@@ -1,0 +1,9 @@
+[package]
+name = "rpki"
+version = "0.1.0"
+authors = ["Martin Hoffmann <hn@nvnc.de>"]
+
+[dependencies]
+chrono    = "0.4"
+ring      = "^0.12" 
+untrusted = "^0.5"
