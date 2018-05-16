@@ -37,9 +37,12 @@ impl Tag {
         = Tag(Tag::CONTEXT_SPECIFIC | Tag::CONSTRUCTED | 3);
 
     pub const CTX_0: Self = Tag(Tag::CONTEXT_SPECIFIC | 0);
-    pub const CTX_1: Self = Tag(Tag::CONTEXT_SPECIFIC | 0);
-    pub const CTX_2: Self = Tag(Tag::CONTEXT_SPECIFIC | 0);
-    pub const CTX_3: Self = Tag(Tag::CONTEXT_SPECIFIC | 0);
+    pub const CTX_1: Self = Tag(Tag::CONTEXT_SPECIFIC | 1);
+    pub const CTX_2: Self = Tag(Tag::CONTEXT_SPECIFIC | 2);
+    pub const CTX_3: Self = Tag(Tag::CONTEXT_SPECIFIC | 3);
+    pub const CTX_4: Self = Tag(Tag::CONTEXT_SPECIFIC | 4);
+    pub const CTX_5: Self = Tag(Tag::CONTEXT_SPECIFIC | 5);
+    pub const CTX_6: Self = Tag(Tag::CONTEXT_SPECIFIC | 6);
 }
 
 impl Tag {
@@ -74,6 +77,12 @@ impl Tag {
 
     pub fn constructed(&self) -> Tag {
         Tag(self.0 | 0x20)
+    }
+}
+
+impl From<u8> for Tag {
+    fn from(x: u8) -> Tag {
+        Tag(x)
     }
 }
 

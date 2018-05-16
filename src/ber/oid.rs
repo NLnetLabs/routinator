@@ -6,8 +6,14 @@ use super::{Content, Error, Tag};
 pub struct Oid<'a>(pub &'a [u8]);
 
 impl<'a> Oid<'a> {
-    pub fn parse<'r>(content: &mut Content<'a>) -> Result<Self, Error> {
+    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
         content.primitive_if(Tag::OID, |input| {
+            Ok(Oid(input.as_slice_less_safe()))
+        })
+    }
+
+    pub fn opt_parse(content: &mut Content<'a>) -> Result<Option<Self>, Error> {
+        content.opt_primitive_if(Tag::OID, |input| {
             Ok(Oid(input.as_slice_less_safe()))
         })
     }

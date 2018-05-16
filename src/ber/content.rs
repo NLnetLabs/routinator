@@ -1,6 +1,7 @@
 use untrusted::{Input, Reader};
 use super::{Error, Length, Tag};
 
+// XXX TODO Add a flag to enforce DER encoding.
 
 //------------ Content -------------------------------------------------------
 
@@ -389,6 +390,26 @@ impl<'a> Content<'a> {
 
 /// # High-level Parsing
 impl<'a> Content<'a> {
+    //--- BOOLEAN
+
+    pub fn parse_bool(&mut self) -> Result<bool, Error> {
+        self.primitive_if(Tag::BOOLEAN, |input| {
+            input.read_all(Error::Malformed, |reader| {
+                // DER: for true, value must be 0xFF.
+                Ok(reader.read_byte()? != 0)
+            })
+        })
+    }
+
+    pub fn parse_opt_bool(&mut self) -> Result<Option<bool>, Error> {
+        self.opt_primitive_if(Tag::BOOLEAN, |input| {
+            input.read_all(Error::Malformed, |reader| {
+                // DER: for true, value must be 0xFF.
+                Ok(reader.read_byte()? != 0)
+            })
+        })
+    }
+
 
     //--- INTEGER
 
@@ -451,6 +472,18 @@ impl<'a> Content<'a> {
 
 
     //--- BIT STRING
+
+    /// Parses a BIT STRING.
+    pub fn bit_string(&mut self) -> Result<(u8, Input<'a>), Error> {
+        self.primitive_if(Tag::BIT_STRING, |input| {
+            input.read_all(Error::Malformed, |reader| {
+                Ok((
+                   reader.read_byte()?,
+                   reader.skip_to_end()
+                ))
+            })
+        })
+    }
 
     /// Parses a BIT STRING with no unused bits.
     pub fn filled_bit_string(&mut self) -> Result<Input<'a>, Error> {

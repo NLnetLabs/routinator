@@ -16,6 +16,7 @@
 //! Because all the data we encounter is small, we can operate on in-memory
 //! data and use the `untrusted` crate for that.
 
+pub use self::bstring::BitString;
 pub use self::content::Content;
 pub use self::error::Error;
 pub use self::length::Length;
@@ -24,6 +25,7 @@ pub use self::ostring::OctetString;
 pub use self::tag::Tag;
 pub use self::reader::ReaderExt;
 
+mod bstring;
 mod content;
 mod error;
 mod length;
