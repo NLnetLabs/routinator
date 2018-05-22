@@ -229,6 +229,7 @@ impl<'a> Content<'a> {
                 op(input)
             }
             else {
+                xdebug!("primitive_if: expected {:?}, got {:?}", expected, tag);
                 Err(Error::Malformed)
             }
         })

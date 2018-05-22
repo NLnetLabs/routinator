@@ -7,3 +7,9 @@ authors = ["Martin Hoffmann <hn@nvnc.de>"]
 chrono    = "0.4"
 ring      = "^0.12" 
 untrusted = "^0.5"
+
+[features]
+# Print out additional debug messages. This feature is intended for
+# development use exclusively and MUST NOT be enabled in release builds.
+extra-debug = []
+

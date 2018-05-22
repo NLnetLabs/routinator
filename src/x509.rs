@@ -60,7 +60,7 @@ pub struct TbsCertificate<'a> {
     subject_public_key_info: SubjectPublicKeyInfo<'a>,
     issuer_unique_id: Option<Input<'a>>,
     subject_unique_id: Option<Input<'a>>,
-    extensions: Input<'a>,
+    extensions: Extensions<'a>,
 }
 
 impl<'a> TbsCertificate<'a> {
@@ -92,7 +92,7 @@ impl<'a> TbsCertificate<'a> {
                         content.opt_filled_bit_string_if(Tag::CTX_1)?,
                     extensions:
                         content.constructed_if(Tag::CTX_CON_3, |content| {
-                            content.sequence(Content::into_input)
+                            Extensions::parse(content)
                         })?,
                 })
             })
@@ -396,57 +396,102 @@ impl<'a> Extensions<'a> {
                 Content::parse(content.octet_string()?, |content| {
                     match id {
                         oid::CE_BASIC_CONSTRAINTS => {
-                            Self::parse_basic_ca(content, &mut basic_ca)
+                            xerr!(Self::parse_basic_ca(content, &mut basic_ca),
+                                  "certificate::basic_ca")
                         }
                         oid::CE_SUBJECT_KEY_IDENTIFIER => {
-                            Self::parse_subject_key_identifier(
-                                content, &mut subject_key_id
+                            xerr!(
+                                Self::parse_subject_key_identifier(
+                                    content, &mut subject_key_id
+                                ),
+                                "certificate::subject_key_identifier"
                             )
                         }
                         oid::CE_AUTHORITY_KEY_IDENTIFIER => {
-                            Self::parse_authority_key_identifier(
-                                content, &mut authority_key_id
+                            xerr!(
+                                Self::parse_authority_key_identifier(
+                                    content, &mut authority_key_id
+                                ),
+                                "certificate::authority_key_identifier"
                             )
                         }
                         oid::CE_KEY_USAGE => {
-                            Self::parse_key_usage(content, &mut key_usage_ca)
+                            xerr!(
+                                Self::parse_key_usage(
+                                    content, &mut key_usage_ca
+                                ),
+                                "certificate::key_usage"
+                            )
                         }
                         oid::CE_EXTENDED_KEY_USAGE => {
-                            Self::parse_extended_key_usage(
-                                content, &mut extended_key_usage
+                            xerr!(
+                                Self::parse_extended_key_usage(
+                                    content, &mut extended_key_usage
+                                ),
+                                "certificate::extended_key_usage"
                             )
                         }
                         oid::CE_CRL_DISTRIBUTION_POINTS => {
-                            Self::parse_crl_distribution_points(
-                                content, &mut crl_distribution
+                            xerr!(
+                                Self::parse_crl_distribution_points(
+                                    content, &mut crl_distribution
+                                ),
+                                "certificate::crl_distribution_point"
                             )
                         }
                         oid::PE_AUTHORITY_INFO_ACCESS => {
-                            Self::parse_authority_info_access(
-                                content, &mut authority_info_access
+                            xerr!(
+                                Self::parse_authority_info_access(
+                                    content, &mut authority_info_access
+                                ),
+                                "certificate::authority_info_access"
                             )
                         }
                         oid::PE_SUBJECT_INFO_ACCESS => {
-                            Self::parse_subject_info_access(
-                                content, &mut subject_info_access
+                            xerr!(
+                                Self::parse_subject_info_access(
+                                    content, &mut subject_info_access
+                                ),
+                                "certificate::subject_info_access"
                             )
                         }
                         oid::CE_CERTIFICATE_POLICIES => {
-                            Self::parse_certificate_policies(
-                                content, &mut certificate_policies
+                            xerr!(
+                                Self::parse_certificate_policies(
+                                    content, &mut certificate_policies
+                                ),
+                                "certificate::certificate_policies"
                             )
                         }
                         oid::PE_IP_ADDR_BLOCK => {
-                            Self::parse_ip_resources(content, &mut resources)
+                            xerr!(
+                                Self::parse_ip_resources(
+                                    content, &mut resources
+                                ),
+                                "certificate::ip_resources"
+                            )
                         }
                         oid::PE_AUTONOMOUS_SYS_IDS => {
-                            Self::parse_as_resources(content, &mut resources)
+                            xerr!(
+                                Self::parse_as_resources(
+                                    content, &mut resources
+                                ),
+                                "certificate::as_resources"
+                            )
                         }
                         _ => {
                             if critical {
+                                xdebug!(
+                                    "certificate: critical extension {:?}",
+                                    id
+                                );
                                 Err(Error::Malformed)
                             }
                             else {
+                                xdebug!(
+                                    "certificate: non-critical extension {:?}",
+                                    id
+                                );
                                 // RFC 5280 says we can ignore non-critical
                                 // extensions we don’t know of. RFC 6487
                                 // agrees. So let’s do that.
@@ -540,7 +585,9 @@ impl<'a> Extensions<'a> {
         content: &mut Content<'a>, authority_key_id: &mut Option<Input<'a>>
     ) -> Result<(), Error> {
         update_once(authority_key_id, || {
-            let res = content.sequence(Content::octet_string)?;
+            let res = content.sequence(|content| {
+                content.octet_string_if(Tag::CTX_0)
+            })?;
             if res.len() != 20 {
                 return Err(Error::Malformed)
             }
@@ -638,7 +685,8 @@ impl<'a> Extensions<'a> {
                 content.sequence(|content| {
                     content.constructed_if(Tag::CTX_CON_0, |content| {
                         content.constructed_if(Tag::CTX_CON_0, |content| {
-                            UriGeneralNames::parse(content)
+                            xerr!(UriGeneralNames::parse_content(content),
+                                  "certificate::crl_dp::general name")
                         })
                     })
                 })
@@ -793,6 +841,7 @@ where F: FnOnce() -> Result<T, Error> {
 pub struct UriGeneralNames<'a>(Input<'a>);
 
 impl<'a> UriGeneralNames<'a> {
+    /// ```text
     /// GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
     ///
     /// GeneralName ::= CHOICE {
@@ -800,14 +849,18 @@ impl<'a> UriGeneralNames<'a> {
     ///    uniformResourceIdentifier       [6]     IA5String,
     ///    ... }
     /// ```
-    fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        let res = content.sequence(Content::into_input)?;
+    fn parse_content(content: &mut Content<'a>) -> Result<Self, Error> {
+        let res = content.into_input()?;
         Content::parse(res.clone(), |content| {
             let _ = UriGeneralName::parse(content)?;
             while let Some(_) = UriGeneralName::opt_parse(content)? { }
             Ok(UriGeneralNames(res))
         })
     }
+
+    //fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
+    //    content.sequence(Self::parse_content)
+    //}
 }
 
 

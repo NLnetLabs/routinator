@@ -34,6 +34,5 @@ fn read_roa_file<P: AsRef<Path>>(path: &P) {
     let mut file = fs::File::open(path).unwrap();
     let mut data = Vec::new();
     file.read_to_end(&mut data).unwrap();
-    let roa = ::roa::RouteOriginAttestation::parse_slice(&data).unwrap();
-    roa.verify_signature().unwrap();
+    let _roa = ::sigobj::SignedObject::parse_slice(&data).unwrap();
 }
