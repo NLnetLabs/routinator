@@ -1,9 +1,9 @@
 //! Signed Objects
 
 use untrusted::Input;
-use ::ber::{Content, Error, OctetString, Oid, Tag};
-use ::x509;
-use ::x509::Time;
+use super::ber::{Content, Error, OctetString, Oid, Tag};
+use super::cert::Cert;
+use super::x509::Time;
 
 
 //------------ Signed Objectr ------------------------------------------------
@@ -16,7 +16,7 @@ use ::x509::Time;
 pub struct SignedObject<'a> {
     content_type: Oid<'a>,
     content: OctetString<'a>,
-    cert: x509::Cert<'a>,
+    cert: Cert<'a>,
     signer_info: SignerInfo<'a>,
 }
 
@@ -32,7 +32,7 @@ impl<'a> SignedObject<'a> {
     }
 
     /// Returns a reference to the certificate the object is signed with.
-    pub fn cert(&self) -> &x509::Cert<'a> {
+    pub fn cert(&self) -> &Cert<'a> {
         &self.cert
     }
 }
@@ -128,11 +128,11 @@ impl<'a> SignedObject<'a> {
     /// RFC 6288 limites the set to exactly one.
     fn parse_certificates(
         content: &mut Content<'a>
-    ) -> Result<x509::Cert<'a>, Error> {
+    ) -> Result<Cert<'a>, Error> {
         content.constructed_if(Tag::CTX_CON_0, |content| {
             content.constructed(|tag, content| {
                 match tag {
-                    Tag::SEQUENCE =>  x509::Cert::parse_content(content),
+                    Tag::SEQUENCE =>  Cert::parse_content(content),
                     _ => Err(Error::Unimplemented)
                 }
             })
@@ -148,7 +148,7 @@ impl<'a> SignedObject<'a> {
     ///
     /// The method returns Ok if the object is valid or an error otherwise.
     pub fn validate<F>(&self, validate_cert: F) -> Result<(), ValidationError>
-    where F: FnOnce(&x509::Cert) -> Result<(), ValidationError> {
+    where F: FnOnce(&Cert) -> Result<(), ValidationError> {
         self.verify_compliance()?;
         self.verify_signature()?;
         validate_cert(self.cert())
@@ -174,6 +174,9 @@ impl<'a> SignedObject<'a> {
         Ok(())
     }
 
+    /// Verifies the signature of the object against contained certificate.
+    ///
+    /// This is item 2 of [RFC 6488]’s section 3.
     fn verify_signature(&self) -> Result<(), ValidationError> {
         let digest = self.content.sha256();
         if digest.as_ref() != self.signer_info.message_digest() {

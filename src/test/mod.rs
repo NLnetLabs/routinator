@@ -5,12 +5,11 @@ use std::io::Read;
 use std::path::Path;
 use std::fs;
 
-//------------ read_roas -----------------------------------------------------
+//------------ read_repository -----------------------------------------------
 //
-// Reads all ROAs in the test/repositories directory.
 
 #[test]
-fn read_roas() {
+fn read_repository() {
     read_dir(&Path::new("test/repositories"));
 }
 
@@ -25,6 +24,9 @@ fn read_dir<P: AsRef<Path>>(path: &P) {
             if extension == "roa" {
                 read_roa_file(&path)
             }
+            else if extension == "crl" {
+                read_crl_file(&path)
+            }
         }
     }
 }
@@ -36,3 +38,12 @@ fn read_roa_file<P: AsRef<Path>>(path: &P) {
     file.read_to_end(&mut data).unwrap();
     let _roa = ::sigobj::SignedObject::parse_slice(&data).unwrap();
 }
+
+fn read_crl_file<P: AsRef<Path>>(path: &P) {
+    println!("{}", path.as_ref().display());
+    let mut file = fs::File::open(path).unwrap();
+    let mut data = Vec::new();
+    file.read_to_end(&mut data).unwrap();
+    let _crl = ::crl::Crl::parse_slice(&data).unwrap();
+}
+

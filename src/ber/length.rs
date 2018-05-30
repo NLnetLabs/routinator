@@ -35,6 +35,21 @@ impl Length {
                     (input.read_byte()? as usize)
                 ))
             }
+            0x83 => {
+                Ok(Length::Definite(
+                    (input.read_byte()? as usize) << 16 |
+                    (input.read_byte()? as usize) << 8 |
+                    (input.read_byte()? as usize)
+                ))
+            }
+            0x84 => {
+                Ok(Length::Definite(
+                    (input.read_byte()? as usize) << 24 |
+                    (input.read_byte()? as usize) << 16 |
+                    (input.read_byte()? as usize) << 8 |
+                    (input.read_byte()? as usize)
+                ))
+            }
             _ => {
                 // We only implement up to two length bytes for now.
                 Err(Error::Unimplemented)
