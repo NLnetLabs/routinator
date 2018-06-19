@@ -1,6 +1,4 @@
 
-use untrusted::EndOfInput;
-
 
 //------------ Error ---------------------------------------------------------
 
@@ -11,11 +9,5 @@ pub enum Error {
 
     /// DER uses features we haven’t implemented.
     Unimplemented,
-}
-
-impl From<EndOfInput> for Error {
-    fn from(_: EndOfInput) -> Error {
-        Error::Malformed
-    }
 }
 

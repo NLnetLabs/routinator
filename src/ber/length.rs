@@ -1,5 +1,5 @@
-use untrusted::Reader;
 use super::error::Error;
+use super::source::Source;
 
 
 //------------ Length -------------------------------------------------------
@@ -19,8 +19,8 @@ pub enum Length {
 }
 
 impl Length {
-    pub fn parse<'a>(input: &mut Reader<'a>) -> Result<Self, Error> {
-        match input.read_byte()? {
+    pub fn take_from<S: Source>(source: &mut S) -> Result<Self, S::Err> {
+        match source.take_u8()? {
             // Bit 7 clear: other bits are the length
             n if (n & 0x80) == 0 => Ok(Length::Definite(n as usize)),
 
@@ -28,31 +28,31 @@ impl Length {
             // encode the length. Unless they are all 0, in which case this
             // is the indefinite form.
             0x80 => Ok(Length::Indefinite),
-            0x81 => Ok(Length::Definite(input.read_byte()? as usize)),
+            0x81 => Ok(Length::Definite(source.take_u8()? as usize)),
             0x82 => {
                 Ok(Length::Definite(
-                    (input.read_byte()? as usize) << 8 |
-                    (input.read_byte()? as usize)
+                    (source.take_u8()? as usize) << 8 |
+                    (source.take_u8()? as usize)
                 ))
             }
             0x83 => {
                 Ok(Length::Definite(
-                    (input.read_byte()? as usize) << 16 |
-                    (input.read_byte()? as usize) << 8 |
-                    (input.read_byte()? as usize)
+                    (source.take_u8()? as usize) << 16 |
+                    (source.take_u8()? as usize) << 8 |
+                    (source.take_u8()? as usize)
                 ))
             }
             0x84 => {
                 Ok(Length::Definite(
-                    (input.read_byte()? as usize) << 24 |
-                    (input.read_byte()? as usize) << 16 |
-                    (input.read_byte()? as usize) << 8 |
-                    (input.read_byte()? as usize)
+                    (source.take_u8()? as usize) << 24 |
+                    (source.take_u8()? as usize) << 16 |
+                    (source.take_u8()? as usize) << 8 |
+                    (source.take_u8()? as usize)
                 ))
             }
             _ => {
                 // We only implement up to two length bytes for now.
-                Err(Error::Unimplemented)
+                Err(Error::Unimplemented.into())
             }
         }
     }
@@ -62,4 +62,3 @@ impl Length {
         else { false }
     }
 }
-

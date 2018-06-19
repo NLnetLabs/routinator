@@ -1,85 +1,95 @@
 
-use untrusted::Input;
-use super::ber::{BitString, Content, Error, OctetString, Oid, Tag};
+use bytes::Bytes;
+use super::ber::{
+    BitString, Constructed, Error, Mode, OctetString, Oid, Source, Tag
+};
 use super::x509::{
-    update_once, Name, SerialNumber, SignatureAlgorithm,
-    SignedData, Time
+    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time
 };
 
 
 //------------ Cert ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Cert<'a> {
-    signed_data: SignedData<'a>,
+pub struct Cert {
+    signed_data: SignedData,
 
-    serial_number: SerialNumber<'a>,
+    serial_number: SerialNumber,
     signature: SignatureAlgorithm,
-    issuer: Name<'a>,
+    issuer: Name,
     validity: Validity,
-    subject: Name<'a>,
-    subject_public_key_info: SubjectPublicKeyInfo<'a>,
-    issuer_unique_id: Option<Input<'a>>,
-    subject_unique_id: Option<Input<'a>>,
-    extensions: Extensions<'a>,
+    subject: Name,
+    subject_public_key_info: SubjectPublicKeyInfo,
+    issuer_unique_id: Option<BitString>,
+    subject_unique_id: Option<BitString>,
+    extensions: Extensions,
 }
 
-impl<'a> Cert<'a> {
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(Self::parse_content)
+impl Cert {
+    pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
+        Mode::Der.decode(source, Self::take_from)
     }
 
-    /// Parses the content of a Certificate value.
-    pub fn parse_content(content: &mut Content<'a>) -> Result<Self, Error> {
-        let signed_data = SignedData::parse_content(content)?;
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(Self::take_content_from)
+    }
 
-        // XXX RFC 5280 demands the signed part to be DER encoded. Enforce
-        //     this.
-        Content::parse(signed_data.data(), |content| {
-            content.sequence(|content| {
+    /// Parses the content of a Certificate sequence.
+    pub fn take_content_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        let signed_data = SignedData::take_content_from(cons)?;
+
+        Mode::Der.decode(signed_data.data().clone(), |cons| {
+            cons.sequence(|cons| {
                 // version [0] EXPLICIT Version DEFAULT v1.
                 //  -- we need extensions so apparently, we want v3 which,
                 //     confusingly, is 2.
-                content.constructed_if(Tag::CTX_CON_0, |content| {
-                    content.skip_u8_if(2)
-                })?;
+                cons.constructed_if(Tag::CTX_0, |c| c.skip_u8_if(2))?;
 
                 Ok(Cert {
                     signed_data,
-                    serial_number: SerialNumber::parse(content)?,
-                    signature: SignatureAlgorithm::parse(content)?,
-                    issuer: Name::parse(content)?,
-                    validity: Validity::parse(content)?,
-                    subject: Name::parse(content)?,
-                    subject_public_key_info:
-                        SubjectPublicKeyInfo::parse(content)?,
-                    issuer_unique_id:
-                        content.opt_filled_bit_string_if(Tag::CTX_1)?,
-                    subject_unique_id:
-                        content.opt_filled_bit_string_if(Tag::CTX_1)?,
-                    extensions:
-                        content.constructed_if(
-                            Tag::CTX_CON_3,
-                            Extensions::parse
-                        )?,
+                    serial_number: SerialNumber::take_from(cons)?,
+                    signature: SignatureAlgorithm::take_from(cons)?,
+                    issuer: Name::take_from(cons)?,
+                    validity: Validity::take_from(cons)?,
+                    subject: Name::take_from(cons)?,
+                    subject_public_key_info: 
+                        SubjectPublicKeyInfo::take_from(cons)?,
+                    issuer_unique_id: cons.opt_value_if(
+                        Tag::CTX_1,
+                        |c| BitString::take_content_from(c)
+                    )?,
+                    subject_unique_id: cons.opt_value_if(
+                        Tag::CTX_2,
+                        |c| BitString::take_content_from(c)
+                    )?,
+                    extensions: cons.constructed_if(
+                        Tag::CTX_3,
+                        Extensions::take_from
+                    )?,
                 })
             })
-        })
+        }).map_err(Into::into)
     }
 
-    pub fn public_key(&self) -> Input<'a> {
+    pub fn public_key(&self) -> BitString {
         self.subject_public_key_info
             .subject_public_key.clone()
     }
 
+    /*
     pub fn public_key_components(
         &self
     ) -> Result<(Input<'a>, Input<'a>), Error> {
         self.subject_public_key_info.public_key_components()
     }
+    */
 
-    pub fn subject_key_identifier(&self) -> OctetString<'a> {
-        unimplemented!()
+    pub fn subject_key_identifier(&self) -> &OctetString {
+        &self.extensions.subject_key_id
     }
 }
 
@@ -97,11 +107,13 @@ impl Validity {
         Validity { not_before, not_after }
     }
 
-    pub fn parse(content: &mut Content) -> Result<Self, Error> {
-        content.sequence(|content| {
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
             Ok(Validity::new(
-                Time::parse(content)?,
-                Time::parse(content)?
+                Time::take_from(cons)?,
+                Time::take_from(cons)?,
             ))
         })
     }
@@ -111,21 +123,24 @@ impl Validity {
 //------------ SubjectPublicKeyInfo ------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct SubjectPublicKeyInfo<'a> {
+pub struct SubjectPublicKeyInfo {
     algorithm: PublicKeyAlgorithm,
-    subject_public_key: Input<'a>,
+    subject_public_key: BitString,
 }
 
-impl<'a> SubjectPublicKeyInfo<'a> {
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(|content| {
+impl SubjectPublicKeyInfo {
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
             Ok(SubjectPublicKeyInfo {
-                algorithm: PublicKeyAlgorithm::parse(content)?,
-                subject_public_key: content.filled_bit_string()?,
+                algorithm: PublicKeyAlgorithm::take_from(cons)?,
+                subject_public_key: BitString::take_from(cons)?
             })
         })
     }
 
+    /*
     pub fn public_key_components(
         &self
     ) -> Result<(Input<'a>, Input<'a>), Error> {
@@ -138,6 +153,7 @@ impl<'a> SubjectPublicKeyInfo<'a> {
             })
         })
     }
+    */
 }
 
 
@@ -149,13 +165,17 @@ pub enum PublicKeyAlgorithm {
 }
 
 impl PublicKeyAlgorithm {
-    pub fn parse(content: &mut Content) -> Result<Self, Error> {
-        content.sequence(Self::parse_content)
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(Self::take_content_from)
     }
 
-    pub fn parse_content(content: &mut Content) -> Result<Self, Error> {
-        oid::RSA_ENCRYPTION.skip_if(content)?;
-        content.skip_opt_null()?;
+    pub fn take_content_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        oid::RSA_ENCRYPTION.skip_if(cons)?;
+        cons.skip_opt_null()?;
         Ok(PublicKeyAlgorithm::RsaEncryption)
     }
 }
@@ -164,7 +184,7 @@ impl PublicKeyAlgorithm {
 //------------ Extensions ----------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Extensions<'a> {
+pub struct Extensions {
     /// Basic Contraints.
     ///
     /// The field indicates whether the extension is present and, if so,
@@ -172,10 +192,10 @@ pub struct Extensions<'a> {
     basic_ca: Option<bool>,
 
     /// Subject Key Identifier.
-    subject_key_id: Input<'a>,
+    subject_key_id: OctetString,
 
     /// Authority Key Identifier
-    authority_key_id: Option<Input<'a>>,
+    authority_key_id: Option<OctetString>,
 
     /// Key Usage.
     ///
@@ -185,37 +205,39 @@ pub struct Extensions<'a> {
     ///
     /// The valud is the content of the DER-encoded sequence of object
     /// identifiers.
-    extended_key_usage: Option<Input<'a>>,
+    extended_key_usage: Option<Bytes>,
 
     /// CRL Distribution Points
-    crl_distribution: Option<UriGeneralNames<'a>>,
+    crl_distribution: Option<UriGeneralNames>,
 
     /// Authority Information Access
-    authority_info_access: Option<UriGeneralName<'a>>,
+    authority_info_access: Option<UriGeneralName>,
 
     /// Subject Information Access
     ///
     /// This value contains the content of the SubjectInfoAccessSyntax
     /// sequence.
-    subject_info_access: Input<'a>,
+    subject_info_access: Bytes,
 
     /// Certificate Policies
     ///
     /// Must be present and critical. RFC 6484 describes the policies for
     /// PKIX certificates. This value contains the content of the
     /// certificatePolicies sequence.
-    certificate_policies: CertificatePolicies<'a>,
+    certificate_policies: CertificatePolicies,
 
     /// IP Resources
-    ip_resources: Option<IpResources<'a>>,
+    ip_resources: Option<IpResources>,
 
     /// AS Resources
-    as_resources: Option<AsResources<'a>>,
+    as_resources: Option<AsResources>,
 }
 
-impl<'a> Extensions<'a> {
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(|content| {
+impl Extensions {
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
             let mut basic_ca = None;
             let mut subject_key_id = None;
             let mut authority_key_id = None;
@@ -227,121 +249,78 @@ impl<'a> Extensions<'a> {
             let mut certificate_policies = None;
             let mut ip_resources = None;
             let mut as_resources = None;
-            while let Some(()) = content.opt_sequence(|content| {
-                let id = Oid::parse(content)?;
-                let critical = content.parse_opt_bool()?.unwrap_or(false);
-                Content::parse(content.octet_string()?, |content| {
-                    match id {
-                        oid::CE_BASIC_CONSTRAINTS => {
-                            xerr!(Self::parse_basic_ca(content, &mut basic_ca),
-                                  "certificate::basic_ca")
-                        }
-                        oid::CE_SUBJECT_KEY_IDENTIFIER => {
-                            xerr!(
-                                Self::parse_subject_key_identifier(
-                                    content, &mut subject_key_id
-                                ),
-                                "certificate::subject_key_identifier"
-                            )
-                        }
-                        oid::CE_AUTHORITY_KEY_IDENTIFIER => {
-                            xerr!(
-                                Self::parse_authority_key_identifier(
-                                    content, &mut authority_key_id
-                                ),
-                                "certificate::authority_key_identifier"
-                            )
-                        }
-                        oid::CE_KEY_USAGE => {
-                            xerr!(
-                                Self::parse_key_usage(
-                                    content, &mut key_usage_ca
-                                ),
-                                "certificate::key_usage"
-                            )
-                        }
-                        oid::CE_EXTENDED_KEY_USAGE => {
-                            xerr!(
-                                Self::parse_extended_key_usage(
-                                    content, &mut extended_key_usage
-                                ),
-                                "certificate::extended_key_usage"
-                            )
-                        }
-                        oid::CE_CRL_DISTRIBUTION_POINTS => {
-                            xerr!(
-                                Self::parse_crl_distribution_points(
-                                    content, &mut crl_distribution
-                                ),
-                                "certificate::crl_distribution_point"
-                            )
-                        }
-                        oid::PE_AUTHORITY_INFO_ACCESS => {
-                            xerr!(
-                                Self::parse_authority_info_access(
-                                    content, &mut authority_info_access
-                                ),
-                                "certificate::authority_info_access"
-                            )
-                        }
-                        oid::PE_SUBJECT_INFO_ACCESS => {
-                            xerr!(
-                                Self::parse_subject_info_access(
-                                    content, &mut subject_info_access
-                                ),
-                                "certificate::subject_info_access"
-                            )
-                        }
-                        oid::CE_CERTIFICATE_POLICIES => {
-                            xerr!(
-                                Self::parse_certificate_policies(
-                                    content, &mut certificate_policies
-                                ),
-                                "certificate::certificate_policies"
-                            )
-                        }
-                        oid::PE_IP_ADDR_BLOCK => {
-                            xerr!(
-                                Self::parse_ip_resources(
-                                    content, &mut ip_resources
-                                ),
-                                "certificate::ip_resources"
-                            )
-                        }
-                        oid::PE_AUTONOMOUS_SYS_IDS => {
-                            xerr!(
-                                Self::parse_as_resources(
-                                    content, &mut as_resources
-                                ),
-                                "certificate::as_resources"
-                            )
-                        }
-                        _ => {
-                            if critical {
-                                xdebug!(
-                                    "certificate: critical extension {:?}",
-                                    id
-                                );
-                                Err(Error::Malformed)
-                            }
-                            else {
-                                xdebug!(
-                                    "certificate: non-critical extension {:?}",
-                                    id
-                                );
-                                // RFC 5280 says we can ignore non-critical
-                                // extensions we don’t know of. RFC 6487
-                                // agrees. So let’s do that.
-                                Ok(())
-                            }
-                        }
+            while let Some(()) = cons.opt_sequence(|cons| {
+                let id = Oid::take_from(cons)?;
+                let critical = cons.take_opt_bool()?.unwrap_or(false);
+                let value = OctetString::take_from(cons)?;
+                Mode::Der.decode(value.as_source(), |content| {
+                    if id == oid::CE_BASIC_CONSTRAINTS {
+                        Self::take_basic_ca(content, &mut basic_ca)
+                    }
+                    else if id == oid::CE_SUBJECT_KEY_IDENTIFIER {
+                        Self::take_subject_key_identifier(
+                            content, &mut subject_key_id
+                        )
+                    }
+                    else if id == oid::CE_AUTHORITY_KEY_IDENTIFIER {
+                        Self::take_authority_key_identifier(
+                            content, &mut authority_key_id
+                        )
+                    }
+                    else if id == oid::CE_KEY_USAGE {
+                        Self::take_key_usage(
+                            content, &mut key_usage_ca
+                        )
+                    }
+                    else if id == oid::CE_EXTENDED_KEY_USAGE {
+                        Self::take_extended_key_usage(
+                            content, &mut extended_key_usage
+                        )
+                    }
+                    else if id == oid::CE_CRL_DISTRIBUTION_POINTS {
+                        Self::take_crl_distribution_points(
+                            content, &mut crl_distribution
+                        )
+                    }
+                    else if id == oid::PE_AUTHORITY_INFO_ACCESS {
+                        Self::take_authority_info_access(
+                            content, &mut authority_info_access
+                        )
+                    }
+                    else if id == oid::PE_SUBJECT_INFO_ACCESS {
+                        Self::take_subject_info_access(
+                            content, &mut subject_info_access
+                        )
+                    }
+                    else if id == oid::CE_CERTIFICATE_POLICIES {
+                        Self::take_certificate_policies(
+                            content, &mut certificate_policies
+                        )
+                    }
+                    else if id == oid::PE_IP_ADDR_BLOCK {
+                        Self::take_ip_resources(
+                            content, &mut ip_resources
+                        )
+                    }
+                    else if id == oid::PE_AUTONOMOUS_SYS_IDS {
+                        Self::take_as_resources(
+                            content, &mut as_resources
+                        )
+                    }
+                    else if critical {
+                        xerr!(Err(Error::Malformed))
+                    }
+                    else {
+                        // RFC 5280 says we can ignore non-critical
+                        // extensions we don’t know of. RFC 6487
+                        // agrees. So let’s do that.
+                        Ok(())
                     }
                 })?;
                 Ok(())
             })? { }
             if ip_resources.is_none() && as_resources.is_none() {
-                xdebug!("certificate: no IP and no AS resources");
-                return Err(Error::Malformed)
+                xerr!(return Err(Error::Malformed.into()))
             }
             Ok(Extensions {
                 basic_ca,
@@ -374,11 +353,12 @@ impl<'a> Extensions<'a> {
     ///
     /// The cA field gets chosen by the CA. The pathLenConstraint field must
     /// not be present.
-    fn parse_basic_ca(
-        content: &mut Content<'a>, basic_ca: &mut Option<bool>
-    ) -> Result<(), Error> {
+    fn take_basic_ca<S: Source>(
+        cons: &mut Constructed<S>,
+        basic_ca: &mut Option<bool>
+    ) -> Result<(), S::Err> {
         update_once(basic_ca, || {
-            match content.sequence(Content::parse_opt_bool)? {
+            match cons.sequence(|cons| cons.take_opt_bool())? {
                 Some(res) => Ok(res),
                 None => Ok(false)
             }
@@ -394,13 +374,14 @@ impl<'a> Extensions<'a> {
     /// SubjectKeyIdentifier ::= KeyIdentifier
     /// KeyIdentifier        ::= OCTET STRING
     /// ```
-    fn parse_subject_key_identifier(
-        content: &mut Content<'a>, subject_key_id: &mut Option<Input<'a>>
-    ) -> Result<(), Error> {
+    fn take_subject_key_identifier<S: Source>(
+        cons: &mut Constructed<S>,
+        subject_key_id: &mut Option<OctetString>
+    ) -> Result<(), S::Err> {
         update_once(subject_key_id, || {
-            let id = content.octet_string()?;
+            let id = OctetString::take_from(cons)?;
             if id.len() != 20 {
-                Err(Error::Malformed)
+                xerr!(Err(Error::Malformed.into()))
             }
             else {
                 Ok(id)
@@ -423,15 +404,16 @@ impl<'a> Extensions<'a> {
     /// ```
     ///
     /// Only keyIdentifier must be present.
-    fn parse_authority_key_identifier(
-        content: &mut Content<'a>, authority_key_id: &mut Option<Input<'a>>
-    ) -> Result<(), Error> {
+    fn take_authority_key_identifier<S: Source>(
+        cons: &mut Constructed<S>,
+        authority_key_id: &mut Option<OctetString>
+    ) -> Result<(), S::Err> {
         update_once(authority_key_id, || {
-            let res = content.sequence(|content| {
-                content.octet_string_if(Tag::CTX_0)
+            let res = cons.sequence(|cons| {
+                cons.value_if(Tag::CTX_0, OctetString::take_content_from)
             })?;
             if res.len() != 20 {
-                return Err(Error::Malformed)
+                return Err(Error::Malformed.into())
             }
             else {
                 Ok(res)
@@ -458,11 +440,12 @@ impl<'a> Extensions<'a> {
     /// CRLSign must be set, in EE certificates, digitalSignatures must be
     /// set. This field therefore simply describes whether the certificate
     /// is for a CA.
-    fn parse_key_usage(
-        content: &mut Content<'a>, key_usage_ca: &mut Option<bool>
-    ) -> Result<(), Error> {
+    fn take_key_usage<S: Source>(
+        cons: &mut Constructed<S>,
+        key_usage_ca: &mut Option<bool>
+    ) -> Result<(), S::Err> {
         update_once(key_usage_ca, || {
-            let bits = BitString::parse(content)?;
+            let bits = BitString::take_from(cons)?;
             if bits.bit(5) && bits.bit(6) {
                 Ok(true)
             }
@@ -470,7 +453,7 @@ impl<'a> Extensions<'a> {
                 Ok(false)
             }
             else {
-                Err(Error::Malformed)
+                Err(Error::Malformed.into())
             }
         })
     }
@@ -483,17 +466,17 @@ impl<'a> Extensions<'a> {
     /// ```
     ///
     /// May only be present in EE certificates issued to devices.
-    fn parse_extended_key_usage(
-        content: &mut Content<'a>,
-        extended_key_usage: &mut Option<Input<'a>>
-    ) -> Result<(), Error> {
+    fn take_extended_key_usage<S: Source>(
+        cons: &mut Constructed<S>,
+        extended_key_usage: &mut Option<Bytes>
+    ) -> Result<(), S::Err> {
         update_once(extended_key_usage, || {
-            let res = content.sequence(Content::into_input)?;
-            Content::parse(res.clone(), |content| {
-                let _ = Oid::parse(content)?;
-                while let Some(_) = Oid::opt_parse(content)? { }
+            let res = cons.sequence(|c| c.take_all())?;
+            Mode::Der.decode(res.clone(), |cons| {
+                Oid::skip_in(cons)?;
+                while let Some(_) = Oid::skip_opt_in(cons)? { }
                 Ok(res)
-            })
+            }).map_err(Into::into)
         })
     }
 
@@ -518,17 +501,16 @@ impl<'a> Extensions<'a> {
     /// distributionPoint field must be present and it must contain
     /// the fullName choice which can be one or more uniformResourceIdentifier
     /// choices.
-    fn parse_crl_distribution_points(
-        content: &mut Content<'a>,
-        crl_distribution: &mut Option<UriGeneralNames<'a>>
-    ) -> Result<(), Error> {
+    fn take_crl_distribution_points<S: Source>(
+        cons: &mut Constructed<S>,
+        crl_distribution: &mut Option<UriGeneralNames>
+    ) -> Result<(), S::Err> {
         update_once(crl_distribution, || {
-            content.sequence(|content| {
-                content.sequence(|content| {
-                    content.constructed_if(Tag::CTX_CON_0, |content| {
-                        content.constructed_if(Tag::CTX_CON_0, |content| {
-                            xerr!(UriGeneralNames::parse_content(content),
-                                  "certificate::crl_dp::general name")
+            cons.sequence(|cons| {
+                cons.sequence(|cons| {
+                    cons.constructed_if(Tag::CTX_0, |cons| {
+                        cons.constructed_if(Tag::CTX_0, |cons| {
+                            UriGeneralNames::take_content_from(cons)
                         })
                     })
                 })
@@ -550,15 +532,15 @@ impl<'a> Extensions<'a> {
     /// Must be present except in self-signed certificates. Must contain
     /// exactly one entry with accessMethod id-ad-caIssuers and a URI as a
     /// generalName.
-    fn parse_authority_info_access(
-        content: &mut Content<'a>,
-        authority_info_access: &mut Option<UriGeneralName<'a>>
-    ) -> Result<(), Error> {
+    fn take_authority_info_access<S: Source>(
+        cons: &mut Constructed<S>,
+        authority_info_access: &mut Option<UriGeneralName>
+    ) -> Result<(), S::Err> {
         update_once(authority_info_access, || {
-            content.sequence(|content| {
-                content.sequence(|content| {
-                    oid::AD_CA_ISSUERS.skip_if(content)?;
-                    UriGeneralName::parse(content)
+            cons.sequence(|cons| {
+                cons.sequence(|cons| {
+                    oid::AD_CA_ISSUERS.skip_if(cons)?;
+                    UriGeneralName::take_from(cons)
                 })
             })
         })
@@ -586,17 +568,17 @@ impl<'a> Extensions<'a> {
     /// with an id-ad-signedObject access method.
     ///
     /// Since we don’t necessarily know what kind of certificate we have yet,
-    /// we may accept the wrong kind here. This needs to be check later.
-    fn parse_subject_info_access(
-        content: &mut Content<'a>,
-        subject_info_access: &mut Option<Input<'a>>,
-    ) -> Result<(), Error> {
+    /// we may accept the wrong kind here. This needs to be checked later.
+    fn take_subject_info_access<S: Source>(
+        cons: &mut Constructed<S>,
+        subject_info_access: &mut Option<Bytes>,
+    ) -> Result<(), S::Err> {
         update_once(subject_info_access, || {
-            let res = content.sequence(Content::into_input)?;
-            Content::parse(res.clone(), |content| {
+            let res = cons.sequence(|cons| cons.take_all())?;
+            Mode::Der.decode(res.clone(), |cons| {
                 let mut ca = None;
-                while let Some(()) = content.opt_sequence(|content| {
-                    let oid = Oid::parse(content)?;
+                while let Some(()) = cons.opt_sequence(|cons| {
+                    let oid = Oid::take_from(cons)?;
                     if oid == oid::AD_CA_REPOSITORY
                         || oid == oid::AD_RPKI_MANIFEST
                     {
@@ -617,49 +599,49 @@ impl<'a> Extensions<'a> {
                             }
                         }
                     }
-                    let _ = UriGeneralName::parse(content)?;
+                    let _ = UriGeneralName::take_from(cons)?;
                     Ok(())
                 })? { }
                 if ca.is_none() {
                     // The sequence was empty.
-                    Err(Error::Malformed)
+                    xerr!(Err(Error::Malformed))
                 }
                 else {
                     Ok(res)
                 }
-            })
+            }).map_err(Into::into)
         })
     }
 
     /// Parses the Certificate Policies extension.
     ///
     /// Must be present.
-    fn parse_certificate_policies(
-        content: &mut Content<'a>,
-        certificate_policies: &mut Option<CertificatePolicies<'a>>,
-    ) -> Result<(), Error> {
+    fn take_certificate_policies<S: Source>(
+        cons: &mut Constructed<S>,
+        certificate_policies: &mut Option<CertificatePolicies>,
+    ) -> Result<(), S::Err> {
         update_once(certificate_policies, || {
-            CertificatePolicies::parse(content)
+            CertificatePolicies::take_from(cons)
         })
     }
 
     /// Parses the IP Resources extension.
-    fn parse_ip_resources(
-        content: &mut Content<'a>,
-        ip_resources: &mut Option<IpResources<'a>>
-    ) -> Result<(), Error> {
+    fn take_ip_resources<S: Source>(
+        cons: &mut Constructed<S>,
+        ip_resources: &mut Option<IpResources>
+    ) -> Result<(), S::Err> {
         update_once(ip_resources, || {
-            IpResources::parse(content)
+            IpResources::take_from(cons)
         })
     }
 
     /// Parses the AS Resources extension.
-    fn parse_as_resources(
-        content: &mut Content<'a>,
-        as_resources: &mut Option<AsResources<'a>>
-    ) -> Result<(), Error> {
+    fn take_as_resources<S: Source>(
+        cons: &mut Constructed<S>,
+        as_resources: &mut Option<AsResources>
+    ) -> Result<(), S::Err> {
         update_once(as_resources, || {
-            AsResources::parse(content)
+            AsResources::take_from(cons)
         })
     }
 }
@@ -669,9 +651,9 @@ impl<'a> Extensions<'a> {
 
 /// A GeneralNames value limited to uniformResourceIdentifier choices.
 #[derive(Clone, Debug)]
-pub struct UriGeneralNames<'a>(Input<'a>);
+pub struct UriGeneralNames(Bytes);
 
-impl<'a> UriGeneralNames<'a> {
+impl<'a> UriGeneralNames {
     /// ```text
     /// GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
     ///
@@ -680,13 +662,16 @@ impl<'a> UriGeneralNames<'a> {
     ///    uniformResourceIdentifier       [6]     IA5String,
     ///    ... }
     /// ```
-    fn parse_content(content: &mut Content<'a>) -> Result<Self, Error> {
-        let res = content.into_input()?;
-        Content::parse(res.clone(), |content| {
-            let _ = UriGeneralName::parse(content)?;
-            while let Some(_) = UriGeneralName::opt_parse(content)? { }
-            Ok(UriGeneralNames(res))
-        })
+    fn take_content_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        Ok(UriGeneralNames(cons.capture(|cons| {
+            if let None = UriGeneralName::skip_opt(cons)? {
+                xerr!(return Err(Error::Malformed.into()))
+            }
+            while let Some(()) = UriGeneralName::skip_opt(cons)? { }
+            Ok(())
+        })?))
     }
 }
 
@@ -694,27 +679,49 @@ impl<'a> UriGeneralNames<'a> {
 //------------ UriGeneralName ------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct UriGeneralName<'a>(Input<'a>);
+pub struct UriGeneralName(Bytes);
 
-impl<'a> UriGeneralName<'a> {
-    fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.primitive_if(Tag::CTX_6, |input| {
-            if input.as_slice_less_safe().is_ascii() {
-                Ok(UriGeneralName(input))
+impl UriGeneralName {
+    fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.primitive_if(Tag::CTX_6, |prim| {
+            let res = prim.take_all()?;
+            if res.is_ascii() {
+                Ok(UriGeneralName(res))
             }
             else {
-                Err(Error::Malformed)
+                xerr!(Err(Error::Malformed.into()))
             }
         })
     }
 
-    fn opt_parse(content: &mut Content<'a>) -> Result<Option<Self>, Error> {
-        content.opt_primitive_if(Tag::CTX_6, |input| {
-            if input.as_slice_less_safe().is_ascii() {
-                Ok(UriGeneralName(input))
+    /*
+    fn take_opt_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Option<Self>, S::Err> {
+        cons.opt_primitive_if(Tag::CTX_6, |prim| {
+            let res = prim.take_all()?;
+            if res.is_ascii() {
+                Ok(UriGeneralName(res))
             }
             else {
-                Err(Error::Malformed)
+                xerr!(Err(Error::Malformed.into()))
+            }
+        })
+    }
+    */
+
+    fn skip_opt<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Option<()>, S::Err> {
+        cons.opt_primitive_if(Tag::CTX_6, |prim| {
+            if prim.slice_all()?.is_ascii() {
+                prim.skip_all()?;
+                Ok(())
+            }
+            else {
+                xerr!(Err(Error::Malformed.into()))
             }
         })
     }
@@ -724,34 +731,29 @@ impl<'a> UriGeneralName<'a> {
 //------------ CertificatePolicies -------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct CertificatePolicies<'a>(Input<'a>);
+pub struct CertificatePolicies(Bytes);
 
-impl<'a> CertificatePolicies<'a> {
-    fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        // XXX TODO Actually parse the whole thing.
-        content.sequence(Content::into_input).map(CertificatePolicies)
+impl CertificatePolicies {
+    fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        // XXX TODO Parse properly.
+        cons.sequence(|c| c.take_all()).map(CertificatePolicies)
     }
-}
-
-
-//------------ Resources -----------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub enum Resources<'a> {
-    Ip(IpResources<'a>),
-    As(AsResources<'a>)
 }
 
 
 //------------ IpResources ---------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct IpResources<'a>(Input<'a>);
+pub struct IpResources(Bytes);
 
-impl<'a> IpResources<'a> {
-    fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
+impl IpResources {
+    fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
         // XXX TODO Parse properly.
-        content.sequence(Content::into_input).map(IpResources)
+        cons.sequence(|c| c.take_all()).map(IpResources)
     }
 }
 
@@ -759,38 +761,44 @@ impl<'a> IpResources<'a> {
 //------------ AsResources ---------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct AsResources<'a>(Input<'a>);
+pub struct AsResources(Bytes);
 
-impl<'a> AsResources<'a> {
-    fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
+impl AsResources {
+    fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
         // XXX TODO Parse properly.
-        content.sequence(Content::into_input).map(AsResources)
+        cons.sequence(|c| c.take_all()).map(AsResources)
     }
 }
 
 
 //------------ OIDs ----------------------------------------------------------
 
+#[allow(dead_code)] // XXX
 mod oid {
     use ::ber::Oid;
 
-    pub const RSA_ENCRYPTION: Oid
+    pub const RSA_ENCRYPTION: Oid<&[u8]>
         = Oid(&[42, 134, 72, 134, 247, 13, 1, 1, 1]);
 
-    pub const AD_CA_ISSUERS: Oid = Oid(&[43, 6, 1, 5, 5, 7, 48, 2]);
-    pub const AD_CA_REPOSITORY: Oid = Oid(&[43, 6, 1, 5, 5, 7, 48, 5]);
-    pub const AD_RPKI_MANIFEST: Oid = Oid(&[43, 6, 1, 5, 5, 7, 48, 10]);
-    pub const AD_SIGNED_OBJECT: Oid = Oid(&[43, 6, 1, 5, 5, 7, 48, 11]);
-    pub const CE_SUBJECT_KEY_IDENTIFIER: Oid = Oid(&[85, 29, 14]);
-    pub const CE_KEY_USAGE: Oid = Oid(&[85, 29, 15]);
-    pub const CE_BASIC_CONSTRAINTS: Oid = Oid(&[85, 29, 19]);
-    pub const CE_CRL_DISTRIBUTION_POINTS: Oid = Oid(&[85, 29, 31]);
-    pub const CE_CERTIFICATE_POLICIES: Oid = Oid(&[85, 29, 32]);
-    pub const CE_AUTHORITY_KEY_IDENTIFIER: Oid = Oid(&[85, 29, 35]);
-    pub const CE_EXTENDED_KEY_USAGE: Oid = Oid(&[85, 29, 37]);
-    pub const PE_AUTHORITY_INFO_ACCESS: Oid = Oid(&[43, 6, 1, 5, 5, 7, 1, 1]);
-    pub const PE_IP_ADDR_BLOCK: Oid = Oid(&[43, 6, 1, 5, 5, 7, 1, 7]);
-    pub const PE_AUTONOMOUS_SYS_IDS: Oid = Oid(&[43, 6, 1, 5, 5, 7, 1, 8]);
-    pub const PE_SUBJECT_INFO_ACCESS: Oid = Oid(&[43, 6, 1, 5, 5, 7, 1, 11]);
+    pub const AD_CA_ISSUERS: Oid<&[u8]> = Oid(&[43, 6, 1, 5, 5, 7, 48, 2]);
+    pub const AD_CA_REPOSITORY: Oid<&[u8]> = Oid(&[43, 6, 1, 5, 5, 7, 48, 5]);
+    pub const AD_RPKI_MANIFEST: Oid<&[u8]> = Oid(&[43, 6, 1, 5, 5, 7, 48, 10]);
+    pub const AD_SIGNED_OBJECT: Oid<&[u8]> = Oid(&[43, 6, 1, 5, 5, 7, 48, 11]);
+    pub const CE_SUBJECT_KEY_IDENTIFIER: Oid<&[u8]> = Oid(&[85, 29, 14]);
+    pub const CE_KEY_USAGE: Oid<&[u8]> = Oid(&[85, 29, 15]);
+    pub const CE_BASIC_CONSTRAINTS: Oid<&[u8]> = Oid(&[85, 29, 19]);
+    pub const CE_CRL_DISTRIBUTION_POINTS: Oid<&[u8]> = Oid(&[85, 29, 31]);
+    pub const CE_CERTIFICATE_POLICIES: Oid<&[u8]> = Oid(&[85, 29, 32]);
+    pub const CE_AUTHORITY_KEY_IDENTIFIER: Oid<&[u8]> = Oid(&[85, 29, 35]);
+    pub const CE_EXTENDED_KEY_USAGE: Oid<&[u8]> = Oid(&[85, 29, 37]);
+    pub const PE_AUTHORITY_INFO_ACCESS: Oid<&[u8]>
+        = Oid(&[43, 6, 1, 5, 5, 7, 1, 1]);
+    pub const PE_IP_ADDR_BLOCK: Oid<&[u8]> = Oid(&[43, 6, 1, 5, 5, 7, 1, 7]);
+    pub const PE_AUTONOMOUS_SYS_IDS: Oid<&[u8]>
+        = Oid(&[43, 6, 1, 5, 5, 7, 1, 8]);
+    pub const PE_SUBJECT_INFO_ACCESS: Oid<&[u8]>
+        = Oid(&[43, 6, 1, 5, 5, 7, 1, 11]);
 }
 

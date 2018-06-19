@@ -1,16 +1,19 @@
-
 use std::fmt;
-use untrusted::Reader;
 use super::error::Error;
+use super::source::Source;
+
 
 //------------ Tag -----------------------------------------------------------
 
 /// The identifier octets of an encoded value, aka its tag.
+//
+//  For the moment, the tag is stored as a single `u8` with the constructed
+//  bit always cleared. Whether a value is primitive or constructed is
+//  indicated via the type used for the value itself.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Tag(u8);
 
 impl Tag {
-    const CONSTRUCTED: u8 = 0x20;
     const CONTEXT_SPECIFIC: u8 = 0x80;
 
     pub const END_OF_VALUE: Self = Tag(0x00);
@@ -20,21 +23,10 @@ impl Tag {
     pub const OCTET_STRING: Self = Tag(0x04);
     pub const NULL: Self = Tag(0x05);
     pub const OID: Self = Tag(0x06);
-    pub const SEQUENCE: Self = Tag(Tag::CONSTRUCTED | 0x10);
-    pub const SET: Self = Tag(Tag::CONSTRUCTED | 0x11);
+    pub const SEQUENCE: Self = Tag(0x10);
+    pub const SET: Self = Tag(0x11);
     pub const UTC_TIME: Self = Tag(0x17);
     pub const GENERALIZED_TIME: Self = Tag(0x18);
-
-    pub const OCTET_STRING_CON: Self = Tag(0x04| Tag::CONSTRUCTED);
-
-    pub const CTX_CON_0: Self
-        = Tag(Tag::CONTEXT_SPECIFIC | Tag::CONSTRUCTED | 0);
-    pub const CTX_CON_1: Self
-        = Tag(Tag::CONTEXT_SPECIFIC | Tag::CONSTRUCTED | 1);
-    pub const CTX_CON_2: Self
-        = Tag(Tag::CONTEXT_SPECIFIC | Tag::CONSTRUCTED | 2);
-    pub const CTX_CON_3: Self
-        = Tag(Tag::CONTEXT_SPECIFIC | Tag::CONSTRUCTED | 3);
 
     pub const CTX_0: Self = Tag(Tag::CONTEXT_SPECIFIC | 0);
     pub const CTX_1: Self = Tag(Tag::CONTEXT_SPECIFIC | 1);
@@ -46,45 +38,37 @@ impl Tag {
 }
 
 impl Tag {
-    pub fn parse<'a>(input: &mut Reader<'a>) -> Result<Self, Error> {
-        let byte = input.read_byte()?;
+    pub fn take_from<S: Source>(
+        source: &mut S,
+    ) -> Result<(Self, bool), S::Err> {
+        let byte = source.take_u8()?;
         if (byte & 0x1F) == 0x1F {
             // If all five lower bits are 1, the tag is encoded in multiple
             // bytes. We don’t support that.
-            Err(Error::Unimplemented)
+            xerr!(return Err(Error::Unimplemented.into()))
+        }
+        Ok((Tag(byte & 0xdf), byte & 0x20 != 0))
+    }
+
+    pub fn take_from_if<S: Source>(
+        self,
+        source: &mut S,
+    ) -> Result<Option<bool>, S::Err> {
+        if source.request(1)? == 0 {
+            return Ok(None)
+        }
+        let byte = source.slice()[0];
+        let (tag, compressed) = (Tag(byte & 0xdf), byte & 0x20 != 0);
+        if tag == self {
+            source.advance(1)?;
+            Ok(Some(compressed))
         }
         else {
-            Ok(Tag(byte))
+            Ok(None)
         }
-    }
-
-    pub fn peek<'a>(&self, reader: &Reader<'a>) -> bool {
-        if reader.at_end() {
-            false
-        }
-        else {
-            reader.peek(self.0)
-        }
-    }
-
-    pub fn is_primitive(&self) -> bool {
-        self.0 & 0x20 == 0
-    }
-
-    pub fn primitive(&self) -> Tag {
-        Tag(self.0 & 0xdf)
-    }
-
-    pub fn constructed(&self) -> Tag {
-        Tag(self.0 | 0x20)
     }
 }
 
-impl From<u8> for Tag {
-    fn from(x: u8) -> Tag {
-        Tag(x)
-    }
-}
 
 impl fmt::Debug for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -97,11 +81,12 @@ impl fmt::Debug for Tag {
             Tag::OID => write!(f, "OBJECT IDENTIFIER"),
             Tag::SEQUENCE => write!(f, "SEQUENCE"),
             Tag::SET => write!(f, "SET"),
-            Tag::CTX_CON_0 => write!(f, "[0]"),
-            Tag::CTX_CON_1 => write!(f, "[1]"),
-            Tag::CTX_CON_2 => write!(f, "[2]"),
-            Tag::CTX_CON_3 => write!(f, "[3]"),
+            Tag::CTX_0 => write!(f, "[0]"),
+            Tag::CTX_1 => write!(f, "[1]"),
+            Tag::CTX_2 => write!(f, "[2]"),
+            Tag::CTX_3 => write!(f, "[3]"),
             _ => write!(f, "Tag(0x{:02x})", self.0)
         }
     }
 }
+

@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 
 [dependencies]
+# Move to published 0.5 once that is available.
+bytes     = { git = "https://github.com/carllerche/bytes.git" }
 chrono    = "0.4"
 ring      = "^0.12" 
 untrusted = "^0.5"

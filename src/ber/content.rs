@@ -1,551 +1,648 @@
-use untrusted::{Input, Reader};
-use super::{Error, Length, Tag};
 
-// XXX TODO Add a flag to enforce DER encoding.
+use bytes::Bytes;
+use super::error::Error;
+use super::length::Length;
+use super::source::{CaptureSource, LimitedSource, Source};
+use super::tag::Tag;
+
 
 //------------ Content -------------------------------------------------------
 
-/// BER-encoded content.
-pub struct Content<'a> {
-    reader: Reader<'a>,
-    state: State,
+pub enum Content<'a, S: 'a> {
+    Primitive(Primitive<'a, S>),
+    Constructed(Constructed<'a, S>)
 }
 
-//  # Internal Basics
-impl<'a> Content<'a> {
-    /// Creates a new content value from its parts.
-    fn new(reader: Reader<'a>, indefinite: bool) -> Self {
-        Content {
-            reader,
-            state: State::new(indefinite)
+impl<'a, S: Source + 'a> Content<'a, S> {
+    fn exhausted(self) -> Result<(), S::Err> {
+        match self {
+            Content::Primitive(inner) => inner.exhausted(),
+            Content::Constructed(mut inner) => inner.exhausted()
         }
     }
 
-    /// Checks whether content has been completely read.
-    fn complete(&mut self) -> Result<(), Error> {
-        match self.state {
-            State::Definite => {
-                if self.reader.at_end() {
-                    Ok(())
-                }
-                else {
-                    Err(Error::Malformed)
-                }
-            }
-            State::Indefinite => {
-                let tag = Tag::parse(&mut self.reader)?;
-                if tag != Tag::END_OF_VALUE {
-                    return Err(Error::Malformed)
-                }
-                if let Length::Definite(0) = Length::parse(&mut self.reader)? {
-                    Ok(())
-                }
-                else {
-                    Err(Error::Malformed)
-                }
-            }
-            State::Done => {
-                Ok(())
+    pub fn mode(&self) -> Mode {
+        match *self {
+            Content::Primitive(ref inner) => inner.mode(),
+            Content::Constructed(ref inner) => inner.mode()
+        }
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        match *self {
+            Content::Primitive(_) => true,
+            Content::Constructed(_) => false,
+        }
+    }
+
+    pub fn is_constructed(&self) -> bool {
+        match *self {
+            Content::Primitive(_) => false,
+            Content::Constructed(_) => true,
+        }
+    }
+
+    pub fn as_primitive(&mut self) -> Result<&mut Primitive<'a, S>, S::Err> {
+        match *self {
+            Content::Primitive(ref mut inner) => Ok(inner),
+            Content::Constructed(_) => {
+                xerr!(Err(Error::Malformed.into()))
             }
         }
     }
 
-    /// Parses a tag and length from the content if there are values left.
+    pub fn as_constructed(
+        &mut self
+    ) -> Result<&mut Constructed<'a, S>, S::Err> {
+        match *self {
+            Content::Primitive(_) => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            Content::Constructed(ref mut inner) => Ok(inner),
+        }
+    }
+
+    pub fn into_bytes(&mut self) -> Result<Bytes, S::Err> {
+        match *self {
+            Content::Primitive(ref mut inner) => inner.take_all(),
+            Content::Constructed(ref mut inner) => inner.take_all(),
+        }
+    }
+}
+
+impl<'a, S: Source + 'a> Content<'a, S> {
+    pub fn u8(&mut self) -> Result<u8, S::Err> {
+        if let Content::Primitive(ref mut prim) = *self {
+            prim.take_u8()
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
+    pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
+        let res = self.u8()?;
+        if res == expected {
+            Ok(())
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
+    pub fn u64(&mut self) -> Result<u64, S::Err> {
+        if let Content::Primitive(ref mut prim) = *self {
+            prim.u64()
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
+}
+
+
+//------------ Primitive -----------------------------------------------------
+
+/// A primitive value.
+pub struct Primitive<'a, S: 'a> {
+    source: &'a mut LimitedSource<S>,
+    mode: Mode,
+}
+
+impl<'a, S: 'a> Primitive<'a, S> {
+    fn new(source: &'a mut LimitedSource<S>, mode: Mode) -> Self {
+        Primitive { source, mode }
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode
+    }
+}
+
+impl<'a, S: Source + 'a> Primitive<'a, S> {
+    /// Parses the primitive value as a BOOLEAN value.
     ///
-    /// Returns `Ok(None)` if we have reached the end of content.
-    fn parse_header(&mut self) -> Result<Option<(Tag, Length)>, Error> {
-        match self.state {
-            State::Definite => {
-                if self.reader.at_end() {
-                    return Ok(None)
+    /// A boolean value is encoded as a primitive value with exactly one
+    /// octet of content. If the octet is 0, the result is `false`, otherwise
+    /// it is `true`. In DER mode, the octet has to be `0` for a value of
+    /// `false`, `0xFF` for a value of `true`, and all other values are not
+    /// permitted.
+    pub fn bool(&mut self) -> Result<bool, S::Err> {
+        let res = self.take_u8()?;
+        if self.mode == Mode::Der {
+            match res {
+                0 => Ok(false),
+                0xFF => Ok(true),
+                _ => {
+                    xerr!(Err(Error::Malformed.into()))
                 }
-            }
-            State::Done => return Ok(None),
-            _ => { }
-        }
-        let tag = Tag::parse(&mut self.reader)?;
-        let length = Length::parse(&mut self.reader)?;
-        if tag == Tag::END_OF_VALUE {
-            if let State::Indefinite = self.state {
-                if length.is_zero() {
-                    self.state = State::Done;
-                    Ok(None)
-                }
-                else {
-                    Err(Error::Malformed)
-                }
-            }
-            else {
-                Err(Error::Malformed)
             }
         }
         else {
-            Ok(Some((tag, length)))
+            Ok(res != 0)
         }
     }
 
-    /// Parses the content of a constructed value.
-    fn parse_content<F, T>(
+    /// Parses the primitive value as a INTEGER value limited to a `u64`.
+    pub fn u64(&mut self) -> Result<u64, S::Err> {
+        let res = {
+            let bits = self.slice_all()?;
+            match (bits.get(0), bits.get(1).map(|x| x & 0x80 != 0)) {
+                (Some(0), Some(false)) => {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                (Some(0xFF), Some(true)) => {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                (Some(x), _) if x & 0x80 != 0 => {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                _ => { }
+            }
+            if bits.len() > 8 {
+                xerr!(return Err(Error::Malformed.into()))
+            }
+            let mut res = 0;
+            for &ch in bits {
+                res = res << 8 | ch as u64
+            }
+            res
+        };
+        self.skip_all()?;
+        Ok(res)
+    }
+}
+
+impl<'a, S: Source + 'a> Primitive<'a, S> {
+    pub fn remaining(&self) -> usize {
+        self.source.limit().unwrap()
+    }
+
+    pub fn skip_all(&mut self) -> Result<(), S::Err> {
+        self.source.skip_all()
+    }
+
+    pub fn take_all(&mut self) -> Result<Bytes, S::Err> {
+        self.source.take_all()
+    }
+
+    pub fn slice_all(&mut self) -> Result<&[u8], S::Err> {
+        let remaining = self.remaining();
+        self.source.request(remaining)?;
+        Ok(&self.source.slice()[..remaining])
+    }
+
+    fn exhausted(self) -> Result<(), S::Err> {
+        self.source.exhausted()
+    }
+}
+
+
+impl<'a, S: Source + 'a> Source for Primitive<'a, S> {
+    type Err = S::Err;
+
+    fn request(&mut self, len: usize) -> Result<usize, Self::Err> {
+        self.source.request(len)
+    }
+
+    fn advance(&mut self, len: usize) -> Result<(), Self::Err> {
+        self.source.advance(len)
+    }
+
+    fn slice(&self) -> &[u8] {
+        self.source.slice()
+    }
+
+    fn bytes(&self, start: usize, end: usize) -> Bytes {
+        self.source.bytes(start, end)
+    }
+}
+
+
+//------------ Constructed ---------------------------------------------------
+
+#[derive(Debug)]
+pub struct Constructed<'a, S: 'a> {
+    source: &'a mut LimitedSource<S>,
+    state: State,
+    mode: Mode,
+}
+
+
+impl<'a, S: Source + 'a> Constructed<'a, S> {
+    fn new(
+        source: &'a mut LimitedSource<S>,
+        state: State,
+        mode: Mode
+    ) -> Self {
+        Constructed { source, state, mode }
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode
+    }
+}
+
+impl<'a, S: Source + 'a> Constructed<'a, S> {
+    fn exhausted(&mut self) -> Result<(), S::Err> {
+        match self.state {
+            State::Done => Ok(()),
+            State::Definite => {
+                self.source.exhausted()
+            }
+            State::Indefinite => {
+                let (tag, constructed) = Tag::take_from(self.source)?;
+                if tag != Tag::END_OF_VALUE {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else if constructed {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else if !Length::take_from(self.source)?.is_zero() {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else {
+                    Ok(())
+                }
+            }
+            State::Unbounded => Ok(())
+        }
+    }
+
+    fn is_exhausted(&self) -> bool {
+        match self.state {
+            State::Definite => {
+                self.source.limit().unwrap() == 0
+            }
+            State::Indefinite => false,
+            State::Done => true,
+            State::Unbounded => false,
+        }
+    }
+
+    fn take_value<F, T>(
         &mut self,
-        tag: Tag,
-        length: Length,
+        expected: Option<Tag>,
         op: F
-    ) -> Result<T, Error>
-    where F: FnOnce(Tag, &mut Content<'a>) -> Result<T, Error> {
+    ) -> Result<Option<T>, S::Err>
+    where F: FnOnce(Tag, &mut Content<S>) -> Result<T, S::Err> {
+        if self.is_exhausted() {
+            return Ok(None)
+        }
+        let (tag, constructed) = if let Some(expected) = expected {
+            (
+                expected,
+                match expected.take_from_if(self.source)? {
+                    Some(compressed) => compressed,
+                    None => return Ok(None)
+                }
+            )
+        }
+        else {
+            Tag::take_from(self.source)?
+        };
+        let length = Length::take_from(self.source)?;
+        println!("Value {:?} {:?} {:?}", tag, constructed, length);
+
+        if tag == Tag::END_OF_VALUE {
+            if let State::Indefinite = self.state {
+                if constructed {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                if !length.is_zero() {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                self.state = State::Done;
+                return Ok(None)
+            }
+            else {
+                xerr!(return Err(Error::Malformed.into()))
+            }
+        }
+
         match length {
             Length::Definite(len) => {
-                let mut reader = Reader::new(
-                    self.reader.skip_and_get_input(len)?
-                );
-                let mut content = Content::new(reader, false);
-                let res = op(tag, &mut content)?;
-                content.complete()?;
-                Ok(res)
+                let old_limit = self.source.limit_further(Some(len));
+                let res = {
+                    let mut content = if constructed {
+                        // Definite length constructed values are not allowed
+                        // in CER.
+                        if self.mode == Mode::Cer {
+                            xerr!(return Err(Error::Malformed.into()))
+                        }
+                        Content::Constructed(
+                            Constructed::new(
+                                self.source, State::Definite, self.mode
+                            )
+                        )
+                    }
+                    else {
+                        Content::Primitive(
+                            Primitive::new(self.source, self.mode)
+                        )
+                    };
+                    let res = op(tag, &mut content)?;
+                    content.exhausted()?;
+                    res
+                };
+                self.source.set_limit(old_limit.map(|x| x - len));
+                Ok(Some(res))
             }
             Length::Indefinite => {
-                let state = self.state.swap(true);
-                let res = op(tag, self)?;
-                self.complete()?;
-                self.state = state;
-                Ok(res)
+                if !constructed {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                else if self.mode == Mode::Der {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                let mut content = Content::Constructed(
+                    Constructed::new(self.source, State::Indefinite, self.mode)
+                );
+                let res = op(tag, &mut content)?;
+                content.exhausted()?;
+                Ok(Some(res))
             }
         }
     }
 }
 
-
-/// # Basic Parsing
-impl<'a> Content<'a> {
-    /// Parses input as BER-encoded content.
-    ///
-    /// The actual parsing happens inside the closure `op` which will receive
-    /// a representation of the input as encoded content.
-    pub fn parse<F, T>(input: Input<'a>, op: F) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
-        let mut content = Content::new(Reader::new(input), false);
-        let res = op(&mut content)?;
-        content.complete()?;
-        Ok(res)
-    }
-
-    /// Parses a byte slice as BER-encoded content.
-    pub fn parse_slice<F, T>(slice: &'a [u8], op: F) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
-        Self::parse(Input::from(slice), op)
-    }
-
-    /// Parses a mandatory constructed value from the beginning of content.
-    ///
-    /// A constructed value is a value that in turn consists of values. Which
-    /// values these are is described via an ASN.1 specification.
-    ///
-    /// This method expects there to be at least one more value in the
-    /// content. It fails with `Err(Error::Malformed)` if the content has
-    /// reached its end.
-    ///
-    /// The closure `op` will receive both the value’s tag and its content
-    /// for futher processing. It must process all the content. If there is
-    /// anything left after the closure returns successfully, this will
-    /// result in an `Err(Error::Malformed)`.
-    pub fn constructed<F, T>(&mut self, op: F) -> Result<T, Error>
-    where F: FnOnce(Tag, &mut Content<'a>) -> Result<T, Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Err(Error::Malformed)
-        };
-        if tag.is_primitive() {
-            return Err(Error::Malformed)
+impl<'a, S: Source + 'a> Constructed<'a, S> {
+    pub fn value<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    where F: FnOnce(Tag, &mut Content<S>) -> Result<T, S::Err> {
+        match self.take_value(None, op)? {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
+            }
         }
-        self.parse_content(tag, length, op)
     }
 
-    /// Parses a mandatory constructed value if it has the right tag.
+    pub fn opt_value<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    where F: FnOnce(Tag, &mut Content<S>) -> Result<T, S::Err> {
+        self.take_value(None, op)
+    }
+
+    pub fn value_if<F, T>(&mut self, expected: Tag, op: F) -> Result<T, S::Err>
+    where F: FnOnce(&mut Content<S>) -> Result<T, S::Err> {
+        let res = self.take_value(Some(expected), |_, content| {
+            op(content)
+        })?;
+        match res {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+        }
+    }
+
+    pub fn opt_value_if<F, T>(
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<Option<T>, S::Err>
+    where F: FnOnce(&mut Content<S>) -> Result<T, S::Err> {
+        self.take_value(Some(expected), |_, content| op(content))
+    }
+
+    pub fn constructed<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    where F: FnOnce(Tag, &mut Constructed<S>) -> Result<T, S::Err> {
+        match self.opt_constructed(op)? {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+        }
+    }
+
+    pub fn opt_constructed<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    where F: FnOnce(Tag, &mut Constructed<S>) -> Result<T, S::Err> {
+        self.take_value(None, |tag, content| {
+            op(tag, content.as_constructed()?)
+        })
+    }
+
     pub fn constructed_if<F, T>(
-        &mut self, expected: Tag, op: F
-    ) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
-        self.constructed(|tag, content| {
-            if tag == expected { op(content) }
-            else { Err(Error::Malformed) }
-        })
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<T, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
+        match self.opt_constructed_if(expected, op)? {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+        }
     }
 
-    /// Parses an optional constructed value from the beginning of content.
-    ///
-    /// This is similar to `constructed` but returns `Ok(None)` if there are
-    /// no values left in the content.
-    pub fn opt_constructed<F, T>(&mut self, op: F) -> Result<Option<T>, Error>
-    where F: FnOnce(Tag, &mut Content<'a>) -> Result<T, Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Ok(None)
-        };
-        self.parse_content(tag, length, op).map(Some)
-    }
-
-    /// Parses an optional constructed value if the tag matches.
-    ///
-    /// This will return `Ok(None)` both if there are no more values left or
-    /// if the tag of the next value does not match the given tag.
     pub fn opt_constructed_if<F, T>(
-        &mut self, expected: Tag, op: F
-    ) -> Result<Option<T>, Error>
-    where F: FnOnce(&mut Content<'a>) ->Result<T, Error> {
-        if !expected.peek(&self.reader) {
-            return Ok(None)
-        }
-        self.opt_constructed(|_, content| op(content))
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<Option<T>, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
+        self.take_value(Some(expected), |_, content| {
+            op(content.as_constructed()?)
+        })
     }
 
-    /// Parses a mandatory primitive value from the beginning of content.
-    ///
-    /// A primitive value is one that actually contains some encoded data.
-    /// This data will be passed together with the tag to the closure `op`.
-    pub fn primitive<F, T>(&mut self, op: F) -> Result<T, Error>
-    where F: FnOnce(Tag, Input<'a>) -> Result<T, Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Err(Error::Malformed)
-        };
-        if !tag.is_primitive() {
-            return Err(Error::Malformed)
-        }
-        let length = match length {
-            Length::Definite(len) => len,
-            Length::Indefinite => return Err(Error::Malformed)
-        };
-        op(tag, self.reader.skip_and_get_input(length)?)
-    }
-
-    /// Parses a primitive value if the tag matches.
-    ///
-    /// If a different tag is encountered, the method will return an error.
-    pub fn primitive_if<F, T>(
-        &mut self, expected: Tag, op: F
-    ) -> Result<T, Error>
-    where F: FnOnce(Input<'a>) -> Result<T, Error> {
-        self.primitive(|tag, input| {
-            if tag == expected {
-                op(input)
+    pub fn primitive<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
+        match self.opt_primitive(op)? {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
             }
-            else {
-                xdebug!("primitive_if: expected {:?}, got {:?}", expected, tag);
-                Err(Error::Malformed)
+        }
+    }
+
+    pub fn opt_primitive<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
+        self.take_value(None, |tag, content| {
+            op(tag, content.as_primitive()?)
+        })
+    }
+
+    pub fn primitive_if<F, T>(
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<T, S::Err>
+    where F: FnOnce(&mut Primitive<S>) -> Result<T, S::Err> {
+        match self.opt_primitive_if(expected, op)? {
+            Some(res) => Ok(res),
+            None => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+        }
+    }
+
+    pub fn opt_primitive_if<F, T>(
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<Option<T>, S::Err>
+    where F: FnOnce(&mut Primitive<S>) -> Result<T, S::Err> {
+        self.take_value(Some(expected), |_, content| {
+            op(content.as_primitive()?)
+        })
+    }
+
+    pub fn capture<F>(&mut self, op: F) -> Result<Bytes, S::Err>
+    where
+        F: FnOnce(
+            &mut Constructed<CaptureSource<LimitedSource<S>>>
+        ) -> Result<(), S::Err>
+    {
+        let limit = self.source.limit();
+        let mut source = LimitedSource::new(CaptureSource::new(self.source));
+        source.set_limit(limit);
+        {
+            let mut constructed = Constructed::new(
+                &mut source, self.state, self.mode
+            );
+            op(&mut constructed)?
+        }
+        Ok(source.unwrap().into_bytes())
+    }
+
+    pub fn take_one(&mut self) -> Result<Bytes, S::Err> {
+        self.capture(|cons| {
+            match cons.skip_one()? {
+                Some(()) => Ok(()),
+                None => {
+                    xerr!(Err(Error::Malformed.into()))
+                }
             }
         })
     }
 
-    /// Parses an optional primitive value from the beginning of content.
-    ///
-    /// This method is similar to `primitive` but it won’t fail if there
-    /// are no more values left.
-    pub fn opt_primitive<F, T>(&mut self, op: F) -> Result<Option<T>, Error>
-    where F: FnOnce(Tag, Input<'a>) -> Result<T, Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Ok(None)
-        };
-        if !tag.is_primitive() {
-            return Err(Error::Malformed)
-        }
-        let length = match length {
-            Length::Definite(len) => len,
-            Length::Indefinite => return Err(Error::Malformed)
-        };
-        op(tag, self.reader.skip_and_get_input(length)?).map(Some)
+    pub fn take_all(&mut self) -> Result<Bytes, S::Err> {
+        self.capture(|cons| cons.skip_all())
     }
 
-    /// Parses an optional primitive value if the tag matches.
-    ///
-    /// The method returns `Ok(None)` both if the end of content is reached
-    /// or if there is a value with a different tag.
-    pub fn opt_primitive_if<F, T>(
-        &mut self, expected: Tag, op: F
-    ) -> Result<Option<T>, Error>
-    where F: FnOnce(Input<'a>) -> Result<T, Error> {
-        if !expected.peek(&self.reader) {
-            return Ok(None)
-        }
-        self.opt_primitive(|_, input| op(input))
-    }
-
-    /// Parses the remaining content into input.
-    pub fn into_input(&mut self) -> Result<Input<'a>, Error> {
-        let start = self.reader.mark();
-        self.skip_all()?;
-        let end = self.reader.mark();
-        Ok(self.reader.get_input_between_marks(start, end)?)
-    }
-
-    /// Returns the next value as input.
-    ///
-    /// The returned input will include tag and length of the value.
-    pub fn value_as_input(&mut self) -> Result<Input<'a>, Error> {
-        let start = self.reader.mark();
-        self.skip()?;
-        let end = self.reader.mark();
-        Ok(self.reader.get_input_between_marks(start, end)?)
-    }
-
-    /// Skips over the remaining content.
-    pub fn skip_all(&mut self) -> Result<(), Error> {
-        while let Some(()) = self.opt_skip()? { }
+    fn skip_all(&mut self) -> Result<(), S::Err> {
+        while let Some(()) = self.skip_one()? { }
         Ok(())
     }
 
-    /// Skips over the next value.
-    pub fn skip(&mut self) -> Result<(), Error> {
-        match self.opt_skip()? {
-            Some(()) => Ok(()),
-            None => Err(Error::Malformed)
-        }
-    }
-
-    /// Skips over the next value, if there is one.
-    pub fn opt_skip(&mut self) -> Result<Option<()>, Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Ok(None)
-        };
-        match length {
-            Length::Definite(len) => {
-                self.reader.skip(len)?;
-                Ok(Some(()))
-            }
-            Length::Indefinite => {
-                if tag.is_primitive() {
-                    return Err(Error::Malformed)
+    fn skip_one(&mut self) -> Result<Option<()>, S::Err> {
+        self.opt_value(|_tag, content| {
+            match *content {
+                Content::Primitive(ref mut inner) => {
+                    inner.skip_all()
                 }
-                self.parse_content(tag, length, |_, content| {
-                    content.skip_all()
-                }).map(Some)
+                Content::Constructed(ref mut inner) => {
+                    inner.skip_all()?;
+                    Ok(())
+                }
             }
-        }
-    }
-
-    /// Parses anything that is coming up.
-    pub fn any<F, T>(&mut self, op: F) -> Result<Option<T>, Error>
-    where
-        F: FnOnce(
-            Tag, Length, Option<&mut Content<'a>>
-        ) -> Result<T, Error>
-    {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Ok(None)
-        };
-        if tag.is_primitive() {
-            if let Length::Definite(len) = length { 
-                self.reader.skip(len)?;
-                op(tag, length, None).map(Some)
-            }
-            else {
-                Err(Error::Malformed)
-            }
-        }
-        else {
-            self.parse_content(tag, length, |tag, content| {
-                op(tag, length, Some(content))
-            }).map(Some)
-        }
-    }
-
-    pub fn recursive_input<F>(
-        &mut self, op: &mut F
-    ) -> Result<Input<'a>, Error>
-    where F: FnMut(Tag, Option<Input<'a>>) -> Result<(), Error> {
-        let start = self.reader.mark();
-        if self.opt_recursive_input(op)?.is_none() {
-            return Err(Error::Malformed)
-        }
-        let end = self.reader.mark();
-        self.reader.get_input_between_marks(start, end).map_err(Into::into)
-    }
-
-    pub fn opt_recursive_input<F>(
-        &mut self, op: &mut F
-    ) -> Result<Option<()>, Error>
-    where F: FnMut(Tag, Option<Input<'a>>) -> Result<(), Error> {
-        let (tag, length) = match self.parse_header()? {
-            Some(some) => some,
-            None => return Ok(None)
-        };
-        if tag.is_primitive() {
-            if let Length::Definite(len) = length { 
-                op(tag, Some(self.reader.skip_and_get_input(len)?)).map(Some)
-            }
-            else {
-                Err(Error::Malformed)
-            }
-        }
-        else {
-            self.parse_content(tag, length, |tag, content| {
-                op(tag, None)?;
-                while let Some(()) = content.opt_recursive_input(op)? { }
-                Ok(())
-            }).map(Some)
-        }
+        })
     }
 }
 
 
-/// # High-level Parsing
-impl<'a> Content<'a> {
-    //--- BOOLEAN
-
-    pub fn parse_bool(&mut self) -> Result<bool, Error> {
-        self.primitive_if(Tag::BOOLEAN, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                // DER: for true, value must be 0xFF.
-                Ok(reader.read_byte()? != 0)
-            })
-        })
+impl<'a, S: Source + 'a> Constructed<'a, S> {
+    pub fn take_bool(&mut self) -> Result<bool, S::Err> {
+        self.primitive_if(Tag::BOOLEAN, |prim| prim.bool())
     }
 
-    pub fn parse_opt_bool(&mut self) -> Result<Option<bool>, Error> {
-        self.opt_primitive_if(Tag::BOOLEAN, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                // DER: for true, value must be 0xFF.
-                Ok(reader.read_byte()? != 0)
-            })
-        })
+    pub fn take_opt_bool(&mut self) -> Result<Option<bool>, S::Err> {
+        self.opt_primitive_if(Tag::BOOLEAN, |prim| prim.bool())
     }
 
-
-    //--- INTEGER
-
-    pub fn parse_u8(&mut self) -> Result<u8, Error> {
-        self.primitive_if(Tag::INTEGER, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                let res = reader.read_byte()?;
-                if res & 0x80 != 0 {
-                    Err(Error::Malformed)
-                }
-                else {
-                    Ok(res)
-                }
-            })
-        })
-    }
-
-    pub fn parse_u32(&mut self) -> Result<u32, Error> {
-        self.primitive_if(Tag::INTEGER, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                let mut res = reader.read_byte()? as u32;
-                if res & 0x80 != 0 {
-                    return Err(Error::Malformed)
-                }
-                for _ in 1..4 {
-                    if reader.at_end() {
-                        return Ok(res)
-                    }
-                    res = (res << 8)
-                        | (reader.read_byte()? as u32);
-                }
-                Err(Error::Malformed)
-            })
-        })
-    }
-
-    pub fn parse_u64(&mut self) -> Result<u64, Error> {
-        self.primitive_if(Tag::INTEGER, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                let mut res = reader.read_byte()? as u64;
-                if res & 0x80 != 0 {
-                    return Err(Error::Malformed)
-                }
-                for _ in 1..8 {
-                    if reader.at_end() {
-                        return Ok(res)
-                    }
-                    res = (res << 8)
-                        | (reader.read_byte()? as u64);
-                }
-                Err(Error::Malformed)
-            })
-        })
-    }
-
-    pub fn skip_u8_if(&mut self, value: u8) -> Result<(), Error> {
-        if self.parse_u8()? == value { Ok(()) }
-        else { Err(Error::Malformed) }
-    }
-
-
-    //--- BIT STRING
-
-    /// Parses a BIT STRING.
-    pub fn bit_string(&mut self) -> Result<(u8, Input<'a>), Error> {
-        self.primitive_if(Tag::BIT_STRING, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                Ok((
-                   reader.read_byte()?,
-                   reader.skip_to_end()
-                ))
-            })
-        })
-    }
-
-    /// Parses a BIT STRING with no unused bits.
-    pub fn filled_bit_string(&mut self) -> Result<Input<'a>, Error> {
-        self.primitive_if(Tag::BIT_STRING, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                if reader.read_byte()? != 0 {
-                    return Err(Error::Malformed)
-                }
-                Ok(reader.skip_to_end())
-            })
-        })
-    }
-
-    pub fn opt_filled_bit_string_if(
-        &mut self, expected: Tag
-    ) -> Result<Option<Input<'a>>, Error> {
-        self.opt_primitive_if(expected, |input| {
-            input.read_all(Error::Malformed, |reader| {
-                if reader.read_byte()? != 0 {
-                    return Err(Error::Malformed)
-                }
-                Ok(reader.skip_to_end())
-            })
-        })
-    }
-
-    //--- OCTET STRING
-
-    pub fn octet_string(&mut self) -> Result<Input<'a>, Error> {
-        self.primitive_if(Tag::OCTET_STRING, Ok)
-    }
-
-    pub fn octet_string_if(
-        &mut self, expected: Tag
-    ) -> Result<Input<'a>, Error> {
-        self.primitive_if(expected, Ok)
-    }
-
-    //--- NULL
-
-    pub fn skip_opt_null(&mut self) -> Result<(), Error> {
+    pub fn skip_opt_null(&mut self) -> Result<(), S::Err> {
         self.opt_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
     }
 
-    //--- SEQUENCE
+    pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
+        self.primitive_if(Tag::INTEGER, |prim| {
+            let got = prim.take_u8()?;
+            if got != expected {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            else {
+                Ok(())
+            }
+        })
+    }
 
-    pub fn sequence<F, T>(&mut self, op: F) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
+    pub fn take_u64(&mut self) -> Result<u64, S::Err> {
+        self.primitive_if(Tag::INTEGER, |prim| prim.u64())
+    }
+
+    pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.constructed_if(Tag::SEQUENCE, op)
     }
 
-    pub fn opt_sequence<F, T>(&mut self, op: F) -> Result<Option<T>, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
+    pub fn opt_sequence<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.opt_constructed_if(Tag::SEQUENCE, op)
     }
 
-    //--- SET
-    
-    pub fn set<F, T>(&mut self, op: F) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
+    pub fn set<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.constructed_if(Tag::SET, op)
+    }
+
+    pub fn opt_set<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
+        self.opt_constructed_if(Tag::SET, op)
+    }
+}
+
+
+//------------ Mode ----------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Mode {
+    /// Basic Encoding Rules.
+    ///
+    /// These are the most flexible rules, allowing alternative encodings for
+    /// some types as well as indefinite length values.
+    Ber,
+
+    /// Canonical Encoding Rules.
+    ///
+    /// These rules always employ indefinite length encoding for constructed
+    /// values and the shortest possible form for primitive values.  There
+    /// are additional restrictions for certain types.
+    Cer,
+
+    /// Distinguished Encoding Rules.
+    ///
+    /// These rules always employ definite length values and require the
+    /// shortest possible encoding. Additional rules apply to some types.
+    Der,
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Ber
+    }
+}
+
+impl Mode {
+    pub fn decode<S, F, T>(self, source: S, op: F) -> Result<T, S::Err>
+    where
+        S: Source,
+        F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err>
+    {
+        let mut source = LimitedSource::new(source);
+        let mut cons = Constructed::new(&mut source, State::Unbounded, self);
+        let res = op(&mut cons)?;
+        cons.exhausted()?;
+        Ok(res)
     }
 }
 
@@ -560,20 +657,10 @@ enum State {
     /// Indefinite value, we haven’t reached the end yet.
     Indefinite,
 
-    /// End of value reached.
-    Done
-}
+    /// End of indefinite value reached.
+    Done,
 
-impl State {
-    fn new(indefinite: bool) -> Self {
-        if indefinite { State::Indefinite }
-        else { State::Definite }
-    }
-
-    fn swap(&mut self, indefinite: bool) -> Self {
-        let res = *self;
-        *self = Self::new(indefinite);
-        res
-    }
+    /// Unbounded value: read as far as we get.
+    Unbounded,
 }
 

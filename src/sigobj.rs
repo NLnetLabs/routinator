@@ -1,57 +1,63 @@
 //! Signed Objects
 
+use bytes::Bytes;
 use untrusted::Input;
-use super::ber::{Content, Error, OctetString, Oid, Tag};
+use super::ber::{Constructed, Error, Mode, OctetString, Oid, Source, Tag};
+use super::x509::update_once;
 use super::cert::Cert;
 use super::x509::Time;
 
 
-//------------ Signed Objectr ------------------------------------------------
+//------------ SignedObject --------------------------------------------------
 
 /// A signed object.
 ///
 /// Signed objects are a more strict profile of a CMS signed-data object.
 /// They are specified in [RFC 6088] while CMS is specified in [RFC 5652].
 #[derive(Clone, Debug)]
-pub struct SignedObject<'a> {
-    content_type: Oid<'a>,
-    content: OctetString<'a>,
-    cert: Cert<'a>,
-    signer_info: SignerInfo<'a>,
+pub struct SignedObject {
+    content_type: Oid<Bytes>,
+    content: OctetString,
+    cert: Cert,
+    signer_info: SignerInfo,
 }
 
-impl<'a> SignedObject<'a> {
+impl SignedObject {
+    pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
+        Mode::Ber.decode(source, Self::take_from)
+    }
+
     /// Returns a reference to the object’s content type.
-    pub fn content_type(&self) -> &Oid<'a> {
+    pub fn content_type(&self) -> &Oid<Bytes> {
         &self.content_type
     }
 
     /// Returns a reference to the object’s content.
-    pub fn content(&self) -> &OctetString<'a> {
+    pub fn content(&self) -> &OctetString {
         &self.content
     }
 
+    /*
+    pub fn parse_content<F, T>(&self, op: F) -> Result<T, Error>
+    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
+        self.content.parse_content(op)
+    }
+    */
+
     /// Returns a reference to the certificate the object is signed with.
-    pub fn cert(&self) -> &Cert<'a> {
+    pub fn cert(&self) -> &Cert {
         &self.cert
     }
 }
 
 
-impl<'a> SignedObject<'a> {
-    /// Parses the ROA from input
-    pub fn parse(input: Input<'a>) -> Result<Self, Error> {
-        Content::parse(input, Self::parse_content_info)
-    }
-
-    pub fn parse_slice(slice: &'a [u8]) -> Result<Self, Error> {
-        Content::parse_slice(slice, Self::parse_content_info)
-    }
-
-    fn parse_content_info(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(|content| {
-            oid::SIGNED_DATA.skip_if(content)?; // contentType
-            content.constructed_if(Tag::CTX_CON_0, Self::parse_signed_data)
+impl SignedObject {
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
+            oid::SIGNED_DATA.skip_if(cons)?; // contentType
+            cons.constructed_if(Tag::CTX_0, Self::take_signed_data)
         })
     }
 
@@ -70,16 +76,18 @@ impl<'a> SignedObject<'a> {
     /// ```
     ///
     /// `version` must be 3, `certificates` present and `crls` not.
-    fn parse_signed_data(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(|content| {
-            content.skip_u8_if(3)?; // version -- must be 3
-            DigestAlgorithm::skip_set(content)?; // digestAlgorithms
-            let (content_type, ct)
-                = Self::parse_encap_content_info(content)?;
-            let cert = Self::parse_certificates(content)?;
-            let signer_info = SignerInfo::parse_set(content)?;
+    fn take_signed_data<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
+            cons.skip_u8_if(3)?; // version -- must be 3
+            DigestAlgorithm::skip_set(cons)?; // digestAlgorithms
+            let (content_type, content)
+                = Self::take_encap_content_info(cons)?;
+            let cert = Self::take_certificates(cons)?;
+            let signer_info = SignerInfo::take_set_from(cons)?;
             Ok(SignedObject {
-                content_type, content: ct, cert, signer_info
+                content_type, content, cert, signer_info
             })
         })
     }
@@ -95,13 +103,16 @@ impl<'a> SignedObject<'a> {
     /// ```
     ///
     /// For a ROA, `eContentType` must be `oid:::ROUTE_ORIGIN_AUTH`.
-    fn parse_encap_content_info(
-        content: &mut Content<'a>
-    ) -> Result<(Oid<'a>, OctetString<'a>), Error> {
-        content.sequence(|content| {
+    fn take_encap_content_info<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<(Oid<Bytes>, OctetString), S::Err> {
+        cons.sequence(|cons| {
             Ok((
-                Oid::parse(content)?,
-                content.constructed_if(Tag::CTX_CON_0, OctetString::parse)?
+                Oid::take_from(cons)?,
+                cons.constructed_if(
+                    Tag::CTX_0,
+                    OctetString::take_from
+                )?
             ))
         })
     }
@@ -126,14 +137,16 @@ impl<'a> SignedObject<'a> {
     /// other choices.
     ///
     /// RFC 6288 limites the set to exactly one.
-    fn parse_certificates(
-        content: &mut Content<'a>
-    ) -> Result<Cert<'a>, Error> {
-        content.constructed_if(Tag::CTX_CON_0, |content| {
-            content.constructed(|tag, content| {
+    fn take_certificates<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Cert, S::Err> {
+        cons.constructed_if(Tag::CTX_0, |cons| {
+            cons.constructed(|tag, cons| {
                 match tag {
-                    Tag::SEQUENCE =>  Cert::parse_content(content),
-                    _ => Err(Error::Unimplemented)
+                    Tag::SEQUENCE =>  Cert::take_content_from(cons),
+                    _ => {
+                        xerr!(Err(Error::Unimplemented.into()))
+                    }
                 }
             })
         })
@@ -163,7 +176,7 @@ impl<'a> SignedObject<'a> {
         //
         // c. cert is an EE cert with the SubjectKeyIdentifer matching
         //    the sid field of the SignerInfo.
-        if self.signer_info.sid != self.cert.subject_key_identifier() {
+        if &self.signer_info.sid != self.cert.subject_key_identifier() {
             return Err(ValidationError)
         }
         // h. eContentType equals the OID in the value of the content-type
@@ -185,9 +198,9 @@ impl<'a> SignedObject<'a> {
         let msg = self.signer_info.signed_attrs.encode_verify();
         ::ring::signature::verify(
             &::ring::signature::RSA_PKCS1_2048_8192_SHA256,
-            self.cert.public_key(),
+            Input::from(self.cert.public_key().as_ref()),
             Input::from(&msg),
-            self.signer_info.signature_value.clone()
+            Input::from(self.signer_info.signature_value.to_bytes().as_ref())
         ).map_err(|_| ValidationError)
     }
 }
@@ -202,17 +215,23 @@ pub enum DigestAlgorithm {
 
 
 impl DigestAlgorithm {
-    pub fn parse(content: &mut Content) -> Result<Self, Error> {
-        content.sequence(Self::parse_content)
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(Self::take_content_from)
     }
 
-    pub fn parse_opt(content: &mut Content) -> Result<Option<Self>, Error> {
-        content.opt_sequence(Self::parse_content)
+    pub fn take_opt_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Option<Self>, S::Err> {
+        cons.opt_sequence(Self::take_content_from)
     }
 
-    fn parse_content(content: &mut Content) -> Result<Self, Error> {
-        oid::SHA256.skip_if(content)?;
-        content.skip_opt_null()?;
+    fn take_content_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        oid::SHA256.skip_if(cons)?;
+        cons.skip_opt_null()?;
         Ok(DigestAlgorithm::Sha256)
     }
 
@@ -226,9 +245,11 @@ impl DigestAlgorithm {
     ///
     /// Section 2.1.2. of RFC 6488 requires there to be exactly one element
     /// chosen from the allowed values.
-    pub fn skip_set(content: &mut Content) -> Result<(), Error> {
-        content.constructed_if(Tag::SET, |content| {
-            while let Some(_) = Self::parse_opt(content)? { }
+    pub fn skip_set<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<(), S::Err> {
+        cons.constructed_if(Tag::SET, |cons| {
+            while let Some(_) = Self::take_opt_from(cons)? { }
             Ok(())
         })
     }
@@ -238,34 +259,40 @@ impl DigestAlgorithm {
 //------------ SignerInfo ----------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct SignerInfo<'a> {
-    sid: OctetString<'a>,
+pub struct SignerInfo {
+    sid: OctetString,
     digest_algorithm: DigestAlgorithm,
-    signed_attrs: SignedAttributes<'a>,
+    signed_attrs: SignedAttributes,
     signature_algorithm: SignatureAlgorithm,
-    signature_value: Input<'a>,
+    signature_value: OctetString
 }
 
-impl<'a> SignerInfo<'a> {
-    pub fn parse_set(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.set(Self::parse)
+impl SignerInfo {
+    pub fn take_set_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.set(Self::take_from)
     }
 
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.sequence(|content| {
-            content.skip_u8_if(3)?;
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
+            cons.skip_u8_if(3)?;
             Ok(SignerInfo {
-                sid: OctetString::parse_if(content, Tag::CTX_0)?,
-                digest_algorithm: DigestAlgorithm::parse(content)?,
-                signed_attrs: SignedAttributes::parse(content)?,
-                signature_algorithm: SignatureAlgorithm::parse(content)?,
-                signature_value: content.octet_string()?,
+                sid: cons.value_if(Tag::CTX_0, |content| {
+                    OctetString::take_content_from(content)
+                })?,
+                digest_algorithm: DigestAlgorithm::take_from(cons)?,
+                signed_attrs: SignedAttributes::take_from(cons)?,
+                signature_algorithm: SignatureAlgorithm::take_from(cons)?,
+                signature_value: OctetString::take_from(cons)?
             })
         })
     }
 
-    pub fn message_digest(&self) -> &[u8] {
-        self.signed_attrs.message_digest.as_slice_less_safe()
+    pub fn message_digest(&self) -> Bytes {
+        self.signed_attrs.message_digest.to_bytes()
     }
 }
 
@@ -273,55 +300,44 @@ impl<'a> SignerInfo<'a> {
 //------------ SignedAttributes ----------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct SignedAttributes<'a> {
-    raw: Input<'a>,
-    message_digest: Input<'a>,
-    content_type: Oid<'a>,
+pub struct SignedAttributes {
+    raw: Bytes,
+    message_digest: OctetString,
+    content_type: Oid<Bytes>,
     signing_time: Option<Time>,
     binary_signing_time: Option<u64>,
 }
 
-impl<'a> SignedAttributes<'a> {
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        let raw = content.constructed_if(Tag::CTX_CON_0, Content::into_input)?;
-        Content::parse(raw.clone(), |content| {
+impl SignedAttributes {
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        let raw = cons.constructed_if(Tag::CTX_0, |c| c.take_all())?;
+        Mode::Ber.decode(raw.clone(), |cons| {
             let mut message_digest = None;
             let mut content_type = None;
             let mut signing_time = None;
             let mut binary_signing_time = None;
-            while let Some(()) = content.opt_sequence(|content| {
-                match Oid::parse(content)? {
-                    oid::CONTENT_TYPE => {
-                        if content_type.is_some() {
-                            return Err(Error::Malformed)
-                        }
-                        content_type
-                            = Some(Self::parse_content_type(content)?);
-                    }
-                    oid::MESSAGE_DIGEST => {
-                        if message_digest.is_some() {
-                            return Err(Error::Malformed)
-                        }
-                        message_digest
-                            = Some(Self::parse_message_digest(content)?);
-                    }
-                    oid::SIGNING_TIME => {
-                        if signing_time.is_some() {
-                            return Err(Error::Malformed)
-                        }
-                        signing_time
-                            = Some(Self::parse_signing_time(content)?);
-                    }
-                    oid::AA_BINARY_SIGNING_TIME => {
-                        if binary_signing_time.is_some() {
-                            return Err(Error::Malformed)
-                        }
-                        binary_signing_time
-                            = Some(Self::parse_bin_signing_time(content)?);
-                    }
-                    _ => return Err(Error::Malformed)
+            while let Some(()) = cons.opt_sequence(|cons| {
+                let oid = Oid::take_from(cons)?;
+                if oid == oid::CONTENT_TYPE {
+                    Self::take_content_type(cons, &mut content_type)
                 }
-                Ok(())
+                else if oid == oid::MESSAGE_DIGEST {
+                    Self::take_message_digest(cons, &mut message_digest)
+                }
+                else if oid == oid::SIGNING_TIME {
+                    Self::take_signing_time(cons, &mut signing_time)
+                }
+                else if oid == oid::AA_BINARY_SIGNING_TIME {
+                    Self::take_bin_signing_time(
+                        cons,
+                        &mut binary_signing_time
+                    )
+                }
+                else {
+                    xerr!(Err(Error::Malformed))
+                }
             })? { }
             let message_digest = match message_digest {
                 Some(some) => some,
@@ -338,33 +354,47 @@ impl<'a> SignedAttributes<'a> {
                 signing_time,
                 binary_signing_time,
             })
+        }).map_err(Into::into)
+    }
+
+    /// Parses the Content Type attribute.
+    ///
+    /// This attribute is defined in section 11.1. of RFC 5652. The attribute
+    /// value is a SET of exactly one OBJECT IDENTIFIER.
+    fn take_content_type<S: Source>(
+        cons: &mut Constructed<S>,
+        content_type: &mut Option<Oid<Bytes>>
+    ) -> Result<(), S::Err> {
+        update_once(content_type, || {
+            cons.set(|cons| Oid::take_from(cons))
         })
     }
 
-    fn parse_content_type(
-        content: &mut Content<'a>
-    ) -> Result<Oid<'a>, Error> {
-        content.set(|content| {
-            Oid::parse(content)
+    fn take_message_digest<S: Source>(
+        cons: &mut Constructed<S>,
+        message_digest: &mut Option<OctetString>
+    ) -> Result<(), S::Err> {
+        update_once(message_digest, || {
+            cons.set(|cons| OctetString::take_from(cons))
         })
     }
 
-    fn parse_message_digest(
-        content: &mut Content<'a>
-    ) -> Result<Input<'a>, Error> {
-        content.set(|content| {
-            content.octet_string()
+    fn take_signing_time<S: Source>(
+        cons: &mut Constructed<S>,
+        signing_time: &mut Option<Time>
+    ) -> Result<(), S::Err> {
+        update_once(signing_time, || {
+            cons.set(Time::take_from)
         })
     }
 
-    fn parse_signing_time(content: &mut Content<'a>) -> Result<Time, Error> {
-        content.set(Time::parse)
-    }
-
-    fn parse_bin_signing_time(
-        content: &mut Content<'a>
-    ) -> Result<u64, Error> {
-        content.set(Content::parse_u64)
+    fn take_bin_signing_time<S: Source>(
+        cons: &mut Constructed<S>,
+        bin_signing_time: &mut Option<u64>
+    ) -> Result<(), S::Err> {
+        update_once(bin_signing_time, || {
+            cons.set(|cons| cons.take_u64())
+        })
     }
 
     pub fn encode_verify(&self) -> Vec<u8> {
@@ -382,7 +412,7 @@ impl<'a> SignedAttributes<'a> {
         else {
             panic!("overly long signed attrs");
         }
-        res.extend_from_slice(self.raw.as_slice_less_safe());
+        res.extend_from_slice(self.raw.as_ref());
         res
     }
 }
@@ -396,18 +426,22 @@ pub enum SignatureAlgorithm {
 }
 
 impl SignatureAlgorithm {
-    pub fn parse(content: &mut Content) -> Result<Self, Error> {
-        content.sequence(Self::parse_content)
+    pub fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(Self::take_content_from)
     }
 
-    pub fn parse_content(content: &mut Content) -> Result<Self, Error> {
-        let oid = Oid::parse(content)?;
+    pub fn take_content_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        let oid = Oid::take_from(cons)?;
         if oid != oid::RSA_ENCRYPTION &&
             oid != oid::SHA256_WITH_RSA_ENCRYPTION
         {
-            return Err(Error::Malformed)
+            return Err(Error::Malformed.into())
         }
-        content.skip_opt_null()?;
+        cons.skip_opt_null()?;
         Ok(SignatureAlgorithm::Sha256WithRsaEncryption)
     }
 }
@@ -424,17 +458,21 @@ pub struct ValidationError;
 mod oid {
     use ::ber::Oid;
 
-    pub const SIGNED_DATA: Oid = Oid(&[42, 134, 72, 134, 247, 13, 1, 7, 2]);
-    pub const SHA256: Oid = Oid(&[96, 134, 72, 1, 101, 3, 4, 2, 1]);
-    pub const RSA_ENCRYPTION: Oid
+    pub const SIGNED_DATA: Oid<&[u8]>
+        = Oid(&[42, 134, 72, 134, 247, 13, 1, 7, 2]);
+    pub const SHA256: Oid<&[u8]> = Oid(&[96, 134, 72, 1, 101, 3, 4, 2, 1]);
+    pub const RSA_ENCRYPTION: Oid<&[u8]>
         = Oid(&[42, 134, 72, 134, 247, 13, 1, 1, 1]);
-    pub const SHA256_WITH_RSA_ENCRYPTION: Oid
+    pub const SHA256_WITH_RSA_ENCRYPTION: Oid<&[u8]>
         = Oid(&[42, 134, 72, 134, 247, 13, 1, 1, 11]);
 
-    pub const CONTENT_TYPE: Oid = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 3]);
-    pub const MESSAGE_DIGEST: Oid = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 4]);
-    pub const SIGNING_TIME: Oid = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 5]);
-    pub const AA_BINARY_SIGNING_TIME: Oid =
+    pub const CONTENT_TYPE: Oid<&[u8]>
+        = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 3]);
+    pub const MESSAGE_DIGEST: Oid<&[u8]>
+        = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 4]);
+    pub const SIGNING_TIME: Oid<&[u8]>
+        = Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 5]);
+    pub const AA_BINARY_SIGNING_TIME: Oid<&[u8]> =
         Oid(&[42, 134, 72, 134, 247, 13, 1, 9, 16, 2, 46]);
 }
 

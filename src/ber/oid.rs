@@ -1,48 +1,125 @@
+//! Object Identifiers.
+//!
+//! This is a private module. Its public content is re-exportet by the parent.
 
 use std::fmt;
-use super::{Content, Error, Tag};
+use bytes::Bytes;
+use super::content::Constructed;
+use super::error::Error;
+use super::source::Source;
+use super::tag::Tag;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Oid<'a>(pub &'a [u8]);
 
-impl<'a> Oid<'a> {
-    pub fn parse(content: &mut Content<'a>) -> Result<Self, Error> {
-        content.primitive_if(Tag::OID, |input| {
-            Ok(Oid(input.as_slice_less_safe()))
+//------------ Oid -----------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Oid<T: AsRef<[u8]>>(pub T);
+
+impl Oid<Bytes> {
+    pub fn skip_in<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<(), S::Err> {
+        cons.primitive_if(Tag::OID, |prim| prim.skip_all())
+    }
+
+    pub fn skip_opt_in<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Option<()>, S::Err> {
+        cons.opt_primitive_if(Tag::OID, |prim| prim.skip_all())
+    }
+
+    pub fn take_from<S: Source>(
+        constructed: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        constructed.primitive_if(Tag::OID, |content| {
+            content.take_all().map(Oid)
         })
     }
 
-    pub fn opt_parse(content: &mut Content<'a>) -> Result<Option<Self>, Error> {
-        content.opt_primitive_if(Tag::OID, |input| {
-            Ok(Oid(input.as_slice_less_safe()))
+    pub fn take_opt_from<S: Source>(
+        constructed: &mut Constructed<S>
+    ) -> Result<Option<Self>, S::Err> {
+        constructed.opt_primitive_if(Tag::OID, |content| {
+            content.take_all().map(Oid)
         })
-    }
-
-    pub fn skip_if(&self, content: &mut Content<'a>) -> Result<(), Error> {
-        if Self::parse(content)? == *self {
-            Ok(())
-        }
-        else {
-            Err(Error::Malformed)
-        }
-    }
-
-    pub fn iter(&self) -> IdIter {
-        IdIter(self.0)
     }
 }
-        
-impl<'a> fmt::Display for Oid<'a> {
+
+impl<T: AsRef<[u8]>> Oid<T> {
+    pub fn skip_if<S: Source>(
+        &self,
+        constructed: &mut Constructed<S>
+    ) -> Result<(), S::Err> {
+        constructed.primitive_if(Tag::OID, |content| {
+            let len = content.remaining();
+            content.request(len)?;
+            if &content.slice()[..len] == self.0.as_ref() {
+                content.skip_all()?;
+                Ok(())
+            }
+            else {
+                xerr!(Err(Error::Malformed.into()))
+            }
+        })
+    }
+
+    pub fn iter(&self) -> Result<IdIter, Error> {
+        let mut sublen = 0;
+        for &ch in self.0.as_ref() {
+            if ch & 0x80 != 0 {
+                sublen += 1;
+                if sublen == 1 && ch == 0x80 {
+                    xerr!(return Err(Error::Malformed))
+                }
+                if sublen == 5 {
+                    xerr!(return Err(Error::Unimplemented))
+                }
+            }
+            else {
+                sublen = 0
+            }
+        }
+        if sublen != 0 {
+            xerr!(return Err(Error::Malformed))
+        }
+        Ok(IdIter(self.0.as_ref()))
+    }
+}
+
+impl<T: AsRef<[u8]>> AsRef<[u8]> for Oid<T> {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl<T: AsRef<[u8]>, U: AsRef<[u8]>> PartialEq<U> for Oid<T> {
+    fn eq(&self, other: &U) -> bool {
+        self.0.as_ref() == other.as_ref()
+    }
+}
+
+impl<T: AsRef<[u8]>> Eq for Oid<T> { }
+
+
+impl<T: AsRef<[u8]>> fmt::Display for Oid<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut ids = self.iter();
-        let first = ids.next().unwrap();
-        write!(f, "{}.{}", first / 40, first % 40)?;
-        for id in ids {
-            write!(f, ".{}", id)?;
+        match self.iter() {
+            Ok(mut ids) => {
+                let first = ids.next().unwrap();
+                write!(f, "{}.{}", first / 40, first % 40)?;
+                for id in ids {
+                    write!(f, ".{}", id)?;
+                }
+            }
+            Err(Error::Malformed) => write!(f, "malformed")?,
+            Err(Error::Unimplemented) => write!(f, "unimplemented")?,
         }
         Ok(())
     }
 }
+
+
+//------------ IdIter --------------------------------------------------------
 
 pub struct IdIter<'a>(&'a [u8]);
 
