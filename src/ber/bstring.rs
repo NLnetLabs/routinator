@@ -15,10 +15,24 @@ use super::tag::Tag;
 /// A BIT STRING value.
 ///
 /// Bit strings are a sequence of bits. They do not need to contain a multiple
-/// of eight bits. Bit strings can be encoded either as a primitive or
+/// of eight bits.
+/// 
+/// You can parse a bit string value out of a constructed value using the
+/// `take_from` method. The `parse_content` method parses the content octets
+/// of a bit string value.
+///
+/// Once you have a value, you can ask for the number of bits available via
+/// the `bit_len` method or ask for the bit at a certain index via `bit`.
+/// The type also implements `AsRef<[u8]>` and `AsRef<Bytes>` to allow access
+/// to the complete bit string at once. Note, however, that the last octet
+/// may not be fully used.
+///
+/// # BER Encoding
+///
+/// When encoded in BER, bit strings can either be a primitive or
 /// constructed value.
 ///
-/// If encoded as a primitive, the first octet of the
+/// If encoded as a primitive value, the first octet of the
 /// content contains the number of unused bits in the last octet and the
 /// following octets contain the bits with the first bit in the most
 /// significant bit of the octet.
@@ -42,11 +56,15 @@ use super::tag::Tag;
 /// encoding of a bit string.
 #[derive(Clone, Debug)]
 pub struct BitString {
+    /// The number of unused bits in the last byte.
     unused: u8,
+
+    /// The bytes of the bit string.
     bits: Bytes,
 }
 
 impl BitString {
+    /// Returns the value of the given bit.
     pub fn bit(&self, bit: usize) -> bool {
         let idx = bit >> 3;
         if self.bits.len() <= idx {
@@ -59,22 +77,44 @@ impl BitString {
         self.bits[idx] & (1 << bit) != 0
     }
 
+    /// Returns the number of bits in the bit string.
     pub fn bit_len(&self) -> usize {
         self.bits.len() << 3 - self.unused
     }
 
+    /// Returns the number of unused bits in the last octet.
+    pub fn unused(&self) -> u8 {
+        self.unused
+    }
+
+    pub fn octet_len(&self) -> usize {
+        self.bits.len()
+    }
+
+    pub fn octets(&self) -> BitStringIter {
+        BitStringIter(self.bits.iter())
+    }
+}
+
+/// # Parsing
+///
+impl BitString {
+    /// Takes a single bit string value from constructed content.
     pub fn take_from<S: Source>(
         constructed: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        constructed.primitive_if(Tag::BIT_STRING, |content| {
-            Ok(BitString {
-                unused: content.take_u8()?,
-                bits: content.take_all()?,
-            })
-        })
+        constructed.value_if(Tag::BIT_STRING, Self::parse_content)
     }
-    
-    pub fn take_content_from<S: Source>(
+
+    /// Skip over a single bit string value inside constructed content.
+    pub fn skip_in<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<(), S::Err> {
+        cons.value_if(Tag::BIT_STRING, Self::skip_content)
+    }
+ 
+    /// Parses the content octets of a bit string value.
+    pub fn parse_content<S: Source>(
         content: &mut Content<S>
     ) -> Result<Self, S::Err> {
         match *content {
@@ -97,7 +137,30 @@ impl BitString {
             }
         }
     }
+
+    /// Skips over the content octets of a bit string value.
+    pub fn skip_content<S: Source>(
+        content: &mut Content<S>
+    ) -> Result<(), S::Err> {
+        match *content {
+            Content::Primitive(ref mut inner) => {
+                if inner.mode() == Mode::Cer && inner.remaining() > 1000 {
+                    xerr!(return Err(Error::Malformed.into()))
+                }
+                inner.skip_all()
+            }
+            Content::Constructed(ref inner) => {
+                if inner.mode() == Mode::Der {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else {
+                    xerr!(Err(Error::Unimplemented.into()))
+                }
+            }
+        }
+    }
 }
+
 
 impl AsRef<Bytes> for BitString {
     fn as_ref(&self) -> &Bytes {
@@ -108,6 +171,20 @@ impl AsRef<Bytes> for BitString {
 impl AsRef<[u8]> for BitString {
     fn as_ref(&self) -> &[u8] {
         self.bits.as_ref()
+    }
+}
+
+
+//------------ BitStringIter -------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct BitStringIter<'a>(::std::slice::Iter<'a, u8>);
+
+impl<'a> Iterator for BitStringIter<'a> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        self.0.next().map(|x| *x)
     }
 }
 

@@ -69,6 +69,15 @@ pub trait Source {
         self.advance(1)?;
         Ok(res)
     }
+
+    fn take_opt_u8(&mut self) -> Result<Option<u8>, Self::Err> {
+        if self.request(1)? < 1 {
+            return Ok(None)
+        }
+        let res = self.slice()[0];
+        self.advance(1)?;
+        Ok(Some(res))
+    }
 }
 
 impl Source for Bytes {
@@ -120,6 +129,26 @@ impl<'a> Source for &'a [u8] {
 
     fn bytes(&self, start: usize, end: usize) -> Bytes {
         Bytes::from(&self[start..end])
+    }
+}
+
+impl<'a, T: Source> Source for &'a mut T {
+    type Err = T::Err;
+
+    fn request(&mut self, len: usize) -> Result<usize, Self::Err> {
+        Source::request(*self, len)
+    }
+    
+    fn advance(&mut self, len: usize) -> Result<(), Self::Err> {
+        Source::advance(*self, len)
+    }
+
+    fn slice(&self) -> &[u8] {
+        Source::slice(*self)
+    }
+
+    fn bytes(&self, start: usize, end: usize) -> Bytes {
+        Source::bytes(*self, start, end)
     }
 }
 

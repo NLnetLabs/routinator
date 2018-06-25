@@ -99,6 +99,10 @@ impl OctetString {
         }
     }
 
+    pub fn octets(&self) -> OctetStringOctets {
+        OctetStringOctets::new(self.iter())
+    }
+
     pub fn process_segments_mut<F>(&self, mut op: F)
     where F: FnMut(&[u8]) -> bool {
         for segment in self.iter() {
@@ -330,6 +334,40 @@ impl<'a> Iterator for OctetStringIter<'a> {
             }
             None
         }
+    }
+}
+
+
+//------------ OctetStringOctets ---------------------------------------------
+
+pub struct OctetStringOctets<'a> {
+    cur: &'a [u8],
+    iter: OctetStringIter<'a>,
+}
+
+impl<'a> OctetStringOctets<'a> {
+    fn new(iter: OctetStringIter<'a>) -> Self {
+        OctetStringOctets {
+            cur: b"",
+            iter: iter
+        }
+    }
+}
+
+impl<'a> Iterator for OctetStringOctets<'a> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        if self.cur.is_empty() {
+            let next = match self.iter.next() {
+                Some(some) => some,
+                None => return None,
+            };
+            self.cur = next;
+        }
+        let res = self.cur[0];
+        self.cur = &self.cur[1..];
+        Some(res)
     }
 }
 

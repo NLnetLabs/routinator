@@ -1,3 +1,7 @@
+//! Parsing BER encoded values.
+//!
+//! This is an internal module. Its public types are re-exported by the
+//! parent.
 
 use bytes::Bytes;
 use super::error::Error;
@@ -8,12 +12,24 @@ use super::tag::Tag;
 
 //------------ Content -------------------------------------------------------
 
+/// The content octets of a BER encoded value.
+///
+/// A value is either primitive, containing actual octets of an actual value,
+/// or constructed, in which case its content contains additional BER encoded
+/// values. This enum is useful for cases where a certain type may be encoded
+/// as either a primitive value or a complex constructed value.
 pub enum Content<'a, S: 'a> {
+    /// The value is a primitive value.
     Primitive(Primitive<'a, S>),
+
+    /// The value is a constructed value.
     Constructed(Constructed<'a, S>)
 }
 
 impl<'a, S: Source + 'a> Content<'a, S> {
+    /// Checkes that the content has been parsed completely.
+    ///
+    /// Returns a malformed error if not.
     fn exhausted(self) -> Result<(), S::Err> {
         match self {
             Content::Primitive(inner) => inner.exhausted(),
@@ -21,6 +37,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Returns the encoding mode used by the value.
     pub fn mode(&self) -> Mode {
         match *self {
             Content::Primitive(ref inner) => inner.mode(),
@@ -28,6 +45,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Returns whether this value is a primitive value.
     pub fn is_primitive(&self) -> bool {
         match *self {
             Content::Primitive(_) => true,
@@ -35,6 +53,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Returns whether this value is a constructed value.
     pub fn is_constructed(&self) -> bool {
         match *self {
             Content::Primitive(_) => false,
@@ -42,6 +61,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Converts a reference into on to a primitive value or errors out.
     pub fn as_primitive(&mut self) -> Result<&mut Primitive<'a, S>, S::Err> {
         match *self {
             Content::Primitive(ref mut inner) => Ok(inner),
@@ -51,6 +71,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Converts a reference into on to a constructed value or errors out.
     pub fn as_constructed(
         &mut self
     ) -> Result<&mut Constructed<'a, S>, S::Err> {
@@ -62,6 +83,11 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Converts the content into a bytes value.
+    ///
+    /// If the value is a constructed value, makes sure that all contained
+    /// constructed values are properly encoded. Primitive values will only
+    /// be checked for valid tag and length encodings.
     pub fn into_bytes(&mut self) -> Result<Bytes, S::Err> {
         match *self {
             Content::Primitive(ref mut inner) => inner.take_all(),
@@ -71,7 +97,11 @@ impl<'a, S: Source + 'a> Content<'a, S> {
 }
 
 impl<'a, S: Source + 'a> Content<'a, S> {
-    pub fn u8(&mut self) -> Result<u8, S::Err> {
+    /// Converts content into a `u8`.
+    ///
+    /// If the content is not primitive or does not contain a single BER
+    /// encoded INTEGER value between 0 and 256, returns a malformed error.
+    pub fn to_u8(&mut self) -> Result<u8, S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
             prim.take_u8()
         }
@@ -81,7 +111,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
     }
 
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
-        let res = self.u8()?;
+        let res = self.to_u8()?;
         if res == expected {
             Ok(())
         }
@@ -90,15 +120,32 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
-    pub fn u64(&mut self) -> Result<u64, S::Err> {
+    pub fn to_u32(&mut self) -> Result<u32, S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
-            prim.u64()
+            prim.to_u32()
         }
         else {
             xerr!(Err(Error::Malformed.into()))
         }
     }
 
+    pub fn to_u64(&mut self) -> Result<u64, S::Err> {
+        if let Content::Primitive(ref mut prim) = *self {
+            prim.to_u64()
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
+    pub fn to_null(&mut self) -> Result<(), S::Err> {
+        if let Content::Primitive(ref mut prim) = *self {
+            prim.to_null()
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
 }
 
 
@@ -148,8 +195,20 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
         }
     }
 
+    /// Parses the primitive value as an INTEGER limited to a `u32`.
+    pub fn to_u32(&mut self) -> Result<u32, S::Err> {
+        // XXX Lazy impl.
+        let res = self.to_u64()?;
+        if res > (::std::u32::MAX as u64) {
+            xerr!(Err(Error::Malformed.into()))
+        }
+        else {
+            Ok(res as u32)
+        }
+    }
+
     /// Parses the primitive value as a INTEGER value limited to a `u64`.
-    pub fn u64(&mut self) -> Result<u64, S::Err> {
+    pub fn to_u64(&mut self) -> Result<u64, S::Err> {
         let res = {
             let bits = self.slice_all()?;
             match (bits.get(0), bits.get(1).map(|x| x & 0x80 != 0)) {
@@ -175,6 +234,11 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
         };
         self.skip_all()?;
         Ok(res)
+    }
+
+    pub fn to_null(&mut self) -> Result<(), S::Err> {
+        // The rest is taken care by the exhausted check later ...
+        Ok(())
     }
 }
 
@@ -576,8 +640,12 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
+    pub fn take_u32(&mut self) -> Result<u32, S::Err> {
+        self.primitive_if(Tag::INTEGER, |prim| prim.to_u32())
+    }
+
     pub fn take_u64(&mut self) -> Result<u64, S::Err> {
-        self.primitive_if(Tag::INTEGER, |prim| prim.u64())
+        self.primitive_if(Tag::INTEGER, |prim| prim.to_u64())
     }
 
     pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>

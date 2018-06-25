@@ -1,8 +1,10 @@
 
 use bytes::Bytes;
+use super::asres::AsIdentifiers;
 use super::ber::{
     BitString, Constructed, Error, Mode, OctetString, Oid, Source, Tag
 };
+use super::ipres::IpAddrBlocks;
 use super::x509::{
     update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time
 };
@@ -60,11 +62,11 @@ impl Cert {
                         SubjectPublicKeyInfo::take_from(cons)?,
                     issuer_unique_id: cons.opt_value_if(
                         Tag::CTX_1,
-                        |c| BitString::take_content_from(c)
+                        |c| BitString::parse_content(c)
                     )?,
                     subject_unique_id: cons.opt_value_if(
                         Tag::CTX_2,
-                        |c| BitString::take_content_from(c)
+                        |c| BitString::parse_content(c)
                     )?,
                     extensions: cons.constructed_if(
                         Tag::CTX_3,
@@ -227,10 +229,10 @@ pub struct Extensions {
     certificate_policies: CertificatePolicies,
 
     /// IP Resources
-    ip_resources: Option<IpResources>,
+    ip_resources: Option<IpAddrBlocks>,
 
     /// AS Resources
-    as_resources: Option<AsResources>,
+    as_resources: Option<AsIdentifiers>,
 }
 
 impl Extensions {
@@ -628,20 +630,20 @@ impl Extensions {
     /// Parses the IP Resources extension.
     fn take_ip_resources<S: Source>(
         cons: &mut Constructed<S>,
-        ip_resources: &mut Option<IpResources>
+        ip_resources: &mut Option<IpAddrBlocks>
     ) -> Result<(), S::Err> {
         update_once(ip_resources, || {
-            IpResources::take_from(cons)
+            IpAddrBlocks::take_from(cons)
         })
     }
 
     /// Parses the AS Resources extension.
     fn take_as_resources<S: Source>(
         cons: &mut Constructed<S>,
-        as_resources: &mut Option<AsResources>
+        as_resources: &mut Option<AsIdentifiers>
     ) -> Result<(), S::Err> {
         update_once(as_resources, || {
-            AsResources::take_from(cons)
+            AsIdentifiers::take_from(cons)
         })
     }
 }
@@ -739,36 +741,6 @@ impl CertificatePolicies {
     ) -> Result<Self, S::Err> {
         // XXX TODO Parse properly.
         cons.sequence(|c| c.take_all()).map(CertificatePolicies)
-    }
-}
-
-
-//------------ IpResources ---------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct IpResources(Bytes);
-
-impl IpResources {
-    fn take_from<S: Source>(
-        cons: &mut Constructed<S>
-    ) -> Result<Self, S::Err> {
-        // XXX TODO Parse properly.
-        cons.sequence(|c| c.take_all()).map(IpResources)
-    }
-}
-
-
-//------------ AsResources ---------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct AsResources(Bytes);
-
-impl AsResources {
-    fn take_from<S: Source>(
-        cons: &mut Constructed<S>
-    ) -> Result<Self, S::Err> {
-        // XXX TODO Parse properly.
-        cons.sequence(|c| c.take_all()).map(AsResources)
     }
 }
 
