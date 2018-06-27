@@ -332,7 +332,6 @@ impl AddressRange {
         }
         let (addr, mask) = Self::from_bits(bs)?;
         let addr = addr & !mask; // clear unused bits even if the should be
-        println!("{}", (16 - bs.octet_len()) * 8);
         Ok(addr << ((16 - bs.octet_len()) * 8))
     }
 

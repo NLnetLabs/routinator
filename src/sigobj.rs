@@ -2,7 +2,9 @@
 
 use bytes::Bytes;
 use untrusted::Input;
-use super::ber::{Constructed, Error, Mode, OctetString, Oid, Source, Tag};
+use super::ber::{
+    Constructed, Error, Mode, OctetString, OctetStringSource, Oid, Source, Tag
+};
 use super::x509::update_once;
 use super::cert::Cert;
 use super::x509::Time;
@@ -37,12 +39,11 @@ impl SignedObject {
         &self.content
     }
 
-    /*
-    pub fn parse_content<F, T>(&self, op: F) -> Result<T, Error>
-    where F: FnOnce(&mut Content<'a>) -> Result<T, Error> {
-        self.content.parse_content(op)
+    pub fn decode_content<F, T>(&self, op: F) -> Result<T, Error>
+    where F: FnOnce(&mut Constructed<OctetStringSource>) -> Result<T, Error> {
+        // XXX Let’s see if using DER here at least holds.
+        Mode::Der.decode(self.content.as_source(), op)
     }
-    */
 
     /// Returns a reference to the certificate the object is signed with.
     pub fn cert(&self) -> &Cert {
@@ -455,7 +456,7 @@ pub struct ValidationError;
 
 //------------ OIDs ----------------------------------------------------------
 
-mod oid {
+pub mod oid {
     use ::ber::Oid;
 
     pub const SIGNED_DATA: Oid<&[u8]>

@@ -103,13 +103,18 @@ impl<'a, S: Source + 'a> Content<'a, S> {
     /// encoded INTEGER value between 0 and 256, returns a malformed error.
     pub fn to_u8(&mut self) -> Result<u8, S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
-            prim.take_u8()
+            prim.to_u8()
         }
         else {
             xerr!(Err(Error::Malformed.into()))
         }
     }
 
+    /// Skips over the content if it contains an INTEGER of value `expected`.
+    ///
+    /// The content needs to be primitive and contain a validly encoded
+    /// integer of value `expected` or else a malformed error will be
+    /// returned.
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
         let res = self.to_u8()?;
         if res == expected {
@@ -120,6 +125,10 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    /// Converts content into a `u32`.
+    ///
+    /// If the content is not primitive or does not contain a single BER
+    /// encoded INTEGER value between 0 and 2^32-1, returns a malformed error.
     pub fn to_u32(&mut self) -> Result<u32, S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
             prim.to_u32()
@@ -129,6 +138,11 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+
+    /// Converts content into a `u64`.
+    ///
+    /// If the content is not primitive or does not contain a single BER
+    /// encoded INTEGER value between 0 and 2^64-1, returns a malformed error.
     pub fn to_u64(&mut self) -> Result<u64, S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
             prim.to_u64()
@@ -138,6 +152,14 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+    pub fn to_unsigned(&mut self) -> Result<Bytes, S::Err> {
+        self.as_primitive()?.to_unsigned()
+    }
+
+    /// Converts the content into a NULL value.
+    ///
+    /// If the content isn’t primitive and contains a single BER encoded
+    /// NULL value (i.e., nothing), returns a malformed error.
     pub fn to_null(&mut self) -> Result<(), S::Err> {
         if let Content::Primitive(ref mut prim) = *self {
             prim.to_null()
@@ -151,26 +173,62 @@ impl<'a, S: Source + 'a> Content<'a, S> {
 
 //------------ Primitive -----------------------------------------------------
 
-/// A primitive value.
+/// The content octets of a primitive value.
+///
+/// You will receive a reference to a value of this type through a closure,
+/// possibly wrapped in a `Content` value. Your task will be to read out all
+/// the octets of the value before returning from the closure or produce an
+/// error if the value isn’t correctly encoded. If you read less octets than
+/// are available, whoever called the closure will produce an error after
+/// you returned. Thus, you can read as many octets as you expect and not
+/// bother to check whether that was all available octets.
+///
+/// The most basic way to do this is through the primitive’s implementation
+/// of the `Source` trait. Thus, you can gain access to some or all of the
+/// octets and mark them read by advancing over them. You can safely attempt
+/// to read more octets than available as that will reliably result in a 
+/// malformed error.
+///
+/// A number of methods are available to deal with the encodings defined for
+/// various types. These are prefixed by `to_` to indicate that they are
+/// intended to convert the content to a certain type. They all read exactly
+/// one encoded value.
+///
+/// The value provides access to the decoding mode via the `mode` method.
+/// All methodes that decode data will honour the decoding mode and enforce
+/// that data is encoded according to the mode.
 pub struct Primitive<'a, S: 'a> {
+    /// The underlying source limited to the length of the value.
     source: &'a mut LimitedSource<S>,
+
+    /// The decoding mode to operate in.
     mode: Mode,
 }
 
+/// # Value Management
+///
 impl<'a, S: 'a> Primitive<'a, S> {
+    /// Creates a new primitive from the given source and mode.
     fn new(source: &'a mut LimitedSource<S>, mode: Mode) -> Self {
         Primitive { source, mode }
     }
 
+    /// Returns the current decoding mode.
+    ///
+    /// The higher-level `to_` methods will use this mode to enforce that
+    /// data is encoded correctly.
     pub fn mode(&self) -> Mode {
         self.mode
     }
 
+    /// Sets the current decoding mode.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode
     }
 }
 
+/// # High-level Decoding
+///
 impl<'a, S: Source + 'a> Primitive<'a, S> {
     /// Parses the primitive value as a BOOLEAN value.
     ///
@@ -179,7 +237,7 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
     /// it is `true`. In DER mode, the octet has to be `0` for a value of
     /// `false`, `0xFF` for a value of `true`, and all other values are not
     /// permitted.
-    pub fn bool(&mut self) -> Result<bool, S::Err> {
+    pub fn to_bool(&mut self) -> Result<bool, S::Err> {
         let res = self.take_u8()?;
         if self.mode == Mode::Der {
             match res {
@@ -196,48 +254,132 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
     }
 
     /// Parses the primitive value as an INTEGER limited to a `u32`.
-    pub fn to_u32(&mut self) -> Result<u32, S::Err> {
-        // XXX Lazy impl.
-        let res = self.to_u64()?;
-        if res > (::std::u32::MAX as u64) {
-            xerr!(Err(Error::Malformed.into()))
+    pub fn to_u8(&mut self) -> Result<u8, S::Err> {
+        self.check_int_head()?;
+        self.check_unsigned()?;
+        match self.remaining() {
+            1 => self.take_u8(), // sign bit has been checked above.
+            2 => {
+                // First byte must be 0x00, second is the result.
+                if self.take_u8()? != 0 {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else {
+                    self.take_u8()
+                }
+            }
+            _ => xerr!(Err(Error::Malformed.into()))
         }
-        else {
-            Ok(res as u32)
+    }
+
+    /// Parses the primitive value as an INTEGER limited to a `u32`.
+    pub fn to_u32(&mut self) -> Result<u32, S::Err> {
+        self.check_int_head()?;
+        self.check_unsigned()?;
+        match self.remaining() {
+            1 => Ok(self.take_u8()? as u32),
+            2 => {
+                Ok(
+                    (self.take_u8()? as u32) << 8
+                    | (self.take_u8()? as u32)
+                )
+            }
+            3 => {
+                Ok(
+                    (self.take_u8()? as u32) << 16
+                    | (self.take_u8()? as u32) << 8
+                    | (self.take_u8()? as u32)
+                )
+            }
+            4 => {
+                Ok(
+                    (self.take_u8()? as u32) << 24
+                    | (self.take_u8()? as u32) << 16
+                    | (self.take_u8()? as u32) << 8
+                    | (self.take_u8()? as u32)
+                )
+            }
+            5 => {
+                if self.take_u8()? != 0 {
+                    xerr!(return Err(Error::Malformed.into()));
+                }
+                Ok(
+                    (self.take_u8()? as u32) << 24
+                    | (self.take_u8()? as u32) << 16
+                    | (self.take_u8()? as u32) << 8
+                    | (self.take_u8()? as u32)
+                )
+            }
+            _ => xerr!(Err(Error::Malformed.into()))
         }
     }
 
     /// Parses the primitive value as a INTEGER value limited to a `u64`.
     pub fn to_u64(&mut self) -> Result<u64, S::Err> {
-        let res = {
-            let bits = self.slice_all()?;
-            match (bits.get(0), bits.get(1).map(|x| x & 0x80 != 0)) {
-                (Some(0), Some(false)) => {
-                    xerr!(return Err(Error::Malformed.into()))
-                }
-                (Some(0xFF), Some(true)) => {
-                    xerr!(return Err(Error::Malformed.into()))
-                }
-                (Some(x), _) if x & 0x80 != 0 => {
-                    xerr!(return Err(Error::Malformed.into()))
-                }
-                _ => { }
-            }
-            if bits.len() > 8 {
+        self.check_int_head()?;
+        self.check_unsigned()?;
+        if self.remaining() == 9 {
+            if self.take_u8()? != 0 {
                 xerr!(return Err(Error::Malformed.into()))
             }
-            let mut res = 0;
-            for &ch in bits {
-                res = res << 8 | ch as u64
+        }
+        let mut res = 0;
+        for _ in 0..8 {
+            if self.remaining() == 0 {
+                break
             }
-            res
-        };
-        self.skip_all()?;
+            res = res << 8 | (self.take_u8()? as u64);
+        }
         Ok(res)
     }
 
+    /// Parses the primitive value as an INTEGER of unlimited length.
+    pub fn to_unsigned(&mut self) -> Result<Bytes, S::Err> {
+        self.check_int_head()?;
+        self.check_unsigned()?;
+        self.take_all()
+    }
+
+    /// Checks that an integer is started correctly.
+    ///
+    /// Specifically, checks that there is at least one octet and that the
+    /// first nine bits of a multi-octet integer are not all the same.
+    ///
+    /// The latter ensures that an integer is encoded in the smallest possible
+    /// number of octets.
+    fn check_int_head(&mut self) -> Result<(), S::Err> {
+        if self.request(2)? == 0 {
+            xerr!(return Err(Error::Malformed.into()))
+        }
+        let slice = self.slice();
+        match (slice.get(0), slice.get(1).map(|x| x & 0x80 != 0)) {
+            (Some(0), Some(false)) => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            (Some(0xFF), Some(true)) => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            (Some(x), _) if x & 0x80 != 0 => {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            _ => Ok(())
+        }
+    }
+
+    /// Checks that an integer is unsigned.
+    ///
+    /// Always call this after `check_int_head`.
+    fn check_unsigned(&self) -> Result<(), S::Err> {
+        if self.slice().get(0).unwrap() & 0x80 != 0 {
+            xerr!(Err(Error::Malformed.into()))
+        }
+        else {
+            Ok(())
+        }
+    }
+
     pub fn to_null(&mut self) -> Result<(), S::Err> {
-        // The rest is taken care by the exhausted check later ...
+        // The rest is taken care of by the exhausted check later ...
         Ok(())
     }
 }
@@ -375,7 +517,6 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
             Tag::take_from(self.source)?
         };
         let length = Length::take_from(self.source)?;
-        println!("Value {:?} {:?} {:?}", tag, constructed, length);
 
         if tag == Tag::END_OF_VALUE {
             if let State::Indefinite = self.state {
@@ -617,11 +758,11 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
 impl<'a, S: Source + 'a> Constructed<'a, S> {
     pub fn take_bool(&mut self) -> Result<bool, S::Err> {
-        self.primitive_if(Tag::BOOLEAN, |prim| prim.bool())
+        self.primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
     pub fn take_opt_bool(&mut self) -> Result<Option<bool>, S::Err> {
-        self.opt_primitive_if(Tag::BOOLEAN, |prim| prim.bool())
+        self.opt_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
     pub fn skip_opt_null(&mut self) -> Result<(), S::Err> {
@@ -640,12 +781,28 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
+    pub fn skip_opt_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
+        self.opt_primitive_if(Tag::INTEGER, |prim| {
+            let got = prim.take_u8()?;
+            if got != expected {
+                xerr!(Err(Error::Malformed.into()))
+            }
+            else {
+                Ok(())
+            }
+        }).map(|_| ())
+    }
+
     pub fn take_u32(&mut self) -> Result<u32, S::Err> {
         self.primitive_if(Tag::INTEGER, |prim| prim.to_u32())
     }
 
     pub fn take_u64(&mut self) -> Result<u64, S::Err> {
         self.primitive_if(Tag::INTEGER, |prim| prim.to_u64())
+    }
+
+    pub fn take_unsigned(&mut self) -> Result<Bytes, S::Err> {
+        self.primitive_if(Tag::INTEGER, |prim| prim.to_unsigned())
     }
 
     pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>

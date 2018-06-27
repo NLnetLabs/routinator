@@ -87,10 +87,12 @@ impl BitString {
         self.unused
     }
 
+    /// Returns the number of octets in the bit string.
     pub fn octet_len(&self) -> usize {
         self.bits.len()
     }
 
+    /// Returns an iterator over the octets in the bit string.
     pub fn octets(&self) -> BitStringIter {
         BitStringIter(self.bits.iter())
     }
@@ -177,6 +179,7 @@ impl AsRef<[u8]> for BitString {
 
 //------------ BitStringIter -------------------------------------------------
 
+/// An iterator over the octets in the bit string.
 #[derive(Clone, Debug)]
 pub struct BitStringIter<'a>(::std::slice::Iter<'a, u8>);
 

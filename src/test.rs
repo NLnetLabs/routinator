@@ -60,7 +60,7 @@ fn read_mft_file<P: AsRef<Path>>(path: &P) {
     let mut file = fs::File::open(path).unwrap();
     let mut data = Vec::new();
     file.read_to_end(&mut data).unwrap();
-    let _mft = ::sigobj::SignedObject::decode(Bytes::from(data)).unwrap();
+    let _mft = ::manifest::Manifest::decode(Bytes::from(data)).unwrap();
 }
 
 fn read_roa_file<P: AsRef<Path>>(path: &P) {

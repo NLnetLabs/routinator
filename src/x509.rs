@@ -30,7 +30,6 @@ impl Name {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        println!("taking name");
         cons.sequence(|cons| cons.take_all()).map(Name)
     }
 }

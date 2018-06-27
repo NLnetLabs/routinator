@@ -10,6 +10,8 @@ pub mod ber;
 pub mod cert;
 pub mod crl;
 pub mod ipres;
+pub mod manifest;
+pub mod repository;
 pub mod sigobj;
 pub mod x509;
 

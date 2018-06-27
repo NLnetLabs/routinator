@@ -249,7 +249,13 @@ impl<S: Source> Source for LimitedSource<S> {
     }
 
     fn slice(&self) -> &[u8] {
-        self.source.slice()
+        let res = self.source.slice();
+        if let Some(limit) = self.limit {
+            if res.len() > limit {
+                return &res[..limit]
+            }
+        }
+        res
     }
 
     fn bytes(&self, start: usize, end: usize) -> Bytes {

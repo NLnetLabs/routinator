@@ -25,6 +25,7 @@ impl Tag {
     pub const OID: Self = Tag(0x06);
     pub const SEQUENCE: Self = Tag(0x10);
     pub const SET: Self = Tag(0x11);
+    pub const IA5_STRING: Self = Tag(0x16);
     pub const UTC_TIME: Self = Tag(0x17);
     pub const GENERALIZED_TIME: Self = Tag(0x18);
 
