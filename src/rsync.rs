@@ -1,7 +1,32 @@
 //! Rsync procession.
 
-use std::str;
+use std::{fmt, io, str};
+use std::fs::create_dir_all;
+use std::path::Path;
+use std::process::Command;
 use url;
+
+
+//------------ update --------------------------------------------------------
+
+pub fn update<P: AsRef<Path>>(
+    source: &Uri,
+    destination: P
+) -> Result<(), io::Error> {
+    create_dir_all(destination.as_ref())?;
+    let status = Command::new("rsync")
+        .arg("-az")
+        .arg("--delete")
+        .arg(source.as_str())
+        .arg(destination.as_ref())
+        .status()?;
+    if !status.success() {
+        Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+    }
+    else {
+        Ok(())
+    }
+}
 
 
 //------------ Uri -----------------------------------------------------------
@@ -12,7 +37,7 @@ pub struct Uri(url::Url);
 
 impl Uri {
     pub fn parse(input: &[u8]) -> Result<Self, UriError> {
-        if input.is_ascii() {
+        if !input.is_ascii() {
             return Err(UriError::NotAscii)
         }
         let url = url::Url::parse(unsafe { str::from_utf8_unchecked(input) })?;
@@ -20,6 +45,38 @@ impl Uri {
             return Err(UriError::BadScheme)
         }
         Ok(Uri(url))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn host(&self) -> &str {
+        self.0.host_str().unwrap()
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        self.0.port()
+    }
+
+    pub fn path(&self) -> &str {
+        self.0.path().trim_left_matches('/')
+    }
+
+    pub fn parent(&self) -> Uri {
+        let mut res = self.clone();
+        res.0.set_path(
+            &format!("{}/",
+                Path::new(self.path()).parent().unwrap().to_str().unwrap()
+            )
+        );
+        res
+    }
+}
+
+impl fmt::Display for Uri {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

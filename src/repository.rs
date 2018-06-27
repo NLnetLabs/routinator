@@ -32,7 +32,14 @@
 //! If this update resulted in any changes to the local copy at all,
 //! validatio is repeated. Otherwise, it ends with an error.
 
-use std::path::PathBuf;
+use std::io;
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use bytes::Bytes;
+use super::{ber, rsync};
+use super::cert::Cert;
+use super::tal::{self, Tal};
 
 
 //------------ Repository ----------------------------------------------------
@@ -42,4 +49,129 @@ pub struct Repository {
     base: PathBuf,
 }
 
+impl Repository {
+    pub fn new<P: AsRef<Path>>(base: P) -> Self {
+        Repository {
+            base: base.as_ref().into()
+        }
+    }
+
+    pub fn base(&self) -> &Path {
+        self.base.as_ref()
+    }
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        self.update()?;
+        self.run_validation()
+    }
+
+    fn update(&self) -> Result<bool, ValidationError> {
+        Ok(false)
+    }
+
+    fn run_validation(&self) -> Result<(), ValidationError> {
+        for tal in Tal::read_dir(self.base.join("tal"))? {
+            let tal = tal?;
+            for uri in tal.uris() {
+                match self.load_ta(&uri) {
+                    Ok(_cert) => { }
+                    Err(FileError::Encoding(_)) => {
+                        // bad trust anchor. ignore.
+                    }
+                    Err(FileError::Io(err)) => return Err(err.into())
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
+        let mut res = self.base.clone();
+        res.push("repository");
+        if let Some(port) = uri.port() {
+            res.push(format!("{}:{}", uri.host(), port))
+        }
+        else {
+            res.push(uri.host())
+        }
+        res.push(uri.path());
+        res
+    }
+
+    fn populate_uri_dir(&self, uri: &rsync::Uri) -> Result<(), io::Error> {
+        let dir_uri = uri.parent();
+        rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
+    }
+}
+
+impl Repository {
+    pub fn load_ta(&self, uri: &rsync::Uri) -> Result<Cert, FileError> {
+        Ok(Cert::decode(self.load_file(uri, true)?)?)
+    }
+
+    pub fn load_cert(&self, uri: &rsync::Uri) -> Result<Cert, FileError> {
+        Ok(Cert::decode(self.load_file(uri, false)?)?)
+    }
+
+    fn load_file(
+        &self,
+        uri: &rsync::Uri,
+        create: bool
+    ) -> Result<Bytes, FileError> {
+        match File::open(self.uri_to_path(uri)) {
+            Ok(mut file) => {
+                let mut data = Vec::new();
+                file.read_to_end(&mut data)?;
+                Ok(data.into())
+            }
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound && create => {
+                self.populate_uri_dir(uri)?;
+                self.load_file(uri, false)
+            }
+            Err(err) => Err(err.into())
+        }
+    }
+}
+
+
+//------------ ValidationError -----------------------------------------------
+
+#[derive(Debug)]
+pub enum ValidationError {
+    Io(io::Error),
+    Tal(tal::ReadError),
+}
+
+impl From<io::Error> for ValidationError {
+    fn from(err: io::Error) -> ValidationError {
+        ValidationError::Io(err)
+    }
+}
+
+impl From<tal::ReadError> for ValidationError {
+    fn from(err: tal::ReadError) -> ValidationError {
+        ValidationError::Tal(err)
+    }
+}
+
+
+//------------ FileError -----------------------------------------------------
+
+#[derive(Debug)]
+pub enum FileError {
+    Io(io::Error),
+    Encoding(ber::Error),
+}
+
+impl From<io::Error> for FileError {
+    fn from(err: io::Error) -> FileError {
+        FileError::Io(err)
+    }
+}
+
+impl From<ber::Error> for FileError {
+    fn from(err: ber::Error) -> FileError {
+        FileError::Encoding(err)
+    }
+}
 

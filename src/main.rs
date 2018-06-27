@@ -4,5 +4,5 @@ use std::path::Path;
 use rpki::repository::Repository;
 
 fn main() {
-    Repository::new(Path::new("test")).validate()
+    Repository::new(Path::new("test")).validate().unwrap()
 }

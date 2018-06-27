@@ -4,11 +4,13 @@ version = "0.1.0"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 
 [dependencies]
+base64    = "^0.9"
 # Move to published 0.5 once that is available.
 bytes     = { git = "https://github.com/carllerche/bytes.git" }
 chrono    = "0.4"
 ring      = "^0.12" 
 untrusted = "^0.5"
+url       = "1.0"
 
 [features]
 # Print out additional debug messages. This feature is intended for
