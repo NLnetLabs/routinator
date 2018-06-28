@@ -60,21 +60,33 @@ impl Repository {
         self.base.as_ref()
     }
 
-    pub fn validate(&self) -> Result<(), ValidationError> {
+    pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
         self.update()?;
-        self.run_validation()
+        self.run()
     }
 
-    fn update(&self) -> Result<bool, ValidationError> {
+    fn update(&self) -> Result<bool, ProcessingError> {
         Ok(false)
     }
 
-    fn run_validation(&self) -> Result<(), ValidationError> {
+    fn run(&self) -> Result<RouteOrigins, ProcessingError> {
+        let mut res = RouteOrigin;
         for tal in Tal::read_dir(self.base.join("tal"))? {
             let tal = tal?;
             for uri in tal.uris() {
                 match self.load_ta(&uri) {
-                    Ok(_cert) => { }
+                    Ok(cert) => {
+                        println!("processing {}", uri);
+                        if cert.subject_public_key_info() != tal.key_info() {
+                            println!("key info doesn’t match");
+                            continue;
+                        }
+                        if let Err(_) = cert.validate_self_signed() {
+                            println!("validation failed");
+                            continue;
+                        }
+                        self.process_ca(cert, &mut res)?;
+                    }
                     Err(FileError::Encoding(_)) => {
                         // bad trust anchor. ignore.
                     }
@@ -85,22 +97,18 @@ impl Repository {
         Ok(())
     }
 
-    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
-        let mut res = self.base.clone();
-        res.push("repository");
-        if let Some(port) = uri.port() {
-            res.push(format!("{}:{}", uri.host(), port))
-        }
-        else {
-            res.push(uri.host())
-        }
-        res.push(uri.path());
-        res
-    }
-
-    fn populate_uri_dir(&self, uri: &rsync::Uri) -> Result<(), io::Error> {
-        let dir_uri = uri.parent();
-        rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
+    fn process_ca(
+        &self,
+        cert: Cert,
+        res: &mut RouteOrigin
+    ) -> Result<(), ProcessingError> {
+        // get the manifest from the cert.
+        // validate the manifest against the cert.
+        // load the objects mentioned in the manifest.
+        // validate those objects against the cert.
+        // drop the cert.
+        // process child cas.
+        Ok(())
     }
 }
 
@@ -131,26 +139,49 @@ impl Repository {
             Err(err) => Err(err.into())
         }
     }
+
+    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
+        let mut res = self.base.clone();
+        res.push("repository");
+        if let Some(port) = uri.port() {
+            res.push(format!("{}:{}", uri.host(), port))
+        }
+        else {
+            res.push(uri.host())
+        }
+        res.push(uri.path());
+        res
+    }
+
+    fn populate_uri_dir(&self, uri: &rsync::Uri) -> Result<(), io::Error> {
+        let dir_uri = uri.parent();
+        rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
+    }
 }
 
 
-//------------ ValidationError -----------------------------------------------
+//------------ RouteOrigins --------------------------------------------------
+
+pub struct RouteOrigins;
+
+
+//------------ ProcessingError -----------------------------------------------
 
 #[derive(Debug)]
-pub enum ValidationError {
+pub enum ProcessingError {
     Io(io::Error),
     Tal(tal::ReadError),
 }
 
-impl From<io::Error> for ValidationError {
-    fn from(err: io::Error) -> ValidationError {
-        ValidationError::Io(err)
+impl From<io::Error> for ProcessingError {
+    fn from(err: io::Error) -> ProcessingError {
+        ProcessingError::Io(err)
     }
 }
 
-impl From<tal::ReadError> for ValidationError {
-    fn from(err: tal::ReadError) -> ValidationError {
-        ValidationError::Tal(err)
+impl From<tal::ReadError> for ProcessingError {
+    fn from(err: tal::ReadError) -> ProcessingError {
+        ProcessingError::Tal(err)
     }
 }
 

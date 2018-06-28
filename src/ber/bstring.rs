@@ -54,7 +54,7 @@ use super::tag::Tag;
 ///
 /// At this time, the `BitString` type does not implement the constructed
 /// encoding of a bit string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BitString {
     /// The number of unused bits in the last byte.
     unused: u8,
@@ -95,6 +95,10 @@ impl BitString {
     /// Returns an iterator over the octets in the bit string.
     pub fn octets(&self) -> BitStringIter {
         BitStringIter(self.bits.iter())
+    }
+
+    pub fn octet_slice(&self) -> Option<&[u8]> {
+        Some(self.bits.as_ref())
     }
 }
 

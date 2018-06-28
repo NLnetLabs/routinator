@@ -4,6 +4,8 @@ use std::fs::{read_dir, DirEntry, File, ReadDir};
 use std::io::{self, Read};
 use std::path::Path;
 use base64;
+use super::ber;
+use super::cert::SubjectPublicKeyInfo;
 use super::rsync;
 
 
@@ -12,7 +14,7 @@ use super::rsync;
 #[derive(Clone, Debug)]
 pub struct Tal {
     uris: Vec<rsync::Uri>,
-    key_info: Vec<u8>,
+    key_info: SubjectPublicKeyInfo,
 }
 
 impl Tal {
@@ -29,7 +31,8 @@ impl Tal {
         while let Some(uri) = Self::take_uri(&mut data)? {
             uris.push(uri)
         }
-        let key_info = base64::decode_config( data, base64::MIME)?;
+        let key_info = base64::decode_config(data, base64::MIME)?;
+        let key_info = SubjectPublicKeyInfo::decode(key_info.as_ref())?;
         Ok(Tal { uris, key_info })
     }
 
@@ -52,6 +55,10 @@ impl Tal {
 impl Tal {
     pub fn uris(&self) -> ::std::slice::Iter<rsync::Uri> {
         self.uris.iter()
+    }
+
+    pub fn key_info(&self) -> &SubjectPublicKeyInfo {
+        &self.key_info
     }
 }
 
@@ -95,7 +102,8 @@ pub enum ReadError {
     Io(io::Error),
     UnexpectedEof,
     BadUri(rsync::UriError),
-    BadKeyInfo(base64::DecodeError),
+    BadKeyInfoEncoding(base64::DecodeError),
+    BadKeyInfo(ber::Error),
 }
 
 impl From<io::Error> for ReadError {
@@ -112,6 +120,12 @@ impl From<rsync::UriError> for ReadError {
 
 impl From<base64::DecodeError> for ReadError {
     fn from(err: base64::DecodeError) -> ReadError {
+        ReadError::BadKeyInfoEncoding(err)
+    }
+}
+
+impl From<ber::Error> for ReadError {
+    fn from(err: ber::Error) -> ReadError {
         ReadError::BadKeyInfo(err)
     }
 }

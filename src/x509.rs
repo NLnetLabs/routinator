@@ -124,6 +124,20 @@ impl SignedData {
     pub fn data(&self) -> &Bytes {
         &self.data
     }
+
+    pub fn verify_signature(
+        &self,
+        public_key: &[u8]
+    ) -> Result<(), ValidationError> {
+        ::ring::signature::verify(
+            &::ring::signature::RSA_PKCS1_2048_8192_SHA256,
+            ::untrusted::Input::from(public_key),
+            ::untrusted::Input::from(self.data.as_ref()),
+            ::untrusted::Input::from(
+                self.signature_value.octet_slice().unwrap()
+            )
+        ).map_err(|_| ValidationError)
+    }
 }
 
 
@@ -230,6 +244,24 @@ impl Time {
             _ => return Err(Error::Malformed)
         }))
     }
+
+    pub fn validate_not_before(&self) -> Result<(), ValidationError> {
+        if Utc::now() < self.0 {
+            Err(ValidationError)
+        }
+        else {
+            Ok(())
+        }
+    }
+
+    pub fn validate_not_after(&self) -> Result<(), ValidationError> {
+        if Utc::now() > self.0 {
+            Err(ValidationError)
+        }
+        else {
+            Ok(())
+        }
+    }
 }
 
 fn read_two_char<S: Source>(source: &mut S) -> Result<u32, S::Err> {
@@ -264,6 +296,12 @@ fn read_four_char<S: Source>(source: &mut S) -> Result<u32, S::Err> {
         xerr!(Error::Malformed.into())
     })
 }
+
+
+//------------ ValidationError -----------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub struct ValidationError;
 
 
 //------------ Object Identifiers --------------------------------------------

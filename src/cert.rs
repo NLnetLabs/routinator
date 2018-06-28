@@ -6,7 +6,8 @@ use super::ber::{
 };
 use super::ipres::IpAddrBlocks;
 use super::x509::{
-    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time
+    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time,
+    ValidationError
 };
 
 
@@ -82,16 +83,26 @@ impl Cert {
             .subject_public_key.clone()
     }
 
-    /*
-    pub fn public_key_components(
-        &self
-    ) -> Result<(Input<'a>, Input<'a>), Error> {
-        self.subject_public_key_info.public_key_components()
-    }
-    */
-
     pub fn subject_key_identifier(&self) -> &OctetString {
         &self.extensions.subject_key_id
+    }
+
+    pub fn subject_public_key_info(&self) -> &SubjectPublicKeyInfo {
+        &self.subject_public_key_info
+    }
+}
+
+/// # Validation
+///
+impl Cert {
+    pub fn validate_self_signed(&self) -> Result<(), ValidationError> {
+        // XXX This is not yet complete.
+        self.validity.validate()?;
+        self.signed_data.verify_signature(
+            self.subject_public_key_info
+                .subject_public_key.octet_slice().unwrap()
+        )?;
+        Ok(())
     }
 }
 
@@ -119,18 +130,28 @@ impl Validity {
             ))
         })
     }
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        self.not_before.validate_not_before()?;
+        self.not_after.validate_not_after()?;
+        Ok(())
+    }
 }
 
 
 //------------ SubjectPublicKeyInfo ------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubjectPublicKeyInfo {
     algorithm: PublicKeyAlgorithm,
     subject_public_key: BitString,
 }
 
 impl SubjectPublicKeyInfo {
+    pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
+        Mode::Der.decode(source, Self::take_from)
+    }
+ 
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -141,27 +162,12 @@ impl SubjectPublicKeyInfo {
             })
         })
     }
-
-    /*
-    pub fn public_key_components(
-        &self
-    ) -> Result<(Input<'a>, Input<'a>), Error> {
-        Content::parse(self.subject_public_key.clone(), |content| {
-            content.sequence(|content| {
-                Ok((
-                    content.primitive_if(Tag::INTEGER, Ok)?,
-                    content.primitive_if(Tag::INTEGER, Ok)?,
-                ))
-            })
-        })
-    }
-    */
 }
 
 
 //------------ PublicKeyAlgorithm --------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PublicKeyAlgorithm {
     RsaEncryption,
 }

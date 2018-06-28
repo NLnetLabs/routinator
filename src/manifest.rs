@@ -1,6 +1,5 @@
 //! RPKI Manifests
 
-use std::fmt;
 use bytes::Bytes;
 use super::ber::{BitString, Constructed, Error, OctetString, Source, Tag};
 use super::sigobj::{self, SignedObject};
@@ -47,14 +46,6 @@ impl Manifest {
                 })
             })
         }).map_err(Into::into)
-    }
-}
-
-
-impl fmt::Display for Manifest {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Manifest {{")?;
-        writeln!(f, "}}")
     }
 }
 

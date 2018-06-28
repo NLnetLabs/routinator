@@ -7,7 +7,7 @@ use super::ber::{
 };
 use super::x509::update_once;
 use super::cert::Cert;
-use super::x509::Time;
+use super::x509::{Time, ValidationError};
 
 
 //------------ SignedObject --------------------------------------------------
@@ -446,12 +446,6 @@ impl SignatureAlgorithm {
         Ok(SignatureAlgorithm::Sha256WithRsaEncryption)
     }
 }
-
-
-//------------ ValidationError -----------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-pub struct ValidationError;
 
 
 //------------ OIDs ----------------------------------------------------------
