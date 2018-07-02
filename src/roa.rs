@@ -251,5 +251,9 @@ impl RouteOrigins {
     pub fn push(&mut self, attestation: RouteOriginAttestation) {
         self.origins.push(attestation)
     }
+
+    pub fn len(&self) -> usize {
+        self.origins.len()
+    }
 }
 

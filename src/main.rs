@@ -10,5 +10,12 @@ fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-    Repository::new(Path::new("test")).process().unwrap();
+    match Repository::new(Path::new("test")).process() {
+        Ok(res) => {
+            println!("Got {} attestations.", res.len());
+        }
+        Err(_) => {
+            println!("Aborted.");
+        }
+    }
 }

@@ -37,7 +37,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use super::{ber, rsync};
+use super::rsync;
 use super::cert::{Cert, ResourceCert};
 use super::crl::{Crl, CrlStore};
 use super::manifest::{Manifest, ManifestContent, ManifestHash};
@@ -78,28 +78,25 @@ impl Repository {
         for tal in Tal::read_dir(self.base.join("tal"))? {
             let tal = tal?;
             for uri in tal.uris() {
-                match self.load_ta(&uri) {
-                    Ok(cert) => {
-                        println!("processing {}", uri);
+                match self.load_ta(&uri)? {
+                    Some(cert) => {
                         if cert.subject_public_key_info() != tal.key_info() {
-                            println!("key info doesn’t match");
                             continue;
                         }
                         let cert = match cert.validate_ta() {
                             Ok(cert) => cert,
                             Err(_) => {
-                                println!("validation failed");
                                 continue;
                             }
                         };
+                        debug!("processing {}", uri);
                         self.process_ca(cert, &mut res)?;
                         // We stop once we have had the first working URI.
                         break;
                     }
-                    Err(FileError::Encoding(_)) => {
+                    None => {
                         // bad trust anchor. ignore.
                     }
-                    Err(FileError::Io(err)) => return Err(err.into())
                 }
             }
         }
@@ -144,27 +141,37 @@ impl Repository {
         //     manifest. So we should be fine calling load_file without
         //     request for file creation.
         if uri.ends_with(".cer") {
-            let bytes = match self.load_file(&uri, false) {
-                Ok(bytes) => bytes,
-                Err(_) => return Ok(())
+            let bytes = match self.load_file(&uri, false)? {
+                Some(bytes) => bytes,
+                None => {
+                    debug!("{}: failed to load.", uri);
+                    return Ok(())
+                }
             };
             if let Err(_) = hash.verify(&bytes) {
+                debug!("{}: file has wrong hash.", uri);
                 return Ok(())
             }
             let cert = match Cert::decode(bytes) {
                 Ok(cert) => cert,
-                Err(_) => return Ok(())
+                Err(_) => {
+                    debug!("{}: failed to decode.", uri);
+                    return Ok(())
+                }
             };
             let cert = match cert.validate_ca(issuer) {
                 Ok(cert) => cert,
-                Err(_) => return Ok(())
+                Err(_) => {
+                    debug!("{}: failed to validate.", uri);
+                    return Ok(())
+                }
             };
             self.process_ca(cert, routes)
         }
         else if uri.ends_with(".roa") {
-            let bytes = match self.load_file(&uri, false) {
-                Ok(bytes) => bytes,
-                Err(_) => return Ok(())
+            let bytes = match self.load_file(&uri, false)? {
+                Some(bytes) => bytes,
+                None => return Ok(())
             };
             if let Err(_) = hash.verify(&bytes) {
                 return Ok(())
@@ -198,9 +205,9 @@ impl Repository {
                 Some(uri) => uri,
                 None => continue,
             };
-            let bytes = match self.load_file(&uri, true) {
-                Ok(bytes) => bytes,
-                Err(_) => continue,
+            let bytes = match self.load_file(&uri, true)? {
+                Some(bytes) => bytes,
+                None => continue,
             };
             let manifest = match Manifest::decode(bytes) {
                 Ok(manifest) => manifest,
@@ -246,8 +253,8 @@ impl Repository {
 
             // Otherwise, try to load it, use it, and then store it.
             let bytes = match self.load_file(&uri, true) {
-                Ok(bytes) => bytes,
-                Err(_) => continue
+                Ok(Some(bytes)) => bytes,
+                _ => continue
             };
             let crl = match Crl::decode(bytes) {
                 Ok(crl) => crl,
@@ -271,24 +278,26 @@ impl Repository {
 }
 
 impl Repository {
-    pub fn load_ta(&self, uri: &rsync::Uri) -> Result<Cert, FileError> {
-        Ok(Cert::decode(self.load_file(uri, true)?)?)
-    }
-
-    pub fn load_cert(&self, uri: &rsync::Uri) -> Result<Cert, FileError> {
-        Ok(Cert::decode(self.load_file(uri, false)?)?)
+    fn load_ta(
+        &self,
+        uri: &rsync::Uri
+    ) -> Result<Option<Cert>, ProcessingError> {
+        Ok(
+            self.load_file(uri, true)?
+            .and_then(|bytes| Cert::decode(bytes).ok())
+        )
     }
 
     fn load_file(
         &self,
         uri: &rsync::Uri,
         create: bool
-    ) -> Result<Bytes, FileError> {
+    ) -> Result<Option<Bytes>, ProcessingError> {
         match File::open(self.uri_to_path(uri)) {
             Ok(mut file) => {
                 let mut data = Vec::new();
                 file.read_to_end(&mut data)?;
-                Ok(data.into())
+                Ok(Some(data.into()))
             }
             Err(ref err) if err.kind() == io::ErrorKind::NotFound && create => {
                 self.populate_uri_dir(uri)?;
@@ -335,27 +344,6 @@ impl From<io::Error> for ProcessingError {
 impl From<tal::ReadError> for ProcessingError {
     fn from(err: tal::ReadError) -> ProcessingError {
         ProcessingError::Tal(err)
-    }
-}
-
-
-//------------ FileError -----------------------------------------------------
-
-#[derive(Debug)]
-pub enum FileError {
-    Io(io::Error),
-    Encoding(ber::Error),
-}
-
-impl From<io::Error> for FileError {
-    fn from(err: io::Error) -> FileError {
-        FileError::Io(err)
-    }
-}
-
-impl From<ber::Error> for FileError {
-    fn from(err: ber::Error) -> FileError {
-        FileError::Encoding(err)
     }
 }
 
