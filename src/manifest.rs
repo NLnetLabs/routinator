@@ -96,11 +96,16 @@ impl Iterator for ManifestIter {
     type Item = Result<(rsync::Uri, ManifestHash), ValidationError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Mode::Ber.decode(&mut self.file_list, |cons| {
-            FileAndHash::take_opt_from(cons)
-        }).unwrap().map(|item| {
-            item.to_uri_etc(&self.base)
-        })
+        if self.file_list.is_empty() {
+            None
+        }
+        else {
+            Mode::Ber.decode(&mut self.file_list, |cons| {
+                FileAndHash::take_opt_from(cons)
+            }).unwrap().map(|item| {
+                item.to_uri_etc(&self.base)
+            })
+        }
     }
 }
 

@@ -79,7 +79,7 @@ impl BitString {
 
     /// Returns the number of bits in the bit string.
     pub fn bit_len(&self) -> usize {
-        self.bits.len() << 3 - self.unused
+        (self.bits.len() << 3) - (self.unused as usize)
     }
 
     /// Returns the number of unused bits in the last octet.

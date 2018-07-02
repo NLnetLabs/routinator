@@ -174,7 +174,12 @@ impl<'a> Iterator for AsIdBlockIter<'a> {
     type Item = AsBlock;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Mode::Der.decode(&mut self.0, AsBlock::take_opt_from).unwrap()
+        if self.0.is_empty() {
+            None
+        }
+        else {
+            Mode::Der.decode(&mut self.0, AsBlock::take_opt_from).unwrap()
+        }
     }
 }
 

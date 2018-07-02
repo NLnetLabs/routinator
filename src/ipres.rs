@@ -312,7 +312,12 @@ impl<'a> Iterator for AddressBlocksIter<'a> {
     type Item = AddressRange;
     
     fn next(&mut self) -> Option<Self::Item> {
-        Mode::Der.decode(&mut self.0, AddressRange::take_opt_from).unwrap()
+        if self.0.is_empty() {
+            None
+        }
+        else {
+            Mode::Der.decode(&mut self.0, AddressRange::take_opt_from).unwrap()
+        }
     }
 }
 

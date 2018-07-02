@@ -176,7 +176,11 @@ impl Repository {
             let _ = roa.process(issuer, routes);
             Ok(())
         }
+        else if uri.ends_with(".crl") {
+            Ok(())
+        }
         else {
+            warn!("skipping unknown file {}", uri);
             Ok(())
         }
     }

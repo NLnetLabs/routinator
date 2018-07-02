@@ -981,9 +981,14 @@ impl Iterator for UriGeneralNameIter {
     type Item = UriGeneralName;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Mode::Der.decode(&mut self.0, |cons| {
-            UriGeneralName::take_opt_from(cons)
-        }).unwrap()
+        if self.0.is_empty() {
+            None
+        }
+        else {
+            Mode::Der.decode(&mut self.0, |cons| {
+                UriGeneralName::take_opt_from(cons)
+            }).unwrap()
+        }
     }
 }
 

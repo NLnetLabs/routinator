@@ -4,7 +4,7 @@
 
 use bytes::Bytes;
 use super::asres::AsId;
-use super::ber::{BitString, Constructed, Error, Mode, Source};
+use super::ber::{BitString, Constructed, Error, Mode, Source, Tag};
 use super::cert::ResourceCert;
 use super::ipres::AddressFamily;
 use super::sigobj::SignedObject;
@@ -55,27 +55,37 @@ impl RouteOriginAttestation {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.sequence(|cons| {
-            cons.skip_opt_u8_if(0)?;
+            cons.opt_primitive_if(Tag::CTX_0, |prim| {
+                if prim.take_u8()? != 0 {
+                    xerr!(Err(Error::Malformed.into()))
+                }
+                else {
+                    Ok(())
+                }
+            })?;
             let as_id = AsId::take_from(cons)?;
             let mut v4 = None;
             let mut v6 = None;
-            while let Some(()) = cons.opt_sequence(|cons| {
-                match AddressFamily::take_from(cons)? {
-                    AddressFamily::Ipv4 => {
-                        if v4.is_some() {
-                            xerr!(return Err(Error::Malformed.into()));
+            cons.sequence(|cons| {
+                while let Some(()) = cons.opt_sequence(|cons| {
+                    match AddressFamily::take_from(cons)? {
+                        AddressFamily::Ipv4 => {
+                            if v4.is_some() {
+                                xerr!(return Err(Error::Malformed.into()));
+                            }
+                            v4 = Some(RoaIpAddresses::take_from(cons)?);
                         }
-                        v4 = Some(RoaIpAddresses::take_from(cons)?);
-                    }
-                    AddressFamily::Ipv6 => {
-                        if v6.is_some() {
-                            xerr!(return Err(Error::Malformed.into()));
+                        AddressFamily::Ipv6 => {
+                            if v6.is_some() {
+                                xerr!(return Err(Error::Malformed.into()));
+                            }
+                            v6 = Some(RoaIpAddresses::take_from(cons)?);
                         }
-                        v6 = Some(RoaIpAddresses::take_from(cons)?);
                     }
-                }
+                    Ok(())
+                })? { }
                 Ok(())
-            })? { }
+            })?;
             Ok(RouteOriginAttestation {
                 as_id,
                 v4_addrs: match v4 {
@@ -154,9 +164,14 @@ impl<'a> Iterator for RoaIpAddressIter<'a> {
     type Item = RoaIpAddress;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Mode::Der.decode(&mut self.0, |cons| {
-            RoaIpAddress::take_opt_from(cons)
-        }).unwrap()
+        if self.0.is_empty() {
+            None
+        }
+        else {
+            Mode::Der.decode(&mut self.0, |cons| {
+                RoaIpAddress::take_opt_from(cons)
+            }).unwrap()
+        }
     }
 }
 
@@ -176,7 +191,6 @@ impl RoaIpAddress {
         (self.address & !mask, self.address | mask)
     }
 }
-
 
 impl RoaIpAddress {
     fn take_opt_from<S: Source>(
