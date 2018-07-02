@@ -9,10 +9,18 @@ for that. If you feel lucky, simply do:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-or get the file, have a look and then run it manually.
+or get the file, have a look and then run it manually. Follow the
+instructions (if any) to get rustup and cargo, the rust build tool, into
+your path.
 
-Make sure `cargo` is in your path (*rustup* should tell you what to do),
-then, in the directory you cloned this repository to, say
+If you already have Rust, make sure you have a reasonably new version. The
+code assumes that you have the latest stable version. If in doubt, run
+
+```bash
+rustup update
+```
+
+In the directory you cloned this repository to, say
 
 ```bash
 cargo build

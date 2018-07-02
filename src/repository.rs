@@ -171,7 +171,10 @@ impl Repository {
             }
             let roa = match Roa::decode(bytes) {
                 Ok(roa) => roa,
-                Err(_) => return Ok(())
+                Err(_) => {
+                    debug!("Decoding failed for {}", uri);
+                    return Ok(())
+                }
             };
             let _ = roa.process(issuer, routes);
             Ok(())

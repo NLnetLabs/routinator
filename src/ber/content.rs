@@ -830,7 +830,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     }
 
     pub fn take_opt_u8(&mut self) -> Result<Option<u8>, S::Err> {
-        self.opt_primitive_if(Tag::INTEGER, |prim| prim.take_u8())
+        self.opt_primitive_if(Tag::INTEGER, |prim| prim.to_u8())
     }
 
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {

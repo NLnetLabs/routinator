@@ -187,7 +187,12 @@ pub struct RoaIpAddress {
 
 impl RoaIpAddress {
     pub fn range(&self) -> (u128, u128) {
-        let mask = !0u128 >> self.address_length;
+        let mask = if self.address_length < 128 {
+            !0u128 >> self.address_length
+        }
+        else {
+            0
+        };
         (self.address & !mask, self.address | mask)
     }
 }
