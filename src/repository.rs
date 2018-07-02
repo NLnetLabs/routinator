@@ -70,6 +70,7 @@ impl Repository {
     }
 
     fn update(&self) -> Result<bool, ProcessingError> {
+        debug!("UPDATED NOT IMPLEMENTED YET.");
         Ok(false)
     }
 
@@ -310,8 +311,13 @@ impl Repository {
                 Ok(Some(data.into()))
             }
             Err(ref err) if err.kind() == io::ErrorKind::NotFound && create => {
-                self.populate_uri_dir(uri)?;
-                self.load_file(uri, false)
+                if let Err(_) = self.populate_uri_dir(uri) {
+                    debug!("rsync failed. Skipping ...");
+                    Ok(None)
+                }
+                else {
+                    self.load_file(uri, false)
+                }
             }
             Err(err) => Err(err.into())
         }

@@ -18,6 +18,7 @@ pub fn update<P: AsRef<Path>>(
     let status = Command::new("rsync")
         .arg("-az")
         .arg("--delete")
+        .arg("--contimeout=10")
         .arg(source.as_str())
         .arg(destination.as_ref())
         .status()?;
