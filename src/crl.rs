@@ -1,10 +1,13 @@
 
 use bytes::Bytes;
+use super::rsync;
 use super::ber::{
     Constructed, Error, Mode, OctetString, Oid, Source, Tag
 };
+use super::cert::Cert;
 use super::x509::{
-    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time
+    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time,
+    ValidationError,
 };
 
 
@@ -56,6 +59,17 @@ impl Crl {
             })
         }).map_err(Into::into)
     }
+
+    pub fn validate<C: AsRef<Cert>>(
+        &self,
+        issuer: C
+    ) -> Result<(), ValidationError> {
+        self.signed_data.verify_signature(issuer.as_ref().public_key())
+    }
+
+    pub fn contains(&self, serial: &SerialNumber) -> bool {
+        self.revoked_certs.contains(serial)
+    }
 }
 
 
@@ -78,6 +92,17 @@ impl RevokedCertificates {
             Some(res) => res,
             None => Bytes::new(),
         }))
+    }
+
+    pub fn contains(&self, serial: &SerialNumber) -> bool {
+        Mode::Der.decode(self.0.as_ref(), |cons| {
+            while let Some(entry) = CrlEntry::take_opt_from(cons).unwrap() {
+                if entry.user_certificate == *serial {
+                    return Ok(true)
+                }
+            }
+            Ok(false)
+        }).unwrap()
     }
 }
 
@@ -137,7 +162,7 @@ impl Extensions {
                 let id = Oid::take_from(cons)?;
                 let _critical = cons.take_opt_bool()?.unwrap_or(false);
                 let value = OctetString::take_from(cons)?;
-                Mode::Der.decode(value.as_source(), |cons| {
+                Mode::Der.decode(value.to_source(), |cons| {
                     if id == oid::CE_AUTHORITY_KEY_IDENTIFIER {
                         Self::take_authority_key_identifier(
                             cons, &mut authority_key_id
@@ -217,6 +242,34 @@ impl Extensions {
         })
     }
 }
+
+
+//------------ CrlStore ------------------------------------------------------
+
+pub struct CrlStore {
+    // This is a simple vector because most likely we’ll only ever have one.
+    crls: Vec<(rsync::Uri, Crl)>
+}
+
+impl CrlStore {
+    pub fn new() -> Self {
+        CrlStore { crls: Vec::new() }
+    }
+
+    pub fn push(&mut self, uri: rsync::Uri, crl: Crl) {
+        self.crls.push((uri, crl))
+    }
+
+    pub fn get(&self, uri: &rsync::Uri) -> Option<&Crl> {
+        for &(ref stored_uri, ref crl) in &self.crls {
+            if *stored_uri == *uri {
+                return Some(crl)
+            }
+        }
+        None
+    }
+}
+
 
 
 //------------ OIDs ----------------------------------------------------------

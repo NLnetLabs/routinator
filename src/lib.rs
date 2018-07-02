@@ -15,7 +15,9 @@ pub mod crl;
 pub mod ipres;
 pub mod manifest;
 pub mod repository;
+pub mod roa;
 pub mod rsync;
 pub mod sigobj;
 pub mod tal;
 pub mod x509;
+

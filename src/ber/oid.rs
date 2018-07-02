@@ -13,7 +13,7 @@ use super::tag::Tag;
 //------------ Oid -----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Oid<T: AsRef<[u8]>>(pub T);
+pub struct Oid<T: AsRef<[u8]>=Bytes>(pub T);
 
 impl Oid<Bytes> {
     pub fn skip_in<S: Source>(

@@ -32,7 +32,7 @@ pub fn update<P: AsRef<Path>>(
 //------------ Uri -----------------------------------------------------------
 
 /// An rsync URI.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Uri(url::Url);
 
 impl Uri {
@@ -71,6 +71,14 @@ impl Uri {
             )
         );
         res
+    }
+
+    pub fn join(&self, path: &str) -> Result<Self, UriError> {
+        Ok(Uri(self.0.join(path)?))
+    }
+
+    pub fn ends_with(&self, extension: &str) -> bool {
+        self.0.path().ends_with(extension)
     }
 }
 

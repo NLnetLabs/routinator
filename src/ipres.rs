@@ -11,17 +11,19 @@ use bytes::Bytes;
 use super::ber::{
     BitString, Constructed, Content, Error, Mode, OctetString, Source, Tag,
 };
+use super::roa::RoaIpAddress;
+use super::x509::ValidationError;
 
 
-//------------ IpAddrBlocks --------------------------------------------------
+//------------ IpResources ---------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct IpAddrBlocks {
+pub struct IpResources {
     v4: Option<AddressChoice>,
     v6: Option<AddressChoice>,
 }
 
-impl IpAddrBlocks {
+impl IpResources {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -49,21 +51,11 @@ impl IpAddrBlocks {
             if v4.is_none() && v6.is_none() {
                 xerr!(return Err(Error::Malformed.into()));
             }
-            // XXX RFC 6487 isn’t quite clear whether only one of the two
-            //     address families is allowed to use the inherit option.
-            //     It does say, however, either non-empty or inherit without
-            //     leaving another choice, so I think that’s what it means.
-            if let (Some(v4), Some(v6)) = (v4.as_ref(), v6.as_ref()) {
-                if (v4.is_inherited() && !v6.is_inherited())
-                    || (v6.is_inherited() && !v4.is_inherited())
-                {
-                    xerr!(return Err(Error::Malformed.into()));
-                }
-            }
-            Ok(IpAddrBlocks { v4, v6 })
+            Ok(IpResources { v4, v6 })
         })
     }
 
+    /*
     pub fn is_inherited(&self) -> bool {
         if let Some(v4) = self.v4.as_ref() {
             if v4.is_inherited() {
@@ -108,6 +100,7 @@ impl IpAddrBlocks {
             (_, Some(_)) => false,
         }
     }
+    */
 }
 
 
@@ -127,10 +120,10 @@ impl AddressChoice {
         }
     }
 
-    pub fn as_blocks(&self) -> &AddressBlocks {
+    pub fn to_blocks(&self) -> Result<AddressBlocks, ValidationError> {
         match *self {
-            AddressChoice::Inherit => panic!("inherited choice"),
-            AddressChoice::Blocks(ref blocks) => blocks
+            AddressChoice::Inherit => Err(ValidationError),
+            AddressChoice::Blocks(ref blocks) => Ok(blocks.clone())
         }
     }
 }
@@ -156,6 +149,63 @@ impl AddressChoice {
 }
 
 
+//------------ IpAddressBlocks -----------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct IpAddressBlocks {
+    v4: Option<AddressBlocks>,
+    v6: Option<AddressBlocks>,
+}
+
+impl IpAddressBlocks {
+    pub fn from_resources(
+        res: Option<&IpResources>
+    ) -> Result<Self, ValidationError> {
+        match res {
+            Some(res) => {
+                Ok(IpAddressBlocks {
+                    v4: match res.v4.as_ref() {
+                        Some(res) => Some(res.to_blocks()?),
+                        None => None,
+                    },
+                    v6: match res.v6.as_ref() {
+                        Some(res) => Some(res.to_blocks()?),
+                        None => None,
+                    }
+                })
+            }
+            None =>
+                Ok(IpAddressBlocks {
+                    v4: None,
+                    v6: None
+                })
+        }
+    }
+
+    pub fn encompasses(
+        &self,
+        res: Option<&IpResources>
+    ) -> Result<Self, ValidationError> {
+        let res = match res {
+            Some(res) => res,
+            None => &IpResources { v4: None, v6: None }
+        };
+        Ok(IpAddressBlocks {
+            v4: AddressBlocks::encompasses(self.v4.as_ref(), res.v4.as_ref())?,
+            v6: AddressBlocks::encompasses(self.v6.as_ref(), res.v6.as_ref())?,
+        })
+    }
+
+    pub fn v4(&self) -> Option<&AddressBlocks> {
+        self.v4.as_ref()
+    }
+
+    pub fn v6(&self) -> Option<&AddressBlocks> {
+        self.v6.as_ref()
+    }
+}
+
+
 //------------ AddressBlocks -------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -164,6 +214,16 @@ pub struct AddressBlocks(Bytes);
 impl AddressBlocks {
     pub fn iter(&self) -> AddressBlocksIter {
         AddressBlocksIter(self.0.as_ref())
+    }
+
+    pub fn contain(&self, addr: &RoaIpAddress) -> bool {
+        let (min, max) = addr.range();
+        for range in self.iter() {
+            if range.min() <= min && range.max() >= max {
+                return true
+            }
+        }
+        false
     }
 }
 
@@ -178,7 +238,28 @@ impl AddressBlocks {
         }).map(AddressBlocks)
     }
 
-    fn encompasses(&self, other: &Self) -> bool {
+    fn encompasses(
+        outer: Option<&Self>,
+        inner: Option<&AddressChoice>
+    ) -> Result<Option<Self>, ValidationError> {
+        match (outer, inner) {
+            (Some(outer), Some(AddressChoice::Inherit)) => {
+                Ok(Some(outer.clone()))
+            }
+            (Some(outer), Some(AddressChoice::Blocks(inner))) => {
+                if outer._encompasses(inner) {
+                    Ok(Some(inner.clone()))
+                }
+                else {
+                    Err(ValidationError)
+                }
+            }
+            (_, None) => Ok(None),
+            _ => Err(ValidationError),
+        }
+    }
+
+    fn _encompasses(&self, other: &Self) -> bool {
         // Everything is supposed to be in increasing order. So we can treat
         // prefixes and blocks both as address ranges (which they actually 
         // are, of course), and can treat them as 128 bit unsigned integers.
@@ -368,13 +449,13 @@ impl AddressRange {
 //------------ AddressFamily -------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AddressFamily {
+pub enum AddressFamily {
     Ipv4,
     Ipv6
 }
 
 impl AddressFamily {
-    fn take_from<S: Source>(
+    pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         let str = OctetString::take_from(cons)?;

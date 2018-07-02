@@ -6,7 +6,7 @@ use super::ber::{
     Constructed, Error, Mode, OctetString, OctetStringSource, Oid, Source, Tag
 };
 use super::x509::update_once;
-use super::cert::Cert;
+use super::cert::{Cert, ResourceCert};
 use super::x509::{Time, ValidationError};
 
 
@@ -42,7 +42,7 @@ impl SignedObject {
     pub fn decode_content<F, T>(&self, op: F) -> Result<T, Error>
     where F: FnOnce(&mut Constructed<OctetStringSource>) -> Result<T, Error> {
         // XXX Let’s see if using DER here at least holds.
-        Mode::Der.decode(self.content.as_source(), op)
+        Mode::Der.decode(self.content.to_source(), op)
     }
 
     /// Returns a reference to the certificate the object is signed with.
@@ -156,16 +156,17 @@ impl SignedObject {
     /// Validates the signed object.
     ///
     /// The requirements for an object to be valid are given in section 3
-    /// of [RFC 6488]. Since additional information is necessary to validate
-    /// the certificate contained in the object, this part is handed off to
-    /// the closure `validate_cert`.
+    /// of [RFC 6488].
     ///
-    /// The method returns Ok if the object is valid or an error otherwise.
-    pub fn validate<F>(&self, validate_cert: F) -> Result<(), ValidationError>
-    where F: FnOnce(&Cert) -> Result<(), ValidationError> {
+    /// Upon success, the method returns the validated certificate and the
+    /// content.
+    pub fn validate(
+        self,
+        issuer: &ResourceCert
+    ) -> Result<ResourceCert, ValidationError> {
         self.verify_compliance()?;
         self.verify_signature()?;
-        validate_cert(self.cert())
+        self.cert.validate_ee(issuer)
     }
 
     /// Validates that the signed object complies with the specification.

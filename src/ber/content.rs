@@ -769,6 +769,10 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         self.opt_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
     }
 
+    pub fn take_opt_u8(&mut self) -> Result<Option<u8>, S::Err> {
+        self.opt_primitive_if(Tag::INTEGER, |prim| prim.take_u8())
+    }
+
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
         self.primitive_if(Tag::INTEGER, |prim| {
             let got = prim.take_u8()?;

@@ -38,8 +38,12 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use super::{ber, rsync};
-use super::cert::Cert;
+use super::cert::{Cert, ResourceCert};
+use super::crl::{Crl, CrlStore};
+use super::manifest::{Manifest, ManifestContent, ManifestHash};
+use super::roa::{Roa, RouteOrigins};
 use super::tal::{self, Tal};
+use super::x509::ValidationError;
 
 
 //------------ Repository ----------------------------------------------------
@@ -70,7 +74,7 @@ impl Repository {
     }
 
     fn run(&self) -> Result<RouteOrigins, ProcessingError> {
-        let mut res = RouteOrigin;
+        let mut res = RouteOrigins::new();
         for tal in Tal::read_dir(self.base.join("tal"))? {
             let tal = tal?;
             for uri in tal.uris() {
@@ -81,11 +85,16 @@ impl Repository {
                             println!("key info doesn’t match");
                             continue;
                         }
-                        if let Err(_) = cert.validate_self_signed() {
-                            println!("validation failed");
-                            continue;
-                        }
+                        let cert = match cert.validate_ta() {
+                            Ok(cert) => cert,
+                            Err(_) => {
+                                println!("validation failed");
+                                continue;
+                            }
+                        };
                         self.process_ca(cert, &mut res)?;
+                        // We stop once we have had the first working URI.
+                        break;
                     }
                     Err(FileError::Encoding(_)) => {
                         // bad trust anchor. ignore.
@@ -94,21 +103,163 @@ impl Repository {
                 }
             }
         }
-        Ok(())
+        Ok(res)
     }
 
     fn process_ca(
         &self,
-        cert: Cert,
-        res: &mut RouteOrigin
+        cert: ResourceCert,
+        routes: &mut RouteOrigins
     ) -> Result<(), ProcessingError> {
-        // get the manifest from the cert.
-        // validate the manifest against the cert.
-        // load the objects mentioned in the manifest.
-        // validate those objects against the cert.
-        // drop the cert.
-        // process child cas.
+        let mut store = CrlStore::new();
+
+        let repo_uri = match cert.repository_uri() {
+            Some(uri) => uri,
+            None => return Ok(())
+        };
+        let manifest = match self.get_manifest(&cert, &mut store)? {
+            Some(manifest) => manifest,
+            None => return Ok(())
+        };
+
+        for item in manifest.iter_uris(repo_uri) {
+            let (uri, hash) = match item {
+                Ok(item) => item,
+                Err(_) => continue,
+            };
+
+            self.process_object(uri, hash, &cert, routes)?;
+        }
         Ok(())
+    }
+
+    fn process_object(
+        &self,
+        uri: rsync::Uri,
+        hash: ManifestHash,
+        issuer: &ResourceCert,
+        routes: &mut RouteOrigins,
+    ) -> Result<(), ProcessingError> {
+        // XXX We should have the directory already from the fetching the
+        //     manifest. So we should be fine calling load_file without
+        //     request for file creation.
+        if uri.ends_with(".cer") {
+            let bytes = match self.load_file(&uri, false) {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(())
+            };
+            if let Err(_) = hash.verify(&bytes) {
+                return Ok(())
+            }
+            let cert = match Cert::decode(bytes) {
+                Ok(cert) => cert,
+                Err(_) => return Ok(())
+            };
+            let cert = match cert.validate_ca(issuer) {
+                Ok(cert) => cert,
+                Err(_) => return Ok(())
+            };
+            self.process_ca(cert, routes)
+        }
+        else if uri.ends_with(".roa") {
+            let bytes = match self.load_file(&uri, false) {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(())
+            };
+            if let Err(_) = hash.verify(&bytes) {
+                return Ok(())
+            }
+            let roa = match Roa::decode(bytes) {
+                Ok(roa) => roa,
+                Err(_) => return Ok(())
+            };
+            let _ = roa.process(issuer, routes);
+            Ok(())
+        }
+        else {
+            Ok(())
+        }
+    }
+
+    fn get_manifest(
+        &self,
+        issuer: &ResourceCert,
+        store: &mut CrlStore,
+    ) -> Result<Option<ManifestContent>, ProcessingError> {
+        for uri in issuer.manifest_uris() {
+            let uri = match uri.into_rsync_uri() {
+                Some(uri) => uri,
+                None => continue,
+            };
+            let bytes = match self.load_file(&uri, true) {
+                Ok(bytes) => bytes,
+                Err(_) => continue,
+            };
+            let manifest = match Manifest::decode(bytes) {
+                Ok(manifest) => manifest,
+                Err(_) => continue,
+            };
+            let (cert, manifest) = match manifest.validate(issuer) {
+                Ok(manifest) => manifest,
+                Err(_) => continue,
+            };
+            if let Err(_) = self.check_crl(cert, issuer, store) {
+                continue
+            }
+            return Ok(Some(manifest))
+        }
+        Ok(None)
+    }
+
+    fn check_crl<C: AsRef<Cert>>(
+        &self,
+        cert: C,
+        issuer: &ResourceCert,
+        store: &mut CrlStore,
+    ) -> Result<(), ValidationError> {
+        let uri_list = match cert.as_ref().crl_distribution() {
+            Some(some) => some,
+            None => return Ok(())
+        };
+        for uri in uri_list.iter() {
+            let uri = match uri.into_rsync_uri() {
+                Some(uri) => uri,
+                None => continue
+            };
+
+            // If we already have that CRL, use it.
+            if let Some(crl) = store.get(&uri) {
+                if crl.contains(&cert.as_ref().serial_number()) {
+                    return Err(ValidationError)
+                }
+                else {
+                    return Ok(())
+                }
+            }
+
+            // Otherwise, try to load it, use it, and then store it.
+            let bytes = match self.load_file(&uri, true) {
+                Ok(bytes) => bytes,
+                Err(_) => continue
+            };
+            let crl = match Crl::decode(bytes) {
+                Ok(crl) => crl,
+                Err(_) => continue
+            };
+            if let Err(_) = crl.validate(issuer) {
+                continue
+            }
+
+            let revoked = crl.contains(&cert.as_ref().serial_number());
+            store.push(uri, crl);
+            if revoked {
+                return Err(ValidationError)
+            }
+            else {
+                return Ok(())
+            }
+        }
+        Err(ValidationError)
     }
 }
 
@@ -158,11 +309,6 @@ impl Repository {
         rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
     }
 }
-
-
-//------------ RouteOrigins --------------------------------------------------
-
-pub struct RouteOrigins;
 
 
 //------------ ProcessingError -----------------------------------------------

@@ -103,6 +103,15 @@ impl OctetString {
         OctetStringOctets::new(self.iter())
     }
 
+    pub fn octet_slice(&self) -> Option<&[u8]> {
+        if self.primitive {
+            Some(self.bytes.as_ref())
+        }
+        else {
+            None
+        }
+    }
+
     pub fn process_segments_mut<F>(&self, mut op: F)
     where F: FnMut(&[u8]) -> bool {
         for segment in self.iter() {
@@ -137,7 +146,7 @@ impl OctetString {
         }
     }
 
-    pub fn as_source(&self) -> OctetStringSource {
+    pub fn to_source(&self) -> OctetStringSource {
         OctetStringSource::new(self)
     }
 

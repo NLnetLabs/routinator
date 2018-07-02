@@ -1,10 +1,12 @@
 
 use bytes::Bytes;
-use super::asres::AsIdentifiers;
+use ring::digest::{self, Digest};
+use super::rsync;
+use super::asres::{AsBlocks, AsResources};
 use super::ber::{
     BitString, Constructed, Error, Mode, OctetString, Oid, Source, Tag
 };
-use super::ipres::IpAddrBlocks;
+use super::ipres::{IpAddressBlocks, IpResources};
 use super::x509::{
     update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time,
     ValidationError
@@ -78,9 +80,9 @@ impl Cert {
         }).map_err(Into::into)
     }
 
-    pub fn public_key(&self) -> BitString {
+    pub fn public_key(&self) -> &[u8] {
         self.subject_public_key_info
-            .subject_public_key.clone()
+            .subject_public_key.octet_slice().unwrap()
     }
 
     pub fn subject_key_identifier(&self) -> &OctetString {
@@ -90,19 +92,327 @@ impl Cert {
     pub fn subject_public_key_info(&self) -> &SubjectPublicKeyInfo {
         &self.subject_public_key_info
     }
+
+    pub fn crl_distribution(&self) -> Option<&UriGeneralNames> {
+        self.extensions.crl_distribution.as_ref()
+    }
+
+    pub fn serial_number(&self) -> &SerialNumber {
+        &self.serial_number
+    }
 }
 
 /// # Validation
 ///
 impl Cert {
-    pub fn validate_self_signed(&self) -> Result<(), ValidationError> {
-        // XXX This is not yet complete.
-        self.validity.validate()?;
+    /// Validates the certificate as a trust anchor.
+    ///
+    /// This validates that the certificate “is a current, self-signed RPKI
+    /// CA certificate that conforms to the profile as specified in
+    /// RFC6487” (RFC7730, section 3, step 2).
+    pub fn validate_ta(self) -> Result<ResourceCert, ValidationError> {
+        self.validate_basics()?;
+        self.validate_ca_basics()?;
+
+        // 4.8.3. Authority Key Identifier. May be present, if so, must be
+        // equal to the subject key indentifier.
+        if let Some(ref aki) = self.extensions.authority_key_id {
+            if *aki != self.extensions.subject_key_id {
+                return Err(ValidationError);
+            }
+        }
+
+        // 4.8.6. CRL Distribution Points. There musn’t be one.
+        if self.extensions.crl_distribution.is_some() {
+            return Err(ValidationError)
+        }
+
+        // 4.8.7. Authority Information Access. Must not be present.
+        if self.extensions.authority_info_access.is_some() {
+            return Err(ValidationError)
+        }
+
+        // 4.8.10.  IP Resources. If present, musn’t be "inherit".
+        let ip_resources = IpAddressBlocks::from_resources(
+            self.extensions.ip_resources.as_ref()
+        )?;
+ 
+        // 4.8.11.  AS Resources. If present, musn’t be "inherit". That
+        // IP resources (logical) or AS resources are present has already
+        // been checked during parsing.
+        let as_resources = AsBlocks::from_resources(
+            self.extensions.as_resources.as_ref()
+        )?;
+
         self.signed_data.verify_signature(
             self.subject_public_key_info
                 .subject_public_key.octet_slice().unwrap()
         )?;
+
+        Ok(ResourceCert {
+            cert: self,
+            ip_resources,
+            as_resources,
+        })
+    }
+
+    /// Validates the certificate as a CA certificate.
+    ///
+    /// For validation to succeed, the certificate needs to have been signed
+    /// by the provided `issuer` certificate.
+    ///
+    /// Note that this does _not_ check the CRL.
+    pub fn validate_ca(
+        self,
+        issuer: &ResourceCert
+    ) -> Result<ResourceCert, ValidationError> {
+        self.validate_basics()?;
+        self.validate_ca_basics()?;
+        self.validate_issued(issuer)?;
+        self.validate_signature(issuer)?;
+        self.validate_resources(issuer)
+    }
+
+    /// Validates the certificate as an EE certificate.
+    ///
+    /// For validation to succeed, the certificate needs to have been signed
+    /// by the provided `issuer` certificate.
+    ///
+    /// Note that this does _not_ check the CRL.
+    pub fn validate_ee(
+        self,
+        issuer: &ResourceCert,
+    ) -> Result<ResourceCert, ValidationError>  {
+        self.validate_basics()?;
+        self.validate_issued(issuer)?;
+
+        // 4.8.1. Basic Constraints: Must not be present.
+        if self.extensions.basic_ca != None {
+            return Err(ValidationError)
+        }
+
+        // 4.8.4. Key Usage. Bits for CA or not CA have been checked during
+        // parsing already.
+        if self.extensions.key_usage_ca {
+            return Err(ValidationError)
+        }
+
+        // 4.8.8.  Subject Information Access.
+        if self.extensions.subject_info_access.ca {
+            return Err(ValidationError)
+        }
+
+        self.validate_signature(issuer)?;
+        self.validate_resources(issuer)
+    }
+
+
+    //--- Validation Components
+
+    /// Validates basic compliance with section 4 of RFC 6487.
+    fn validate_basics(&self) -> Result<(), ValidationError> {
+        // The following lists all such constraints in the RFC, noting those
+        // that we cannot check here.
+
+        // 4.2 Serial Number: must be unique over the CA. We cannot check
+        // here, and -- XXX --- probably don’t care?
+
+        // 4.3 Signature Algorithm: limited to those in RFC 6485. Already
+        // checked in parsing.
+
+        // 4.4 Issuer: must have certain format. Since it is not intended to
+        // be descriptive, we simply ignore it.
+
+        // 4.5 Subject: same as 4.4.
+        
+        // 4.6 Validity. Check according to RFC 5280.
+        self.validity.validate()?;
+
+        // 4.7 Subject Public Key Info: limited algorithms. Already checked
+        // during parsing.
+
+        // 4.8.1. Basic Constraints. Differing requirements for CA and EE
+        // certificates.
+        
+        // 4.8.2. Subject Key Identifer. Must be the SHA-1 hash of the octets
+        // of the subjectPublicKey.
+        if self.extensions.subject_key_id.octet_slice().unwrap()
+                != self.subject_public_key_info().key_identifier().as_ref()
+        {
+            return Err(ValidationError)
+        }
+
+        // 4.8.3. Authority Key Identifier. Differing requirements of TA and
+        // other certificates.
+
+        // 4.8.4. Key Usage. Differs between CA and EE certificates.
+
+        // 4.8.5. Extended Key Usage. Must not be present for the kind of
+        // certificates we use here.
+        if self.extensions.extended_key_usage.is_some() {
+            return Err(ValidationError)
+        }
+
+        // 4.8.6. CRL Distribution Points. Differs between TA and other
+        // certificates.
+
+        // 4.8.7. Authority Information Access. Differs between TA and other
+        // certificates.
+
+        // 4.8.8.  Subject Information Access. Differs between CA and EE
+        // certificates.
+
+        // 4.8.9.  Certificate Policies. XXX I think this can be ignored.
+        // At least for now.
+
+        // 4.8.10.  IP Resources. Differs between trust anchor and issued
+        // certificates.
+        
+        // 4.8.11.  AS Resources. Differs between trust anchor and issued
+        // certificates.
+
         Ok(())
+    }
+
+    /// Validates that the certificate is a correctly issued certificate.
+    fn validate_issued(
+        &self,
+        issuer: &ResourceCert,
+    ) -> Result<(), ValidationError> {
+        // 4.8.3. Authority Key Identifier. Must be present and match the
+        // subject key ID of `issuer`.
+        if let Some(ref aki) = self.extensions.authority_key_id {
+            if *aki != issuer.cert.extensions.subject_key_id {
+                return Err(ValidationError)
+            }
+        }
+        else {
+            return Err(ValidationError);
+        }
+
+        // 4.8.6. CRL Distribution Points. There must be one. There’s a rule
+        // that there must be at least one rsync URI. This will be implicitely
+        // checked when verifying the CRL later.
+        if self.extensions.crl_distribution.is_none() {
+            return Err(ValidationError)
+        }
+
+        // 4.8.7. Authority Information Access. Must be present and contain
+        // the URI of the issuer certificate. Since we do top-down validation,
+        // we don’t really need that URI so – XXX – leave it unchecked for
+        // now.
+        if self.extensions.authority_info_access.is_none() {
+            return Err(ValidationError);
+        }
+
+        Ok(())
+    }
+
+    /// Validates that the certificate is a valid CA certificate.
+    ///
+    /// Checks the parts that are common in normal and trust anchor CA
+    /// certificates.
+    fn validate_ca_basics(&self) -> Result<(), ValidationError> {
+        // 4.8.1. Basic Constraints: For a CA it must be present (RFC6487)
+        // und the “cA” flag must be set (RFC5280).
+        if self.extensions.basic_ca != Some(true) {
+            return Err(ValidationError)
+        }
+
+        // 4.8.4. Key Usage. Bits for CA or not CA have been checked during
+        // parsing already.
+        if !self.extensions.key_usage_ca {
+            return Err(ValidationError)
+        }
+
+        // 4.8.8.  Subject Information Access.
+        if !self.extensions.subject_info_access.ca {
+            return Err(ValidationError)
+        }
+        
+        Ok(())
+    }
+
+    /// Validates the certificate’s signature.
+    fn validate_signature(
+        &self,
+        issuer: &ResourceCert
+    ) -> Result<(), ValidationError> {
+        self.signed_data.verify_signature(issuer.cert.public_key())
+    }
+
+    /// Validates and extracts the IP and AS resources.
+    ///
+    /// Upon success, this converts the certificate into a `ResourceCert`.
+    fn validate_resources(
+        self,
+        issuer: &ResourceCert
+    ) -> Result<ResourceCert, ValidationError> {
+        // 4.8.10.  IP Resources. If present, must be encompassed by issuer.
+        // certificates.
+        let ip_resources = issuer.ip_resources.encompasses(
+            self.extensions.ip_resources.as_ref()
+        )?;
+        
+        // 4.8.11.  AS Resources. If present, must be encompassed by issuer.
+        // That IP or AS resources need to be present has been
+        // checked during parsing.
+        let as_resources = issuer.as_resources.encompasses(
+            self.extensions.as_resources.as_ref()
+        )?;
+
+        Ok(ResourceCert {
+            cert: self,
+            ip_resources,
+            as_resources,
+        })
+    }
+}
+
+
+//------------ ResourceCert --------------------------------------------------
+
+/// A validated resource certificate.
+///
+/// This differs from a normal `Cert` in that its IP and AS resources are not
+/// of the “inhert” variant.
+#[derive(Clone, Debug)]
+pub struct ResourceCert {
+    cert: Cert,
+    ip_resources: IpAddressBlocks,
+    as_resources: AsBlocks,
+}
+
+impl ResourceCert {
+    pub fn ip_resources(&self) -> &IpAddressBlocks {
+        &self.ip_resources
+    }
+
+    pub fn as_resources(&self) -> &AsBlocks {
+        &self.as_resources
+    }
+
+    pub fn manifest_uris(&self) -> impl Iterator<Item=UriGeneralName> {
+        self.cert.extensions.subject_info_access.iter().filter_oid(
+            oid::AD_RPKI_MANIFEST
+        )
+    }
+
+    pub fn repository_uri(&self) -> Option<rsync::Uri> {
+        for uri in self.cert.extensions.subject_info_access
+                       .iter().filter_oid(oid::AD_CA_REPOSITORY)
+        {
+            if let Some(uri) = uri.into_rsync_uri() {
+                return Some(uri)
+            }
+        }
+        None
+    }
+}
+
+impl AsRef<Cert> for ResourceCert {
+    fn as_ref(&self) -> &Cert {
+        &self.cert
     }
 }
 
@@ -161,6 +471,13 @@ impl SubjectPublicKeyInfo {
                 subject_public_key: BitString::take_from(cons)?
             })
         })
+    }
+
+    pub fn key_identifier(&self) -> Digest {
+        digest::digest(
+            &digest::SHA1,
+            self.subject_public_key.octet_slice().unwrap()
+        )
     }
 }
 
@@ -225,7 +542,7 @@ pub struct Extensions {
     ///
     /// This value contains the content of the SubjectInfoAccessSyntax
     /// sequence.
-    subject_info_access: Bytes,
+    subject_info_access: SubjectInfoAccess,
 
     /// Certificate Policies
     ///
@@ -235,10 +552,10 @@ pub struct Extensions {
     certificate_policies: CertificatePolicies,
 
     /// IP Resources
-    ip_resources: Option<IpAddrBlocks>,
+    ip_resources: Option<IpResources>,
 
     /// AS Resources
-    as_resources: Option<AsIdentifiers>,
+    as_resources: Option<AsResources>,
 }
 
 impl Extensions {
@@ -261,7 +578,7 @@ impl Extensions {
                 let id = Oid::take_from(cons)?;
                 let critical = cons.take_opt_bool()?.unwrap_or(false);
                 let value = OctetString::take_from(cons)?;
-                Mode::Der.decode(value.as_source(), |content| {
+                Mode::Der.decode(value.to_source(), |content| {
                     if id == oid::CE_BASIC_CONSTRAINTS {
                         Self::take_basic_ca(content, &mut basic_ca)
                     }
@@ -579,46 +896,12 @@ impl Extensions {
     /// we may accept the wrong kind here. This needs to be checked later.
     fn take_subject_info_access<S: Source>(
         cons: &mut Constructed<S>,
-        subject_info_access: &mut Option<Bytes>,
+        subject_info_access: &mut Option<SubjectInfoAccess>,
     ) -> Result<(), S::Err> {
-        update_once(subject_info_access, || {
-            let res = cons.sequence(|cons| cons.take_all())?;
-            Mode::Der.decode(res.clone(), |cons| {
-                let mut ca = None;
-                while let Some(()) = cons.opt_sequence(|cons| {
-                    let oid = Oid::take_from(cons)?;
-                    if oid == oid::AD_CA_REPOSITORY
-                        || oid == oid::AD_RPKI_MANIFEST
-                    {
-                        match ca {
-                            None => ca = Some(true),
-                            Some(true) => { }
-                            Some(false) => {
-                                return Err(Error::Malformed)
-                            }
-                        }
-                    }
-                    else if oid == oid::AD_SIGNED_OBJECT {
-                        match ca {
-                            None => ca = Some(false),
-                            Some(false) => { }
-                            Some(true) => {
-                                return Err(Error::Malformed)
-                            }
-                        }
-                    }
-                    let _ = UriGeneralName::take_from(cons)?;
-                    Ok(())
-                })? { }
-                if ca.is_none() {
-                    // The sequence was empty.
-                    xerr!(Err(Error::Malformed))
-                }
-                else {
-                    Ok(res)
-                }
-            }).map_err(Into::into)
-        })
+        update_once(
+            subject_info_access,
+            || SubjectInfoAccess::take_from(cons)
+        )
     }
 
     /// Parses the Certificate Policies extension.
@@ -636,20 +919,20 @@ impl Extensions {
     /// Parses the IP Resources extension.
     fn take_ip_resources<S: Source>(
         cons: &mut Constructed<S>,
-        ip_resources: &mut Option<IpAddrBlocks>
+        ip_resources: &mut Option<IpResources>
     ) -> Result<(), S::Err> {
         update_once(ip_resources, || {
-            IpAddrBlocks::take_from(cons)
+            IpResources::take_from(cons)
         })
     }
 
     /// Parses the AS Resources extension.
     fn take_as_resources<S: Source>(
         cons: &mut Constructed<S>,
-        as_resources: &mut Option<AsIdentifiers>
+        as_resources: &mut Option<AsResources>
     ) -> Result<(), S::Err> {
         update_once(as_resources, || {
-            AsIdentifiers::take_from(cons)
+            AsResources::take_from(cons)
         })
     }
 }
@@ -681,6 +964,27 @@ impl<'a> UriGeneralNames {
             Ok(())
         })?))
     }
+
+    pub fn iter(&self) -> UriGeneralNameIter {
+        UriGeneralNameIter(self.0.clone())
+    }
+}
+
+
+//------------ UriGeneralNameIter --------------------------------------------
+
+// XXX This can be improved quite a bit.
+#[derive(Clone, Debug)]
+pub struct UriGeneralNameIter(Bytes);
+
+impl Iterator for UriGeneralNameIter {
+    type Item = UriGeneralName;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Mode::Der.decode(&mut self.0, |cons| {
+            UriGeneralName::take_opt_from(cons)
+        }).unwrap()
+    }
 }
 
 
@@ -704,7 +1008,6 @@ impl UriGeneralName {
         })
     }
 
-    /*
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
@@ -718,7 +1021,6 @@ impl UriGeneralName {
             }
         })
     }
-    */
 
     fn skip_opt<S: Source>(
         cons: &mut Constructed<S>
@@ -732,6 +1034,108 @@ impl UriGeneralName {
                 xerr!(Err(Error::Malformed.into()))
             }
         })
+    }
+
+    pub fn into_rsync_uri(self) -> Option<rsync::Uri> {
+        rsync::Uri::parse(self.0.as_ref()).ok()
+    }
+}
+
+
+//------------ SubjectInfoAccess ---------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct SubjectInfoAccess {
+    content: Bytes,
+    ca: bool
+}
+
+impl SubjectInfoAccess {
+    pub fn iter(&self) -> SiaIter {
+        SiaIter { content: self.content.clone() }
+    }
+
+    fn take_from<S: Source>(
+        cons: &mut Constructed<S>
+    ) -> Result<Self, S::Err> {
+        cons.sequence(|cons| {
+            let mut ca = None;
+            let content = cons.capture(|cons| {
+                while let Some(()) = cons.opt_sequence(|cons| {
+                    let oid = Oid::take_from(cons)?;
+                    if oid == oid::AD_CA_REPOSITORY
+                        || oid == oid::AD_RPKI_MANIFEST
+                    {
+                        match ca {
+                            None => ca = Some(true),
+                            Some(true) => { }
+                            Some(false) => {
+                                xerr!(return Err(Error::Malformed.into()))
+                            }
+                        }
+                    }
+                    else if oid == oid::AD_SIGNED_OBJECT {
+                        match ca {
+                            None => ca = Some(false),
+                            Some(false) => { }
+                            Some(true) => {
+                                xerr!(return Err(Error::Malformed.into()))
+                            }
+                        }
+                    }
+                    let _ = UriGeneralName::take_from(cons)?;
+                    Ok(())
+                })? { }
+                Ok(())
+            })?;
+            if let Some(ca) = ca {
+                Ok(SubjectInfoAccess { content, ca })
+            }
+            else {
+                // The sequence was empty.
+                xerr!(Err(Error::Malformed.into()))
+            }
+        })
+    }
+}
+
+
+//------------ SiaIter -------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct SiaIter {
+    content: Bytes,
+}
+
+impl SiaIter {
+    pub fn filter_oid<O: AsRef<[u8]>>(
+        self,
+        expected: Oid<O>
+    ) -> impl Iterator<Item=UriGeneralName> {
+        self.filter_map(move |(oid, uri)| {
+            if oid == expected {
+                Some(uri)
+            }
+            else {
+                None
+            }
+        })
+    }
+}
+
+
+impl Iterator for SiaIter {
+    type Item = (Oid, UriGeneralName);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Mode::Der.decode(&mut self.content, |cons| {
+            cons.opt_sequence(|cons| {
+                Ok((
+                    Oid::take_from(cons)?,
+                    UriGeneralName::take_from(cons)?
+                ))
+            })
+        }).unwrap()
     }
 }
 

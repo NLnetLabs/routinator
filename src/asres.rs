@@ -8,27 +8,30 @@
 use std::ops;
 use bytes::Bytes;
 use super::ber::{Constructed, Content, Error, Mode, Source, Tag};
+use super::x509::ValidationError;
 
 
-//------------ AsIdentifiers -------------------------------------------------
+//------------ AsResources ---------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub enum AsIdentifiers {
+pub enum AsResources {
     Inherit,
     Ids(AsIdBlocks),
 }
 
-impl AsIdentifiers {
-    /// Checks whether this value encompasses `other`.
-    ///
-    /// Essentially checks that every AS number contained in `other` is also
-    /// covered by `self`. The method will return `None` if either value
-    /// uses the `AsIdentifiers::Inherit` variant.
-    pub fn encompasses(&self, other: &AsIdentifiers) -> Option<bool> {
-        match (self, other) {
-            (&AsIdentifiers::Ids(ref s), &AsIdentifiers::Ids(ref o))
-                => Some(s.encompasses(o)),
-            _ => None
+impl AsResources {
+
+    pub fn is_inherited(&self) -> bool {
+        match self {
+            AsResources::Inherit => true,
+            _ =>  false
+        }
+    }
+
+    pub fn to_blocks(&self) -> Result<AsIdBlocks, ValidationError> {
+        match self {
+            AsResources::Inherit => Err(ValidationError),
+            AsResources::Ids(ref some) => Ok(some.clone()),
         }
     }
 
@@ -40,11 +43,11 @@ impl AsIdentifiers {
                 cons.value(|tag, content| {
                     if tag == Tag::NULL {
                         content.to_null()?;
-                        Ok(AsIdentifiers::Inherit)
+                        Ok(AsResources::Inherit)
                     }
                     else if tag == Tag::SEQUENCE {
                         AsIdBlocks::parse_content(content)
-                            .map(AsIdentifiers::Ids)
+                            .map(AsResources::Ids)
                     }
                     else {
                         xerr!(Err(Error::Malformed.into()))
@@ -56,7 +59,50 @@ impl AsIdentifiers {
 }
 
 
-//------------ AsIdBlocks -------------------------------------------------
+//------------ AsBlocks ------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct AsBlocks(Option<AsIdBlocks>);
+
+impl AsBlocks {
+    pub fn from_resources(
+        res: Option<&AsResources>
+    ) -> Result<Self, ValidationError> {
+        match res {
+            Some(AsResources::Inherit) => Err(ValidationError),
+            Some(AsResources::Ids(ref some)) => {
+                Ok(AsBlocks(Some(some.clone())))
+            }
+            None => Ok(AsBlocks(None))
+        }
+    }
+
+    pub fn encompasses(
+        &self,
+        res: Option<&AsResources>
+    ) -> Result<Self, ValidationError> {
+        match res {
+            Some(AsResources::Inherit) => Ok(self.clone()),
+            Some(AsResources::Ids(ref inner)) => {
+                match self.0 {
+                    Some(ref outer) => {
+                        if outer.encompasses(inner) {
+                            Ok(AsBlocks(Some(inner.clone())))
+                        }
+                        else {
+                            Err(ValidationError)
+                        }
+                    }
+                    None => Err(ValidationError)
+                }
+            }
+            None => Ok(AsBlocks(None))
+        }
+    }
+}
+
+
+//------------ AsIdBlocks ----------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct AsIdBlocks(Bytes);
@@ -222,7 +268,7 @@ impl AsBlock {
 pub struct AsId(u32);
 
 impl AsId {
-    fn take_from<S: Source>(
+    pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.take_u32().map(AsId)
