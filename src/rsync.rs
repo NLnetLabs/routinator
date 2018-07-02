@@ -13,6 +13,7 @@ pub fn update<P: AsRef<Path>>(
     source: &Uri,
     destination: P
 ) -> Result<(), io::Error> {
+    debug!("rsyncing from {}", source);
     create_dir_all(destination.as_ref())?;
     let status = Command::new("rsync")
         .arg("-az")

@@ -123,7 +123,10 @@ impl FileAndHash {
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
         cons.opt_sequence(|cons| {
-            cons.value_if(Tag::IA5_STRING, OctetString::take_content_from)?;
+            cons.take_value_if(
+                Tag::IA5_STRING,
+                OctetString::take_content_from
+            )?;
             BitString::skip_in(cons)?;
             Ok(())
         })
@@ -134,7 +137,7 @@ impl FileAndHash {
     ) -> Result<Option<Self>, S::Err> {
         cons.opt_sequence(|cons| {
             Ok(FileAndHash {
-                file: cons.value_if(
+                file: cons.take_value_if(
                     Tag::IA5_STRING,
                     OctetString::take_content_from
                 )?,

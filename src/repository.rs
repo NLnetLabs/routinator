@@ -124,7 +124,6 @@ impl Repository {
                 Ok(item) => item,
                 Err(_) => continue,
             };
-
             self.process_object(uri, hash, &cert, routes)?;
         }
         Ok(())
@@ -207,21 +206,32 @@ impl Repository {
             };
             let bytes = match self.load_file(&uri, true)? {
                 Some(bytes) => bytes,
-                None => continue,
+                None => {
+                    debug!("{}: failed to load.", uri);
+                    continue
+                }
             };
             let manifest = match Manifest::decode(bytes) {
                 Ok(manifest) => manifest,
-                Err(_) => continue,
+                Err(_) => {
+                    debug!("{}: failed to decode", uri);
+                    continue
+                }
             };
             let (cert, manifest) = match manifest.validate(issuer) {
                 Ok(manifest) => manifest,
-                Err(_) => continue,
+                Err(_) => {
+                    debug!("{}: failed to validate", uri);
+                    continue
+                }
             };
             if let Err(_) = self.check_crl(cert, issuer, store) {
+                debug!("{}: cert listed CRL", uri);
                 continue
             }
             return Ok(Some(manifest))
         }
+        debug!("No valid manifests");
         Ok(None)
     }
 

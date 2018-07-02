@@ -40,7 +40,7 @@ impl AsResources {
     ) -> Result<Self, S::Err> {
         cons.sequence(|cons| {
             cons.constructed_if(Tag::CTX_0, |cons| {
-                cons.value(|tag, content| {
+                cons.take_value(|tag, content| {
                     if tag == Tag::NULL {
                         content.to_null()?;
                         Ok(AsResources::Inherit)
@@ -236,7 +236,7 @@ impl AsBlock {
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_value(|tag, content| {
+        cons.take_opt_value(|tag, content| {
             if tag == Tag::INTEGER {
                 AsId::parse_content(content).map(AsBlock::Id)
             }
@@ -252,7 +252,7 @@ impl AsBlock {
     fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
-        cons.opt_value(|tag, content| {
+        cons.take_opt_value(|tag, content| {
             if tag == Tag::INTEGER {
                 AsId::skip_content(content)
             }

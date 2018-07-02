@@ -132,7 +132,7 @@ impl AddressChoice {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.value(|tag, content| {
+        cons.take_value(|tag, content| {
             if tag == Tag::NULL {
                 content.to_null()?;
                 Ok(AddressChoice::Inherit)
@@ -246,6 +246,7 @@ impl AddressBlocks {
             (Some(outer), Some(AddressChoice::Inherit)) => {
                 Ok(Some(outer.clone()))
             }
+            (None, Some(AddressChoice::Inherit)) => Ok(None),
             (Some(outer), Some(AddressChoice::Blocks(inner))) => {
                 if outer._encompasses(inner) {
                     Ok(Some(inner.clone()))
@@ -255,7 +256,7 @@ impl AddressBlocks {
                 }
             }
             (_, None) => Ok(None),
-            _ => Err(ValidationError),
+            _ => Err(ValidationError)
         }
     }
 
@@ -373,7 +374,7 @@ impl AddressRange {
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_value(|tag, content| {
+        cons.take_opt_value(|tag, content| {
             if tag == Tag::BIT_STRING {
                 Self::parse_address_content(content)
             }

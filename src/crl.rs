@@ -215,7 +215,7 @@ impl Extensions {
     ) -> Result<(), S::Err> {
         update_once(authority_key_id, || {
             let res = cons.sequence(|cons| {
-                cons.value_if(Tag::CTX_0, OctetString::take_content_from)
+                cons.take_value_if(Tag::CTX_0, OctetString::take_content_from)
             })?;
             if res.len() != 20 {
                 return Err(Error::Malformed.into())

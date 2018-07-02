@@ -26,7 +26,7 @@ impl OctetString {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.value_if(Tag::OCTET_STRING, Self::take_content_from)
+        cons.take_value_if(Tag::OCTET_STRING, Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(

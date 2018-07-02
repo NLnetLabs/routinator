@@ -109,14 +109,14 @@ impl BitString {
     pub fn take_from<S: Source>(
         constructed: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        constructed.value_if(Tag::BIT_STRING, Self::parse_content)
+        constructed.take_value_if(Tag::BIT_STRING, Self::parse_content)
     }
 
     /// Skip over a single bit string value inside constructed content.
     pub fn skip_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<(), S::Err> {
-        cons.value_if(Tag::BIT_STRING, Self::skip_content)
+        cons.take_value_if(Tag::BIT_STRING, Self::skip_content)
     }
  
     /// Parses the content octets of a bit string value.

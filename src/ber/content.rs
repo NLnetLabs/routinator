@@ -555,7 +555,14 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     /// If `expected` is not `None`, the method will only process a value
     /// with the given tag and return `Ok(None)` if there isn’t another value
     /// or if the next value has a different tag.
-    fn take_value<F, T>(
+    ///
+    /// If `expected` is `None`, the method will process a value with any
+    /// tag and only return `Ok(None)` if it reached the end of the value.
+    ///
+    /// The closure `op` receives both the tag and content for the next
+    /// value. It must process the value, advancing the source to its end
+    /// or return an error.
+    fn process_next_value<F, T>(
         &mut self,
         expected: Option<Tag>,
         op: F
@@ -640,10 +647,23 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     }
 }
 
+/// # Processing Contained Values
+///
+/// The methods in this section each process one value of the constructed
+/// value’s content.
 impl<'a, S: Source + 'a> Constructed<'a, S> {
-    pub fn value<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    /// Process one value of content.
+    ///
+    /// The closure `op` receives the tag and content of the next value
+    /// and must process it completely, advancing to the content’s end.
+    ///
+    /// Upon success, the method returns the closure’s return value. The
+    /// method returns a malformed error if there isn’t at least one more
+    /// value available. It also returns an error if the closure returns one
+    /// or if reading from the source fails.
+    pub fn take_value<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(Tag, &mut Content<S>) -> Result<T, S::Err> {
-        match self.take_value(None, op)? {
+        match self.process_next_value(None, op)? {
             Some(res) => Ok(res),
             None => {
                 xerr!(Err(Error::Malformed.into()))
@@ -651,14 +671,36 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_value<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    /// Processes an optional value.
+    ///
+    /// If there is at least one more value available, the closure `op` is
+    /// given the tag and content of that value and must process it
+    /// completely, advancing to the end of its content. If the closure
+    /// succeeds, its return value is returned as ‘some’ result.
+    ///
+    /// If there are no more values available, the method returns `Ok(None)`.
+    /// It returns an error if the closure returns one or if reading from
+    /// the source fails.
+    pub fn take_opt_value<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(Tag, &mut Content<S>) -> Result<T, S::Err> {
-        self.take_value(None, op)
+        self.process_next_value(None, op)
     }
 
-    pub fn value_if<F, T>(&mut self, expected: Tag, op: F) -> Result<T, S::Err>
+    /// Processes a value with the given tag.
+    ///
+    /// If the next value has the tag `expected`, its content is being given
+    /// to the closure which has to process it completely and return whatever
+    /// is being returned upon success.
+    ///
+    /// The method will return a malformed error if it encounters any other
+    /// tag or the end of the value.
+    pub fn take_value_if<F, T>(
+        &mut self,
+        expected: Tag,
+        op: F
+    ) -> Result<T, S::Err>
     where F: FnOnce(&mut Content<S>) -> Result<T, S::Err> {
-        let res = self.take_value(Some(expected), |_, content| {
+        let res = self.process_next_value(Some(expected), |_, content| {
             op(content)
         })?;
         match res {
@@ -675,7 +717,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         op: F
     ) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Content<S>) -> Result<T, S::Err> {
-        self.take_value(Some(expected), |_, content| op(content))
+        self.process_next_value(Some(expected), |_, content| op(content))
     }
 
     pub fn constructed<F, T>(&mut self, op: F) -> Result<T, S::Err>
@@ -690,7 +732,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
     pub fn opt_constructed<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(Tag, &mut Constructed<S>) -> Result<T, S::Err> {
-        self.take_value(None, |tag, content| {
+        self.process_next_value(None, |tag, content| {
             op(tag, content.as_constructed()?)
         })
     }
@@ -715,7 +757,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         op: F
     ) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        self.take_value(Some(expected), |_, content| {
+        self.process_next_value(Some(expected), |_, content| {
             op(content.as_constructed()?)
         })
     }
@@ -732,7 +774,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
     pub fn opt_primitive<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
-        self.take_value(None, |tag, content| {
+        self.process_next_value(None, |tag, content| {
             op(tag, content.as_primitive()?)
         })
     }
@@ -757,7 +799,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         op: F
     ) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Primitive<S>) -> Result<T, S::Err> {
-        self.take_value(Some(expected), |_, content| {
+        self.process_next_value(Some(expected), |_, content| {
             op(content.as_primitive()?)
         })
     }
@@ -801,7 +843,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     }
 
     fn skip_one(&mut self) -> Result<Option<()>, S::Err> {
-        self.opt_value(|_tag, content| {
+        self.take_opt_value(|_tag, content| {
             match *content {
                 Content::Primitive(ref mut inner) => {
                     inner.skip_all()

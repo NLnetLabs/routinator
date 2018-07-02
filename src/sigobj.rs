@@ -282,7 +282,7 @@ impl SignerInfo {
         cons.sequence(|cons| {
             cons.skip_u8_if(3)?;
             Ok(SignerInfo {
-                sid: cons.value_if(Tag::CTX_0, |content| {
+                sid: cons.take_value_if(Tag::CTX_0, |content| {
                     OctetString::take_content_from(content)
                 })?,
                 digest_algorithm: DigestAlgorithm::take_from(cons)?,
