@@ -346,7 +346,9 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
     /// first nine bits of a multi-octet integer are not all the same.
     ///
     /// The latter ensures that an integer is encoded in the smallest possible
-    /// number of octets.
+    /// number of octets. If we insist on this rule, we can use the content
+    /// octets as the value for large integers and use simply compare slices
+    /// for comparision.
     fn check_int_head(&mut self) -> Result<(), S::Err> {
         if self.request(2)? == 0 {
             xerr!(return Err(Error::Malformed.into()))
@@ -378,31 +380,49 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
         }
     }
 
+    /// Converts the content octets to a NULL value.
+    ///
+    /// Since such a value is empty, this doesn’t really do anything.
     pub fn to_null(&mut self) -> Result<(), S::Err> {
         // The rest is taken care of by the exhausted check later ...
         Ok(())
     }
 }
 
+/// # Low-level Access
+///
+/// For basic low-level access, `Primitive` implements the `Source` trait.
+/// Because the length of the content is guaranteed to be known, it can
+/// provide a few additional methods. Note that these may still fail because
+/// while the length is known, the underlying source doesn’t guarantee that
+/// as many octets are actually available.
 impl<'a, S: Source + 'a> Primitive<'a, S> {
+    /// Returns the number of remaining octets.
+    ///
+    /// The returned value reflects what is left of the content and therefore
+    /// decreases when the primitive is advanced.
     pub fn remaining(&self) -> usize {
         self.source.limit().unwrap()
     }
 
+    /// Skips the rest of the content.
     pub fn skip_all(&mut self) -> Result<(), S::Err> {
         self.source.skip_all()
     }
 
+    /// Returns the remainder of the content as a `Bytes` value.
     pub fn take_all(&mut self) -> Result<Bytes, S::Err> {
         self.source.take_all()
     }
 
+    /// Returns a bytes slice of the remainder of the content.
     pub fn slice_all(&mut self) -> Result<&[u8], S::Err> {
         let remaining = self.remaining();
         self.source.request(remaining)?;
         Ok(&self.source.slice()[..remaining])
     }
 
+    /// Checkes whether all content has been advanced over.
     fn exhausted(self) -> Result<(), S::Err> {
         self.source.exhausted()
     }
@@ -432,15 +452,37 @@ impl<'a, S: Source + 'a> Source for Primitive<'a, S> {
 
 //------------ Constructed ---------------------------------------------------
 
+/// The content octets of a constructed value.
+///
+/// You will only ever receive a mutable reference to a value of this type
+/// as an argument to a closure provided to some function. Your closure will
+/// have to advance over the complete content using the value’s methods.
+///
+/// Since constructed values consist of a sequence of values, these methods
+/// allow you to process these values one by one. The most basic of these
+/// are `value` and `opt_value` which process exactly one value or up to one
+/// value. A number of convenience functions exists on top of them for
+/// commonly encountered types and cases.
+///
+/// Because the caller of your closure checks whether all content has been
+/// advanced over, you only need to read as many values as you expected to
+/// be present and can simply return when you think you are done.
 #[derive(Debug)]
 pub struct Constructed<'a, S: 'a> {
+    /// The underlying source.
     source: &'a mut LimitedSource<S>,
+
+    /// The state we are in so we can determine the end of the content.
     state: State,
+
+    /// The encoding mode to use.
     mode: Mode,
 }
 
-
+/// # General Management
+///
 impl<'a, S: Source + 'a> Constructed<'a, S> {
+    /// Creates a new source from the given components.
     fn new(
         source: &'a mut LimitedSource<S>,
         state: State,
@@ -449,16 +491,25 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         Constructed { source, state, mode }
     }
 
+    /// Returns the encoding mode used by the value.
     pub fn mode(&self) -> Mode {
         self.mode
     }
 
+    /// Sets the encoding mode to be used for the value.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode
     }
 }
 
+/// # Fundamental Reading
+///
 impl<'a, S: Source + 'a> Constructed<'a, S> {
+    /// Checks whether all content has advanced over.
+    ///
+    /// For a value of definite length, this is the case when the limit of the
+    /// source has been reached. For indefinite values, we need to have either
+    /// have read or can now read the end-of-value marker.
     fn exhausted(&mut self) -> Result<(), S::Err> {
         match self.state {
             State::Done => Ok(()),
@@ -484,6 +535,10 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
+    /// Returns whether we have already reached the end.
+    ///
+    /// For indefinite values, we may be at the end right now but don’t
+    /// know it yet.
     fn is_exhausted(&self) -> bool {
         match self.state {
             State::Definite => {
@@ -495,6 +550,11 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
+    /// Processes the next value.
+    ///
+    /// If `expected` is not `None`, the method will only process a value
+    /// with the given tag and return `Ok(None)` if there isn’t another value
+    /// or if the next value has a different tag.
     fn take_value<F, T>(
         &mut self,
         expected: Option<Tag>,

@@ -91,10 +91,15 @@ impl fmt::Display for Uri {
 
 //------------ UriError ----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Fail)]
 pub enum UriError {
+    #[fail(display="invalid characters")]
     NotAscii,
+
+    #[fail(display="{}", _0)]
     BadUri(url::ParseError),
+
+    #[fail(display="bad URI scheme")]
     BadScheme,
 }
 

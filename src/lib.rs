@@ -1,6 +1,8 @@
 extern crate base64;
 extern crate bytes;
 extern crate chrono;
+#[macro_use] extern crate failure;
+#[macro_use] extern crate log;
 extern crate ring;
 extern crate untrusted;
 extern crate url;

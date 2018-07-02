@@ -77,7 +77,10 @@ impl Iterator for TalIter {
                     match next_entry(entry) {
                         Ok(Some(res)) => return Some(Ok(res)),
                         Ok(None) => { },
-                        Err(err) => return Some(Err(err))
+                        Err(err) => {
+                            error!("Bad trust anchor {}", err);
+                            return Some(Err(err))
+                        }
                     }
                 }
                 Some(Err(err)) => return Some(Err(err.into())),
@@ -91,18 +94,29 @@ fn next_entry(entry: DirEntry) -> Result<Option<Tal>, ReadError> {
     if !entry.file_type()?.is_file() {
         return Ok(None)
     }
-    Tal::read(&mut File::open(entry.path())?).map(Some)
+    let path = entry.path();
+    debug!("Processing TAL {}", path.display());
+    Tal::read(&mut File::open(path)?).map(Some)
 }
 
 
 //------------ ReadError -----------------------------------------------------
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum ReadError {
+    #[fail(display="{}", _0)]
     Io(io::Error),
+
+    #[fail(display="unexpected end of file")]
     UnexpectedEof,
+
+    #[fail(display="bad trunst anchor URI: {}", _0)]
     BadUri(rsync::UriError),
+
+    #[fail(display="bad key info: {}", _0)]
     BadKeyInfoEncoding(base64::DecodeError),
+
+    #[fail(display="bad key info: {}", _0)]
     BadKeyInfo(ber::Error),
 }
 

@@ -2,12 +2,12 @@
 
 //------------ Error ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Fail)]
 pub enum Error {
-    /// Malformed DER.
+    #[fail(display="malformed data")]
     Malformed,
 
-    /// DER uses features we haven’t implemented.
+    #[fail(display="format not implemented")]
     Unimplemented,
 }
 
