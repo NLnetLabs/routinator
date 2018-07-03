@@ -385,7 +385,7 @@ impl<'a> Iterator for OctetStringOctets<'a> {
 
 fn skip_nested<S>(con: &mut Constructed<S>) -> Result<(), S::Err>
 where S: Source {
-    while let Some(()) = con.opt_value_if(Tag::OCTET_STRING, |content| {
+    while let Some(()) = con.take_opt_value_if(Tag::OCTET_STRING, |content| {
         match content {
             Content::Constructed(ref mut inner) => {
                 skip_nested(inner)?

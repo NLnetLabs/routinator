@@ -150,7 +150,7 @@ impl Time {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.primitive(|tag, prim| {
+        cons.take_primitive(|tag, prim| {
             match tag {
                 Tag::UTC_TIME => {
                     // RFC 5280 requires the format YYMMDDHHMMSSZ

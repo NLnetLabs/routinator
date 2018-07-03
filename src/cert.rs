@@ -52,7 +52,7 @@ impl Cert {
                 // version [0] EXPLICIT Version DEFAULT v1.
                 //  -- we need extensions so apparently, we want v3 which,
                 //     confusingly, is 2.
-                cons.constructed_if(Tag::CTX_0, |c| c.skip_u8_if(2))?;
+                cons.take_constructed_if(Tag::CTX_0, |c| c.skip_u8_if(2))?;
 
                 Ok(Cert {
                     signed_data,
@@ -63,15 +63,15 @@ impl Cert {
                     subject: Name::take_from(cons)?,
                     subject_public_key_info: 
                         SubjectPublicKeyInfo::take_from(cons)?,
-                    issuer_unique_id: cons.opt_value_if(
+                    issuer_unique_id: cons.take_opt_value_if(
                         Tag::CTX_1,
                         |c| BitString::parse_content(c)
                     )?,
-                    subject_unique_id: cons.opt_value_if(
+                    subject_unique_id: cons.take_opt_value_if(
                         Tag::CTX_2,
                         |c| BitString::parse_content(c)
                     )?,
-                    extensions: cons.constructed_if(
+                    extensions: cons.take_constructed_if(
                         Tag::CTX_3,
                         Extensions::take_from
                     )?,
@@ -833,8 +833,8 @@ impl Extensions {
         update_once(crl_distribution, || {
             cons.sequence(|cons| {
                 cons.sequence(|cons| {
-                    cons.constructed_if(Tag::CTX_0, |cons| {
-                        cons.constructed_if(Tag::CTX_0, |cons| {
+                    cons.take_constructed_if(Tag::CTX_0, |cons| {
+                        cons.take_constructed_if(Tag::CTX_0, |cons| {
                             UriGeneralNames::take_content_from(cons)
                         })
                     })

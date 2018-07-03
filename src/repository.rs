@@ -32,7 +32,7 @@
 //! If this update resulted in any changes to the local copy at all,
 //! validatio is repeated. Otherwise, it ends with an error.
 
-use std::io;
+use std::{fs, io};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -68,12 +68,90 @@ impl Repository {
         self.update()?;
         self.run()
     }
+}
 
-    fn update(&self) -> Result<bool, ProcessingError> {
-        debug!("UPDATED NOT IMPLEMENTED YET.");
-        Ok(false)
+
+/// # Updating the Repository Copy
+///
+impl Repository {
+    fn update(&self) -> Result<(), ProcessingError> {
+        for entry in fs::read_dir(self.base.join("repository"))? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                self.update_host(entry)?
+            }
+        }
+        Ok(())
     }
 
+    fn update_host(
+        &self,
+        entry: fs::DirEntry
+    ) -> Result<(), ProcessingError> {
+        let uri = format!(
+            "rsync://{}",
+            entry.file_name().to_str().ok_or(ProcessingError::Other)?
+        );
+        for entry in fs::read_dir(entry.path())? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                self.update_dir(
+                    format!(
+                        "{}/{}",
+                        uri,
+                        entry.file_name()
+                            .to_str().ok_or(ProcessingError::Other)?
+                    ),
+                    entry.path()
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn update_dir(
+        &self,
+        uri: String,
+        path: PathBuf
+    ) -> Result<(), ProcessingError> {
+        let mut first = None;
+        for entry in fs::read_dir(&path)? {
+            let entry = entry?;
+            if first.is_none() {
+                first = Some(entry)
+            }
+            else {
+                let uri = format!("{}/", uri);
+                let path = format!("{}/", path.display());
+                let path = Path::new(AsRef::<Path>::as_ref(&path));
+                rsync::update(
+                    &rsync::Uri::parse(uri.as_ref())
+                        .map_err(|_| ProcessingError::Other)?,
+                    path
+                )?;
+                return Ok(())
+            }
+        }
+        if let Some(entry) = first {
+            if entry.file_type()?.is_dir() {
+                self.update_dir(
+                    format!(
+                        "{}/{}",
+                        uri,
+                        entry.file_name()
+                            .to_str().ok_or(ProcessingError::Other)?
+                    ),
+                    entry.path()
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// # Processing the Repository Content
+///
+impl Repository {
     fn run(&self) -> Result<RouteOrigins, ProcessingError> {
         let mut res = RouteOrigins::new();
         for tal in Tal::read_dir(self.base.join("tal"))? {
@@ -349,6 +427,7 @@ impl Repository {
 pub enum ProcessingError {
     Io(io::Error),
     Tal(tal::ReadError),
+    Other,
 }
 
 impl From<io::Error> for ProcessingError {

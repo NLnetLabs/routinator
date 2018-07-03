@@ -58,7 +58,7 @@ impl SignedObject {
     ) -> Result<Self, S::Err> {
         cons.sequence(|cons| {
             oid::SIGNED_DATA.skip_if(cons)?; // contentType
-            cons.constructed_if(Tag::CTX_0, Self::take_signed_data)
+            cons.take_constructed_if(Tag::CTX_0, Self::take_signed_data)
         })
     }
 
@@ -110,7 +110,7 @@ impl SignedObject {
         cons.sequence(|cons| {
             Ok((
                 Oid::take_from(cons)?,
-                cons.constructed_if(
+                cons.take_constructed_if(
                     Tag::CTX_0,
                     OctetString::take_from
                 )?
@@ -141,8 +141,8 @@ impl SignedObject {
     fn take_certificates<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Cert, S::Err> {
-        cons.constructed_if(Tag::CTX_0, |cons| {
-            cons.constructed(|tag, cons| {
+        cons.take_constructed_if(Tag::CTX_0, |cons| {
+            cons.take_constructed(|tag, cons| {
                 match tag {
                     Tag::SEQUENCE =>  Cert::take_content_from(cons),
                     _ => {
@@ -250,7 +250,7 @@ impl DigestAlgorithm {
     pub fn skip_set<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<(), S::Err> {
-        cons.constructed_if(Tag::SET, |cons| {
+        cons.take_constructed_if(Tag::SET, |cons| {
             while let Some(_) = Self::take_opt_from(cons)? { }
             Ok(())
         })
@@ -314,7 +314,7 @@ impl SignedAttributes {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        let raw = cons.constructed_if(Tag::CTX_0, |c| c.take_all())?;
+        let raw = cons.take_constructed_if(Tag::CTX_0, |c| c.take_all())?;
         Mode::Ber.decode(raw.clone(), |cons| {
             let mut message_digest = None;
             let mut content_type = None;

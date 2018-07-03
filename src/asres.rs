@@ -39,7 +39,7 @@ impl AsResources {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.sequence(|cons| {
-            cons.constructed_if(Tag::CTX_0, |cons| {
+            cons.take_constructed_if(Tag::CTX_0, |cons| {
                 cons.take_value(|tag, content| {
                     if tag == Tag::NULL {
                         content.to_null()?;

@@ -693,7 +693,9 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     /// is being returned upon success.
     ///
     /// The method will return a malformed error if it encounters any other
-    /// tag or the end of the value.
+    /// tag or the end of the value. It will also return an error if the
+    /// closure returns an error or doesn’t process the complete values, or
+    /// if accessing the underlying source fails.
     pub fn take_value_if<F, T>(
         &mut self,
         expected: Tag,
@@ -711,7 +713,17 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_value_if<F, T>(
+    /// Processes an optional value with the given tag.
+    ///
+    /// If the next value has the tag `expected`, its content is being given
+    /// to the closure which has to process it completely and return whatever
+    /// is to be returned as some value.
+    ///
+    /// If the next value has a different tag or if the end of the value has
+    /// been reached, the method returns `Ok(None)`. It will return an error
+    /// if the closure fails or doesn’t process the complete value, or if
+    /// accessing the underlying source fails.
+    pub fn take_opt_value_if<F, T>(
         &mut self,
         expected: Tag,
         op: F
@@ -720,9 +732,19 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         self.process_next_value(Some(expected), |_, content| op(content))
     }
 
-    pub fn constructed<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    /// Process a constructed value.
+    ///
+    /// If the next value is a constructed value, its tag and content are
+    /// being given to the closure `op` which has to process it completely.
+    /// If it succeeds, its return value is returned.
+    ///
+    /// If the next value is not a constructed value or there is no next
+    /// value or if the closure doesn’t process the next value completely,
+    /// a malformed error is returned. An error is also returned if the
+    /// closure returns one or if accessing the underlying source fails.
+    pub fn take_constructed<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(Tag, &mut Constructed<S>) -> Result<T, S::Err> {
-        match self.opt_constructed(op)? {
+        match self.take_opt_constructed(op)? {
             Some(res) => Ok(res),
             None => {
                 xerr!(Err(Error::Malformed.into()))
@@ -730,20 +752,48 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_constructed<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    /// Processes an optional constructed value.
+    ///
+    /// If the next value is a constructed value, its tag and content are
+    /// being given to the closure `op` which has to process it completely.
+    /// If it succeeds, its return value is returned as some value.
+    ///
+    /// If the end of the value has been reached, the method returns
+    /// `Ok(None)`.
+    ///
+    /// If the next value is not a constructed value or if the closure
+    /// doesn’t process the next value completely, a malformed error is
+    /// returned. An error is also returned if the closure returns one or
+    /// if accessing the underlying source fails.
+    pub fn take_opt_constructed<F, T>(
+        &mut self,
+        op: F
+    ) -> Result<Option<T>, S::Err>
     where F: FnOnce(Tag, &mut Constructed<S>) -> Result<T, S::Err> {
         self.process_next_value(None, |tag, content| {
             op(tag, content.as_constructed()?)
         })
     }
 
-    pub fn constructed_if<F, T>(
+    /// Processes a constructed value with a required tag.
+    ///
+    /// If the next value is a constructed value with a tag equal to
+    /// `expected`, its content is given to the closure `op` which has to
+    /// process it completely. If the closure succeeds, its return value
+    /// is returned.
+    ///
+    /// If the next value is not constructed or has a different tag, if
+    /// the end of the value has been reached, or if the closure does not
+    /// process the contained value’s content completely, a malformed error
+    /// is returned. An error is also returned if the closure returns one or
+    /// if accessing the underlying source fails.
+    pub fn take_constructed_if<F, T>(
         &mut self,
         expected: Tag,
         op: F
     ) -> Result<T, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        match self.opt_constructed_if(expected, op)? {
+        match self.take_opt_constructed_if(expected, op)? {
             Some(res) => Ok(res),
             None => {
                 xerr!(Err(Error::Malformed.into()))
@@ -751,7 +801,21 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_constructed_if<F, T>(
+    /// Processes an optional constructed value if it has a given tag.
+    ///
+    /// If the next value is a constructed value with a tag equal to
+    /// `expected`, its content is given to the closure `op` which has to
+    /// process it completely. If the closure succeeds, its return value
+    /// is returned.
+    ///
+    /// If the next value is not constructed, does not have the expected tag,
+    /// or the end of this value has been reached, the method returns
+    /// `Ok(None)`. It returns a malformed error if the closure does not
+    /// process the content of the next value fully.
+    ///
+    /// An error is also returned if the closure returns one or if accessing
+    /// the underlying source fails.
+    pub fn take_opt_constructed_if<F, T>(
         &mut self,
         expected: Tag,
         op: F
@@ -762,7 +826,17 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
-    pub fn primitive<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    /// Processes a primitive value.
+    ///
+    /// If the next value is primitive, its tag and content are given to the
+    /// closure `op` which has to process it fully. Upon success, the
+    /// closure’s return value is returned.
+    ///
+    /// If the next value is not primitive, if the end of value has been
+    /// reached, or if the closure fails to process the next value’s content
+    /// fully, a malformed error is returned. An error is also returned if
+    /// the closure returns one or if accessing the underlying source fails.
+    pub fn take_primitive<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
         match self.opt_primitive(op)? {
             Some(res) => Ok(res),
@@ -772,7 +846,21 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_primitive<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    /// Processes an optional primitive value.
+    ///
+    /// If the next value is primitive, its tag and content are given to the
+    /// closure `op` which has to process it fully. Upon success, the
+    /// closure’s return value is returned.
+    /// 
+    /// If the next value is not primitive or if the end of value has been
+    /// reached, `Ok(None)` is returned.
+    /// If the closure fails to process the next value’s content fully, a
+    /// malformed error is returned. An error is also returned if
+    /// the closure returns one or if accessing the underlying source fails.
+    pub fn opt_primitive<F, T>(
+        &mut self,
+        op: F
+    ) -> Result<Option<T>, S::Err>
     where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
         self.process_next_value(None, |tag, content| {
             op(tag, content.as_primitive()?)
@@ -913,22 +1001,22 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
     pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        self.constructed_if(Tag::SEQUENCE, op)
+        self.take_constructed_if(Tag::SEQUENCE, op)
     }
 
     pub fn opt_sequence<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        self.opt_constructed_if(Tag::SEQUENCE, op)
+        self.take_opt_constructed_if(Tag::SEQUENCE, op)
     }
 
     pub fn set<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        self.constructed_if(Tag::SET, op)
+        self.take_constructed_if(Tag::SET, op)
     }
 
     pub fn opt_set<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
-        self.opt_constructed_if(Tag::SET, op)
+        self.take_opt_constructed_if(Tag::SET, op)
     }
 }
 

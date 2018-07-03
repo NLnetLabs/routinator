@@ -51,7 +51,7 @@ impl Crl {
                     this_update: Time::take_from(cons)?,
                     next_update: Time::take_opt_from(cons)?,
                     revoked_certs: RevokedCertificates::take_from(cons)?,
-                    extensions: cons.constructed_if(
+                    extensions: cons.take_constructed_if(
                         Tag::CTX_0,
                         Extensions::take_from
                     )?
