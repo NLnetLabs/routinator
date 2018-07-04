@@ -14,12 +14,31 @@ fn main() {
     if let Err(_) = repo.update() {
         println!("Update failed. Continuing anyway.");
     }
-    match repo.process() {
-        Ok(res) => {
-            println!("Got {} attestations.", res.len());
-        }
+    let roas = match repo.process() {
+        Ok(res) => res,
         Err(_) => {
-            println!("Aborted.");
+            println!("Fatal error during validation. Aborted.");
+            ::std::process::exit(1);
+        }
+    };
+
+    println!("ASN,IP Prefix,Max Length");
+    for roa in roas.drain() {
+        for addr in roa.v4_addrs().iter() {
+            let addr = addr.as_v4();
+            println!("{},{}/{},{}",
+                roa.as_id(),
+                addr.address(), addr.address_length(),
+                addr.max_length()
+            );
+        }
+        for addr in roa.v6_addrs().iter() {
+            let addr = addr.as_v6();
+            println!("{},{}/{},{}",
+                roa.as_id(),
+                addr.address(), addr.address_length(),
+                addr.max_length()
+            );
         }
     }
 }

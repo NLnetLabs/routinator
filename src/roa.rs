@@ -2,6 +2,7 @@
 //!
 //! For details, see RFC 6482.
 
+use std::net::{Ipv4Addr, Ipv6Addr};
 use bytes::Bytes;
 use super::asres::AsId;
 use super::ber::{BitString, Constructed, Error, Mode, Source, Tag};
@@ -49,6 +50,21 @@ pub struct RouteOriginAttestation {
     v4_addrs: RoaIpAddresses,
     v6_addrs: RoaIpAddresses,
 }
+
+impl RouteOriginAttestation {
+    pub fn as_id(&self) -> AsId {
+        self.as_id
+    }
+
+    pub fn v4_addrs(&self) -> &RoaIpAddresses {
+        &self.v4_addrs
+    }
+
+    pub fn v6_addrs(&self) -> &RoaIpAddresses {
+        &self.v6_addrs
+    }
+}
+
 
 impl RouteOriginAttestation {
     fn take_from<S: Source>(
@@ -195,6 +211,14 @@ impl RoaIpAddress {
         };
         (self.address & !mask, self.address | mask)
     }
+
+    pub fn as_v4(self) -> RoaIpv4Address {
+        RoaIpv4Address(self)
+    }
+
+    pub fn as_v6(self) -> RoaIpv6Address {
+        RoaIpv6Address(self)
+    }
 }
 
 impl RoaIpAddress {
@@ -237,6 +261,60 @@ impl RoaIpAddress {
 }
 
 
+//------------ RoaIpv4Address ------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct RoaIpv4Address(RoaIpAddress);
+
+impl RoaIpv4Address {
+    pub fn address(&self) -> Ipv4Addr {
+        Ipv4Addr::new(
+            ((self.0.address >> 120) & 0xFF) as u8,
+            ((self.0.address >> 112) & 0xFF) as u8,
+            ((self.0.address >> 104) & 0xFF) as u8,
+            ((self.0.address >> 96) & 0xFF) as u8
+        )
+    }
+
+    pub fn address_length(&self) -> u8 {
+        self.0.address_length
+    }
+
+    pub fn max_length(&self) -> u8 {
+        self.0.max_length.unwrap_or(self.0.address_length)
+    }
+}
+
+
+//------------ RoaIpv6Address ------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct RoaIpv6Address(RoaIpAddress);
+
+impl RoaIpv6Address {
+    pub fn address(&self) -> Ipv6Addr {
+        Ipv6Addr::new(
+            ((self.0.address >> 112) & 0xFFFF) as u16,
+            ((self.0.address >> 96) & 0xFFFF) as u16,
+            ((self.0.address >> 80) & 0xFFFF) as u16,
+            ((self.0.address >> 64) & 0xFFFF) as u16,
+            ((self.0.address >> 48) & 0xFFFF) as u16,
+            ((self.0.address >> 32) & 0xFFFF) as u16,
+            ((self.0.address >> 16) & 0xFFFF) as u16,
+            (self.0.address & 0xFFFF) as u16
+        )
+    }
+
+    pub fn address_length(&self) -> u8 {
+        self.0.address_length
+    }
+
+    pub fn max_length(&self) -> u8 {
+        self.0.max_length.unwrap_or(self.0.address_length)
+    }
+}
+
+
 //------------ RouteOrigins --------------------------------------------------
 
 pub struct RouteOrigins {
@@ -254,6 +332,14 @@ impl RouteOrigins {
 
     pub fn len(&self) -> usize {
         self.origins.len()
+    }
+
+    pub fn drain(self) -> impl Iterator<Item=RouteOriginAttestation> {
+        self.origins.into_iter()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&RouteOriginAttestation> {
+        self.origins.iter()
     }
 }
 

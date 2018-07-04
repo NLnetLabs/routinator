@@ -23,11 +23,9 @@ pub fn update<P: AsRef<Path>>(
         .arg(destination.as_ref())
         .status()?;
     if !status.success() {
-        Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+        return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
     }
-    else {
-        Ok(())
-    }
+    Ok(())
 }
 
 

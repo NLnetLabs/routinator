@@ -5,7 +5,7 @@
 //! particular, it prohibits the use of RDI values. Additionally, if the
 //! "inherit" value is not used, the set of identifiers must be non-empty.
 
-use std::ops;
+use std::{fmt, ops};
 use bytes::Bytes;
 use super::ber::{Constructed, Content, Error, Mode, Source, Tag};
 use super::x509::ValidationError;
@@ -303,6 +303,12 @@ impl ops::Add<u32> for AsId {
 
     fn add(self, rhs: u32) -> Self {
         AsId(self.0.checked_add(rhs).unwrap())
+    }
+}
+
+impl fmt::Display for AsId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AS{}", self.0)
     }
 }
 
