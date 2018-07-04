@@ -19,19 +19,19 @@ impl Oid<Bytes> {
     pub fn skip_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<(), S::Err> {
-        cons.primitive_if(Tag::OID, |prim| prim.skip_all())
+        cons.take_primitive_if(Tag::OID, |prim| prim.skip_all())
     }
 
     pub fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
-        cons.opt_primitive_if(Tag::OID, |prim| prim.skip_all())
+        cons.take_opt_primitive_if(Tag::OID, |prim| prim.skip_all())
     }
 
     pub fn take_from<S: Source>(
         constructed: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        constructed.primitive_if(Tag::OID, |content| {
+        constructed.take_primitive_if(Tag::OID, |content| {
             content.take_all().map(Oid)
         })
     }
@@ -39,7 +39,7 @@ impl Oid<Bytes> {
     pub fn take_opt_from<S: Source>(
         constructed: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        constructed.opt_primitive_if(Tag::OID, |content| {
+        constructed.take_opt_primitive_if(Tag::OID, |content| {
             content.take_all().map(Oid)
         })
     }
@@ -50,7 +50,7 @@ impl<T: AsRef<[u8]>> Oid<T> {
         &self,
         constructed: &mut Constructed<S>
     ) -> Result<(), S::Err> {
-        constructed.primitive_if(Tag::OID, |content| {
+        constructed.take_primitive_if(Tag::OID, |content| {
             let len = content.remaining();
             content.request(len)?;
             if &content.slice()[..len] == self.0.as_ref() {

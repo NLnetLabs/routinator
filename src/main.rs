@@ -10,7 +10,11 @@ fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-    match Repository::new(Path::new("test")).process() {
+    let repo = Repository::new(Path::new("test"));
+    if let Err(_) = repo.update() {
+        println!("Update failed. Continuing anyway.");
+    }
+    match repo.process() {
         Ok(res) => {
             println!("Got {} attestations.", res.len());
         }

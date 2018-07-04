@@ -30,7 +30,7 @@ impl Name {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| cons.take_all()).map(Name)
+        cons.sequence(|cons| cons.capture_all()).map(Name)
     }
 }
 
@@ -54,7 +54,7 @@ impl SerialNumber {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.primitive_if(Tag::INTEGER, |prim| {
+        cons.take_primitive_if(Tag::INTEGER, |prim| {
             match prim.slice_all()?.first() {
                 Some(&x) => {
                     if x & 0x80 != 0 {
@@ -115,7 +115,7 @@ impl SignedData {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         Ok(SignedData {
-            data: cons.take_one()?,
+            data: cons.capture_one()?,
             signature_algorithm: SignatureAlgorithm::take_from(cons)?,
             signature_value: BitString::take_from(cons)?,
         })
@@ -195,7 +195,7 @@ impl Time {
     pub fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        let res = cons.opt_primitive_if(Tag::UTC_TIME, |prim| {
+        let res = cons.take_opt_primitive_if(Tag::UTC_TIME, |prim| {
             let year = read_two_char(prim)? as i32;
             let year = if year >= 50 { year + 1900 }
                        else { year + 2000 };
@@ -215,7 +215,7 @@ impl Time {
         if let Some(res) = res {
             return Ok(Some(res))
         }
-        cons.opt_primitive_if(Tag::GENERALIZED_TIME, |prim| {
+        cons.take_opt_primitive_if(Tag::GENERALIZED_TIME, |prim| {
             let res = (
                 read_four_char(prim)? as i32,
                 read_two_char(prim)?,

@@ -314,7 +314,7 @@ impl SignedAttributes {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        let raw = cons.take_constructed_if(Tag::CTX_0, |c| c.take_all())?;
+        let raw = cons.take_constructed_if(Tag::CTX_0, |c| c.capture_all())?;
         Mode::Ber.decode(raw.clone(), |cons| {
             let mut message_digest = None;
             let mut content_type = None;

@@ -796,7 +796,7 @@ impl Extensions {
         extended_key_usage: &mut Option<Bytes>
     ) -> Result<(), S::Err> {
         update_once(extended_key_usage, || {
-            let res = cons.sequence(|c| c.take_all())?;
+            let res = cons.sequence(|c| c.capture_all())?;
             Mode::Der.decode(res.clone(), |cons| {
                 Oid::skip_in(cons)?;
                 while let Some(_) = Oid::skip_opt_in(cons)? { }
@@ -1002,7 +1002,7 @@ impl UriGeneralName {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.primitive_if(Tag::CTX_6, |prim| {
+        cons.take_primitive_if(Tag::CTX_6, |prim| {
             let res = prim.take_all()?;
             if res.is_ascii() {
                 Ok(UriGeneralName(res))
@@ -1016,7 +1016,7 @@ impl UriGeneralName {
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_primitive_if(Tag::CTX_6, |prim| {
+        cons.take_opt_primitive_if(Tag::CTX_6, |prim| {
             let res = prim.take_all()?;
             if res.is_ascii() {
                 Ok(UriGeneralName(res))
@@ -1030,7 +1030,7 @@ impl UriGeneralName {
     fn skip_opt<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
-        cons.opt_primitive_if(Tag::CTX_6, |prim| {
+        cons.take_opt_primitive_if(Tag::CTX_6, |prim| {
             if prim.slice_all()?.is_ascii() {
                 prim.skip_all()?;
                 Ok(())
@@ -1155,7 +1155,7 @@ impl CertificatePolicies {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         // XXX TODO Parse properly.
-        cons.sequence(|c| c.take_all()).map(CertificatePolicies)
+        cons.sequence(|c| c.capture_all()).map(CertificatePolicies)
     }
 }
 

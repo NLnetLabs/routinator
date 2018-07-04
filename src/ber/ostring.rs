@@ -73,8 +73,8 @@ impl OctetString {
     ) -> Result<Self, S::Err> {
         let mut short = false;
         constructed.capture(|con| {
-            while let Some(()) = con.opt_primitive_if(Tag::OCTET_STRING,
-                                                      |primitive| {
+            while let Some(()) = con.take_opt_primitive_if(Tag::OCTET_STRING,
+                                                           |primitive| {
                 if primitive.remaining() > 1000 {
                     xerr!(return Err(Error::Malformed.into()));
                 }

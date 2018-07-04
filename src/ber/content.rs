@@ -91,7 +91,7 @@ impl<'a, S: Source + 'a> Content<'a, S> {
     pub fn into_bytes(&mut self) -> Result<Bytes, S::Err> {
         match *self {
             Content::Primitive(ref mut inner) => inner.take_all(),
-            Content::Constructed(ref mut inner) => inner.take_all(),
+            Content::Constructed(ref mut inner) => inner.capture_all(),
         }
     }
 }
@@ -838,7 +838,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     /// the closure returns one or if accessing the underlying source fails.
     pub fn take_primitive<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(Tag, &mut Primitive<S>) -> Result<T, S::Err> {
-        match self.opt_primitive(op)? {
+        match self.take_opt_primitive(op)? {
             Some(res) => Ok(res),
             None => {
                 xerr!(Err(Error::Malformed.into()))
@@ -857,7 +857,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     /// If the closure fails to process the next value’s content fully, a
     /// malformed error is returned. An error is also returned if
     /// the closure returns one or if accessing the underlying source fails.
-    pub fn opt_primitive<F, T>(
+    pub fn take_opt_primitive<F, T>(
         &mut self,
         op: F
     ) -> Result<Option<T>, S::Err>
@@ -867,13 +867,23 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
-    pub fn primitive_if<F, T>(
+    /// Processes a primitive value if it has the right tag.
+    ///
+    /// If the next value is a primitive and its tag matches `expected`, its
+    /// content is given to the closure `op` which has to process it
+    /// completely or return an error, either of which is returned.
+    ///
+    /// The method returns a malformed error if there is no next value, if the
+    /// next value is not a primitive, if it doesn’t have the right tag, or if
+    /// the closure doesn’t advance over the complete content. If access to
+    /// the underlying source fails, an error is returned, too.
+    pub fn take_primitive_if<F, T>(
         &mut self,
         expected: Tag,
         op: F
     ) -> Result<T, S::Err>
     where F: FnOnce(&mut Primitive<S>) -> Result<T, S::Err> {
-        match self.opt_primitive_if(expected, op)? {
+        match self.take_opt_primitive_if(expected, op)? {
             Some(res) => Ok(res),
             None => {
                 xerr!(Err(Error::Malformed.into()))
@@ -881,7 +891,18 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         }
     }
 
-    pub fn opt_primitive_if<F, T>(
+    /// Processes an optional primitive value of a given tag.
+    ///
+    /// If the next value is a primitive and its tag matches `expected`, its
+    /// content is given to the closure `op` which has to process it
+    /// completely or return an error, either of which is returned.
+    ///
+    /// If the end of this value has been reached, if the next value is not
+    /// a primitive or if its tag doesn’t match, the method returns
+    /// `Ok(None)`. If the closure doesn’t process the next value’s content
+    /// fully the method returns a malformed error. If access to the
+    /// underlying source fails, it returns an appropriate error.
+    pub fn take_opt_primitive_if<F, T>(
         &mut self,
         expected: Tag,
         op: F
@@ -892,6 +913,16 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
+    /// Captures content into a bytes value.
+    ///
+    /// The method gives a representation of the content to the closure `op`.
+    /// If it succeeds, it converts whatever the closure advanced over into
+    /// a `Bytes` value and returns this value.
+    ///
+    /// The closure may process no, one, several, or all values of this
+    /// value’s content.
+    ///
+    /// If the closure returns an error, this error is returned.
     pub fn capture<F>(&mut self, op: F) -> Result<Bytes, S::Err>
     where
         F: FnOnce(
@@ -910,7 +941,14 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         Ok(source.unwrap().into_bytes())
     }
 
-    pub fn take_one(&mut self) -> Result<Bytes, S::Err> {
+    /// Captures the next value into a bytes value.
+    ///
+    /// The method takes the next value from this value’s content, whatever
+    /// it its, end returns its encoded form as a `Bytes` value.
+    ///
+    /// If there is no next value, a malformed error is returned. If access
+    /// to the underlying source fails, an appropriate error is returned.
+    pub fn capture_one(&mut self) -> Result<Bytes, S::Err> {
         self.capture(|cons| {
             match cons.skip_one()? {
                 Some(()) => Ok(()),
@@ -921,15 +959,24 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
-    pub fn take_all(&mut self) -> Result<Bytes, S::Err> {
+    /// Captures all remaining content into a bytes value.
+    ///
+    /// The mathod takes all remaining values from this value’s content and
+    /// returns their encoded form in a `Bytes` value.
+    pub fn capture_all(&mut self) -> Result<Bytes, S::Err> {
         self.capture(|cons| cons.skip_all())
     }
 
+    /// Skips over all remaining content.
     fn skip_all(&mut self) -> Result<(), S::Err> {
         while let Some(()) = self.skip_one()? { }
         Ok(())
     }
 
+    /// Attempts to skip over the next value.
+    ///
+    /// If there is a next value, returns `Ok(Some(()))`, if the end of value
+    /// has already been reached, returns `Ok(None)`.
     fn skip_one(&mut self) -> Result<Option<()>, S::Err> {
         self.take_opt_value(|_tag, content| {
             match *content {
@@ -948,23 +995,23 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
 impl<'a, S: Source + 'a> Constructed<'a, S> {
     pub fn take_bool(&mut self) -> Result<bool, S::Err> {
-        self.primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
+        self.take_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
     pub fn take_opt_bool(&mut self) -> Result<Option<bool>, S::Err> {
-        self.opt_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
+        self.take_opt_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
     pub fn skip_opt_null(&mut self) -> Result<(), S::Err> {
-        self.opt_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
+        self.take_opt_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
     }
 
     pub fn take_opt_u8(&mut self) -> Result<Option<u8>, S::Err> {
-        self.opt_primitive_if(Tag::INTEGER, |prim| prim.to_u8())
+        self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u8())
     }
 
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
-        self.primitive_if(Tag::INTEGER, |prim| {
+        self.take_primitive_if(Tag::INTEGER, |prim| {
             let got = prim.take_u8()?;
             if got != expected {
                 xerr!(Err(Error::Malformed.into()))
@@ -976,7 +1023,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     }
 
     pub fn skip_opt_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
-        self.opt_primitive_if(Tag::INTEGER, |prim| {
+        self.take_opt_primitive_if(Tag::INTEGER, |prim| {
             let got = prim.take_u8()?;
             if got != expected {
                 xerr!(Err(Error::Malformed.into()))
@@ -988,15 +1035,15 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
     }
 
     pub fn take_u32(&mut self) -> Result<u32, S::Err> {
-        self.primitive_if(Tag::INTEGER, |prim| prim.to_u32())
+        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u32())
     }
 
     pub fn take_u64(&mut self) -> Result<u64, S::Err> {
-        self.primitive_if(Tag::INTEGER, |prim| prim.to_u64())
+        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u64())
     }
 
     pub fn take_unsigned(&mut self) -> Result<Bytes, S::Err> {
-        self.primitive_if(Tag::INTEGER, |prim| prim.to_unsigned())
+        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_unsigned())
     }
 
     pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>

@@ -63,18 +63,13 @@ impl Repository {
     pub fn base(&self) -> &Path {
         self.base.as_ref()
     }
-
-    pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
-        self.update()?;
-        self.run()
-    }
 }
 
 
 /// # Updating the Repository Copy
 ///
 impl Repository {
-    fn update(&self) -> Result<(), ProcessingError> {
+    pub fn update(&self) -> Result<(), ProcessingError> {
         for entry in fs::read_dir(self.base.join("repository"))? {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
@@ -152,7 +147,7 @@ impl Repository {
 /// # Processing the Repository Content
 ///
 impl Repository {
-    fn run(&self) -> Result<RouteOrigins, ProcessingError> {
+    pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
         let mut res = RouteOrigins::new();
         for tal in Tal::read_dir(self.base.join("tal"))? {
             let tal = tal?;

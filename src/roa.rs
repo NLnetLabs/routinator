@@ -55,7 +55,7 @@ impl RouteOriginAttestation {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.sequence(|cons| {
-            cons.opt_primitive_if(Tag::CTX_0, |prim| {
+            cons.take_opt_primitive_if(Tag::CTX_0, |prim| {
                 if prim.take_u8()? != 0 {
                     xerr!(Err(Error::Malformed.into()))
                 }
