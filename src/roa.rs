@@ -2,7 +2,7 @@
 //!
 //! For details, see RFC 6482.
 
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use bytes::Bytes;
 use super::asres::AsId;
 use super::ber::{BitString, Constructed, Error, Mode, Source, Tag};
@@ -65,6 +65,16 @@ impl RouteOriginAttestation {
 
     pub fn v6_addrs(&self) -> &RoaIpAddresses {
         &self.v6_addrs
+    }
+
+    pub fn iter<'a>(
+        &'a self
+    ) -> impl Iterator<Item=FriendlyRoaIpAddress> + 'a {
+        self.v4_addrs.iter().map(|addr| FriendlyRoaIpAddress::new(addr, true))
+            .chain(
+                self.v6_addrs.iter()
+                    .map(|addr| FriendlyRoaIpAddress::new(addr, false))
+            )
     }
 }
 
@@ -214,14 +224,6 @@ impl RoaIpAddress {
         };
         (self.address & !mask, self.address | mask)
     }
-
-    pub fn as_v4(self) -> RoaIpv4Address {
-        RoaIpv4Address(self)
-    }
-
-    pub fn as_v6(self) -> RoaIpv6Address {
-        RoaIpv6Address(self)
-    }
 }
 
 impl RoaIpAddress {
@@ -264,56 +266,48 @@ impl RoaIpAddress {
 }
 
 
-//------------ RoaIpv4Address ------------------------------------------------
+//------------ FriendlyRoaIpAddress ------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct RoaIpv4Address(RoaIpAddress);
-
-impl RoaIpv4Address {
-    pub fn address(&self) -> Ipv4Addr {
-        Ipv4Addr::new(
-            ((self.0.address >> 120) & 0xFF) as u8,
-            ((self.0.address >> 112) & 0xFF) as u8,
-            ((self.0.address >> 104) & 0xFF) as u8,
-            ((self.0.address >> 96) & 0xFF) as u8
-        )
-    }
-
-    pub fn address_length(&self) -> u8 {
-        self.0.address_length
-    }
-
-    pub fn max_length(&self) -> u8 {
-        self.0.max_length.unwrap_or(self.0.address_length)
-    }
+pub struct FriendlyRoaIpAddress {
+    addr: RoaIpAddress,
+    v4: bool
 }
 
+impl FriendlyRoaIpAddress {
+    fn new(addr: RoaIpAddress, v4: bool) -> Self {
+        FriendlyRoaIpAddress { addr, v4 }
+    }
 
-//------------ RoaIpv6Address ------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct RoaIpv6Address(RoaIpAddress);
-
-impl RoaIpv6Address {
-    pub fn address(&self) -> Ipv6Addr {
-        Ipv6Addr::new(
-            ((self.0.address >> 112) & 0xFFFF) as u16,
-            ((self.0.address >> 96) & 0xFFFF) as u16,
-            ((self.0.address >> 80) & 0xFFFF) as u16,
-            ((self.0.address >> 64) & 0xFFFF) as u16,
-            ((self.0.address >> 48) & 0xFFFF) as u16,
-            ((self.0.address >> 32) & 0xFFFF) as u16,
-            ((self.0.address >> 16) & 0xFFFF) as u16,
-            (self.0.address & 0xFFFF) as u16
-        )
+    pub fn address(&self) -> IpAddr {
+        if self.v4 {
+            Ipv4Addr::new(
+                ((self.addr.address >> 120) & 0xFF) as u8,
+                ((self.addr.address >> 112) & 0xFF) as u8,
+                ((self.addr.address >> 104) & 0xFF) as u8,
+                ((self.addr.address >> 96) & 0xFF) as u8
+            ).into()
+        }
+        else {
+            Ipv6Addr::new(
+                ((self.addr.address >> 112) & 0xFFFF) as u16,
+                ((self.addr.address >> 96) & 0xFFFF) as u16,
+                ((self.addr.address >> 80) & 0xFFFF) as u16,
+                ((self.addr.address >> 64) & 0xFFFF) as u16,
+                ((self.addr.address >> 48) & 0xFFFF) as u16,
+                ((self.addr.address >> 32) & 0xFFFF) as u16,
+                ((self.addr.address >> 16) & 0xFFFF) as u16,
+                (self.addr.address & 0xFFFF) as u16
+            ).into()
+        }
     }
 
     pub fn address_length(&self) -> u8 {
-        self.0.address_length
+        self.addr.address_length
     }
 
     pub fn max_length(&self) -> u8 {
-        self.0.max_length.unwrap_or(self.0.address_length)
+        self.addr.max_length.unwrap_or(self.addr.address_length)
     }
 }
 
