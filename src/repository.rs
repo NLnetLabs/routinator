@@ -51,12 +51,23 @@ use super::x509::ValidationError;
 #[derive(Clone, Debug)]
 pub struct Repository {
     base: PathBuf,
+    strict: bool,
+    rsync: bool,
 }
 
 impl Repository {
-    pub fn new<P: AsRef<Path>>(base: P) -> Self {
-        Repository {
-            base: base.as_ref().into()
+    pub fn new<P: AsRef<Path>>(
+        base: P,
+        strict: bool,
+        rsync: bool
+    ) -> Result<Self, ProcessingError> {
+        let base = base.as_ref().into();
+        if let Err(err) = fs::read_dir(&base) {
+            error!("failed to open cache: {}", err);
+            Err(ProcessingError::Io(err))
+        }
+        else {
+            Ok(Repository { base, strict, rsync })
         }
     }
 
@@ -83,6 +94,9 @@ impl Repository {
         &self,
         entry: fs::DirEntry
     ) -> Result<(), ProcessingError> {
+        if !self.rsync {
+            return Ok(())
+        }
         let uri = format!(
             "rsync://{}",
             entry.file_name().to_str().ok_or(ProcessingError::Other)?
@@ -150,28 +164,31 @@ impl Repository {
     pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
         let mut res = RouteOrigins::new();
         for tal in Tal::read_dir(self.base.join("tal"))? {
-            let tal = tal?;
-            for uri in tal.uris() {
-                match self.load_ta(&uri)? {
-                    Some(cert) => {
-                        if cert.subject_public_key_info() != tal.key_info() {
-                            continue;
-                        }
-                        let cert = match cert.validate_ta() {
-                            Ok(cert) => cert,
-                            Err(_) => {
-                                continue;
-                            }
-                        };
-                        debug!("processing {}", uri);
-                        self.process_ca(cert, &mut res)?;
-                        // We stop once we have had the first working URI.
-                        break;
-                    }
-                    None => {
-                        // bad trust anchor. ignore.
-                    }
+            let tal = match tal {
+                Ok(tal) => tal,
+                Err(err) => {
+                    debug!("failed to read TAL: {}", err);
+                    continue
                 }
+            };
+            for uri in tal.uris() {
+                let cert = match self.load_ta(&uri)? {
+                    Some(cert) => cert,
+                    None => continue,
+                };
+                if cert.subject_public_key_info() != tal.key_info() {
+                    continue;
+                }
+                let cert = match cert.validate_ta() {
+                    Ok(cert) => cert,
+                    Err(_) => {
+                        continue;
+                    }
+                };
+                debug!("processing {}", uri);
+                self.process_ca(cert, &mut res)?;
+                // We stop once we have had the first working URI.
+                break;
             }
         }
         Ok(res)
@@ -217,25 +234,25 @@ impl Repository {
             let bytes = match self.load_file(&uri, false)? {
                 Some(bytes) => bytes,
                 None => {
-                    debug!("{}: failed to load.", uri);
+                    info!("{}: failed to load.", uri);
                     return Ok(())
                 }
             };
             if let Err(_) = hash.verify(&bytes) {
-                debug!("{}: file has wrong hash.", uri);
+                info!("{}: file has wrong hash.", uri);
                 return Ok(())
             }
             let cert = match Cert::decode(bytes) {
                 Ok(cert) => cert,
                 Err(_) => {
-                    debug!("{}: failed to decode.", uri);
+                    info!("{}: failed to decode.", uri);
                     return Ok(())
                 }
             };
             let cert = match cert.validate_ca(issuer) {
                 Ok(cert) => cert,
                 Err(_) => {
-                    debug!("{}: failed to validate.", uri);
+                    info!("{}: failed to validate.", uri);
                     return Ok(())
                 }
             };
@@ -249,10 +266,10 @@ impl Repository {
             if let Err(_) = hash.verify(&bytes) {
                 return Ok(())
             }
-            let roa = match Roa::decode(bytes) {
+            let roa = match Roa::decode(bytes, self.strict) {
                 Ok(roa) => roa,
                 Err(_) => {
-                    debug!("Decoding failed for {}", uri);
+                    info!("Decoding failed for {}", uri);
                     return Ok(())
                 }
             };
@@ -263,7 +280,7 @@ impl Repository {
             Ok(())
         }
         else {
-            warn!("skipping unknown file {}", uri);
+            info!("skipping unknown file {}", uri);
             Ok(())
         }
     }
@@ -281,26 +298,26 @@ impl Repository {
             let bytes = match self.load_file(&uri, true)? {
                 Some(bytes) => bytes,
                 None => {
-                    debug!("{}: failed to load.", uri);
+                    info!("{}: failed to load.", uri);
                     continue
                 }
             };
-            let manifest = match Manifest::decode(bytes) {
+            let manifest = match Manifest::decode(bytes, self.strict) {
                 Ok(manifest) => manifest,
                 Err(_) => {
-                    debug!("{}: failed to decode", uri);
+                    info!("{}: failed to decode", uri);
                     continue
                 }
             };
             let (cert, manifest) = match manifest.validate(issuer) {
                 Ok(manifest) => manifest,
                 Err(_) => {
-                    debug!("{}: failed to validate", uri);
+                    info!("{}: failed to validate", uri);
                     continue
                 }
             };
             if let Err(_) = self.check_crl(cert, issuer, store) {
-                debug!("{}: cert listed CRL", uri);
+                info!("{}: certificate has been revoked", uri);
                 continue
             }
             return Ok(Some(manifest))
@@ -383,16 +400,22 @@ impl Repository {
                 file.read_to_end(&mut data)?;
                 Ok(Some(data.into()))
             }
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound && create => {
-                if let Err(_) = self.populate_uri_dir(uri) {
-                    debug!("rsync failed. Skipping ...");
-                    Ok(None)
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+                if create {
+                    if let Err(_) = self.populate_uri_dir(uri) {
+                        debug!("rsync failed. Skipping ...");
+                        Ok(None)
+                    }
+                    else {
+                        self.load_file(uri, false)
+                    }
                 }
                 else {
-                    self.load_file(uri, false)
+                    debug!("{}: not found; ignoring", uri);
+                    Ok(None)
                 }
             }
-            Err(err) => Err(err.into())
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -410,6 +433,9 @@ impl Repository {
     }
 
     fn populate_uri_dir(&self, uri: &rsync::Uri) -> Result<(), io::Error> {
+        if !self.rsync {
+            return Ok(())
+        }
         let dir_uri = uri.parent();
         rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
     }

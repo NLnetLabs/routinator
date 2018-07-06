@@ -89,7 +89,7 @@ impl SignatureAlgorithm {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         oid::SHA256_WITH_RSA_ENCRYPTION.skip_if(cons)?;
-        cons.skip_opt_null()?;
+        cons.take_opt_null()?;
         Ok(SignatureAlgorithm::Sha256WithRsaEncryption)
     }
 }

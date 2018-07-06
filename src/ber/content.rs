@@ -125,6 +125,21 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
+
+    /// Converts content into a `u16`.
+    ///
+    /// If the content is not primitive or does not contain a single BER
+    /// encoded INTEGER value between 0 and 2^16-1, returns a malformed error.
+    pub fn to_u16(&mut self) -> Result<u16, S::Err> {
+        if let Content::Primitive(ref mut prim) = *self {
+            prim.to_u16()
+        }
+        else {
+            xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
+
     /// Converts content into a `u32`.
     ///
     /// If the content is not primitive or does not contain a single BER
@@ -271,6 +286,33 @@ impl<'a, S: Source + 'a> Primitive<'a, S> {
             _ => xerr!(Err(Error::Malformed.into()))
         }
     }
+
+
+    /// Parses the primitive value as an INTEGER limited to a `u32`.
+    pub fn to_u16(&mut self) -> Result<u16, S::Err> {
+        self.check_int_head()?;
+        self.check_unsigned()?;
+        match self.remaining() {
+            1 => Ok(self.take_u8()? as u16),
+            2 => {
+                Ok(
+                    (self.take_u8()? as u16) << 8
+                    | (self.take_u8()? as u16)
+                )
+            }
+            3 => {
+                if self.take_u8()? != 0 {
+                    xerr!(return Err(Error::Malformed.into()));
+                }
+                Ok(
+                    (self.take_u8()? as u16) << 24
+                    | (self.take_u8()? as u16) << 16
+                )
+            }
+            _ => xerr!(Err(Error::Malformed.into()))
+        }
+    }
+
 
     /// Parses the primitive value as an INTEGER limited to a `u32`.
     pub fn to_u32(&mut self) -> Result<u32, S::Err> {
@@ -993,23 +1035,71 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 }
 
 
+/// # Processing Standard Values
+///
+/// These methods provide short-cuts for processing fundamental values in
+/// their standard form. That is, the values use their regular tag and
+/// encoding.
+///
+/// When such values are explicitely tagged, they are encoded inside as the
+/// sole content of a constructed value with the given tag. If such values
+/// are implicitely tagged, they are encoded as usual, but have a different
+/// tag. In this case, you can use `take_value_if` or `take_opt_value_if`,
+/// provide it with the expected tag and use the high-level processing
+/// methods of `Value` to process the content.
+///
+/// For instance, an ASN.1 definition of `[0] IMPLICIT BOOL` you would
+/// process as
+/// 
+/// ```rust,ignore
+/// cons.take_value(Tag::CTX_0, |value| value.to_bool())
+/// ```
+///
+/// Note that if neither EXPLICIT or IMPLICIT are given in the definition,
+/// which of the two is used is decided by the module definition. If the
+/// module starts with `DEFINITIONS EXPLICIT TAGS ::=`, explicit is the
+/// default. Some RFCs have modules with both defaults, so check carefully.
 impl<'a, S: Source + 'a> Constructed<'a, S> {
+    /// Processes and returns a mandatory boolean value.
     pub fn take_bool(&mut self) -> Result<bool, S::Err> {
         self.take_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
+    /// Processes and returns an optional boolean value.
     pub fn take_opt_bool(&mut self) -> Result<Option<bool>, S::Err> {
         self.take_opt_primitive_if(Tag::BOOLEAN, |prim| prim.to_bool())
     }
 
-    pub fn skip_opt_null(&mut self) -> Result<(), S::Err> {
+    /// Processes a mandatory NULL value.
+    pub fn take_null(&mut self) -> Result<(), S::Err> {
+        self.take_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
+    }
+
+    /// Processes an optional NULL value.
+    pub fn take_opt_null(&mut self) -> Result<(), S::Err> {
         self.take_opt_primitive_if(Tag::NULL, |_| Ok(())).map(|_| ())
     }
 
+    /// Processes a mandatory INTEGER value of the `u8` range.
+    ///
+    /// If the integer value is less than 0 or greater than 255, a malformed
+    /// error is returned.
+    pub fn take_u8(&mut self) -> Result<u8, S::Err> {
+        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u8())
+    }
+
+    /// Processes an optional INTEGER value of the `u8` range.
+    ///
+    /// If the integer value is less than 0 or greater than 255, a malformed
+    /// error is returned.
     pub fn take_opt_u8(&mut self) -> Result<Option<u8>, S::Err> {
         self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u8())
     }
 
+    /// Skips over a mandatory INTEGER if it has the given value.
+    ///
+    /// If the next value is an integer but of a different value, returns
+    /// a malformed error.
     pub fn skip_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
         self.take_primitive_if(Tag::INTEGER, |prim| {
             let got = prim.take_u8()?;
@@ -1022,6 +1112,10 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         })
     }
 
+    /// Skips over an optional INTEGER if it has the given value.
+    ///
+    /// If the next value is an integer but of a different value, returns
+    /// a malformed error.
     pub fn skip_opt_u8_if(&mut self, expected: u8) -> Result<(), S::Err> {
         self.take_opt_primitive_if(Tag::INTEGER, |prim| {
             let got = prim.take_u8()?;
@@ -1032,6 +1126,22 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
                 Ok(())
             }
         }).map(|_| ())
+    }
+
+    /// Processes a mandatory INTEGER value of the `u8` range.
+    ///
+    /// If the integer value is less than 0 or greater than 65535, a malformed
+    /// error is returned.
+    pub fn take_u16(&mut self) -> Result<u16, S::Err> {
+        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u16())
+    }
+
+    /// Processes an optional INTEGER value of the `u8` range.
+    ///
+    /// If the integer value is less than 0 or greater than 65535, a malformed
+    /// error is returned.
+    pub fn take_opt_u16(&mut self) -> Result<Option<u16>, S::Err> {
+        self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u16())
     }
 
     pub fn take_u32(&mut self) -> Result<u32, S::Err> {

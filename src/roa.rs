@@ -21,8 +21,11 @@ pub struct Roa {
 }
 
 impl Roa {
-    pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
-        let signed = SignedObject::decode(source)?;
+    pub fn decode<S: Source>(
+        source: S,
+        strict: bool
+    ) -> Result<Self, S::Err> {
+        let signed = SignedObject::decode(source, strict)?;
         let content = signed.decode_content(|cons| {
             RouteOriginAttestation::take_from(cons)
         })?;

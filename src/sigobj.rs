@@ -25,8 +25,13 @@ pub struct SignedObject {
 }
 
 impl SignedObject {
-    pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
-        Mode::Ber.decode(source, Self::take_from)
+    pub fn decode<S: Source>(
+        source: S,
+        strict: bool
+    ) -> Result<Self, S::Err> {
+        if strict { Mode::Der }
+        else { Mode::Ber }
+            .decode(source, Self::take_from)
     }
 
     /// Returns a reference to the object’s content type.
@@ -233,7 +238,7 @@ impl DigestAlgorithm {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         oid::SHA256.skip_if(cons)?;
-        cons.skip_opt_null()?;
+        cons.take_opt_null()?;
         Ok(DigestAlgorithm::Sha256)
     }
 
@@ -443,7 +448,7 @@ impl SignatureAlgorithm {
         {
             return Err(Error::Malformed.into())
         }
-        cons.skip_opt_null()?;
+        cons.take_opt_null()?;
         Ok(SignatureAlgorithm::Sha256WithRsaEncryption)
     }
 }

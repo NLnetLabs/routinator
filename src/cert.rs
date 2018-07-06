@@ -500,7 +500,7 @@ impl PublicKeyAlgorithm {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         oid::RSA_ENCRYPTION.skip_if(cons)?;
-        cons.skip_opt_null()?;
+        cons.take_opt_null()?;
         Ok(PublicKeyAlgorithm::RsaEncryption)
     }
 }
