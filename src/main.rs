@@ -86,6 +86,7 @@ fn main() -> Result<(), ProcessingError> {
 
     match matches.value_of("outform").unwrap_or("csv") {
         "csv" => output_csv(roas, &mut output),
+        "json" => output_json(roas, &mut output),
         other => {
             error!("unknown output format {}", other);
             Err(ProcessingError::Other)
@@ -120,6 +121,48 @@ fn output_csv<W: io::Write>(
     Ok(())
 }
 
+fn output_json<W: io::Write>(
+    roas: RouteOrigins,
+    output: &mut W
+) -> Result<(), ProcessingError> {
+    let mut first = true;
+    writeln!(output, "{{\n  \"roas\": [")?;
+    for roa in roas.drain() {
+        for addr in roa.v4_addrs().iter() {
+            if first {
+                first = false
+            }
+            else {
+                write!(output, ",\n")?;
+            }
+            let addr = addr.as_v4();
+            write!(output,
+                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \"maxLength\": {} }}",
+                roa.as_id(),
+                addr.address(), addr.address_length(),
+                addr.max_length()
+            )?;
+        }
+        for addr in roa.v6_addrs().iter() {
+            if first {
+                first = false
+            }
+            else {
+                write!(output, ",\n")?;
+            }
+            let addr = addr.as_v6();
+            write!(output,
+                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \"maxLength\": {} }}",
+                roa.as_id(),
+                addr.address(), addr.address_length(),
+                addr.max_length()
+            )?;
+        }
+    }
+    writeln!(output, "\n  ]\n}}")?;
+    Ok(())
+}
+
 
 pub enum FileOrStdout<F, S> {
     File(F),
@@ -130,7 +173,7 @@ impl FileOrStdout<File, io::Stdout> {
     fn open(path: &str) -> Result<Self, io::Error> {
         match path {
             "-" => Ok(FileOrStdout::Stdout(io::stdout())),
-            path => File::open(Path::new(path)).map(FileOrStdout::File)
+            path => File::create(Path::new(path)).map(FileOrStdout::File)
         }
     }
 
