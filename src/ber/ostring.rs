@@ -232,7 +232,9 @@ impl OctetStringSource {
     fn next_primitive(&mut self) -> Option<Bytes> {
         while !self.remainder.is_empty() {
             let (tag, cons) = Tag::take_from(&mut self.remainder).unwrap();
-            let length = Length::take_from(&mut self.remainder).unwrap();
+            let length = Length::take_from(
+                &mut self.remainder, Mode::Ber
+            ).unwrap();
             match tag {
                 Tag::OCTET_STRING => {
                     if cons {
@@ -323,7 +325,9 @@ impl<'a> Iterator for OctetStringIter<'a> {
         else {
             while !self.bytes.is_empty() {
                 let (tag, cons) = Tag::take_from(&mut self.bytes).unwrap();
-                let length = Length::take_from(&mut self.bytes).unwrap();
+                let length = Length::take_from(
+                    &mut self.bytes, Mode::Ber
+                ).unwrap();
                 match tag {
                     Tag::OCTET_STRING => {
                         if cons {

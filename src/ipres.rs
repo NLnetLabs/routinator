@@ -27,10 +27,10 @@ impl IpResources {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             let mut v4 = None;
             let mut v6 = None;
-            while let Some(()) = cons.opt_sequence(|cons| {
+            while let Some(()) = cons.take_opt_sequence(|cons| {
                 let af = AddressFamily::take_from(cons)?;
                 match af {
                     AddressFamily::Ipv4 => {
@@ -54,53 +54,6 @@ impl IpResources {
             Ok(IpResources { v4, v6 })
         })
     }
-
-    /*
-    pub fn is_inherited(&self) -> bool {
-        if let Some(v4) = self.v4.as_ref() {
-            if v4.is_inherited() {
-                return true
-            }
-        }
-        if let Some(v6) = self.v6.as_ref() {
-            if v6.is_inherited() {
-                return true
-            }
-        }
-        false
-    }
-
-    /// Checks whether `self` encompasses `other`.
-    /// 
-    /// Returns `None` if either of them chose the inherit option.
-    pub fn encompasses(&self, other: &Self) -> Option<bool> {
-        if self.is_inherited() || other.is_inherited() {
-            return None
-        }
-        if !self.encompasses_v4(other) {
-            return Some(false)
-        }
-        Some(self.encompasses_v6(other))
-    }
-
-    fn encompasses_v4(&self, other: &Self) -> bool {
-        // We assume neither is ever inherited.
-        match (self.v4.as_ref(), other.v4.as_ref()) {
-            (Some(s), Some(o)) => s.as_blocks().encompasses(o.as_blocks()),
-            (_, None) => true,
-            (_, Some(_)) => false,
-        }
-    }
-
-    fn encompasses_v6(&self, other: &Self) -> bool {
-        // We assume neither is ever inherited.
-        match (self.v6.as_ref(), other.v6.as_ref()) {
-            (Some(s), Some(o)) => s.as_blocks().encompasses(o.as_blocks()),
-            (_, None) => true,
-            (_, Some(_)) => false,
-        }
-    }
-    */
 }
 
 

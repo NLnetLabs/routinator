@@ -61,7 +61,7 @@ impl SignedObject {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             oid::SIGNED_DATA.skip_if(cons)?; // contentType
             cons.take_constructed_if(Tag::CTX_0, Self::take_signed_data)
         })
@@ -85,7 +85,7 @@ impl SignedObject {
     fn take_signed_data<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.skip_u8_if(3)?; // version -- must be 3
             DigestAlgorithm::skip_set(cons)?; // digestAlgorithms
             let (content_type, content)
@@ -112,7 +112,7 @@ impl SignedObject {
     fn take_encap_content_info<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<(Oid<Bytes>, OctetString), S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             Ok((
                 Oid::take_from(cons)?,
                 cons.take_constructed_if(
@@ -225,13 +225,13 @@ impl DigestAlgorithm {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_sequence(Self::take_content_from)
+        cons.take_opt_sequence(Self::take_content_from)
     }
 
     fn take_content_from<S: Source>(
@@ -278,13 +278,13 @@ impl SignerInfo {
     pub fn take_set_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.set(Self::take_from)
+        cons.take_set(Self::take_from)
     }
 
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.skip_u8_if(3)?;
             Ok(SignerInfo {
                 sid: cons.take_value_if(Tag::CTX_0, |content| {
@@ -325,7 +325,7 @@ impl SignedAttributes {
             let mut content_type = None;
             let mut signing_time = None;
             let mut binary_signing_time = None;
-            while let Some(()) = cons.opt_sequence(|cons| {
+            while let Some(()) = cons.take_opt_sequence(|cons| {
                 let oid = Oid::take_from(cons)?;
                 if oid == oid::CONTENT_TYPE {
                     Self::take_content_type(cons, &mut content_type)
@@ -373,7 +373,7 @@ impl SignedAttributes {
         content_type: &mut Option<Oid<Bytes>>
     ) -> Result<(), S::Err> {
         update_once(content_type, || {
-            cons.set(|cons| Oid::take_from(cons))
+            cons.take_set(|cons| Oid::take_from(cons))
         })
     }
 
@@ -382,7 +382,7 @@ impl SignedAttributes {
         message_digest: &mut Option<OctetString>
     ) -> Result<(), S::Err> {
         update_once(message_digest, || {
-            cons.set(|cons| OctetString::take_from(cons))
+            cons.take_set(|cons| OctetString::take_from(cons))
         })
     }
 
@@ -391,7 +391,7 @@ impl SignedAttributes {
         signing_time: &mut Option<Time>
     ) -> Result<(), S::Err> {
         update_once(signing_time, || {
-            cons.set(Time::take_from)
+            cons.take_set(Time::take_from)
         })
     }
 
@@ -400,7 +400,7 @@ impl SignedAttributes {
         bin_signing_time: &mut Option<u64>
     ) -> Result<(), S::Err> {
         update_once(bin_signing_time, || {
-            cons.set(|cons| cons.take_u64())
+            cons.take_set(|cons| cons.take_u64())
         })
     }
 
@@ -436,7 +436,7 @@ impl SignatureAlgorithm {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(

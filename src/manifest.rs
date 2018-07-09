@@ -54,7 +54,7 @@ impl ManifestContent {
     fn decode<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.take_opt_primitive_if(Tag::CTX_0, |prim| {
                 if prim.to_u8()? != 0 {
                     xerr!(Err(Error::Malformed.into()))
@@ -70,7 +70,7 @@ impl ManifestContent {
                 xerr!(return Err(Error::Malformed.into()));
             }
             sigobj::oid::SHA256.skip_if(cons)?;
-            let file_list = cons.sequence(|cons| {
+            let file_list = cons.take_sequence(|cons| {
                 cons.capture(|cons| {
                     while let Some(()) = FileAndHash::skip_opt_in(cons)? {
                     }
@@ -127,7 +127,7 @@ impl FileAndHash {
     fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
-        cons.opt_sequence(|cons| {
+        cons.take_opt_sequence(|cons| {
             cons.take_value_if(
                 Tag::IA5_STRING,
                 OctetString::take_content_from
@@ -140,7 +140,7 @@ impl FileAndHash {
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_sequence(|cons| {
+        cons.take_opt_sequence(|cons| {
             Ok(FileAndHash {
                 file: cons.take_value_if(
                     Tag::IA5_STRING,

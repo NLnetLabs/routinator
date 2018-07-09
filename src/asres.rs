@@ -38,7 +38,7 @@ impl AsResources {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.take_constructed_if(Tag::CTX_0, |cons| {
                 cons.take_value(|tag, content| {
                     if tag == Tag::NULL {

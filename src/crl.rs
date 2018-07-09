@@ -32,7 +32,7 @@ impl Crl {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(
@@ -41,7 +41,7 @@ impl Crl {
         let signed_data = SignedData::take_content_from(cons)?;
 
         Mode::Der.decode(signed_data.data().clone(), |cons| {
-            cons.sequence(|cons| {
+            cons.take_sequence(|cons| {
                 cons.skip_u8_if(1)?; // v2 => 1
                 Ok(Crl {
                     signed_data,
@@ -81,7 +81,7 @@ impl RevokedCertificates {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        let res = cons.opt_sequence(|cons| {
+        let res = cons.take_opt_sequence(|cons| {
             cons.capture(|cons| {
                 while let Some(_) = CrlEntry::take_opt_from(cons)? { }
                 Ok(())
@@ -118,13 +118,13 @@ impl CrlEntry {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_sequence(Self::take_content_from)
+        cons.take_opt_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(
@@ -154,10 +154,10 @@ impl Extensions {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             let mut authority_key_id = None;
             let mut crl_number = None;
-            while let Some(()) = cons.opt_sequence(|cons| {
+            while let Some(()) = cons.take_opt_sequence(|cons| {
                 let id = Oid::take_from(cons)?;
                 let _critical = cons.take_opt_bool()?.unwrap_or(false);
                 let value = OctetString::take_from(cons)?;
@@ -213,7 +213,7 @@ impl Extensions {
         authority_key_id: &mut Option<OctetString>
     ) -> Result<(), S::Err> {
         update_once(authority_key_id, || {
-            let res = cons.sequence(|cons| {
+            let res = cons.take_sequence(|cons| {
                 cons.take_value_if(Tag::CTX_0, OctetString::take_content_from)
             })?;
             if res.len() != 20 {

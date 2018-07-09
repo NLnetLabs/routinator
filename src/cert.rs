@@ -38,7 +38,7 @@ impl Cert {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     /// Parses the content of a Certificate sequence.
@@ -48,7 +48,7 @@ impl Cert {
         let signed_data = SignedData::take_content_from(cons)?;
 
         Mode::Der.decode(signed_data.data().clone(), |cons| {
-            cons.sequence(|cons| {
+            cons.take_sequence(|cons| {
                 // version [0] EXPLICIT Version DEFAULT v1.
                 //  -- we need extensions so apparently, we want v3 which,
                 //     confusingly, is 2.
@@ -433,7 +433,7 @@ impl Validity {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             Ok(Validity::new(
                 Time::take_from(cons)?,
                 Time::take_from(cons)?,
@@ -465,7 +465,7 @@ impl SubjectPublicKeyInfo {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             Ok(SubjectPublicKeyInfo {
                 algorithm: PublicKeyAlgorithm::take_from(cons)?,
                 subject_public_key: BitString::take_from(cons)?
@@ -493,7 +493,7 @@ impl PublicKeyAlgorithm {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(
@@ -562,7 +562,7 @@ impl Extensions {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             let mut basic_ca = None;
             let mut subject_key_id = None;
             let mut authority_key_id = None;
@@ -574,7 +574,7 @@ impl Extensions {
             let mut certificate_policies = None;
             let mut ip_resources = None;
             let mut as_resources = None;
-            while let Some(()) = cons.opt_sequence(|cons| {
+            while let Some(()) = cons.take_opt_sequence(|cons| {
                 let id = Oid::take_from(cons)?;
                 let critical = cons.take_opt_bool()?.unwrap_or(false);
                 let value = OctetString::take_from(cons)?;
@@ -683,7 +683,7 @@ impl Extensions {
         basic_ca: &mut Option<bool>
     ) -> Result<(), S::Err> {
         update_once(basic_ca, || {
-            match cons.sequence(|cons| cons.take_opt_bool())? {
+            match cons.take_sequence(|cons| cons.take_opt_bool())? {
                 Some(res) => Ok(res),
                 None => Ok(false)
             }
@@ -734,7 +734,7 @@ impl Extensions {
         authority_key_id: &mut Option<OctetString>
     ) -> Result<(), S::Err> {
         update_once(authority_key_id, || {
-            let res = cons.sequence(|cons| {
+            let res = cons.take_sequence(|cons| {
                 cons.take_value_if(Tag::CTX_0, OctetString::take_content_from)
             })?;
             if res.len() != 20 {
@@ -796,7 +796,7 @@ impl Extensions {
         extended_key_usage: &mut Option<Bytes>
     ) -> Result<(), S::Err> {
         update_once(extended_key_usage, || {
-            let res = cons.sequence(|c| c.capture_all())?;
+            let res = cons.take_sequence(|c| c.capture_all())?;
             Mode::Der.decode(res.clone(), |cons| {
                 Oid::skip_in(cons)?;
                 while let Some(_) = Oid::skip_opt_in(cons)? { }
@@ -831,8 +831,8 @@ impl Extensions {
         crl_distribution: &mut Option<UriGeneralNames>
     ) -> Result<(), S::Err> {
         update_once(crl_distribution, || {
-            cons.sequence(|cons| {
-                cons.sequence(|cons| {
+            cons.take_sequence(|cons| {
+                cons.take_sequence(|cons| {
                     cons.take_constructed_if(Tag::CTX_0, |cons| {
                         cons.take_constructed_if(Tag::CTX_0, |cons| {
                             UriGeneralNames::take_content_from(cons)
@@ -862,8 +862,8 @@ impl Extensions {
         authority_info_access: &mut Option<UriGeneralName>
     ) -> Result<(), S::Err> {
         update_once(authority_info_access, || {
-            cons.sequence(|cons| {
-                cons.sequence(|cons| {
+            cons.take_sequence(|cons| {
+                cons.take_sequence(|cons| {
                     oid::AD_CA_ISSUERS.skip_if(cons)?;
                     UriGeneralName::take_from(cons)
                 })
@@ -1063,10 +1063,10 @@ impl SubjectInfoAccess {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             let mut ca = None;
             let content = cons.capture(|cons| {
-                while let Some(()) = cons.opt_sequence(|cons| {
+                while let Some(()) = cons.take_opt_sequence(|cons| {
                     let oid = Oid::take_from(cons)?;
                     if oid == oid::AD_CA_REPOSITORY
                         || oid == oid::AD_RPKI_MANIFEST
@@ -1134,7 +1134,7 @@ impl Iterator for SiaIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         Mode::Der.decode(&mut self.content, |cons| {
-            cons.opt_sequence(|cons| {
+            cons.take_opt_sequence(|cons| {
                 Ok((
                     Oid::take_from(cons)?,
                     UriGeneralName::take_from(cons)?
@@ -1155,7 +1155,7 @@ impl CertificatePolicies {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         // XXX TODO Parse properly.
-        cons.sequence(|c| c.capture_all()).map(CertificatePolicies)
+        cons.take_sequence(|c| c.capture_all()).map(CertificatePolicies)
     }
 }
 

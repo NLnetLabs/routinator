@@ -36,7 +36,7 @@ fn main() -> Result<(), ProcessingError> {
              .short("f")
              .long("outform")
              .value_name("FORMAT")
-             .help("sets the output format (csv or json)")
+             .help("sets the output format (csv, json, rpsl, none)")
              .takes_value(true)
         )
         .arg(Arg::with_name("strict")
@@ -90,6 +90,7 @@ fn main() -> Result<(), ProcessingError> {
         "csv" => output_csv(roas, &mut output),
         "json" => output_json(roas, &mut output),
         "rpsl" => output_rpsl(roas, &mut output),
+        "none" => Ok(()),
         other => {
             error!("unknown output format {}", other);
             Err(ProcessingError::Other)

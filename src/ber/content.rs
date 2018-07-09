@@ -565,7 +565,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
                 else if constructed {
                     xerr!(Err(Error::Malformed.into()))
                 }
-                else if !Length::take_from(self.source)?.is_zero() {
+                else if !Length::take_from(self.source, self.mode)?.is_zero() {
                     xerr!(Err(Error::Malformed.into()))
                 }
                 else {
@@ -624,7 +624,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         else {
             Tag::take_from(self.source)?
         };
-        let length = Length::take_from(self.source)?;
+        let length = Length::take_from(self.source, self.mode)?;
 
         if tag == Tag::END_OF_VALUE {
             if let State::Indefinite = self.state {
@@ -1175,22 +1175,37 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u64())
     }
 
-    pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    /// Processes a mandatory SEQUENCE value.
+    ///
+    /// This is a shortcut for `self.take_constructed(Tag::SEQUENCE, op)`.
+    pub fn take_sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.take_constructed_if(Tag::SEQUENCE, op)
     }
 
-    pub fn opt_sequence<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    /// Processes an optional SEQUENCE value.
+    ///
+    /// This is a shortcut for `self.take_opt_constructed(Tag::SEQUENCE, op)`.
+    pub fn take_opt_sequence<F, T>(
+        &mut self,
+        op: F
+    ) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.take_opt_constructed_if(Tag::SEQUENCE, op)
     }
 
-    pub fn set<F, T>(&mut self, op: F) -> Result<T, S::Err>
+    /// Processes a mandatory SET value.
+    ///
+    /// This is a shortcut for `self.take_constructed(Tag::SET, op)`.
+    pub fn take_set<F, T>(&mut self, op: F) -> Result<T, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.take_constructed_if(Tag::SET, op)
     }
 
-    pub fn opt_set<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
+    /// Processes an optional SET value.
+    ///
+    /// This is a shortcut for `self.take_opt_constructed(Tag::SET, op)`.
+    pub fn take_opt_set<F, T>(&mut self, op: F) -> Result<Option<T>, S::Err>
     where F: FnOnce(&mut Constructed<S>) -> Result<T, S::Err> {
         self.take_opt_constructed_if(Tag::SET, op)
     }
@@ -1199,6 +1214,16 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
 
 //------------ Mode ----------------------------------------------------------
 
+/// The Decoding Mode.
+///
+/// X.680 defines not one but three sets of related encoding rules. All three
+/// follow the same basic ideas but implement them in slightly different
+/// ways.
+///
+/// This type represents these rules. The `decode` method provides a way to
+/// decode a source using the specific decoding mode. You can also change
+/// the decoding mode later on through the `set_mode` methods of `Primitive`
+/// and `Constructed`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
     /// Basic Encoding Rules.
@@ -1221,13 +1246,13 @@ pub enum Mode {
     Der,
 }
 
-impl Default for Mode {
-    fn default() -> Self {
-        Mode::Ber
-    }
-}
-
 impl Mode {
+    /// Decode a source using a specific mode.
+    ///
+    /// The method will attempt to decode `source` using the rules represented
+    /// by this value. The closure `op` will be given the content of the
+    /// source as a sequence of values. The closure does not need to process
+    /// all values in the source.
     pub fn decode<S, F, T>(self, source: S, op: F) -> Result<T, S::Err>
     where
         S: Source,
@@ -1239,11 +1264,26 @@ impl Mode {
         cons.exhausted()?;
         Ok(res)
     }
+
+    /// Returns whether mode is `Mode::Ber`.
+    pub fn is_ber(self) -> bool {
+        match self {
+            Mode::Ber => true,
+            _ => false,
+        }
+    }
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Ber
+    }
 }
 
 
 //------------ State ---------------------------------------------------------
 
+/// The processing state of a constructed value.
 #[derive(Clone, Copy, Debug)]
 enum State {
     /// We are reading until the end of the reader.

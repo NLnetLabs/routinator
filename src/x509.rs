@@ -30,7 +30,7 @@ impl Name {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| cons.capture_all()).map(Name)
+        cons.take_sequence(|cons| cons.capture_all()).map(Name)
     }
 }
 
@@ -46,7 +46,7 @@ impl SignatureAlgorithm {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(
@@ -72,7 +72,7 @@ impl SignedData {
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(Self::take_content_from)
+        cons.take_sequence(Self::take_content_from)
     }
 
     pub fn take_content_from<S: Source>(

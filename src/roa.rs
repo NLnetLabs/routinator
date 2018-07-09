@@ -83,7 +83,7 @@ impl RouteOriginAttestation {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.take_opt_primitive_if(Tag::CTX_0, |prim| {
                 if prim.take_u8()? != 0 {
                     xerr!(Err(Error::Malformed.into()))
@@ -95,8 +95,8 @@ impl RouteOriginAttestation {
             let as_id = AsId::take_from(cons)?;
             let mut v4 = None;
             let mut v6 = None;
-            cons.sequence(|cons| {
-                while let Some(()) = cons.opt_sequence(|cons| {
+            cons.take_sequence(|cons| {
+                while let Some(()) = cons.take_opt_sequence(|cons| {
                     match AddressFamily::take_from(cons)? {
                         AddressFamily::Ipv4 => {
                             if v4.is_some() {
@@ -166,7 +166,7 @@ impl RoaIpAddresses {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
-        cons.sequence(|cons| {
+        cons.take_sequence(|cons| {
             cons.capture(|cons| {
                 while let Some(()) = RoaIpAddress::skip_opt_in(cons)? { }
                 Ok(())
@@ -230,7 +230,7 @@ impl RoaIpAddress {
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
-        cons.opt_sequence(|cons| {
+        cons.take_opt_sequence(|cons| {
             let bs = BitString::take_from(cons)?;
             let max = cons.take_opt_u8()?;
             if bs.octet_len() > 16 {
@@ -254,7 +254,7 @@ impl RoaIpAddress {
     fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
-        cons.opt_sequence(|cons| {
+        cons.take_opt_sequence(|cons| {
             let bs = BitString::take_from(cons)?;
             let _ = cons.take_opt_u8()?;
             if bs.octet_len() > 16 {
