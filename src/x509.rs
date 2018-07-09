@@ -35,42 +35,6 @@ impl Name {
 }
 
 
-//------------ SerialNumber --------------------------------------------------
-
-/// A certificate’s serial number.
-///
-/// RFC 5280 demands implementations to support serial number of up to twenty
-/// octets. Because of that we keep the serial internally as a bytes value
-/// and go from there.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SerialNumber(Bytes);
-
-impl SerialNumber {
-    /// Parses the serial number.
-    ///
-    /// ```text
-    /// CertificateSerialNumber  ::=  INTEGER
-    /// ```
-    pub fn take_from<S: Source>(
-        cons: &mut Constructed<S>
-    ) -> Result<Self, S::Err> {
-        cons.take_primitive_if(Tag::INTEGER, |prim| {
-            match prim.slice_all()?.first() {
-                Some(&x) => {
-                    if x & 0x80 != 0 {
-                        xerr!(return Err(Error::Malformed.into()))
-                    }
-                }
-                None => {
-                    xerr!(return Err(Error::Malformed.into()))
-                }
-            }
-            Ok(SerialNumber(prim.take_all()?))
-        })
-    }
-}
-
-
 //------------ SignatureAlgorithm --------------------------------------------
 
 #[derive(Clone, Debug)]

@@ -2,7 +2,9 @@
 
 use bytes::Bytes;
 use super::rsync;
-use super::ber::{BitString, Constructed, Error, Mode, OctetString, Source, Tag};
+use super::ber::{
+    BitString, Constructed, Error, Mode, OctetString, Source, Tag, Unsigned
+};
 use super::cert::{ResourceCert};
 use super::sigobj::{self, SignedObject};
 use super::x509::{Time, ValidationError};
@@ -42,7 +44,7 @@ impl Manifest {
 
 #[derive(Clone, Debug)]
 pub struct ManifestContent {
-    manifest_number: Bytes,
+    manifest_number: Unsigned,
     this_update: Time,
     next_update: Time,
     file_list: Bytes,
@@ -61,7 +63,7 @@ impl ManifestContent {
                     Ok(())
                 }
             })?;
-            let manifest_number = cons.take_unsigned()?;
+            let manifest_number = Unsigned::take_from(cons)?;
             let this_update = Time::take_from(cons)?;
             let next_update = Time::take_from(cons)?;
             if this_update > next_update {

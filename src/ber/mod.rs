@@ -59,6 +59,7 @@
 pub use self::bstring::BitString;
 pub use self::content::{Content, Constructed, Mode, Primitive};
 pub use self::error::Error;
+pub use self::int::{Integer, Unsigned};
 pub use self::oid::Oid;
 pub use self::ostring::{
     OctetString, OctetStringSource, OctetStringIter, OctetStringOctets
@@ -69,6 +70,7 @@ pub use self::tag::Tag;
 mod bstring;
 mod content;
 mod error;
+mod int;
 mod length;
 mod oid;
 mod ostring;

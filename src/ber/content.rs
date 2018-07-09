@@ -125,7 +125,6 @@ impl<'a, S: Source + 'a> Content<'a, S> {
         }
     }
 
-
     /// Converts content into a `u16`.
     ///
     /// If the content is not primitive or does not contain a single BER
@@ -1136,7 +1135,7 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u16())
     }
 
-    /// Processes an optional INTEGER value of the `u8` range.
+    /// Processes an optional INTEGER value of the `u16` range.
     ///
     /// If the integer value is less than 0 or greater than 65535, a malformed
     /// error is returned.
@@ -1144,16 +1143,36 @@ impl<'a, S: Source + 'a> Constructed<'a, S> {
         self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u16())
     }
 
+    /// Processes a mandatory INTEGER value of the `u32` range.
+    ///
+    /// If the integer value is less than 0 or greater than 2^32-1, a
+    /// malformed error is returned.
     pub fn take_u32(&mut self) -> Result<u32, S::Err> {
         self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u32())
     }
 
+    /// Processes a optional INTEGER value of the `u32` range.
+    ///
+    /// If the integer value is less than 0 or greater than 2^32-1, a
+    /// malformed error is returned.
+    pub fn take_opt_u32(&mut self) -> Result<Option<u32>, S::Err> {
+        self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u32())
+    }
+
+    /// Processes a mandatory INTEGER value of the `u64` range.
+    ///
+    /// If the integer value is less than 0 or greater than 2^64-1, a
+    /// malformed error is returned.
     pub fn take_u64(&mut self) -> Result<u64, S::Err> {
         self.take_primitive_if(Tag::INTEGER, |prim| prim.to_u64())
     }
 
-    pub fn take_unsigned(&mut self) -> Result<Bytes, S::Err> {
-        self.take_primitive_if(Tag::INTEGER, |prim| prim.to_unsigned())
+    /// Processes a optional INTEGER value of the `u64` range.
+    ///
+    /// If the integer value is less than 0 or greater than 2^64-1, a
+    /// malformed error is returned.
+    pub fn take_opt_u64(&mut self) -> Result<Option<u64>, S::Err> {
+        self.take_opt_primitive_if(Tag::INTEGER, |prim| prim.to_u64())
     }
 
     pub fn sequence<F, T>(&mut self, op: F) -> Result<T, S::Err>

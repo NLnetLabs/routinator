@@ -2,12 +2,11 @@
 use bytes::Bytes;
 use super::rsync;
 use super::ber::{
-    Constructed, Error, Mode, OctetString, Oid, Source, Tag
+    Constructed, Error, Mode, OctetString, Oid, Source, Tag, Unsigned
 };
 use super::cert::Cert;
 use super::x509::{
-    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time,
-    ValidationError,
+    update_once, Name, SignatureAlgorithm, SignedData, Time, ValidationError
 };
 
 
@@ -67,7 +66,7 @@ impl Crl {
         self.signed_data.verify_signature(issuer.as_ref().public_key())
     }
 
-    pub fn contains(&self, serial: &SerialNumber) -> bool {
+    pub fn contains(&self, serial: &Unsigned) -> bool {
         self.revoked_certs.contains(serial)
     }
 }
@@ -94,7 +93,7 @@ impl RevokedCertificates {
         }))
     }
 
-    pub fn contains(&self, serial: &SerialNumber) -> bool {
+    pub fn contains(&self, serial: &Unsigned) -> bool {
         Mode::Der.decode(self.0.as_ref(), |cons| {
             while let Some(entry) = CrlEntry::take_opt_from(cons).unwrap() {
                 if entry.user_certificate == *serial {
@@ -111,7 +110,7 @@ impl RevokedCertificates {
 
 #[derive(Clone, Debug)]
 pub struct CrlEntry {
-    user_certificate: SerialNumber,
+    user_certificate: Unsigned,
     revocation_date: Time,
 }
 
@@ -132,7 +131,7 @@ impl CrlEntry {
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         Ok(CrlEntry {
-            user_certificate: SerialNumber::take_from(cons)?,
+            user_certificate: Unsigned::take_from(cons)?,
             revocation_date: Time::take_from(cons)?,
             // crlEntryExtensions are forbidden by RFC 6487.
         })
@@ -148,7 +147,7 @@ pub struct Extensions {
     authority_key_id: OctetString,
 
     /// CRL Number
-    crl_number: SerialNumber,
+    crl_number: Unsigned,
 }
 
 impl Extensions {
@@ -235,10 +234,10 @@ impl Extensions {
     /// ```
     fn take_crl_number<S: Source>(
         cons: &mut Constructed<S>,
-        crl_number: &mut Option<SerialNumber>
+        crl_number: &mut Option<Unsigned>
     ) -> Result<(), S::Err> {
         update_once(crl_number, || {
-            SerialNumber::take_from(cons)
+            Unsigned::take_from(cons)
         })
     }
 }

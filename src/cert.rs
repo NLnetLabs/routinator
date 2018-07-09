@@ -4,12 +4,12 @@ use ring::digest::{self, Digest};
 use super::rsync;
 use super::asres::{AsBlocks, AsResources};
 use super::ber::{
-    BitString, Constructed, Error, Mode, OctetString, Oid, Source, Tag
+    BitString, Constructed, Error, Mode, OctetString, Oid, Source, Tag,
+    Unsigned
 };
 use super::ipres::{IpAddressBlocks, IpResources};
 use super::x509::{
-    update_once, Name, SerialNumber, SignatureAlgorithm, SignedData, Time,
-    ValidationError
+    update_once, Name, SignatureAlgorithm, SignedData, Time, ValidationError
 };
 
 
@@ -19,7 +19,7 @@ use super::x509::{
 pub struct Cert {
     signed_data: SignedData,
 
-    serial_number: SerialNumber,
+    serial_number: Unsigned,
     signature: SignatureAlgorithm,
     issuer: Name,
     validity: Validity,
@@ -56,7 +56,7 @@ impl Cert {
 
                 Ok(Cert {
                     signed_data,
-                    serial_number: SerialNumber::take_from(cons)?,
+                    serial_number: Unsigned::take_from(cons)?,
                     signature: SignatureAlgorithm::take_from(cons)?,
                     issuer: Name::take_from(cons)?,
                     validity: Validity::take_from(cons)?,
@@ -97,7 +97,7 @@ impl Cert {
         self.extensions.crl_distribution.as_ref()
     }
 
-    pub fn serial_number(&self) -> &SerialNumber {
+    pub fn serial_number(&self) -> &Unsigned {
         &self.serial_number
     }
 }
