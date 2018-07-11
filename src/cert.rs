@@ -236,7 +236,7 @@ impl Cert {
         
         // 4.8.2. Subject Key Identifer. Must be the SHA-1 hash of the octets
         // of the subjectPublicKey.
-        if self.extensions.subject_key_id.octet_slice().unwrap()
+        if self.extensions.subject_key_id.as_slice().unwrap()
                 != self.subject_public_key_info().key_identifier().as_ref()
         {
             return Err(ValidationError)

@@ -1,3 +1,7 @@
+//! The source for decoding data.
+//!
+//! This is an internal module. It’s public types are re-exported by the
+//! parent.
 
 use std::mem;
 use std::cmp::min;
@@ -59,8 +63,13 @@ pub trait Source {
     /// successful call to `request`.
     fn bytes(&self, start: usize, end: usize) -> Bytes;
 
+
     //--- Advanced access
 
+    /// Takes a single octet from the source.
+    ///
+    /// If there aren’t any more octets available from the source, returns
+    /// a malformed error.
     fn take_u8(&mut self) -> Result<u8, Self::Err> {
         if self.request(1)? < 1 {
             xerr!(return Err(Error::Malformed.into()))
@@ -70,6 +79,10 @@ pub trait Source {
         Ok(res)
     }
 
+    /// Takes a optional octet from the source.
+    ///
+    /// If there aren’t any more octets available from the source, returns
+    /// `Ok(None)`.
     fn take_opt_u8(&mut self) -> Result<Option<u8>, Self::Err> {
         if self.request(1)? < 1 {
             return Ok(None)
@@ -155,13 +168,33 @@ impl<'a, T: Source> Source for &'a mut T {
 
 //------------ LimitedSource -------------------------------------------------
 
+/// A source that can be limited to a certain number of octets.
+///
+/// This type wraps another source and allows access to be limited to a
+/// certain number of octets. It will never provide access to more than
+/// that number of octets. Any attempt to advance over more octets will
+/// fail with a malformed error.
+///
+/// The limit can be changed or even removed at any time.
 #[derive(Debug)]
 pub struct LimitedSource<S> {
+    /// The source this value wraps.
     source: S,
+
+    /// The current limit.
+    ///
+    /// If `limit` is `None`, there is no limit. If there is a limit, it
+    /// will be decreased by calls to `advance` accordingly. I.e., this is
+    /// the current limit, not the original limit.
     limit: Option<usize>,
 }
 
+/// # General Management
+///
 impl<S> LimitedSource<S> {
+    /// Creates a new limited source for the given source.
+    ///
+    /// The return limited source will have no limit just yet.
     pub fn new(source: S) -> Self {
         LimitedSource {
             source,
@@ -169,14 +202,28 @@ impl<S> LimitedSource<S> {
         }
     }
 
+    /// Unwraps the value and returns the source it was created from.
     pub fn unwrap(self) -> S {
         self.source
     }
 
+    /// Returns the current limit.
+    ///
+    /// Returns `None` if there is no limit. Otherwise, the number returned
+    /// is the number of remaining octets before the limit is reached. This
+    /// does not necessarily mean that that many octets are actually
+    /// available in the underlying source.
     pub fn limit(&self) -> Option<usize> {
         self.limit
     }
 
+    /// Sets a more strict limit.
+    ///
+    /// The method will panic (!) if you are trying to set a new limit that
+    /// is larger than the current limit or if you are trying to remove
+    /// the limit by passing `None` if there currently is a limit set.
+    ///
+    /// Returns the old limit.
     pub fn limit_further(&mut self, limit: Option<usize>) -> Option<usize> {
         if let Some(cur) = self.limit {
             match limit {
@@ -187,17 +234,33 @@ impl<S> LimitedSource<S> {
         mem::replace(&mut self.limit, limit)
     }
 
+    /// Unconditionally sets a new limit.
+    ///
+    /// If you pass `None`, the limit will be removed.
     pub fn set_limit(&mut self, limit: Option<usize>) {
         self.limit = limit
     }
 }
 
+/// # Advanced Access
+///
 impl<S: Source> LimitedSource<S> {
+    /// Skip over all remaining octets until the current limit is reached.
+    ///
+    /// If there currently is no limit, the method will panic. Otherwise it
+    /// will simply advance to the end of the limit which may be something
+    /// the underlying source doesn’t like and thus produce an error.
     pub fn skip_all(&mut self) -> Result<(), S::Err> {
         let limit = self.limit.unwrap();
         self.advance(limit)
     }
 
+    /// Returns a bytes value containing all octets until the current limit.
+    ///
+    /// If there currently is no limit, the method will panic. Otherwise it
+    /// tries to acquire a bytes value for the octets from the current
+    /// position to the end of the limit and advance to the end of the limit.
+    /// This may result in an error by the underlying source.
     pub fn take_all(&mut self) -> Result<Bytes, S::Err> {
         let limit = self.limit.unwrap();
         if self.request(limit)? < limit {
@@ -208,6 +271,15 @@ impl<S: Source> LimitedSource<S> {
         Ok(res)
     }
 
+    /// Checks whether the end of the limit has been reached.
+    ///
+    /// If a limit is currently set, the method will return an malformed
+    /// error if it is larger than zero, i.e., if there are octets left to
+    /// advance over before reaching the limit.
+    ///
+    /// If there is no limit set, the method will try to access one single
+    /// octet and return a malformed error if that is actually possible, i.e.,
+    /// if there are octets left in the underlying source.
     pub fn exhausted(&mut self) -> Result<(), S::Err> {
         match self.limit {
             Some(0) => Ok(()),
@@ -270,12 +342,21 @@ impl<S: Source> Source for LimitedSource<S> {
 
 //------------ CaptureSource -------------------------------------------------
 
+/// A source that captures what has been advanced over.
+///
+/// A capture source wraps a mutable reference to some other source and
+/// provides the usual source access. However, instead of dropping octets
+/// that have been advanced over, it keeps them around and allows taking
+/// them out as a bytes value.
+///
+/// This type is used by `Constructed::capture`.
 pub struct CaptureSource<'a, S: 'a> {
     source: &'a mut S,
     pos: usize,
 }
 
 impl<'a, S: Source> CaptureSource<'a, S> {
+    /// Creates a new capture source using a reference to some other source.
     pub fn new(source: &'a mut S) -> Self {
         CaptureSource {
             source,
@@ -283,12 +364,14 @@ impl<'a, S: Source> CaptureSource<'a, S> {
         }
     }
 
+    /// Converts the capture source into the captured bytes.
     pub fn into_bytes(self) -> Bytes {
         let res = self.source.bytes(0, self.pos);
         self.skip();
         res
     }
 
+    /// Drops the captured bytes.
     pub fn skip(self) {
         if let Err(_) = self.source.advance(self.pos) {
             panic!("failed to advance capture source");
