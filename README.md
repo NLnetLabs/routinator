@@ -20,6 +20,8 @@ code assumes that you have the latest stable version. If in doubt, run
 rustup update
 ```
 
+## Building and Running
+
 In the directory you cloned this repository to, say
 
 ```bash
@@ -34,6 +36,21 @@ cargo run
 ```
 
 to run the binary that has been built. At this point, it will rsync all
-repository instances into `./test/repository` and validate them. You will
-need the `rsync` executable in your path.
+repository instances into `./rpki-cache/repository` and validate them. You
+will need the `rsync` executable in your path.
 
+To get a better performance, build and run in release mode like so:
+
+```bash
+cargo run --release
+```
+
+It will then take forever to build but is quick to run.
+
+There is a number of command line options available. You can have cargo pass
+them to the executable after a double hyphen. For instance, if to find out
+about them, run
+
+```bash
+cargo run --relase -- -h
+```
