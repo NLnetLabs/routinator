@@ -11,10 +11,12 @@ chrono     = "^0.4"
 clap       = "2.0"
 env_logger = "^0.5"
 failure    = "^0.1"
-log        = "^0.4"
+futures         = "^0.1"
+futures-cpupool = "^0.1"
+log             = "^0.4"
+num_cpus        = "1.0"
 ring       = "^0.12" 
 untrusted  = "^0.5"
-url        = "1.0"
 
 [features]
 # Panic when a parsing error occurs. This feature is intended for

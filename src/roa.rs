@@ -314,6 +314,7 @@ impl FriendlyRoaIpAddress {
 
 //------------ RouteOrigins --------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct RouteOrigins {
     origins: Vec<RouteOriginAttestation>
 }
@@ -325,6 +326,10 @@ impl RouteOrigins {
 
     pub fn push(&mut self, attestation: RouteOriginAttestation) {
         self.origins.push(attestation)
+    }
+
+    pub fn merge(&mut self, mut other: RouteOrigins) {
+        self.origins.append(&mut other.origins)
     }
 
     pub fn len(&self) -> usize {

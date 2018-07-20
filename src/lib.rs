@@ -2,10 +2,12 @@ extern crate base64;
 extern crate bytes;
 extern crate chrono;
 #[macro_use] extern crate failure;
+extern crate futures;
+extern crate futures_cpupool;
 #[macro_use] extern crate log;
+extern crate num_cpus;
 extern crate ring;
 extern crate untrusted;
-extern crate url;
 
 
 #[macro_use] mod debug;

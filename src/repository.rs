@@ -1,60 +1,44 @@
-//! The complete RPKI repository.
-//!
-//! # Structure of the Local Copy
-//!
-//! Such a repository consists of a number of _repository instances_
-//! identifier via a unique rsync base URI. All the publication points within
-//! that instance have URIs startin with that base URI.
-//!
-//! As an initial approach to storing a local copy of the repository, we
-//! keep a directory structure under a configured base directory. This
-//! directory contains another directory names `"repository"`. It will
-//! contain a set of directories whose name is the hostname portion of
-//! an rsync URI and who mirror the structure of encountered URIs.
-//!
-//! When updating a repository, we will walk this tree searching for the
-//! set of directories that contain more than one entry and whose parents
-//! are not part of the set. We construct the rsync URIs from their path
-//! and run the `rsync` command to update them.
-//!
-//! The configured base directory also contains a directory named `"tal"`
-//! that contains trust anchor locator files in RFC 7730 format.
-//!
-//!
-//! # Validation
-//!
-//! The files read during validation are referenced through rsync URIs which
-//! will be translated into file system paths in the local copy of the
-//! repository. If the indicated file is present it will be used and
-//! validated. If it isn’t, the directory the file should be in will be
-//! created and validation continue. Once it concludes, if there was at least
-//! one missing file, the local copy is updated to fetch the missing files.
-//! If this update resulted in any changes to the local copy at all,
-//! validatio is repeated. Otherwise, it ends with an error.
-
 use std::{fs, io};
-use std::fs::File;
+use std::fs::{DirEntry, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex};
 use bytes::Bytes;
+use futures::future;
+use futures::Future;
+use futures_cpupool::CpuPool;
 use super::rsync;
 use super::cert::{Cert, ResourceCert};
 use super::crl::{Crl, CrlStore};
 use super::manifest::{Manifest, ManifestContent, ManifestHash};
 use super::roa::{Roa, RouteOrigins};
-use super::tal::{self, Tal};
+use super::tal::Tal;
 use super::x509::ValidationError;
 
 
 //------------ Repository ----------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Repository {
-    base: PathBuf,
+pub struct Repository(Arc<RepoInner>);
+
+#[derive(Debug)]
+struct RepoInner {
+    /// The directory our local copy lives in.
+    base: PathBuf, 
+
+    /// Should we be strict when decoding data?
     strict: bool,
-    rsync: bool,
+
+    /// Number of threads.
+    threads: usize,
+
+    /// Shared state for running rsync.
+    ///
+    /// If this is `None`, we don’t rsync.
+    rsync: Option<Mutex<RsyncState>>,
 }
 
+#[allow(unused_variables)]
 impl Repository {
     pub fn new<P: AsRef<Path>>(
         base: P,
@@ -63,118 +47,188 @@ impl Repository {
     ) -> Result<Self, ProcessingError> {
         let base = base.as_ref().into();
         if let Err(err) = fs::read_dir(&base) {
-            error!("failed to open cache: {}", err);
-            Err(ProcessingError::Io(err))
+            return Err(ProcessingError::BadRepository(err))
         }
-        else {
-            Ok(Repository { base, strict, rsync })
-        }
-    }
-
-    pub fn base(&self) -> &Path {
-        self.base.as_ref()
-    }
-}
-
-
-/// # Updating the Repository Copy
-///
-impl Repository {
-    pub fn update(&self) -> Result<(), ProcessingError> {
-        for entry in fs::read_dir(self.base.join("repository"))? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                self.update_host(entry)?
-            }
-        }
-        Ok(())
-    }
-
-    fn update_host(
-        &self,
-        entry: fs::DirEntry
-    ) -> Result<(), ProcessingError> {
-        if !self.rsync {
-            return Ok(())
-        }
-        let uri = format!(
-            "rsync://{}",
-            entry.file_name().to_str().ok_or(ProcessingError::Other)?
-        );
-        for entry in fs::read_dir(entry.path())? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                self.update_dir(
-                    format!(
-                        "{}/{}",
-                        uri,
-                        entry.file_name()
-                            .to_str().ok_or(ProcessingError::Other)?
-                    ),
-                    entry.path()
-                )?;
-            }
-        }
-        Ok(())
-    }
-
-    fn update_dir(
-        &self,
-        uri: String,
-        path: PathBuf
-    ) -> Result<(), ProcessingError> {
-        let mut first = None;
-        for entry in fs::read_dir(&path)? {
-            let entry = entry?;
-            if first.is_none() {
-                first = Some(entry)
+        Ok(Repository(Arc::new(RepoInner {
+            base,
+            strict,
+            threads: ::num_cpus::get(),
+            rsync: if rsync {
+                Some(Mutex::new(RsyncState::new()))
             }
             else {
-                let uri = format!("{}/", uri);
-                let path = format!("{}/", path.display());
-                let path = Path::new(AsRef::<Path>::as_ref(&path));
-                rsync::update(
-                    &rsync::Uri::parse(uri.as_ref())
-                        .map_err(|_| ProcessingError::Other)?,
-                    path
-                )?;
-                return Ok(())
+                None
+            }
+        })))
+    }
+
+    pub fn update(&self) -> Result<(), ProcessingError> {
+        let dir = self.0.base.join("repository");
+        let pool = CpuPool::new(self.0.threads);
+        future::join_all(fs::read_dir(dir)?.map(|entry| {
+            let repo = self.clone();
+            pool.spawn(future::lazy(|| repo.update_host(entry)))
+        })).wait().map(|_| ())
+    }
+
+
+    pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
+        let dir = self.0.base.join("tal");
+        let pool = CpuPool::new(self.0.threads);
+        future::join_all(fs::read_dir(dir)?.map(|entry| {
+            let repo = self.clone();
+            pool.spawn(future::lazy(|| repo.process_tal(entry)))
+        })).and_then(|x| {
+            let mut res = RouteOrigins::new();
+            x.into_iter().for_each(|item| res.merge(item));
+            Ok(res)
+        }).wait()
+    }
+}
+
+
+/// # Repository Access
+///
+impl Repository {
+    fn load_ta(
+        &self,
+        uri: &rsync::Uri
+    ) -> Result<Option<Cert>, ProcessingError> {
+        Ok(
+            self.load_file(uri, true)?
+            .and_then(|bytes| Cert::decode(bytes).ok())
+        )
+    }
+
+    fn load_file(
+        &self,
+        uri: &rsync::Uri,
+        create: bool
+    ) -> Result<Option<Bytes>, ProcessingError> {
+        match File::open(self.uri_to_path(uri)) {
+            Ok(mut file) => {
+                let mut data = Vec::new();
+                file.read_to_end(&mut data)?;
+                Ok(Some(data.into()))
+            }
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+                if create {
+                    self.rsync_module(uri.module());
+                    self.load_file(uri, false)
+                }
+                else {
+                    debug!("{}: not found; ignoring", uri);
+                    Ok(None)
+                }
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    fn module_to_path(&self, module: &rsync::Module) -> PathBuf {
+        let mut res = self.0.base.clone();
+        res.push("repository");
+        res.push(module.authority());
+        res.push(module.module());
+        res
+    }
+
+    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
+        let mut res = self.module_to_path(uri.module());
+        res.push(uri.path());
+        res
+    }
+}
+
+
+/// # Updating
+///
+impl Repository {
+    fn update_host(
+        self,
+        entry: Result<DirEntry, io::Error>
+    ) -> Result<(), ProcessingError> {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            return Ok(())
+        }
+        match entry_to_uri_component(&entry) {
+            Some(host) => self.update_module(host, entry.path()),
+            None => {
+                warn!(
+                    "{}: illegal host directory. Skipping.",
+                    entry.path().display()
+                );
+                Ok(())
             }
         }
-        if let Some(entry) = first {
-            if entry.file_type()?.is_dir() {
-                self.update_dir(
-                    format!(
-                        "{}/{}",
-                        uri,
-                        entry.file_name()
-                            .to_str().ok_or(ProcessingError::Other)?
-                    ),
-                    entry.path()
-                )?;
+    }
+
+    fn update_module(
+        &self,
+        host: Bytes,
+        path: PathBuf
+    ) -> Result<(), ProcessingError> {
+        for entry in fs::read_dir(&path)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                warn!("{}: unexpected file. Skipping", entry.path().display());
+                continue
+            }
+            match entry_to_uri_component(&entry) {
+                Some(module) => {
+                    self.rsync_module(
+                        &rsync::Module::new(host.clone(), module)
+                    )
+                }
+                None => {
+                    warn!(
+                        "{}: illegal module directory. Skipping",
+                        entry.path().display()
+                    )
+                }
             }
         }
         Ok(())
     }
 }
 
-/// # Processing the Repository Content
+
+/// # Processing
 ///
 impl Repository {
-    pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
+    pub fn process_tal(
+        self,
+        entry: Result<DirEntry, io::Error>
+    ) -> Result<RouteOrigins, ProcessingError> {
+        let entry = entry?;
+        let path = entry.path();
         let mut res = RouteOrigins::new();
-        for tal in Tal::read_dir(self.base.join("tal"))? {
-            let tal = match tal {
-                Ok(tal) => tal,
-                Err(err) => {
-                    debug!("failed to read TAL: {}", err);
-                    continue
-                }
-            };
-            for uri in tal.uris() {
-                let cert = match self.load_ta(&uri)? {
-                    Some(cert) => cert,
-                    None => continue,
+        if !entry.file_type()?.is_file() {
+            warn!("{}: garbage in TAL directory.", path.display());
+            return Ok(res)
+        }
+        let mut file = match File::open(&path) {
+            Ok(file) => {
+                debug!("Processing TAL {}", path.display());
+                file
+            }
+            Err(err) => {
+                error!("{}: {}. Aborting.", path.display(), err);
+                return Err(err.into())
+            }
+        };
+        let tal = match Tal::read(&mut file) {
+            Ok(tal) => tal,
+            Err(err) => {
+                error!("{}: {}. Aborting.", path.display(), err);
+                return Err(ProcessingError::Other)
+            }
+        };
+        for uri in tal.uris() {
+                let cert = match self.load_ta(&uri) {
+                    Ok(Some(cert)) => cert,
+                    _ => continue,
                 };
                 if cert.subject_public_key_info() != tal.key_info() {
                     continue;
@@ -186,10 +240,9 @@ impl Repository {
                     }
                 };
                 debug!("processing {}", uri);
-                self.process_ca(cert, &mut res)?;
+                let _ = self.process_ca(cert, &mut res);
                 // We stop once we have had the first working URI.
                 break;
-            }
         }
         Ok(res)
     }
@@ -266,7 +319,7 @@ impl Repository {
             if let Err(_) = hash.verify(&bytes) {
                 return Ok(())
             }
-            let roa = match Roa::decode(bytes, self.strict) {
+            let roa = match Roa::decode(bytes, self.0.strict) {
                 Ok(roa) => roa,
                 Err(_) => {
                     info!("Decoding failed for {}", uri);
@@ -302,7 +355,7 @@ impl Repository {
                     continue
                 }
             };
-            let manifest = match Manifest::decode(bytes, self.strict) {
+            let manifest = match Manifest::decode(bytes, self.0.strict) {
                 Ok(manifest) => manifest,
                 Err(_) => {
                     info!("{}: failed to decode", uri);
@@ -378,88 +431,125 @@ impl Repository {
     }
 }
 
-impl Repository {
-    fn load_ta(
-        &self,
-        uri: &rsync::Uri
-    ) -> Result<Option<Cert>, ProcessingError> {
-        Ok(
-            self.load_file(uri, true)?
-            .and_then(|bytes| Cert::decode(bytes).ok())
-        )
-    }
 
-    fn load_file(
-        &self,
-        uri: &rsync::Uri,
-        create: bool
-    ) -> Result<Option<Bytes>, ProcessingError> {
-        match File::open(self.uri_to_path(uri)) {
-            Ok(mut file) => {
-                let mut data = Vec::new();
-                file.read_to_end(&mut data)?;
-                Ok(Some(data.into()))
+/// # Rsyncing
+///
+impl Repository {
+    fn rsync_module(&self, module: &rsync::Module) {
+        if let Some(ref rsync) = self.0.rsync {
+            if rsync.lock().unwrap().have_seen(module) {
+                return
             }
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                if create {
-                    if let Err(_) = self.populate_uri_dir(uri) {
-                        debug!("rsync failed. Skipping ...");
-                        Ok(None)
-                    }
-                    else {
-                        self.load_file(uri, false)
+            let path = self.module_to_path(module);
+
+            let cvar = rsync.lock().unwrap().get_running(module);
+            match cvar {
+                Ok(cvar) => {
+                    let mut finished = cvar.0.lock().unwrap();
+                    while !*finished {
+                        finished = cvar.1.wait(finished).unwrap();
                     }
                 }
-                else {
-                    debug!("{}: not found; ignoring", uri);
-                    Ok(None)
+                Err(cvar) => {
+                    let mut finished = cvar.0.lock().unwrap();
+                    let _ = rsync::update(module, path);
+                    {
+                        let mut rsync = rsync.lock().unwrap();
+                        rsync.remove_running(module);
+                        rsync.add_seen(module);
+                    }
+                    *finished = true;
+                    cvar.1.notify_all();
                 }
             }
-            Err(err) => Err(err.into()),
+        }
+    }
+}
+
+
+//------------ RsyncState ----------------------------------------------------
+
+#[derive(Clone, Debug)]
+struct RsyncState {
+    /// Rsync processes currently running.
+    ///
+    /// The first element of each list item is the module for which the
+    /// process runs, the second is a conditional variable that is going
+    /// to be triggered when the process finishes.
+    running: Vec<(rsync::Module, Arc<(Mutex<bool>, Condvar)>)>,
+
+    /// The rsync modules we already tried in this iteration.
+    seen: Vec<rsync::Module>,
+}
+
+impl RsyncState {
+    fn new() -> Self {
+        RsyncState {
+            running: Vec::new(),
+            seen: Vec::new(),
         }
     }
 
-    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
-        let mut res = self.base.clone();
-        res.push("repository");
-        if let Some(port) = uri.port() {
-            res.push(format!("{}:{}", uri.host(), port))
+    fn get_running(
+        &mut self,
+        module: &rsync::Module
+    ) -> Result<Arc<(Mutex<bool>, Condvar)>, Arc<(Mutex<bool>, Condvar)>> {
+        for item in &self.running {
+            if item.0.eq(module) {
+                return Ok(item.1.clone())
+            }
+        }
+        let res = Arc::new((Mutex::new(false), Condvar::new()));
+        self.running.push((module.clone(), res.clone()));
+        Err(res)
+    }
+
+    fn remove_running(&mut self, module: &rsync::Module) {
+        self.running.retain(|item| !item.0.eq(module))
+    }
+
+    fn add_seen(&mut self, module: &rsync::Module) {
+        self.seen.push(module.clone());
+    }
+
+    fn have_seen(&self, module: &rsync::Module) -> bool {
+        self.seen.contains(module)
+    }
+}
+
+
+//------------ Helper Functions ----------------------------------------------
+
+fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
+    let name = entry.file_name();
+    name.to_str().and_then(|name| {
+        if rsync::is_uri_ascii(name) {
+            Some(Bytes::from(name.as_bytes()))
         }
         else {
-            res.push(uri.host())
+            None
         }
-        res.push(uri.path());
-        res
-    }
-
-    fn populate_uri_dir(&self, uri: &rsync::Uri) -> Result<(), io::Error> {
-        if !self.rsync {
-            return Ok(())
-        }
-        let dir_uri = uri.parent();
-        rsync::update(&dir_uri, self.uri_to_path(&dir_uri))
-    }
+    })
 }
 
 
 //------------ ProcessingError -----------------------------------------------
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum ProcessingError {
+    #[fail(display="failed to open local repository: {}", _0)]
+    BadRepository(io::Error),
+
+    #[fail(display="IO error: {}", _0)]
     Io(io::Error),
-    Tal(tal::ReadError),
-    Other,
+
+    #[fail(display="fatal processing error")]
+    Other
 }
 
 impl From<io::Error> for ProcessingError {
-    fn from(err: io::Error) -> ProcessingError {
+    fn from(err: io::Error) -> Self {
         ProcessingError::Io(err)
-    }
-}
-
-impl From<tal::ReadError> for ProcessingError {
-    fn from(err: tal::ReadError) -> ProcessingError {
-        ProcessingError::Tal(err)
     }
 }
 

@@ -47,7 +47,7 @@ impl Tal {
             Ok(None)
         }
         else {
-            Ok(Some(rsync::Uri::parse(line)?))
+            Ok(Some(rsync::Uri::from_slice(line)?))
         }
     }
 }

@@ -402,7 +402,7 @@ impl ResourceCert {
         for uri in self.cert.extensions.subject_info_access
                        .iter().filter_oid(oid::AD_CA_REPOSITORY)
         {
-            if let Some(uri) = uri.into_rsync_uri() {
+            if let Some(mut uri) = uri.into_rsync_uri() {
                 return Some(uri)
             }
         }
@@ -1042,7 +1042,7 @@ impl UriGeneralName {
     }
 
     pub fn into_rsync_uri(self) -> Option<rsync::Uri> {
-        rsync::Uri::parse(self.0.as_ref()).ok()
+        rsync::Uri::from_bytes(self.0.clone()).ok()
     }
 }
 

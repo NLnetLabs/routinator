@@ -48,6 +48,11 @@ fn main() -> Result<(), ProcessingError> {
              .long("noupdate")
              .help("don't update local cache")
         )
+        .arg(Arg::with_name("noprocess")
+             .short("N")
+             .long("noprocess")
+             .help("don't process the repository")
+        )
         .arg(Arg::with_name("verbose")
              .short("v")
              .long("verbose")
@@ -72,7 +77,11 @@ fn main() -> Result<(), ProcessingError> {
         !matches.is_present("noupdate")
     )?;
     if let Err(_) = repo.update() {
-        println!("Update failed. Continuing anyway.");
+        warn!("Update failed. Continuing anyway.");
+    }
+
+    if matches.is_present("noprocess") {
+        ::std::process::exit(0);
     }
     let roas = match repo.process() {
         Ok(res) => res,

@@ -156,13 +156,10 @@ impl FileAndHash {
         base: &rsync::Uri
     ) -> Result<(rsync::Uri, ManifestHash), ValidationError> {
         let name = self.file.to_bytes();
-        let name = match ::std::str::from_utf8(name.as_ref()) {
-            Ok(name) => name,
-            Err(_) => return Err(ValidationError)
-        };
-        base.join(name)
-            .map_err(|_| ValidationError)
-            .map(|uri| (uri, self.hash))
+        if !name.is_ascii() {
+            return Err(ValidationError)
+        }
+        Ok((base.join(&name), self.hash))
     }
 }
 
