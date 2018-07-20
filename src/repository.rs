@@ -32,10 +32,10 @@ struct RepoInner {
     /// Number of threads.
     threads: usize,
 
-    /// Shared state for running rsync.
+    /// Information for running rsync.
     ///
     /// If this is `None`, we don’t rsync.
-    rsync: Option<Mutex<RsyncState>>,
+    rsync: Option<(Mutex<RsyncState>, rsync::Command)>,
 }
 
 #[allow(unused_variables)]
@@ -54,7 +54,10 @@ impl Repository {
             strict,
             threads: ::num_cpus::get(),
             rsync: if rsync {
-                Some(Mutex::new(RsyncState::new()))
+                Some((
+                    Mutex::new(RsyncState::new()),
+                    rsync::Command::detect()?
+                ))
             }
             else {
                 None
@@ -436,13 +439,13 @@ impl Repository {
 ///
 impl Repository {
     fn rsync_module(&self, module: &rsync::Module) {
-        if let Some(ref rsync) = self.0.rsync {
-            if rsync.lock().unwrap().have_seen(module) {
+        if let Some((ref state, ref command)) = self.0.rsync {
+            if state.lock().unwrap().have_seen(module) {
                 return
             }
             let path = self.module_to_path(module);
 
-            let cvar = rsync.lock().unwrap().get_running(module);
+            let cvar = state.lock().unwrap().get_running(module);
             match cvar {
                 Ok(cvar) => {
                     let mut finished = cvar.0.lock().unwrap();
@@ -452,11 +455,11 @@ impl Repository {
                 }
                 Err(cvar) => {
                     let mut finished = cvar.0.lock().unwrap();
-                    let _ = rsync::update(module, path);
+                    let _ = command.update(module, path);
                     {
-                        let mut rsync = rsync.lock().unwrap();
-                        rsync.remove_running(module);
-                        rsync.add_seen(module);
+                        let mut state = state.lock().unwrap();
+                        state.remove_running(module);
+                        state.add_seen(module);
                     }
                     *finished = true;
                     cvar.1.notify_all();
@@ -540,11 +543,20 @@ pub enum ProcessingError {
     #[fail(display="failed to open local repository: {}", _0)]
     BadRepository(io::Error),
 
+    #[fail(display="{}", _0)]
+    Rsync(rsync::DetectError),
+
     #[fail(display="IO error: {}", _0)]
     Io(io::Error),
 
     #[fail(display="fatal processing error")]
     Other
+}
+
+impl From<rsync::DetectError> for ProcessingError {
+    fn from(err: rsync::DetectError) -> Self {
+        ProcessingError::Rsync(err)
+    }
 }
 
 impl From<io::Error> for ProcessingError {

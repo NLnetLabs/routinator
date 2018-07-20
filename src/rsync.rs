@@ -1,78 +1,38 @@
 //! Rsync procession.
 
-use std::{fmt, io, str};
+use std::{fmt, io, process, str};
 use std::fs::create_dir_all;
 use std::path::Path;
-use std::process::Command;
-use std::sync::{Arc, Condvar, Mutex};
 use bytes::Bytes;
 
 
-//------------ update --------------------------------------------------------
-
-pub fn update<P: AsRef<Path>>(
-    source: &Module,
-    destination: P
-) -> Result<(), io::Error> {
-    debug!("rsyncing from {}.", source);
-    let destination = destination.as_ref();
-    create_dir_all(destination)?;
-    let mut destination = format!("{}", destination.display());
-    if !destination.ends_with("/") {
-        destination.push('/')
-    }
-    let status = Command::new("rsync")
-        .arg("-az")
-        .arg("--delete")
-        .arg("--contimeout=10")
-        .arg(source.to_string())
-        .arg(destination)
-        .status()?;
-    if !status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
-    }
-    Ok(())
-}
 
 
-//------------ Runner --------------------------------------------------------
+//------------ Command -------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Runner(Arc<Mutex<State>>);
-
-#[derive(Clone, Debug)]
-struct State {
-    running: Vec<(Uri, Arc<(Mutex<bool>, Condvar)>)>,
+pub struct Command {
+    has_contimeout: bool
 }
 
-impl Runner {
-    pub fn new() -> Self {
-        Runner(Arc::new(Mutex::new(
-            State {
-                running: Vec::new(),
-            }
-        )))
+impl Command {
+    pub fn detect() -> Result<Command, DetectError> {
+        let output = process::Command::new("rsync").arg("-h").output()?;
+        if !output.status.success() {
+            return Err(DetectError::Output(
+                String::from_utf8_lossy(&output.stderr).into()
+            ))
+        }
+        Ok(Command {
+            has_contimeout:
+                output.stdout.windows(12)
+                             .any(|window| window == b"--contimeout")
+        })
     }
-
-    /*
 
     pub fn update<P: AsRef<Path>>(
         &self,
-        source: &Uri,
-        destination: P
-    ) -> Result<(), io::Error> {
-        let cvar = self.wait(source);
-        let mut finished = cvar.0.lock().unwrap();
-        let res = self._update(source, destination);
-        self.remove_cvar(source);
-        *finished = true;
-        cvar.1.notify_all();
-        res
-    }
-
-    pub fn _update<P: AsRef<Path>>(
-        &self,
-        source: &Uri,
+        source: &Module,
         destination: P
     ) -> Result<(), io::Error> {
         debug!("rsyncing from {}.", source);
@@ -82,54 +42,19 @@ impl Runner {
         if !destination.ends_with("/") {
             destination.push('/')
         }
-        let status = Command::new("rsync")
-            .arg("-az")
-            .arg("--delete")
-            .arg("--contimeout=10")
-            .arg(source.to_string())
-            .arg(destination)
-            .status()?;
-        if !status.success() {
+        cmd.arg("-az")
+           .arg("--delete");
+        if self.has_contimeout {
+            cmd.arg("--contimeout=10");
+        }
+        cmd.arg(source.to_string())
+           .arg(destination);
+        debug!("Running {:?}", cmd);
+        if !cmd.status()?.success() {
             return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
         }
         Ok(())
     }
-
-    fn wait(&self, source: &Uri) -> Arc<(Mutex<bool>, Condvar)> {
-        loop {
-            match self.get_cvar(source) {
-                Ok(cvar) => return cvar,
-                Err(cvar) => {
-                    let mut finished = cvar.0.lock().unwrap();
-                    while !*finished {
-                        finished = cvar.1.wait(finished).unwrap();
-                    }
-                }
-            }
-        }
-    }
-
-    fn get_cvar(
-        &self,
-        source: &Uri
-    ) -> Result<Arc<(Mutex<bool>, Condvar)>, Arc<(Mutex<bool>, Condvar)>> {
-        let mut state = self.0.lock().unwrap();
-        for item in &state.running {
-            if item.0.eq_module(source) {
-                return Err(item.1.clone())
-            }
-        }
-        let res = Arc::new((Mutex::new(false), Condvar::new()));
-        state.running.push((source.clone(), res.clone()));
-        Ok(res)
-    }
-
-    fn remove_cvar(&self, source: &Uri) {
-        let mut state = self.0.lock().unwrap();
-        state.running.retain(|item| !item.0.eq_module(source))
-    }
-
-    */
 }
 
 
@@ -305,6 +230,24 @@ pub fn is_uri_ascii<S: AsRef<[u8]>>(slice: S) -> bool {
             && ch != b'^' && ch != b'`' && ch != b'{' && ch != b'|'
             && ch != b'}' && ch < 0x7F
     })
+}
+
+
+//------------ DetectError ---------------------------------------------------
+
+#[derive(Debug, Fail)]
+pub enum DetectError {
+    #[fail(display="unable to run rsync:\n{}", _0)]
+    Command(io::Error),
+
+    #[fail(display="unable to run rsync:\n{}", _0)]
+    Output(String),
+}
+
+impl From<io::Error> for DetectError {
+    fn from(err: io::Error) -> DetectError {
+        DetectError::Command(err)
+    }
 }
 
 
