@@ -42,6 +42,7 @@ impl Command {
         if !destination.ends_with("/") {
             destination.push('/')
         }
+        let mut cmd = process::Command::new("rsync");
         cmd.arg("-az")
            .arg("--delete");
         if self.has_contimeout {
@@ -153,7 +154,7 @@ impl Uri {
     pub fn join(&self, path: &[u8]) -> Self {
         assert!(is_uri_ascii(path));
         let mut res = self.clone();
-        if !res.path.ends_with(b"/") {
+        if !res.path.is_empty() && !res.path.ends_with(b"/") {
             res.path.to_mut().extend_from_slice(b"/");
         }
         res.path.to_mut().extend_from_slice(path);
