@@ -60,6 +60,16 @@ You can update your Rust installation later by simply running
 rustup update
 ```
 
+
+### C Toolchain
+
+Some of the libraries Routinator depends on require a C toolchain to be
+present. Your system probably has some easy way to install the minimum
+set of packages to build from C sources. If you are unsure, try to run
+`cc` on a command line and if there’s a complaint about missing input
+files, you are probably good to go.
+
+
 ## Building and Running
 
 In the directory you cloned this repository to, say
