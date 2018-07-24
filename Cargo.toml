@@ -4,19 +4,19 @@ version = "0.1.0"
 authors = ["Martin Hoffmann <martin@nlnetlabs.nl>"]
 
 [dependencies]
-base64     = "^0.9"
+base64          = "^0.9"
 # Move to published 0.5 once that is available.
-bytes      = { git = "https://github.com/carllerche/bytes.git" }
-chrono     = "^0.4"
-clap       = "2.0"
-env_logger = "^0.5"
-failure    = "^0.1"
+bytes           = { git = "https://github.com/carllerche/bytes.git" }
+chrono          = "^0.4"
+clap            = "2.0"
+env_logger      = "^0.5"
+failure         = "^0.1"
 futures         = "^0.1"
 futures-cpupool = "^0.1"
 log             = "^0.4"
 num_cpus        = "1.0"
-ring       = "^0.12" 
-untrusted  = "^0.5"
+ring            = "^0.12"
+untrusted       = "^0.5"
 
 [features]
 # Panic when a parsing error occurs. This feature is intended for

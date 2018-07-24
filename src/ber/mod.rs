@@ -1,4 +1,4 @@
-//! Parsing of data in Basic Encoding Rules.
+//! Parsing data in Basic Encoding Rules.
 //!
 //! This modules provides means to parse data encoded in ASN.1’s _Basic
 //! Encoding Rules_ as defined in ITU recommendation X.690 as well as their

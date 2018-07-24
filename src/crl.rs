@@ -245,6 +245,7 @@ impl Extensions {
 
 //------------ CrlStore ------------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct CrlStore {
     // This is a simple vector because most likely we’ll only ever have one.
     crls: Vec<(rsync::Uri, Crl)>
