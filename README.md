@@ -86,8 +86,10 @@ cargo run
 ```
 
 to run the binary that has been built. At this point, it will rsync all
-repository instances into `./rpki-cache/repository` and validate them. You
-will need the `rsync` executable in your path.
+repository instances into `./rpki-cache/repository` and validate them.
+
+When running, you might get rsync errors, such as from rpki.cnnic.cn.
+You can ignore these. Certainly, Routinator will.
 
 To get a better performance, build and run in release mode like so:
 
@@ -102,6 +104,10 @@ them to the executable after a double hyphen. For instance, if to find out
 about them, run
 
 ```bash
-cargo run --relase -- -h
+cargo run --release -- -h
 ```
+
+When playing with these options, you might find `-n` useful. It will
+cause Routinator to skip the rsync-ing of the repository and significantly
+increase your turn-around.
 

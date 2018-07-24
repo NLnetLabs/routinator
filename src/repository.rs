@@ -271,7 +271,7 @@ impl Repository {
                 Ok(item) => item,
                 Err(_) => continue,
             };
-            self.process_object(uri, hash, &cert, routes)?;
+            self.process_object(uri, hash, &cert, &mut store, routes)?;
         }
         Ok(())
     }
@@ -281,6 +281,7 @@ impl Repository {
         uri: rsync::Uri,
         hash: ManifestHash,
         issuer: &ResourceCert,
+        crl: &mut CrlStore,
         routes: &mut RouteOrigins,
     ) -> Result<(), ProcessingError> {
         // XXX We should have the directory already from the fetching the
@@ -312,6 +313,10 @@ impl Repository {
                     return Ok(())
                 }
             };
+            if let Err(_) = self.check_crl(&cert, issuer, crl) {
+                info!("{}: certificate has been revoked", uri);
+                return Ok(())
+            }
             self.process_ca(cert, routes)
         }
         else if uri.ends_with(".roa") {
@@ -329,7 +334,9 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let _ = roa.process(issuer, routes);
+            let _ = roa.process(issuer, routes, |cert| {
+                self.check_crl(cert, issuer, crl)
+            });
             Ok(())
         }
         else if uri.ends_with(".crl") {

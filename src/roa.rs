@@ -6,7 +6,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use bytes::Bytes;
 use super::asres::AsId;
 use super::ber::{BitString, Constructed, Error, Mode, Source, Tag};
-use super::cert::ResourceCert;
+use super::cert::{Cert, ResourceCert};
 use super::ipres::AddressFamily;
 use super::sigobj::SignedObject;
 use super::x509::ValidationError;
@@ -32,13 +32,16 @@ impl Roa {
         Ok(Roa { signed, content })
     }
 
-    pub fn process(
+    pub fn process<F>(
         self,
         issuer: &ResourceCert,
-        origins: &mut RouteOrigins
-    ) -> Result<(), ValidationError> {
+        origins: &mut RouteOrigins,
+        check_crl: F,
+    ) -> Result<(), ValidationError>
+    where F: FnOnce(&Cert) -> Result<(), ValidationError> {
         let cert = self.signed.validate(issuer)?;
         self.content.validate(&cert)?;
+        check_crl(cert.as_ref())?;
         origins.push(self.content);
         Ok(())
     }

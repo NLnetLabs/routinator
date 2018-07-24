@@ -1,3 +1,21 @@
+//! RPKI Certificates.
+//!
+//! For its certificates, RPKI defines a profile for X.509 certificates. That
+//! is, while it uses the format defined for X.509 certificates, it limits
+//! the allowed values for various fields, making the overall structure more
+//! simple and predictable.
+//!
+//! This module implements the raw certificates in the type [`Cert`] and
+//! validated certificates in the type [`ResourceCert`]. The latter are used
+//! as the issuer certificates when validating other certificates.
+//!
+//! In addition, there are several types for the components of a certificate.
+//!
+//! RPKI resource certificates are defined in RFC 6487 based on the Internet
+//! PKIX profile defined in RFC 5280.
+//!
+//! [`Cert`]: struct.Cert.html
+//! [`ResourceCert`]: struct.ResourceCert.html
 
 use bytes::Bytes;
 use ring::digest::{self, Digest};
@@ -15,26 +33,74 @@ use super::x509::{
 
 //------------ Cert ----------------------------------------------------------
 
+/// An RPKI resource certificate.
+///
+/// A value of this type is the result of parsing a resource certificate. It
+/// can be one of three different variants: A CA certificate appears in its
+/// own file in the repository. It main use is to sign other certificates.
+/// An EE certificate is used to sign other objects in the repository, such
+/// as manifests or ROAs. In RPKI, EE certificates are used only once.
+/// Whenever a new such object is created, a new EE certificate is created,
+/// signed by its CA, used to sign the object, and then the private key is
+/// thrown away. Thus, EE certificates only appear inside these signed
+/// objects.
+/// Finally, TA certificates are the installed trust anchors. These are
+/// self-signed.
+/// 
+/// If a certificate is stored in a file, you can use the `decode` function
+/// to parse the entire file. If the certificate is part of some other
+/// structure, the `take_from` and `take_content_from` function can be used
+/// during parsing of that structure.
+///
+/// Once parsing succeeded, the three methods `validate_ta`, `validate_ca`,
+/// and `validate_ee` can be used to validate the certificate and turn it
+/// into a [`ResourceCert`] so it can be used for further processing.
+///
+/// [`ResourceCert`]: struct.ResourceCert.html
 #[derive(Clone, Debug)]
 pub struct Cert {
+    /// The outer structure of the certificate.
     signed_data: SignedData,
 
+    /// The serial number.
     serial_number: Unsigned,
+
+    /// The algorithm used for signing the certificate.
     signature: SignatureAlgorithm,
+
+    /// The name of the issuer.
+    ///
+    /// It isn’t really relevant in RPKI.
     issuer: Name,
+
+    /// The validity of the certificate.
     validity: Validity,
+
+    /// The name of the subject of this certificate.
+    ///
+    /// This isn’t really relevant in RPKI.
     subject: Name,
+
+    /// Information about the public key of this certificate.
     subject_public_key_info: SubjectPublicKeyInfo,
+
+    /// The optional Issuer Unique ID.
     issuer_unique_id: Option<BitString>,
+
+    /// The optional Subject Unique ID.
     subject_unique_id: Option<BitString>,
+
+    /// The certificate extensions.
     extensions: Extensions,
 }
 
 impl Cert {
+    /// Decodes a source as a certificate.
     pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
         Mode::Der.decode(source, Self::take_from)
     }
 
+    /// Takes an encoded certificate from the beginning of a value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -80,23 +146,30 @@ impl Cert {
         }).map_err(Into::into)
     }
 
+    /// Returns a reference to the certificate’s public key.
     pub fn public_key(&self) -> &[u8] {
         self.subject_public_key_info
             .subject_public_key.octet_slice().unwrap()
     }
 
+    /// Returns a reference to the subject key identifier.
     pub fn subject_key_identifier(&self) -> &OctetString {
         &self.extensions.subject_key_id
     }
 
+    /// Returns a reference to the entire public key information structure.
     pub fn subject_public_key_info(&self) -> &SubjectPublicKeyInfo {
         &self.subject_public_key_info
     }
 
+    /// Returns a reference to the certificate’s CRL distributionb point.
+    ///
+    /// If present, this will be an `rsync` URI. 
     pub fn crl_distribution(&self) -> Option<&UriGeneralNames> {
         self.extensions.crl_distribution.as_ref()
     }
 
+    /// Returns a reference to the certificate’s serial number.
     pub fn serial_number(&self) -> &Unsigned {
         &self.serial_number
     }
@@ -370,34 +443,52 @@ impl Cert {
 }
 
 
+//--- AsRef
+
+impl AsRef<Cert> for Cert {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
+
 //------------ ResourceCert --------------------------------------------------
 
 /// A validated resource certificate.
 ///
-/// This differs from a normal `Cert` in that its IP and AS resources are not
-/// of the “inhert” variant.
+/// This differs from a normal [`Cert`] in that its IP and AS resources are
+/// resolved into concrete values.
 #[derive(Clone, Debug)]
 pub struct ResourceCert {
+    /// The underlying resource certificate.
     cert: Cert,
+
+    /// The resolved IP resources.
     ip_resources: IpAddressBlocks,
+
+    /// The resolved AS resources.
     as_resources: AsBlocks,
 }
 
 impl ResourceCert {
+    /// Returns a reference to the IP resources of this certificate.
     pub fn ip_resources(&self) -> &IpAddressBlocks {
         &self.ip_resources
     }
 
+    /// Returns a reference to the AS resources of this certificate.
     pub fn as_resources(&self) -> &AsBlocks {
         &self.as_resources
     }
 
+    /// Returns an iterator over the manifest URIs of this certificate.
     pub fn manifest_uris(&self) -> impl Iterator<Item=UriGeneralName> {
         self.cert.extensions.subject_info_access.iter().filter_oid(
             oid::AD_RPKI_MANIFEST
         )
     }
 
+    /// Returns the repository rsync URI of this certificate if available.
     pub fn repository_uri(&self) -> Option<rsync::Uri> {
         for uri in self.cert.extensions.subject_info_access
                        .iter().filter_oid(oid::AD_CA_REPOSITORY)
