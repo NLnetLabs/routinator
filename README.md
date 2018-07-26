@@ -34,7 +34,7 @@ yet. But don’t worry, getting Rust and building packages with it is easy.
 Currently, Routinator requires the `rsync` executable to be in your path.
 We are not quite sure which particular version you need at the very least,
 but whatever is being shipped with current Linux and \*BSD distributions
-and macOS.
+and macOS should be fine.
 
 If you don’t have rsync, please head to http://rsync.samba.org/.
 
@@ -99,7 +99,8 @@ To get a better performance, build and run in release mode like so:
 cargo run --release
 ```
 
-It will then take forever to build but is quick to run.
+It will then take forever to build but is quick to run, taking less than a
+tenth (!) of the time for validation.
 
 There is a number of command line options available. You can have cargo pass
 them to the executable after a double hyphen. For instance, if to find out
@@ -110,8 +111,8 @@ cargo run --release -- -h
 ```
 
 When playing with these options, you might find `-n` useful. It will
-cause Routinator to skip the rsync-ing of the repository and significantly
-increase your turn-around.
+cause Routinator to skip the rsync-ing of the repository – which should
+be unnecessary if you re-run in quick succession.
 
 
 ## The Local Copy of the RPKI Repository
@@ -126,5 +127,6 @@ called `tal`. Each file in that directory should be a Trust Anchor Locator
 (TAL) as defined in RFC 7730.
 
 The source repository contains an example of such an `rpki-cache` with the
-current TALs of the five RIRs present.
+current TALs of the five RIRs present. If you want to add additional trust
+anchors, just drop their associated TAL files into that location.
 
