@@ -14,7 +14,7 @@ use rpki::repository::{ProcessingError, Repository};
 use rpki::roa::RouteOrigins;
 
 fn main() -> Result<(), ProcessingError> {
-    let matches = App::new("The Rusty RPKI Validator")
+    let matches = App::new("Routinator 3000")
         .version("0.1")
         .author("Martin Hoffmann <martin@nlnetlabs.nl>")
         .about("validates RPKI route origin attestations")
