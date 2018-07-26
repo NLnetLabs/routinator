@@ -1,6 +1,6 @@
 # :rocket: Routinator 3000.
 
-[![Travis Build Status](https://travis-ci.org/nlnetlabs/routinator.svg?branch=master)](https://travis-ci.org/nlnetlabs/routinator)
+[![Travis Build Status](https://travis-ci.org/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.org/NLnetLabs/routinator)
 
 Introducing ‘Routinator 3000,’ an experimental RPKI relying party software
 written in Rust.
