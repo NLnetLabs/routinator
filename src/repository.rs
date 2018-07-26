@@ -1,3 +1,11 @@
+//! The local copy of the RPKI repository.
+//!
+//! This module contains [`Repository`] representing the local copy of the
+//! RPKI repository. It knows how to update the content and also how to
+//! process it into a list of route origins.
+//!
+//! [`Repository`]: struct.Repository.html
+
 use std::{fs, io};
 use std::fs::{DirEntry, File};
 use std::io::Read;
@@ -18,6 +26,15 @@ use super::x509::ValidationError;
 
 //------------ Repository ----------------------------------------------------
 
+/// A reference to the local copy of the RPKI repository.
+///
+/// This type wraps all the configuration necessary for finding and working
+/// with the local copy.
+///
+/// You create a repository by calling the `new` function, providing a small
+/// amount of configuration information. Next, you can update the content via
+/// the `update` method. Finally, the `process` method produces a list of
+/// validated route origins.
 #[derive(Clone, Debug)]
 pub struct Repository(Arc<RepoInner>);
 
@@ -38,8 +55,15 @@ struct RepoInner {
     rsync: Option<(Mutex<RsyncState>, rsync::Command)>,
 }
 
-#[allow(unused_variables)]
 impl Repository {
+    /// Creates a new repository.
+    ///
+    /// You need to pass in the path to the directory where the local copy
+    /// lives via the `base` argument. If `strict` is `true`, then parsing
+    /// will be done very strictly. In particular, it means that the code
+    /// expectes signed objects to be encoded in DER format which seems not
+    /// to be the case in practice. Finally, if `rsync` is set to `false`, no
+    /// rsync will ever happen. Nothing will fail because of that, though.
     pub fn new<P: AsRef<Path>>(
         base: P,
         strict: bool,
@@ -65,6 +89,10 @@ impl Repository {
         })))
     }
 
+    /// Updates the content of the local copy.
+    ///
+    /// This will go out and do a bunch of rsync requests (unless that was
+    /// disabled explicitely).
     pub fn update(&self) -> Result<(), ProcessingError> {
         let dir = self.0.base.join("repository");
         let pool = CpuPool::new(self.0.threads);
@@ -74,7 +102,11 @@ impl Repository {
         })).wait().map(|_| ())
     }
 
-
+    /// Process the local copy and produce a list of validated route origins.
+    ///
+    /// Note that the method may also do some rsync if it encounters new
+    /// modules it hasn’t seen before. This means that if you start out on a
+    /// new copy, it will go out and fetch everything it needs.
     pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
         let dir = self.0.base.join("tal");
         let pool = CpuPool::new(self.0.threads);
@@ -93,6 +125,7 @@ impl Repository {
 /// # Repository Access
 ///
 impl Repository {
+    /// Loads a trust anchor certificate from the given URI.
     fn load_ta(
         &self,
         uri: &rsync::Uri
@@ -103,6 +136,9 @@ impl Repository {
         )
     }
 
+    /// Loads the content of a file from the given URI.
+    ///
+    /// If `create` is `true`, it will try to rsync missing files.
     fn load_file(
         &self,
         uri: &rsync::Uri,
@@ -128,6 +164,7 @@ impl Repository {
         }
     }
 
+    /// Converts an rsync module URI into a path.
     fn module_to_path(&self, module: &rsync::Module) -> PathBuf {
         let mut res = self.0.base.clone();
         res.push("repository");
@@ -136,6 +173,7 @@ impl Repository {
         res
     }
 
+    /// Converts an rsync URI into a path.
     fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
         let mut res = self.module_to_path(uri.module());
         res.push(uri.path());
@@ -147,6 +185,7 @@ impl Repository {
 /// # Updating
 ///
 impl Repository {
+    /// Updates content of the host-specific directory of the local copy.
     fn update_host(
         self,
         entry: Result<DirEntry, io::Error>
@@ -167,6 +206,7 @@ impl Repository {
         }
     }
 
+    /// Updates content of the module-specific directory of the local copy.
     fn update_module(
         &self,
         host: Bytes,
@@ -200,6 +240,7 @@ impl Repository {
 /// # Processing
 ///
 impl Repository {
+    /// Processes all data for the given trust anchor.
     pub fn process_tal(
         self,
         entry: Result<DirEntry, io::Error>
@@ -250,6 +291,7 @@ impl Repository {
         Ok(res)
     }
 
+    /// Processes all data for the given trust CA.
     fn process_ca(
         &self,
         cert: ResourceCert,
@@ -276,6 +318,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Processes all an object.
     fn process_object(
         &self,
         uri: rsync::Uri,

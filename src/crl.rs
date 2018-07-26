@@ -1,3 +1,18 @@
+//! Certificate Revocation Lists for RPKI.
+//!
+//! Much like for certificates, RPKI reuses X.509 for its certifcate
+//! revocation lists (CRLs), limiting the values that are allowed in the
+//! various fields.
+//!
+//! This module implements the CRLs themselves via the type [`Crl`] as well
+//! as a [`CrlStore`] that can keep several CRLs which may be helpful during
+//! validation.
+//!
+//! The RPKI CRL profile is defined in RFC 6487 based on the Internet RPIX
+//! profile defined in RFC 5280.
+//!
+//! [`Crl`]: struct.Crl.html
+//! [`CrlStore`]: struct.CrlStore.html
 
 use bytes::Bytes;
 use super::rsync;
@@ -12,29 +27,51 @@ use super::x509::{
 
 //------------ Crl -----------------------------------------------------------
 
+/// An RPKI certificate revocation list.
+///
+/// A value of this type is the result of parsing a CRL file found in the
+/// RPKI repository. You can use the `decode` function for parsing a CRL out
+/// of such a file.
 #[derive(Clone, Debug)]
 pub struct Crl {
+    /// The outer structure of the CRL.
     signed_data: SignedData,
 
+    /// The algorithm used for signing the certificate.
     signature: SignatureAlgorithm,
+
+    /// The name of the issuer.
+    ///
+    /// This isn’t really used in RPKI at all.
     issuer: Name,
+
+    /// The time this version of the CRL was created.
     this_update: Time,
+
+    /// The time the next version of the CRL is likely to be created.
     next_update: Option<Time>,
+
+    /// The list of revoked certificates.
     revoked_certs: RevokedCertificates,
+
+    /// The CRL extensions.
     extensions: Extensions
 }
 
 impl Crl {
+    /// Parses a source as a certificate revocation list.
     pub fn decode<S: Source>(source: S) -> Result<Self, S::Err> {
         Mode::Der.decode(source, Self::take_from)
     }
 
+    /// Takes an encoded CRL from the beginning of a constructed value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.take_sequence(Self::take_content_from)
     }
 
+    /// Parses the content of a certificate revocation list.
     pub fn take_content_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -59,6 +96,10 @@ impl Crl {
         }).map_err(Into::into)
     }
 
+    /// Validates the certificate revocation list.
+    ///
+    /// The list’s signature is validated against the certificate provided
+    /// via `issuer`.
     pub fn validate<C: AsRef<Cert>>(
         &self,
         issuer: C
@@ -66,6 +107,7 @@ impl Crl {
         self.signed_data.verify_signature(issuer.as_ref().public_key())
     }
 
+    /// Returns whether the given serial number is on this revocation list.
     pub fn contains(&self, serial: &Unsigned) -> bool {
         self.revoked_certs.contains(serial)
     }
@@ -74,10 +116,16 @@ impl Crl {
 
 //------------ RevokedCertificates ------------------------------------------
 
+/// The list of revoked certificates.
+///
+/// A value of this type wraps the bytes of the DER encoded list. You can
+/// check whether a certain serial number is part of this list via the
+/// `contains` method.
 #[derive(Clone, Debug)]
 pub struct RevokedCertificates(Bytes);
 
 impl RevokedCertificates {
+    /// Takes a revoked certificates list from the beginning of a value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -93,6 +141,10 @@ impl RevokedCertificates {
         }))
     }
 
+    /// Returns whether the given serial number is contained on this list.
+    ///
+    /// The method walks over the list, decoding it on the fly and checking
+    /// each entry.
     pub fn contains(&self, serial: &Unsigned) -> bool {
         Mode::Der.decode(self.0.as_ref(), |cons| {
             while let Some(entry) = CrlEntry::take_opt_from(cons).unwrap() {
@@ -108,25 +160,32 @@ impl RevokedCertificates {
 
 //------------ CrlEntry ------------------------------------------------------
 
+/// An entry in the revoked certificates list.
 #[derive(Clone, Debug)]
 pub struct CrlEntry {
+    /// The serial number of the revoked certificate.
     user_certificate: Unsigned,
+
+    /// The time of revocation.
     revocation_date: Time,
 }
 
 impl CrlEntry {
+    /// Takes a single CRL entry from the beginning of a constructed value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
         cons.take_sequence(Self::take_content_from)
     }
 
+    /// Takes an optional CRL entry from the beginning of a contructed value.
     pub fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
         cons.take_opt_sequence(Self::take_content_from)
     }
 
+    /// Parses the content of a CRL entry.
     pub fn take_content_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -141,6 +200,12 @@ impl CrlEntry {
 
 //------------ Extensions ----------------------------------------------------
 
+/// Extensions of a RPKI certificate revocation list.
+///
+/// Only two extension are allowed to be present: the authority key
+/// identifier extension which contains the key identifier of the certificate
+/// this CRL is associated with, and the CRL number which is the serial
+/// number of this version of the CRL.
 #[derive(Clone, Debug)]
 pub struct Extensions {
     /// Authority Key Identifier
@@ -151,6 +216,7 @@ pub struct Extensions {
 }
 
 impl Extensions {
+    /// Takes the CRL extension from the beginning of a constructed value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -245,6 +311,11 @@ impl Extensions {
 
 //------------ CrlStore ------------------------------------------------------
 
+/// A place to cache CRLs for reuse.
+///
+/// This type allows to store CRLs you have seen in case you may need them
+/// again soon. This is useful when validating the objects issued by a CA as
+/// they likely all refer to the same CRL, so keeping it around makes sense.
 #[derive(Clone, Debug)]
 pub struct CrlStore {
     // This is a simple vector because most likely we’ll only ever have one.
@@ -252,14 +323,19 @@ pub struct CrlStore {
 }
 
 impl CrlStore {
+    /// Creates a new CRL store.
     pub fn new() -> Self {
         CrlStore { crls: Vec::new() }
     }
 
+    /// Adds an entry to the CRL store.
+    ///
+    /// The CRL is keyed by its rsync `uri`.
     pub fn push(&mut self, uri: rsync::Uri, crl: Crl) {
         self.crls.push((uri, crl))
     }
 
+    /// Returns a reference to a CRL if it is available in the store.
     pub fn get(&self, uri: &rsync::Uri) -> Option<&Crl> {
         for &(ref stored_uri, ref crl) in &self.crls {
             if *stored_uri == *uri {

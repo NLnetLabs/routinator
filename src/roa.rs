@@ -81,7 +81,6 @@ impl RouteOriginAttestation {
     }
 }
 
-
 impl RouteOriginAttestation {
     fn take_from<S: Source>(
         cons: &mut Constructed<S>

@@ -1,4 +1,14 @@
-//! RPKI Manifests
+//! RPKI Manifests.
+//!
+//! Manifests list all the files that are currently published by an RPKI CA.
+//! They are defined in RFC 6486.
+//!
+//! This module defines the type [`Manifest`] that represents a decoded
+//! manifest and the type [`ManifestContent`] for the content of a validated
+//! manifest, as well as some helper types for accessing the content.
+//!
+//! [`Manifest`]: struct.Manifest.html
+//! [`ManifestContent`]: struct.ManifestContent.html
 
 use bytes::Bytes;
 use super::rsync;
@@ -12,6 +22,11 @@ use super::x509::{Time, ValidationError};
 
 //------------ Manifest ------------------------------------------------------
 
+/// A decoded RPKI manifest.
+///
+/// This type represents a manifest decoded from a source. In order to get to
+/// the manifest’s content, you need to validate it via the `validate`
+/// method.
 #[derive(Clone, Debug)]
 pub struct Manifest {
     signed: SignedObject,
@@ -19,6 +34,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    /// Decodes a manifest from a source.
     pub fn decode<S: Source>(
         source: S,
         strict: bool
@@ -30,6 +46,11 @@ impl Manifest {
         Ok(Manifest { signed, content })
     }
 
+    /// Validates the manifest.
+    ///
+    /// You need to pass in the certificate of the issuing CA. If validation
+    /// succeeds, the result will be the EE certificate of the manifest and
+    /// the manifest content.
     pub fn validate(
         self,
         cert: &ResourceCert,
@@ -42,15 +63,29 @@ impl Manifest {
 
 //------------ ManifestContent -----------------------------------------------
 
+/// The content of an RPKI manifest.
+///
+/// A manifests consists chiefly of a list of files and their hash value. You
+/// can access this list via the `iter_uris` method.
 #[derive(Clone, Debug)]
 pub struct ManifestContent {
+    /// The number of this manifest.
+    ///
+    /// These numbers are similar to the serial numbers of certificates.
     manifest_number: Unsigned,
+
+    /// The time this iteration of the manifest was created.
     this_update: Time,
+
+    /// The time the next iteration of the manifest is likely to be created.
     next_update: Time,
+
+    /// The list of files in its encoded form.
     file_list: Bytes,
 }
 
 impl ManifestContent {
+    /// Decodes the manifest content from its encoded form.
     fn decode<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -83,6 +118,13 @@ impl ManifestContent {
         })
     }
 
+    /// Returns an iterator over the files in the manifest.
+    ///
+    /// Since the manifest only contains file names, the iterator needs a base
+    /// URI to produce complete URIs. It is taken from `base`.
+    ///
+    /// The returned iterator returns a pair of the file URI and the SHA256
+    /// hash of the file.
     pub fn iter_uris(&self, base: rsync::Uri) -> ManifestIter {
         ManifestIter { base, file_list: self.file_list.clone() }
     }
@@ -91,6 +133,10 @@ impl ManifestContent {
 
 //------------ ManifestIter --------------------------------------------------
 
+/// An iterator over the files in the manifest.
+///
+/// The iterator returns pairs of the absolute URIs of the files and their
+/// SHA256 hash values.
 #[derive(Clone, Debug)]
 pub struct ManifestIter{
     base: rsync::Uri,
@@ -117,13 +163,18 @@ impl Iterator for ManifestIter {
 
 //------------ FileAndHash ---------------------------------------------------
 
+/// An entry in the list of a manifest.
 #[derive(Clone, Debug)]
 pub struct FileAndHash {
+    /// The name of the file.
     file: OctetString,
+
+    /// A SHA256 hash over the file’s content.
     hash: ManifestHash,
 }
 
 impl FileAndHash {
+    /// Skips over an optional value in a constructed value.
     fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
@@ -137,6 +188,7 @@ impl FileAndHash {
         })
     }
 
+    /// Takes an optional value from the beginning of a constructed value.
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
@@ -151,6 +203,7 @@ impl FileAndHash {
         })
     }
 
+    /// Converts a value into a pair of an absolute URI and its hash.
     fn to_uri_etc(
         self,
         base: &rsync::Uri
@@ -166,10 +219,14 @@ impl FileAndHash {
 
 //------------ ManifestHash --------------------------------------------------
 
+/// A manifest hash.
+///
+/// This is a SHA256 hash.
 #[derive(Clone, Debug)]
 pub struct ManifestHash(BitString);
 
 impl ManifestHash {
+    /// Check that `bytes` has the same hash value as `this`.
     pub fn verify<B: AsRef<[u8]>>(
         &self,
         bytes: B

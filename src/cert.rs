@@ -501,6 +501,9 @@ impl ResourceCert {
     }
 }
 
+
+//--- AsRef
+
 impl AsRef<Cert> for ResourceCert {
     fn as_ref(&self) -> &Cert {
         &self.cert

@@ -1,5 +1,5 @@
 [package]
-name = "routinator"
+name = "rpki"
 version = "0.1.0"
 authors = ["Martin Hoffmann <martin@nlnetlabs.nl>"]
 

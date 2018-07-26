@@ -17,13 +17,22 @@ use super::x509::ValidationError;
 
 //------------ IpResources ---------------------------------------------------
 
+/// The IP Address Resources of an RPKI Certificate.
+///
+/// This type contains these resources as parsed from the certificate. Apart
+/// from parsing, you won’t use this type much. Instead, you’ll convert it
+/// into a list of address blocks via `IpAddressBlocks::from_resources`.
 #[derive(Clone, Debug)]
 pub struct IpResources {
+    /// The IPv4 address resources if present.
     v4: Option<AddressChoice>,
+
+    /// The IPv6 address resources if present.
     v6: Option<AddressChoice>,
 }
 
 impl IpResources {
+    /// Takes the IP resources from the beginning of a constructed value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -59,6 +68,11 @@ impl IpResources {
 
 //------------ AddressChoice -------------------------------------------------
 
+/// The choice of per-family address resources.
+///
+/// This can either be an actual list of address blocks or `Inherit`, which
+/// instructs to just keep using the address blocks from the issuer
+/// certificate.
 #[derive(Clone, Debug)]
 pub enum AddressChoice {
     Inherit,
@@ -66,6 +80,7 @@ pub enum AddressChoice {
 }
 
 impl AddressChoice {
+    /// Returns whether the choice is for inheriting.
     pub fn is_inherited(&self) -> bool {
         match *self {
             AddressChoice::Inherit => true,
@@ -73,6 +88,10 @@ impl AddressChoice {
         }
     }
 
+    /// Converts the choice into a list of address blocks.
+    ///
+    /// If the inherit choice is present, this will result in a
+    /// validation error.
     pub fn to_blocks(&self) -> Result<AddressBlocks, ValidationError> {
         match *self {
             AddressChoice::Inherit => Err(ValidationError),
@@ -82,6 +101,7 @@ impl AddressChoice {
 }
 
 impl AddressChoice {
+    /// Takes an address choice from the beginning of a constructed value.
     fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
@@ -104,6 +124,10 @@ impl AddressChoice {
 
 //------------ IpAddressBlocks -----------------------------------------------
 
+/// A list of IP address blocks.
+///
+/// This type actually contains two optional lists of address blocks, one each
+/// for IPv4 and IPv6.
 #[derive(Clone, Debug)]
 pub struct IpAddressBlocks {
     v4: Option<AddressBlocks>,
@@ -111,6 +135,11 @@ pub struct IpAddressBlocks {
 }
 
 impl IpAddressBlocks {
+    /// Creates a list of IP address blocks from IP resources.
+    ///
+    /// If no resources are present, creates an empty list. If either of the
+    /// families in the resources has chosen the inherit choice, the function
+    /// will return a validation error.
     pub fn from_resources(
         res: Option<&IpResources>
     ) -> Result<Self, ValidationError> {
@@ -135,6 +164,11 @@ impl IpAddressBlocks {
         }
     }
 
+    /// Produces a new value if `res` is encompassed by this value.
+    ///
+    /// If `res` is `None`, an empy set of blocks is returned. Otherwise,
+    /// checks whether any blocks in `res` are encompassed by `self`, that
+    /// is, they either are the same or are smaller.
     pub fn encompasses(
         &self,
         res: Option<&IpResources>
@@ -149,10 +183,12 @@ impl IpAddressBlocks {
         })
     }
 
+    /// Returns a reference to the IPv4 address blocks if there are any.
     pub fn v4(&self) -> Option<&AddressBlocks> {
         self.v4.as_ref()
     }
 
+    /// Returns a reference to the IPv6 address blocks if there are any.
     pub fn v6(&self) -> Option<&AddressBlocks> {
         self.v6.as_ref()
     }
@@ -161,14 +197,17 @@ impl IpAddressBlocks {
 
 //------------ AddressBlocks -------------------------------------------------
 
+/// A sequence of address ranges for one address family.
 #[derive(Clone, Debug)]
 pub struct AddressBlocks(Bytes);
 
 impl AddressBlocks {
+    /// Returns an iterator over the address ranges in the block.
     pub fn iter(&self) -> AddressBlocksIter {
         AddressBlocksIter(self.0.as_ref())
     }
 
+    /// Returns whether the address blocks cover the given ROA address prefix.
     pub fn contain(&self, addr: &RoaIpAddress) -> bool {
         let (min, max) = addr.range();
         for range in self.iter() {
@@ -181,6 +220,7 @@ impl AddressBlocks {
 }
 
 impl AddressBlocks {
+    /// Parses the content of an address block sequence.
     fn parse_content<S: Source>(
         content: &mut Content<S>
     ) -> Result<Self, S::Err> {
@@ -191,6 +231,16 @@ impl AddressBlocks {
         }).map(AddressBlocks)
     }
 
+    /// Checks that `outer` encompasses `inner`.
+    ///
+    /// Encompasses means that `outer` covers all the IP addresses covered
+    /// by `inner`. For this function, `inner` can either be an address block
+    /// sequence itself or is to inherit the blocks from `outer`. The
+    /// function will return the sequence to use – which will be `outer` for
+    /// the inherit option – or an error.
+    ///
+    /// If `inner` is `None`, the result will be `Ok(None)`. If `outer` is
+    /// `None`, `inner` has to be `None`, too, or an error will happen.
     fn encompasses(
         outer: Option<&Self>,
         inner: Option<&AddressChoice>
@@ -213,6 +263,7 @@ impl AddressBlocks {
         }
     }
 
+    /// Returns whether an address block sequence is encompassed by `self`.
     fn _encompasses(&self, other: &Self) -> bool {
         // Everything is supposed to be in increasing order. So we can treat
         // prefixes and blocks both as address ranges (which they actually 
@@ -260,6 +311,9 @@ impl AddressBlocks {
 
 //------------ AddressBlocksIter ---------------------------------------------
 
+/// An iterator over the address ranges in an address block sequence.
+///
+/// You can get a value of this type via `AddressBlocks::iter`.
 pub struct AddressBlocksIter<'a>(&'a [u8]);
 
 impl<'a> Iterator for AddressBlocksIter<'a> {
@@ -291,19 +345,35 @@ impl<'a> Iterator for AddressBlocksIter<'a> {
 /// the upper 32 bits for IPv4.
 #[derive(Clone, Debug)]
 pub struct AddressRange {
+    /// The smallest IP address that is part of this range.
     min: u128,
+
+    /// The largest IP address that is part of this range.
+    ///
+    /// Note that this means that, unlike normal Rust ranges, our range is
+    /// inclusive at the upper end. This is necessary to represent a range
+    /// that goes all the way to the last address (which, for instance,
+    /// `::0/0` does).
     max: u128,
 }
 
 impl AddressRange {
+    /// Returns the smallest IP address that is part of this range.
     pub fn min(&self) -> u128 {
         self.min
     }
 
+    /// Returns the largest IP address that is still part of this range.
     pub fn max(&self) -> u128 {
         self.max
     }
 
+    /// Sets a new minimum IP address.
+    ///
+    /// # Panics
+    ///
+    /// If you try to set the minimum to value larger than the current
+    /// maximum, the method will panic.
     pub fn set_min(&mut self, min: u128) {
         if min <= self.max() {
             self.min = min
@@ -313,6 +383,12 @@ impl AddressRange {
         }
     }
 
+    /// Sets a new maximum IP address.
+    ///
+    /// # Panics
+    ///
+    /// If you try to set the minimum to value smaller than the current
+    /// minimum, the method will panic.
     pub fn set_max(&mut self, max: u128) {
         if max > self.min() {
             self.max = max
@@ -324,6 +400,7 @@ impl AddressRange {
 }
 
 impl AddressRange {
+    /// Takes an option address range from the beginning of a value.
     fn take_opt_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<Self>, S::Err> {
@@ -340,12 +417,14 @@ impl AddressRange {
         })
     }
 
+    /// Skips over the address range at the beginning of a value.
     fn skip_opt_in<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Option<()>, S::Err> {
         Self::take_opt_from(cons).map(|x| x.map(|_| ()))
     }
 
+    /// Parses the content of the IPAddress variant of an address range.
     fn parse_address_content<S: Source>(
         content: &mut Content<S>
     ) -> Result<Self, S::Err> {
@@ -356,6 +435,7 @@ impl AddressRange {
         })
     }
 
+    /// Parses the content of the IPAddressRange variant of an address range.
     fn parse_range_content<S: Source>(
         content: &mut Content<S>
     ) -> Result<Self, S::Err> {
@@ -366,6 +446,7 @@ impl AddressRange {
         })
     }
 
+    /// Calculates the minumum IP address from a bit string.
     fn min_from_bits(bs: &BitString) -> Result<u128, Error> {
         if bs.octet_len() == 0 {
             return Ok(0)
@@ -375,6 +456,7 @@ impl AddressRange {
         Ok(addr << ((16 - bs.octet_len()) * 8))
     }
 
+    /// Calculates the maximum IP address from a bit string.
     fn max_from_bits(bs: &BitString) -> Result<u128, Error> {
         if bs.octet_len() == 0 {
             return Ok(!0)
@@ -387,6 +469,7 @@ impl AddressRange {
         Ok(addr)
     }
 
+    /// Calculates the minumum and maximum IP addresses from a bit string.
     fn from_bits(bs: &BitString) -> Result<(u128, u128), Error> {
         if bs.octet_len() > 16 {
             xerr!(return Err(Error::Malformed.into()))
@@ -407,13 +490,22 @@ impl AddressRange {
 
 //------------ AddressFamily -------------------------------------------------
 
+/// The address family of an IP resources value.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AddressFamily {
+    /// IPv4.
+    ///
+    /// This is encoded by a two byte octet string with value `0x00 0x01`.
     Ipv4,
+
+    /// IPv6.
+    ///
+    /// This is encoded by a two byte octet string with value `0x00 0x02`.
     Ipv6
 }
 
 impl AddressFamily {
+    /// Takes a single address family from the beginning of a value.
     pub fn take_from<S: Source>(
         cons: &mut Constructed<S>
     ) -> Result<Self, S::Err> {
