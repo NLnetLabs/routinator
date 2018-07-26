@@ -111,3 +111,18 @@ When playing with these options, you might find `-n` useful. It will
 cause Routinator to skip the rsync-ing of the repository and significantly
 increase your turn-around.
 
+
+## The Local Copy of the RPKI Repository
+
+Routinator keeps a local copy of RPKI repository it collected for
+validation. Its location can be specified with the `-c` command line
+option. By default, this is the directory `rpki-cache` in the current
+directory.
+
+In there, Routinator expects to find the trust anchors in a sub-directory
+called `tal`. Each file in that directory should be a Trust Anchor Locator
+(TAL) as defined in RFC 7730.
+
+The source repository contains an example of such an `rpki-cache` with the
+current TALs of the five RIRs present.
+
