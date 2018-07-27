@@ -2,6 +2,7 @@ extern crate chrono;
 extern crate clap;
 extern crate env_logger;
 #[macro_use] extern crate log;
+extern crate routinator;
 extern crate rpki;
 
 use std::io;
@@ -10,7 +11,7 @@ use std::io::Write;
 use std::path::Path;
 use chrono::Utc;
 use clap::{Arg, App};
-use rpki::repository::{ProcessingError, Repository};
+use routinator::repository::{ProcessingError, Repository};
 use rpki::roa::RouteOrigins;
 
 fn main() -> Result<(), ProcessingError> {

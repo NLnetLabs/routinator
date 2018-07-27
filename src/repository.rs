@@ -6,8 +6,8 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fs, io};
-use std::fs::{DirEntry, File};
+use std::{fs, io, process};
+use std::fs::{DirEntry, File, create_dir_all};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
@@ -15,13 +15,13 @@ use bytes::Bytes;
 use futures::future;
 use futures::Future;
 use futures_cpupool::CpuPool;
-use super::rsync;
-use super::cert::{Cert, ResourceCert};
-use super::crl::{Crl, CrlStore};
-use super::manifest::{Manifest, ManifestContent, ManifestHash};
-use super::roa::{Roa, RouteOrigins};
-use super::tal::Tal;
-use super::x509::ValidationError;
+use rpki::rsync;
+use rpki::cert::{Cert, ResourceCert};
+use rpki::crl::{Crl, CrlStore};
+use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
+use rpki::roa::{Roa, RouteOrigins};
+use rpki::tal::Tal;
+use rpki::x509::ValidationError;
 
 
 //------------ Repository ----------------------------------------------------
@@ -52,7 +52,7 @@ struct RepoInner {
     /// Information for running rsync.
     ///
     /// If this is `None`, we don’t rsync.
-    rsync: Option<(Mutex<RsyncState>, rsync::Command)>,
+    rsync: Option<(Mutex<RsyncState>, RsyncCommand)>,
 }
 
 impl Repository {
@@ -80,7 +80,7 @@ impl Repository {
             rsync: if rsync {
                 Some((
                     Mutex::new(RsyncState::new()),
-                    rsync::Command::detect()?
+                    RsyncCommand::detect()?
                 ))
             }
             else {
@@ -571,6 +571,57 @@ impl RsyncState {
 }
 
 
+//------------ RsyncCommand --------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct RsyncCommand {
+    has_contimeout: bool
+}
+
+impl RsyncCommand {
+    pub fn detect() -> Result<Self, RsyncError> {
+        let output = process::Command::new("rsync").arg("-h").output()?;
+        if !output.status.success() {
+            return Err(RsyncError::Output(
+                String::from_utf8_lossy(&output.stderr).into()
+            ))
+        }
+        Ok(RsyncCommand {
+            has_contimeout:
+                output.stdout.windows(12)
+                             .any(|window| window == b"--contimeout")
+        })
+    }
+
+    pub fn update<P: AsRef<Path>>(
+        &self,
+        source: &rsync::Module,
+        destination: P
+    ) -> Result<(), io::Error> {
+        debug!("rsyncing from {}.", source);
+        let destination = destination.as_ref();
+        create_dir_all(destination)?;
+        let mut destination = format!("{}", destination.display());
+        if !destination.ends_with("/") {
+            destination.push('/')
+        }
+        let mut cmd = process::Command::new("rsync");
+        cmd.arg("-az")
+           .arg("--delete");
+        if self.has_contimeout {
+            cmd.arg("--contimeout=10");
+        }
+        cmd.arg(source.to_string())
+           .arg(destination);
+        debug!("Running {:?}", cmd);
+        if !cmd.status()?.success() {
+            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+        }
+        Ok(())
+    }
+}
+
+
 //------------ Helper Functions ----------------------------------------------
 
 fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
@@ -594,7 +645,7 @@ pub enum ProcessingError {
     BadRepository(io::Error),
 
     #[fail(display="{}", _0)]
-    Rsync(rsync::DetectError),
+    Rsync(RsyncError),
 
     #[fail(display="IO error: {}", _0)]
     Io(io::Error),
@@ -603,8 +654,8 @@ pub enum ProcessingError {
     Other
 }
 
-impl From<rsync::DetectError> for ProcessingError {
-    fn from(err: rsync::DetectError) -> Self {
+impl From<RsyncError> for ProcessingError {
+    fn from(err: RsyncError) -> Self {
         ProcessingError::Rsync(err)
     }
 }
@@ -612,6 +663,24 @@ impl From<rsync::DetectError> for ProcessingError {
 impl From<io::Error> for ProcessingError {
     fn from(err: io::Error) -> Self {
         ProcessingError::Io(err)
+    }
+}
+
+
+//------------ RsyncError ---------------------------------------------------
+
+#[derive(Debug, Fail)]
+pub enum RsyncError {
+    #[fail(display="unable to run rsync:\n{}", _0)]
+    Command(io::Error),
+
+    #[fail(display="unable to run rsync:\n{}", _0)]
+    Output(String),
+}
+
+impl From<io::Error> for RsyncError {
+    fn from(err: io::Error) -> RsyncError {
+        RsyncError::Command(err)
     }
 }
 
