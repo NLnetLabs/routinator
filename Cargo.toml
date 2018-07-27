@@ -6,7 +6,7 @@ authors = ["Martin Hoffmann <martin@nlnetlabs.nl>"]
 [dependencies]
 base64          = "^0.9"
 # Move to published 0.5 once that is available.
-bytes           = { git = "https://github.com/carllerche/bytes.git" }
+bytes           = "^0.4"
 chrono          = "^0.4"
 clap            = "2.0"
 env_logger      = "^0.5"

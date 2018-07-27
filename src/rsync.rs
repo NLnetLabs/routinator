@@ -3,7 +3,7 @@
 use std::{fmt, io, process, str};
 use std::fs::create_dir_all;
 use std::path::Path;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
 
 
@@ -81,6 +81,10 @@ pub struct Uri {
 }
 
 impl Uri {
+    pub fn new(module: Module, path: Bytes) -> Self {
+        Uri { module, path }
+    }
+
     pub fn from_slice(slice: &[u8]) -> Result<Self, UriError> {
         Self::from_bytes(slice.into())
     }
@@ -153,12 +157,17 @@ impl Uri {
 
     pub fn join(&self, path: &[u8]) -> Self {
         assert!(is_uri_ascii(path));
-        let mut res = self.clone();
-        if !res.path.is_empty() && !res.path.ends_with(b"/") {
-            res.path.to_mut().extend_from_slice(b"/");
+        let mut res = BytesMut::with_capacity(
+            self.path.len() + path.len() + 1
+        );
+        if !self.path.is_empty() {
+            res.put_slice(self.path.as_ref());
+            if !self.path.ends_with(b"/") {
+                res.put_slice(b"/");
+            }
         }
-        res.path.to_mut().extend_from_slice(path);
-        res
+        res.put_slice(path);
+        Self::new(self.module.clone(), res.freeze())
     }
 
     pub fn ends_with(&self, extension: &str) -> bool {
