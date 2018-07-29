@@ -27,5 +27,6 @@ extern crate futures_cpupool;
 extern crate num_cpus;
 extern crate rpki;
 
+pub mod origins;
 pub mod repository;
 

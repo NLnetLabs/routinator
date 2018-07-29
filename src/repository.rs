@@ -19,9 +19,10 @@ use rpki::rsync;
 use rpki::cert::{Cert, ResourceCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
-use rpki::roa::{Roa, RouteOrigins};
+use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+use super::origins::RouteOrigins;
 
 
 //------------ Repository ----------------------------------------------------
@@ -377,9 +378,12 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let _ = roa.process(issuer, routes, |cert| {
+            let route = roa.process(issuer, |cert| {
                 self.check_crl(cert, issuer, crl)
             });
+            if let Ok(route) = route {
+                routes.push(route)
+            }
             Ok(())
         }
         else if uri.ends_with(".crl") {

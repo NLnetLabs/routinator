@@ -12,7 +12,7 @@ use std::path::Path;
 use chrono::Utc;
 use clap::{Arg, App};
 use routinator::repository::{ProcessingError, Repository};
-use rpki::roa::RouteOrigins;
+use routinator::origins::AddressOrigins;
 
 fn main() -> Result<(), ProcessingError> {
     let matches = App::new("Routinator 3000")
@@ -39,6 +39,11 @@ fn main() -> Result<(), ProcessingError> {
              .value_name("FORMAT")
              .help("sets the output format (csv, json, rpsl, none)")
              .takes_value(true)
+        )
+        .arg(Arg::with_name("unique")
+             .short("u")
+             .long("unique")
+             .help("output unique value only")
         )
         .arg(Arg::with_name("strict")
              .long("strict")
@@ -93,80 +98,86 @@ fn main() -> Result<(), ProcessingError> {
     };
     debug!("Found {} ROAs.", roas.len());
 
-    let output = FileOrStdout::open(matches.value_of("output").unwrap_or("-"))?;
-    let mut output = output.lock();
+    let outform = matches.value_of("outform").unwrap_or("csv");
+    if outform == "none" {
+        Ok(())
+    }
+    else {
+        let output = FileOrStdout::open(
+            matches.value_of("output").unwrap_or("-")
+        )?;
+        let mut output = output.lock();
+        let roas = AddressOrigins::from_route_origins(
+            roas,
+            matches.is_present("unique")
+        );
 
-    match matches.value_of("outform").unwrap_or("csv") {
-        "csv" => output_csv(roas, &mut output),
-        "json" => output_json(roas, &mut output),
-        "rpsl" => output_rpsl(roas, &mut output),
-        "none" => Ok(()),
-        other => {
-            error!("unknown output format {}", other);
-            Err(ProcessingError::Other)
+        match matches.value_of("outform").unwrap_or("csv") {
+            "csv" => output_csv(roas, &mut output),
+            "json" => output_json(roas, &mut output),
+            "rpsl" => output_rpsl(roas, &mut output),
+            other => {
+                error!("unknown output format {}", other);
+                Err(ProcessingError::Other)
+            }
         }
     }
 }
 
 
 fn output_csv<W: io::Write>(
-    roas: RouteOrigins,
+    roas: AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     writeln!(output, "ASN,IP Prefix,Max Length")?;
-    for roa in roas.drain() {
-        for addr in roa.iter() {
-            writeln!(output, "{},{}/{},{}",
-                roa.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length()
-            )?;
-        }
+    for addr in roas.iter() {
+        writeln!(output, "{},{}/{},{}",
+            addr.as_id(),
+            addr.address(), addr.address_length(),
+            addr.max_length()
+        )?;
     }
     Ok(())
 }
 
 fn output_json<W: io::Write>(
-    roas: RouteOrigins,
+    roas: AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     let mut first = true;
     writeln!(output, "{{\n  \"roas\": [")?;
-    for roa in roas.drain() {
-        for addr in roa.iter() {
-            if first {
-                first = false
-            }
-            else {
-                write!(output, ",\n")?;
-            }
-            write!(output,
-                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \"maxLength\": {} }}",
-                roa.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length()
-            )?;
+    for addr in roas.iter() {
+        if first {
+            first = false
         }
+        else {
+            write!(output, ",\n")?;
+        }
+        write!(output,
+            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+            \"maxLength\": {} }}",
+            addr.as_id(),
+            addr.address(), addr.address_length(),
+            addr.max_length()
+        )?;
     }
     writeln!(output, "\n  ]\n}}")?;
     Ok(())
 }
 
 fn output_rpsl<W: io::Write>(
-    roas: RouteOrigins,
+    roas: AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     let now = Utc::now().to_rfc3339();
-    for roa in roas.drain() {
-        for addr in roa.iter() {
-            writeln!(output,
-                "\r\nroute: {}/{}\r\norigin: {}\r\n\
-                descr: RPKI attestation\r\nmnt-by: NA\r\ncreated: {}\r\n\
-                last-modified: {}\r\nsource: NA\r\n",
-                addr.address(), addr.address_length(),
-                roa.as_id(), now, now
-            )?;
-        }
+    for addr in roas.iter() {
+        writeln!(output,
+            "\r\nroute: {}/{}\r\norigin: {}\r\n\
+            descr: RPKI attestation\r\nmnt-by: NA\r\ncreated: {}\r\n\
+            last-modified: {}\r\nsource: NA\r\n",
+            addr.address(), addr.address_length(),
+            addr.as_id(), now, now
+        )?;
     }
     Ok(())
 }
