@@ -610,7 +610,7 @@ impl RsyncCommand {
             destination.push('/')
         }
         let mut cmd = process::Command::new("rsync");
-        cmd.arg("-az")
+        cmd.arg("-rltz")
            .arg("--delete");
         if self.has_contimeout {
             cmd.arg("--contimeout=10");
