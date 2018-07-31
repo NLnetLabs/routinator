@@ -1,0 +1,126 @@
+.TH "routinator" "1" "July 31, 2018" "NLnet Labs" "routinator 0.1.0
+.\"
+.\" routinator.1 -- routinator DNS lookup utility
+.\"
+.\" Copyright (c) 2018, NLnet Labs. All rights reserved.
+.\"
+.\" See LICENSE for the license.
+.\"
+.\" Provicial manual page, need improvement so
+.\" version etc is generated automagically
+.\"
+.SH "NAME"
+.B routinator
+\- Experimental RPKI relying party software
+.SH "SYNOPSIS"
+.B routinator
+.RB [ \-h | \c
+.BR \-\-help ] 
+.RB [ \-N | \c
+.BR \-\-noprocess
+.RB [ \-\-strict ]
+.RB [ \-u | \c
+.BR \-\-unique ]
+.RB [ \-V | \c
+.BR \-\-Version ]
+.RB [ \-v | \c
+.BR \-\-verbose ]
+.RB [ \-c | \c
+.BR \-\-cache ]
+.IR cache
+.RB [ \-f | \c
+.BR \-\-outform ]
+.IR format
+.RB [ \-o | \c
+.BR \-\-output ]
+.RI [ file ]
+.SH "DESCRIPTION"
+.B Routinator
+validates RPKI route origin attestations.
+.P
+The available options are:
+.TP
+.BR \-h , " \-\-help"
+Prints some help information.
+.TP
+.BR \-N , " \-\-noprocess
+Do not process the repository.
+.TP
+.BR \-n , " \-\-noupdate
+Do not update local cache.
+.TP
+.B \-\-strict
+Parse RPKI data in strict mode.
+.TP
+.BR \-u , " \-\-unique
+Output unique value only.
+.TP
+.BR \-V , " \-\-version
+Prints version information.
+.TP
+.BR \-v , " \-\-verbose
+Print more information.
+If given multiple times, more information is
+printed.
+.TP
+.BR \-c , " \-\-cache \fIdirectory
+Sets the cache directory.
+Default a directory called
+.I rpki
+in the current directory.
+The directory has to be created by the user.
+.TP
+.BR \-f , " \-\-outform
+Specifies which output format to use.
+Possible formats are
+.IR csv ,
+.IR jason ,
+.IR rpsl
+and
+.IR none .
+Default format is
+.IR csv .
+.TP
+.BR \-o , " \-\-ouput \fIfilename
+The output file to be used.
+If no output filename or named "-" is given, standard output is used.
+.SH CACHE DIRECTORY STRUCTURE
+.\" This description is actually something that should
+.\" be covered by a reference manual.
+The
+.B
+Routinator
+uses the
+.UX
+file sytem as cache for the data.
+The default cache is the directory
+.I rpki-cache
+on the current directory where the progrem is called.
+This directory has to have two sub-directories entries,
+.IR tal
+and
+.IR repository .
+The
+.I tal
+directories contains the
+.I registry.tal
+files which instucts the
+.B routinator
+which RIR to uses while the
+.I repository
+is used for storage.
+.P
+It is beyond the scope of this manual page
+to descibe the format of the 
+.I \&.tal
+or repository data.
+.SH AUTHOR
+.P
+Jaap Akkerhuis whipped up this manual page.
+.SH "EXIT CODE"
+The routinator program exits with status code 1 on error, 
+.SH "SEE ALSO"
+.P
+Reference manual (to be written).
+.SH BUGS
+Sure
