@@ -41,22 +41,22 @@ validates RPKI route origin attestations.
 The available options are:
 .TP
 .BR \-h , " \-\-help"
-Prints some help information.
+Print some help information.
 .TP
 .BR \-N , " \-\-noprocess
 Do not process the repository.
 .TP
 .BR \-n , " \-\-noupdate
-Do not update local cache.
+Do not update the local cache.
 .TP
 .B \-\-strict
 Parse RPKI data in strict mode.
 .TP
 .BR \-u , " \-\-unique
-Output unique value only.
+Output unique values only.
 .TP
 .BR \-V , " \-\-version
-Prints version information.
+Print version information.
 .TP
 .BR \-v , " \-\-verbose
 Print more information.
@@ -65,7 +65,7 @@ printed.
 .TP
 .BR \-c , " \-\-cache \fIdirectory
 Sets the cache directory.
-Default a directory called
+Defaults to a directory called
 .I rpki
 in the current directory.
 The directory has to be created by the user.
@@ -74,7 +74,7 @@ The directory has to be created by the user.
 Specifies which output format to use.
 Possible formats are
 .IR csv ,
-.IR jason ,
+.IR json ,
 .IR rpsl
 and
 .IR none .
@@ -83,7 +83,7 @@ Default format is
 .TP
 .BR \-o , " \-\-ouput \fIfilename
 The output file to be used.
-If no output filename or named "-" is given, standard output is used.
+If no output filename or the target "-" is given, standard output is used.
 .SH CACHE DIRECTORY STRUCTURE
 .\" This description is actually something that should
 .\" be covered by a reference manual.
@@ -93,27 +93,27 @@ Routinator
 uses the
 .UX
 file sytem as cache for the data.
-The default cache is the directory
+The default cache is the
 .I rpki-cache
-on the current directory where the progrem is called.
-This directory has to have two sub-directories entries,
+directory in the folder where the program is called.
+This directory should have two entries,
 .IR tal
 and
 .IR repository .
 The
 .I tal
-directories contains the
+directoriy contains the
 .I registry.tal
-files which instucts the
+files which instruct the
 .B routinator
-which RIR to uses while the
+on which RIR repositories to download validation data from, while the
 .I repository
-is used for storage.
+directory is used for storage.
 .P
 It is beyond the scope of this manual page
 to descibe the format of the 
 .I \&.tal
-or repository data.
+or the repository data.
 .SH AUTHOR
 .P
 Jaap Akkerhuis whipped up this manual page.
