@@ -15,7 +15,7 @@ use bytes::Bytes;
 use futures::future;
 use futures::Future;
 use futures_cpupool::CpuPool;
-use rpki::rsync;
+use rpki::uri;
 use rpki::cert::{Cert, ResourceCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
@@ -129,7 +129,7 @@ impl Repository {
     /// Loads a trust anchor certificate from the given URI.
     fn load_ta(
         &self,
-        uri: &rsync::Uri
+        uri: &uri::Rsync
     ) -> Result<Option<Cert>, ProcessingError> {
         Ok(
             self.load_file(uri, true)?
@@ -142,7 +142,7 @@ impl Repository {
     /// If `create` is `true`, it will try to rsync missing files.
     fn load_file(
         &self,
-        uri: &rsync::Uri,
+        uri: &uri::Rsync,
         create: bool
     ) -> Result<Option<Bytes>, ProcessingError> {
         match File::open(self.uri_to_path(uri)) {
@@ -166,7 +166,7 @@ impl Repository {
     }
 
     /// Converts an rsync module URI into a path.
-    fn module_to_path(&self, module: &rsync::Module) -> PathBuf {
+    fn module_to_path(&self, module: &uri::RsyncModule) -> PathBuf {
         let mut res = self.0.base.clone();
         res.push("repository");
         res.push(module.authority());
@@ -175,7 +175,7 @@ impl Repository {
     }
 
     /// Converts an rsync URI into a path.
-    fn uri_to_path(&self, uri: &rsync::Uri) -> PathBuf {
+    fn uri_to_path(&self, uri: &uri::Rsync) -> PathBuf {
         let mut res = self.module_to_path(uri.module());
         res.push(uri.path());
         res
@@ -222,7 +222,7 @@ impl Repository {
             match entry_to_uri_component(&entry) {
                 Some(module) => {
                     self.rsync_module(
-                        &rsync::Module::new(host.clone(), module)
+                        &uri::RsyncModule::new(host.clone(), module)
                     )
                 }
                 None => {
@@ -322,7 +322,7 @@ impl Repository {
     /// Processes all an object.
     fn process_object(
         &self,
-        uri: rsync::Uri,
+        uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &ResourceCert,
         crl: &mut CrlStore,
@@ -492,7 +492,7 @@ impl Repository {
 /// # Rsyncing
 ///
 impl Repository {
-    fn rsync_module(&self, module: &rsync::Module) {
+    fn rsync_module(&self, module: &uri::RsyncModule) {
         if let Some((ref state, ref command)) = self.0.rsync {
             if state.lock().unwrap().have_seen(module) {
                 return
@@ -533,10 +533,10 @@ struct RsyncState {
     /// The first element of each list item is the module for which the
     /// process runs, the second is a conditional variable that is going
     /// to be triggered when the process finishes.
-    running: Vec<(rsync::Module, Arc<(Mutex<bool>, Condvar)>)>,
+    running: Vec<(uri::RsyncModule, Arc<(Mutex<bool>, Condvar)>)>,
 
     /// The rsync modules we already tried in this iteration.
-    seen: Vec<rsync::Module>,
+    seen: Vec<uri::RsyncModule>,
 }
 
 impl RsyncState {
@@ -549,7 +549,7 @@ impl RsyncState {
 
     fn get_running(
         &mut self,
-        module: &rsync::Module
+        module: &uri::RsyncModule
     ) -> Result<Arc<(Mutex<bool>, Condvar)>, Arc<(Mutex<bool>, Condvar)>> {
         for item in &self.running {
             if item.0.eq(module) {
@@ -561,15 +561,15 @@ impl RsyncState {
         Err(res)
     }
 
-    fn remove_running(&mut self, module: &rsync::Module) {
+    fn remove_running(&mut self, module: &uri::RsyncModule) {
         self.running.retain(|item| !item.0.eq(module))
     }
 
-    fn add_seen(&mut self, module: &rsync::Module) {
+    fn add_seen(&mut self, module: &uri::RsyncModule) {
         self.seen.push(module.clone());
     }
 
-    fn have_seen(&self, module: &rsync::Module) -> bool {
+    fn have_seen(&self, module: &uri::RsyncModule) -> bool {
         self.seen.contains(module)
     }
 }
@@ -599,7 +599,7 @@ impl RsyncCommand {
 
     pub fn update<P: AsRef<Path>>(
         &self,
-        source: &rsync::Module,
+        source: &uri::RsyncModule,
         destination: P
     ) -> Result<(), io::Error> {
         debug!("rsyncing from {}.", source);
@@ -631,7 +631,7 @@ impl RsyncCommand {
 fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
     let name = entry.file_name();
     name.to_str().and_then(|name| {
-        if rsync::is_uri_ascii(name) {
+        if uri::is_uri_ascii(name) {
             Some(Bytes::from(name.as_bytes()))
         }
         else {
