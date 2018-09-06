@@ -5,6 +5,21 @@
 Introducing ‘Routinator 3000,’ an experimental RPKI relying party software
 written in Rust.
 
+We are working towards a full production release over the
+next few months. Features on the roadmap are:
+
+  * [x] Fetch certificates and ROAs via rsync
+  * [x] Perform crypotographic validation
+  * [x] Export validated ROAs in CSV, JSON and RPSL format
+  * [ ] Exhaustive interoperability and compliance testing
+  * [ ] Implement the RPKI-RTR protocol for pushing RPKI data to supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+  * [ ] Implement the RRDP protocol for fetching ([RFC 8182](https://tools.ietf.org/html/rfc8182))
+  * [ ] Add local exceptions and overrides
+  * [ ] Implement a basic web-based user interface and Command Line Interface
+  * [ ] Expose an API
+  * [ ] Add the ability to process Internet Routing Registry data
+  * [ ] Integration with alerting and monitoring services so that route hijacks, misconfigurations, connectivity and application problems can be flagged.
+
 
 ## RPKI
 
