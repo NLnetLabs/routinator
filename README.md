@@ -3,7 +3,9 @@
 [![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
 
 Introducing ‘Routinator 3000,’ an experimental RPKI relying party software
-written in Rust. We are working towards a full production release over the
+written in Rust.
+
+We are working towards a full production release over the
 next few months. Features on the roadmap are:
 
   * [x] Fetch certificates and ROAs via rsync
