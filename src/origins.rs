@@ -1,8 +1,10 @@
 
 use std::collections::HashSet;
 use std::net::IpAddr;
+use std::str::FromStr;
 use rpki::asres::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
+use super::slurm::LocalExceptions;
 
 
 //------------ RouteOrigins --------------------------------------------------
@@ -48,24 +50,37 @@ pub enum AddressOrigins {
 }
 
 impl AddressOrigins {
-    pub fn from_route_origins(origins: RouteOrigins, unique: bool) -> Self {
-        if unique {
-            let mut res = HashSet::new();
-            for roa in origins.drain() {
-                for addr in roa.iter() {
-                    res.insert(AddressOrigin::new(roa.as_id(), addr));
-                }
-            }
-            AddressOrigins::Unique(res)
+    pub fn from_route_origins(
+        origins: RouteOrigins,
+        exceptions: &LocalExceptions,
+        unique: bool
+    ) -> Self {
+        let mut res = if unique {
+            AddressOrigins::Unique(HashSet::new())
         }
         else {
-            let mut res = Vec::new();
-            for roa in origins.drain() {
-                for addr in roa.iter() {
-                    res.push(AddressOrigin::new(roa.as_id(), addr));
+            AddressOrigins::Regular(Vec::new())
+        };
+        for roa in origins.drain() {
+            for addr in roa.iter() {
+                let addr = AddressOrigin::from_roa(roa.as_id(), addr);
+                if exceptions.keep_origin(&addr) {
+                    res.push(addr)
                 }
             }
-            AddressOrigins::Regular(res)
+        }
+        for addr in exceptions.assertions() {
+            res.push(addr.clone())
+        }
+        res
+    }
+
+    fn push(&mut self, addr: AddressOrigin) {
+        match *self {
+            AddressOrigins::Regular(ref mut vec) => vec.push(addr),
+            AddressOrigins::Unique(ref mut set) => {
+                set.insert(addr);
+            }
         }
     }
 
@@ -112,28 +127,114 @@ impl<'a> Iterator for AddressOriginsIter<'a> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AddressOrigin {
     as_id: AsId,
-    addr: FriendlyRoaIpAddress,
+    prefix: AddressPrefix,
+    max_length: u8,
 }
 
 impl AddressOrigin {
-    fn new(as_id: AsId, addr: FriendlyRoaIpAddress) -> Self {
-        AddressOrigin { as_id, addr }
+    pub fn new(as_id: AsId, prefix: AddressPrefix, max_length: u8) -> Self {
+        AddressOrigin { as_id, prefix, max_length }
+    }
+
+    fn from_roa(as_id: AsId, addr: FriendlyRoaIpAddress) -> Self {
+        AddressOrigin {
+            as_id,
+            prefix: AddressPrefix::from(&addr),
+            max_length: addr.max_length()
+        }
     }
 
     pub fn as_id(&self) -> AsId {
         self.as_id
     }
 
+    pub fn prefix(&self) -> AddressPrefix {
+        self.prefix
+    }
+
     pub fn address(&self) -> IpAddr {
-        self.addr.address()
+        self.prefix.address()
     }
 
     pub fn address_length(&self) ->u8 {
-        self.addr.address_length()
+        self.prefix.address_length()
     }
 
     pub fn max_length(&self) -> u8 {
-        self.addr.max_length()
+        self.max_length
     }
 }
+
+
+//------------ AddressPrefix -------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AddressPrefix {
+    addr: IpAddr,
+    len: u8,
+}
+
+impl AddressPrefix {
+    pub fn address(self) -> IpAddr {
+        self.addr
+    }
+
+    pub fn address_length(self) -> u8 {
+        self.len
+    }
+
+    pub fn covers(self, other: Self) -> bool {
+        // XXX TEST THIS!!!11eleven
+        match (self.addr, other.addr) {
+            (IpAddr::V4(left), IpAddr::V4(right)) => {
+                if self.len > other.len {
+                    return false
+                }
+                let left = u32::from(left) & !(::std::u32::MAX >> self.len);
+                let right = u32::from(right) & !(::std::u32::MAX >> self.len);
+                left == right
+            }
+            (IpAddr::V6(left), IpAddr::V6(right)) => {
+                if self.len > other.len {
+                    return false
+                }
+                let left = u128::from(left) & !(::std::u128::MAX >> self.len);
+                let right = u128::from(right) & !(::std::u128::MAX >> self.len);
+                left == right
+            }
+            _ => false
+        }
+    }
+}
+
+impl<'a> From<&'a FriendlyRoaIpAddress> for AddressPrefix {
+    fn from(addr: &'a FriendlyRoaIpAddress) -> Self {
+        AddressPrefix {
+            addr: addr.address(),
+            len: addr.address_length(),
+        }
+    }
+}
+
+impl FromStr for AddressPrefix {
+    type Err = FromStrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut iter = s.splitn(2, '/');
+        let addr = iter.next().ok_or_else(|| FromStrError(s.into()))?;
+        let len = iter.next().ok_or_else(|| FromStrError(s.into()))?;
+        let addr = IpAddr::from_str(addr)
+                          .map_err(|_| FromStrError(s.into()))?;
+        let len = u8::from_str(len)
+                     .map_err(|_| FromStrError(s.into()))?;
+        Ok(AddressPrefix { addr, len })
+    }
+}
+
+
+//------------ FromStrError --------------------------------------------------
+
+#[derive(Clone, Debug, Fail)]
+#[fail(display="bad prefix {}", _0)]
+pub struct FromStrError(String);
 
