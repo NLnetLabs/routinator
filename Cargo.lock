@@ -57,7 +57,7 @@ dependencies = [
 [[package]]
 name = "ber"
 version = "0.1.0"
-source = "git+https://github.com/NLnetLabs/ber-rs.git#5a2f2f76a64d11d03d35cdf83c46ff5bc77b9ff6"
+source = "git+https://github.com/NLnetLabs/ber-rs.git#35c8adc36efc421abb016f0a2c587b651260a4bb"
 dependencies = [
  "bytes 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -324,7 +324,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.1.0"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git#222afde07764eb01273981963ed3205a40136b29"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#baa0f006a1001561ac65c0688c9828c525b0499e"
 dependencies = [
  "base64 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ber 0.1.0 (git+https://github.com/NLnetLabs/ber-rs.git)",
