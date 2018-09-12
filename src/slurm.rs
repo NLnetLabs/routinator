@@ -90,7 +90,7 @@ impl LocalExceptions {
 
     pub fn keep_origin(&self, addr: &AddressOrigin) -> bool {
         for filter in &self.filters {
-            if !filter.keep_origin(addr) {
+            if filter.filter_origin(addr) {
                 return false
             }
         }
@@ -182,7 +182,7 @@ impl PrefixFilter {
         }
     }
 
-    fn keep_origin(&self, addr: &AddressOrigin) -> bool {
+    fn filter_origin(&self, addr: &AddressOrigin) -> bool {
         match (self.prefix, self.asn) {
             (Some(prefix), Some(asn)) => {
                 prefix.covers(addr.prefix()) && asn == addr.as_id()
