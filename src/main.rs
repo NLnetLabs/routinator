@@ -1,5 +1,5 @@
 extern crate chrono;
-extern crate clap;
+#[macro_use] extern crate clap;
 extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate routinator;
@@ -13,17 +13,27 @@ use chrono::Utc;
 use clap::{Arg, App};
 use routinator::repository::{ProcessingError, Repository};
 use routinator::origins::AddressOrigins;
+use routinator::slurm::LocalExceptions;
 
 fn main() -> Result<(), ProcessingError> {
-    let matches = App::new("Routinator 3000")
+    // Remember to update the man page if you change this here!
+    let matches = App::new("Routinator")
         .version("0.1")
-        .author("Martin Hoffmann <martin@nlnetlabs.nl>")
+
+        .author(crate_authors!())
         .about("validates RPKI route origin attestations")
         .arg(Arg::with_name("cache")
              .short("c")
              .long("cache")
              .value_name("DIR")
              .help("sets the cache directory")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("exceptions")
+             .short("x")
+             .long("exceptions")
+             .value_name("FILE")
+             .help("file with local exceptions (see RFC 8416 for format)")
              .takes_value(true)
         )
         .arg(Arg::with_name("output")
@@ -77,6 +87,17 @@ fn main() -> Result<(), ProcessingError> {
         .format(|buf, record| write!(buf, "{}\n", record.args()))
         .init();
 
+    let exceptions = match matches.value_of("exceptions") {
+        Some(path) => match LocalExceptions::from_file(path) {
+            Ok(res) => res,
+            Err(err) => {
+                println!("Failed to load exceptions: {}\nAborted.", err);
+                ::std::process::exit(1);
+            }
+        }
+        None => LocalExceptions::empty()
+    };
+
     let repo = Repository::new(
         Path::new(matches.value_of("cache").unwrap_or("rpki-cache")),
         matches.is_present("strict"),
@@ -109,6 +130,7 @@ fn main() -> Result<(), ProcessingError> {
         let mut output = output.lock();
         let roas = AddressOrigins::from_route_origins(
             roas,
+            &exceptions,
             matches.is_present("unique")
         );
 

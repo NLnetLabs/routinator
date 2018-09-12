@@ -66,9 +66,13 @@ printed.
 .BR \-c , " \-\-cache \fIdirectory
 Sets the cache directory.
 Defaults to a directory called
-.I rpki
+.I rpki\-cache
 in the current directory.
 The directory has to be created by the user.
+.TP
+.BR \-x , " \-\-exceptions \fIfile
+Path to a file that contains the local exceptions.
+The file must be in SLURM format as defined in RFC 8416.
 .TP
 .BR \-f , " \-\-outform
 Specifies which output format to use.
