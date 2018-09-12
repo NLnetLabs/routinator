@@ -11,8 +11,8 @@ next few months. Features on the roadmap are:
   * [x] Fetch certificates and ROAs via rsync
   * [x] Perform cryptographic validation
   * [x] Export validated ROAs in CSV, JSON and RPSL format
+  * [x] Add local white list exceptions and overrides ([RFC 8416](https://tools.ietf.org/html/rfc8416))
   * [ ] Exhaustive interoperability and compliance testing
-  * [ ] Add local white list exceptions and overrides
   * [ ] Implement the RPKI-RTR protocol for pushing RPKI data to supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
   * [ ] Implement the RRDP protocol for fetching ([RFC 8182](https://tools.ietf.org/html/rfc8182))
   * [ ] Implement a basic web-based user interface and Command Line Interface
