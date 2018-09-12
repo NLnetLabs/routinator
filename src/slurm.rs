@@ -76,10 +76,10 @@ impl LocalExceptions {
                     "validationOutputFilters.prefixFilters"
                 )
             )?;
-        let assertions = assertions.remove("prefixFilters")
+        let assertions = assertions.remove("prefixAssertions")
             .ok_or_else(
                 || ParseError::missing(
-                    "validationOutputFilters.prefixFilters"
+                    "locallyAddedAssertions.prefixAssertions"
                 )
             )?;
         Ok(LocalExceptions {
@@ -105,7 +105,7 @@ impl LocalExceptions {
 
 //------------ PrefixFilter --------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrefixFilter {
     prefix: Option<AddressPrefix>,
     asn: Option<AsId>,
@@ -389,3 +389,100 @@ impl From<ParseError> for LoadError {
     }
 }
 
+
+//------------ Tests ---------------------------------------------------------
+
+#[cfg(test)]
+pub mod tests {
+
+    use super::*;
+    use origins::AddressPrefix;
+
+    fn address_origin(
+        asn: u32,
+        ip_string: &str,
+        length: u8,
+        max_length: u8
+    ) -> AddressOrigin {
+        AddressOrigin::new(
+            AsId::from(asn),
+            AddressPrefix::new(
+                ip_string.parse().unwrap(),
+                length
+            ),
+            max_length
+        )
+    }
+
+    fn make_prefix_filter(
+        prefix: Option<AddressPrefix>,
+        asn: Option<u32>
+    ) -> PrefixFilter {
+        PrefixFilter { prefix, asn: asn.map(|asn| AsId::from(asn)) }
+    }
+
+    fn address_prefix(
+        ip_string: &str,
+        length: u8
+    ) -> Option<AddressPrefix> {
+        Some(AddressPrefix::new(ip_string.parse().unwrap(), length))
+    }
+
+
+
+    #[test]
+    fn should_parse_empty_slurm_file() {
+        let empty = include_str!("../test/slurm/empty.json");
+        let json = json::parse(empty).unwrap();
+        let exceptions = LocalExceptions::from_json(json).unwrap();
+
+        assert_eq!(0, exceptions.assertions.len());
+        assert_eq!(0, exceptions.filters.len());
+    }
+
+    #[test]
+    fn should_parse_full_slurm_file() {
+        let empty = include_str!("../test/slurm/full.json");
+        let json = json::parse(empty).unwrap();
+        let exceptions = LocalExceptions::from_json(json).unwrap();
+
+        assert_eq!(2, exceptions.assertions.len());
+        assert!(
+            exceptions.assertions.contains(
+                &address_origin(64496, "198.51.100.0", 24, 24)
+            )
+        );
+        assert!(
+            exceptions.assertions.contains(
+                &address_origin(64496, "2001:DB8::", 32, 48)
+            )
+        );
+
+        assert_eq!(3, exceptions.filters.len());
+
+        assert!(
+            exceptions.filters.contains(
+                &make_prefix_filter(
+                    address_prefix("192.0.2.0", 24),
+                    None
+                )
+            )
+        );
+        assert!(
+            exceptions.filters.contains(
+                &make_prefix_filter(
+                    None,
+                    Some(64496)
+                )
+            )
+        );
+        assert!(
+            exceptions.filters.contains(
+                &make_prefix_filter(
+                    address_prefix("198.51.100.0", 24),
+                    Some(64497)
+                )
+            )
+        );
+    }
+}

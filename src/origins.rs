@@ -175,6 +175,10 @@ pub struct AddressPrefix {
 }
 
 impl AddressPrefix {
+    pub fn new(addr: IpAddr, len: u8) -> Self {
+        AddressPrefix{addr, len}
+    }
+
     pub fn address(self) -> IpAddr {
         self.addr
     }
@@ -238,3 +242,33 @@ impl FromStr for AddressPrefix {
 #[fail(display="bad prefix {}", _0)]
 pub struct FromStrError(String);
 
+
+//------------ Tests ---------------------------------------------------------
+
+#[cfg(test)]
+pub mod tests {
+
+    use super::*;
+
+    fn make_pfx(s: &str, l: u8) -> AddressPrefix {
+        AddressPrefix::new(s.parse().unwrap(), l)
+    }
+
+    #[test]
+    fn should_find_covered_prefixes() {
+        let outer = make_pfx("10.0.0.0", 16);
+        let sibling = make_pfx("10.1.0.0", 16);
+        let inner_low = make_pfx("10.0.0.0", 24);
+        let inner_mid = make_pfx("10.0.61.0", 24);
+        let inner_hi = make_pfx("10.0.255.0", 24);
+
+        assert!(! outer.covers(sibling));
+        assert!(outer.covers(inner_low));
+        assert!(outer.covers(inner_mid));
+        assert!(outer.covers(inner_hi));
+    }
+
+
+
+
+}

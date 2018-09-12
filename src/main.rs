@@ -1,5 +1,5 @@
 extern crate chrono;
-extern crate clap;
+#[macro_use] extern crate clap;
 extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate routinator;
@@ -19,7 +19,8 @@ fn main() -> Result<(), ProcessingError> {
     // Remember to update the man page if you change this here!
     let matches = App::new("Routinator")
         .version("0.1")
-        .author("Martin Hoffmann <martin@nlnetlabs.nl>")
+
+        .author(crate_authors!())
         .about("validates RPKI route origin attestations")
         .arg(Arg::with_name("cache")
              .short("c")
@@ -32,7 +33,7 @@ fn main() -> Result<(), ProcessingError> {
              .short("x")
              .long("exceptions")
              .value_name("FILE")
-             .help("file with local exceptions (SLURM)")
+             .help("file with local exceptions (see RFC 8416 for format)")
              .takes_value(true)
         )
         .arg(Arg::with_name("output")
