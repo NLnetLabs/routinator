@@ -20,6 +20,7 @@
 //! [`Repository`]: repository/struct.Repository.html
 
 extern crate bytes;
+#[macro_use] extern crate clap;
 #[macro_use] extern crate failure;
 extern crate futures;
 extern crate futures_cpupool;
@@ -28,6 +29,7 @@ extern crate json;
 extern crate num_cpus;
 extern crate rpki;
 
+pub mod config;
 pub mod origins;
 pub mod repository;
 pub mod slurm;

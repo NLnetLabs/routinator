@@ -1,7 +1,8 @@
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 use rpki::asres::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use super::slurm::LocalExceptions;
@@ -44,23 +45,22 @@ impl RouteOrigins {
 //------------ AddressOrigins ------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub enum AddressOrigins {
-    Regular(Vec<AddressOrigin>),
-    Unique(HashSet<AddressOrigin>),
+pub struct AddressOrigins {
+    origins: HashSet<AddressOrigin>,
 }
 
 impl AddressOrigins {
+    pub fn new() -> Self {
+        AddressOrigins {
+            origins: HashSet::new()
+        }
+    }
+
     pub fn from_route_origins(
         origins: RouteOrigins,
         exceptions: &LocalExceptions,
-        unique: bool
     ) -> Self {
-        let mut res = if unique {
-            AddressOrigins::Unique(HashSet::new())
-        }
-        else {
-            AddressOrigins::Regular(Vec::new())
-        };
+        let mut res = Self::new();
         for roa in origins.drain() {
             for addr in roa.iter() {
                 let addr = AddressOrigin::from_roa(roa.as_id(), addr);
@@ -76,48 +76,132 @@ impl AddressOrigins {
     }
 
     fn push(&mut self, addr: AddressOrigin) {
-        match *self {
-            AddressOrigins::Regular(ref mut vec) => vec.push(addr),
-            AddressOrigins::Unique(ref mut set) => {
-                set.insert(addr);
-            }
-        }
+        let _ = self.origins.insert(addr);
     }
 
-    pub fn iter(&self) -> AddressOriginsIter {
-        AddressOriginsIter::new(self)
+    pub fn iter(&self) -> impl Iterator<Item=&AddressOrigin> {
+        self.origins.iter()
     }
 }
 
 
-//------------ AddressOriginsIter --------------------------------------------
+//------------ OriginsDiff ---------------------------------------------------
 
-pub enum AddressOriginsIter<'a> {
-    Regular(::std::slice::Iter<'a, AddressOrigin>),
-    Unique(::std::collections::hash_set::Iter<'a, AddressOrigin>),
+#[derive(Clone, Debug)]
+pub struct OriginsDiff {
+    serial: u32,
+    // We are using `HashSet`s here for easy unique-ing.
+    announce: HashSet<AddressOrigin>,
+    withdraw: HashSet<AddressOrigin>,
 }
 
-impl<'a> AddressOriginsIter<'a> {
-    fn new(from: &'a AddressOrigins) -> Self {
-        match *from {
-            AddressOrigins::Regular(ref inner) => {
-                AddressOriginsIter::Regular(inner.iter())
-            }
-            AddressOrigins::Unique(ref inner) => {
-                AddressOriginsIter::Unique(inner.iter())
+impl OriginsDiff {
+    pub fn construct(
+        mut current: AddressOrigins,
+        origins: Option<RouteOrigins>,
+        exceptions: &LocalExceptions,
+        serial: u32
+    ) -> (AddressOrigins, Self) {
+        let mut next = AddressOrigins::new();
+        let mut announce = HashSet::new();
+
+        if let Some(origins) = origins {
+            for roa in origins.drain() {
+                for addr in roa.iter() {
+                    let addr = AddressOrigin::from_roa(roa.as_id(), addr);
+                    if !exceptions.keep_origin(&addr) {
+                        continue
+                    }
+
+                    if !current.origins.remove(&addr) {
+                        let _ = announce.insert(addr.clone());
+                    }
+                    next.push(addr)
+                }
             }
         }
+        for addr in exceptions.assertions() {
+            // Exceptions could have changed, so let’s be thorough here.
+            if !current.origins.remove(&addr) {
+                let _ = announce.insert(addr.clone());
+            }
+            next.push(addr.clone())
+        }
+        let withdraw = current.origins.drain().collect();
+        (next, OriginsDiff { serial, announce, withdraw })
+    }
+
+    pub fn serial(&self) -> u32 {
+        self.serial
+    }
+
+    pub fn announce(&self) -> impl Iterator<Item=&AddressOrigin> {
+        self.announce.iter()
+    }
+
+    pub fn withdraw(&self) -> impl Iterator<Item=&AddressOrigin> {
+        self.withdraw.iter()
     }
 }
 
-impl<'a> Iterator for AddressOriginsIter<'a> {
-    type Item = &'a AddressOrigin;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match *self {
-            AddressOriginsIter::Regular(ref mut inner) => inner.next(),
-            AddressOriginsIter::Unique(ref mut inner) => inner.next(),
+//------------ OriginsHistory ------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct OriginsHistory {
+    current: AddressOrigins,
+    diffs: VecDeque<OriginsDiff>,
+    keep: usize,
+}
+
+impl OriginsHistory {
+    pub fn new(current: AddressOrigins, keep: usize) -> Self {
+        OriginsHistory {
+            current,
+            diffs: VecDeque::with_capacity(keep),
+            keep
         }
+    }
+
+    pub fn push_diff(&mut self, diff: OriginsDiff) {
+        if self.diffs.len() == self.keep {
+            let _ = self.diffs.pop_back();
+        }
+        self.diffs.push_front(diff)
+    }
+
+    pub fn iter_diffs(&self) -> impl Iterator<Item=&OriginsDiff> {
+        self.diffs.iter()
+    }
+
+    pub fn current(&self) -> &AddressOrigins {
+        &self.current
+    }
+
+    pub fn serial(&self) -> u32 {
+        match self.diffs.front() {
+            Some(diff) => diff.serial(),
+            None => 0
+        }
+    }
+
+    pub fn update(
+        history: Arc<RwLock<Self>>,
+        origins: Option<RouteOrigins>,
+        exceptions: &LocalExceptions
+    ) {
+        let (serial, current) = {
+            let history = history.read().unwrap();
+            let serial = history.serial().wrapping_add(1);
+            let current = history.current.clone();
+            (serial, current)
+        };
+        let (next, diff) = OriginsDiff::construct(
+            current, origins, exceptions, serial
+        );
+        let mut history = history.write().unwrap();
+        history.current = next;
+        history.push_diff(diff);
     }
 }
 
@@ -188,7 +272,6 @@ impl AddressPrefix {
     }
 
     pub fn covers(self, other: Self) -> bool {
-        // XXX TEST THIS!!!11eleven
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
                 if self.len > other.len {

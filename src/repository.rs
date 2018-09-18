@@ -41,8 +41,11 @@ pub struct Repository(Arc<RepoInner>);
 
 #[derive(Debug)]
 struct RepoInner {
-    /// The directory our local copy lives in.
-    base: PathBuf, 
+    /// The directory our local copy of the respository lives in.
+    cache_dir: PathBuf, 
+
+    /// The directory the TALs live in.
+    tal_dir: PathBuf,
 
     /// Should we be strict when decoding data?
     strict: bool,
@@ -58,24 +61,21 @@ struct RepoInner {
 
 impl Repository {
     /// Creates a new repository.
-    ///
-    /// You need to pass in the path to the directory where the local copy
-    /// lives via the `base` argument. If `strict` is `true`, then parsing
-    /// will be done very strictly. In particular, it means that the code
-    /// expectes signed objects to be encoded in DER format which seems not
-    /// to be the case in practice. Finally, if `rsync` is set to `false`, no
-    /// rsync will ever happen. Nothing will fail because of that, though.
-    pub fn new<P: AsRef<Path>>(
-        base: P,
+    pub fn new(
+        cache_dir: PathBuf,
+        tal_dir: PathBuf,
         strict: bool,
         rsync: bool
     ) -> Result<Self, ProcessingError> {
-        let base = base.as_ref().into();
-        if let Err(err) = fs::read_dir(&base) {
-            return Err(ProcessingError::BadRepository(err))
+        if let Err(err) = fs::read_dir(&cache_dir) {
+            return Err(ProcessingError::BadCacheDirectory(err))
+        }
+        if let Err(err) = fs::read_dir(&tal_dir) {
+            return Err(ProcessingError::BadTalDirectory(err))
         }
         Ok(Repository(Arc::new(RepoInner {
-            base,
+            cache_dir,
+            tal_dir,
             strict,
             threads: ::num_cpus::get(),
             rsync: if rsync {
@@ -95,9 +95,8 @@ impl Repository {
     /// This will go out and do a bunch of rsync requests (unless that was
     /// disabled explicitely).
     pub fn update(&self) -> Result<(), ProcessingError> {
-        let dir = self.0.base.join("repository");
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(dir)?.map(|entry| {
+        future::join_all(fs::read_dir(&self.0.cache_dir)?.map(|entry| {
             let repo = self.clone();
             pool.spawn(future::lazy(|| repo.update_host(entry)))
         })).wait().map(|_| ())
@@ -109,9 +108,8 @@ impl Repository {
     /// modules it hasn’t seen before. This means that if you start out on a
     /// new copy, it will go out and fetch everything it needs.
     pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
-        let dir = self.0.base.join("tal");
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(dir)?.map(|entry| {
+        future::join_all(fs::read_dir(&self.0.tal_dir)?.map(|entry| {
             let repo = self.clone();
             pool.spawn(future::lazy(|| repo.process_tal(entry)))
         })).and_then(|x| {
@@ -167,8 +165,7 @@ impl Repository {
 
     /// Converts an rsync module URI into a path.
     fn module_to_path(&self, module: &uri::RsyncModule) -> PathBuf {
-        let mut res = self.0.base.clone();
-        res.push("repository");
+        let mut res = self.0.cache_dir.clone();
         res.push(module.authority());
         res.push(module.module());
         res
@@ -645,8 +642,11 @@ fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
 
 #[derive(Debug, Fail)]
 pub enum ProcessingError {
-    #[fail(display="failed to open local repository: {}", _0)]
-    BadRepository(io::Error),
+    #[fail(display="failed to open repository cache directory: {}", _0)]
+    BadCacheDirectory(io::Error),
+
+    #[fail(display="failed to open trust anchor directory: {}", _0)]
+    BadTalDirectory(io::Error),
 
     #[fail(display="{}", _0)]
     Rsync(RsyncError),
