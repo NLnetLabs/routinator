@@ -144,7 +144,8 @@ If you would like to add exceptions to the validated RPKI data in the
 form of local filters and additions, you can specify this in a file 
 using JSON notation according to the 
 [SLURM](https://tools.ietf.org/html/rfc8416) standard. You can find 
-two example files in `/test/slurm`.
+two example files in `/test/slurm`. Use the `-x` option to refer to your 
+file with local exceptions.
 
 When playing with these options, you might find `-n` useful. It will
 cause Routinator to skip the rsync-ing of the repository – which should
