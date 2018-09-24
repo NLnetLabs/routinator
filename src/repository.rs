@@ -278,7 +278,7 @@ impl Repository {
                 if cert.subject_public_key_info() != tal.key_info() {
                     continue;
                 }
-                let cert = match cert.validate_ta() {
+                let cert = match cert.validate_ta(self.0.strict) {
                     Ok(cert) => cert,
                     Err(_) => {
                         continue;
@@ -350,7 +350,7 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let cert = match cert.validate_ca(issuer) {
+            let cert = match cert.validate_ca(issuer, self.0.strict) {
                 Ok(cert) => cert,
                 Err(_) => {
                     info!("{}: failed to validate.", uri);
@@ -378,7 +378,7 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let route = roa.process(issuer, |cert| {
+            let route = roa.process(issuer, self.0.strict, |cert| {
                 self.check_crl(cert, issuer, crl)
             });
             if let Ok(route) = route {
@@ -419,7 +419,8 @@ impl Repository {
                     continue
                 }
             };
-            let (cert, manifest) = match manifest.validate(issuer) {
+            let (cert, manifest) = match manifest.validate(issuer,
+                                                           self.0.strict) {
                 Ok(manifest) => manifest,
                 Err(_) => {
                     info!("{}: failed to validate", uri);
