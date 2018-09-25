@@ -28,6 +28,8 @@ extern crate json;
 #[macro_use] extern crate log;
 extern crate num_cpus;
 extern crate rpki;
+extern crate tokio;
+extern crate tokio_process;
 
 pub mod config;
 pub mod origins;

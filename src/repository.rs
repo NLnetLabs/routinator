@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use bytes::Bytes;
 use futures::future;
-use futures::Future;
+use futures::{Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use rpki::uri;
 use rpki::cert::{Cert, ResourceCert};
@@ -22,6 +22,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+use tokio_process::CommandExt;
 use super::origins::RouteOrigins;
 
 
@@ -90,16 +91,33 @@ impl Repository {
         })))
     }
 
+    /// Starts a validation run.
+    pub fn start(&self) {
+        if let Some(ref rsync) = self.0.rsync {
+            rsync.0.lock().unwrap().clear_seen();
+        }
+    }
+
     /// Updates the content of the local copy.
     ///
     /// This will go out and do a bunch of rsync requests (unless that was
     /// disabled explicitely).
     pub fn update(&self) -> Result<(), ProcessingError> {
+        self.update_async().wait()
+    }
+
+    pub fn update_async(
+        &self
+    ) -> impl Future<Item=(), Error=ProcessingError> {
+        let repo = self.clone();
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(&self.0.cache_dir)?.map(|entry| {
-            let repo = self.clone();
-            pool.spawn(future::lazy(|| repo.update_host(entry)))
-        })).wait().map(|_| ())
+        fs::read_dir(&self.0.cache_dir).map_err(Into::into).into_future()
+        .and_then(|dir| {
+            future::join_all(dir.map(move |entry| {
+                let repo = repo.clone();
+                pool.spawn(future::lazy(|| repo.update_host(entry)))
+            })).map(|_| ())
+        })
     }
 
     /// Process the local copy and produce a list of validated route origins.
@@ -108,15 +126,25 @@ impl Repository {
     /// modules it hasn’t seen before. This means that if you start out on a
     /// new copy, it will go out and fetch everything it needs.
     pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
+        self.process_async().wait()
+    }
+
+    pub fn process_async(
+        &self
+    ) -> impl Future<Item=RouteOrigins, Error=ProcessingError> {
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(&self.0.tal_dir)?.map(|entry| {
-            let repo = self.clone();
-            pool.spawn(future::lazy(|| repo.process_tal(entry)))
-        })).and_then(|x| {
-            let mut res = RouteOrigins::new();
-            x.into_iter().for_each(|item| res.merge(item));
-            Ok(res)
-        }).wait()
+        let repo = self.clone();
+        fs::read_dir(&self.0.cache_dir).map_err(Into::into).into_future()
+        .and_then(|dir| {
+            future::join_all(dir.map(move |entry| {
+                let repo = repo.clone();
+                pool.spawn(future::lazy(|| repo.process_tal(entry)))
+            })).and_then(|x| {
+                let mut res = RouteOrigins::new();
+                x.into_iter().for_each(|item| res.merge(item));
+                Ok(res)
+            })
+        })
     }
 }
 
@@ -275,7 +303,7 @@ impl Repository {
                 if cert.subject_public_key_info() != tal.key_info() {
                     continue;
                 }
-                let cert = match cert.validate_ta() {
+                let cert = match cert.validate_ta(self.0.strict) {
                     Ok(cert) => cert,
                     Err(_) => {
                         continue;
@@ -347,7 +375,7 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let cert = match cert.validate_ca(issuer) {
+            let cert = match cert.validate_ca(issuer, self.0.strict) {
                 Ok(cert) => cert,
                 Err(_) => {
                     info!("{}: failed to validate.", uri);
@@ -375,7 +403,7 @@ impl Repository {
                     return Ok(())
                 }
             };
-            let route = roa.process(issuer, |cert| {
+            let route = roa.process(issuer, self.0.strict, |cert| {
                 self.check_crl(cert, issuer, crl)
             });
             if let Ok(route) = route {
@@ -416,7 +444,8 @@ impl Repository {
                     continue
                 }
             };
-            let (cert, manifest) = match manifest.validate(issuer) {
+            let (cert, manifest) = match manifest.validate(issuer,
+                                                           self.0.strict) {
                 Ok(manifest) => manifest,
                 Err(_) => {
                     info!("{}: failed to validate", uri);
@@ -569,6 +598,10 @@ impl RsyncState {
     fn have_seen(&self, module: &uri::RsyncModule) -> bool {
         self.seen.contains(module)
     }
+
+    fn clear_seen(&mut self) {
+        self.seen.clear()
+    }
 }
 
 
@@ -599,6 +632,46 @@ impl RsyncCommand {
         source: &uri::RsyncModule,
         destination: P
     ) -> Result<(), io::Error> {
+        if !self.command(source, destination)?.status()?.success() {
+            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+        }
+        Ok(())
+    }
+
+    pub fn update_async<P: AsRef<Path>>(
+        &self,
+        source: &uri::RsyncModule,
+        destination: P
+    ) -> impl Future<Item=(), Error=io::Error> {
+        let cmd = self.command(source, destination);
+        future::lazy(|| cmd)
+        .and_then(|mut cmd| {
+            cmd.status_async()
+        })
+        .and_then(|cmd| cmd)
+        .then(|res| {
+            match res {
+                Ok(status) => {
+                    if status.success() {
+                        Ok(())
+                    }
+                    else {
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "rsync failed"
+                        ))
+                    }
+                }
+                Err(err) => Err(err)
+            }
+        })
+    }
+
+    fn command<P: AsRef<Path>>(
+        &self,
+        source: &uri::RsyncModule,
+        destination: P
+    ) -> Result<process::Command, io::Error> {
         debug!("rsyncing from {}.", source);
         let destination = destination.as_ref();
         create_dir_all(destination)?;
@@ -614,13 +687,16 @@ impl RsyncCommand {
         }
         cmd.arg(source.to_string())
            .arg(destination);
-        debug!("Running {:?}", cmd);
-        if !cmd.status()?.success() {
-            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
-        }
-        Ok(())
+        Ok(cmd)
     }
 }
+
+
+//------------ ProcessLoop ---------------------------------------------------
+
+/// A future that keeps updating the repository.
+#[derive(Debug)]
+pub struct ProcessLoop;
 
 
 //------------ Helper Functions ----------------------------------------------

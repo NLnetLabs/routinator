@@ -221,6 +221,8 @@ impl Config {
             },
         }
     }
+
+    pub fn touch(&self) { }
 }
 
 

@@ -1,22 +1,33 @@
 extern crate chrono;
 extern crate env_logger;
+extern crate futures;
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate routinator;
 extern crate rpki;
+extern crate tokio;
 
 use std::io;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 use chrono::Utc;
+use futures::future;
+use futures::future::Future;
+use tokio::timer::Delay;
 use routinator::config::{Config, OutputFormat};
 use routinator::repository::{ProcessingError, Repository};
 use routinator::origins::{AddressOrigins, OriginsHistory};
 use routinator::slurm::LocalExceptions;
 
+lazy_static! {
+    static ref CONFIG: Config = Config::create();
+}
+
 fn main() -> Result<(), ProcessingError> {
-    let config = Config::create();
+    let config = &CONFIG;
 
     env_logger::Builder::new()
         .filter_level(config.verbose)
@@ -32,7 +43,7 @@ fn main() -> Result<(), ProcessingError> {
 }
 
 
-fn run_forever(config: Config) -> Result<(), ProcessingError> {
+fn run_forever(config: &Config) -> Result<(), ProcessingError> {
     if !config.update {
         warn!("no-update option ignored in repeat mode");
     }
@@ -54,16 +65,80 @@ fn run_forever(config: Config) -> Result<(), ProcessingError> {
             repo.process()?,
             &load_exceptions(&config)?
         ),
-        10 // XXX Make configurable.
+        config.history_size
     )));
 
-    let _ = history;
+    tokio::runtime::run(
+        update_future(repo.clone(), history.clone()).select(
+            listener_future(repo, history)
+        ).map(|_| ()).map_err(|_| ())
+    );
 
     Ok(())
 }
 
 
-fn run_once(config: Config) -> Result<(), ProcessingError> {
+fn update_future(
+    repo: Repository,
+    history: Arc<RwLock<OriginsHistory>>,
+) -> impl Future<Item=(), Error=()> {
+    future::loop_fn((repo, history), |(repo, history)| {
+        Delay::new(Instant::now() + CONFIG.refresh)
+        .map_err(|e| error!("timer failed; err={:?}", e))
+        .and_then(move |_| {
+            repo.start();
+            Ok(repo)
+        })
+        .and_then(|repo| {
+            repo.update_async()
+            .then(|res| {
+                // Print error but keep going.
+                if let Err(err) = res {
+                    error!("repository update failed: {}", err);
+                }
+                Ok(repo)
+            })
+        })
+        .and_then(|repo| {
+            repo.process_async()
+            .then(|origins| {
+                let origins = match origins {
+                    Ok(origins) => origins,
+                    Err(err) => {
+                        error!("repository processing failed; err={:?}", err);
+                        return Ok(
+                            future::Loop::Continue((repo, history))
+                        )
+                    }
+                };
+                match load_exceptions(&CONFIG) {
+                    Ok(exceptions) => {
+                        OriginsHistory::update(
+                            history.clone(),
+                            Some(origins),
+                            &exceptions,
+                        );
+                    }
+                    Err(err) => {
+                        error!("failed loading exceptions: {}", err);
+                    }
+                }
+                Ok(future::Loop::Continue((repo, history)))
+            })
+        })
+    })
+}
+
+
+fn listener_future(
+    _repo: Repository,
+    _history: Arc<RwLock<OriginsHistory>>,
+) -> impl Future<Item=(), Error=()> {
+    future::empty()
+}
+
+
+fn run_once(config: &Config) -> Result<(), ProcessingError> {
     let exceptions = load_exceptions(&config)?;
 
     let repo = Repository::new(
