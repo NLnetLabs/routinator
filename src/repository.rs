@@ -70,10 +70,15 @@ impl Repository {
         strict: bool,
         rsync: bool
     ) -> Result<Self, ProcessingError> {
-        let base = base.as_ref().into();
+        let base = PathBuf::from(base.as_ref());
         if let Err(err) = fs::read_dir(&base) {
             return Err(ProcessingError::BadRepository(err))
         }
+
+        // Let’s quickly go over the TALs to break as early as possible if
+        // they aren’t good.
+        for _ in Tal::read_dir(base.join("tal"))? { }
+
         Ok(Repository(Arc::new(RepoInner {
             base,
             strict,
