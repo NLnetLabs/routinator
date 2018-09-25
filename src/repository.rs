@@ -263,7 +263,7 @@ impl Repository {
                 return Err(err.into())
             }
         };
-        let tal = match Tal::read(&mut file) {
+        let tal = match Tal::read(&path, &mut file) {
             Ok(tal) => tal,
             Err(err) => {
                 error!("{}: {}. Aborting.", path.display(), err);

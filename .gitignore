@@ -2,4 +2,5 @@
 /target/
 **/*.rs.bk
 /rpki-cache/repository
+/rpki-cache/tal/arin.tal
 /.cargo
