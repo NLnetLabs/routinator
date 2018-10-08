@@ -34,5 +34,7 @@ extern crate tokio_process;
 pub mod config;
 pub mod origins;
 pub mod repository;
+pub mod rtr;
 pub mod slurm;
+
 

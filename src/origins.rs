@@ -46,13 +46,13 @@ impl RouteOrigins {
 
 #[derive(Clone, Debug)]
 pub struct AddressOrigins {
-    origins: HashSet<AddressOrigin>,
+    origins: Vec<AddressOrigin>,
 }
 
 impl AddressOrigins {
     pub fn new() -> Self {
         AddressOrigins {
-            origins: HashSet::new()
+            origins: Vec::new()
         }
     }
 
@@ -60,27 +60,35 @@ impl AddressOrigins {
         origins: RouteOrigins,
         exceptions: &LocalExceptions,
     ) -> Self {
-        let mut res = Self::new();
+        let mut res = HashSet::new();
         for roa in origins.drain() {
             for addr in roa.iter() {
                 let addr = AddressOrigin::from_roa(roa.as_id(), addr);
                 if exceptions.keep_origin(&addr) {
-                    res.push(addr)
+                    let _ = res.insert(addr);
                 }
             }
         }
         for addr in exceptions.assertions() {
-            res.push(addr.clone())
+            let _ = res.insert(addr.clone());
         }
-        res
+        AddressOrigins {
+            origins: res.into_iter().collect()
+        }
     }
 
     fn push(&mut self, addr: AddressOrigin) {
-        let _ = self.origins.insert(addr);
+        self.origins.push(addr)
     }
 
     pub fn iter(&self) -> impl Iterator<Item=&AddressOrigin> {
         self.origins.iter()
+    }
+}
+
+impl AsRef<[AddressOrigin]> for AddressOrigins {
+    fn as_ref(&self) -> &[AddressOrigin] {
+        self.origins.as_ref()
     }
 }
 
@@ -90,14 +98,21 @@ impl AddressOrigins {
 #[derive(Clone, Debug)]
 pub struct OriginsDiff {
     serial: u32,
-    // We are using `HashSet`s here for easy unique-ing.
-    announce: HashSet<AddressOrigin>,
-    withdraw: HashSet<AddressOrigin>,
+    announce: Vec<AddressOrigin>,
+    withdraw: Vec<AddressOrigin>,
 }
 
 impl OriginsDiff {
+    pub fn empty(serial: u32) -> Self {
+        OriginsDiff {
+            serial,
+            announce: Vec::new(),
+            withdraw: Vec::new()
+        }
+    }
+
     pub fn construct(
-        mut current: AddressOrigins,
+        mut current: HashSet<AddressOrigin>,
         origins: Option<RouteOrigins>,
         exceptions: &LocalExceptions,
         serial: u32
@@ -113,7 +128,7 @@ impl OriginsDiff {
                         continue
                     }
 
-                    if !current.origins.remove(&addr) {
+                    if !current.remove(&addr) {
                         let _ = announce.insert(addr.clone());
                     }
                     next.push(addr)
@@ -122,12 +137,13 @@ impl OriginsDiff {
         }
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
-            if !current.origins.remove(&addr) {
+            if !current.remove(&addr) {
                 let _ = announce.insert(addr.clone());
             }
             next.push(addr.clone())
         }
-        let withdraw = current.origins.drain().collect();
+        let withdraw = current.into_iter().collect();
+        let announce = announce.into_iter().collect();
         (next, OriginsDiff { serial, announce, withdraw })
     }
 
@@ -135,12 +151,60 @@ impl OriginsDiff {
         self.serial
     }
 
-    pub fn announce(&self) -> impl Iterator<Item=&AddressOrigin> {
-        self.announce.iter()
+    pub fn announce(&self) -> &[AddressOrigin] {
+        self.announce.as_ref()
     }
 
-    pub fn withdraw(&self) -> impl Iterator<Item=&AddressOrigin> {
-        self.withdraw.iter()
+    pub fn withdraw(&self) -> &[AddressOrigin] {
+        self.withdraw.as_ref()
+    }
+
+    pub fn unwrap(
+        self
+    ) -> (u32, Vec<AddressOrigin>, Vec<AddressOrigin>) {
+        (self.serial, self.announce, self.withdraw)
+    }
+}
+
+
+//------------ DiffMerger ----------------------------------------------------
+
+#[derive(Clone, Debug)]
+struct DiffMerger {
+    serial: u32,
+    announce: HashSet<AddressOrigin>,
+    withdraw: HashSet<AddressOrigin>,
+}
+
+impl DiffMerger {
+    fn new(diff: &OriginsDiff) -> Self {
+        DiffMerger {
+            serial: diff.serial,
+            announce: diff.announce.iter().map(Clone::clone).collect(),
+            withdraw: diff.withdraw.iter().map(Clone::clone).collect(),
+        }
+    }
+
+    fn merge(&mut self, diff: &OriginsDiff) {
+        self.serial = diff.serial;
+        for origin in &diff.announce {
+            if !self.withdraw.remove(origin) {
+                self.announce.insert(origin.clone());
+            }
+        }
+        for origin in &diff.withdraw {
+            if !self.announce.remove(origin) {
+                self.withdraw.insert(origin.clone());
+            }
+        }
+    }
+
+    fn into_diff(self) -> Arc<OriginsDiff> {
+        Arc::new(OriginsDiff {
+            serial: self.serial,
+            announce: self.announce.into_iter().collect(),
+            withdraw: self.withdraw.into_iter().collect(),
+        })
     }
 }
 
@@ -148,36 +212,91 @@ impl OriginsDiff {
 //------------ OriginsHistory ------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct OriginsHistory {
-    current: AddressOrigins,
-    diffs: VecDeque<OriginsDiff>,
+pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
+
+#[derive(Clone, Debug)]
+pub struct HistoryInner {
+    current: Arc<AddressOrigins>,
+    diffs: VecDeque<Arc<OriginsDiff>>,
     keep: usize,
 }
 
 impl OriginsHistory {
     pub fn new(current: AddressOrigins, keep: usize) -> Self {
-        OriginsHistory {
-            current,
-            diffs: VecDeque::with_capacity(keep),
-            keep
+        OriginsHistory(Arc::new(RwLock::new(
+            HistoryInner {
+                current: Arc::new(current),
+                diffs: VecDeque::with_capacity(keep),
+                keep
+            }
+        )))
+    }
+
+    pub fn current(&self) -> Arc<AddressOrigins> {
+        self.0.read().unwrap().current.clone()
+    }
+
+    pub fn get(&self, serial: u32) -> Option<Arc<OriginsDiff>> {
+        let history = self.0.read().unwrap();
+        if let Some(diff) = history.diffs.back() {
+            if diff.serial() == serial {
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else if diff.serial() == serial + 1 {
+                // This relies on serials increasing by one always.
+                return Some(diff.clone())
+            }
         }
-    }
-
-    pub fn push_diff(&mut self, diff: OriginsDiff) {
-        if self.diffs.len() == self.keep {
-            let _ = self.diffs.pop_back();
+        let mut iter = history.diffs.iter();
+        while let Some(diff) = iter.next() {
+            if serial < diff.serial() {
+                return None
+            }
+            else if diff.serial() == serial {
+                break
+            }
         }
-        self.diffs.push_front(diff)
+        // We already know that the serial’s diff was’t last, so unwrap is
+        // fine.
+        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
+        for diff in iter {
+            res.merge(diff.as_ref())
+        }
+        Some(res.into_diff())
     }
 
-    pub fn iter_diffs(&self) -> impl Iterator<Item=&OriginsDiff> {
-        self.diffs.iter()
+    pub fn serial(&self) -> u32 {
+        self.0.read().unwrap().serial()
     }
 
-    pub fn current(&self) -> &AddressOrigins {
-        &self.current
+    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, u32) {
+        let history = self.0.read().unwrap();
+        (history.current.clone(), history.serial())
     }
 
+    pub fn update(
+        &self,
+        origins: Option<RouteOrigins>,
+        exceptions: &LocalExceptions
+    ) {
+        let (serial, current) = {
+            let history = self.0.read().unwrap();
+            let serial = history.serial().wrapping_add(1);
+            let current = history.current.clone();
+            (serial, current)
+        };
+        let current: HashSet<_> = current.iter().map(Clone::clone).collect();
+        let (next, diff) = OriginsDiff::construct(
+            current, origins, exceptions, serial
+        );
+        let mut history = self.0.write().unwrap();
+        history.current = Arc::new(next);
+        history.push_diff(diff);
+    }
+
+}
+
+impl HistoryInner {
     pub fn serial(&self) -> u32 {
         match self.diffs.front() {
             Some(diff) => diff.serial(),
@@ -185,23 +304,11 @@ impl OriginsHistory {
         }
     }
 
-    pub fn update(
-        history: Arc<RwLock<Self>>,
-        origins: Option<RouteOrigins>,
-        exceptions: &LocalExceptions
-    ) {
-        let (serial, current) = {
-            let history = history.read().unwrap();
-            let serial = history.serial().wrapping_add(1);
-            let current = history.current.clone();
-            (serial, current)
-        };
-        let (next, diff) = OriginsDiff::construct(
-            current, origins, exceptions, serial
-        );
-        let mut history = history.write().unwrap();
-        history.current = next;
-        history.push_diff(diff);
+    pub fn push_diff(&mut self, diff: OriginsDiff) {
+        if self.diffs.len() == self.keep {
+            let _ = self.diffs.pop_back();
+        }
+        self.diffs.push_front(Arc::new(diff))
     }
 }
 

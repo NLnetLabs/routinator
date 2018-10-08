@@ -1,6 +1,7 @@
 //! Configuration.
 
 use std::{env, process};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -9,6 +10,7 @@ use log::LevelFilter;
 
 
 /// Routinator configuration.
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Path to the directory that contains the repository cache.
     pub cache_dir: PathBuf,
@@ -45,8 +47,15 @@ pub struct Config {
     /// The refresh interval for repository validation.
     pub refresh: Duration,
 
+    pub retry: Duration,
+
+    pub expire: Duration,
+
     /// How many diffs to keep in the history.
     pub history_size: usize,
+
+    /// Addresses to listen for RTR connections on.
+    pub rtr_listen: Vec<SocketAddr>,
 }
 
 impl Config {
@@ -205,6 +214,8 @@ impl Config {
                     }
                 }
             },
+            retry: Duration::from_secs(600),
+            expire: Duration::from_secs(7200),
             history_size: {
                 let value = matches.value_of("refresh").unwrap();
                 match usize::from_str(value) {
@@ -219,6 +230,11 @@ impl Config {
                     }
                 }
             },
+            rtr_listen: {
+                use std::net::ToSocketAddrs;
+
+                "127.0.0.1:3323".to_socket_addrs().unwrap().collect()
+            }
         }
     }
 
@@ -240,6 +256,7 @@ impl RunMode {
 }
 
 
+#[derive(Clone, Copy, Debug)]
 pub enum OutputFormat {
     Csv,
     Json,

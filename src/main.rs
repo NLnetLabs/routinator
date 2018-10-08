@@ -11,7 +11,6 @@ use std::io;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use chrono::Utc;
 use futures::future;
@@ -20,6 +19,7 @@ use tokio::timer::Delay;
 use routinator::config::{Config, OutputFormat};
 use routinator::repository::{ProcessingError, Repository};
 use routinator::origins::{AddressOrigins, OriginsHistory};
+use routinator::rtr::rtr_listener;
 use routinator::slurm::LocalExceptions;
 
 lazy_static! {
@@ -60,17 +60,17 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
     if let Err(_) = repo.update() {
         warn!("Update failed. Continuing anyway.");
     }
-    let history = Arc::new(RwLock::new(OriginsHistory::new(
+    let history = OriginsHistory::new(
         AddressOrigins::from_route_origins(
             repo.process()?,
             &load_exceptions(&config)?
         ),
         config.history_size
-    )));
+    );
 
     tokio::runtime::run(
         update_future(repo.clone(), history.clone()).select(
-            listener_future(repo, history)
+            rtr_listener(repo, history, &CONFIG)
         ).map(|_| ()).map_err(|_| ())
     );
 
@@ -80,7 +80,7 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
 
 fn update_future(
     repo: Repository,
-    history: Arc<RwLock<OriginsHistory>>,
+    history: OriginsHistory,
 ) -> impl Future<Item=(), Error=()> {
     future::loop_fn((repo, history), |(repo, history)| {
         Delay::new(Instant::now() + CONFIG.refresh)
@@ -114,7 +114,7 @@ fn update_future(
                 match load_exceptions(&CONFIG) {
                     Ok(exceptions) => {
                         OriginsHistory::update(
-                            history.clone(),
+                            &history,
                             Some(origins),
                             &exceptions,
                         );
@@ -127,14 +127,6 @@ fn update_future(
             })
         })
     })
-}
-
-
-fn listener_future(
-    _repo: Repository,
-    _history: Arc<RwLock<OriginsHistory>>,
-) -> impl Future<Item=(), Error=()> {
-    future::empty()
 }
 
 

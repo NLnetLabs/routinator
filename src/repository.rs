@@ -134,7 +134,7 @@ impl Repository {
     ) -> impl Future<Item=RouteOrigins, Error=ProcessingError> {
         let pool = CpuPool::new(self.0.threads);
         let repo = self.clone();
-        fs::read_dir(&self.0.cache_dir).map_err(Into::into).into_future()
+        fs::read_dir(&self.0.tal_dir).map_err(Into::into).into_future()
         .and_then(|dir| {
             future::join_all(dir.map(move |entry| {
                 let repo = repo.clone();
@@ -288,7 +288,7 @@ impl Repository {
                 return Err(err.into())
             }
         };
-        let tal = match Tal::read(&mut file) {
+        let tal = match Tal::read(&path, &mut file) {
             Ok(tal) => tal,
             Err(err) => {
                 error!("{}: {}. Aborting.", path.display(), err);
