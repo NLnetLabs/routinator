@@ -26,7 +26,7 @@ lazy_static! {
     static ref CONFIG: Config = Config::create();
 }
 
-fn main() -> Result<(), ProcessingError> {
+fn main() {
     let config = &CONFIG;
 
     env_logger::Builder::new()
@@ -34,11 +34,15 @@ fn main() -> Result<(), ProcessingError> {
         .format(|buf, record| write!(buf, "{}\n", record.args()))
         .init();
 
-    if config.mode.is_once() {
+    let res = if config.mode.is_once() {
         run_once(config)
     }
     else {
         run_forever(config)
+    };
+
+    if let Err(err) = res {
+        println!("{}\nAborted.", err);
     }
 }
 

@@ -69,10 +69,16 @@ impl Repository {
         rsync: bool
     ) -> Result<Self, ProcessingError> {
         if let Err(err) = fs::read_dir(&cache_dir) {
-            return Err(ProcessingError::BadCacheDirectory(err))
+            return Err(ProcessingError::BadCacheDirectory(
+                format!("{}", cache_dir.display()),
+                err
+            ))
         }
         if let Err(err) = fs::read_dir(&tal_dir) {
-            return Err(ProcessingError::BadTalDirectory(err))
+            return Err(ProcessingError::BadTalDirectory(
+                format!("{}", tal_dir.display()),
+                err
+            ))
         }
         Ok(Repository(Arc::new(RepoInner {
             cache_dir,
@@ -718,11 +724,11 @@ fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
 
 #[derive(Debug, Fail)]
 pub enum ProcessingError {
-    #[fail(display="failed to open repository cache directory: {}", _0)]
-    BadCacheDirectory(io::Error),
+    #[fail(display="failed to open cache directory {}: {}", _0, _1)]
+    BadCacheDirectory(String, io::Error),
 
-    #[fail(display="failed to open trust anchor directory: {}", _0)]
-    BadTalDirectory(io::Error),
+    #[fail(display="failed to open trust anchor directory {}: {}", _0, _1)]
+    BadTalDirectory(String, io::Error),
 
     #[fail(display="{}", _0)]
     Rsync(RsyncError),
