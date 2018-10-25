@@ -294,9 +294,18 @@ impl OriginsHistory {
             let current = history.current.clone();
             (serial, current)
         };
+        debug!("Updating history for serial {}", serial);
+        debug!("Current set has {} entries.", current.len());
+        if let Some(ref origins) = origins {
+            debug!("New set has {} entries.", origins.len());
+        }
         let current: HashSet<_> = current.iter().map(Clone::clone).collect();
         let (next, diff) = OriginsDiff::construct(
             current, origins, exceptions, serial
+        );
+        debug!(
+            "Diff has {} announced and {} withdrawn.",
+            diff.announce.len(), diff.withdraw.len()
         );
         let mut history = self.0.write().unwrap();
         history.current = Arc::new(next);
