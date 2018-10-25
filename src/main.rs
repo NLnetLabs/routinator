@@ -6,6 +6,7 @@ extern crate futures;
 #[macro_use] extern crate log;
 extern crate routinator;
 extern crate rpki;
+extern crate syslog;
 extern crate tokio;
 
 use std::{io, process};
@@ -30,10 +31,19 @@ lazy_static! {
 fn main() {
     let config = &CONFIG;
 
-    env_logger::Builder::new()
-        .filter_level(config.verbose)
-        .format(|buf, record| write!(buf, "{}\n", record.args()))
-        .init();
+    if config.mode.is_daemon() {
+        let _ = syslog::init(
+            syslog::Facility::LOG_DAEMON,
+            config.verbose,
+            Some("routinator")
+        );
+    }
+    else {
+        env_logger::Builder::new()
+            .filter_level(config.verbose)
+            .format(|buf, record| write!(buf, "{}\n", record.args()))
+            .init();
+    }
 
     let res = if config.mode.is_once() {
         run_once(config)

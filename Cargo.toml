@@ -18,6 +18,7 @@ lazy_static     = "1.1"
 log             = "^0.4"
 num_cpus        = "1.0"
 slab            = "^0.4"
+syslog		= "4.0"
 tokio           = "^0.1"
 tokio-process   = "^0.2"
 
