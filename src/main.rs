@@ -71,6 +71,8 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
         ),
         config.history_size
     );
+
+    info("Starting RTR listener...");
     
     let (notify, rtr) = rtr_listener(history.clone(), &CONFIG);
 
@@ -155,7 +157,7 @@ fn run_once(config: &Config) -> Result<(), ProcessingError> {
     let roas = match repo.process() {
         Ok(res) => res,
         Err(err) => {
-            println!("Fatal error during validation. Aborted.");
+            error!("Fatal error during validation. Aborted.");
             return Err(err)
         }
     };

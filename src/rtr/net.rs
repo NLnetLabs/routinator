@@ -154,7 +154,6 @@ impl Future for Connection {
                 }
                 OutputState::Idle(_) => {
                     // We need to wait for input.
-                    println!("waiting");
                     match try_ready!(self.input.poll()) {
                         Some(input) => Ok(input),
                         None => return Ok(Async::Ready(()))
@@ -164,7 +163,6 @@ impl Future for Connection {
             };
             match next {
                 Err(sock) => {
-                    println!("Going idle");
                     self.output = OutputState::Idle(sock);
                 }
                 Ok(input) => {
