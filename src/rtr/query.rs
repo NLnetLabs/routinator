@@ -131,31 +131,61 @@ impl<A: AsyncRead> QueryStream<A> {
         }
     }
 
+    fn start_state(sock: A) -> State<A> {
+        State::Header(pdu::Header::read(sock))
+    }
+
     fn read_data(
         sock: A,
         header: pdu::Header
-    ) -> Result<State<A>, Query> {
+    ) -> (State<A>, Result<Async<Option<Query>>, io::Error>) { 
         match header.pdu() {
             pdu::SERIAL_QUERY_PDU => {
-                Self::check_length(header, pdu::SERIAL_QUERY_LEN)?;
-                Ok(State::SerialQuery(
-                    header,
-                    pdu::SerialQueryPayload::read(sock)
-                ))
+                match Self::check_length(header, pdu::SERIAL_QUERY_LEN) {
+                    Ok(()) => {
+                        (
+                            State::SerialQuery(
+                                header, pdu::SerialQueryPayload::read(sock)
+                            ),
+                            Ok(Async::NotReady)
+                        )
+                    }
+                    Err(err) => {
+                        (
+                            Self::start_state(sock),
+                            Ok(Async::Ready(Some(err)))
+                        )
+                    }
+                }
             }
             pdu::ResetQuery::PDU => {
-                Self::check_length(header, pdu::ResetQuery::LEN)?;
-                Err(Query::Reset)
+                match Self::check_length(header, pdu::ResetQuery::LEN) {
+                    Ok(()) => {
+                        (
+                            Self::start_state(sock),
+                            Ok(Async::Ready(Some(Query::Reset)))
+                        )
+                    }
+                    Err(err) => {
+                        (
+                            Self::start_state(sock),
+                            Ok(Async::Ready(Some(err)))
+                        )
+                    }
+                }
             }
             _ => {
-                Err(Query::Error(
-                    pdu::Error::new(
-                        header.version(),
-                        3,
-                        header,
-                        "expected Serial Query or Reset Query"
-                    ).boxed()
-                ))
+                (
+                    Self::start_state(sock),
+                    Ok(Async::Ready(Some(Query::Error(
+                        pdu::Error::new(
+                            header.version(),
+                            3,
+                            header,
+                            "expected Serial Query or Reset Query"
+                        ).boxed()
+                    ))))
+                )
             }
         }
     }
@@ -190,12 +220,7 @@ impl<A: AsyncRead> Stream for QueryStream<A> {
                 }
                 else {
                     self.version = Some(header.version());
-                    match Self::read_data(sock, header) {
-                        Ok(state) => (state, Ok(Async::NotReady)),
-                        Err(query) => {
-                            (State::Done, Ok(Async::Ready(Some(query))))
-                        }
-                    }
+                    Self::read_data(sock, header)
                 }
             }
             State::SerialQuery(header, ref mut fut) => {
