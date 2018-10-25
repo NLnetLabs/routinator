@@ -2,18 +2,20 @@
 
 [![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
 
-Introducing ‘Routinator 3000,’ an experimental RPKI relying party software
-written in Rust.
+Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 
-We are working towards a full production release over the
-next few months. Features on the roadmap are:
+Please consider this implementation experimental for now. We are actively 
+working towards a production release. Next up on the roadmap is RPKI-RTR 
+support, allowing this package to be used in operational environments.
+
+Full roadmap:
 
   * [x] Fetch certificates and ROAs via rsync
   * [x] Perform cryptographic validation
   * [x] Export validated ROAs in CSV, JSON and RPSL format
   * [x] Add local white list exceptions and overrides ([RFC 8416](https://tools.ietf.org/html/rfc8416))
-  * [ ] Exhaustive interoperability and compliance testing
   * [ ] Implement the RPKI-RTR protocol for pushing RPKI data to supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+  * [ ] Exhaustive interoperability and compliance testing
   * [ ] Implement the RRDP protocol for fetching ([RFC 8182](https://tools.ietf.org/html/rfc8182))
   * [ ] Implement a basic web-based user interface and Command Line Interface
   * [ ] Expose an API
@@ -28,15 +30,15 @@ statements about the association of Internet routing resources. In
 particular, it allows the holder of an IP address prefix to publish which
 AS number will be the origin of BGP route announcements for it.
 
-All of these statements are published in a distributed repository. The
-Routinator 3000 will collect these statements into a local copy, validate
+All of these statements are published in a distributed repository. 
+Routinator will collect these statements into a local copy, validate
 their signatures, and output a list of associations between IP address
 prefixes and AS numbers in a number of useful formats.
 
 
 ## Getting Started
 
-There’s two things you need for the Routinator: rsync and Rust. You need
+There’s two things you need for Routinator: rsync and Rust. You need
 the former because the RPKI repository currently uses rsync as its main
 means of distribution. You need the latter because that’s what the
 Routinator has been written in. Since this currently is a very early
@@ -124,6 +126,26 @@ about them, run
 ```bash
 cargo run --release -- -h
 ```
+
+## Commonly Used Options
+
+By default, all Validated ROA Prefixes will be sent to `stdout` in CSV 
+format. You can use the `-f` flag to specify other formats such as JSON 
+and RPSL and save the data to a file using `-o`. For example 
+
+```bash
+cargo run --release -f json -o roa.json
+```
+To support interoperability, these output formats are compatible with other 
+validator implementations. You can run this command in a `cron` job to get 
+fresh RPKI data at regular invervals.
+
+If you would like to add exceptions to the validated RPKI data in the 
+form of local filters and additions, you can specify this in a file 
+using JSON notation according to the 
+[SLURM](https://tools.ietf.org/html/rfc8416) standard. You can find 
+two example files in `/test/slurm`. Use the `-x` option to refer to your 
+file with local exceptions.
 
 When playing with these options, you might find `-n` useful. It will
 cause Routinator to skip the rsync-ing of the repository – which should

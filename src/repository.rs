@@ -80,6 +80,11 @@ impl Repository {
                 err
             ))
         }
+
+        // Let’s quickly go over the TALs to break as early as possible if
+        // they aren’t good.
+        for _ in Tal::read_dir(&tal_dir)? { }
+
         Ok(Repository(Arc::new(RepoInner {
             cache_dir,
             tal_dir,
