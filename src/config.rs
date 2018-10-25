@@ -276,6 +276,10 @@ impl RunMode {
     pub fn is_once(self) -> bool {
         self == RunMode::Once
     }
+
+    pub fn is_daemon(self) -> bool {
+        self == RunMode::Daemon
+    }
 }
 
 

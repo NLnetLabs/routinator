@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate daemonize;
 extern crate env_logger;
 extern crate futures;
 #[macro_use] extern crate lazy_static;
@@ -7,7 +8,7 @@ extern crate routinator;
 extern crate rpki;
 extern crate tokio;
 
-use std::io;
+use std::{io, process};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -53,6 +54,13 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
     }
     if !config.process {
         warn!("no-process option ignored in repeat mode");
+    }
+
+    if config.mode.is_daemon() {
+        if let Err(err) = daemonize::Daemonize::new().start() {
+            println!("Daemonization failed: {}", err);
+            process::exit(1);
+        }
     }
 
     let repo = Repository::new(
