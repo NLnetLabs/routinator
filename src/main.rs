@@ -1,114 +1,156 @@
 extern crate chrono;
-#[macro_use] extern crate clap;
 extern crate env_logger;
+extern crate futures;
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate routinator;
 extern crate rpki;
+extern crate tokio;
 
 use std::io;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::time::Instant;
 use chrono::Utc;
-use clap::{Arg, App};
+use futures::future;
+use futures::future::Future;
+use tokio::timer::Delay;
+use routinator::config::{Config, OutputFormat};
 use routinator::repository::{ProcessingError, Repository};
-use routinator::origins::AddressOrigins;
+use routinator::origins::{AddressOrigins, OriginsHistory};
+use routinator::rtr::{rtr_listener, NotifySender};
 use routinator::slurm::LocalExceptions;
 
-fn main() -> Result<(), ProcessingError> {
-    // Remember to update the man page if you change this here!
-    let matches = App::new("Routinator")
-        .version("0.1")
+lazy_static! {
+    static ref CONFIG: Config = Config::create();
+}
 
-        .author(crate_authors!())
-        .about("validates RPKI route origin attestations")
-        .arg(Arg::with_name("cache")
-             .short("c")
-             .long("cache")
-             .value_name("DIR")
-             .help("sets the cache directory")
-             .takes_value(true)
-        )
-        .arg(Arg::with_name("exceptions")
-             .short("x")
-             .long("exceptions")
-             .value_name("FILE")
-             .help("file with local exceptions (see RFC 8416 for format)")
-             .takes_value(true)
-        )
-        .arg(Arg::with_name("output")
-             .short("o")
-             .long("output")
-             .value_name("FILE")
-             .help("output file, '-' or not present for stdout")
-             .takes_value(true)
-        )
-        .arg(Arg::with_name("outform")
-             .short("f")
-             .long("outform")
-             .value_name("FORMAT")
-             .help("sets the output format (csv, json, rpsl, none)")
-             .takes_value(true)
-        )
-        .arg(Arg::with_name("unique")
-             .short("u")
-             .long("unique")
-             .help("output unique value only")
-        )
-        .arg(Arg::with_name("strict")
-             .long("strict")
-             .help("parse RPKI data in strict mode")
-        )
-        .arg(Arg::with_name("noupdate")
-             .short("n")
-             .long("noupdate")
-             .help("don't update local cache")
-        )
-        .arg(Arg::with_name("noprocess")
-             .short("N")
-             .long("noprocess")
-             .help("don't process the repository")
-        )
-        .arg(Arg::with_name("verbose")
-             .short("v")
-             .long("verbose")
-             .multiple(true)
-             .help("print more (and more) information")
-        )
-        .get_matches();
-
+fn main() {
+    let config = &CONFIG;
 
     env_logger::Builder::new()
-        .filter_level(match matches.occurrences_of("verbose") {
-            0 => log::LevelFilter::Error,
-            1 => log::LevelFilter::Info,
-            _ => log::LevelFilter::Debug,
-        })
+        .filter_level(config.verbose)
         .format(|buf, record| write!(buf, "{}\n", record.args()))
         .init();
 
-    let exceptions = match matches.value_of("exceptions") {
-        Some(path) => match LocalExceptions::from_file(path) {
-            Ok(res) => res,
-            Err(err) => {
-                println!("Failed to load exceptions: {}\nAborted.", err);
-                ::std::process::exit(1);
-            }
-        }
-        None => LocalExceptions::empty()
+    let res = if config.mode.is_once() {
+        run_once(config)
+    }
+    else {
+        run_forever(config)
     };
 
+    if let Err(err) = res {
+        println!("{}\nAborted.", err);
+    }
+}
+
+
+fn run_forever(config: &Config) -> Result<(), ProcessingError> {
+    if !config.update {
+        warn!("no-update option ignored in repeat mode");
+    }
+    if !config.process {
+        warn!("no-process option ignored in repeat mode");
+    }
+
     let repo = Repository::new(
-        Path::new(matches.value_of("cache").unwrap_or("rpki-cache")),
-        matches.is_present("strict"),
-        !matches.is_present("noupdate")
+        config.cache_dir.clone(), config.tal_dir.clone(), config.strict, true
+    )?;
+
+    // Start out with validation so that we only fire up our sockets once we
+    // are actually ready.
+    if let Err(_) = repo.update() {
+        warn!("Update failed. Continuing anyway.");
+    }
+    let history = OriginsHistory::new(
+        AddressOrigins::from_route_origins(
+            repo.process()?,
+            &load_exceptions(&config)?
+        ),
+        config.history_size
+    );
+    
+    let (notify, rtr) = rtr_listener(history.clone(), &CONFIG);
+
+    tokio::runtime::run(
+        update_future(repo, history, notify)
+        .select(rtr).map(|_| ()).map_err(|_| ())
+    );
+
+    Ok(())
+}
+
+
+fn update_future(
+    repo: Repository,
+    history: OriginsHistory,
+    notify: NotifySender,
+) -> impl Future<Item=(), Error=()> {
+    future::loop_fn((repo, history, notify), |(repo, history, mut notify)| {
+        Delay::new(Instant::now() + CONFIG.refresh)
+        .map_err(|e| error!("timer failed; err={:?}", e))
+        .and_then(move |_| {
+            repo.start();
+            Ok(repo)
+        })
+        .and_then(|repo| {
+            repo.update_async()
+            .then(|res| {
+                // Print error but keep going.
+                if let Err(err) = res {
+                    error!("repository update failed: {}", err);
+                }
+                Ok(repo)
+            })
+        })
+        .and_then(|repo| {
+            repo.process_async()
+            .then(move |origins| {
+                let origins = match origins {
+                    Ok(origins) => origins,
+                    Err(err) => {
+                        error!("repository processing failed; err={:?}", err);
+                        return Ok(
+                            future::Loop::Continue((repo, history, notify))
+                        )
+                    }
+                };
+                let must_notify = match load_exceptions(&CONFIG) {
+                    Ok(exceptions) => {
+                        history.update(Some(origins), &exceptions)
+                    }
+                    Err(err) => {
+                        error!("failed loading exceptions: {}", err);
+                        false
+                    }
+                };
+                debug!("New serial is {}.", history.serial());
+                if must_notify {
+                    debug!("Sending out notifications.");
+                    notify.notify();
+                }
+                Ok(future::Loop::Continue((repo, history, notify)))
+            })
+        })
+    })
+}
+
+
+fn run_once(config: &Config) -> Result<(), ProcessingError> {
+    let exceptions = load_exceptions(&config)?;
+
+    let repo = Repository::new(
+        config.cache_dir.clone(), config.tal_dir.clone(), config.strict,
+        config.update
     )?;
     if let Err(_) = repo.update() {
         warn!("Update failed. Continuing anyway.");
     }
 
-    if matches.is_present("noprocess") {
-        ::std::process::exit(0);
+    if !config.process {
+        return Ok(())
     }
     let roas = match repo.process() {
         Ok(res) => res,
@@ -119,36 +161,45 @@ fn main() -> Result<(), ProcessingError> {
     };
     debug!("Found {} ROAs.", roas.len());
 
-    let outform = matches.value_of("outform").unwrap_or("csv");
-    if outform == "none" {
-        Ok(())
-    }
-    else {
-        let output = FileOrStdout::open(
-            matches.value_of("output").unwrap_or("-")
-        )?;
-        let mut output = output.lock();
-        let roas = AddressOrigins::from_route_origins(
-            roas,
-            &exceptions,
-            matches.is_present("unique")
-        );
+    let roas = AddressOrigins::from_route_origins(roas, &exceptions);
 
-        match matches.value_of("outform").unwrap_or("csv") {
-            "csv" => output_csv(roas, &mut output),
-            "json" => output_json(roas, &mut output),
-            "rpsl" => output_rpsl(roas, &mut output),
-            other => {
-                error!("unknown output format {}", other);
+    output(&roas, &config)
+}
+
+
+fn load_exceptions(
+    config: &Config
+) -> Result<LocalExceptions, ProcessingError> {
+    match config.exceptions {
+        Some(ref path) => match LocalExceptions::from_file(path) {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                error!("Failed to load exceptions: {}\nAborted.", err);
                 Err(ProcessingError::Other)
             }
         }
+        None => Ok(LocalExceptions::empty())
+    }
+}
+
+
+fn output(
+    roas: &AddressOrigins,
+    config: &Config
+) -> Result<(), ProcessingError> {
+    let output = FileOrStdout::open(config.output.as_ref())?;
+    let mut output = output.lock();
+    match config.outform {
+        OutputFormat::Csv => output_csv(roas, &mut output),
+        OutputFormat::Json => output_json(roas, &mut output),
+        OutputFormat::Rpsl => output_rpsl(roas, &mut output),
+        OutputFormat::None => { Ok(()) }
     }
 }
 
 
 fn output_csv<W: io::Write>(
-    roas: AddressOrigins,
+    roas: &AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     writeln!(output, "ASN,IP Prefix,Max Length")?;
@@ -163,7 +214,7 @@ fn output_csv<W: io::Write>(
 }
 
 fn output_json<W: io::Write>(
-    roas: AddressOrigins,
+    roas: &AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     let mut first = true;
@@ -188,7 +239,7 @@ fn output_json<W: io::Write>(
 }
 
 fn output_rpsl<W: io::Write>(
-    roas: AddressOrigins,
+    roas: &AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     let now = Utc::now().to_rfc3339();
@@ -211,10 +262,10 @@ pub enum FileOrStdout<F, S> {
 }
 
 impl FileOrStdout<File, io::Stdout> {
-    fn open(path: &str) -> Result<Self, io::Error> {
+    fn open<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
         match path {
-            "-" => Ok(FileOrStdout::Stdout(io::stdout())),
-            path => File::create(Path::new(path)).map(FileOrStdout::File)
+            Some(path) => File::create(path).map(FileOrStdout::File),
+            None => Ok(FileOrStdout::Stdout(io::stdout())),
         }
     }
 

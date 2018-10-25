@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use bytes::Bytes;
 use futures::future;
-use futures::Future;
+use futures::{Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use rpki::uri;
 use rpki::cert::{Cert, ResourceCert};
@@ -22,6 +22,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+use tokio_process::CommandExt;
 use super::origins::RouteOrigins;
 
 
@@ -41,8 +42,11 @@ pub struct Repository(Arc<RepoInner>);
 
 #[derive(Debug)]
 struct RepoInner {
-    /// The directory our local copy lives in.
-    base: PathBuf, 
+    /// The directory our local copy of the respository lives in.
+    cache_dir: PathBuf, 
+
+    /// The directory the TALs live in.
+    tal_dir: PathBuf,
 
     /// Should we be strict when decoding data?
     strict: bool,
@@ -58,29 +62,32 @@ struct RepoInner {
 
 impl Repository {
     /// Creates a new repository.
-    ///
-    /// You need to pass in the path to the directory where the local copy
-    /// lives via the `base` argument. If `strict` is `true`, then parsing
-    /// will be done very strictly. In particular, it means that the code
-    /// expectes signed objects to be encoded in DER format which seems not
-    /// to be the case in practice. Finally, if `rsync` is set to `false`, no
-    /// rsync will ever happen. Nothing will fail because of that, though.
-    pub fn new<P: AsRef<Path>>(
-        base: P,
+    pub fn new(
+        cache_dir: PathBuf,
+        tal_dir: PathBuf,
         strict: bool,
         rsync: bool
     ) -> Result<Self, ProcessingError> {
-        let base = PathBuf::from(base.as_ref());
-        if let Err(err) = fs::read_dir(&base) {
-            return Err(ProcessingError::BadRepository(err))
+        if let Err(err) = fs::read_dir(&cache_dir) {
+            return Err(ProcessingError::BadCacheDirectory(
+                format!("{}", cache_dir.display()),
+                err
+            ))
+        }
+        if let Err(err) = fs::read_dir(&tal_dir) {
+            return Err(ProcessingError::BadTalDirectory(
+                format!("{}", tal_dir.display()),
+                err
+            ))
         }
 
         // Let’s quickly go over the TALs to break as early as possible if
         // they aren’t good.
-        for _ in Tal::read_dir(base.join("tal"))? { }
+        for _ in Tal::read_dir(&tal_dir)? { }
 
         Ok(Repository(Arc::new(RepoInner {
-            base,
+            cache_dir,
+            tal_dir,
             strict,
             threads: ::num_cpus::get(),
             rsync: if rsync {
@@ -95,17 +102,33 @@ impl Repository {
         })))
     }
 
+    /// Starts a validation run.
+    pub fn start(&self) {
+        if let Some(ref rsync) = self.0.rsync {
+            rsync.0.lock().unwrap().clear_seen();
+        }
+    }
+
     /// Updates the content of the local copy.
     ///
     /// This will go out and do a bunch of rsync requests (unless that was
     /// disabled explicitely).
     pub fn update(&self) -> Result<(), ProcessingError> {
-        let dir = self.0.base.join("repository");
+        self.update_async().wait()
+    }
+
+    pub fn update_async(
+        &self
+    ) -> impl Future<Item=(), Error=ProcessingError> {
+        let repo = self.clone();
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(dir)?.map(|entry| {
-            let repo = self.clone();
-            pool.spawn(future::lazy(|| repo.update_host(entry)))
-        })).wait().map(|_| ())
+        fs::read_dir(&self.0.cache_dir).map_err(Into::into).into_future()
+        .and_then(|dir| {
+            future::join_all(dir.map(move |entry| {
+                let repo = repo.clone();
+                pool.spawn(future::lazy(|| repo.update_host(entry)))
+            })).map(|_| ())
+        })
     }
 
     /// Process the local copy and produce a list of validated route origins.
@@ -114,16 +137,25 @@ impl Repository {
     /// modules it hasn’t seen before. This means that if you start out on a
     /// new copy, it will go out and fetch everything it needs.
     pub fn process(&self) -> Result<RouteOrigins, ProcessingError> {
-        let dir = self.0.base.join("tal");
+        self.process_async().wait()
+    }
+
+    pub fn process_async(
+        &self
+    ) -> impl Future<Item=RouteOrigins, Error=ProcessingError> {
         let pool = CpuPool::new(self.0.threads);
-        future::join_all(fs::read_dir(dir)?.map(|entry| {
-            let repo = self.clone();
-            pool.spawn(future::lazy(|| repo.process_tal(entry)))
-        })).and_then(|x| {
-            let mut res = RouteOrigins::new();
-            x.into_iter().for_each(|item| res.merge(item));
-            Ok(res)
-        }).wait()
+        let repo = self.clone();
+        fs::read_dir(&self.0.tal_dir).map_err(Into::into).into_future()
+        .and_then(|dir| {
+            future::join_all(dir.map(move |entry| {
+                let repo = repo.clone();
+                pool.spawn(future::lazy(|| repo.process_tal(entry)))
+            })).and_then(|x| {
+                let mut res = RouteOrigins::new();
+                x.into_iter().for_each(|item| res.merge(item));
+                Ok(res)
+            })
+        })
     }
 }
 
@@ -172,8 +204,7 @@ impl Repository {
 
     /// Converts an rsync module URI into a path.
     fn module_to_path(&self, module: &uri::RsyncModule) -> PathBuf {
-        let mut res = self.0.base.clone();
-        res.push("repository");
+        let mut res = self.0.cache_dir.clone();
         res.push(module.authority());
         res.push(module.module());
         res
@@ -578,6 +609,10 @@ impl RsyncState {
     fn have_seen(&self, module: &uri::RsyncModule) -> bool {
         self.seen.contains(module)
     }
+
+    fn clear_seen(&mut self) {
+        self.seen.clear()
+    }
 }
 
 
@@ -608,6 +643,46 @@ impl RsyncCommand {
         source: &uri::RsyncModule,
         destination: P
     ) -> Result<(), io::Error> {
+        if !self.command(source, destination)?.status()?.success() {
+            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+        }
+        Ok(())
+    }
+
+    pub fn update_async<P: AsRef<Path>>(
+        &self,
+        source: &uri::RsyncModule,
+        destination: P
+    ) -> impl Future<Item=(), Error=io::Error> {
+        let cmd = self.command(source, destination);
+        future::lazy(|| cmd)
+        .and_then(|mut cmd| {
+            cmd.status_async()
+        })
+        .and_then(|cmd| cmd)
+        .then(|res| {
+            match res {
+                Ok(status) => {
+                    if status.success() {
+                        Ok(())
+                    }
+                    else {
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "rsync failed"
+                        ))
+                    }
+                }
+                Err(err) => Err(err)
+            }
+        })
+    }
+
+    fn command<P: AsRef<Path>>(
+        &self,
+        source: &uri::RsyncModule,
+        destination: P
+    ) -> Result<process::Command, io::Error> {
         debug!("rsyncing from {}.", source);
         let destination = destination.as_ref();
         create_dir_all(destination)?;
@@ -623,13 +698,16 @@ impl RsyncCommand {
         }
         cmd.arg(source.to_string())
            .arg(destination);
-        debug!("Running {:?}", cmd);
-        if !cmd.status()?.success() {
-            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
-        }
-        Ok(())
+        Ok(cmd)
     }
 }
+
+
+//------------ ProcessLoop ---------------------------------------------------
+
+/// A future that keeps updating the repository.
+#[derive(Debug)]
+pub struct ProcessLoop;
 
 
 //------------ Helper Functions ----------------------------------------------
@@ -651,8 +729,11 @@ fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
 
 #[derive(Debug, Fail)]
 pub enum ProcessingError {
-    #[fail(display="failed to open local repository: {}", _0)]
-    BadRepository(io::Error),
+    #[fail(display="failed to open cache directory {}: {}", _0, _1)]
+    BadCacheDirectory(String, io::Error),
+
+    #[fail(display="failed to open trust anchor directory {}: {}", _0, _1)]
+    BadTalDirectory(String, io::Error),
 
     #[fail(display="{}", _0)]
     Rsync(RsyncError),
