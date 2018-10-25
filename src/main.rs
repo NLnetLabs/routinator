@@ -72,7 +72,7 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
         config.history_size
     );
 
-    info("Starting RTR listener...");
+    info!("Starting RTR listener...");
     
     let (notify, rtr) = rtr_listener(history.clone(), &CONFIG);
 
