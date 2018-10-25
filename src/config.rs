@@ -1,7 +1,7 @@
 //! Configuration.
 
 use std::{env, process};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -113,6 +113,14 @@ impl Config {
                  .help("sets the output format")
                  .takes_value(true)
             )
+            .arg(Arg::with_name("listen")
+                 .short("l")
+                 .long("listen")
+                 .value_name("ADDR:PORT")
+                 .help("listen addr:port for RTR.")
+                 .takes_value(true)
+                 .multiple(true)
+            )
             .arg(Arg::with_name("strict")
                  .long("strict")
                  .help("parse RPKI data in strict mode")
@@ -155,6 +163,25 @@ impl Config {
                     err
                 );
                 process::exit(1);
+            }
+        };
+
+        let listen = match matches.values_of("listen") {
+            Some(values) => {
+                let mut listen = Vec::new();
+                for val in values {
+                    match val.to_socket_addrs() {
+                        Ok(some) => listen.extend(some),
+                        Err(_) => {
+                            println!("Invalid socket address {}", val);
+                            process::exit(1);
+                        }
+                    }
+                }
+                listen
+            }
+            None => {
+                "127.0.0.1:3323".to_socket_addrs().unwrap().collect()
             }
         };
 
@@ -230,11 +257,7 @@ impl Config {
                     }
                 }
             },
-            rtr_listen: {
-                use std::net::ToSocketAddrs;
-
-                "127.0.0.1:3323".to_socket_addrs().unwrap().collect()
-            }
+            rtr_listen: listen,
         }
     }
 

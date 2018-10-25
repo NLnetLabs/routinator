@@ -19,7 +19,7 @@ use tokio::timer::Delay;
 use routinator::config::{Config, OutputFormat};
 use routinator::repository::{ProcessingError, Repository};
 use routinator::origins::{AddressOrigins, OriginsHistory};
-use routinator::rtr::rtr_listener;
+use routinator::rtr::{rtr_listener, NotifySender};
 use routinator::slurm::LocalExceptions;
 
 lazy_static! {
@@ -67,11 +67,12 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
         ),
         config.history_size
     );
+    
+    let (notify, rtr) = rtr_listener(history.clone(), &CONFIG);
 
     tokio::runtime::run(
-        update_future(repo.clone(), history.clone()).select(
-            rtr_listener(repo, history, &CONFIG)
-        ).map(|_| ()).map_err(|_| ())
+        update_future(repo, history, notify)
+        .select(rtr).map(|_| ()).map_err(|_| ())
     );
 
     Ok(())
@@ -81,8 +82,9 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
 fn update_future(
     repo: Repository,
     history: OriginsHistory,
+    notify: NotifySender,
 ) -> impl Future<Item=(), Error=()> {
-    future::loop_fn((repo, history), |(repo, history)| {
+    future::loop_fn((repo, history, notify), |(repo, history, mut notify)| {
         Delay::new(Instant::now() + CONFIG.refresh)
         .map_err(|e| error!("timer failed; err={:?}", e))
         .and_then(move |_| {
@@ -101,13 +103,13 @@ fn update_future(
         })
         .and_then(|repo| {
             repo.process_async()
-            .then(|origins| {
+            .then(move |origins| {
                 let origins = match origins {
                     Ok(origins) => origins,
                     Err(err) => {
                         error!("repository processing failed; err={:?}", err);
                         return Ok(
-                            future::Loop::Continue((repo, history))
+                            future::Loop::Continue((repo, history, notify))
                         )
                     }
                 };
@@ -123,7 +125,8 @@ fn update_future(
                         error!("failed loading exceptions: {}", err);
                     }
                 }
-                Ok(future::Loop::Continue((repo, history)))
+                notify.notify();
+                Ok(future::Loop::Continue((repo, history, notify)))
             })
         })
     })

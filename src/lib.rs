@@ -22,12 +22,13 @@
 extern crate bytes;
 #[macro_use] extern crate clap;
 #[macro_use] extern crate failure;
-extern crate futures;
+#[macro_use] extern crate futures;
 extern crate futures_cpupool;
 extern crate json;
 #[macro_use] extern crate log;
 extern crate num_cpus;
 extern crate rpki;
+extern crate slab;
 extern crate tokio;
 extern crate tokio_process;
 

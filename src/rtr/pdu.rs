@@ -8,7 +8,9 @@
 use std::{io, mem, slice};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use futures::future::Future;
-use tokio::io::{AsyncRead, AsyncWrite, read_exact, write_all};
+use tokio::io::{
+    AsyncRead, AsyncWrite, ReadExact, WriteAll, read_exact, write_all
+};
 use ::origins::AddressOrigin;
 
 
@@ -16,17 +18,18 @@ use ::origins::AddressOrigin;
 
 macro_rules! common {
     ( $type:ident ) => {
+        #[allow(dead_code)]
         impl $type {
             pub fn read<A: AsyncRead>(
                 a: A
-            ) -> impl Future<Item=(A, Self), Error=io::Error> {
+            ) -> ReadExact<A, $type> {
                 read_exact(a, Self::default())
             }
 
             pub fn write<A: AsyncWrite>(
                 self,
                 a: A
-            ) -> impl Future<Item=(A, Self), Error=io::Error> {
+            ) -> WriteAll<A, $type> {
                 write_all(a, self)
             }
         }
@@ -60,6 +63,35 @@ macro_rules! common {
 
 #[derive(Default)]
 #[repr(packed)]
+#[allow(dead_code)]
+pub struct SerialNotify {
+    header: Header,
+    serial: u32,
+}
+
+impl SerialNotify {
+    pub const PDU: u8 = 0;
+    pub const LEN: u32 = 12;
+
+    pub fn new(version: u8, session: u16, serial: u32) -> Self {
+        SerialNotify {
+            header: Header::new(version, Self::PDU, session, Self::LEN),
+            serial
+        }
+    }
+}
+
+common!(SerialNotify);
+
+
+//------------ SerialQuery ---------------------------------------------------
+
+pub const SERIAL_QUERY_PDU: u8 = 1;
+pub const SERIAL_QUERY_LEN: u32 = 12;
+
+/*
+#[derive(Default)]
+#[repr(packed)]
 pub struct SerialQuery {
     header: Header,
     payload: SerialQueryPayload,
@@ -90,6 +122,7 @@ impl SerialQuery {
 }
 
 common!(SerialQuery);
+*/
 
 
 //------------ SerialQueryPayload --------------------------------------------
@@ -101,11 +134,13 @@ pub struct SerialQueryPayload {
 }
 
 impl SerialQueryPayload {
+    /*
     pub fn new(serial: u32) -> Self {
         SerialQueryPayload {
             serial: serial.to_be()
         }
     }
+    */
 
     pub fn serial(&self) -> u32 {
         u32::from_be(self.serial)
@@ -128,6 +163,7 @@ impl ResetQuery {
     pub const PDU: u8 = 2;
     pub const LEN: u32 = 8;
 
+    #[allow(dead_code)]
     pub fn new(version: u8) -> Self {
         ResetQuery {
             header: Header::new(version, 2, 0, 8)
@@ -162,18 +198,18 @@ common!(CacheResponse);
 
 #[derive(Default)]
 #[repr(packed)]
+#[allow(dead_code)]
 pub struct Ipv4Prefix {
-    #[allow(dead_code)]
     header: Header,
     flags: u8,
     prefix_len: u8,
     max_len: u8,
-    #[allow(dead_code)]
     zero: u8,
     prefix: u32,
     asn: u32
 }
 
+#[allow(dead_code)]
 impl Ipv4Prefix {
     pub fn new(
         version: u8,
@@ -226,16 +262,18 @@ common!(Ipv4Prefix);
 
 #[derive(Default)]
 #[repr(packed)]
+#[allow(dead_code)] 
 pub struct Ipv6Prefix {
     header: Header,
     flags: u8,
     prefix_len: u8,
     max_len: u8,
-    #[allow(dead_code)] zero: u8,
+    zero: u8,
     prefix: u128,
     asn: u32,
 }
 
+#[allow(dead_code)] 
 impl Ipv6Prefix {
     pub fn new(
         version: u8,
@@ -325,7 +363,7 @@ impl Prefix {
     pub fn write<A: AsyncWrite>(
         self,
         a: A
-    ) -> impl Future<Item=(A, Self), Error=io::Error> {
+    ) -> WriteAll<A, Self> {
         write_all(a, self)
     }
 }
@@ -355,6 +393,7 @@ impl AsMut<[u8]> for Prefix {
 
 #[derive(Default)]
 #[repr(packed)]
+#[allow(dead_code)] 
 pub struct EndOfData {
     header: Header,
     serial: u32,
@@ -363,6 +402,7 @@ pub struct EndOfData {
     expire: u32,
 }
 
+#[allow(dead_code)] 
 impl EndOfData {
     pub fn new(
         version: u8,
@@ -413,10 +453,12 @@ common!(EndOfData);
 
 #[derive(Default)]
 #[repr(packed)]
+#[allow(dead_code)] 
 pub struct CacheReset {
     header: Header
 }
 
+#[allow(dead_code)] 
 impl CacheReset {
     pub fn new(version: u8) -> Self {
         CacheReset {
@@ -473,6 +515,7 @@ where
     }
 }
 
+#[allow(dead_code)] 
 impl<P: Default + Sized, T: Default + Sized> Error<P, T> {
     pub fn read<A: AsyncRead>(
         a: A
@@ -515,6 +558,12 @@ impl<P: Default + Sized, T: Default + Sized> AsMut<[u8]> for Error<P, T> {
 
 pub struct BoxedError(Box<AsRef<[u8]> + Send>);
 
+impl BoxedError {
+    pub fn write<A: AsyncWrite>(self, a: A) -> WriteAll<A, Self> {
+        write_all(a, self)
+    }
+}
+
 impl AsRef<[u8]> for BoxedError {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref().as_ref()
@@ -524,7 +573,7 @@ impl AsRef<[u8]> for BoxedError {
 
 //------------ Header --------------------------------------------------------
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 #[repr(packed)]
 pub struct Header {
     version: u8,

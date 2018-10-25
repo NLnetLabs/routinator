@@ -1,4 +1,5 @@
 
+use std::ops;
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -83,6 +84,14 @@ impl AddressOrigins {
 
     pub fn iter(&self) -> impl Iterator<Item=&AddressOrigin> {
         self.origins.iter()
+    }
+}
+
+impl ops::Deref for AddressOrigins {
+    type Target = [AddressOrigin];
+
+    fn deref(&self) -> &Self::Target {
+        self.origins.as_ref()
     }
 }
 
