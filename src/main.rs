@@ -117,19 +117,20 @@ fn update_future(
                         )
                     }
                 };
-                match load_exceptions(&CONFIG) {
+                let must_notify = match load_exceptions(&CONFIG) {
                     Ok(exceptions) => {
-                        OriginsHistory::update(
-                            &history,
-                            Some(origins),
-                            &exceptions,
-                        );
+                        history.update(Some(origins), &exceptions)
                     }
                     Err(err) => {
                         error!("failed loading exceptions: {}", err);
+                        false
                     }
+                };
+                debug!("New serial is {}.", history.serial());
+                if must_notify {
+                    debug!("Sending out notifications.");
+                    notify.notify();
                 }
-                notify.notify();
                 Ok(future::Loop::Continue((repo, history, notify)))
             })
         })

@@ -78,12 +78,16 @@ impl AddressOrigins {
         }
     }
 
-    fn push(&mut self, addr: AddressOrigin) {
-        self.origins.push(addr)
-    }
-
     pub fn iter(&self) -> impl Iterator<Item=&AddressOrigin> {
         self.origins.iter()
+    }
+}
+
+impl From<HashSet<AddressOrigin>> for AddressOrigins {
+    fn from(set: HashSet<AddressOrigin>) -> Self {
+        AddressOrigins {
+            origins: set.into_iter().collect()
+        }
     }
 }
 
@@ -120,13 +124,17 @@ impl OriginsDiff {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.announce.is_empty() && self.withdraw.is_empty()
+    }
+
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
         origins: Option<RouteOrigins>,
         exceptions: &LocalExceptions,
         serial: u32
     ) -> (AddressOrigins, Self) {
-        let mut next = AddressOrigins::new();
+        let mut next = HashSet::new();
         let mut announce = HashSet::new();
 
         if let Some(origins) = origins {
@@ -136,24 +144,29 @@ impl OriginsDiff {
                     if !exceptions.keep_origin(&addr) {
                         continue
                     }
-
-                    if !current.remove(&addr) {
-                        let _ = announce.insert(addr.clone());
+                    if next.insert(addr.clone()) {
+                        if !current.remove(&addr) {
+                            let _ = announce.insert(addr);
+                        }
                     }
-                    next.push(addr)
                 }
             }
         }
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
-            if !current.remove(&addr) {
-                let _ = announce.insert(addr.clone());
+            if next.insert(addr.clone()) {
+                if !current.remove(addr) {
+                    announce.insert(addr.clone());
+                }
             }
-            next.push(addr.clone())
         }
-        let withdraw = current.into_iter().collect();
-        let announce = announce.into_iter().collect();
-        (next, OriginsDiff { serial, announce, withdraw })
+        let withdraw: Vec<_> = current.into_iter().collect();
+        let announce: Vec<_> = announce.into_iter().collect();
+        debug!(
+            "Diff with {} announced and {} withdrawn.",
+            announce.len(), withdraw.len()
+        );
+        (next.into(), OriginsDiff { serial, announce, withdraw })
     }
 
     pub fn serial(&self) -> u32 {
@@ -287,29 +300,26 @@ impl OriginsHistory {
         &self,
         origins: Option<RouteOrigins>,
         exceptions: &LocalExceptions
-    ) {
+    ) -> bool {
         let (serial, current) = {
             let history = self.0.read().unwrap();
             let serial = history.serial().wrapping_add(1);
             let current = history.current.clone();
             (serial, current)
         };
-        debug!("Updating history for serial {}", serial);
-        debug!("Current set has {} entries.", current.len());
-        if let Some(ref origins) = origins {
-            debug!("New set has {} entries.", origins.len());
-        }
         let current: HashSet<_> = current.iter().map(Clone::clone).collect();
         let (next, diff) = OriginsDiff::construct(
             current, origins, exceptions, serial
         );
-        debug!(
-            "Diff has {} announced and {} withdrawn.",
-            diff.announce.len(), diff.withdraw.len()
-        );
-        let mut history = self.0.write().unwrap();
-        history.current = Arc::new(next);
-        history.push_diff(diff);
+        if !diff.is_empty() {
+            let mut history = self.0.write().unwrap();
+            history.current = Arc::new(next);
+            history.push_diff(diff);
+            true
+        }
+        else {
+            false
+        }
     }
 
 }
