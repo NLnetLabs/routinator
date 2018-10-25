@@ -16,5 +16,7 @@ json		= "^0.11"
 lazy_static     = "1.1"
 log             = "^0.4"
 num_cpus        = "1.0"
+slab            = "^0.4"
 tokio           = "^0.1"
 tokio-process   = "^0.2"
+
