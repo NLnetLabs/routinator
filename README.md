@@ -5,22 +5,26 @@
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 
 Please consider this implementation experimental for now. We are actively 
-working towards a production release. Next up on the roadmap is RPKI-RTR 
-support, allowing this package to be used in operational environments.
+working towards a production release.
 
 Full roadmap:
 
   * [x] Fetch certificates and ROAs via rsync
   * [x] Perform cryptographic validation
   * [x] Export validated ROAs in CSV, JSON and RPSL format
-  * [x] Add local white list exceptions and overrides ([RFC 8416](https://tools.ietf.org/html/rfc8416))
-  * [ ] Implement the RPKI-RTR protocol for pushing RPKI data to supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+  * [x] Add local white list exceptions and overrides
+        ([RFC 8416](https://tools.ietf.org/html/rfc8416))
+  * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
+        supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
   * [ ] Exhaustive interoperability and compliance testing
-  * [ ] Implement the RRDP protocol for fetching ([RFC 8182](https://tools.ietf.org/html/rfc8182))
+  * [ ] Implement the RRDP protocol for fetching
+        ([RFC 8182](https://tools.ietf.org/html/rfc8182))
   * [ ] Implement a basic web-based user interface and Command Line Interface
   * [ ] Expose an API
   * [ ] Add the ability to process Internet Routing Registry data
-  * [ ] Integration with alerting and monitoring services so that route hijacks, misconfigurations, connectivity and application problems can be flagged.
+  * [ ] Integration with alerting and monitoring services so that route
+        hijacks, misconfigurations, connectivity and application problems
+        can be flagged.
 
 
 ## RPKI
@@ -32,16 +36,21 @@ AS number will be the origin of BGP route announcements for it.
 
 All of these statements are published in a distributed repository. 
 Routinator will collect these statements into a local copy, validate
-their signatures, and output a list of associations between IP address
-prefixes and AS numbers in a number of useful formats.
+their signatures, and construct a list of associations between IP address
+prefixes and AS numbers. It provides this information to routers supporting
+the RPKI-RTR protocol or can output it in a number of useful formats. 
 
 
 ## Getting Started
 
-There’s two things you need for Routinator: rsync and Rust. You need
-the former because the RPKI repository currently uses rsync as its main
-means of distribution. You need the latter because that’s what the
-Routinator has been written in. Since this currently is a very early
+There’s two things you need for Routinator: rsync and Rust and a C toolc…
+There is three things you need for Routinator: rsync, Rust and a C
+toolchain. You need rsync because the RPKI repository currently uses rsync
+as its main means of distribution. You need Rust because that’s what the
+Routinator has been written in. Some of the cryptographic primitives used
+by the Routinator require a C toolchain, so you need that, too.
+
+Since this currently is a very early
 experimental version, we decided not to distribute binary packages just
 yet. But don’t worry, getting Rust and building packages with it is easy.
 
@@ -58,12 +67,12 @@ If you don’t have rsync, please head to http://rsync.samba.org/.
 
 ### Rust
 
-The easiest and canonical way to install Rust on your machine and maintain
-that installation is a tool called *rustup.* While some distributions
-include Rust packages, we kind of rely on very recent stable releases at
-this point, so using rustup is preferred.
+While some system distributions include Rust as system packages,
+Routinator relies on a relatively new version of Rust, currently 1.29.
+We therefore suggest to use the canonical Rust installation via a tool
+called *rustup.*
 
-If you feel lucky, simply do:
+To install *rustup* and Rust, simply do:
 
 ```bash
 curl https://sh.rustup.rs -sSf | sh
@@ -94,30 +103,34 @@ files, you are probably good to go.
 In the directory you cloned this repository to, say
 
 ```bash
-cargo build
+cargo build --release
 ```
 
-This will build the whole thing (or fail, of course). If it succeeds, you
-can run
-
-```bash
-cargo run
-```
-
-to run the binary that has been built. At this point, it will rsync all
-repository instances into `./rpki-cache/repository` and validate them.
-
-When running, you might get rsync errors, such as from rpki.cnnic.cn.
-You can ignore these. Certainly, Routinator will.
-
-To get a better performance, build and run in release mode like so:
+This will build the whole thing in release mode (or fail, of course). If
+it succeeds, you can run
 
 ```bash
 cargo run --release
 ```
 
-It will then take forever to build but is quick to run, taking less than a
-tenth (!) of the time for validation.
+to run the binary that has been built. If this is the first time you’ve
+been using Routinator, it will create `$HOME/.rpki-cache`, put the
+trust anchor locators of the five RIRs there, and then complain that
+ARIN’s TAL is in fact not really there.
+
+Follow the instructions provided and try again. You can also add
+additional trust anchors by simple dropping their TAL file in RFC 7730
+format into `$HOME/.rpki-cache/tals`.
+
+Now Routinator will rsync the entire RPKI repository to your machine
+(which will take a while), validate it and produce a long list of AS
+numbers and prefixes.
+
+When running, you might get rsync errors, such as from rpki.cnnic.cn.
+You can ignore these. Certainly, Routinator will.
+
+Note that the `--release` flag is important as the produced binary is
+about ten times faster than the one built if you skip that flag.
 
 There is a number of command line options available. You can have cargo pass
 them to the executable after a double hyphen. For instance, if to find out
@@ -127,18 +140,40 @@ about them, run
 cargo run --release -- -h
 ```
 
-## Commonly Used Options
-
-By default, all Validated ROA Prefixes will be sent to `stdout` in CSV 
-format. You can use the `-f` flag to specify other formats such as JSON 
-and RPSL and save the data to a file using `-o`. For example 
+The manual page in `doc/routinator.1` has detailed information about those
+options. Read it via
 
 ```bash
-cargo run --release -f json -o roa.json
+man doc/routinator.1
 ```
-To support interoperability, these output formats are compatible with other 
-validator implementations. You can run this command in a `cron` job to get 
-fresh RPKI data at regular invervals.
+
+
+## Feeding a Router with RPKI-RTR
+
+Routinator supports RPKI-RTR as specified in RFC 8210. It will act as an
+RTR server if you start it with the `-r` (or `--repeat`) or `-d`
+(`--daemon`) option. In the latter case it will detach from the terminal
+and log to syslog while in repeat mode it’ll stay with you.
+
+You can specify the address(es) to listen on via the `-l` (or `--listen`)
+option. If you don’t, it will listen on `127.0.0.1:3323` by default. It
+will not use the default RTR port of 323 since you need to be root to bind
+to that port. Also, note that the default address is localhost for
+security reasons.
+
+So, in order to run Routinator as RTR server listening on port 3323 on
+both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
+
+```bash
+cargo run --release -- -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
+```
+
+Note that RTR support (like everything else in the Routinator right now)
+is still experimental and may break in new and creative ways. You might
+not want to make production routing decision based on it just yet.
+
+
+## Local Exceptions
 
 If you would like to add exceptions to the validated RPKI data in the 
 form of local filters and additions, you can specify this in a file 
@@ -150,20 +185,4 @@ file with local exceptions.
 When playing with these options, you might find `-n` useful. It will
 cause Routinator to skip the rsync-ing of the repository – which should
 be unnecessary if you re-run in quick succession.
-
-
-## The Local Copy of the RPKI Repository
-
-Routinator keeps a local copy of RPKI repository it collected for
-validation. Its location can be specified with the `-c` command line
-option. By default, this is the directory `rpki-cache` in the current
-directory.
-
-In there, Routinator expects to find the trust anchors in a sub-directory
-called `tal`. Each file in that directory should be a Trust Anchor Locator
-(TAL) as defined in RFC 7730.
-
-The source repository contains an example of such an `rpki-cache` with the
-current TALs of the five RIRs present. If you want to add additional trust
-anchors, just drop their associated TAL files into that location.
 
