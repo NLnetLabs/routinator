@@ -1,13 +1,17 @@
 //! Configuration.
 
-use std::{env, process};
+use std::{env, fs, process};
+use std::io::Write;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
+use dirs::home_dir;
 use log::LevelFilter;
 
+
+//------------ Config --------------------------------------------------------
 
 /// Routinator configuration.
 #[derive(Clone, Debug)]
@@ -60,22 +64,29 @@ pub struct Config {
 
 impl Config {
     pub fn create() -> Self {
-        // Remember to update the man page if you change this here!
+        // Remember to update the man page if you change things here!
         let matches = App::new("Routinator")
             .version("0.1")
 
             .author(crate_authors!())
             .about("validates RPKI route origin attestations")
-            .arg(Arg::with_name("cache")
+            .arg(Arg::with_name("basedir")
+                 .short("b")
+                 .long("base-dir")
+                 .value_name("DIR")
+                 .help("sets the base directory for cache and TALs")
+                 .takes_value(true)
+            )
+            .arg(Arg::with_name("cachedir")
                  .short("c")
-                 .long("cache")
+                 .long("cache-dir")
                  .value_name("DIR")
                  .help("sets the cache directory")
                  .takes_value(true)
             )
-            .arg(Arg::with_name("tal")
+            .arg(Arg::with_name("taldir")
                  .short("t")
-                 .long("tal")
+                 .long("tal-dir")
                  .value_name("DIR")
                  .help("sets the TAL directory")
                  .takes_value(true)
@@ -87,15 +98,15 @@ impl Config {
                  .help("file with local exceptions (see RFC 8416 for format)")
                  .takes_value(true)
             )
-            .arg(Arg::with_name("repeat")
-                 .short("r")
-                 .long("repeat")
-                 .help("repeatedly run validation")
-            )
             .arg(Arg::with_name("daemon")
                  .short("d")
                  .long("daemon")
                  .help("run in daemon mode (detach from terminal)")
+            )
+            .arg(Arg::with_name("repeat")
+                 .short("r")
+                 .long("repeat")
+                 .help("repeatedly run validation")
             )
             .arg(Arg::with_name("output")
                  .short("o")
@@ -121,10 +132,6 @@ impl Config {
                  .takes_value(true)
                  .multiple(true)
             )
-            .arg(Arg::with_name("strict")
-                 .long("strict")
-                 .help("parse RPKI data in strict mode")
-            )
             .arg(Arg::with_name("noupdate")
                  .short("n")
                  .long("noupdate")
@@ -135,11 +142,9 @@ impl Config {
                  .long("noprocess")
                  .help("don't process the repository")
             )
-            .arg(Arg::with_name("verbose")
-                 .short("v")
-                 .long("verbose")
-                 .multiple(true)
-                 .help("print more (and more) information")
+            .arg(Arg::with_name("strict")
+                 .long("strict")
+                 .help("parse RPKI data in strict mode")
             )
             .arg(Arg::with_name("refresh")
                  .long("refresh")
@@ -152,6 +157,12 @@ impl Config {
                  .value_name("COUNT")
                  .default_value("10")
                  .help("number of history items to keep in repeat mode")
+            )
+            .arg(Arg::with_name("verbose")
+                 .short("v")
+                 .long("verbose")
+                 .multiple(true)
+                 .help("print more (and more) information")
             )
             .get_matches();
 
@@ -185,13 +196,11 @@ impl Config {
             }
         };
 
+        let (cache_dir, tal_dir) = Self::prepare_dirs(&matches, &cur_dir);
+
         Config {
-            cache_dir: cur_dir.join(
-                matches.value_of("cache").unwrap_or("rpki-cache/repository")
-            ),
-            tal_dir: cur_dir.join(
-                matches.value_of("tal").unwrap_or("rpki-cache/tal")
-            ),
+            cache_dir,
+            tal_dir,
             exceptions: matches.value_of("exceptions").map(|path| {
                 cur_dir.join(path)
             }),
@@ -261,9 +270,83 @@ impl Config {
         }
     }
 
-    pub fn touch(&self) { }
+    /// Prepares and returns the cache dir and tal dir.
+    fn prepare_dirs(
+        matches: &ArgMatches,
+        cur_dir: &Path
+    ) -> (PathBuf, PathBuf) {
+        let base_dir = match matches.value_of("basedir") {
+            Some(dir) => Some(cur_dir.join(dir)),
+            None => match home_dir() {
+                Some(dir) => Some(dir.join(".rpki-cache")),
+                None => None,
+            }
+        };
+        let cache_dir = match matches.value_of("cachedir") {
+            Some(dir) => cur_dir.join(dir),
+            None => match base_dir {
+                Some(ref dir) => dir.join("repository"),
+                None => {
+                    println!("Can't determine default working directory. \
+                              Please use the -b option.\nAborting.");
+                    process::exit(1)
+                }
+            }
+        };
+        let tal_dir = match matches.value_of("taldir") {
+            Some(dir) => cur_dir.join(dir),
+            None => match base_dir {
+                Some(ref dir) => dir.join("tals"),
+                None => {
+                    println!("Can't determine default working directory. \
+                              Please use the -b option.\nAborting.");
+                    process::exit(1)
+                }
+            }
+        };
+
+        if let Err(err) = fs::create_dir_all(&cache_dir) {
+            println!(
+                "Can't create repository directory {}: {}.\nAborting.",
+                cache_dir.display(), err
+            );
+            process::exit(1);
+        }
+        if fs::read_dir(&tal_dir).is_err() {
+            if let Err(err) = fs::create_dir_all(&tal_dir) {
+                println!(
+                    "Can't create TAL directory {}: {}.\nAborting.",
+                    tal_dir.display(), err
+                );
+                process::exit(1);
+            }
+            for (name, content) in &DEFAULT_TALS {
+                let mut file = match fs::File::create(tal_dir.join(name)) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        println!(
+                            "Can't create TAL file {}: {}.\n Aborting.",
+                            tal_dir.join(name).display(), err
+                        );
+                        process::exit(1);
+                    }
+                };
+                if let Err(err) = file.write_all(content) {
+                    println!(
+                        "Can't create TAL file {}: {}.\n Aborting.",
+                        tal_dir.join(name).display(), err
+                    );
+                    process::exit(1);
+                }
+            }
+        }
+
+        (cache_dir, tal_dir)
+    }
 }
 
+
+//------------ RunMode -------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RunMode {
@@ -283,6 +366,8 @@ impl RunMode {
 }
 
 
+//------------ OutputFormat --------------------------------------------------
+
 #[derive(Clone, Copy, Debug)]
 pub enum OutputFormat {
     Csv,
@@ -290,4 +375,15 @@ pub enum OutputFormat {
     Rpsl,
     None,
 }
+
+
+//------------ DEFAULT_TALS --------------------------------------------------
+
+const DEFAULT_TALS: [(&str, &[u8]); 5] = [
+    ("afrinic.tal", include_bytes!("../tals/afrinic.tal")),
+    ("apnic.tal", include_bytes!("../tals/apnic.tal")),
+    ("arin.tal", include_bytes!("../tals/arin.tal")),
+    ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
+    ("ripe.tal", include_bytes!("../tals/ripe.tal")),
+];
 

@@ -1,8 +1,8 @@
-.TH "routinator" "1" "July 31, 2018" "NLnet Labs" "routinator 0.1.0
+.TH "routinator" "1" "October 25, 2018" "NLnet Labs" "routinator 0.1.0
 .\"
-.\" routinator.1 -- routinator DNS lookup utility
+.\" routinator.1 -- RPKI Relying Party software
 .\"
-.\" Copyright (c) 2018, NLnet Labs. All rights reserved.
+.\" Copyright (c) 2018, NLnet Labs.
 .\"
 .\" See LICENSE for the license.
 .\"
@@ -14,110 +14,216 @@
 \- Experimental RPKI relying party software
 .SH "SYNOPSIS"
 .B routinator
-.RB [ \-h | \c
-.BR \-\-help ] 
-.RB [ \-N | \c
-.BR \-\-noprocess
+.RB [ \-b
+.IR base-dir ]
+.RB [ \-c
+.IR cache-dir ]
+.RB [ \-t
+.IR tal-dir ]
+.RB [ \-x
+.IR exceptions-file ]
+.RB [ \-o
+.IR output-file ]
+.RB [ \-f
+.IR output-format ]
+.RB [ \-l
+.IR addr:port
+[ ... ] ]
+.RB [ \-d | \c
+.BR \-r ]
+.RB [ \-n ]
+.RB [ \-N ]
 .RB [ \-\-strict ]
-.RB [ \-V | \c
-.BR \-\-Version ]
+.RB [ \-\-refresh
+.IR seconds ]
+.RB [ \-\-history
+.IR count ]
 .RB [ \-v | \c
-.BR \-\-verbose ]
-.RB [ \-c | \c
-.BR \-\-cache ]
-.IR cache
-.RB [ \-f | \c
-.BR \-\-outform ]
-.IR format
-.RB [ \-o | \c
-.BR \-\-output ]
-.RI [ file ]
+.BR \-vv | \c
+.BR \-vvv ]
+.RB [ \-h ]
+.RB [ \-V ]
 .SH "DESCRIPTION"
 .B Routinator
 validates RPKI route origin attestations.
 .P
+It can either run in one-shot mode outputting a list of validated route
+origins in various formats or in repeat mode listening to RPKI-RTR
+connections.
+.SH "OPTIONS"
+.P
 The available options are:
+.TP
+.BI \-b\  dir \fR,\ \fB\-\-base\-dir= dir
+Specifies the base directory to keep status information in. Unless
+overwritten by the
+.B -c
+or
+.B -t
+options, the RPKI cache will be kept in the sub-directory
+.I repository
+and the TALs will be kept in the sub-directory
+.I tals\fR.
+.IP
+If omitted, the base directory defaults to
+.I $HOME/.rpki-cache\fR.
+.TP
+.BI \-c\  dir \fR,\ \fB\-\-cache\-dir= dir
+Specifies the directory to keep the RPKI cache in.
+.TP
+.BI \-t\  dir \fR,\ \fB\-\-tal\-dir= dir
+Specifies the directory containing the trust anchor locators to use. See
+.B TRUST ANCHOR LOCATORS
+for more information on what should be present in this directory.
+.TP
+.BI \-x\  file \fR,\ \fB\-\-exceptions= file
+If present, provides the path to a local exceptions file. This is a JSON
+file described in RFC 8416.
+.TP
+.BR \-d\fR,\ \fB\-\-daemon
+Directs Routinator to run in daemon mode. After starting, it will detach from
+the terminal, will start listening on the RTR socket and run repeat
+validation.
+.IP
+This option implies the
+.B -r
+option.
+.TP
+.BR \-r\fR,\ \fB\-\-repeat
+Directs Routinator to run in repeat mode. In this mode, validation will
+be performed repeatedly and Routinator will act as an RTR server.
+.TP
+.BI \-o\  file \fR,\ \fB\-\-output= file
+This option specifies the file to output validated route origins to. If the
+option is missing or given as
+.BR -
+standard output is used.
+.TP
+.BI \-f\  format \fR,\ \fB\-\-outform= format
+Specifies the format to use for outputting validated route origins.
+.IP
+If the format value
+.BR csv
+is used, output will be a file with comma-separated rows. The fields will
+be the AS number, the prefix, and the maximum prefix length.
+.IP
+The format value of
+.BR json
+will produce a JSON file consisting of a single object with the only element
+labeled
+.IR roas
+which is a list of objects consisting of the three elements
+.IR asn\fR,
+.IR prefix\fR,
+and
+.IR maxLength\fR.
+.IP
+The format value of
+.BR rpsl
+will produce an RPSL file where each object has the elements
+.IR route\fR,
+.IR origin\fR,
+.IR descr\fR,
+.IR mnt-by\fR,
+.IR created\fR,
+.IR last-modified\fR,
+and
+.IR source\fR,
+not all of which have meaningful values.
+.IP
+Finally, an format value of
+.BR none
+will suppress output of validated origins altogether.
+.TP
+.BI \-l\  addr:port \fR,\ \fB\-\-listen= addr:port
+Each occurrence of this option specifies an address and port to listen
+on for incoming RTR connections. IPv6 addresses need be enclosed in
+square brackets.
+.IP
+If this option is not present at all, the default of
+.IR 127.0.0.1:3323
+will be used.
+.TP
+.BR \-n , " \-\-noupdate
+If this option is given, the local copy of the RPKI repository will not be
+updated.
+.IP
+The option is ignored in repeat and daemon mode.
+.TP
+.BR \-N , " \-\-noprocess
+If this option is present, the RPKI repository will not be validated and no
+output be produced.
+.IP
+The option is ignored in repeat and daemon mode.
+.TP
+.BR \-\-strict
+If this option is present, the repository will be validated in strict mode
+following the requirements laid out by the standard documents very closely.
+This will lead to a rather large amount of invalid route origins and should
+therefore not be used in practice.
+.TP
+.BI \-\-refresh= seconds
+Specifies how long to wait between validation runs in repeat mode. The time
+is to be specified in seconds. It starts after validation has been finished.
+.IP
+The default time is 3600 seconds.
+.TP
+.BI \-\-history= count
+Specifies the number of incremental updates Routinator should keep for RTR
+clients.
+.IP
+If a client that has previously received a data set connects to the RTR
+server, it can provide the server with the serial number it has last seen
+and request only to be given the changes since then. Routinator can keep a
+number of older versions around to provide clients with these changes.
+.IP
+The default number of incremental updates kept is 10.
+.TP
+.BR \-v , " \-\-verbose
+Print more information.
+If given multiple times, more information is
+printed.
+.IP
+When running in daemon mode, Routinator will print information to syslog
+using the daemon facility. In all other cases, it prints this information
+to stderr.
 .TP
 .BR \-h , " \-\-help"
 Print some help information.
-.TP
-.BR \-N , " \-\-noprocess
-Do not process the repository.
-.TP
-.BR \-n , " \-\-noupdate
-Do not update the local cache.
 .TP
 .B \-\-strict
 Parse RPKI data in strict mode.
 .TP
 .BR \-V , " \-\-version
 Print version information.
-.TP
-.BR \-v , " \-\-verbose
-Print more information.
-If given multiple times, more information is
-printed.
-.TP
-.BR \-c , " \-\-cache \fIdirectory
-Sets the cache directory.
-Defaults to a directory called
-.I rpki\-cache
-in the current directory.
-The directory has to be created by the user.
-.TP
-.BR \-x , " \-\-exceptions \fIfile
-Path to a file that contains the local exceptions.
-The file must be in SLURM format as defined in RFC 8416.
-.TP
-.BR \-f , " \-\-outform
-Specifies which output format to use.
-Possible formats are
-.IR csv ,
-.IR json ,
-.IR rpsl
-and
-.IR none .
-Default format is
-.IR csv .
-.TP
-.BR \-o , " \-\-ouput \fIfilename
-The output file to be used.
-If no output filename or the target "-" is given, standard output is used.
-.SH CACHE DIRECTORY STRUCTURE
-.\" This description is actually something that should
-.\" be covered by a reference manual.
-The
-.B
-Routinator
-uses the
-.UX
-file sytem as cache for the data.
-The default cache is the
-.I rpki-cache
-directory in the folder where the program is called.
-This directory should have two entries,
-.IR tal
-and
-.IR repository .
-The
-.I tal
-directoriy contains the
-.I registry.tal
-files which instruct the
-.B routinator
-on which RIR repositories to download validation data from, while the
-.I repository
-directory is used for storage.
+
+.SH TRUST ANCHOR LOCATORS
+RPKI uses trust anchor locators, or TALs, to identify the location and
+public keys of the trusted root CA certificates. Routinator keeps these
+TALs in files in the TAL directory which can be set by the
+.B \-t
+option. If the
+.B \-b
+option is used instead, the TAL directory will be in the sub-directory
+.I tals
+under the directory specified in this option. The default location, if
+no options are used at all is
+.I $HOME/.rpki-cache/tals\fR.
 .P
-It is beyond the scope of this manual page
-to descibe the format of the 
-.I \&.tal
-or the repository data.
+If the specified or default directory does not exist, Routinator will try
+to create it and populate it with the TALs of the five Regional Internet
+Registries (RIRs). Unfortunately, the terms and conditions of the
+North American registry ARIN do not allow us to include their TAL with the
+Routinator. We instead include a crippled version that will cause
+Routinator to refuse to work and print instructions on how to get the
+TAL instead.
+
 .SH AUTHOR
 .P
-Jaap Akkerhuis whipped up this manual page.
+Jaap Akkerhuis wrote the original version of this manual page,
+Martin Hoffmann extended it for later versions.
 .SH "EXIT CODE"
-The routinator program exits with status code 1 on error, 
+The Routinator program exits with status code 1 on error, 
 .SH "SEE ALSO"
 .P
 Reference manual (to be written).
