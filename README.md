@@ -130,11 +130,11 @@ When running, you might get rsync errors, such as from rpki.cnnic.cn.
 You can ignore these. Certainly, Routinator will.
 
 Note that the `--release` flag is important as the produced binary is
-about ten times faster than the one built if you skip that flag.
+about ten times faster than the one built while not providing that flag.
 
 There is a number of command line options available. You can have cargo pass
-them to the executable after a double hyphen. For instance, if to find out
-about them, run
+them to the executable after a double hyphen. For instance, if you want to find 
+out about them, run
 
 ```bash
 cargo run --release -- -h
@@ -159,11 +159,11 @@ and log to syslog while in repeat mode it’ll stay with you.
 
 You can specify the address(es) to listen on via the `-l` (or `--listen`)
 option. If you don’t, it will listen on `127.0.0.1:3323` by default. It
-will not use the default RTR port of 323 since you need to be root to bind
+will not use the default RTR port of 3323 since you need to be root to bind
 to that port. Also, note that the default address is localhost for
 security reasons.
 
-So, in order to run Routinator as RTR server listening on port 3323 on
+So, in order to run Routinator as an RTR server listening on port 3323 on
 both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
 
 ```bash
@@ -184,7 +184,7 @@ using JSON notation according to the
 two example files in `/test/slurm`. Use the `-x` option to refer to your 
 file with local exceptions.
 
-When playing with these options, you might find `-n` useful. It will
-cause Routinator to skip the rsync-ing of the repository – which should
+When playing with these options, you might find the `-n` option useful. 
+It will cause Routinator to skip the rsync-ing of the repository – which should
 be unnecessary if you re-run in quick succession.
 
