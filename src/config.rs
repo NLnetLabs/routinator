@@ -1,6 +1,6 @@
 //! Configuration.
 
-use std::{env, fs, process};
+use std::{env, fs, io, process};
 use std::io::Write;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
@@ -164,7 +164,17 @@ impl Config {
                  .multiple(true)
                  .help("print more (and more) information")
             )
+            .arg(Arg::with_name("man")
+                 .long("man")
+                 .help("print the man page to stdout")
+            )
             .get_matches();
+
+        if matches.is_present("man") {
+            let stdout = io::stdout();
+            let _ = stdout.lock().write_all(MAN_PAGE);
+            process::exit(0);
+        }
 
         let cur_dir = match env::current_dir() {
             Ok(dir) => dir,
@@ -386,4 +396,9 @@ const DEFAULT_TALS: [(&str, &[u8]); 5] = [
     ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
     ("ripe.tal", include_bytes!("../tals/ripe.tal")),
 ];
+
+
+//------------ The Man Page --------------------------------------------------
+
+const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
 
