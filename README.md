@@ -132,9 +132,9 @@ You can ignore these. Certainly, Routinator will.
 Note that the `--release` flag is important as the produced binary is
 about ten times faster than the one built while not providing that flag.
 
-There is a number of command line options available. You can have cargo pass
-them to the executable after a double hyphen. For instance, if you want to find 
-out about them, run
+There is a number of command line options available. You can have cargo
+pass them to the executable after a double hyphen. For instance, if you
+want to find out about them, run
 
 ```bash
 cargo run --release -- -h
@@ -158,10 +158,10 @@ RTR server if you start it with the `-r` (or `--repeat`) or `-d`
 and log to syslog while in repeat mode it’ll stay with you.
 
 You can specify the address(es) to listen on via the `-l` (or `--listen`)
-option. If you don’t, it will listen on `127.0.0.1:3323` by default. It
-will not use the default RTR port of 3323 since you need to be root to bind
-to that port. Also, note that the default address is localhost for
-security reasons.
+option. If you don’t, it will listen on `127.0.0.1:3323` by default. We
+are not using the IANA-assigned default port RTR, port 323, because that
+would require root permissions to bind to the port. Also, note that the
+default address is a localhost address for security reasons.
 
 So, in order to run Routinator as an RTR server listening on port 3323 on
 both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
