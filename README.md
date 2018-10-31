@@ -140,11 +140,13 @@ about them, run
 cargo run --release -- -h
 ```
 
-The manual page in `doc/routinator.1` has detailed information about those
-options. Read it via
+For somewhat more complete information on the options, you can also
+consult the man page. It lives in `doc/routinator.1` in the repository but
+is also included in the executable and accessible via the `--man` option.
+On Linux, you can simply run:
 
 ```bash
-man doc/routinator.1
+cargo run --release -- --man | man -l -
 ```
 
 
