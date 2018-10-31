@@ -1,5 +1,9 @@
+/// Route origins.
+///
+/// The types in this module store route origins, sets of route origins, and
+/// the history of changes necessary for RTR.
 
-use std::ops;
+use std::{ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -11,58 +15,106 @@ use super::slurm::LocalExceptions;
 
 //------------ RouteOrigins --------------------------------------------------
 
+/// The raw list of route origin attestations from RPKI.
+///
+/// This type is used to collect all the valid route origins as they fall out
+/// of RPKI repository validation. It is an intermediary type used as input
+/// for generating the real origins kept in [`AddressOrigins`].
+///
+/// [`AddressOrigins`]: struct.AddressOrigins.html
 #[derive(Clone, Debug)]
 pub struct RouteOrigins {
+    /// The list of route origin attestations.
     origins: Vec<RouteOriginAttestation>
 }
 
 impl RouteOrigins {
+    /// Creates a new, empty list of route origins.
     pub fn new() -> Self {
         RouteOrigins { origins: Vec::new() }
     }
 
+    /// Appends the given attestation to the set.
+    ///
+    /// The attestation will simply be added to the end of the list. No
+    /// checking for duplicates is being done.
     pub fn push(&mut self, attestation: RouteOriginAttestation) {
         self.origins.push(attestation)
     }
 
+    /// Merges another list of route origins into this one.
+    ///
+    /// Despite the name, this method doesn’t do any duplicate checking,
+    /// either.
     pub fn merge(&mut self, mut other: RouteOrigins) {
         self.origins.append(&mut other.origins)
     }
 
+    /// Returns the number of attestations in the list.
     pub fn len(&self) -> usize {
         self.origins.len()
     }
 
-    pub fn drain(self) -> impl Iterator<Item=RouteOriginAttestation> {
+    /// Returns an iterator over the attestations in the list.
+    pub fn iter(&self) -> slice::Iter<RouteOriginAttestation> {
+        self.origins.iter()
+    }
+}
+
+impl IntoIterator for RouteOrigins {
+    type Item = RouteOriginAttestation;
+    type IntoIter = vec::IntoIter<RouteOriginAttestation>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.origins.into_iter()
     }
+}
 
-    pub fn iter(&self) -> impl Iterator<Item=&RouteOriginAttestation> {
-        self.origins.iter()
+impl<'a> IntoIterator for &'a RouteOrigins {
+    type Item = &'a RouteOriginAttestation;
+    type IntoIter = slice::Iter<'a, RouteOriginAttestation>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
 
 //------------ AddressOrigins ------------------------------------------------
 
+/// A set of address origin statements.
+///
+/// This type contains a list of [`AddressOrigin`] statements. While it is
+/// indeed a set, that is, it doesn’t contain duplicates, it is accessible
+/// like a slice of address origins, to which it even derefs. This is so that
+/// we can iterate over the set using indexes instead of references.
+///
+/// [`AddressOrigin`]: struct.AddressOrigin.html
 #[derive(Clone, Debug)]
 pub struct AddressOrigins {
+    /// A list of (unique) address origins.
     origins: Vec<AddressOrigin>,
 }
 
 impl AddressOrigins {
+    /// Creates a new, empty set of address origins.
     pub fn new() -> Self {
         AddressOrigins {
             origins: Vec::new()
         }
     }
 
+    /// Creates a set from the raw route origins and exceptions.
+    ///
+    /// The function will take all the address origins in `origins`, drop
+    /// duplicates, drop the origins filtered in `execptions` and add the
+    /// assertions from `exceptions`.
     pub fn from_route_origins(
         origins: RouteOrigins,
         exceptions: &LocalExceptions,
     ) -> Self {
         let mut res = HashSet::new();
-        for roa in origins.drain() {
+        for roa in origins {
             for addr in roa.iter() {
                 let addr = AddressOrigin::from_roa(roa.as_id(), addr);
                 if exceptions.keep_origin(&addr) {
@@ -78,10 +130,14 @@ impl AddressOrigins {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&AddressOrigin> {
+    /// Returns an iterator over the address orgins.
+    pub fn iter(&self) -> slice::Iter<AddressOrigin> {
         self.origins.iter()
     }
 }
+
+
+//--- From
 
 impl From<HashSet<AddressOrigin>> for AddressOrigins {
     fn from(set: HashSet<AddressOrigin>) -> Self {
@@ -90,6 +146,9 @@ impl From<HashSet<AddressOrigin>> for AddressOrigins {
         }
     }
 }
+
+
+//--- Deref and AsRef
 
 impl ops::Deref for AddressOrigins {
     type Target = [AddressOrigin];
@@ -138,7 +197,7 @@ impl OriginsDiff {
         let mut announce = HashSet::new();
 
         if let Some(origins) = origins {
-            for roa in origins.drain() {
+            for roa in origins {
                 for addr in roa.iter() {
                     let addr = AddressOrigin::from_roa(roa.as_id(), addr);
                     if !exceptions.keep_origin(&addr) {
@@ -261,12 +320,25 @@ impl OriginsHistory {
     pub fn get(&self, serial: u32) -> Option<Arc<OriginsDiff>> {
         let history = self.0.read().unwrap();
         if let Some(diff) = history.diffs.back() {
-            if diff.serial() == serial {
+            if diff.serial() < serial {
+                // If they give us a future serial, we reset.
+                return None
+            }
+            else if diff.serial() == serial {
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else if diff.serial() == serial + 1 {
                 // This relies on serials increasing by one always.
                 return Some(diff.clone())
+            }
+        }
+        else {
+            if serial == 0 {
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else {
+                // That pesky future serial again.
+                return None
             }
         }
         let mut iter = history.diffs.iter();

@@ -141,6 +141,7 @@ impl<A: AsyncRead> QueryStream<A> {
     ) -> (State<A>, Result<Async<Option<Query>>, io::Error>) { 
         match header.pdu() {
             pdu::SERIAL_QUERY_PDU => {
+                debug!("RTR: Got serial query.");
                 match Self::check_length(header, pdu::SERIAL_QUERY_LEN) {
                     Ok(()) => {
                         (
@@ -151,6 +152,7 @@ impl<A: AsyncRead> QueryStream<A> {
                         )
                     }
                     Err(err) => {
+                        debug!("RTR: ... with bad length");
                         (
                             Self::start_state(sock),
                             Ok(Async::Ready(Some(err)))
@@ -159,6 +161,7 @@ impl<A: AsyncRead> QueryStream<A> {
                 }
             }
             pdu::ResetQuery::PDU => {
+                debug!("RTR: Got reset query.");
                 match Self::check_length(header, pdu::ResetQuery::LEN) {
                     Ok(()) => {
                         (
@@ -167,6 +170,7 @@ impl<A: AsyncRead> QueryStream<A> {
                         )
                     }
                     Err(err) => {
+                        debug!("RTR: ... with bad length");
                         (
                             Self::start_state(sock),
                             Ok(Async::Ready(Some(err)))
@@ -174,7 +178,8 @@ impl<A: AsyncRead> QueryStream<A> {
                     }
                 }
             }
-            _ => {
+            pdu => {
+                debug!("RTR: Got query with PDU {}.", pdu);
                 (
                     Self::start_state(sock),
                     Ok(Async::Ready(Some(Query::Error(
@@ -212,31 +217,39 @@ impl<A: AsyncRead> Stream for QueryStream<A> {
     type Error = io::Error;
 
     fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
-        let (state, res) = match self.state {
-            State::Header(ref mut fut) => {
-                let (sock, header) = try_ready!(fut.poll());
-                if let Some(err) = Self::check_version(self.version, header) {
-                    (State::Done, Ok(Async::Ready(Some(err))))
+        loop {
+            let (state, res) = match self.state {
+                State::Header(ref mut fut) => {
+                    let (sock, header) = try_ready!(fut.poll());
+                    debug!("RTR: read a header.");
+                    if let Some(err) = Self::check_version(self.version,
+                                                           header) {
+                        (State::Done, Ok(Async::Ready(Some(err))))
+                    }
+                    else {
+                        self.version = Some(header.version());
+                        Self::read_data(sock, header)
+                    }
                 }
-                else {
-                    self.version = Some(header.version());
-                    Self::read_data(sock, header)
+                State::SerialQuery(header, ref mut fut) => {
+                    let (sock, payload) = try_ready!(fut.poll());
+                    debug!("RTR: read the serial query payload.");
+                    (
+                        State::Header(pdu::Header::read(sock)),
+                        Ok(Async::Ready(Some(Query::Serial {
+                            session: header.session(),
+                            serial: payload.serial()
+                        })))
+                    )
                 }
+                State::Done => return Ok(Async::Ready(None))
+            };
+            self.state = state;
+            match res {
+                Ok(Async::NotReady) => { }
+                _ => return res
             }
-            State::SerialQuery(header, ref mut fut) => {
-                let (sock, payload) = try_ready!(fut.poll());
-                (
-                    State::Header(pdu::Header::read(sock)),
-                    Ok(Async::Ready(Some(Query::Serial {
-                        session: header.session(),
-                        serial: payload.serial()
-                    })))
-                )
-            }
-            State::Done => return Ok(Async::Ready(None))
-        };
-        self.state = state;
-        res
+        }
     }
 }
 
