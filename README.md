@@ -4,10 +4,43 @@
 
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 
-Please consider this implementation experimental for now. We are actively 
-working towards a production release.
+Even though it is still early days for the Routinator, we have decided to
+provide a release in the spirit of open development. Please consider this
+when using the software. If you have any feedback, we would love to hear
+from you. Don’t hesitate to 
+[create an issue of Github](https://github.com/NLnetLabs/routinator/issues/new)
+or drop us a line a [rpki@nlnetlab.nl](mailto:rpki@nlnetlabs.nl).
 
-Full roadmap:
+
+## Quick Start
+
+Assuming you have rsync and the C toolchain but not yet Rust, here’s how
+you get the Routinator to run as an RTR server listening on 127.0.0.1 port
+3323:
+
+```
+curl https://sh.rustup.rs -sSf | sh
+source ~/.cargo/env
+cargo install routinator
+routinator -r -l 127.0.0.1:3323
+```
+
+
+## RPKI
+
+The Resource Public Key Infrastructure provides cryptographically signed
+statements about the association of Internet routing resources. In
+particular, it allows the holder of an IP address prefix to publish which
+AS number will be the origin of BGP route announcements for it.
+
+All of these statements are published in a distributed repository. 
+Routinator will collect these statements into a local copy, validate
+their signatures, and construct a list of associations between IP address
+prefixes and AS numbers. It provides this information to routers supporting
+the RPKI-RTR protocol or can output it in a number of useful formats. 
+
+
+## Full Roadmap
 
   * [x] Fetch certificates and ROAs via rsync
   * [x] Perform cryptographic validation
@@ -25,20 +58,6 @@ Full roadmap:
   * [ ] Integration with alerting and monitoring services so that route
         hijacks, misconfigurations, connectivity and application problems
         can be flagged.
-
-
-## RPKI
-
-The Resource Public Key Infrastructure provides cryptographically signed
-statements about the association of Internet routing resources. In
-particular, it allows the holder of an IP address prefix to publish which
-AS number will be the origin of BGP route announcements for it.
-
-All of these statements are published in a distributed repository. 
-Routinator will collect these statements into a local copy, validate
-their signatures, and construct a list of associations between IP address
-prefixes and AS numbers. It provides this information to routers supporting
-the RPKI-RTR protocol or can output it in a number of useful formats. 
 
 
 ## Getting Started
@@ -68,9 +87,9 @@ If you don’t have rsync, please head to http://rsync.samba.org/.
 ### Rust
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.29.
-We therefore suggest to use the canonical Rust installation via a tool
-called *rustup.*
+Routinator relies on a relatively new version of Rust, currently 1.29 or
+newer. We therefore suggest to use the canonical Rust installation via a
+tool called *rustup.*
 
 To install *rustup* and Rust, simply do:
 
@@ -107,7 +126,7 @@ cargo install routinator
 ```
 
 This will build Routinator and install it in the same directory that cargo
-itself lives in (likely `$HOME/.cargo/bin). Which means that you can run
+itself lives in (likely `$HOME/.cargo/bin`). Which means that you can run
 routinator simply as:
 
 ```bash
@@ -124,18 +143,15 @@ additional trust anchors by simple dropping their TAL file in RFC 7730
 format into `$HOME/.rpki-cache/tals`.
 
 Now Routinator will rsync the entire RPKI repository to your machine
-(which will take a while), validate it and produce a long list of AS
-numbers and prefixes.
+(which will take a while during the first run), validate it and produce
+a long list of AS numbers and prefixes.
 
-When running, you might get rsync errors, such as from rpki.cnnic.cn.
-You can ignore these. Certainly, Routinator will.
+When running, you might get rsync errors, such as from rpki.cnnic.cn
+which isn’t reachable. These servers will be ignored and tried again on
+the next run, so you ignore the errors.
 
-Note that the `--release` flag is important as the produced binary is
-about ten times faster than the one built while not providing that flag.
-
-There is a number of command line options available. You can have cargo
-pass them to the executable after a double hyphen. For instance, if you
-want to find out about them, run
+There are a number of command line options available. You can  find out
+about them by running
 
 ```bash
 routinator -h
@@ -150,8 +166,9 @@ On Linux, you can simply run:
 routinator --man | man -l -
 ```
 
-On BSDs, man doesn’t seem to like reading man pages from stdin, so you’ll
-have to redirect the output somewhere before being able to read it.
+It is also available online on the
+[NLnetLabs documentation
+site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
 
 
 ## Feeding a Router with RPKI-RTR
@@ -174,6 +191,17 @@ both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
 routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
 ```
 
+By default, the repository will be updated and re-validated every hour as
+per the recommendation in the RFC. You can change this via the
+``--refresh` option and specify the intervall between re-validations in
+seconds. That is, if you rather have Routinator validate every fifteen
+minutes, the above command becomes
+
+```bash
+routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
+```
+
+
 ## Local Exceptions
 
 If you would like to add exceptions to the validated RPKI data in the 
@@ -181,6 +209,9 @@ form of local filters and additions, you can specify this in a file
 using JSON notation according to the [SLURM] standard. You can find 
 two example files in the repository at `/test/slurm`. Use the `-x` option
 to refer to your file with local exceptions.
+
+Routinator will re-read that file on every validation run, so you can
+simply update the file whenever your exceptions change.
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
 
