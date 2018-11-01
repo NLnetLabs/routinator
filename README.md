@@ -1,4 +1,4 @@
-# :rocket: Routinator 3000.
+# :rocket: Routinator
 
 [![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
 
@@ -100,20 +100,21 @@ files, you are probably good to go.
 
 ## Building and Running
 
-In the directory you cloned this repository to, say
+The easiest way to get Routinator is to leave it to cargo by saying
 
-```bash
-cargo build --release
+```
+cargo install routinator
 ```
 
-This will build the whole thing in release mode (or fail, of course). If
-it succeeds, you can run
+This will build Routinator and install it in the same directory that cargo
+itself lives in (likely `$HOME/.cargo/bin). Which means that you can run
+routinator simply as:
 
 ```bash
-cargo run --release
+routinator
 ```
 
-to run the binary that has been built. If this is the first time you’ve
+If this is the first time you’ve
 been using Routinator, it will create `$HOME/.rpki-cache`, put the
 trust anchor locators of the five RIRs there, and then complain that
 ARIN’s TAL is in fact not really there.
@@ -137,7 +138,7 @@ pass them to the executable after a double hyphen. For instance, if you
 want to find out about them, run
 
 ```bash
-cargo run --release -- -h
+routinator -h
 ```
 
 For somewhat more complete information on the options, you can also
@@ -146,8 +147,11 @@ is also included in the executable and accessible via the `--man` option.
 On Linux, you can simply run:
 
 ```bash
-cargo run --release -- --man | man -l -
+routinator --man | man -l -
 ```
+
+On BSDs, man doesn’t seem to like reading man pages from stdin, so you’ll
+have to redirect the output somewhere before being able to read it.
 
 
 ## Feeding a Router with RPKI-RTR
@@ -167,24 +171,16 @@ So, in order to run Routinator as an RTR server listening on port 3323 on
 both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
 
 ```bash
-cargo run --release -- -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
+routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
 ```
-
-Note that RTR support (like everything else in the Routinator right now)
-is still experimental and may break in new and creative ways. You might
-not want to make production routing decision based on it just yet.
-
 
 ## Local Exceptions
 
 If you would like to add exceptions to the validated RPKI data in the 
 form of local filters and additions, you can specify this in a file 
-using JSON notation according to the 
-[SLURM](https://tools.ietf.org/html/rfc8416) standard. You can find 
-two example files in `/test/slurm`. Use the `-x` option to refer to your 
-file with local exceptions.
+using JSON notation according to the [SLURM] standard. You can find 
+two example files in the repository at `/test/slurm`. Use the `-x` option
+to refer to your file with local exceptions.
 
-When playing with these options, you might find the `-n` option useful. 
-It will cause Routinator to skip the rsync-ing of the repository – which should
-be unnecessary if you re-run in quick succession.
+[SLURM]: https://tools.ietf.org/html/rfc8416
 

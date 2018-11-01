@@ -2,9 +2,14 @@
 name = "routinator"
 version = "0.1.0"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
+description = "An RPKI relying party software."
+repository = "https://github.com/NLnetLabs/routinator"
+keywords = ["rpki", "routing-security", "bgp"]
+categories = ["command-line-utilities"]
+license = "BSD-3-Clause"
 
 [dependencies]
-rpki            = { git="https://github.com/NLnetLabs/rpki-rs.git" }
+rpki            = "^0.1"
 bytes           = "^0.4"
 chrono          = "^0.4"
 clap            = "2.0"
