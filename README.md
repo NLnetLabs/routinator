@@ -193,7 +193,7 @@ routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
 
 By default, the repository will be updated and re-validated every hour as
 per the recommendation in the RFC. You can change this via the
-``--refresh` option and specify the intervall between re-validations in
+`--refresh` option and specify the interval between re-validations in
 seconds. That is, if you rather have Routinator validate every fifteen
 minutes, the above command becomes
 
