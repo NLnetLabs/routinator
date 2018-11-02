@@ -391,18 +391,11 @@ impl AsMut<[u8]> for Prefix {
 
 //------------ EndOfData -----------------------------------------------------
 
-#[derive(Default)]
-#[repr(packed)]
-#[allow(dead_code)] 
-pub struct EndOfData {
-    header: Header,
-    serial: u32,
-    refresh: u32,
-    retry: u32,
-    expire: u32,
+pub enum EndOfData {
+    V0(EndOfDataV0),
+    V1(EndOfDataV1),
 }
 
-#[allow(dead_code)] 
 impl EndOfData {
     pub fn new(
         version: u8,
@@ -412,7 +405,100 @@ impl EndOfData {
         retry: u32,
         expire: u32
     ) -> Self {
-        EndOfData {
+        if version == 0 {
+            EndOfData::V0(EndOfDataV0::new(session, serial))
+        }
+        else {
+            EndOfData::V1(EndOfDataV1::new(
+                version, session, serial, refresh, retry, expire
+            ))
+        }
+    }
+
+    pub fn write<A: AsyncWrite>(self, a: A) -> WriteAll<A, Self> {
+        write_all(a, self)
+    }
+}
+
+impl AsRef<[u8]> for EndOfData {
+    fn as_ref(&self) -> &[u8] {
+        match *self {
+            EndOfData::V0(ref inner) => inner.as_ref(),
+            EndOfData::V1(ref inner) => inner.as_ref(),
+        }
+    }
+}
+
+impl AsMut<[u8]> for EndOfData {
+    fn as_mut(&mut self) -> &mut [u8] {
+        match *self {
+            EndOfData::V0(ref mut inner) => inner.as_mut(),
+            EndOfData::V1(ref mut inner) => inner.as_mut(),
+        }
+    }
+}
+
+
+
+//------------ EndOfDataV0 ---------------------------------------------------
+
+#[derive(Default)]
+#[repr(packed)]
+#[allow(dead_code)]
+pub struct EndOfDataV0 {
+    header: Header,
+    serial: u32
+}
+
+#[allow(dead_code)]
+impl EndOfDataV0 {
+    pub fn new(session: u16, serial: u32) -> Self {
+        EndOfDataV0 {
+            header: Header::new(0, 7, session, 12),
+            serial: serial.to_be()
+        }
+    }
+
+    pub fn version(&self) -> u8 {
+        self.header.version
+    }
+
+    pub fn session(&self) -> u16 {
+        u16::from_be(self.header.session)
+    }
+
+    pub fn serial(&self) -> u32 {
+        u32::from_be(self.serial)
+    }
+}
+
+common!(EndOfDataV0);
+    
+
+//------------ EndOfDataV1 ---------------------------------------------------
+
+#[derive(Default)]
+#[repr(packed)]
+#[allow(dead_code)] 
+pub struct EndOfDataV1 {
+    header: Header,
+    serial: u32,
+    refresh: u32,
+    retry: u32,
+    expire: u32,
+}
+
+#[allow(dead_code)] 
+impl EndOfDataV1 {
+    pub fn new(
+        version: u8,
+        session: u16,
+        serial: u32,
+        refresh: u32,
+        retry: u32,
+        expire: u32
+    ) -> Self {
+        EndOfDataV1 {
             header: Header::new(version, 7, session, 24),
             serial: serial.to_be(),
             refresh: refresh.to_be(),
@@ -446,7 +532,7 @@ impl EndOfData {
     }
 }
 
-common!(EndOfData);
+common!(EndOfDataV1);
 
 
 //------------ CacheReset ----------------------------------------------------
