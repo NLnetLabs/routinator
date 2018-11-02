@@ -125,9 +125,20 @@ The easiest way to get Routinator is to leave it to cargo by saying
 cargo install routinator
 ```
 
-This will build Routinator and install it in the same directory that cargo
-itself lives in (likely `$HOME/.cargo/bin`). Which means that you can run
-routinator simply as:
+If you want to try the master branch from the repository instead of a
+release version, you can run
+
+```
+cargo install --git https://github.com/NLnetLabs/routinator.git
+```
+
+If you want to update an installed version, you run the same command but
+add the `-f` flag (aka force) to approve overwriting the installed
+version.
+
+The command will build Routinator and install it in the same directory
+that cargo itself lives in (likely `$HOME/.cargo/bin`).
+Which means that you can run routinator simply as:
 
 ```bash
 routinator
