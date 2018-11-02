@@ -8,7 +8,7 @@ Even though it is still early days for the Routinator, we have decided to
 provide a release in the spirit of open development. Please consider this
 when using the software. If you have any feedback, we would love to hear
 from you. Don’t hesitate to 
-[create an issue of Github](https://github.com/NLnetLabs/routinator/issues/new)
+[create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or drop us a line at [rpki@nlnetlabs.nl](mailto:rpki@nlnetlabs.nl).
 
 
@@ -50,14 +50,14 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
   * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
         supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
   * [ ] Exhaustive interoperability and compliance testing
+  * [ ] Integration with alerting and monitoring services so that route
+        hijacks, misconfigurations, connectivity and application problems
+        can be flagged.
   * [ ] Implement the RRDP protocol for fetching
         ([RFC 8182](https://tools.ietf.org/html/rfc8182))
   * [ ] Implement a basic web-based user interface and Command Line Interface
   * [ ] Expose an API
   * [ ] Add the ability to process Internet Routing Registry data
-  * [ ] Integration with alerting and monitoring services so that route
-        hijacks, misconfigurations, connectivity and application problems
-        can be flagged.
 
 
 ## Getting Started
