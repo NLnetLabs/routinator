@@ -63,7 +63,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 ## Getting Started
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
-There is three things you need for Routinator: rsync, Rust and a C
+There are three things you need for Routinator: rsync, Rust and a C
 toolchain. You need rsync because the RPKI repository currently uses rsync
 as its main means of distribution. You need Rust because that’s what the
 Routinator has been written in. Some of the cryptographic primitives used
