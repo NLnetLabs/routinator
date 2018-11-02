@@ -9,7 +9,7 @@ provide a release in the spirit of open development. Please consider this
 when using the software. If you have any feedback, we would love to hear
 from you. Don’t hesitate to 
 [create an issue of Github](https://github.com/NLnetLabs/routinator/issues/new)
-or drop us a line a [rpki@nlnetlabs.nl](mailto:rpki@nlnetlabs.nl).
+or drop us a line at [rpki@nlnetlabs.nl](mailto:rpki@nlnetlabs.nl).
 
 
 ## Quick Start
@@ -69,9 +69,9 @@ as its main means of distribution. You need Rust because that’s what the
 Routinator has been written in. Some of the cryptographic primitives used
 by the Routinator require a C toolchain, so you need that, too.
 
-Since this currently is a very early
-experimental version, we decided not to distribute binary packages just
-yet. But don’t worry, getting Rust and building packages with it is easy.
+Since this currently is an early version, we decided not to distribute 
+binary packages just yet. But don’t worry, getting Rust and building 
+packages with it is easy.
 
 
 ### rsync
