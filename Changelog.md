@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.1.2
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.1.1 ‘Five-second Rule’
 
 Bug Fixes
