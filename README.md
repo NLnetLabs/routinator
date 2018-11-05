@@ -25,6 +25,12 @@ cargo install routinator
 routinator -r -l 127.0.0.1:3323
 ```
 
+If you have an older version of the Routinator, you can update via
+
+```
+cargo install -f routinator
+```
+
 
 ## RPKI
 
