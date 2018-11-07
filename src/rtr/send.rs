@@ -202,9 +202,9 @@ impl Iterator for SendDiff {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.announce {
-            if self.next_idx == self.diff.announce().len() {
+            if self.next_idx >= self.diff.announce().len() {
                 self.announce = false;
-                self.next_idx = 1;
+                self.next_idx = 1; // We return the 0th item right away.
                 self.diff.withdraw().first().map(|orig| {
                     pdu::Prefix::new(self.version, 0, orig)
                 })
@@ -216,11 +216,11 @@ impl Iterator for SendDiff {
             }
         }
         else {
-            if self.next_idx == self.diff.withdraw().len() {
+            if self.next_idx >= self.diff.withdraw().len() {
                 None
             }
             else {
-                let res = &self.diff.announce()[self.next_idx];
+                let res = &self.diff.withdraw()[self.next_idx];
                 self.next_idx += 1;
                 Some(pdu::Prefix::new(self.version, 0, res))
             }
