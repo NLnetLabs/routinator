@@ -297,8 +297,15 @@ pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 
 #[derive(Clone, Debug)]
 pub struct HistoryInner {
+    /// The current full set of adress origins.
     current: Arc<AddressOrigins>,
+
+    /// A queue with a number of diffs.
+    ///
+    /// The newest diff will be at the front of the queue.
     diffs: VecDeque<Arc<OriginsDiff>>,
+
+    /// The number of diffs to keep.
     keep: usize,
 }
 
@@ -318,30 +325,39 @@ impl OriginsHistory {
     }
 
     pub fn get(&self, serial: u32) -> Option<Arc<OriginsDiff>> {
+        debug!("Fetching diff for serial {}", serial);
         let history = self.0.read().unwrap();
-        if let Some(diff) = history.diffs.back() {
+        if let Some(diff) = history.diffs.front() {
+            debug!("Our current serial is {}", diff.serial);
             if diff.serial() < serial {
                 // If they give us a future serial, we reset.
+                debug!("Future, forcing reset.");
                 return None
             }
             else if diff.serial() == serial {
+                debug!("Same, producing empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else if diff.serial() == serial + 1 {
                 // This relies on serials increasing by one always.
+                debug!("One behind, just clone.");
                 return Some(diff.clone())
             }
         }
         else {
+            debug!("We are at serial 0.");
             if serial == 0 {
+                debug!("Same, returning empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else {
                 // That pesky future serial again.
+                debug!("Future, forcing reset.");
                 return None
             }
         }
-        let mut iter = history.diffs.iter();
+        debug!("Merging diffs.");
+        let mut iter = history.diffs.iter().rev();
         while let Some(diff) = iter.next() {
             if serial < diff.serial() {
                 return None
@@ -350,7 +366,7 @@ impl OriginsHistory {
                 break
             }
         }
-        // We already know that the serial’s diff was’t last, so unwrap is
+        // We already know that the serial’s diff wasn’t last, so unwrap is
         // fine.
         let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
         for diff in iter {
