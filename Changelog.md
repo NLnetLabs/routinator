@@ -1,5 +1,16 @@
 # Change Log
 
+## Next Version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.1.2 ‘And I Cry If I Want To’
 
 Bug Fixes
