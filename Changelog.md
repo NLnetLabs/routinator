@@ -1,14 +1,14 @@
 # Change Log
 
-## 0.1.2
-
-Breaking Changes
-
-New
+## 0.1.2 ‘And I Cry If I Want To’
 
 Bug Fixes
 
-Dependencies
+* [Panic in iterating over the withdrawals in an RTR set][17].
+* When comparing serial numbers for RTR Serial Query, looked at the oldest
+  known serial not the newest, always returning an empty change set.
+
+[17]: https://github.com/NLnetLabs/routinator/issues/17
 
 
 ## 0.1.1 ‘Five-second Rule’
