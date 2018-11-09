@@ -3,13 +3,14 @@
 /// The types in this module store route origins, sets of route origins, and
 /// the history of changes necessary for RTR.
 
-use std::{ops, slice, vec};
+use std::{hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use rpki::asres::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
+use rpki::tal::TalInfo;
 use super::slurm::LocalExceptions;
 
 
@@ -116,7 +117,9 @@ impl AddressOrigins {
         let mut res = HashSet::new();
         for roa in origins {
             for addr in roa.iter() {
-                let addr = AddressOrigin::from_roa(roa.as_id(), addr);
+                let addr = AddressOrigin::from_roa(
+                    roa.as_id(), addr, roa.status().tal().map(Clone::clone)
+                );
                 if exceptions.keep_origin(&addr) {
                     let _ = res.insert(addr);
                 }
@@ -199,7 +202,9 @@ impl OriginsDiff {
         if let Some(origins) = origins {
             for roa in origins {
                 for addr in roa.iter() {
-                    let addr = AddressOrigin::from_roa(roa.as_id(), addr);
+                    let addr = AddressOrigin::from_roa(
+                        roa.as_id(), addr, roa.status().tal().map(Clone::clone)
+                    );
                     if !exceptions.keep_origin(&addr) {
                         continue
                     }
@@ -415,23 +420,29 @@ impl HistoryInner {
 
 //------------ AddressOrigin -------------------------------------------------
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct AddressOrigin {
     as_id: AsId,
     prefix: AddressPrefix,
     max_length: u8,
+    tal: Option<Arc<TalInfo>>
 }
 
 impl AddressOrigin {
     pub fn new(as_id: AsId, prefix: AddressPrefix, max_length: u8) -> Self {
-        AddressOrigin { as_id, prefix, max_length }
+        AddressOrigin { as_id, prefix, max_length, tal: None }
     }
 
-    fn from_roa(as_id: AsId, addr: FriendlyRoaIpAddress) -> Self {
+    fn from_roa(
+        as_id: AsId,
+        addr: FriendlyRoaIpAddress,
+        tal: Option<Arc<TalInfo>>
+    ) -> Self {
         AddressOrigin {
             as_id,
             prefix: AddressPrefix::from(&addr),
-            max_length: addr.max_length()
+            max_length: addr.max_length(),
+            tal
         }
     }
 
@@ -453,6 +464,37 @@ impl AddressOrigin {
 
     pub fn max_length(&self) -> u8 {
         self.max_length
+    }
+
+    pub fn tal_name(&self) -> &str {
+        match self.tal {
+            Some(ref tal) => tal.name(),
+            None => "N/A"
+        }
+    }
+}
+
+
+//--- PartialEq and Eq
+
+impl PartialEq for AddressOrigin {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_id == other.as_id
+        && self.prefix == other.prefix 
+        && self.max_length == other.max_length
+    }
+}
+
+impl Eq for AddressOrigin { }
+
+
+//--- Hash
+
+impl hash::Hash for AddressOrigin {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.as_id.hash(state);
+        self.prefix.hash(state);
+        self.max_length.hash(state);
     }
 }
 

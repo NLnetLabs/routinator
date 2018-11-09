@@ -9,7 +9,6 @@ categories = ["command-line-utilities"]
 license = "BSD-3-Clause"
 
 [dependencies]
-rpki            = "^0.1"
 bytes           = "^0.4"
 chrono          = "^0.4"
 clap            = "2.0"
@@ -23,8 +22,11 @@ json		= "^0.11"
 lazy_static     = "1.1"
 log             = "^0.4"
 num_cpus        = "1.0"
+rpki            = "^0.2.0"
 slab            = "^0.4"
 syslog		= "4.0"
 tokio           = "^0.1"
 tokio-process   = "^0.2"
 
+[patch.crates-io]
+rpki = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch="tal-info" }

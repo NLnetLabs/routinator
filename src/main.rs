@@ -10,6 +10,7 @@ extern crate syslog;
 extern crate tokio;
 
 use std::{io, process};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -222,12 +223,13 @@ fn output_csv<W: io::Write>(
     roas: &AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
-    writeln!(output, "ASN,IP Prefix,Max Length")?;
+    writeln!(output, "ASN,IP Prefix,Max Length,Trust Anchor")?;
     for addr in roas.iter() {
-        writeln!(output, "{},{}/{},{}",
+        writeln!(output, "{},{}/{},{},{}",
             addr.as_id(),
             addr.address(), addr.address_length(),
-            addr.max_length()
+            addr.max_length(),
+            addr.tal_name(),
         )?;
     }
     Ok(())
@@ -248,28 +250,47 @@ fn output_json<W: io::Write>(
         }
         write!(output,
             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-            \"maxLength\": {} }}",
+            \"maxLength\": {}, \"ta\": \"{}\" }}",
             addr.as_id(),
             addr.address(), addr.address_length(),
-            addr.max_length()
+            addr.max_length(),
+            addr.tal_name(),
         )?;
     }
     writeln!(output, "\n  ]\n}}")?;
     Ok(())
 }
 
+#[derive(Default)]
+struct RpslSource(HashMap<String, String>);
+
+impl RpslSource {
+    fn display(&mut self, tal: &str) -> &str {
+        if self.0.contains_key(tal) {
+            // This is double lookup is necessary for the borrow checker ...
+            self.0.get(tal).unwrap()
+        }
+        else {
+            self.0.entry(tal.to_string())
+                .or_insert(format!("ROA-{}-RPKI-ROOT", tal.to_uppercase()))
+        }
+    }
+}
+
+
 fn output_rpsl<W: io::Write>(
     roas: &AddressOrigins,
     output: &mut W
 ) -> Result<(), ProcessingError> {
     let now = Utc::now().to_rfc3339();
+    let mut source = RpslSource::default();
     for addr in roas.iter() {
         writeln!(output,
             "\r\nroute: {}/{}\r\norigin: {}\r\n\
             descr: RPKI attestation\r\nmnt-by: NA\r\ncreated: {}\r\n\
-            last-modified: {}\r\nsource: NA\r\n",
+            last-modified: {}\r\nsource: {}\r\n",
             addr.address(), addr.address_length(),
-            addr.as_id(), now, now
+            addr.as_id(), now, now, source.display(addr.tal_name())
         )?;
     }
     Ok(())
