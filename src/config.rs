@@ -236,7 +236,7 @@ impl Config {
                     // This should be covered by clap above.
                     unreachable!();
                 }
-                None => OutputFormat::None,
+                None => OutputFormat::Csv,
             },
             strict: matches.is_present("strict"),
             update: !matches.is_present("noupdate"),
