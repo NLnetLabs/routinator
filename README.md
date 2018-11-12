@@ -9,7 +9,7 @@ provide a release in the spirit of open development. Please consider this
 when using the software. If you have any feedback, we would love to hear
 from you. Don’t hesitate to 
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
-or drop us a line at [rpki@nlnetlabs.nl](mailto:rpki@nlnetlabs.nl).
+or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
 
 
 ## Quick Start
