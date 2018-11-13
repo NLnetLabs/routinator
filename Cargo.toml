@@ -29,4 +29,4 @@ tokio           = "^0.1"
 tokio-process   = "^0.2"
 
 [patch.crates-io]
-rpki = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch="tal-info" }
+rpki = { git = "https://github.com/NLnetLabs/rpki-rs.git" }
