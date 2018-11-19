@@ -314,7 +314,8 @@ impl Repository {
                 if cert.subject_public_key_info() != tal.key_info() {
                     continue;
                 }
-                let cert = match cert.validate_ta(self.0.strict) {
+                let cert = match cert.validate_ta(tal.info().clone(),
+                                                  self.0.strict) {
                     Ok(cert) => cert,
                     Err(_) => {
                         continue;

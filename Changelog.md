@@ -4,6 +4,8 @@
 
 Breaking Changes
 
+* Add trust anchor information to the CSV, JSON, and RPSL output. [21]
+
 New
 
 Bug Fixes
@@ -12,6 +14,8 @@ Bug Fixes
   `csv` again.
 
 Dependencies
+
+[21]: https://github.com/NLnetLabs/routinator/pull/21
 
 
 ## 0.1.2 ‘And I Cry If I Want To’
