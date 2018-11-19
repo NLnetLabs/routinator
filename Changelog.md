@@ -8,6 +8,9 @@ New
 
 Bug Fixes
 
+* The default output format was accidentally changed to `none`. It is
+  `csv` again.
+
 Dependencies
 
 
