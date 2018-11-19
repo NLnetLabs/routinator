@@ -1,12 +1,13 @@
 [package]
 name = "routinator"
-version = "0.1.1"
+version = "0.1.3"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
 keywords = ["rpki", "routing-security", "bgp"]
 categories = ["command-line-utilities"]
 license = "BSD-3-Clause"
+readme = "README.md"
 
 [dependencies]
 bytes           = "^0.4"
