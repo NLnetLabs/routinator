@@ -11,14 +11,13 @@ from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
 
-
 ## Quick Start
 
 Assuming you have rsync and the C toolchain but not yet Rust, here’s how
 you get the Routinator to run as an RTR server listening on 127.0.0.1 port
 3323:
 
-```
+```bash
 curl https://sh.rustup.rs -sSf | sh
 source ~/.cargo/env
 cargo install routinator
@@ -27,10 +26,28 @@ routinator -r -l 127.0.0.1:3323
 
 If you have an older version of the Routinator, you can update via
 
-```
+```bash
 cargo install -f routinator
 ```
 
+## Quick Start with Docker
+
+Due to the impracticality of complying with the ARIN TAL distribution terms
+in an unsupervised Docker environment, prior to launching the container it
+is necessary to first review and agree to the ARIN TAL terms available at
+https://www.arin.net/resources/rpki/tal.html
+
+The ARIN TAL RFC 7730 format file available at that URL will then need to
+be downloaded and placed in a volume mounted into the docker container.
+
+```bash
+# Create a local directory for the rpki cache
+sudo mkdir -p /etc/routinator/tals
+# Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
+sudo wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/tals
+# Launch detached container (will listen on 0.0.0.0:3323 and expose that port by default)
+sudo docker run -d -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator
+```
 
 ## RPKI
 
@@ -44,7 +61,6 @@ Routinator will collect these statements into a local copy, validate
 their signatures, and construct a list of associations between IP address
 prefixes and AS numbers. It provides this information to routers supporting
 the RPKI-RTR protocol or can output it in a number of useful formats. 
-
 
 ## Full Roadmap
 
@@ -65,7 +81,6 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
   * [ ] Expose an API
   * [ ] Add the ability to process Internet Routing Registry data
 
-
 ## Getting Started
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
@@ -79,7 +94,6 @@ Since this currently is an early version, we decided not to distribute
 binary packages just yet. But don’t worry, getting Rust and building 
 packages with it is easy.
 
-
 ### rsync
 
 Currently, Routinator requires the `rsync` executable to be in your path.
@@ -88,7 +102,6 @@ but whatever is being shipped with current Linux and \*BSD distributions
 and macOS should be fine.
 
 If you don’t have rsync, please head to http://rsync.samba.org/.
-
 
 ### Rust
 
@@ -113,7 +126,6 @@ You can update your Rust installation later by simply running
 rustup update
 ```
 
-
 ### C Toolchain
 
 Some of the libraries Routinator depends on require a C toolchain to be
@@ -122,19 +134,18 @@ set of packages to build from C sources. If you are unsure, try to run
 `cc` on a command line and if there’s a complaint about missing input
 files, you are probably good to go.
 
-
 ## Building and Running
 
 The easiest way to get Routinator is to leave it to cargo by saying
 
-```
+```bash
 cargo install routinator
 ```
 
 If you want to try the master branch from the repository instead of a
 release version, you can run
 
-```
+```bash
 cargo install --git https://github.com/NLnetLabs/routinator.git
 ```
 
@@ -218,7 +229,6 @@ minutes, the above command becomes
 routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
 ```
 
-
 ## Local Exceptions
 
 If you would like to add exceptions to the validated RPKI data in the 
@@ -231,4 +241,3 @@ Routinator will re-read that file on every validation run, so you can
 simply update the file whenever your exceptions change.
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
-
