@@ -38,15 +38,16 @@ is necessary to first review and agree to the ARIN TAL terms available at
 https://www.arin.net/resources/rpki/tal.html
 
 The ARIN TAL RFC 7730 format file available at that URL will then need to
-be downloaded and placed in a volume mounted into the docker container.
+be downloaded and mounted into the docker container as a replacement for
+the dummy arin.tal file that is shipped with Routinator.
 
 ```bash
 # Create a local directory for the rpki cache
 sudo mkdir -p /etc/routinator/tals
 # Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
 sudo wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/tals
-# Launch detached container (will listen on 0.0.0.0:3323 and expose that port by default)
-sudo docker run -d -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator
+# Launch a detached container named 'routinator' (will listen on 0.0.0.0:3323 and expose that port by default)
+sudo docker run -d --name routinator -v /etc/routinator/tals/arin-rfc7730.tal:/root/.rpki-cache/tals/arin.tal nlnetlabs/routinator
 ```
 
 ## RPKI

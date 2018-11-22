@@ -27,6 +27,8 @@ RUN apk add rsync
 # Prepare a directory for TALs
 RUN mkdir -p /root/.rpki-cache/tals
 
-VOLUME ["/root/.rpki-cache/tals"]
+# Copy over TALs from source
+COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
+
 EXPOSE 3323/tcp
 CMD ["routinator","-r","-l","0.0.0.0:3323"]
