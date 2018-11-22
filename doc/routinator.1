@@ -217,6 +217,13 @@ North American registry ARIN do not allow us to include their TAL with the
 Routinator. We instead include a crippled version that will cause
 Routinator to refuse to work and print instructions on how to get the
 TAL instead.
+.P
+If the directory does exist, Routinator will use all files with an extension
+of
+.I .tal
+in this directory. This means that you can add and remove trust anchors by
+adding and removing files in this directory. If you add files, make sure they
+are in RFC 7730 format.
 
 .SH AUTHOR
 .P
