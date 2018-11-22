@@ -18,8 +18,8 @@ COPY --from=build /tmp/routinator/target/x86_64-unknown-linux-musl/release/routi
 # Install rsync as routinator depends on it
 RUN apk add rsync
 
-# Due to ARIN TAL licensing terms, we can't do this here. An individual user, however,
-# might want to anyway after reviewing https://www.arin.net/resources/rpki/tal.html
+# Due to ARIN TAL distribution terms, we can't do this here. An individual user, however,
+# might want to anyway - after reviewing https://www.arin.net/resources/rpki/tal.html
 # If this is in place, mouting a volume at run time with this file is no longer necessary.
 # 
 # ADD https://www.arin.net/resources/rpki/arin-rfc7730.tal /root/.rpki-cache/tals/arin.tal
