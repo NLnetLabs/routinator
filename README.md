@@ -46,8 +46,8 @@ the dummy arin.tal file that is shipped with Routinator.
 sudo mkdir -p /etc/routinator/tals
 # Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
 sudo wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/tals
-# Launch a detached container named 'routinator' (will listen on 0.0.0.0:3323 and expose that port by default)
-sudo docker run -d --name routinator -v /etc/routinator/tals/arin-rfc7730.tal:/root/.rpki-cache/tals/arin.tal nlnetlabs/routinator
+# Launch a detached container named 'routinator' (will listen on 0.0.0.0:3323 and expose that port)
+sudo docker run -d --name routinator -p 3323:3323 -v /etc/routinator/tals/arin-rfc7730.tal:/root/.rpki-cache/tals/arin.tal nlnetlabs/routinator
 ```
 
 ## RPKI
