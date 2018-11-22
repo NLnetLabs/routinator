@@ -42,11 +42,11 @@ be downloaded and placed in a volume mounted into the docker container.
 
 ```bash
 # Create a local directory for the rpki cache
-mkdir -p /etc/routinator/.rpki-cache/tals
+sudo mkdir -p /etc/routinator/tals
 # Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
-wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/.rpki-cache/tals
+sudo wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/tals
 # Launch detached container (will listen on 0.0.0.0:3323 and expose that port by default)
-docker run -d -v /etc/routinator/.rpki-cache:/root/.rpki-cache nlnetlabs/routinator
+docker run -d -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator
 ```
 
 ## RPKI
