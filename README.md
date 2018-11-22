@@ -31,6 +31,24 @@ If you have an older version of the Routinator, you can update via
 cargo install -f routinator
 ```
 
+## Quick Start with Docker
+
+Due to the impracticality of complying with the ARIN TAL distribution terms
+in an unsupervised Docker environment, prior to launching the container it
+is necessary to first review and agree to the ARIN TAL terms available at
+https://www.arin.net/resources/rpki/tal.html
+
+The ARIN TAL RFC 7730 format file available at that URL will then need to
+be downloaded and placed in a volume mounted into the docker container.
+
+```shell
+# Create a local directory for the rpki cache
+mkdir -p /etc/routinator/.rpki-cache/tals
+# Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
+wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/.rpki-cache/tals
+# Launch detached container (will listen on 0.0.0.0:3323 and expose that port by default)
+docker run -d -v /etc/routinator/.rpki-cache:/root/.rpki-cache nlnetlabs/routinator
+```
 
 ## RPKI
 
