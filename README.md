@@ -1,4 +1,4 @@
-# :rocket: Routinator
+# Routinator
 
 [![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
 
