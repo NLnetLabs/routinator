@@ -24,6 +24,9 @@ RUN apk add rsync
 # 
 # ADD https://www.arin.net/resources/rpki/arin-rfc7730.tal /root/.rpki-cache/tals/arin.tal
 
-VOLUME ["/root/.rpki-cache"]
+# Prepare a directory for TALs
+RUN mkdir -p /root/.rpki-cache/tals
+
+VOLUME ["/root/.rpki-cache/tals"]
 EXPOSE 3323/tcp
 CMD ["routinator","-r","-l","0.0.0.0:3323"]
