@@ -3,7 +3,6 @@
 This file contains a random collections of items worth remembering. It
 will become part of the Owner’s Manual once that starts existing.
 
-
 ## Building a Statically Linked Routinator
 
 While Rust binaries are mostly statically linked, they depend on libc
@@ -18,11 +17,10 @@ easy with rustup. You need to install musl and the correct musl target
 such as `x86_64-unknown-linux-musl` for x86\_64 Linux systems. Then you
 can just build Routinator for that target.
 
-On a Debian (and presumbaly Ubuntu) system, it goes somewhat like this:
+On a Debian (and presumably Ubuntu) system, it goes somewhat like this:
 
 ```bash
 sudo apt-get install musl-tools
 rustup target add x86_64-unknown-linux-musl
 cargo build --target=x86_64-unknown-linux-musl --release
 ```
-
