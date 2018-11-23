@@ -7,7 +7,7 @@ Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 Even though it is still early days for the Routinator, we have decided to
 provide a release in the spirit of open development. Please consider this
 when using the software. If you have any feedback, we would love to hear
-from you. Don’t hesitate to 
+from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
 
@@ -42,7 +42,7 @@ be downloaded and mounted into the docker container as a replacement for
 the dummy arin.tal file that is shipped with Routinator.
 
 ```bash
-# Create a local directory for the rpki cache
+# Create a local directory for the RPKI cache
 sudo mkdir -p /etc/routinator/tals
 # Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
 sudo wget https://www.arin.net/resources/rpki/arin-rfc7730.tal -P /etc/routinator/tals
@@ -57,30 +57,30 @@ statements about the association of Internet routing resources. In
 particular, it allows the holder of an IP address prefix to publish which
 AS number will be the origin of BGP route announcements for it.
 
-All of these statements are published in a distributed repository. 
+All of these statements are published in a distributed repository.
 Routinator will collect these statements into a local copy, validate
 their signatures, and construct a list of associations between IP address
 prefixes and AS numbers. It provides this information to routers supporting
-the RPKI-RTR protocol or can output it in a number of useful formats. 
+the RPKI-RTR protocol or can output it in a number of useful formats.
 
 ## Full Roadmap
 
-  * [x] Fetch certificates and ROAs via rsync
-  * [x] Perform cryptographic validation
-  * [x] Export validated ROAs in CSV, JSON and RPSL format
-  * [x] Add local white list exceptions and overrides
-        ([RFC 8416](https://tools.ietf.org/html/rfc8416))
-  * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
-        supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
-  * [ ] Exhaustive interoperability and compliance testing
-  * [ ] Integration with alerting and monitoring services so that route
-        hijacks, misconfigurations, connectivity and application problems
-        can be flagged.
-  * [ ] Implement the RRDP protocol for fetching
-        ([RFC 8182](https://tools.ietf.org/html/rfc8182))
-  * [ ] Implement a basic web-based user interface and Command Line Interface
-  * [ ] Expose an API
-  * [ ] Add the ability to process Internet Routing Registry data
+* [x] Fetch certificates and ROAs via rsync
+* [x] Perform cryptographic validation
+* [x] Export validated ROAs in CSV, JSON and RPSL format
+* [x] Add local white list exceptions and overrides
+  ([RFC 8416](https://tools.ietf.org/html/rfc8416))
+* [x] Implement the RPKI-RTR protocol for pushing RPKI data to
+      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+* [ ] Exhaustive interoperability and compliance testing
+* [ ] Integration with alerting and monitoring services so that route
+      hijacks, misconfigurations, connectivity and application problems
+      can be flagged.
+* [ ] Implement the RRDP protocol for fetching
+      ([RFC 8182](https://tools.ietf.org/html/rfc8182))
+* [ ] Implement a basic web-based user interface and Command Line Interface
+* [ ] Expose an API
+* [ ] Add the ability to process Internet Routing Registry data
 
 ## Getting Started
 
@@ -91,8 +91,8 @@ as its main means of distribution. You need Rust because that’s what the
 Routinator has been written in. Some of the cryptographic primitives used
 by the Routinator require a C toolchain, so you need that, too.
 
-Since this currently is an early version, we decided not to distribute 
-binary packages just yet. But don’t worry, getting Rust and building 
+Since this currently is an early version, we decided not to distribute
+binary packages just yet. But don’t worry, getting Rust and building
 packages with it is easy.
 
 ### rsync
@@ -102,7 +102,7 @@ We are not quite sure which particular version you need at the very least,
 but whatever is being shipped with current Linux and \*BSD distributions
 and macOS should be fine.
 
-If you don’t have rsync, please head to http://rsync.samba.org/.
+If you don’t have rsync, please head to http://rsync.samba.org/
 
 ### Rust
 
@@ -199,7 +199,6 @@ It is also available online on the
 [NLnetLabs documentation
 site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
 
-
 ## Feeding a Router with RPKI-RTR
 
 Routinator supports RPKI-RTR as specified in RFC 8210. It will act as an
@@ -232,9 +231,9 @@ routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
 
 ## Local Exceptions
 
-If you would like to add exceptions to the validated RPKI data in the 
-form of local filters and additions, you can specify this in a file 
-using JSON notation according to the [SLURM] standard. You can find 
+If you would like to add exceptions to the validated RPKI data in the
+form of local filters and additions, you can specify this in a file
+using JSON notation according to the [SLURM] standard. You can find
 two example files in the repository at `/test/slurm`. Use the `-x` option
 to refer to your file with local exceptions.
 
