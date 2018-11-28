@@ -67,16 +67,16 @@ fn run_forever(config: &Config) -> Result<(), ProcessingError> {
         warn!("no-process option ignored in repeat mode");
     }
 
+    let repo = Repository::new(
+        config.cache_dir.clone(), config.tal_dir.clone(), config.strict, true
+    )?;
+
     if config.mode.is_daemon() {
         if let Err(err) = daemonize::Daemonize::new().start() {
             println!("Daemonization failed: {}", err);
             process::exit(1);
         }
     }
-
-    let repo = Repository::new(
-        config.cache_dir.clone(), config.tal_dir.clone(), config.strict, true
-    )?;
 
     // Start out with validation so that we only fire up our sockets once we
     // are actually ready.
