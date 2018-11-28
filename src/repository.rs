@@ -10,6 +10,7 @@ use std::{fs, io, process};
 use std::fs::{DirEntry, File, create_dir_all};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::{ExitStatus, Output};
 use std::sync::{Arc, Condvar, Mutex};
 use bytes::Bytes;
 use futures::future;
@@ -644,7 +645,9 @@ impl RsyncCommand {
         source: &uri::RsyncModule,
         destination: P
     ) -> Result<(), io::Error> {
-        if !self.command(source, destination)?.status()?.success() {
+        let output = self.command(source, destination)?.output()?;
+        let status = Self::log_output(source, output);
+        if status.success() {
             return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
         }
         Ok(())
@@ -656,25 +659,18 @@ impl RsyncCommand {
         destination: P
     ) -> impl Future<Item=(), Error=io::Error> {
         let cmd = self.command(source, destination);
+        let source = source.clone();
         future::lazy(|| cmd)
         .and_then(|mut cmd| {
-            cmd.status_async()
+            cmd.output_async()
         })
-        .and_then(|cmd| cmd)
-        .then(|res| {
-            match res {
-                Ok(status) => {
-                    if status.success() {
-                        Ok(())
-                    }
-                    else {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "rsync failed"
-                        ))
-                    }
-                }
-                Err(err) => Err(err)
+        .and_then(move |output| {
+            let status = Self::log_output(&source, output);
+            if status.success() {
+                Ok(())
+            }
+            else {
+                Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
             }
         })
     }
@@ -684,7 +680,7 @@ impl RsyncCommand {
         source: &uri::RsyncModule,
         destination: P
     ) -> Result<process::Command, io::Error> {
-        debug!("rsyncing from {}.", source);
+        info!("rsyncing from {}.", source);
         let destination = destination.as_ref();
         create_dir_all(destination)?;
         let mut destination = format!("{}", destination.display());
@@ -699,16 +695,34 @@ impl RsyncCommand {
         }
         cmd.arg(source.to_string())
            .arg(destination);
+        debug!("Running command {:?}", cmd);
         Ok(cmd)
     }
+
+    fn log_output(source: &uri::RsyncModule, output: Output) -> ExitStatus {
+        if !output.status.success() {
+            warn!(
+                "rsync {}/{}: failed with status {}",
+                source.authority(), source.module(), output.status
+            );
+        }
+        if !output.stderr.is_empty() {
+            String::from_utf8_lossy(&output.stderr).lines().for_each(|l| {
+                warn!(
+                    "rsync {}/{}: {}", source.authority(), source.module(), l
+                );
+            })
+        }
+        if !output.stdout.is_empty() {
+            String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
+                info!(
+                    "rsync {}/{}; {}", source.authority(), source.module(), l
+                )
+            })
+        }
+        output.status
+    }
 }
-
-
-//------------ ProcessLoop ---------------------------------------------------
-
-/// A future that keeps updating the repository.
-#[derive(Debug)]
-pub struct ProcessLoop;
 
 
 //------------ Helper Functions ----------------------------------------------
