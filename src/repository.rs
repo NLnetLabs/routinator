@@ -716,7 +716,7 @@ impl RsyncCommand {
         if !output.stdout.is_empty() {
             String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
                 info!(
-                    "rsync {}/{}; {}", source.authority(), source.module(), l
+                    "rsync {}/{}: {}", source.authority(), source.module(), l
                 )
             })
         }
