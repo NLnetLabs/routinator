@@ -225,6 +225,25 @@ in this directory. This means that you can add and remove trust anchors by
 adding and removing files in this directory. If you add files, make sure they
 are in RFC 7730 format.
 
+.SH LOGGING
+
+Routinator uses four log levels to determine the severity of a message. The
+most severe level,
+.I error\fR,
+is used for situation where Routinator would produce no or invalid output.
+The level
+.I warn
+marks events that result in incomplete output. This happens for instance when
+Routinator cannot reach certain publication points or when TALs are invalid.
+.P
+Messages that let you follow along to see what Routinator is currently doing
+are output with log level
+.I info\fR. Additional messages that are likely to be only useful for
+developers have the level
+.I debug\fR.
+
+
+
 .SH AUTHOR
 .P
 Jaap Akkerhuis wrote the original version of this manual page,
