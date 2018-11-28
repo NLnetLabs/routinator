@@ -8,6 +8,12 @@ Breaking Changes
 
 New
 
+* Output from the rsync runs is now send to the logger and will be handled
+  according to log settings. Output to stderr is logged with log level
+  _warn,_ stdout is logged with _info._
+* In daemon mode, forking now happens _after_ the TALs are checked so that
+  you can see the error messages and that it fails.
+
 Bug Fixes
 
 * The default output format was accidentally changed to `none`. It is
