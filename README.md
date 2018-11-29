@@ -107,7 +107,7 @@ If you don’t have rsync, please head to http://rsync.samba.org/
 ### Rust
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.29 or
+Routinator relies on a relatively new version of Rust, currently 1.30 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called *rustup.*
 
