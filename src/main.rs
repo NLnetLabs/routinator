@@ -213,6 +213,7 @@ fn output(
     match config.outform {
         OutputFormat::Csv => output_csv(roas, &mut output),
         OutputFormat::Json => output_json(roas, &mut output),
+        OutputFormat::Openbgpd => output_openbgpd(roas, &mut output),
         OutputFormat::Rpsl => output_rpsl(roas, &mut output),
         OutputFormat::None => { Ok(()) }
     }
@@ -260,6 +261,30 @@ fn output_json<W: io::Write>(
     writeln!(output, "\n  ]\n}}")?;
     Ok(())
 }
+
+
+fn output_openbgpd<W: io::Write>(
+    roas: &AddressOrigins,
+    output: &mut W
+) -> Result<(), ProcessingError> {
+    writeln!(output, "roa-set {{")?;
+    for addr in roas.iter() {
+        write!(output, "    {}/{}",
+            addr.address(), addr.address_length(),
+        )?;
+        if addr.address_length() < addr.max_length() {
+            write!(output, " maxlen {}",
+                addr.max_length(),
+            )?;
+        }
+        writeln!(output, " source-as {}",
+            u32::from(addr.as_id()),
+        )?;
+    }
+    writeln!(output, "}}")?;
+    Ok(())
+}
+
 
 #[derive(Default)]
 struct RpslSource(HashMap<String, String>);
