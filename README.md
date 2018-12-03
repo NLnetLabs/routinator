@@ -71,7 +71,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 * [x] Add local white list exceptions and overrides
   ([RFC 8416](https://tools.ietf.org/html/rfc8416))
 * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
-      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810), [RFC 8210](https://tools.ietf.org/html/rfc8210))
 * [ ] Exhaustive interoperability and compliance testing
 * [ ] Integration with alerting and monitoring services so that route
       hijacks, misconfigurations, connectivity and application problems
