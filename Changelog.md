@@ -13,6 +13,8 @@ New
   _warn,_ stdout is logged with _info._
 * In daemon mode, forking now happens _after_ the TALs are checked so that
   you can see the error messages and that it fails.
+* New VRP output format `openbgpd` which produces a `roa-set` for
+  [OpenBGPD](http://www.openbgpd.org/) config.
 
 Bug Fixes
 
