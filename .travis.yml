@@ -2,4 +2,5 @@ language: rust
 rust:
   - stable
   - beta
+  - 1.30.0  # The minimal Rust version we claim we need.
 
