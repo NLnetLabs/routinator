@@ -1,0 +1,119 @@
+# Routinator Configuration
+#
+# The configuration file is a TOML file. See https://github.com/toml-lang/toml
+# for information on the format.
+#
+# This file contains all configuration settings with explanations and their
+# default values.
+
+# Repository directory
+#
+# This is where Routinator stores the local copy of the RPKI repository.
+# Any relative path is interpreted with respect to the directory this config
+# lives in.
+#
+# This setting is mandatory.
+#
+repository-dir = ...
+
+# Trust Anchor Locator (TAL) directory
+#
+# All the files with the extension ".tal" in this directory are treated as
+# trust anchor locators for RPKI validation.
+#
+# A relative path is interpreted with respect to the directory this config
+# lives in.
+#
+# This setting is mandatory.
+#
+tal_dir = ...
+
+# Local exceptions files
+#
+# This settings contains a array of paths to files that contain local
+# exceptions. The files are JSON files according to RFC 8416 (aka SLURM).
+#exceptions = []
+
+# Strict mode
+#
+# If strict mode, Routinator will stick to the requirements in the respective
+# RFCs very strictly. See
+# https://github.com/NLnetLabs/rpki-rs/blob/master/doc/relaxed-validation.md
+# for information on what is allowed when strict mode is off.
+#strict = false
+
+# Number of parallel rsync commands
+#
+# This is the maximum number of rsync commands that are run in parallel.
+# We are not sure, if the current default is any good. Some feedback whether
+# it is causing trouble or whether a higher value would even be fine is very
+# much appreciated.
+#
+#rsync-count = 4
+
+# Number of validation threads
+#
+# The number of threads that are used for validating the repository. The
+# default value is the number of CPUs.
+#validation-threads = NUMBER
+
+# Refresh interval
+#
+# How often the repository should be updated and validated in RTR mode. 
+# Specifically, this is the number of seconds the process will wait after
+# having finished validation before starting the next update.
+#
+# The default is the value indirectly recommended by RFC 8210.
+#refresh = 3600
+
+# RTR retry interval
+#
+# This is the time an RTR client is told to wait before retrying a failed
+# query in seconds.
+#retry = 600
+
+# RTR expire interval
+#
+# This is the time an RTR client is told to keep using data if it can't
+# refresh it.
+#expire = 7200
+
+# History size
+#
+# The number of deltas to keep. If a client requests an older delta, it is
+# served the entire set again.
+#
+# There was no particular reason for choosing the default ...
+#history-size = 10
+
+# Listen addresses for RTR TCP transport.
+#
+# This is an array of strings, each string a socket address of the form
+# "address:port" with IPv6 address in square brackets.
+#listen_tcp = ["127.0.0.1:3323"]
+
+# Log level
+#
+# The maximum log level ("off", "error", "warn", "info", or "debug") for
+# which to log messages.
+#log-level = "warn"
+
+# Log target
+#
+# Where to log to. One of "stderr" for stderr, "syslog" for syslog, or "file"
+# for a file. If "file" is given, the "log-file" field needs to be given, too.
+#
+# Can also be "default", in which case "syslog" is used in daemon mode and
+# "stderr" otherwise
+#log = "default"
+
+# Syslog facility
+#
+# The syslog facility to log to if syslog logging is used.
+#syslog-facility = "daemon"
+
+# Log file
+#
+# The path to the file to log to if file logging is used. If the path is
+# relative, it is relative to the directory this config file lives in.
+#log-file = ...

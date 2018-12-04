@@ -4,8 +4,8 @@ use std::io;
 use std::sync::Arc;
 use futures::{Async, Future};
 use tokio::io::{AsyncWrite, WriteAll};
-use ::config::Config;
-use ::origins::{AddressOrigins, OriginsDiff};
+use crate::config::Config;
+use crate::origins::{AddressOrigins, OriginsDiff};
 use super::pdu;
 
 
@@ -35,12 +35,12 @@ impl<A: AsyncWrite> Sender<A> {
         version: u8,
         session: u16,
         diff: Arc<OriginsDiff>,
-        config: &Config,
+        timing: Timing,
     ) -> Self {
         Sender::Diff(Wrapped::new(
             sock, version, session, diff.serial(),
             SendDiff::new(version, diff),
-            config
+            timing
         ))
     }
 
@@ -50,12 +50,12 @@ impl<A: AsyncWrite> Sender<A> {
         session: u16,
         serial: u32,
         current: Arc<AddressOrigins>,
-        config: &Config,
+        timing: Timing,
     ) -> Self {
         Sender::Full(Wrapped::new(
             sock, version, session, serial,
             SendFull::new(version, current),
-            config
+            timing
         ))
     }
 
@@ -116,7 +116,7 @@ impl<A: AsyncWrite, D> Wrapped<A, D> {
         session: u16,
         serial: u32,
         iter: D,
-        config: &Config
+        timing: Timing,
     ) -> Self {
         Wrapped::Head(
             pdu::CacheResponse::new(version, session).write(sock),
@@ -124,9 +124,7 @@ impl<A: AsyncWrite, D> Wrapped<A, D> {
                 iter,
                 pdu::EndOfData::new(
                     version, session, serial,
-                    config.refresh.as_secs() as u32,
-                    config.retry.as_secs() as u32,
-                    config.expire.as_secs() as u32
+                    timing.refresh, timing.retry, timing.expire
                 )
             ))
         )
@@ -256,6 +254,26 @@ impl Iterator for SendFull {
         }
         else {
             None
+        }
+    }
+}
+
+
+//------------ Timing --------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub struct Timing {
+    refresh: u32,
+    retry: u32,
+    expire: u32
+}
+
+impl Timing {
+    pub fn new(config: &Config) -> Self {
+        Timing {
+            refresh: config.refresh.as_secs() as u32,
+            retry: config.retry.as_secs() as u32,
+            expire: config.expire.as_secs() as u32
         }
     }
 }
