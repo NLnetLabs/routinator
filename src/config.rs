@@ -119,8 +119,8 @@ impl Config {
                  .short("f")
                  .long("outform")
                  .value_name("FORMAT")
-                 .possible_values(&["csv", "json", "rpsl", "none"])
-                 //.help("sets the output format (csv, json, rpsl, none)")
+                 .possible_values(&["csv", "json", "openbgpd", "rpsl", "none"])
+                 //.help("sets the output format (csv, json, openbgpd, rpsl, none)")
                  .help("sets the output format")
                  .takes_value(true)
             )
@@ -230,6 +230,7 @@ impl Config {
             outform: match matches.value_of("outform") {
                 Some("csv") => OutputFormat::Csv,
                 Some("json") => OutputFormat::Json,
+                Some("openbgpd") => OutputFormat::Openbgpd,
                 Some("rpsl") => OutputFormat::Rpsl,
                 Some("none") => OutputFormat::None,
                 Some(_) => {
@@ -382,6 +383,7 @@ impl RunMode {
 pub enum OutputFormat {
     Csv,
     Json,
+    Openbgpd,
     Rpsl,
     None,
 }
