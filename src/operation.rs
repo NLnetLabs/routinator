@@ -36,10 +36,9 @@ impl Orders {
         let matches = Operation::config_args(
             Config::config_args(app)
         ).get_matches();
-        Ok(Orders {
-            config: Config::from_arg_matches(&matches),
-            operation: Operation::from_arg_matches(&matches)
-        })
+        let mut config = Config::from_arg_matches(&matches);
+        let operation = Operation::from_arg_matches(&matches, &mut config);
+        Ok(Orders { config, operation })
     }
 
     pub fn config(&self) -> &Config {
@@ -112,14 +111,14 @@ impl Operation {
         )
 
         // rtrd
-        .subcommand(SubCommand::with_name("rtrd")
+        .subcommand(Config::rtrd_args(SubCommand::with_name("rtrd")
             .about("Starts the RTR server.")
             .arg(Arg::with_name("attached")
                 .short("a")
                 .long("attached")
                 .help("stay attached to the terminal")
             )
-        )
+        ))
 
         // man
         .subcommand(SubCommand::with_name("man")
@@ -128,10 +127,14 @@ impl Operation {
     }
 
     /// Creates a command from clap matches.
-    pub fn from_arg_matches(matches: &ArgMatches) -> Self {
+    pub fn from_arg_matches(
+        matches: &ArgMatches,
+        config: &mut Config
+    ) -> Self {
         match matches.subcommand() {
             ("man", _) => Operation::Man,
             ("rtrd", Some(matches)) => {
+                config.apply_rtrd_arg_matches(matches);
                 Operation::Rtrd {
                     attached: matches.is_present("attached")
                 }

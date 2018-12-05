@@ -110,6 +110,7 @@ impl Config {
              .help("file with local exceptions (see RFC 8416 for format)")
              .takes_value(true)
              .multiple(true)
+             .number_of_values(1)
         )
         .arg(Arg::with_name("strict")
              .long("strict")
@@ -127,6 +128,28 @@ impl Config {
              .help("number of threads for validation")
              .takes_value(true)
         )
+        .arg(Arg::with_name("syslog-facility")
+             .long("syslog-facility")
+             .takes_value(true)
+             .default_value("daemon")
+             .help("facility to use for syslog logging")
+        )
+        .arg(Arg::with_name("logfile")
+             .long("logfile")
+             .takes_value(true)
+             .value_name("PATH")
+             .help("log to this file")
+        )
+    }
+
+    /// Adds the relevant config args to the rtrd subcommand.
+    ///
+    /// Some of the options in the config only makes sense to have for the
+    /// RTR daemon. Having them in the global part of the clap command line
+    /// is confusing, so we stick to defaults unless we actually run the
+    /// daemon. This function adds the relevant args to the subcommand.
+    pub fn rtrd_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+        app
         .arg(Arg::with_name("refresh")
              .long("refresh")
              .value_name("SECONDS")
@@ -158,6 +181,7 @@ impl Config {
              .help("listen addr:port for RTR.")
              .takes_value(true)
              .multiple(true)
+             .number_of_values(1)
         )
         .arg(Arg::with_name("verbose")
              .short("v")
@@ -175,18 +199,6 @@ impl Config {
         .arg(Arg::with_name("syslog")
              .long("syslog")
              .help("log to syslog")
-        )
-        .arg(Arg::with_name("syslog-facility")
-             .long("syslog-facility")
-             .takes_value(true)
-             .default_value("daemon")
-             .help("facility to use for syslog logging")
-        )
-        .arg(Arg::with_name("logfile")
-             .long("logfile")
-             .takes_value(true)
-             .value_name("PATH")
-             .help("log to this file")
         )
     }
 
@@ -243,39 +255,6 @@ impl Config {
             res.validation_threads = value
         }
 
-        // refresh
-        if let Some(value) = from_str_value_of(matches, "refresh") {
-            res.refresh = Duration::from_secs(value)
-        }
-
-        // retry
-        if let Some(value) = from_str_value_of(matches, "retry") {
-            res.retry = Duration::from_secs(value)
-        }
-
-        // expire
-        if let Some(value) = from_str_value_of(matches, "expire") {
-            res.expire = Duration::from_secs(value)
-        }
-
-        // history_size
-        if let Some(value) = from_str_value_of(matches, "history") {
-            res.history_size = value
-        }
-
-        // tcp_listen
-        if let Some(list) = matches.values_of("listen") {
-            res.tcp_listen = list.map(|value| {
-                match SocketAddr::from_str(value) {
-                    Ok(some) => some,
-                    Err(_) => {
-                        println!("Invalid value for listen: {}", value);
-                        process::exit(1);
-                    }
-                }
-            }).collect()
-        }
-
         // log_level
         match (matches.occurrences_of("verbose"),
                                             matches.occurrences_of("quiet")) {
@@ -311,6 +290,41 @@ impl Config {
         }
 
         res
+    }
+
+    pub fn apply_rtrd_arg_matches(&mut self, matches: &ArgMatches) {
+        // refresh
+        if let Some(value) = from_str_value_of(matches, "refresh") {
+            self.refresh = Duration::from_secs(value)
+        }
+
+        // retry
+        if let Some(value) = from_str_value_of(matches, "retry") {
+            self.retry = Duration::from_secs(value)
+        }
+
+        // expire
+        if let Some(value) = from_str_value_of(matches, "expire") {
+            self.expire = Duration::from_secs(value)
+        }
+
+        // history_size
+        if let Some(value) = from_str_value_of(matches, "history") {
+            self.history_size = value
+        }
+
+        // tcp_listen
+        if let Some(list) = matches.values_of("listen") {
+            self.tcp_listen = list.map(|value| {
+                match SocketAddr::from_str(value) {
+                    Ok(some) => some,
+                    Err(_) => {
+                        println!("Invalid value for listen: {}", value);
+                        process::exit(1);
+                    }
+                }
+            }).collect()
+        }
     }
 
     /// Creates and returns the repository for this configuration.
