@@ -71,7 +71,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 * [x] Add local white list exceptions and overrides
   ([RFC 8416](https://tools.ietf.org/html/rfc8416))
 * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
-      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810))
+      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810), [RFC 8210](https://tools.ietf.org/html/rfc8210))
 * [ ] Exhaustive interoperability and compliance testing
 * [ ] Integration with alerting and monitoring services so that route
       hijacks, misconfigurations, connectivity and application problems
@@ -107,7 +107,7 @@ If you don’t have rsync, please head to http://rsync.samba.org/
 ### Rust
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.29 or
+Routinator relies on a relatively new version of Rust, currently 1.30 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called *rustup.*
 
