@@ -27,6 +27,15 @@ use tokio_process::CommandExt;
 use super::origins::RouteOrigins;
 
 
+//------------ Configuration -------------------------------------------------
+
+/// The minimum number of manifest entries that triggers CRL serial caching.
+///
+/// The value has been determined exprimentally with the RPKI repository at
+/// a certain state so may or may not be a good one, really.
+const CRL_CACHE_LIMIT: usize = 50;
+
+
 //------------ Repository ----------------------------------------------------
 
 /// A reference to the local copy of the RPKI repository.
@@ -465,6 +474,13 @@ impl Repository {
                     continue
                 }
             };
+            if manifest.len() > CRL_CACHE_LIMIT {
+                debug!(
+                    "Manifest with {} entries: enabling serial caching",
+                    manifest.len()
+                );
+                store.enable_serial_caching();
+            }
             if let Err(_) = self.check_crl(cert, issuer, store) {
                 info!("{}: certificate has been revoked", uri);
                 continue

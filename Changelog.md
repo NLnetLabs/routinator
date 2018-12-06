@@ -24,6 +24,12 @@ Bug Fixes
 * The default output format was accidentally changed to `none`. It is
   `csv` again.
 
+Performance Improvements
+
+* Caching of CRL serial numbers for CAs with large manifests leads to
+  about half the validation time for the current repository. [(XX)]
+
+
 Dependencies
 
 [(#21)]: https://github.com/NLnetLabs/routinator/pull/21
