@@ -36,8 +36,8 @@ impl Orders {
         let matches = Operation::config_args(
             Config::config_args(app)
         ).get_matches();
-        let mut config = Config::from_arg_matches(&matches);
-        let operation = Operation::from_arg_matches(&matches, &mut config);
+        let mut config = Config::from_arg_matches(&matches)?;
+        let operation = Operation::from_arg_matches(&matches, &mut config)?;
         Ok(Orders { config, operation })
     }
 
@@ -130,11 +130,11 @@ impl Operation {
     pub fn from_arg_matches(
         matches: &ArgMatches,
         config: &mut Config
-    ) -> Self {
-        match matches.subcommand() {
+    ) -> Result<Self, Error> {
+        Ok(match matches.subcommand() {
             ("man", _) => Operation::Man,
             ("rtrd", Some(matches)) => {
-                config.apply_rtrd_arg_matches(matches);
+                config.apply_rtrd_arg_matches(matches)?;
                 Operation::Rtrd {
                     attached: matches.is_present("attached")
                 }
@@ -158,7 +158,7 @@ impl Operation {
                 }
             }
             _ => panic!("Unexpected subcommand."),
-        }
+        })
     }
 
     pub fn run(self, config: Config) -> Result<(), Error> {
@@ -330,7 +330,10 @@ fn update_future(
                     let origins = match origins {
                         Ok(origins) => origins,
                         Err(err) => {
-                            error!("repository processing failed; err={:?}", err);
+                            error!(
+                                "repository processing failed; err={:?}",
+                                err
+                            );
                             return Ok(
                                 future::Loop::Continue(
                                     (repo, history, notify, config)

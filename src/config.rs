@@ -1,6 +1,6 @@
 //! Configuration.
 
-use std::{env, fmt, fs, io, process};
+use std::{env, fmt, fs, io};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -202,7 +202,7 @@ impl Config {
         )
     }
 
-    pub fn from_arg_matches(matches: &ArgMatches) -> Self {
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         let cur_dir = match env::current_dir() {
             Ok(dir) => dir,
             Err(err) => {
@@ -210,14 +210,14 @@ impl Config {
                     "Fatal: cannot get current directory ({}). Aborting.",
                     err
                 );
-                process::exit(1);
+                return Err(Error);
             }
         };
 
         let mut res = Self::create_base_config(
             Self::path_value_of(matches, "config", &cur_dir)
                 .as_ref().map(AsRef::as_ref)
-        );
+        )?;
 
         // cache_dir
         if let Some(dir) = matches.value_of("repository-dir") {
@@ -229,10 +229,10 @@ impl Config {
 
         // tal_dir
         if let Some(dir) = matches.value_of("tal-dir") {
-            res.cache_dir = cur_dir.join(dir)
+            res.tal_dir = cur_dir.join(dir)
         }
         else if let Some(dir) = matches.value_of("base-dir") {
-            res.cache_dir = cur_dir.join(dir).join("tals")
+            res.tal_dir = cur_dir.join(dir).join("tals")
         }
 
         // expceptions
@@ -246,12 +246,12 @@ impl Config {
         }
 
         // rsync_count
-        if let Some(value) = from_str_value_of(matches, "rsync-count") {
+        if let Some(value) = from_str_value_of(matches, "rsync-count")? {
             res.rsync_count = value
         }
 
         // validation_threads
-        if let Some(value) = from_str_value_of(matches, "validation-threads") {
+        if let Some(value) = from_str_value_of(matches, "validation-threads")? {
             res.validation_threads = value
         }
 
@@ -275,7 +275,7 @@ impl Config {
                     Ok(value) => value,
                     Err(_) => {
                         println!("Invalid value for syslog-facility.");
-                        process::exit(1)
+                        return Err(Error);
                     }
                 }
             )
@@ -289,42 +289,48 @@ impl Config {
             }
         }
 
-        res
+        Ok(res)
     }
 
-    pub fn apply_rtrd_arg_matches(&mut self, matches: &ArgMatches) {
+    pub fn apply_rtrd_arg_matches(
+        &mut self,
+        matches: &ArgMatches
+    ) -> Result<(), Error> {
         // refresh
-        if let Some(value) = from_str_value_of(matches, "refresh") {
+        if let Some(value) = from_str_value_of(matches, "refresh")? {
             self.refresh = Duration::from_secs(value)
         }
 
         // retry
-        if let Some(value) = from_str_value_of(matches, "retry") {
+        if let Some(value) = from_str_value_of(matches, "retry")? {
             self.retry = Duration::from_secs(value)
         }
 
         // expire
-        if let Some(value) = from_str_value_of(matches, "expire") {
+        if let Some(value) = from_str_value_of(matches, "expire")? {
             self.expire = Duration::from_secs(value)
         }
 
         // history_size
-        if let Some(value) = from_str_value_of(matches, "history") {
+        if let Some(value) = from_str_value_of(matches, "history")? {
             self.history_size = value
         }
 
         // tcp_listen
         if let Some(list) = matches.values_of("listen") {
-            self.tcp_listen = list.map(|value| {
+            self.tcp_listen = Vec::new();
+            for value in list.into_iter() {
                 match SocketAddr::from_str(value) {
-                    Ok(some) => some,
+                    Ok(some) => self.tcp_listen.push(some),
                     Err(_) => {
                         println!("Invalid value for listen: {}", value);
-                        process::exit(1);
+                        return Err(Error);
                     }
                 }
-            }).collect()
+            }
         }
+
+        Ok(())
     }
 
     /// Creates and returns the repository for this configuration.
@@ -336,7 +342,7 @@ impl Config {
         &self,
         update: bool
     ) -> Result<Repository, Error> {
-        self.prepare_dirs();
+        self.prepare_dirs()?;
         Repository::new(self, update).map_err(|err| {
             println!("{}", err);
             Error
@@ -432,21 +438,21 @@ impl Config {
     /// If no config path is given, tries to read the default config in
     /// `$HOME/.routinator.toml`. If that doesn’t exist, creates a default
     /// config.
-    fn create_base_config(path: Option<&Path>) -> Self {
-        let mut file = match path {
+    fn create_base_config(path: Option<&Path>) -> Result<Self, Error> {
+        let file = match path {
             Some(path) => {
-                match ConfigFile::read(&path) {
+                match ConfigFile::read(&path)? {
                     Some(file) => file,
                     None => {
                         println!("Cannot read config file {}", path.display());
-                        process::exit(1)
+                        return Err(Error);
                     }
                 }
             }
             None => {
                 match home_dir() {
                     Some(dir) => match ConfigFile::read(
-                                             &dir.join(".routinator.toml")) {
+                                            &dir.join(".routinator.toml"))? {
                         Some(file) => file,
                         None => return Self::default(),
                     }
@@ -454,8 +460,12 @@ impl Config {
                 }
             }
         };
+        Self::from_config_file(file)
+    }
 
-        let facility = file.take_string("syslog-facility");
+    /// Creates a base config from a config file.
+    fn from_config_file(mut file: ConfigFile) -> Result<Self, Error> {
+        let facility = file.take_string("syslog-facility")?;
         let facility = facility.as_ref().map(AsRef::as_ref).unwrap_or("daemon");
         let facility = match Facility::from_str(facility) {
             Ok(value) => value,
@@ -463,26 +473,26 @@ impl Config {
                 println!(
                     "Error in config file {}: \
                      invalid syslog-facility.",
-                     path.unwrap().display()
+                     file.path.display()
                 );
-                process::exit(1)
+                return Err(Error);
             }
         };
-        let log_target = file.take_string("log");
+        let log_target = file.take_string("log")?;
         let log_target = match log_target.as_ref().map(AsRef::as_ref) {
             Some("default") | None => LogTarget::Default(facility),
             Some("syslog") => LogTarget::Syslog(facility),
             Some("stderr") =>  LogTarget::Stderr,
             Some("file") => {
-                LogTarget::File(match file.take_path("log-file") {
+                LogTarget::File(match file.take_path("log-file")? {
                     Some(file) => file,
                     None => {
                         println!(
                             "Error in config file {}: \
                              log target \"file\" requires 'log-file' value.",
-                             path.unwrap().display()
+                             file.path.display()
                         );
-                        process::exit(1);
+                        return Err(Error);
                     }
                 })
             }
@@ -490,51 +500,52 @@ impl Config {
                 println!(
                     "Error in config file {}: \
                      invalid log target '{}'",
-                     path.unwrap().display(),
+                     file.path.display(),
                      value
                 );
-                process::exit(1);
+                return Err(Error);
             }
         };
 
         let res = Config {
-            cache_dir: file.take_mandatory_path("repository-dir"),
-            tal_dir: file.take_mandatory_path("tal-dir"),
-            exceptions: file.take_path_array("exceptions"),
-            strict: file.take_bool("strict").unwrap_or(false),
+            cache_dir: file.take_mandatory_path("repository-dir")?,
+            tal_dir: file.take_mandatory_path("tal-dir")?,
+            exceptions: file.take_path_array("exceptions")?,
+            strict: file.take_bool("strict")?.unwrap_or(false),
             rsync_count: {
-                file.take_usize("rsync-count").unwrap_or(DEFAULT_RSYNC_COUNT)
+                file.take_usize("rsync-count")?.unwrap_or(DEFAULT_RSYNC_COUNT)
             },
             validation_threads: {
-                file.take_usize("validation-threads")
+                file.take_usize("validation-threads")?
                     .unwrap_or(::num_cpus::get())
             },
             refresh: {
                 Duration::from_secs(
-                    file.take_u64("refresh").unwrap_or(DEFAULT_REFRESH)
+                    file.take_u64("refresh")?.unwrap_or(DEFAULT_REFRESH)
                 )
             },
             retry: {
                 Duration::from_secs(
-                    file.take_u64("retry").unwrap_or(DEFAULT_REFRESH)
+                    file.take_u64("retry")?.unwrap_or(DEFAULT_REFRESH)
                 )
             },
             expire: {
                 Duration::from_secs(
-                    file.take_u64("expire").unwrap_or(DEFAULT_REFRESH)
+                    file.take_u64("expire")?.unwrap_or(DEFAULT_REFRESH)
                 )
             },
             history_size: {
-                file.take_usize("history-size").unwrap_or(DEFAULT_HISTORY_SIZE)
+                file.take_usize("history-size")?
+                    .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
-            tcp_listen: file.take_from_str_array("listen-tcp"),
+            tcp_listen: file.take_from_str_array("listen-tcp")?,
             log_level: {
-                file.take_from_str("log-level").unwrap_or(LevelFilter::Warn)
+                file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target
         };
-        file.check_exhausted();
-        res
+        file.check_exhausted()?;
+        Ok(res)
     }
 
     /// Creates a default config with the given paths.
@@ -560,13 +571,13 @@ impl Config {
 
 
     /// Prepares and returns the cache dir and tal dir.
-    fn prepare_dirs(&self) {
+    fn prepare_dirs(&self) -> Result<(), Error> {
         if let Err(err) = fs::create_dir_all(&self.cache_dir) {
             println!(
                 "Can't create repository directory {}: {}.\nAborting.",
                 self.cache_dir.display(), err
             );
-            process::exit(1);
+            return Err(Error);
         }
         if fs::read_dir(&self.tal_dir).is_err() {
             if let Err(err) = fs::create_dir_all(&self.tal_dir) {
@@ -574,7 +585,7 @@ impl Config {
                     "Can't create TAL directory {}: {}.\nAborting.",
                     self.tal_dir.display(), err
                 );
-                process::exit(1);
+                return Err(Error);
             }
             for (name, content) in &DEFAULT_TALS {
                 let mut file = match fs::File::create(self.tal_dir.join(name)) {
@@ -584,7 +595,7 @@ impl Config {
                             "Can't create TAL file {}: {}.\n Aborting.",
                             self.tal_dir.join(name).display(), err
                         );
-                        process::exit(1);
+                        return Err(Error);
                     }
                 };
                 if let Err(err) = file.write_all(content) {
@@ -592,15 +603,14 @@ impl Config {
                         "Can't create TAL file {}: {}.\n Aborting.",
                         self.tal_dir.join(name).display(), err
                     );
-                    process::exit(1);
+                    return Err(Error);
                 }
             }
         }
+        Ok(())
     }
-}
 
-impl Default for Config {
-    fn default() -> Self {
+    fn default() -> Result<Self, Error> {
         let base_dir = match home_dir() {
             Some(dir) => dir.join(".rpki-cache"),
             None => {
@@ -609,13 +619,13 @@ impl Default for Config {
                     (no home directory). Please specify \
                     explicitely."
                 );
-                process::exit(1);
+                return Err(Error);
             }
         };
-        Config::default_with_paths(
+        Ok(Config::default_with_paths(
             base_dir.join("repository"), 
             base_dir.join("tals")
-        )
+        ))
     }
 }
 
@@ -670,10 +680,10 @@ impl ConfigFile {
     ///
     /// If there is no such file, returns `None`. If there is a file but it
     /// is broken, aborts.
-    fn read(path: &Path) -> Option<Self> {
+    fn read(path: &Path) -> Result<Option<Self>, Error> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
-            Err(_) => return None
+            Err(_) => return Ok(None)
         };
         let mut config = String::new();
         if let Err(err) = file.read_to_string(&mut config) {
@@ -681,23 +691,28 @@ impl ConfigFile {
                 "Failed to read config file {}: {}",
                 path.display(), err
             );
-            process::exit(1);
+            return Err(Error);
         }
-        let content = match toml::from_str(&config) {
+        Self::parse(&config, path).map(Some)
+    }
+
+    /// Parses the content of the file from a string.
+    fn parse(content: &str, path: &Path) -> Result<Self, Error> {
+        let content = match toml::from_str(content) {
             Ok(toml::Value::Table(content)) => content,
             Ok(_) => {
                 println!(
                     "Failed to parse config file {}: Not a mapping.",
                     path.display()
                 );
-                process::exit(1);
+                return Err(Error);
             }
             Err(err) => {
                 println!(
                     "Failed to parse config file {}: {}",
                     path.display(), err
                 );
-                process::exit(1);
+                return Err(Error);
             }
         };
         let dir = if path.is_relative() {
@@ -708,146 +723,167 @@ impl ConfigFile {
                         "Fatal: Can't determine current directory: {}.",
                         err
                     );
-                    process::exit(1);
+                    return Err(Error);
                 }
             }).parent().unwrap().into() // a file always has a parent
         }
         else {
             path.parent().unwrap().into()
         };
-        Some(ConfigFile {
+        Ok(ConfigFile {
             content,
             path: path.into(),
             dir: dir
         })
     }
 
-    fn take_bool(&mut self, key: &str) -> Option<bool> {
-        self.content.remove(key).map(|value| {
-            if let toml::Value::Boolean(res) = value {
-                res
-            }
-            else {
-                println!(
-                    "Error in config file {}: '{}' expected to be a boolean.",
-                    self.path.display(), key
-                );
-                process::exit(1);
-            }
-        })
-    }
-    
-    fn take_u64(&mut self, key: &str) -> Option<u64> {
-        self.content.remove(key).map(|value| {
-            if let toml::Value::Integer(res) = value {
-                if res < 0 {
-                    println!(
-                        "Error in config file {}: \
-                        '{}' expected to be a positive integer.",
-                        self.path.display(), key
-                    );
-                    process::exit(1);
+    fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Boolean(res) = value {
+                    Ok(Some(res))
                 }
                 else {
-                    res as u64
-                }
-            }
-            else {
-                println!(
-                    "Error in config file {}: '{}' expected to be an integer.",
-                    self.path.display(), key
-                );
-                process::exit(1);
-            }
-        })
-    }
-
-    fn take_usize(&mut self, key: &str) -> Option<usize> {
-        self.content.remove(key).map(|value| {
-            if let toml::Value::Integer(res) = value {
-                if res < 0 {
                     println!(
-                        "Error in config file {}: \
-                        '{}' expected to be a positive integer.",
+                        "Error in config file {}: '{}' expected to be a boolean.",
                         self.path.display(), key
                     );
-                    process::exit(1);
+                    Err(Error)
                 }
-                if is_large_i64(res) {
+            }
+            None => Ok(None)
+        }
+    }
+    
+    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    if res < 0 {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else {
+                        Ok(Some(res as u64))
+                    }
+                }
+                else {
                     println!(
                         "Error in config file {}: \
-                        value for '{}' is too large.",
+                         '{}' expected to be an integer.",
                         self.path.display(), key
                     );
-                    process::exit(1);
+                    Err(Error)
                 }
-                res as usize
             }
-            else {
-                println!(
-                    "Error in config file {}: '{}' expected to be a integer.",
-                    self.path.display(), key
-                );
-                process::exit(1);
-            }
-        })
+            None => Ok(None)
+        }
     }
 
-    fn take_string(&mut self, key: &str) -> Option<String> {
-        self.content.remove(key).map(|value| {
-            if let toml::Value::String(res) = value {
-                res
+    fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    if res < 0 {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else if is_large_i64(res) {
+                        println!(
+                            "Error in config file {}: \
+                            value for '{}' is too large.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else {
+                        Ok(Some(res as usize))
+                    }
+                }
+                else {
+                    println!(
+                        "Error in config file {}: \
+                         '{}' expected to be a integer.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
             }
-            else {
-                println!(
-                    "Error in config file {}: '{}' expected to be a string.",
-                    self.path.display(), key
-                );
-                process::exit(1);
-            }
-        })
+            None => Ok(None)
+        }
     }
 
-    fn take_from_str<T>(&mut self, key: &str) -> Option<T>
+    fn take_string(&mut self, key: &str) -> Result<Option<String>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::String(res) = value {
+                    Ok(Some(res))
+                }
+                else {
+                    println!(
+                        "Error in config file {}: \
+                         '{}' expected to be a string.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn take_from_str<T>(&mut self, key: &str) -> Result<Option<T>, Error>
     where T: FromStr, T::Err: fmt::Display {
-        self.take_string(key).map(|value| {
-            match T::from_str(&value) {
-                Ok(some) => some,
-                Err(err) => {
-                    println!(
-                        "Error in config file {}: \
-                         illegal value in '{}': {}.",
-                        self.path.display(), key, err
-                    );
-                    process::exit(1)
+        match self.take_string(key)? {
+            Some(value) => {
+                match T::from_str(&value) {
+                    Ok(some) => Ok(Some(some)),
+                    Err(err) => {
+                        println!(
+                            "Error in config file {}: \
+                             illegal value in '{}': {}.",
+                            self.path.display(), key, err
+                        );
+                        Err(Error)
+                    }
                 }
             }
-        })
+            None => Ok(None)
+        }
     }
 
-    fn take_path(&mut self, key: &str) -> Option<PathBuf> {
-        self.take_string(key).map(|path| self.dir.join(path))
+    fn take_path(&mut self, key: &str) -> Result<Option<PathBuf>, Error> {
+        self.take_string(key).map(|opt| opt.map(|path| self.dir.join(path)))
     }
 
-    fn take_mandatory_path(&mut self, key: &str) -> PathBuf {
-        match self.take_path(key) {
-            Some(res) => res,
+    fn take_mandatory_path(&mut self, key: &str) -> Result<PathBuf, Error> {
+        match self.take_path(key)? {
+            Some(res) => Ok(res),
             None => {
                 println!(
                     "Error in config file {}: missing required '{}'.",
                     self.path.display(), key
                 );
-                process::exit(1)
+                Err(Error)
             }
         }
     }
 
-    fn take_path_array(&mut self, key: &str) -> Vec<PathBuf> {
+    fn take_path_array(&mut self, key: &str) -> Result<Vec<PathBuf>, Error> {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
-                vec.into_iter().map(|value| {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
                     if let ::toml::Value::String(value) = value {
-                        self.dir.join(value)
+                        res.push(self.dir.join(value))
                     }
                     else {
                         println!(
@@ -856,9 +892,10 @@ impl ConfigFile {
                             self.path.display(),
                             key
                         );
-                        process::exit(1);
+                        return Err(Error);
                     }
-                }).collect()
+                }
+                Ok(res)
             }
             Some(_) => {
                 println!(
@@ -866,27 +903,28 @@ impl ConfigFile {
                      '{}' expected to be a array of paths.",
                     self.path.display(), key
                 );
-                process::exit(1);
+                Err(Error)
             }
-            None => return Vec::new()
+            None => Ok(Vec::new())
         }
     }
 
-    fn take_from_str_array<T>(&mut self, key: &str) -> Vec<T>
+    fn take_from_str_array<T>(&mut self, key: &str) -> Result<Vec<T>, Error>
     where T: FromStr, T::Err: fmt::Display {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
-                vec.into_iter().map(|value| {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
                     if let ::toml::Value::String(value) = value {
                         match T::from_str(&value) {
-                            Ok(value) => value,
+                            Ok(value) => res.push(value),
                             Err(err) => {
                                 println!(
                                     "Error in config file {}: \
                                      Invalid value in '{}': {}",
                                     self.path.display(), key, err
                                 );
-                                process::exit(1)
+                                return Err(Error)
                             }
                         }
                     }
@@ -897,9 +935,10 @@ impl ConfigFile {
                             self.path.display(),
                             key
                         );
-                        process::exit(1);
+                        return Err(Error)
                     }
-                }).collect()
+                }
+                Ok(res)
             }
             Some(_) => {
                 println!(
@@ -907,13 +946,13 @@ impl ConfigFile {
                      '{}' expected to be a array of strings.",
                     self.path.display(), key
                 );
-                process::exit(1);
+                Err(Error)
             }
-            None => return Vec::new()
+            None => Ok(Vec::new())
         }
     }
 
-    fn check_exhausted(&self) {
+    fn check_exhausted(&self) -> Result<(), Error> {
         if !self.content.is_empty() {
             print!(
                 "Error in config file {}: Unknown settings ",
@@ -930,7 +969,10 @@ impl ConfigFile {
                 print!("{}", key);
             }
             println!(".");
-            process::exit(1);
+            Err(Error)
+        }
+        else {
+            Ok(())
         }
     }
 }
@@ -938,20 +980,26 @@ impl ConfigFile {
 
 //------------ Helpers -------------------------------------------------------
 
-fn from_str_value_of<T>(matches: &ArgMatches, key: &str) -> Option<T>
+fn from_str_value_of<T>(
+    matches: &ArgMatches,
+    key: &str
+) -> Result<Option<T>, Error>
 where T: FromStr, T::Err: fmt::Display {
-    matches.value_of(key).map(|value| {
-        match T::from_str(value) {
-            Ok(value) => value,
-            Err(err) => {
-                println!(
-                    "Invalid value for {}: {}.", 
-                    key, err
-                );
-                process::exit(1);
+    match matches.value_of(key) {
+        Some(value) => {
+            match T::from_str(value) {
+                Ok(value) => Ok(Some(value)),
+                Err(err) => {
+                    println!(
+                        "Invalid value for {}: {}.", 
+                        key, err
+                    );
+                    Err(Error)
+                }
             }
         }
-    })
+        None => Ok(None)
+    }
 }
 
 #[cfg(target_pointer_width = "32")]
