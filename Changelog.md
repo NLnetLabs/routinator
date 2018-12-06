@@ -27,7 +27,7 @@ Bug Fixes
 Performance Improvements
 
 * Caching of CRL serial numbers for CAs with large manifests leads to
-  about half the validation time for the current repository. [(XX)]
+  about half the validation time for the current repository. [(#34)]
 
 
 Dependencies
@@ -36,6 +36,7 @@ Dependencies
 [(#23)]: https://github.com/NLnetLabs/routinator/pull/23
 [(#27)]: https://github.com/NLnetLabs/routinator/pull/27
 [(#32)]: https://github.com/NLnetLabs/routinator/pull/32
+[(#34)]: https://github.com/NLnetLabs/routinator/pull/34
 
 
 ## 0.1.2 ‘And I Cry If I Want To’
