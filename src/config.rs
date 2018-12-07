@@ -219,40 +219,50 @@ impl Config {
                 .as_ref().map(AsRef::as_ref)
         )?;
 
+        res.apply_arg_matches(matches, &cur_dir)?;
+
+        Ok(res)
+    }
+
+    fn apply_arg_matches(
+        &mut self,
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<(), Error> {
         // cache_dir
         if let Some(dir) = matches.value_of("repository-dir") {
-            res.cache_dir = cur_dir.join(dir)
+            self.cache_dir = cur_dir.join(dir)
         }
         else if let Some(dir) = matches.value_of("base-dir") {
-            res.cache_dir = cur_dir.join(dir).join("repository")
+            self.cache_dir = cur_dir.join(dir).join("repository")
         }
 
         // tal_dir
         if let Some(dir) = matches.value_of("tal-dir") {
-            res.tal_dir = cur_dir.join(dir)
+            self.tal_dir = cur_dir.join(dir)
         }
         else if let Some(dir) = matches.value_of("base-dir") {
-            res.tal_dir = cur_dir.join(dir).join("tals")
+            self.tal_dir = cur_dir.join(dir).join("tals")
         }
 
         // expceptions
         if let Some(list) = matches.values_of("exceptions") {
-            res.exceptions = list.map(|path| cur_dir.join(path)).collect()
+            self.exceptions = list.map(|path| cur_dir.join(path)).collect()
         }
 
         // strict
         if matches.is_present("strict") {
-            res.strict = true
+            self.strict = true
         }
 
         // rsync_count
         if let Some(value) = from_str_value_of(matches, "rsync-count")? {
-            res.rsync_count = value
+            self.rsync_count = value
         }
 
         // validation_threads
         if let Some(value) = from_str_value_of(matches, "validation-threads")? {
-            res.validation_threads = value
+            self.validation_threads = value
         }
 
         // log_level
@@ -260,16 +270,16 @@ impl Config {
                                             matches.occurrences_of("quiet")) {
             // This assumes that -v and -q are conflicting.
             (0, 0) => { }
-            (1, 0) => res.log_level = LevelFilter::Info,
-            (_, 0) => res.log_level = LevelFilter::Debug,
-            (0, 1) => res.log_level = LevelFilter::Error,
-            (0, _) => res.log_level = LevelFilter::Off,
+            (1, 0) => self.log_level = LevelFilter::Info,
+            (_, 0) => self.log_level = LevelFilter::Debug,
+            (0, 1) => self.log_level = LevelFilter::Error,
+            (0, _) => self.log_level = LevelFilter::Off,
             _ => { }
         }
 
         // log_target
         if matches.is_present("syslog") {
-            res.log_target = LogTarget::Syslog(
+            self.log_target = LogTarget::Syslog(
                 match Facility::from_str(
                                matches.value_of("syslog-facility").unwrap()) {
                     Ok(value) => value,
@@ -282,14 +292,14 @@ impl Config {
         }
         else if let Some(file) = matches.value_of("logfile") {
             if file == "-" {
-                res.log_target = LogTarget::Stderr
+                self.log_target = LogTarget::Stderr
             }
             else {
-                res.log_target = LogTarget::File(cur_dir.join(file))
+                self.log_target = LogTarget::File(cur_dir.join(file))
             }
         }
 
-        Ok(res)
+        Ok(())
     }
 
     pub fn apply_rtrd_arg_matches(
@@ -479,12 +489,13 @@ impl Config {
             }
         };
         let log_target = file.take_string("log")?;
+        let log_file = file.take_path("log-file")?;
         let log_target = match log_target.as_ref().map(AsRef::as_ref) {
             Some("default") | None => LogTarget::Default(facility),
             Some("syslog") => LogTarget::Syslog(facility),
             Some("stderr") =>  LogTarget::Stderr,
             Some("file") => {
-                LogTarget::File(match file.take_path("log-file")? {
+                LogTarget::File(match log_file {
                     Some(file) => file,
                     None => {
                         println!(
@@ -565,7 +576,7 @@ impl Config {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
             ],
             log_level: LevelFilter::Warn,
-            log_target: LogTarget::Stderr,
+            log_target: LogTarget::Default(Facility::LOG_DAEMON),
         }
     }
 
@@ -637,7 +648,7 @@ impl Config {
 pub enum LogTarget {
     /// Default.
     ///
-    /// Logs to `Syslog(facility)? in daemon mode and `Stderr` otherwise.
+    /// Logs to `Syslog(facility)` in daemon mode and `Stderr` otherwise.
     Default(Facility),
 
     /// Syslog.
@@ -652,6 +663,24 @@ pub enum LogTarget {
     ///
     /// The argument is the file name.
     File(PathBuf)
+}
+
+impl PartialEq for LogTarget {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (&LogTarget::Default(s), &LogTarget::Default(o)) => {
+                (s as usize) == (o as usize)
+            }
+            (&LogTarget::Syslog(s), &LogTarget::Syslog(o)) => {
+                (s as usize) == (o as usize)
+            }
+            (&LogTarget::Stderr, &LogTarget::Stderr) => true,
+            (&LogTarget::File(ref s), &LogTarget::File(ref o)) => {
+                s == o
+            }
+            _ => false
+        }
+    }
 }
 
 
@@ -1022,4 +1051,183 @@ const DEFAULT_TALS: [(&str, &[u8]); 5] = [
     ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
     ("ripe.tal", include_bytes!("../tals/ripe.tal")),
 ];
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn get_default_config() -> Config {
+        // Set $HOME so that home_dir always succeeds.
+        ::std::env::set_var("HOME", "/home/test");
+        Config::default().unwrap()
+    }
+
+    fn process_basic_args(args: &[&str]) -> Config {
+        let mut config = get_default_config();
+        config.apply_arg_matches(
+            &Config::config_args(App::new("routinator"))
+                .get_matches_from_safe(args).unwrap(),
+            Path::new("/test")
+        ).unwrap();
+        config
+    }
+
+    fn process_rtrd_args(args: &[&str]) -> Config {
+        let mut config = get_default_config();
+        let matches = Config::rtrd_args(Config::config_args(
+                App::new("routinator"))
+        ).get_matches_from_safe(args).unwrap();
+        config.apply_arg_matches(&matches, Path::new("/test")).unwrap();
+        config.apply_rtrd_arg_matches(&matches).unwrap();
+        config
+    }
+
+    #[test]
+    fn default_config() {
+        let config = get_default_config();
+        assert_eq!(
+            config.cache_dir,
+            home_dir().unwrap().join(".rpki-cache").join("repository")
+        );
+        assert_eq!(
+            config.tal_dir,
+            home_dir().unwrap().join(".rpki-cache").join("tals")
+        );
+        assert!(config.exceptions.is_empty());
+        assert_eq!(config.strict, DEFAULT_STRICT);
+        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
+        assert_eq!(config.validation_threads, ::num_cpus::get());
+        assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
+        assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
+        assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
+        assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
+        assert_eq!(
+            config.tcp_listen,
+            vec![SocketAddr::from_str("127.0.0.1:3323").unwrap()]
+        );
+        assert_eq!(config.log_level, LevelFilter::Warn);
+        assert_eq!(config.log_target, LogTarget::Default(Facility::LOG_DAEMON));
+    }
+
+    #[test]
+    fn good_file_config() {
+        let config = ConfigFile::parse(
+            "repository-dir = \"/repodir\"\n\
+             tal-dir = \"taldir\"\n\
+             exceptions = [\"ex1\", \"/ex2\"]\n\
+             strict = true\n\
+             rsync-count = 12\n\
+             validation-threads = 1000000\n\
+             refresh = 6\n\
+             retry = 7\n\
+             expire = 8\n\
+             history-size = 5000\n\
+             listen-tcp = [\"[2001:db8::4]:323\", \"192.0.2.4:323\"]\n\
+             log-level = \"info\"\n\
+             log = \"file\"\n\
+             log-file = \"foo.log\"",
+            &Path::new("/test/routinator.conf")
+        ).unwrap();
+        let config = Config::from_config_file(config).unwrap();
+        assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
+        assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
+        assert_eq!(
+            config.exceptions,
+            vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
+        );
+        assert_eq!(config.strict, true);
+        assert_eq!(config.rsync_count, 12);
+        assert_eq!(config.validation_threads, 1000000);
+        assert_eq!(config.refresh, Duration::from_secs(6));
+        assert_eq!(config.retry, Duration::from_secs(7));
+        assert_eq!(config.expire, Duration::from_secs(8));
+        assert_eq!(config.history_size, 5000);
+        assert_eq!(
+            config.tcp_listen,
+            vec![
+                SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
+                SocketAddr::from_str("192.0.2.4:323").unwrap(),
+            ]
+        );
+        assert_eq!(config.log_level, LevelFilter::Info);
+        assert_eq!(
+            config.log_target,
+            LogTarget::File(PathBuf::from("/test/foo.log"))
+        );
+    }
+
+    #[test]
+    fn bad_config_file() {
+        let config = ConfigFile::parse(
+            "", Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+        let config = ConfigFile::parse(
+            "repository-dir=\"bla\"",
+            Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+        let config = ConfigFile::parse(
+            "tal-dir=\"bla\"",
+            Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+    }
+
+    #[test]
+    fn basic_args() {
+        let config = process_basic_args(&[
+            "routinator", "-r", "/repository", "-t", "tals",
+            "-x", "/x1", "--exceptions", "x2", "--strict",
+            "--rsync-count", "1000", "--validation-threads", "2000",
+            "--syslog", "--syslog-facility", "auth"
+        ]);
+        assert_eq!(config.cache_dir, Path::new("/repository"));
+        assert_eq!(config.tal_dir, Path::new("/test/tals"));
+        assert_eq!(
+            config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
+        );
+        assert_eq!(config.strict, true);
+        assert_eq!(config.rsync_count, 1000);
+        assert_eq!(config.validation_threads, 2000);
+        assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
+    }
+
+    #[test]
+    fn verbosity() {
+        let config = process_basic_args(&["routinator"]);
+        assert_eq!(config.log_level, LevelFilter::Warn);
+        let config = process_basic_args(&["routinator", "-v"]);
+        assert_eq!(config.log_level, LevelFilter::Info);
+        let config = process_basic_args(&["routinator", "-vv"]);
+        assert_eq!(config.log_level, LevelFilter::Debug);
+        let config = process_basic_args(&["routinator", "-q"]);
+        assert_eq!(config.log_level, LevelFilter::Error);
+        let config = process_basic_args(&["routinator", "-qq"]);
+        assert_eq!(config.log_level, LevelFilter::Off);
+    }
+
+    #[test]
+    fn rtrd_args() {
+        let config = process_rtrd_args(&[
+            "routinator", "--refresh", "7", "--retry", "8", "--expire", "9",
+            "--history", "1000", "-l", "[2001:db8::4]:323",
+            "--listen", "192.0.2.4:323"
+        ]);
+        assert_eq!(config.refresh, Duration::from_secs(7));
+        assert_eq!(config.retry, Duration::from_secs(8));
+        assert_eq!(config.expire, Duration::from_secs(9));
+        assert_eq!(config.history_size, 1000);
+        assert_eq!(
+            config.tcp_listen,
+            vec![
+                SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
+                SocketAddr::from_str("192.0.2.4:323").unwrap(),
+            ]
+        );
+    }
+}
 
