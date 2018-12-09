@@ -1,4 +1,8 @@
 //! Configuration.
+//!
+//! This module primarily contains the type [`Config`] that holds the
+//! configuration for how Routinator keeps and updates the local repository
+//! as well as for the RTR server.
 
 use std::{env, fmt, fs, io};
 use std::io::{Read, Write};
@@ -18,17 +22,48 @@ use crate::slurm::LocalExceptions;
 
 //------------ Defaults for Some Values --------------------------------------
 
+/// Are we doing strict validation by default?
 const DEFAULT_STRICT: bool = false;
+
+/// The default number of rsync commands run in parallel.
 const DEFAULT_RSYNC_COUNT: usize = 4;
+
+/// The default refresh interval in seconds.
 const DEFAULT_REFRESH: u64 = 3600;
+
+/// The default RTR retry interval in seconds.
 const DEFAULT_RETRY: u64 = 600;
+
+/// The default RTR expire interval in seconds.
 const DEFAULT_EXPIRE: u64 = 7200;
+
+/// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
 
 //------------ Config --------------------------------------------------------
 
 /// Routinator configuration.
+///
+/// This type contains both the basic configuration of Routinator, such as
+/// where to keep the repository and how to update it, and the configuration
+/// for the RTR server.
+///
+/// All values are public and can be accessed directly.
+///
+/// The two functions [`config_args`] and [`rtrd_args`] can be used to create
+/// the clap application. Its matches can then be used to create the basic
+/// config via [`from_arg_matches`]. If the RTR server configuration is
+/// necessary, it can be added via [`apply_rtrd_arg_matches`] from the RTR
+/// server subcommand matches.
+///
+/// A few methods are provided that do mundane tasks that heavily depend on
+/// the configuration.
+///
+/// [`config_args`]: #method.config_args
+/// [`rtrd_args`]: #method.rtrd_args
+/// [`from_arg_matches`]: #method.from_arg_matches
+/// [`apply_rtrd_arg_matches`]: #method.apply_rtrd_arg_matches
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Path to the directory that contains the repository cache.
@@ -72,7 +107,10 @@ pub struct Config {
 }
 
 impl Config {
-    /// Creates a clap app that can parse the configuration.
+    /// Adds the basic arguments to a clapp app.
+    ///
+    /// The function follows clap’s builder pattern: it takes an app,
+    /// adds a bunch of arguments to it and returns it at the end.
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
         .arg(Arg::with_name("config")
@@ -162,9 +200,12 @@ impl Config {
     /// Adds the relevant config args to the rtrd subcommand.
     ///
     /// Some of the options in the config only makes sense to have for the
-    /// RTR daemon. Having them in the global part of the clap command line
+    /// RTR server. Having them in the global part of the clap command line
     /// is confusing, so we stick to defaults unless we actually run the
-    /// daemon. This function adds the relevant args to the subcommand.
+    /// server. This function adds the relevant args to the subcommand.
+    ///
+    /// It follows clap’s builder pattern: It takes an app, adds a bunch of
+    /// arguments to it, and returns it in the end.
     pub fn rtrd_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
         .arg(Arg::with_name("refresh")
@@ -202,11 +243,23 @@ impl Config {
         )
     }
 
+    /// Creates a configuration from the command line arguments.
+    ///
+    /// The function will try to read a config file, either the one provided
+    /// via the command line or the default, and apply all basic command line
+    /// options to it.
+    ///
+    /// If you are trying to run the RTR server, you need to also apply the
+    /// RTR server arguments via [`apply_rtrd_arg_matches`].
+    ///
+    /// This functions prints all its error messages directly to stderr.
+    ///
+    /// [`apply_rtrd_arg_matches`]: #method.apply_rtrd_arg_matches
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         let cur_dir = match env::current_dir() {
             Ok(dir) => dir,
             Err(err) => {
-                println!(
+                eprintln!(
                     "Fatal: cannot get current directory ({}). Aborting.",
                     err
                 );
@@ -224,6 +277,12 @@ impl Config {
         Ok(res)
     }
 
+    /// Applies the basic command line arguments to a configuration.
+    ///
+    /// The path arguments in `matches` will be interpreted relative to
+    /// `cur_dir`.
+    ///
+    /// This functions prints all its error messages directly to stderr.
     fn apply_arg_matches(
         &mut self,
         matches: &ArgMatches,
@@ -236,6 +295,14 @@ impl Config {
         else if let Some(dir) = matches.value_of("base-dir") {
             self.cache_dir = cur_dir.join(dir).join("repository")
         }
+        if self.cache_dir == Path::new("") {
+            eprintln!(
+                "Couldn’t determine default repository directory: \
+                 no home directory.\n\
+                 Please specify the repository directory with the -r option."
+            );
+            return Err(Error)
+        }
 
         // tal_dir
         if let Some(dir) = matches.value_of("tal-dir") {
@@ -243,6 +310,14 @@ impl Config {
         }
         else if let Some(dir) = matches.value_of("base-dir") {
             self.tal_dir = cur_dir.join(dir).join("tals")
+        }
+        if self.tal_dir == Path::new("") {
+            eprintln!(
+                "Couldn’t determine default TAL directory: \
+                 no home directory.\n\
+                 Please specify the repository directory with the -t option."
+            );
+            return Err(Error)
         }
 
         // expceptions
@@ -284,7 +359,7 @@ impl Config {
                                matches.value_of("syslog-facility").unwrap()) {
                     Ok(value) => value,
                     Err(_) => {
-                        println!("Invalid value for syslog-facility.");
+                        eprintln!("Invalid value for syslog-facility.");
                         return Err(Error);
                     }
                 }
@@ -302,6 +377,9 @@ impl Config {
         Ok(())
     }
 
+    /// Applies the RTR server command line arguments to a config.
+    ///
+    /// This functions prints all its error messages directly to stderr.
     pub fn apply_rtrd_arg_matches(
         &mut self,
         matches: &ArgMatches
@@ -333,7 +411,7 @@ impl Config {
                 match SocketAddr::from_str(value) {
                     Ok(some) => self.tcp_listen.push(some),
                     Err(_) => {
-                        println!("Invalid value for listen: {}", value);
+                        eprintln!("Invalid value for listen: {}", value);
                         return Err(Error);
                     }
                 }
@@ -345,29 +423,33 @@ impl Config {
 
     /// Creates and returns the repository for this configuration.
     ///
+    /// This will create the cache and TAL directories if they don’t exist
+    /// and, in this case, populate the TAL directoy with the default set
+    /// of TALS.
+    ///
     /// If `update` is `false`, all updates in the respository are disabled.
     ///
-    /// If any errors happen, the method will print (!) an error message.
+    /// This functions prints all its error messages directly to stderr.
     pub fn create_repository(
         &self,
         update: bool
     ) -> Result<Repository, Error> {
         self.prepare_dirs()?;
         Repository::new(self, update).map_err(|err| {
-            println!("{}", err);
+            eprintln!("{}", err);
             Error
         })
     }
 
     /// Loads the local exceptions for this configuration.
     ///
-    /// If any errors happen, the method will print (!) an error message.
+    /// This function logs its error messages.
     pub fn load_exceptions(&self) -> Result<LocalExceptions, Error> {
         let mut res = LocalExceptions::empty();
         let mut ok = true;
         for path in &self.exceptions {
             if let Err(err) = res.extend_from_file(path) {
-                println!(
+                error!(
                     "Failed to load exceptions file {}: {}",
                     path.display(), err
                 );
@@ -386,17 +468,19 @@ impl Config {
     ///
     /// If `daemon` is `true`, the default target is syslog, otherwise it is
     /// stderr.
+    ///
+    /// This functions prints all its error messages directly to stderr.
     pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
         match self.log_target {
             LogTarget::Default(fac) if daemon => {
                 if let Err(err) = syslog::init(fac, self.log_level, None) {
-                    println!("Failed to init syslog: {}", err);
+                    eprintln!("Failed to init syslog: {}", err);
                     return Err(Error)
                 }
             }
             LogTarget::Syslog(fac) => {
                 if let Err(err) = syslog::init(fac, self.log_level, None) {
-                    println!("Failed to init syslog: {}", err);
+                    eprintln!("Failed to init syslog: {}", err);
                     return Err(Error)
                 }
             }
@@ -405,7 +489,7 @@ impl Config {
                     .level(self.log_level)
                     .chain(io::stderr());
                 if let Err(err) = dispatch.apply() {
-                    println!("Failed to init stderr logging: {}", err);
+                    eprintln!("Failed to init stderr logging: {}", err);
                     return Err(Error)
                 }
             }
@@ -413,7 +497,7 @@ impl Config {
                 let file = match fern::log_file(path) {
                     Ok(file) => file,
                     Err(err) => {
-                        println!(
+                        eprintln!(
                             "Failed to open log file '{}': {}",
                             path.display(), err
                         );
@@ -424,7 +508,7 @@ impl Config {
                     .level(self.log_level)
                     .chain(file);
                 if let Err(err) = dispatch.apply() {
-                    println!("Failed to init file logging: {}", err);
+                    eprintln!("Failed to init file logging: {}", err);
                     return Err(Error)
                 }
             }
@@ -448,13 +532,17 @@ impl Config {
     /// If no config path is given, tries to read the default config in
     /// `$HOME/.routinator.toml`. If that doesn’t exist, creates a default
     /// config.
+    ///
+    /// This functions prints all its error messages directly to stderr.
     fn create_base_config(path: Option<&Path>) -> Result<Self, Error> {
         let file = match path {
             Some(path) => {
                 match ConfigFile::read(&path)? {
                     Some(file) => file,
                     None => {
-                        println!("Cannot read config file {}", path.display());
+                        eprintln!(
+                            "Cannot read config file {}", path.display()
+                        );
                         return Err(Error);
                     }
                 }
@@ -464,9 +552,9 @@ impl Config {
                     Some(dir) => match ConfigFile::read(
                                             &dir.join(".routinator.toml"))? {
                         Some(file) => file,
-                        None => return Self::default(),
+                        None => return Ok(Self::default()),
                     }
-                    None => return Self::default()
+                    None => return Ok(Self::default())
                 }
             }
         };
@@ -474,13 +562,16 @@ impl Config {
     }
 
     /// Creates a base config from a config file.
+    ///
+    /// This functions prints all its error messages directly to stderr.
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Error> {
         let facility = file.take_string("syslog-facility")?;
-        let facility = facility.as_ref().map(AsRef::as_ref).unwrap_or("daemon");
+        let facility = facility.as_ref().map(AsRef::as_ref)
+                               .unwrap_or("daemon");
         let facility = match Facility::from_str(facility) {
             Ok(value) => value,
             Err(_) => {
-                println!(
+                eprintln!(
                     "Error in config file {}: \
                      invalid syslog-facility.",
                      file.path.display()
@@ -498,7 +589,7 @@ impl Config {
                 LogTarget::File(match log_file {
                     Some(file) => file,
                     None => {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                              log target \"file\" requires 'log-file' value.",
                              file.path.display()
@@ -508,7 +599,7 @@ impl Config {
                 })
             }
             Some(value) => {
-                println!(
+                eprintln!(
                     "Error in config file {}: \
                      invalid log target '{}'",
                      file.path.display(),
@@ -582,9 +673,15 @@ impl Config {
 
 
     /// Prepares and returns the cache dir and tal dir.
+    ///
+    /// If the cache dir doesn’t exist, tries to create it. If the tal dir
+    /// doesn’t exist, tries to create it and populate it with the default
+    /// set of TALs.
+    ///
+    /// This method prints all its error messages directly to stderr.
     fn prepare_dirs(&self) -> Result<(), Error> {
         if let Err(err) = fs::create_dir_all(&self.cache_dir) {
-            println!(
+            eprintln!(
                 "Can't create repository directory {}: {}.\nAborting.",
                 self.cache_dir.display(), err
             );
@@ -592,7 +689,7 @@ impl Config {
         }
         if fs::read_dir(&self.tal_dir).is_err() {
             if let Err(err) = fs::create_dir_all(&self.tal_dir) {
-                println!(
+                eprintln!(
                     "Can't create TAL directory {}: {}.\nAborting.",
                     self.tal_dir.display(), err
                 );
@@ -602,7 +699,7 @@ impl Config {
                 let mut file = match fs::File::create(self.tal_dir.join(name)) {
                     Ok(file) => file,
                     Err(err) => {
-                        println!(
+                        eprintln!(
                             "Can't create TAL file {}: {}.\n Aborting.",
                             self.tal_dir.join(name).display(), err
                         );
@@ -610,7 +707,7 @@ impl Config {
                     }
                 };
                 if let Err(err) = file.write_all(content) {
-                    println!(
+                    eprintln!(
                         "Can't create TAL file {}: {}.\n Aborting.",
                         self.tal_dir.join(name).display(), err
                     );
@@ -620,23 +717,27 @@ impl Config {
         }
         Ok(())
     }
+}
 
-    fn default() -> Result<Self, Error> {
-        let base_dir = match home_dir() {
-            Some(dir) => dir.join(".rpki-cache"),
-            None => {
-                println!(
-                    "Cannot determine default directories \
-                    (no home directory). Please specify \
-                    explicitely."
-                );
-                return Err(Error);
+
+//--- Default
+
+impl Default for Config {
+    fn default() -> Self {
+        match home_dir() {
+            Some(dir) => {
+                let base = dir.join(".rpki-cache");
+                Config::default_with_paths(
+                    base.join("repository"), 
+                    base.join("tals")
+                )
             }
-        };
-        Ok(Config::default_with_paths(
-            base_dir.join("repository"), 
-            base_dir.join("tals")
-        ))
+            None => {
+                Config::default_with_paths(
+                    PathBuf::from(""), PathBuf::from("")
+                )
+            }
+        }
     }
 }
 
@@ -665,6 +766,9 @@ pub enum LogTarget {
     File(PathBuf)
 }
 
+
+//--- PartialEq and Eq
+
 impl PartialEq for LogTarget {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -683,6 +787,8 @@ impl PartialEq for LogTarget {
     }
 }
 
+impl Eq for LogTarget { }
+
 
 //------------ ConfigFile ----------------------------------------------------
 
@@ -690,6 +796,9 @@ impl PartialEq for LogTarget {
 ///
 /// This is a thin wrapper around `toml::Table` to make dealing with it more
 /// convenient.
+///
+/// All functions and methods that can return an `Error` print their error
+/// messages to stderr.
 #[derive(Clone, Debug)]
 struct ConfigFile {
     /// The content of the file.
@@ -716,7 +825,7 @@ impl ConfigFile {
         };
         let mut config = String::new();
         if let Err(err) = file.read_to_string(&mut config) {
-            println!(
+            eprintln!(
                 "Failed to read config file {}: {}",
                 path.display(), err
             );
@@ -730,14 +839,14 @@ impl ConfigFile {
         let content = match toml::from_str(content) {
             Ok(toml::Value::Table(content)) => content,
             Ok(_) => {
-                println!(
+                eprintln!(
                     "Failed to parse config file {}: Not a mapping.",
                     path.display()
                 );
                 return Err(Error);
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "Failed to parse config file {}: {}",
                     path.display(), err
                 );
@@ -748,7 +857,7 @@ impl ConfigFile {
             path.join(match env::current_dir() {
                 Ok(dir) => dir,
                 Err(err) => {
-                    println!(
+                    eprintln!(
                         "Fatal: Can't determine current directory: {}.",
                         err
                     );
@@ -773,8 +882,9 @@ impl ConfigFile {
                     Ok(Some(res))
                 }
                 else {
-                    println!(
-                        "Error in config file {}: '{}' expected to be a boolean.",
+                    eprintln!(
+                        "Error in config file {}: \
+                         '{}' expected to be a boolean.",
                         self.path.display(), key
                     );
                     Err(Error)
@@ -789,7 +899,7 @@ impl ConfigFile {
             Some(value) => {
                 if let toml::Value::Integer(res) = value {
                     if res < 0 {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                             '{}' expected to be a positive integer.",
                             self.path.display(), key
@@ -801,7 +911,7 @@ impl ConfigFile {
                     }
                 }
                 else {
-                    println!(
+                    eprintln!(
                         "Error in config file {}: \
                          '{}' expected to be an integer.",
                         self.path.display(), key
@@ -818,7 +928,7 @@ impl ConfigFile {
             Some(value) => {
                 if let toml::Value::Integer(res) = value {
                     if res < 0 {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                             '{}' expected to be a positive integer.",
                             self.path.display(), key
@@ -826,7 +936,7 @@ impl ConfigFile {
                         Err(Error)
                     }
                     else if is_large_i64(res) {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                             value for '{}' is too large.",
                             self.path.display(), key
@@ -838,7 +948,7 @@ impl ConfigFile {
                     }
                 }
                 else {
-                    println!(
+                    eprintln!(
                         "Error in config file {}: \
                          '{}' expected to be a integer.",
                         self.path.display(), key
@@ -857,7 +967,7 @@ impl ConfigFile {
                     Ok(Some(res))
                 }
                 else {
-                    println!(
+                    eprintln!(
                         "Error in config file {}: \
                          '{}' expected to be a string.",
                         self.path.display(), key
@@ -876,7 +986,7 @@ impl ConfigFile {
                 match T::from_str(&value) {
                     Ok(some) => Ok(Some(some)),
                     Err(err) => {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                              illegal value in '{}': {}.",
                             self.path.display(), key, err
@@ -897,7 +1007,7 @@ impl ConfigFile {
         match self.take_path(key)? {
             Some(res) => Ok(res),
             None => {
-                println!(
+                eprintln!(
                     "Error in config file {}: missing required '{}'.",
                     self.path.display(), key
                 );
@@ -915,7 +1025,7 @@ impl ConfigFile {
                         res.push(self.dir.join(value))
                     }
                     else {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                             '{}' expected to be a array of paths.",
                             self.path.display(),
@@ -927,7 +1037,7 @@ impl ConfigFile {
                 Ok(res)
             }
             Some(_) => {
-                println!(
+                eprintln!(
                     "Error in config file {}: \
                      '{}' expected to be a array of paths.",
                     self.path.display(), key
@@ -948,7 +1058,7 @@ impl ConfigFile {
                         match T::from_str(&value) {
                             Ok(value) => res.push(value),
                             Err(err) => {
-                                println!(
+                                eprintln!(
                                     "Error in config file {}: \
                                      Invalid value in '{}': {}",
                                     self.path.display(), key, err
@@ -958,7 +1068,7 @@ impl ConfigFile {
                         }
                     }
                     else {
-                        println!(
+                        eprintln!(
                             "Error in config file {}: \
                             '{}' expected to be a array of strings.",
                             self.path.display(),
@@ -970,7 +1080,7 @@ impl ConfigFile {
                 Ok(res)
             }
             Some(_) => {
-                println!(
+                eprintln!(
                     "Error in config file {}: \
                      '{}' expected to be a array of strings.",
                     self.path.display(), key
@@ -997,7 +1107,7 @@ impl ConfigFile {
                 }
                 print!("{}", key);
             }
-            println!(".");
+            eprintln!(".");
             Err(Error)
         }
         else {
@@ -1019,7 +1129,7 @@ where T: FromStr, T::Err: fmt::Display {
             match T::from_str(value) {
                 Ok(value) => Ok(Some(value)),
                 Err(err) => {
-                    println!(
+                    eprintln!(
                         "Invalid value for {}: {}.", 
                         key, err
                     );
@@ -1062,7 +1172,7 @@ mod test {
     fn get_default_config() -> Config {
         // Set $HOME so that home_dir always succeeds.
         ::std::env::set_var("HOME", "/home/test");
-        Config::default().unwrap()
+        Config::default()
     }
 
     fn process_basic_args(args: &[&str]) -> Config {
