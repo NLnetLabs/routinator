@@ -59,7 +59,9 @@ impl Orders {
 
 /// The command to run.
 pub enum Operation {
-    Man,
+    Man {
+        output: Option<Option<PathBuf>>,
+    },
     Update,
     Vrps {
         output: Option<PathBuf>,
@@ -78,13 +80,12 @@ impl Operation {
 
         // vrps
         .subcommand(SubCommand::with_name("vrps")
-            .about("Produces a list of valid ROA prefixes.")
+            .about("Produces a list of validated ROA payload.")
             .arg(Arg::with_name("output")
                 .short("o")
                 .long("output")
                 .value_name("FILE")
-                .help("output file, '-' or not present for stdout")
-                .default_value("-")
+                .help("output file")
                 .takes_value(true)
             )
             .arg(Arg::with_name("format")
@@ -123,6 +124,14 @@ impl Operation {
         // man
         .subcommand(SubCommand::with_name("man")
             .about("Shows the man page")
+            .arg(Arg::with_name("output")
+                .short("o")
+                .long("output")
+                .value_name("FILE")
+                .help("output file, '-' or not present for stdout")
+                .default_value("-")
+                .takes_value(true)
+            )
         )
     }
 
@@ -132,7 +141,16 @@ impl Operation {
         config: &mut Config
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
-            ("man", _) => Operation::Man,
+            ("man", Some(matches)) => {
+                Operation::Man {
+                    output: matches.value_of("output").map(|value| {
+                        match value {
+                            "-" => None,
+                            path => Some(path.into())
+                        }
+                    })
+                }
+            }
             ("rtrd", Some(matches)) => {
                 config.apply_rtrd_arg_matches(matches)?;
                 Operation::Rtrd {
@@ -157,14 +175,31 @@ impl Operation {
                     noupdate: matches.is_present("noupdate")
                 }
             }
+            ("", _) => {
+                eprintln!(
+                    "Error: a command is required.\n\
+                     \nCommonly used commands are:\
+                     \n   vrps   produces a list of validated ROA payload\
+                     \n   rtrd   start the RTR server\
+                     \n   man    show the manual page\
+                     \n\
+                     \nSee routinator -h for a usage summary or\
+                       routinator man for detailed help."
+                );
+                return Err(Error)
+            }
             _ => panic!("Unexpected subcommand."),
         })
     }
 
     pub fn run(self, config: Config) -> Result<(), Error> {
         match self {
-            Operation::Man
-                => Self::man(),
+            Operation::Man { output } => {
+                match output {
+                    Some(output) => Self::output_man(output),
+                    None => Self::display_man(),
+                }
+            }
             Operation::Rtrd { attached }
                 => Self::rtrd(config, attached),
             Operation::Update
@@ -174,7 +209,37 @@ impl Operation {
         }
     }
 
-    fn man() -> Result<(), Error> {
+    fn output_man(output: Option<PathBuf>) -> Result<(), Error> {
+        match output {
+            Some(path) => {
+                let mut file = match fs::File::create(&path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        eprintln!(
+                            "Failed to open output file {}: {}",
+                            path.display(), err
+                        );
+                        return Err(Error)
+                    }
+                };
+                if let Err(err) = file.write_all(MAN_PAGE) {
+                    eprintln!("Failed to write to output file: {}", err);
+                    return Err(Error)
+                }
+            }
+            None => {
+                let out = io::stdout();
+                let mut out = out.lock();
+                if let Err(err) = out.write_all(MAN_PAGE) {
+                    eprintln!("Failed to write man page: {}", err);
+                    return Err(Error)
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn display_man() -> Result<(), Error> {
         let mut file = NamedTempFile::new().map_err(|err| {
             println!(
                 "Can't display man page: \
@@ -246,11 +311,7 @@ impl Operation {
     }
 
     fn update(config: Config) -> Result<(), Error> {
-        let repo = config.create_repository(true)?;
-        repo.update().map_err(|err| {
-            println!("Updating the repository has failed: {}", err);
-            Error
-        })
+        Self::vrps(config, None, OutputFormat::None, false)
     }
 
     fn vrps(
