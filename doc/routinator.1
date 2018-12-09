@@ -1,4 +1,4 @@
-.TH "routinator" "1" "October 25, 2018" "NLnet Labs" "routinator 0.1.0
+.TH "routinator" "1" "December 7, 2018" "NLnet Labs" "routinator 0.2.0
 .\"
 .\" routinator.1 -- RPKI Relying Party software
 .\"
@@ -6,8 +6,6 @@
 .\"
 .\" See LICENSE for the license.
 .\"
-.\" Provicial manual page, need improvement so
-.\" version etc is generated automagically
 .\"
 .SH "NAME"
 .B routinator
@@ -16,51 +14,96 @@
 .B routinator
 .RB [ \-b
 .IR base-dir ]
-.RB [ \-c
-.IR cache-dir ]
+.RB [ \-r
+.IR repository-dir ]
 .RB [ \-t
 .IR tal-dir ]
 .RB [ \-x
-.IR exceptions-file ]
+.IR exceptions-file
+.RB [ \-x
+.IR exceptions-file
+[...]]]
+.RB [ \-\-strict ]
+.RB [ \-v | \c
+.BR \-vv | \c
+.BR \-q  | \c
+.BR \-qq ]
+.RB [ \-h ]
+.RB [ \-V ]
+command
+[args]
+.PP
+.B routinator
+[options]
+.B vrps
 .RB [ \-o
 .IR output-file ]
 .RB [ \-f
-.IR output-format ]
+.IR format ]
+.RB [ \-n
+]
+.PP
+.B routinator
+[options]
+.B rtrd
 .RB [ \-l
-.IR addr:port
-[ ... ] ]
-.RB [ \-d | \c
-.BR \-r ]
-.RB [ \-n ]
-.RB [ \-N ]
-.RB [ \-\-strict ]
+.I addr:port
+.RB [ \-l
+.I addr:port
+[...]]]
 .RB [ \-\-refresh
+.IR seconds ]
+.RB [ \-\-retry
+.IR seconds ]
+.RB [ \-\-expire
 .IR seconds ]
 .RB [ \-\-history
 .IR count ]
-.RB [ \-v | \c
-.BR \-vv | \c
-.BR \-vvv ]
-.RB [ \-h ]
-.RB [ \-V ]
+.PP
+.B routinator
+[options]
+.B update
+.PP
+.B routinator
+.B man
+.RB [ \-o
+.IR file ]
+
+
 .SH "DESCRIPTION"
-.B Routinator
-validates RPKI route origin attestations.
+Routinator
+collects and processes Resource Public Key Infrastructure (RPKI) data. It
+validates the route origin attestations contained in the data and makes
+them available for routing.
 .P
 It can either run in one-shot mode outputting a list of validated route
-origins in various formats or in repeat mode listening to RPKI-RTR
-connections.
+origins in various formats or as a server for the RPKI-to-Router (RTR)
+protocol that routers often implement to access the data.
+.P
+These modes and additional operations can be chosen  via commands. For
+the available commands, see
+.B COMMANDS
+below.
 .SH "OPTIONS"
 .P
 The available options are:
 .TP
+.BI \-c\  path \fR,\ \fB\-\-config= path
+Provides the path to a file containing basic configuration. If this option
+is not given, Routinator will try to use
+.I $HOME/.routinator.conf
+if that exists. See
+.B CONFIGURATION FILE
+below for more information on the format and contents of the configuration
+file.
+.TP
 .BI \-b\  dir \fR,\ \fB\-\-base\-dir= dir
 Specifies the base directory to keep status information in. Unless
 overwritten by the
-.B -c
+.B -r
 or
 .B -t
-options, the RPKI cache will be kept in the sub-directory
+options, the local repository will be kept in the sub-directory
 .I repository
 and the TALs will be kept in the sub-directory
 .I tals\fR.
@@ -68,136 +111,228 @@ and the TALs will be kept in the sub-directory
 If omitted, the base directory defaults to
 .I $HOME/.rpki-cache\fR.
 .TP
-.BI \-c\  dir \fR,\ \fB\-\-cache\-dir= dir
-Specifies the directory to keep the RPKI cache in.
+.BI \-r\  dir \fR,\ \fB\-\-repository\-dir= dir
+Specifies the directory to keep the local repository in. This is the place
+where Routinator stores the RPKI data it has collected and thus is a copy of
+all the data referenced via the trust anchors.
 .TP
 .BI \-t\  dir \fR,\ \fB\-\-tal\-dir= dir
-Specifies the directory containing the trust anchor locators to use. See
+Specifies the directory containing the trust anchor locators (TALs) to use.
+Trust anchor locators are the starting points for collecting and validating
+RPKI data. See
 .B TRUST ANCHOR LOCATORS
 for more information on what should be present in this directory.
 .TP
 .BI \-x\  file \fR,\ \fB\-\-exceptions= file
-If present, provides the path to a local exceptions file. This is a JSON
-file described in RFC 8416.
-.TP
-.BR \-d\fR,\ \fB\-\-daemon
-Directs Routinator to run in daemon mode. After starting, it will detach from
-the terminal, will start listening on the RTR socket and run repeat
-validation.
-.IP
-This option implies the
-.B -r
-option.
-.TP
-.BR \-r\fR,\ \fB\-\-repeat
-Directs Routinator to run in repeat mode. In this mode, validation will
-be performed repeatedly and Routinator will act as an RTR server.
-.TP
-.BI \-o\  file \fR,\ \fB\-\-output= file
-This option specifies the file to output validated route origins to. If the
-option is missing or given as
-.BR -
-standard output is used.
-.TP
-.BI \-f\  format \fR,\ \fB\-\-outform= format
-Specifies the format to use for outputting validated route origins.
-.IP
-If the format value
-.BR csv
-is used, output will be a file with comma-separated rows. The fields will
-be the AS number, the prefix, and the maximum prefix length.
-.IP
-The format value of
-.BR json
-will produce a JSON file consisting of a single object with the only element
-labeled
-.IR roas
-which is a list of objects consisting of the three elements
-.IR asn\fR,
-.IR prefix\fR,
-and
-.IR maxLength\fR.
-.IP
-The format value of
-.BR openbgpd
-will produce an OpenBGPD configuration file that can be referenced from
-OpenBGPD's main configuration file.
-.IP
-The format value of
-.BR rpsl
-will produce an RPSL file where each object has the elements
-.IR route\fR,
-.IR origin\fR,
-.IR descr\fR,
-.IR mnt-by\fR,
-.IR created\fR,
-.IR last-modified\fR,
-and
-.IR source\fR,
-not all of which have meaningful values.
-.IP
-Finally, an format value of
-.BR none
-will suppress output of validated origins altogether.
-.TP
-.BI \-l\  addr:port \fR,\ \fB\-\-listen= addr:port
-Each occurrence of this option specifies an address and port to listen
-on for incoming RTR connections. IPv6 addresses need be enclosed in
-square brackets.
-.IP
-If this option is not present at all, the default of
-.IR 127.0.0.1:3323
-will be used.
-.TP
-.BR \-n , " \-\-noupdate
-If this option is given, the local copy of the RPKI repository will not be
-updated.
-.IP
-The option is ignored in repeat and daemon mode.
-.TP
-.BR \-N , " \-\-noprocess
-If this option is present, the RPKI repository will not be validated and no
-output be produced.
-.IP
-The option is ignored in repeat and daemon mode.
+Provides the path to a local exceptions file. The option can be used
+multiple times to specify more than one file to use. Each file is a JSON
+file as described in RFC 8416. It lists both route origins that should be
+filtered out of the output as well as origins that should be added.
 .TP
 .BR \-\-strict
 If this option is present, the repository will be validated in strict mode
 following the requirements laid out by the standard documents very closely.
-This will lead to a rather large amount of invalid route origins and should
-therefore not be used in practice.
-.TP
-.BI \-\-refresh= seconds
-Specifies how long to wait between validation runs in repeat mode. The time
-is to be specified in seconds. It starts after validation has been finished.
+With the current RPKI repository, using this option will lead to a rather
+large amount of invalid route origins and should therefore not be used in
+practice.
 .IP
-The default time is 3600 seconds.
+See
+.B RELAXED VALIDATION
+below for more information.
 .TP
-.BI \-\-history= count
-Specifies the number of incremental updates Routinator should keep for RTR
-clients.
+.BR \-v ,\  \fB\-\-verbose
+Print more information. If given twice, even more information is printed.
 .IP
-If a client that has previously received a data set connects to the RTR
-server, it can provide the server with the serial number it has last seen
-and request only to be given the changes since then. Routinator can keep a
-number of older versions around to provide clients with these changes.
-.IP
-The default number of incremental updates kept is 10.
+More specifically, a single
+.B -v
+increases the log level from the default of
+.I warn
+to
+.I info\fR,
+specifying it more than once increases it to
+.I debug\fR.
 .TP
-.BR \-v , " \-\-verbose
-Print more information.
-If given multiple times, more information is
-printed.
+.BR \-q ,\  \fB\-\-quiet
+Print less information. Given twice, print nothing at all.
 .IP
-When running in daemon mode, Routinator will print information to syslog
-using the daemon facility. In all other cases, it prints this information
-to stderr.
+A single
+.B -q
+will drop the log level to
+.I error\fR.
+Repeating 
+.B -q
+more than once turns logging off completely. 
 .TP
+.BR \-\-syslog
+Redirect logging output to syslog.
+.IP
+This option is implied if a command is used that causes Routinator to run
+in daemon mode.
+.TP
+.BI \-\-syslog-facility= facility
+If logging to syslog is used, this option can be used to specify the syslog
+facility to use. The default is
+.I daemon\fR.
+.TP
+.BI \-\-logfile= path
+Redirect logging output to the given file.
 .BR \-h , " \-\-help"
 Print some help information.
 .TP
 .BR \-V , " \-\-version
 Print version information.
+
+.SH COMMANDS
+Routinator provides a number of operations around the local RPKI repository.
+These can be requested by providing different commands on the command line.
+
+.SS vrps
+This command requests that Routinator update the local repository and then
+validate the Route Origin Authorizations in the repository and output the
+valid route origins, which are also knwon as Valid ROA Payload or VRPs, as
+a list.
+.TP
+.BI -o\  file \fR,\ \fB\-\-output= file
+Specifies the output file to write the list to. If this option is missing
+or file is
+.I "-"
+the list is printed to standard output.
+.TP
+.BI -f\  format \fR,\ \fB\-\-format= format
+The output format to use. Routinator currently supports the following formats:
+.RS
+.TP
+.B csv
+The list is formatted as lines of comma-separated values of the prefix in
+slash notation, the maximum prefix length, the autonomous system, and an
+abbreviation for the trust anchor the entry is derived from. The latter is
+the name of the TAL file without the extension
+.IR ".tal" .
+.IP
+This is the default format used if the
+.B -f
+option is missing.
+.TP
+.B json
+The list is placed into a JSON object with a single element
+.I "roas"
+which contains an array of objects with four elements each: The autonomous
+system number of the system authorized to originate a prefix in
+.IR "asn" ,
+the prefix in slash notation in
+.IR "prefix" ,
+the maximum prefix length of the announced route in
+.IR "maxLength" ,
+and the trust anchor from which the authorization was derived in
+.IR "ta" .
+This format is identical to that produced by the RIPE NCC validator except
+for different naming of the trust anchor. Routinator uses the name of the
+TAL file without the extension
+.IR ".tal"
+whereas the RIPE NCC Validator has a dedicated name for each.
+.TP
+.B openbgpd
+Choosing this format causes Routinator to produce a
+.I "roa-set"
+configuration item for the OpenBGPD configuration.
+.TP
+.B rpsl
+This format produces a list of RPSL objects with the authorization in the
+fields
+.IR route ,
+.IR origin ,
+and
+.IR source .
+In addition, the fields
+.IR descr ,
+.IR mnt-by ,
+.IR created ,
+and
+.IR last-modified ,
+are present with more or less meaningful values.
+.TP
+.B none
+This format produces no output whatsoever.
+.RE
+.TP
+.BR \-n ,\  \-\-noupdate
+The repository will not be updated before producing the list.
+
+.SS rtrd
+This command causes Routinator to act as a server for the RPKI-to-Router
+protocol (RTR). After a quick sanity check, it will detach from the
+terminal unless the
+.B -a
+option is given.
+.PP
+The server will periodically update the local repository, hourly by default,
+notify any clients of changes, and let them fetch validated data.
+.PP
+Routinator supports both protocol version 0 defined in RFC 6810 and version
+1 defined in RFC 8210. However, it does not support router keys introduced
+in version 1.
+.TP
+.BI \-l\ addr:port\fR, \ \-\-listen= addr:port
+Specifies the local address and port to listen on for incoming RTR
+connections. IPv6 addresses must be enclosed in square brackets. You can
+provide the option multiple times to let Routinator listen on multiple
+address-port pairs.
+.IP
+If this options is omitted, Routinator will listen on
+.BR 127.0.0.1:3323 .
+Note how this is a localhost address for security reasons. We also don't
+use the standard RTR port 323 as this is a privileged port that would
+require Routinator to be run as root or otherwise receive permission which
+otherwise isn't necessary at all.
+.TP
+.BI \-\-refresh= seconds
+The amount of seconds the server should wait after having finished updating
+and validating the local repository before starting to update again. The
+default value is 3600 seconds.
+.TP
+.BI \-\-retry= seconds
+The amount of seconds to suggest to an RTR client to wait before trying to
+request data again if that failed. The default value is 600 seconds, the
+value recommended in RFC 8210.
+.TP
+.BI \-\-expire= seconds
+The amount of seconds to an RTR client can keep using data if it cannot
+refresh it. After that time, the client should discard the data. Note that
+this value was introduced in version 1 of the RTR protocol and is thus not
+relevant for clients that only implement version 0. The default value, as
+recommended in RFC 8210, is 7200 seconds.
+.TP
+.BI \-\-history= count
+In RTR, a client can request to only receive the changes that happened since
+the last version of the data it had seen. This option sets how many change
+sets the server will at most keep. If a client requests changes from an older
+version, it will get the current full set.
+.IP
+Note that routers typically stay connected with their RTR server and therefore
+really only ever need one single change set. Additionally, if RTR server or
+router are restarted, they will have a new session with new change sets and
+need to exchange a full data set, too. Thus, increasing the value probably
+only ever increases memory consumption.
+.IP
+The default value is 10.
+
+.SS update
+Updates the local repository by resyncing all known publication points. The
+command will also validate the updated repository to discover any new
+publication points that appear in the repository and fetch their data.
+.PP
+As such, the command really a shortcut for running
+.B routinator vrps -f none\fR.
+
+.SS man
+Displays the manual page, i.e., this page.
+.TP
+.BI -o\  file \fR,\ \fB\-\-output= file
+If this option is provided, the manual page will be written to the given
+file instead of displaying it. Use
+.I "-"
+to output the manual page to standard output.
+
 
 .SH TRUST ANCHOR LOCATORS
 RPKI uses trust anchor locators, or TALs, to identify the location and
@@ -227,24 +362,161 @@ in this directory. This means that you can add and remove trust anchors by
 adding and removing files in this directory. If you add files, make sure they
 are in RFC 7730 format.
 
-.SH LOGGING
+.SH CONFIGURATION FILE
+Instead of providing all options on the command line, they can also be
+provided through a configuration file. Such a file can be selected through
+the
+.B -c
+option. If no configuration file is specified this way but a file named
+.I $HOME/.routinator.conf
+is present, this file is used.
+.PP
+The configuration file is a file in TOML format. In short, it consists of
+a sequence of key-value pairs, each on its own line. Strings are to be
+enclosed in double quotes. Lists can be given be enclosing a comma-separated
+list of values in square brackets.
+.PP
+The configuration file can contain the following entries. All path values
+are interpreted relative to the directory the configuration file is located.
+All values can be overwritten via the command line options.
+in.
+.TP
+.B repository-dir
+A string containing the path to the directory to store the local repository
+in. This entry is mandatory.
+.TP
+.B tal-dir
+A string containing the path to he directory that contains the Trust Anchor
+Locators. This entry is mandatory.
+.TP
+.B exceptions
+A list of strings, each containing the path to a file with locale exceptions.
+If missing, no local exception files are used.
+.TP
+.B strict
+A boolean specifying whether strict validation should be employed. If missing,
+strict validation will not be used.
+.TP
+.B rsync-count
+An integer value specifying the number of rsync commands that should at most
+be run in parallel. The default if this value is missing is 4 commands.
+.TP
+.B validation-threads
+An integer value specifying the number of threads to be used during
+validation of the repository. If this value is missing, the number of CPUs
+in the system is used.
+.TP
+.B log-level
+A string value specifying the maximum log level for which log messages should
+be emitted. The default is
+.IR warn .
+.TP
+.B log
+A string specifying where to send log messages to. This can be one of the
+following values:
+.RS
+.TP
+.I default
+Log messages will be sent to standard error if Routinator stays attached to
+the terminal or to syslog if it runs in daemon mode.
+.TP
+.I stderr
+Log messages will be sent to standard error.
+.TP
+.I syslog
+Log messages will be sent to syslog.
+.TP
+.I file
+Log messages will be sent to the file specified through the
+.B log-file
+configuration file entry.
+.RE
+.IP
+The default if this value is missing is, unsurprisingly,
+.IR default .
+.TP
+.B log-file
+A string value containing the path to a file to which log messages will be
+appended if the
+.B log
+configuration value is set to
+.IR file .
+In this case, the value is mandatory.
+.TP
+.B syslog-facility
+A string value specifying the syslog facility to use for logging to syslog.
+The default value if this entry is missing is
+.IR daemon .
+.TP
+.B refresh
+An integer value specifying the number of seconds Routinator should wait
+between consecutive validation runs in RTR server mode. The default is
+3600 seconds.
+.TP
+.B retry
+An integer value specifying the number of seconds an RTR client is requested
+to wait after it failed to receive a data set. The default is 600 seconds.
+.TP
+.B expire
+An integer value specifying the number of seconds an RTR client is requested
+to use a data set if it cannot get an update before throwing it away and
+continuing with no data at all. The default is 7200 seconds.
+if it cannot get an update before throwing it away and
+continuing with no data at all. The default is 7200 seconds.
+.TP
+.B history-size
+An integer value specifying how many change sets Routinator should keep in
+RTR server mode. The default is 10.
 
-Routinator uses four log levels to determine the severity of a message. The
-most severe level,
-.I error\fR,
-is used for situation where Routinator would produce no or invalid output.
-The level
-.I warn
-marks events that result in incomplete output. This happens for instance when
-Routinator cannot reach certain publication points or when TALs are invalid.
-.P
-Messages that let you follow along to see what Routinator is currently doing
-are output with log level
-.I info\fR. Additional messages that are likely to be only useful for
-developers have the level
-.I debug\fR.
+.SH RELAXED VALIDATION
+The documents defining RPKI include a number of very strict rules
+regarding the formatting of the objects published in the RPKI repository.
+However, because PRKI reuses existing technology, real-world applications
+produce objects that do not follow these strict requirements.
+.PP
+As a consequence, a significant portion of the RPKI repository is actually
+invalid if the rules are followed. We therefore introduce two validation
+modes: strict and relaxed. Strict mode rejects any object that does not
+pass all checks laid out by the relevant RFCs. Relaxed mode ignores a
+number of these checks.
+.PP
+This memo documents the violations we encountered and are dealing with in
+relaxed validation mode.
 
+.SS Resource Certificates (RFC 6487)
 
+Resource certificates are defined as a profile on the more general
+Internet PKI certificates defined in RFC 5280.
+
+.TP
+.B Subject and Issuer
+The RFC restricts the type used for CommonName attributes to
+PrintableString, allowing only a subset of ASCII characters, while RFC
+5280 allows a number of additional string types. At least one CA produces
+resource certificates with Utf8Strings.
+.IP
+In relaxed mode, we will only check that the general structure of the
+issuer and subject fields are correct and allow any number and types of
+attributes. This seems justified since RPKI explicitly does not use these
+fields.
+
+.SS Signed Objects (RFC 6488)
+Signed objects are defined as a profile on CMS messages defined in RFC
+5652.
+.TP
+.B DER Encoding
+RFC 6488 demands all signed objects to be DER encoded while the more
+general CMS format allows any BER encoding – DER is a stricter subset of
+the more general BER. At least one CA does indeed produce BER encoded
+signed objects.
+.IP
+In relaxed mode, we will allow BER encoding.
+.IP
+Note that this isn’t just nit-picking. In BER encoding, octet strings can
+be broken up into a sequence of sub-strings. Since those strings are in
+some places used to carry encoded content themselves, such an encoding
+does make parsing significantly more difficult. At least one CA does
+produce such broken-up strings.
 
 .SH AUTHOR
 .P
@@ -252,8 +524,5 @@ Jaap Akkerhuis wrote the original version of this manual page,
 Martin Hoffmann extended it for later versions.
 .SH "EXIT CODE"
 The Routinator program exits with status code 1 on error, 
-.SH "SEE ALSO"
-.P
-Reference manual (to be written).
 .SH BUGS
 Sure

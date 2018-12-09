@@ -1,14 +1,29 @@
 //! Configuration.
 
-use std::{env, fs, io, process};
-use std::io::Write;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::{env, fmt, fs, io};
+use std::io::{Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
+use fern;
 use log::LevelFilter;
+use syslog::Facility;
+use toml;
+use crate::operation::Error;
+use crate::repository::Repository;
+use crate::slurm::LocalExceptions;
+
+//------------ Defaults for Some Values --------------------------------------
+
+const DEFAULT_STRICT: bool = false;
+const DEFAULT_RSYNC_COUNT: usize = 4;
+const DEFAULT_REFRESH: u64 = 3600;
+const DEFAULT_RETRY: u64 = 600;
+const DEFAULT_EXPIRE: u64 = 7200;
+const DEFAULT_HISTORY_SIZE: usize = 10;
 
 
 //------------ Config --------------------------------------------------------
@@ -22,160 +37,172 @@ pub struct Config {
     /// Path to the directory that contains the trust anchor locators.
     pub tal_dir: PathBuf,
 
-    /// Path to the optional local exceptions file.
-    pub exceptions: Option<PathBuf>,
-
-    /// Expected mode of operation.
-    pub mode: RunMode,
-
-    /// Path to the output file.
-    ///
-    /// If this is `None`, we are supposed to output to stdout. 
-    pub output: Option<PathBuf>,
-
-    /// Format for output to a file.
-    pub outform: OutputFormat,
+    /// Paths to the local exceptions files.
+    pub exceptions: Vec<PathBuf>,
 
     /// Should we do strict validation?
     pub strict: bool,
 
-    /// Should we update the repository cache?
-    pub update: bool,
+    /// Number of parallel rsync commands.
+    pub rsync_count: usize,
 
-    /// Should we process the repository?
-    pub process: bool,
-
-    /// The log level filter for setting up logging.
-    pub verbose: LevelFilter,
+    /// Number of parallel validations.
+    pub validation_threads: usize,
 
     /// The refresh interval for repository validation.
     pub refresh: Duration,
 
+    /// The RTR retry inverval to be announced to a client.
     pub retry: Duration,
 
+    /// The RTR expire time to be announced to a client.
     pub expire: Duration,
 
     /// How many diffs to keep in the history.
     pub history_size: usize,
 
-    /// Addresses to listen for RTR connections on.
-    pub rtr_listen: Vec<SocketAddr>,
+    /// Addresses to listen for RTR TCP transport connections on.
+    pub tcp_listen: Vec<SocketAddr>,
+
+    /// The log levels to be logged.
+    pub log_level: LevelFilter,
+
+    /// Should we log to stderr?
+    pub log_target: LogTarget,
 }
 
 impl Config {
-    pub fn create() -> Self {
-        // Remember to update the man page if you change things here!
-        let matches = App::new("Routinator")
-            .version("0.1")
+    /// Creates a clap app that can parse the configuration.
+    pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+        app
+        .arg(Arg::with_name("config")
+             .short("c")
+             .long("config")
+             .takes_value(true)
+             .value_name("PATH")
+             .help("read base configuration from this file")
+        )
+        .arg(Arg::with_name("base-dir")
+             .short("b")
+             .long("base-dir")
+             .value_name("DIR")
+             .help("sets the base directory for cache and TALs")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("repository-dir")
+             .short("r")
+             .long("repository-dir")
+             .value_name("DIR")
+             .help("sets the repository cache directory")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("tal-dir")
+             .short("t")
+             .long("tal-dir")
+             .value_name("DIR")
+             .help("sets the TAL directory")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("exceptions")
+             .short("x")
+             .long("exceptions")
+             .value_name("FILE")
+             .help("file with local exceptions (see RFC 8416 for format)")
+             .takes_value(true)
+             .multiple(true)
+             .number_of_values(1)
+        )
+        .arg(Arg::with_name("strict")
+             .long("strict")
+             .help("parse RPKI data in strict mode")
+        )
+        .arg(Arg::with_name("rsync-count")
+             .long("rsync-count")
+             .value_name("COUNT")
+             .help("number of parallel rsync commands")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("validation-threads")
+             .long("validation-threads")
+             .value_name("COUNT")
+             .help("number of threads for validation")
+             .takes_value(true)
+        )
+        .arg(Arg::with_name("verbose")
+             .short("v")
+             .long("verbose")
+             .multiple(true)
+             .help("log more information, twice for even more")
+        )
+        .arg(Arg::with_name("quiet")
+             .short("q")
+             .long("quiet")
+             .multiple(true)
+             .conflicts_with("verbose")
+             .help("log less informatio, twice for no information")
+        )
+        .arg(Arg::with_name("syslog")
+             .long("syslog")
+             .help("log to syslog")
+        )
+        .arg(Arg::with_name("syslog-facility")
+             .long("syslog-facility")
+             .takes_value(true)
+             .default_value("daemon")
+             .help("facility to use for syslog logging")
+        )
+        .arg(Arg::with_name("logfile")
+             .long("logfile")
+             .takes_value(true)
+             .value_name("PATH")
+             .help("log to this file")
+        )
+    }
 
-            .author(crate_authors!())
-            .about("validates RPKI route origin attestations")
-            .arg(Arg::with_name("basedir")
-                 .short("b")
-                 .long("base-dir")
-                 .value_name("DIR")
-                 .help("sets the base directory for cache and TALs")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("cachedir")
-                 .short("c")
-                 .long("cache-dir")
-                 .value_name("DIR")
-                 .help("sets the cache directory")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("taldir")
-                 .short("t")
-                 .long("tal-dir")
-                 .value_name("DIR")
-                 .help("sets the TAL directory")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("exceptions")
-                 .short("x")
-                 .long("exceptions")
-                 .value_name("FILE")
-                 .help("file with local exceptions (see RFC 8416 for format)")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("daemon")
-                 .short("d")
-                 .long("daemon")
-                 .help("run in daemon mode (detach from terminal)")
-            )
-            .arg(Arg::with_name("repeat")
-                 .short("r")
-                 .long("repeat")
-                 .help("repeatedly run validation")
-            )
-            .arg(Arg::with_name("output")
-                 .short("o")
-                 .long("output")
-                 .value_name("FILE")
-                 .help("output file, '-' or not present for stdout")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("outform")
-                 .short("f")
-                 .long("outform")
-                 .value_name("FORMAT")
-                 .possible_values(&["csv", "json", "openbgpd", "rpsl", "none"])
-                 //.help("sets the output format (csv, json, openbgpd, rpsl, none)")
-                 .help("sets the output format")
-                 .takes_value(true)
-            )
-            .arg(Arg::with_name("listen")
-                 .short("l")
-                 .long("listen")
-                 .value_name("ADDR:PORT")
-                 .help("listen addr:port for RTR.")
-                 .takes_value(true)
-                 .multiple(true)
-            )
-            .arg(Arg::with_name("noupdate")
-                 .short("n")
-                 .long("noupdate")
-                 .help("don't update local cache")
-            )
-            .arg(Arg::with_name("noprocess")
-                 .short("N")
-                 .long("noprocess")
-                 .help("don't process the repository")
-            )
-            .arg(Arg::with_name("strict")
-                 .long("strict")
-                 .help("parse RPKI data in strict mode")
-            )
-            .arg(Arg::with_name("refresh")
-                 .long("refresh")
-                 .value_name("SECONDS")
-                 .default_value("3600")
-                 .help("refresh interval in seconds")
-            )
-            .arg(Arg::with_name("history_size")
-                 .long("history")
-                 .value_name("COUNT")
-                 .default_value("10")
-                 .help("number of history items to keep in repeat mode")
-            )
-            .arg(Arg::with_name("verbose")
-                 .short("v")
-                 .long("verbose")
-                 .multiple(true)
-                 .help("print more (and more) information")
-            )
-            .arg(Arg::with_name("man")
-                 .long("man")
-                 .help("print the man page to stdout")
-            )
-            .get_matches();
+    /// Adds the relevant config args to the rtrd subcommand.
+    ///
+    /// Some of the options in the config only makes sense to have for the
+    /// RTR daemon. Having them in the global part of the clap command line
+    /// is confusing, so we stick to defaults unless we actually run the
+    /// daemon. This function adds the relevant args to the subcommand.
+    pub fn rtrd_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+        app
+        .arg(Arg::with_name("refresh")
+             .long("refresh")
+             .value_name("SECONDS")
+             .default_value("3600")
+             .help("refresh interval in seconds")
+        )
+        .arg(Arg::with_name("retry")
+             .long("retry")
+             .value_name("SECONDS")
+             .default_value("600")
+             .help("RTR retry interval in seconds")
+        )
+        .arg(Arg::with_name("expire")
+             .long("expire")
+             .value_name("SECONDS")
+             .default_value("600")
+             .help("RTR expire interval in seconds")
+        )
+        .arg(Arg::with_name("history")
+             .long("history")
+             .value_name("COUNT")
+             .default_value("10")
+             .help("number of history items to keep in repeat mode")
+        )
+        .arg(Arg::with_name("listen")
+             .short("l")
+             .long("listen")
+             .value_name("ADDR:PORT")
+             .help("listen addr:port for RTR.")
+             .takes_value(true)
+             .multiple(true)
+             .number_of_values(1)
+        )
+    }
 
-        if matches.is_present("man") {
-            let stdout = io::stdout();
-            let _ = stdout.lock().write_all(MAN_PAGE);
-            process::exit(0);
-        }
-
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         let cur_dir = match env::current_dir() {
             Ok(dir) => dir,
             Err(err) => {
@@ -183,209 +210,835 @@ impl Config {
                     "Fatal: cannot get current directory ({}). Aborting.",
                     err
                 );
-                process::exit(1);
+                return Err(Error);
             }
         };
 
-        let listen = match matches.values_of("listen") {
-            Some(values) => {
-                let mut listen = Vec::new();
-                for val in values {
-                    match val.to_socket_addrs() {
-                        Ok(some) => listen.extend(some),
-                        Err(_) => {
-                            println!("Invalid socket address {}", val);
-                            process::exit(1);
-                        }
+        let mut res = Self::create_base_config(
+            Self::path_value_of(matches, "config", &cur_dir)
+                .as_ref().map(AsRef::as_ref)
+        )?;
+
+        res.apply_arg_matches(matches, &cur_dir)?;
+
+        Ok(res)
+    }
+
+    fn apply_arg_matches(
+        &mut self,
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<(), Error> {
+        // cache_dir
+        if let Some(dir) = matches.value_of("repository-dir") {
+            self.cache_dir = cur_dir.join(dir)
+        }
+        else if let Some(dir) = matches.value_of("base-dir") {
+            self.cache_dir = cur_dir.join(dir).join("repository")
+        }
+
+        // tal_dir
+        if let Some(dir) = matches.value_of("tal-dir") {
+            self.tal_dir = cur_dir.join(dir)
+        }
+        else if let Some(dir) = matches.value_of("base-dir") {
+            self.tal_dir = cur_dir.join(dir).join("tals")
+        }
+
+        // expceptions
+        if let Some(list) = matches.values_of("exceptions") {
+            self.exceptions = list.map(|path| cur_dir.join(path)).collect()
+        }
+
+        // strict
+        if matches.is_present("strict") {
+            self.strict = true
+        }
+
+        // rsync_count
+        if let Some(value) = from_str_value_of(matches, "rsync-count")? {
+            self.rsync_count = value
+        }
+
+        // validation_threads
+        if let Some(value) = from_str_value_of(matches, "validation-threads")? {
+            self.validation_threads = value
+        }
+
+        // log_level
+        match (matches.occurrences_of("verbose"),
+                                            matches.occurrences_of("quiet")) {
+            // This assumes that -v and -q are conflicting.
+            (0, 0) => { }
+            (1, 0) => self.log_level = LevelFilter::Info,
+            (_, 0) => self.log_level = LevelFilter::Debug,
+            (0, 1) => self.log_level = LevelFilter::Error,
+            (0, _) => self.log_level = LevelFilter::Off,
+            _ => { }
+        }
+
+        // log_target
+        if matches.is_present("syslog") {
+            self.log_target = LogTarget::Syslog(
+                match Facility::from_str(
+                               matches.value_of("syslog-facility").unwrap()) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        println!("Invalid value for syslog-facility.");
+                        return Err(Error);
                     }
                 }
-                listen
-            }
-            None => {
-                "127.0.0.1:3323".to_socket_addrs().unwrap().collect()
-            }
-        };
-
-        let (cache_dir, tal_dir) = Self::prepare_dirs(&matches, &cur_dir);
-
-        Config {
-            cache_dir,
-            tal_dir,
-            exceptions: matches.value_of("exceptions").map(|path| {
-                cur_dir.join(path)
-            }),
-            mode: if matches.is_present("daemon") {
-                RunMode::Daemon
-            }
-            else if matches.is_present("repeat") {
-                RunMode::Repeat
+            )
+        }
+        else if let Some(file) = matches.value_of("logfile") {
+            if file == "-" {
+                self.log_target = LogTarget::Stderr
             }
             else {
-                RunMode::Once
-            },
-            output: match matches.value_of("output") {
-                None | Some("-") => None,
-                Some(path) => Some(cur_dir.join(path)),
-            },
-            outform: match matches.value_of("outform") {
-                Some("csv") => OutputFormat::Csv,
-                Some("json") => OutputFormat::Json,
-                Some("openbgpd") => OutputFormat::Openbgpd,
-                Some("rpsl") => OutputFormat::Rpsl,
-                Some("none") => OutputFormat::None,
-                Some(_) => {
-                    // This should be covered by clap above.
-                    unreachable!();
-                }
-                None => OutputFormat::Csv,
-            },
-            strict: matches.is_present("strict"),
-            update: !matches.is_present("noupdate"),
-            process: !matches.is_present("noprocess"),
-            verbose: match matches.occurrences_of("verbose") {
-                0 => LevelFilter::Error,
-                1 => LevelFilter::Info,
-                _ => LevelFilter::Debug,
-            },
-            refresh: {
-                let value = matches.value_of("refresh").unwrap();
-                match u64::from_str(value) {
-                    Ok(some) => Duration::from_secs(some),
+                self.log_target = LogTarget::File(cur_dir.join(file))
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_rtrd_arg_matches(
+        &mut self,
+        matches: &ArgMatches
+    ) -> Result<(), Error> {
+        // refresh
+        if let Some(value) = from_str_value_of(matches, "refresh")? {
+            self.refresh = Duration::from_secs(value)
+        }
+
+        // retry
+        if let Some(value) = from_str_value_of(matches, "retry")? {
+            self.retry = Duration::from_secs(value)
+        }
+
+        // expire
+        if let Some(value) = from_str_value_of(matches, "expire")? {
+            self.expire = Duration::from_secs(value)
+        }
+
+        // history_size
+        if let Some(value) = from_str_value_of(matches, "history")? {
+            self.history_size = value
+        }
+
+        // tcp_listen
+        if let Some(list) = matches.values_of("listen") {
+            self.tcp_listen = Vec::new();
+            for value in list.into_iter() {
+                match SocketAddr::from_str(value) {
+                    Ok(some) => self.tcp_listen.push(some),
                     Err(_) => {
-                        error!(
-                            "Invalid value '{}' for refresh argument.\
-                             Needs to be number of seconds.",
-                            value
-                        );
-                        process::exit(1);
+                        println!("Invalid value for listen: {}", value);
+                        return Err(Error);
                     }
                 }
-            },
-            retry: Duration::from_secs(600),
-            expire: Duration::from_secs(7200),
-            history_size: {
-                let value = matches.value_of("refresh").unwrap();
-                match usize::from_str(value) {
-                    Ok(some) => some,
-                    Err(_) => {
-                        error!(
-                            "Invalid value '{}' for refresh argument.\
-                             Needs to be number of seconds.",
-                            value
-                        );
-                        process::exit(1);
-                    }
-                }
-            },
-            rtr_listen: listen,
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Creates and returns the repository for this configuration.
+    ///
+    /// If `update` is `false`, all updates in the respository are disabled.
+    ///
+    /// If any errors happen, the method will print (!) an error message.
+    pub fn create_repository(
+        &self,
+        update: bool
+    ) -> Result<Repository, Error> {
+        self.prepare_dirs()?;
+        Repository::new(self, update).map_err(|err| {
+            println!("{}", err);
+            Error
+        })
+    }
+
+    /// Loads the local exceptions for this configuration.
+    ///
+    /// If any errors happen, the method will print (!) an error message.
+    pub fn load_exceptions(&self) -> Result<LocalExceptions, Error> {
+        let mut res = LocalExceptions::empty();
+        let mut ok = true;
+        for path in &self.exceptions {
+            if let Err(err) = res.extend_from_file(path) {
+                println!(
+                    "Failed to load exceptions file {}: {}",
+                    path.display(), err
+                );
+                ok = false;
+            }
+        }
+        if ok {
+            Ok(res)
+        }
+        else {
+            Err(Error)
         }
     }
 
-    /// Prepares and returns the cache dir and tal dir.
-    fn prepare_dirs(
+    /// Switches logging to the configured target.
+    ///
+    /// If `daemon` is `true`, the default target is syslog, otherwise it is
+    /// stderr.
+    pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
+        match self.log_target {
+            LogTarget::Default(fac) if daemon => {
+                if let Err(err) = syslog::init(fac, self.log_level, None) {
+                    println!("Failed to init syslog: {}", err);
+                    return Err(Error)
+                }
+            }
+            LogTarget::Syslog(fac) => {
+                if let Err(err) = syslog::init(fac, self.log_level, None) {
+                    println!("Failed to init syslog: {}", err);
+                    return Err(Error)
+                }
+            }
+            LogTarget::Stderr | LogTarget::Default(_) => {
+                let dispatch = fern::Dispatch::new()
+                    .level(self.log_level)
+                    .chain(io::stderr());
+                if let Err(err) = dispatch.apply() {
+                    println!("Failed to init stderr logging: {}", err);
+                    return Err(Error)
+                }
+            }
+            LogTarget::File(ref path) => {
+                let file = match fern::log_file(path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        println!(
+                            "Failed to open log file '{}': {}",
+                            path.display(), err
+                        );
+                        return Err(Error)
+                    }
+                };
+                let dispatch = fern::Dispatch::new()
+                    .level(self.log_level)
+                    .chain(file);
+                if let Err(err) = dispatch.apply() {
+                    println!("Failed to init file logging: {}", err);
+                    return Err(Error)
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns a path value in arg matches.
+    ///
+    /// This expands a relative path based on the given directory.
+    fn path_value_of(
         matches: &ArgMatches,
-        cur_dir: &Path
-    ) -> (PathBuf, PathBuf) {
-        let base_dir = match matches.value_of("basedir") {
-            Some(dir) => Some(cur_dir.join(dir)),
-            None => match home_dir() {
-                Some(dir) => Some(dir.join(".rpki-cache")),
-                None => None,
+        key: &str,
+        dir: &Path
+    ) -> Option<PathBuf> {
+        matches.value_of(key).map(|path| dir.join(path))
+    }
+
+    /// Creates the correct base configuration for the given config file.
+    /// 
+    /// If no config path is given, tries to read the default config in
+    /// `$HOME/.routinator.toml`. If that doesn’t exist, creates a default
+    /// config.
+    fn create_base_config(path: Option<&Path>) -> Result<Self, Error> {
+        let file = match path {
+            Some(path) => {
+                match ConfigFile::read(&path)? {
+                    Some(file) => file,
+                    None => {
+                        println!("Cannot read config file {}", path.display());
+                        return Err(Error);
+                    }
+                }
             }
-        };
-        let cache_dir = match matches.value_of("cachedir") {
-            Some(dir) => cur_dir.join(dir),
-            None => match base_dir {
-                Some(ref dir) => dir.join("repository"),
-                None => {
-                    println!("Can't determine default working directory. \
-                              Please use the -b option.\nAborting.");
-                    process::exit(1)
+            None => {
+                match home_dir() {
+                    Some(dir) => match ConfigFile::read(
+                                            &dir.join(".routinator.toml"))? {
+                        Some(file) => file,
+                        None => return Self::default(),
+                    }
+                    None => return Self::default()
                 }
             }
         };
-        let tal_dir = match matches.value_of("taldir") {
-            Some(dir) => cur_dir.join(dir),
-            None => match base_dir {
-                Some(ref dir) => dir.join("tals"),
-                None => {
-                    println!("Can't determine default working directory. \
-                              Please use the -b option.\nAborting.");
-                    process::exit(1)
-                }
+        Self::from_config_file(file)
+    }
+
+    /// Creates a base config from a config file.
+    fn from_config_file(mut file: ConfigFile) -> Result<Self, Error> {
+        let facility = file.take_string("syslog-facility")?;
+        let facility = facility.as_ref().map(AsRef::as_ref).unwrap_or("daemon");
+        let facility = match Facility::from_str(facility) {
+            Ok(value) => value,
+            Err(_) => {
+                println!(
+                    "Error in config file {}: \
+                     invalid syslog-facility.",
+                     file.path.display()
+                );
+                return Err(Error);
+            }
+        };
+        let log_target = file.take_string("log")?;
+        let log_file = file.take_path("log-file")?;
+        let log_target = match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | None => LogTarget::Default(facility),
+            Some("syslog") => LogTarget::Syslog(facility),
+            Some("stderr") =>  LogTarget::Stderr,
+            Some("file") => {
+                LogTarget::File(match log_file {
+                    Some(file) => file,
+                    None => {
+                        println!(
+                            "Error in config file {}: \
+                             log target \"file\" requires 'log-file' value.",
+                             file.path.display()
+                        );
+                        return Err(Error);
+                    }
+                })
+            }
+            Some(value) => {
+                println!(
+                    "Error in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                return Err(Error);
             }
         };
 
-        if let Err(err) = fs::create_dir_all(&cache_dir) {
+        let res = Config {
+            cache_dir: file.take_mandatory_path("repository-dir")?,
+            tal_dir: file.take_mandatory_path("tal-dir")?,
+            exceptions: file.take_path_array("exceptions")?,
+            strict: file.take_bool("strict")?.unwrap_or(false),
+            rsync_count: {
+                file.take_usize("rsync-count")?.unwrap_or(DEFAULT_RSYNC_COUNT)
+            },
+            validation_threads: {
+                file.take_usize("validation-threads")?
+                    .unwrap_or(::num_cpus::get())
+            },
+            refresh: {
+                Duration::from_secs(
+                    file.take_u64("refresh")?.unwrap_or(DEFAULT_REFRESH)
+                )
+            },
+            retry: {
+                Duration::from_secs(
+                    file.take_u64("retry")?.unwrap_or(DEFAULT_REFRESH)
+                )
+            },
+            expire: {
+                Duration::from_secs(
+                    file.take_u64("expire")?.unwrap_or(DEFAULT_REFRESH)
+                )
+            },
+            history_size: {
+                file.take_usize("history-size")?
+                    .unwrap_or(DEFAULT_HISTORY_SIZE)
+            },
+            tcp_listen: file.take_from_str_array("listen-tcp")?,
+            log_level: {
+                file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
+            },
+            log_target
+        };
+        file.check_exhausted()?;
+        Ok(res)
+    }
+
+    /// Creates a default config with the given paths.
+    fn default_with_paths(cache_dir: PathBuf, tal_dir: PathBuf) -> Self {
+        Config {
+            cache_dir,
+            tal_dir,
+            exceptions: Vec::new(),
+            strict: DEFAULT_STRICT,
+            rsync_count: DEFAULT_RSYNC_COUNT,
+            validation_threads: ::num_cpus::get(),
+            refresh: Duration::from_secs(DEFAULT_REFRESH),
+            retry: Duration::from_secs(DEFAULT_RETRY),
+            expire: Duration::from_secs(DEFAULT_EXPIRE),
+            history_size: DEFAULT_HISTORY_SIZE,
+            tcp_listen: vec![
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
+            ],
+            log_level: LevelFilter::Warn,
+            log_target: LogTarget::Default(Facility::LOG_DAEMON),
+        }
+    }
+
+
+    /// Prepares and returns the cache dir and tal dir.
+    fn prepare_dirs(&self) -> Result<(), Error> {
+        if let Err(err) = fs::create_dir_all(&self.cache_dir) {
             println!(
                 "Can't create repository directory {}: {}.\nAborting.",
-                cache_dir.display(), err
+                self.cache_dir.display(), err
             );
-            process::exit(1);
+            return Err(Error);
         }
-        if fs::read_dir(&tal_dir).is_err() {
-            if let Err(err) = fs::create_dir_all(&tal_dir) {
+        if fs::read_dir(&self.tal_dir).is_err() {
+            if let Err(err) = fs::create_dir_all(&self.tal_dir) {
                 println!(
                     "Can't create TAL directory {}: {}.\nAborting.",
-                    tal_dir.display(), err
+                    self.tal_dir.display(), err
                 );
-                process::exit(1);
+                return Err(Error);
             }
             for (name, content) in &DEFAULT_TALS {
-                let mut file = match fs::File::create(tal_dir.join(name)) {
+                let mut file = match fs::File::create(self.tal_dir.join(name)) {
                     Ok(file) => file,
                     Err(err) => {
                         println!(
                             "Can't create TAL file {}: {}.\n Aborting.",
-                            tal_dir.join(name).display(), err
+                            self.tal_dir.join(name).display(), err
                         );
-                        process::exit(1);
+                        return Err(Error);
                     }
                 };
                 if let Err(err) = file.write_all(content) {
                     println!(
                         "Can't create TAL file {}: {}.\n Aborting.",
-                        tal_dir.join(name).display(), err
+                        self.tal_dir.join(name).display(), err
                     );
-                    process::exit(1);
+                    return Err(Error);
                 }
             }
         }
+        Ok(())
+    }
 
-        (cache_dir, tal_dir)
+    fn default() -> Result<Self, Error> {
+        let base_dir = match home_dir() {
+            Some(dir) => dir.join(".rpki-cache"),
+            None => {
+                println!(
+                    "Cannot determine default directories \
+                    (no home directory). Please specify \
+                    explicitely."
+                );
+                return Err(Error);
+            }
+        };
+        Ok(Config::default_with_paths(
+            base_dir.join("repository"), 
+            base_dir.join("tals")
+        ))
     }
 }
 
 
-//------------ RunMode -------------------------------------------------------
+//------------ LogTarget -----------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RunMode {
-    Once,
-    Repeat,
-    Daemon,
+/// The target to log to.
+#[derive(Clone, Debug)]
+pub enum LogTarget {
+    /// Default.
+    ///
+    /// Logs to `Syslog(facility)` in daemon mode and `Stderr` otherwise.
+    Default(Facility),
+
+    /// Syslog.
+    ///
+    /// The argument is the syslog facility to use.
+    Syslog(Facility),
+
+    /// Stderr.
+    Stderr,
+
+    /// A file.
+    ///
+    /// The argument is the file name.
+    File(PathBuf)
 }
 
-impl RunMode {
-    pub fn is_once(self) -> bool {
-        self == RunMode::Once
-    }
-
-    pub fn is_daemon(self) -> bool {
-        self == RunMode::Daemon
+impl PartialEq for LogTarget {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (&LogTarget::Default(s), &LogTarget::Default(o)) => {
+                (s as usize) == (o as usize)
+            }
+            (&LogTarget::Syslog(s), &LogTarget::Syslog(o)) => {
+                (s as usize) == (o as usize)
+            }
+            (&LogTarget::Stderr, &LogTarget::Stderr) => true,
+            (&LogTarget::File(ref s), &LogTarget::File(ref o)) => {
+                s == o
+            }
+            _ => false
+        }
     }
 }
 
 
-//------------ OutputFormat --------------------------------------------------
+//------------ ConfigFile ----------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
-pub enum OutputFormat {
-    Csv,
-    Json,
-    Openbgpd,
-    Rpsl,
-    None,
+/// The content of a config file.
+///
+/// This is a thin wrapper around `toml::Table` to make dealing with it more
+/// convenient.
+#[derive(Clone, Debug)]
+struct ConfigFile {
+    /// The content of the file.
+    content: toml::value::Table,
+
+    /// The path to the config file.
+    path: PathBuf,
+
+    /// The directory we found the file in.
+    ///
+    /// This is used in relative paths.
+    dir: PathBuf,
+}
+
+impl ConfigFile {
+    /// Reads the config file at the given path.
+    ///
+    /// If there is no such file, returns `None`. If there is a file but it
+    /// is broken, aborts.
+    fn read(path: &Path) -> Result<Option<Self>, Error> {
+        let mut file = match fs::File::open(path) {
+            Ok(file) => file,
+            Err(_) => return Ok(None)
+        };
+        let mut config = String::new();
+        if let Err(err) = file.read_to_string(&mut config) {
+            println!(
+                "Failed to read config file {}: {}",
+                path.display(), err
+            );
+            return Err(Error);
+        }
+        Self::parse(&config, path).map(Some)
+    }
+
+    /// Parses the content of the file from a string.
+    fn parse(content: &str, path: &Path) -> Result<Self, Error> {
+        let content = match toml::from_str(content) {
+            Ok(toml::Value::Table(content)) => content,
+            Ok(_) => {
+                println!(
+                    "Failed to parse config file {}: Not a mapping.",
+                    path.display()
+                );
+                return Err(Error);
+            }
+            Err(err) => {
+                println!(
+                    "Failed to parse config file {}: {}",
+                    path.display(), err
+                );
+                return Err(Error);
+            }
+        };
+        let dir = if path.is_relative() {
+            path.join(match env::current_dir() {
+                Ok(dir) => dir,
+                Err(err) => {
+                    println!(
+                        "Fatal: Can't determine current directory: {}.",
+                        err
+                    );
+                    return Err(Error);
+                }
+            }).parent().unwrap().into() // a file always has a parent
+        }
+        else {
+            path.parent().unwrap().into()
+        };
+        Ok(ConfigFile {
+            content,
+            path: path.into(),
+            dir: dir
+        })
+    }
+
+    fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Boolean(res) = value {
+                    Ok(Some(res))
+                }
+                else {
+                    println!(
+                        "Error in config file {}: '{}' expected to be a boolean.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+    
+    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    if res < 0 {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else {
+                        Ok(Some(res as u64))
+                    }
+                }
+                else {
+                    println!(
+                        "Error in config file {}: \
+                         '{}' expected to be an integer.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    if res < 0 {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else if is_large_i64(res) {
+                        println!(
+                            "Error in config file {}: \
+                            value for '{}' is too large.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                    else {
+                        Ok(Some(res as usize))
+                    }
+                }
+                else {
+                    println!(
+                        "Error in config file {}: \
+                         '{}' expected to be a integer.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn take_string(&mut self, key: &str) -> Result<Option<String>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::String(res) = value {
+                    Ok(Some(res))
+                }
+                else {
+                    println!(
+                        "Error in config file {}: \
+                         '{}' expected to be a string.",
+                        self.path.display(), key
+                    );
+                    Err(Error)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn take_from_str<T>(&mut self, key: &str) -> Result<Option<T>, Error>
+    where T: FromStr, T::Err: fmt::Display {
+        match self.take_string(key)? {
+            Some(value) => {
+                match T::from_str(&value) {
+                    Ok(some) => Ok(Some(some)),
+                    Err(err) => {
+                        println!(
+                            "Error in config file {}: \
+                             illegal value in '{}': {}.",
+                            self.path.display(), key, err
+                        );
+                        Err(Error)
+                    }
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn take_path(&mut self, key: &str) -> Result<Option<PathBuf>, Error> {
+        self.take_string(key).map(|opt| opt.map(|path| self.dir.join(path)))
+    }
+
+    fn take_mandatory_path(&mut self, key: &str) -> Result<PathBuf, Error> {
+        match self.take_path(key)? {
+            Some(res) => Ok(res),
+            None => {
+                println!(
+                    "Error in config file {}: missing required '{}'.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+        }
+    }
+
+    fn take_path_array(&mut self, key: &str) -> Result<Vec<PathBuf>, Error> {
+        match self.content.remove(key) {
+            Some(::toml::Value::Array(vec)) => {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
+                    if let ::toml::Value::String(value) = value {
+                        res.push(self.dir.join(value))
+                    }
+                    else {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a array of paths.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error);
+                    }
+                }
+                Ok(res)
+            }
+            Some(_) => {
+                println!(
+                    "Error in config file {}: \
+                     '{}' expected to be a array of paths.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+            None => Ok(Vec::new())
+        }
+    }
+
+    fn take_from_str_array<T>(&mut self, key: &str) -> Result<Vec<T>, Error>
+    where T: FromStr, T::Err: fmt::Display {
+        match self.content.remove(key) {
+            Some(::toml::Value::Array(vec)) => {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
+                    if let ::toml::Value::String(value) = value {
+                        match T::from_str(&value) {
+                            Ok(value) => res.push(value),
+                            Err(err) => {
+                                println!(
+                                    "Error in config file {}: \
+                                     Invalid value in '{}': {}",
+                                    self.path.display(), key, err
+                                );
+                                return Err(Error)
+                            }
+                        }
+                    }
+                    else {
+                        println!(
+                            "Error in config file {}: \
+                            '{}' expected to be a array of strings.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error)
+                    }
+                }
+                Ok(res)
+            }
+            Some(_) => {
+                println!(
+                    "Error in config file {}: \
+                     '{}' expected to be a array of strings.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+            None => Ok(Vec::new())
+        }
+    }
+
+    fn check_exhausted(&self) -> Result<(), Error> {
+        if !self.content.is_empty() {
+            print!(
+                "Error in config file {}: Unknown settings ",
+                self.path.display()
+            );
+            let mut first = true;
+            for key in self.content.keys() {
+                if !first {
+                    print!(",");
+                }
+                else {
+                    first = false
+                }
+                print!("{}", key);
+            }
+            println!(".");
+            Err(Error)
+        }
+        else {
+            Ok(())
+        }
+    }
+}
+
+
+//------------ Helpers -------------------------------------------------------
+
+fn from_str_value_of<T>(
+    matches: &ArgMatches,
+    key: &str
+) -> Result<Option<T>, Error>
+where T: FromStr, T::Err: fmt::Display {
+    match matches.value_of(key) {
+        Some(value) => {
+            match T::from_str(value) {
+                Ok(value) => Ok(Some(value)),
+                Err(err) => {
+                    println!(
+                        "Invalid value for {}: {}.", 
+                        key, err
+                    );
+                    Err(Error)
+                }
+            }
+        }
+        None => Ok(None)
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+fn is_large_i64(x: i64) -> bool {
+    res > ::std::usize::MAX as i64
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+fn is_large_i64(_: i64) -> bool {
+    false
 }
 
 
@@ -400,7 +1053,181 @@ const DEFAULT_TALS: [(&str, &[u8]); 5] = [
 ];
 
 
-//------------ The Man Page --------------------------------------------------
+//============ Tests =========================================================
 
-const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn get_default_config() -> Config {
+        // Set $HOME so that home_dir always succeeds.
+        ::std::env::set_var("HOME", "/home/test");
+        Config::default().unwrap()
+    }
+
+    fn process_basic_args(args: &[&str]) -> Config {
+        let mut config = get_default_config();
+        config.apply_arg_matches(
+            &Config::config_args(App::new("routinator"))
+                .get_matches_from_safe(args).unwrap(),
+            Path::new("/test")
+        ).unwrap();
+        config
+    }
+
+    fn process_rtrd_args(args: &[&str]) -> Config {
+        let mut config = get_default_config();
+        let matches = Config::rtrd_args(Config::config_args(
+                App::new("routinator"))
+        ).get_matches_from_safe(args).unwrap();
+        config.apply_arg_matches(&matches, Path::new("/test")).unwrap();
+        config.apply_rtrd_arg_matches(&matches).unwrap();
+        config
+    }
+
+    #[test]
+    fn default_config() {
+        let config = get_default_config();
+        assert_eq!(
+            config.cache_dir,
+            home_dir().unwrap().join(".rpki-cache").join("repository")
+        );
+        assert_eq!(
+            config.tal_dir,
+            home_dir().unwrap().join(".rpki-cache").join("tals")
+        );
+        assert!(config.exceptions.is_empty());
+        assert_eq!(config.strict, DEFAULT_STRICT);
+        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
+        assert_eq!(config.validation_threads, ::num_cpus::get());
+        assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
+        assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
+        assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
+        assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
+        assert_eq!(
+            config.tcp_listen,
+            vec![SocketAddr::from_str("127.0.0.1:3323").unwrap()]
+        );
+        assert_eq!(config.log_level, LevelFilter::Warn);
+        assert_eq!(config.log_target, LogTarget::Default(Facility::LOG_DAEMON));
+    }
+
+    #[test]
+    fn good_file_config() {
+        let config = ConfigFile::parse(
+            "repository-dir = \"/repodir\"\n\
+             tal-dir = \"taldir\"\n\
+             exceptions = [\"ex1\", \"/ex2\"]\n\
+             strict = true\n\
+             rsync-count = 12\n\
+             validation-threads = 1000000\n\
+             refresh = 6\n\
+             retry = 7\n\
+             expire = 8\n\
+             history-size = 5000\n\
+             listen-tcp = [\"[2001:db8::4]:323\", \"192.0.2.4:323\"]\n\
+             log-level = \"info\"\n\
+             log = \"file\"\n\
+             log-file = \"foo.log\"",
+            &Path::new("/test/routinator.conf")
+        ).unwrap();
+        let config = Config::from_config_file(config).unwrap();
+        assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
+        assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
+        assert_eq!(
+            config.exceptions,
+            vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
+        );
+        assert_eq!(config.strict, true);
+        assert_eq!(config.rsync_count, 12);
+        assert_eq!(config.validation_threads, 1000000);
+        assert_eq!(config.refresh, Duration::from_secs(6));
+        assert_eq!(config.retry, Duration::from_secs(7));
+        assert_eq!(config.expire, Duration::from_secs(8));
+        assert_eq!(config.history_size, 5000);
+        assert_eq!(
+            config.tcp_listen,
+            vec![
+                SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
+                SocketAddr::from_str("192.0.2.4:323").unwrap(),
+            ]
+        );
+        assert_eq!(config.log_level, LevelFilter::Info);
+        assert_eq!(
+            config.log_target,
+            LogTarget::File(PathBuf::from("/test/foo.log"))
+        );
+    }
+
+    #[test]
+    fn bad_config_file() {
+        let config = ConfigFile::parse(
+            "", Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+        let config = ConfigFile::parse(
+            "repository-dir=\"bla\"",
+            Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+        let config = ConfigFile::parse(
+            "tal-dir=\"bla\"",
+            Path::new("/test/routinator.conf")
+        ).unwrap();
+        assert!(Config::from_config_file(config).is_err());
+    }
+
+    #[test]
+    fn basic_args() {
+        let config = process_basic_args(&[
+            "routinator", "-r", "/repository", "-t", "tals",
+            "-x", "/x1", "--exceptions", "x2", "--strict",
+            "--rsync-count", "1000", "--validation-threads", "2000",
+            "--syslog", "--syslog-facility", "auth"
+        ]);
+        assert_eq!(config.cache_dir, Path::new("/repository"));
+        assert_eq!(config.tal_dir, Path::new("/test/tals"));
+        assert_eq!(
+            config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
+        );
+        assert_eq!(config.strict, true);
+        assert_eq!(config.rsync_count, 1000);
+        assert_eq!(config.validation_threads, 2000);
+        assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
+    }
+
+    #[test]
+    fn verbosity() {
+        let config = process_basic_args(&["routinator"]);
+        assert_eq!(config.log_level, LevelFilter::Warn);
+        let config = process_basic_args(&["routinator", "-v"]);
+        assert_eq!(config.log_level, LevelFilter::Info);
+        let config = process_basic_args(&["routinator", "-vv"]);
+        assert_eq!(config.log_level, LevelFilter::Debug);
+        let config = process_basic_args(&["routinator", "-q"]);
+        assert_eq!(config.log_level, LevelFilter::Error);
+        let config = process_basic_args(&["routinator", "-qq"]);
+        assert_eq!(config.log_level, LevelFilter::Off);
+    }
+
+    #[test]
+    fn rtrd_args() {
+        let config = process_rtrd_args(&[
+            "routinator", "--refresh", "7", "--retry", "8", "--expire", "9",
+            "--history", "1000", "-l", "[2001:db8::4]:323",
+            "--listen", "192.0.2.4:323"
+        ]);
+        assert_eq!(config.refresh, Duration::from_secs(7));
+        assert_eq!(config.retry, Duration::from_secs(8));
+        assert_eq!(config.expire, Duration::from_secs(9));
+        assert_eq!(config.history_size, 1000);
+        assert_eq!(
+            config.tcp_listen,
+            vec![
+                SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
+                SocketAddr::from_str("192.0.2.4:323").unwrap(),
+            ]
+        );
+    }
+}
 

@@ -10,7 +10,7 @@ use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use ::config::Config;
 use ::origins::OriginsHistory;
-use super::send::Sender;
+use super::send::{Sender, Timing};
 use super::query::{Input, InputStream, Query};
 use super::notify::{Dispatch, NotifyReceiver, NotifySender};
 
@@ -19,16 +19,17 @@ use super::notify::{Dispatch, NotifyReceiver, NotifySender};
 
 pub fn rtr_listener(
     history: OriginsHistory,
-    config: &'static Config,
+    config: &Config,
 ) -> (NotifySender, impl Future<Item=(), Error=()>) {
     let session = session_id();
     let (dispatch, dispatch_fut) = Dispatch::new();
+    let timing = Timing::new(config);
     let fut = dispatch_fut.select(
         future::select_all(
-            config.rtr_listen.iter().map(|addr| {
+            config.tcp_listen.iter().map(|addr| {
                 single_listener(
                     *addr, session, history.clone(),
-                    dispatch.clone(), config
+                    dispatch.clone(), timing
                 )
             })
         ).then(|_| Ok(()))
@@ -47,7 +48,7 @@ fn single_listener(
     session: u16,
     history: OriginsHistory,
     mut dispatch: Dispatch,
-    config: &'static Config,
+    timing: Timing,
 ) -> impl Future<Item=(), Error=()> {
     TcpListener::bind(&addr).into_future()
     .map_err(move |err| error!("Failed to bind RTR listener {}: {}", addr, err))
@@ -59,7 +60,7 @@ fn single_listener(
             tokio::spawn(
                 Connection::new(
                     sock, session, history.clone(), notify,
-                    config
+                    timing,
                 )
             )
         })
@@ -74,7 +75,7 @@ struct Connection {
     output: OutputState,
     session: u16,
     history: OriginsHistory,
-    config: &'static Config,
+    timing: Timing,
 }
 
 enum OutputState {
@@ -89,13 +90,13 @@ impl Connection {
         session: u16,
         history: OriginsHistory,
         notify: NotifyReceiver,
-        config: &'static Config,
+        timing: Timing,
     ) -> Self {
         let (read, write) = sock.split();
         Connection {
             input: InputStream::new(read, notify),
             output: OutputState::Idle(write),
-            session, history, config
+            session, history, timing
         }
     }
 
@@ -114,7 +115,7 @@ impl Connection {
                     Some(diff) => {
                         Sender::diff(
                             sock, self.input.version(), session, diff,
-                            self.config
+                            self.timing
                         ) 
                     }
                     None => {
@@ -126,7 +127,7 @@ impl Connection {
                 let (current, serial) = self.history.current_and_serial();
                 Sender::full(
                     sock, self.input.version(), self.session, serial, current,
-                    self.config
+                    self.timing
                 )
             }
             Input::Query(Query::Error(err)) => Sender::error(sock, err),

@@ -11,6 +11,7 @@ from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
 
+
 ## Quick Start
 
 Assuming you have rsync and the C toolchain but not yet Rust, here’s how
@@ -21,7 +22,7 @@ you get the Routinator to run as an RTR server listening on 127.0.0.1 port
 curl https://sh.rustup.rs -sSf | sh
 source ~/.cargo/env
 cargo install routinator
-routinator -r -l 127.0.0.1:3323
+routinator rtrd -al 127.0.0.1:3323
 ```
 
 If you have an older version of the Routinator, you can update via
@@ -29,6 +30,7 @@ If you have an older version of the Routinator, you can update via
 ```bash
 cargo install -f routinator
 ```
+
 
 ## Quick Start with Docker
 
@@ -156,10 +158,21 @@ version.
 
 The command will build Routinator and install it in the same directory
 that cargo itself lives in (likely `$HOME/.cargo/bin`).
-Which means that you can run routinator simply as:
+Which means Routinator will be in your path, too.
+
+There are currently two major functions of the Routinator: printing the
+list of valid route origins, also known as _Validated ROA Payload_ or VRP,
+and providing the service for routers to access this list via a protocol
+known as RPKI-to-Router protocol or RTR.
+
+These (and all other functions) of Routinator are accessible on the
+command lines via sub-commands. The commands are `vrps` and `rtrd`,
+respectively.
+
+So, to have Routinator print the list, you say
 
 ```bash
-routinator
+routinator vrps
 ```
 
 If this is the first time you’ve
@@ -175,48 +188,38 @@ Now Routinator will rsync the entire RPKI repository to your machine
 (which will take a while during the first run), validate it and produce
 a long list of AS numbers and prefixes.
 
-When running, you might get rsync errors, such as from rpki.cnnic.cn
-which isn’t reachable. These servers will be ignored and tried again on
-the next run, so you ignore the errors.
-
-There are a number of command line options available. You can  find out
-about them by running
+Information about additional command line arguments is available via the
+`-h` option or you can look at the more detailed man page via the `man`
+sub-command:
 
 ```bash
-routinator -h
-```
-
-For somewhat more complete information on the options, you can also
-consult the man page. It lives in `doc/routinator.1` in the repository but
-is also included in the executable and accessible via the `--man` option.
-On Linux, you can simply run:
-
-```bash
-routinator --man | man -l -
+routinator man
 ```
 
 It is also available online on the
 [NLnetLabs documentation
 site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
 
+
 ## Feeding a Router with RPKI-RTR
 
-Routinator supports RPKI-RTR as specified in RFC 8210. It will act as an
-RTR server if you start it with the `-r` (or `--repeat`) or `-d`
-(`--daemon`) option. In the latter case it will detach from the terminal
-and log to syslog while in repeat mode it’ll stay with you.
+Routinator supports RPKI-RTR as specified in RFC 8210 as well as the older
+version from RFC 6810. It will act as an RTR server if you start it with
+the `rtrd` sub-command. It will do so as a daemon and detach from your
+terminal unless you provide the `-a` (for attached) option.
 
 You can specify the address(es) to listen on via the `-l` (or `--listen`)
-option. If you don’t, it will listen on `127.0.0.1:3323` by default. We
-are not using the IANA-assigned default port RTR, port 323, because that
-would require root permissions to bind to the port. Also, note that the
+option. If you don’t, it will listen on `127.0.0.1:3323` by default. This
+isn’t the IANA-assigned default port for the protocol, which would be 323.
+But since that is a privileged port you’d need to be running Routinator as
+root when otherwise there is no reason to do that. Also, note that the
 default address is a localhost address for security reasons.
 
 So, in order to run Routinator as an RTR server listening on port 3323 on
-both 192.0.2.13 and 2001:0DB8::13 in repeat mode, execute
+both 192.0.2.13 and 2001:0DB8::13 without detaching from the terminal, run
 
 ```bash
-routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
+routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
 ```
 
 By default, the repository will be updated and re-validated every hour as
@@ -226,7 +229,7 @@ seconds. That is, if you rather have Routinator validate every fifteen
 minutes, the above command becomes
 
 ```bash
-routinator -r -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
+routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
 ```
 
 ## Local Exceptions
@@ -241,3 +244,4 @@ Routinator will re-read that file on every validation run, so you can
 simply update the file whenever your exceptions change.
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
+

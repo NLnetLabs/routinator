@@ -20,9 +20,12 @@
 //! [`Repository`]: repository/struct.Repository.html
 
 extern crate bytes;
-#[macro_use] extern crate clap;
+extern crate chrono;
+extern crate clap;
+extern crate daemonize;
 extern crate dirs;
 #[macro_use] extern crate failure;
+extern crate fern;
 #[macro_use] extern crate futures;
 extern crate futures_cpupool;
 extern crate json;
@@ -30,10 +33,14 @@ extern crate json;
 extern crate num_cpus;
 extern crate rpki;
 extern crate slab;
+extern crate syslog;
+extern crate tempfile;
 extern crate tokio;
 extern crate tokio_process;
+extern crate toml;
 
 pub mod config;
+pub mod operation;
 pub mod origins;
 pub mod repository;
 pub mod rtr;

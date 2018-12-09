@@ -24,6 +24,7 @@ use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
 use tokio_process::CommandExt;
+use super::config::Config;
 use super::origins::RouteOrigins;
 
 
@@ -72,34 +73,29 @@ struct RepoInner {
 
 impl Repository {
     /// Creates a new repository.
-    pub fn new(
-        cache_dir: PathBuf,
-        tal_dir: PathBuf,
-        strict: bool,
-        rsync: bool
-    ) -> Result<Self, ProcessingError> {
-        if let Err(err) = fs::read_dir(&cache_dir) {
+    pub fn new(config: &Config, rsync: bool) -> Result<Self, ProcessingError> {
+        if let Err(err) = fs::read_dir(&config.cache_dir) {
             return Err(ProcessingError::BadCacheDirectory(
-                format!("{}", cache_dir.display()),
+                format!("{}", config.cache_dir.display()),
                 err
             ))
         }
-        if let Err(err) = fs::read_dir(&tal_dir) {
+        if let Err(err) = fs::read_dir(&config.tal_dir) {
             return Err(ProcessingError::BadTalDirectory(
-                format!("{}", tal_dir.display()),
+                format!("{}", config.tal_dir.display()),
                 err
             ))
         }
 
         // Let’s quickly go over the TALs to break as early as possible if
         // they aren’t good.
-        for _ in Tal::read_dir(&tal_dir)? { }
+        for _ in Tal::read_dir(&config.tal_dir)? { }
 
         Ok(Repository(Arc::new(RepoInner {
-            cache_dir,
-            tal_dir,
-            strict,
-            threads: ::num_cpus::get(),
+            cache_dir: config.cache_dir.clone(),
+            tal_dir: config.tal_dir.clone(),
+            strict: config.strict,
+            threads: config.validation_threads,
             rsync: if rsync {
                 Some((
                     Mutex::new(RsyncState::new()),

@@ -4,10 +4,15 @@
 
 Breaking Changes
 
+* The command line arguments have been restructured to use commands to
+  determine the mode of operation rather than options. In the course of
+  that, some options changed, too. [(#35)]
 * Add trust anchor information to the CSV, JSON, and RPSL output. [(#21)]
 
 New
 
+* Add a configuration file for all standard options and the options for
+  the RTR server mode. [(#35)]
 * Add a `Dockerfile` for building and deploying through Docker. Thanks to
   David Monosov. [(#23)]
 * Output from the rsync runs is now send to the logger and will be handled
@@ -37,6 +42,7 @@ Dependencies
 [(#27)]: https://github.com/NLnetLabs/routinator/pull/27
 [(#32)]: https://github.com/NLnetLabs/routinator/pull/32
 [(#34)]: https://github.com/NLnetLabs/routinator/pull/34
+[(#35)]: https://github.com/NLnetLabs/routinator/pull/35
 
 
 ## 0.1.2 ‘And I Cry If I Want To’

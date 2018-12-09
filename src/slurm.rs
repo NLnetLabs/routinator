@@ -37,6 +37,26 @@ impl LocalExceptions {
     }
 
     pub fn from_json(json: JsonValue) -> Result<Self, ParseError> {
+        let mut res = Self::empty();
+        res.extend_from_json(json)?;
+        Ok(res)
+    }
+
+    pub fn extend_from_file<P: AsRef<Path>>(
+        &mut self,
+        path: P
+    ) -> Result<(), LoadError> {
+        let mut file = File::open(path)?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)?;
+        self.extend_from_json(json::parse(&buf)?)?;
+        Ok(())
+    }
+
+    pub fn extend_from_json(
+        &mut self,
+        json: JsonValue
+    ) -> Result<(), ParseError> {
         let mut json = match json {
             JsonValue::Object(json) => json,
             _ => {
@@ -82,10 +102,9 @@ impl LocalExceptions {
                     "locallyAddedAssertions.prefixAssertions"
                 )
             )?;
-        Ok(LocalExceptions {
-            filters: PrefixFilter::vec_from_json(filters)?,
-            assertions: AddressOrigin::vec_from_json(assertions)?,
-        })
+        PrefixFilter::extend_from_json(filters, &mut self.filters)?;
+        AddressOrigin::extend_from_json(assertions, &mut self.assertions)?;
+        Ok(())
     }
 
     pub fn keep_origin(&self, addr: &AddressOrigin) -> bool {
@@ -112,7 +131,10 @@ pub struct PrefixFilter {
 }
 
 impl PrefixFilter {
-    fn vec_from_json(json: JsonValue) -> Result<Vec<Self>, ParseError> {
+    fn extend_from_json(
+        json: JsonValue,
+        vec: &mut Vec<Self>
+    ) -> Result<(), ParseError> {
         let json = match json {
             JsonValue::Array(json) => json,
             _ => {
@@ -122,11 +144,11 @@ impl PrefixFilter {
                 ))
             }
         };
-        let mut res = Vec::new();
+        vec.reserve(json.len());
         for item in json {
-            res.push(Self::from_json(item)?);
+            vec.push(Self::from_json(item)?);
         }
-        Ok(res)
+        Ok(())
     }
 
     fn from_json(json: JsonValue) -> Result<Self, ParseError> {
@@ -204,7 +226,10 @@ impl PrefixFilter {
 // see super::origins.
 
 impl AddressOrigin {
-    fn vec_from_json(json: JsonValue) -> Result<Vec<Self>, ParseError> {
+    fn extend_from_json(
+        json: JsonValue,
+        vec: &mut Vec<Self>
+    ) -> Result<(), ParseError> {
         let json = match json {
             JsonValue::Array(json) => json,
             _ => {
@@ -214,11 +239,11 @@ impl AddressOrigin {
                 ))
             }
         };
-        let mut res = Vec::new();
+        vec.reserve(json.len());
         for item in json {
-            res.push(Self::from_json(item)?);
+            vec.push(Self::from_json(item)?);
         }
-        Ok(res)
+        Ok(())
     }
 
     fn from_json(json: JsonValue) -> Result<Self, ParseError> {
