@@ -1,9 +1,10 @@
 //! RTR PDUs.
 //!
-//! This struct contains types that represent the protocol data units of
+//! This module contains types that represent the protocol data units of
 //! RPKI-RTR in their wire representation. That is, these types can be
 //! used given to read and write operations as buffers.
-//! See section 5 of RFC 8210.
+//! See section 5 of RFC 6810 and RFC 8210. Annoyingly, the format of the
+//! `EndOfData` PDU changes between the two versions.
 
 use std::{io, mem, slice};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -89,7 +90,7 @@ common!(SerialNotify);
 pub const SERIAL_QUERY_PDU: u8 = 1;
 pub const SERIAL_QUERY_LEN: u32 = 12;
 
-/*
+#[allow(dead_code)]  // We currently don’t need this, but might later ...
 #[derive(Default)]
 #[repr(packed)]
 pub struct SerialQuery {
@@ -97,6 +98,7 @@ pub struct SerialQuery {
     payload: SerialQueryPayload,
 }
 
+#[allow(dead_code)]
 impl SerialQuery {
     pub const PDU: u8 = 1;
     pub const LEN: u32 = 12;
@@ -122,7 +124,6 @@ impl SerialQuery {
 }
 
 common!(SerialQuery);
-*/
 
 
 //------------ SerialQueryPayload --------------------------------------------
@@ -134,13 +135,11 @@ pub struct SerialQueryPayload {
 }
 
 impl SerialQueryPayload {
-    /*
     pub fn new(serial: u32) -> Self {
         SerialQueryPayload {
             serial: serial.to_be()
         }
     }
-    */
 
     pub fn serial(&self) -> u32 {
         u32::from_be(self.serial)
@@ -386,11 +385,14 @@ impl AsMut<[u8]> for Prefix {
     }
 }
 
-    
-
 
 //------------ EndOfData -----------------------------------------------------
 
+/// Generic End-of-Data PDU.
+///
+/// This PDU differs between version 0 and 1 of RTR. Consequently, this
+/// generic version is an enum that can be both, depending on the version
+/// requested.
 pub enum EndOfData {
     V0(EndOfDataV0),
     V1(EndOfDataV1),
@@ -437,7 +439,6 @@ impl AsMut<[u8]> for EndOfData {
         }
     }
 }
-
 
 
 //------------ EndOfDataV0 ---------------------------------------------------

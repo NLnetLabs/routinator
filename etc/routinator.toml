@@ -26,7 +26,7 @@ repository-dir = ...
 #
 # This setting is mandatory.
 #
-tal_dir = ...
+tal-dir = ...
 
 # Local exceptions files
 #
@@ -90,7 +90,7 @@ tal_dir = ...
 #
 # This is an array of strings, each string a socket address of the form
 # "address:port" with IPv6 address in square brackets.
-#listen_tcp = ["127.0.0.1:3323"]
+#listen-tcp = ["127.0.0.1:3323"]
 
 # Log level
 #

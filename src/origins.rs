@@ -62,6 +62,9 @@ impl RouteOrigins {
     }
 }
 
+
+//--- IntoIterator
+
 impl IntoIterator for RouteOrigins {
     type Item = RouteOriginAttestation;
     type IntoIter = vec::IntoIter<RouteOriginAttestation>;
@@ -88,7 +91,8 @@ impl<'a> IntoIterator for &'a RouteOrigins {
 /// This type contains a list of [`AddressOrigin`] statements. While it is
 /// indeed a set, that is, it doesn’t contain duplicates, it is accessible
 /// like a slice of address origins, to which it even derefs. This is so that
-/// we can iterate over the set using indexes instead of references.
+/// we can iterate over the set using indexes instead of references, avoiding
+/// self-referential types in futures.
 ///
 /// [`AddressOrigin`]: struct.AddressOrigin.html
 #[derive(Clone, Debug)]
@@ -170,14 +174,34 @@ impl AsRef<[AddressOrigin]> for AddressOrigins {
 
 //------------ OriginsDiff ---------------------------------------------------
 
+/// The difference between two address origin lists.
+///
+/// A value of this types keeps two lists. One lists, _announce_ contains the
+/// address origins added in this diff, the second, _withdraw_ those that
+/// were removed. In addition, the `serial` field holds a serial number for
+/// this diff.
+///
+/// You can create a diff via the `construct` method from a set of address
+/// origins, route origins, and exceptions.
 #[derive(Clone, Debug)]
 pub struct OriginsDiff {
+    /// The serial number of this diff.
+    ///
+    /// Serial numbers start from zero and are guaranteed to be incremented
+    /// by one between versions of address origin sets.
     serial: u32,
+
+    /// The address origins added by this diff.
     announce: Vec<AddressOrigin>,
+
+    /// The address origins removed by this diff.
     withdraw: Vec<AddressOrigin>,
 }
 
 impl OriginsDiff {
+    /// Creates an empty origins diff with the given serial number.
+    ///
+    /// Both the announce and withdraw lists will be empty.
     pub fn empty(serial: u32) -> Self {
         OriginsDiff {
             serial,
@@ -186,10 +210,23 @@ impl OriginsDiff {
         }
     }
 
+    /// Returns whether this is an empty diff.
+    ///
+    /// A diff is empty if both the accounce and withdraw lists are empty.
     pub fn is_empty(&self) -> bool {
         self.announce.is_empty() && self.withdraw.is_empty()
     }
 
+    /// Constructs a diff.
+    ///
+    /// The method takes the previous list of address origins as a set (so
+    /// that there are definitely no duplicates), a list of route origins
+    /// gained from validation, a list of local exceptions, and the serial
+    /// number of the current version.
+    ///
+    /// It will create and return the new list of address origins from the
+    /// route origins and a origins diff between the new and old address
+    /// origins with the serial number of `serial` plus one.
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
         origins: Option<RouteOrigins>,
@@ -226,25 +263,29 @@ impl OriginsDiff {
         }
         let withdraw: Vec<_> = current.into_iter().collect();
         let announce: Vec<_> = announce.into_iter().collect();
-        debug!(
+        info!(
             "Diff with {} announced and {} withdrawn.",
             announce.len(), withdraw.len()
         );
         (next.into(), OriginsDiff { serial, announce, withdraw })
     }
 
+    /// Returns the serial number of this origins diff.
     pub fn serial(&self) -> u32 {
         self.serial
     }
 
+    /// Returns a slice with the address origins added by this diff.
     pub fn announce(&self) -> &[AddressOrigin] {
         self.announce.as_ref()
     }
 
+    /// Returns a slice with the address origins removed by this diff.
     pub fn withdraw(&self) -> &[AddressOrigin] {
         self.withdraw.as_ref()
     }
 
+    /// Unwraps the diff into the serial number, announce and withdraw lists.
     pub fn unwrap(
         self
     ) -> (u32, Vec<AddressOrigin>, Vec<AddressOrigin>) {
@@ -255,14 +296,25 @@ impl OriginsDiff {
 
 //------------ DiffMerger ----------------------------------------------------
 
+/// A helper struct that allows merging two diffs into a combined diff.
+///
+/// This works like a builder type. You create a merged from the oldest diff
+/// via the `new` method, add additional diffs via `merge`, and finally
+/// convert the merger into a regular diff via `into_diff`.
 #[derive(Clone, Debug)]
 struct DiffMerger {
+    /// The serial number of the combined diff.
     serial: u32,
+
+    /// The set of added address origins.
     announce: HashSet<AddressOrigin>,
+
+    /// The set of removed address origins.
     withdraw: HashSet<AddressOrigin>,
 }
 
 impl DiffMerger {
+    /// Creates a diff merged based on the
     fn new(diff: &OriginsDiff) -> Self {
         DiffMerger {
             serial: diff.serial,
@@ -271,6 +323,16 @@ impl DiffMerger {
         }
     }
 
+    /// Merges a diff.
+    ///
+    /// After, the serial number will be that of `diff`. Address origins that
+    /// are in `diff`’s announce list are added to the merger’s announce set
+    /// unless they are in the merger’s withdraw set, in which case they are
+    /// removed from the merger’s withdraw set. Origins in `diff`’s withdraw
+    /// set are removed from the merger’s announce set if they are in it or
+    /// added to the merger’s withdraw set otherwise.
+    ///
+    /// (This looks much simpler in code than in prose …)
     fn merge(&mut self, diff: &OriginsDiff) {
         self.serial = diff.serial;
         for origin in &diff.announce {
@@ -285,6 +347,7 @@ impl DiffMerger {
         }
     }
 
+    /// Converts the merger into an origin diff with the same content.
     fn into_diff(self) -> Arc<OriginsDiff> {
         Arc::new(OriginsDiff {
             serial: self.serial,
@@ -297,9 +360,18 @@ impl DiffMerger {
 
 //------------ OriginsHistory ------------------------------------------------
 
+/// A shareable history of address orgins.
+///
+/// A value of this type allows access to the currently valid list of address
+/// origins and a list of diffs from earlier versions. The latter list is
+/// limited to a certain length. Older diffs are dropped.
+///
+/// These things are all hidden away behind an arc and a lock so you can copy
+/// and share values relatively cheaply and in a safe way.
 #[derive(Clone, Debug)]
 pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 
+/// The inner, raw data of the origins history.
 #[derive(Clone, Debug)]
 pub struct HistoryInner {
     /// The current full set of adress origins.
@@ -315,6 +387,11 @@ pub struct HistoryInner {
 }
 
 impl OriginsHistory {
+    /// Creates a new history from the given initial data.
+    ///
+    /// The history will start out with `current` as its initial address
+    /// origins, an empty diff list, and a maximum length of the diff list
+    /// of `keep`.
     pub fn new(current: AddressOrigins, keep: usize) -> Self {
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
@@ -325,10 +402,20 @@ impl OriginsHistory {
         )))
     }
 
+    /// Returns a reference to the current list of address origins.
     pub fn current(&self) -> Arc<AddressOrigins> {
         self.0.read().unwrap().current.clone()
     }
 
+    /// Returns a diff from the given serial number.
+    ///
+    /// The serial is what the requestor has last seen. The method produces
+    /// a diff from that version to the current version if it can. If it
+    /// can’t, either because it doesn’t have enough history data or because
+    /// the serial is actually in the future.
+    ///
+    /// The method current doesn’t correctly treat serial number wrap around.
+    /// See [issue #38](https://github.com/NLnetLabs/routinator/issues/38).
     pub fn get(&self, serial: u32) -> Option<Arc<OriginsDiff>> {
         debug!("Fetching diff for serial {}", serial);
         let history = self.0.read().unwrap();
@@ -380,15 +467,27 @@ impl OriginsHistory {
         Some(res.into_diff())
     }
 
+    /// Returns the serial number of the current version of the origin list.
     pub fn serial(&self) -> u32 {
         self.0.read().unwrap().serial()
     }
 
+    /// Returns the current list of address origins and its serial number.
     pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, u32) {
         let history = self.0.read().unwrap();
         (history.current.clone(), history.serial())
     }
 
+    /// Updates the history.
+    ///
+    /// Produces a new list of address origins based on the route origins
+    /// and local exceptions. If this list differs from the current list
+    /// of address origins, adds a new version to the history.
+    ///
+    /// The method returns whether it added a new version.
+    ///
+    /// Note also that the method has to acquire the write lock on the
+    /// history.
     pub fn update(
         &self,
         origins: Option<RouteOrigins>,
@@ -418,6 +517,10 @@ impl OriginsHistory {
 }
 
 impl HistoryInner {
+    /// Returns the current serial.
+    ///
+    /// This is either the serial of the first diff or 0 if there are no
+    /// diffs.
     pub fn serial(&self) -> u32 {
         match self.diffs.front() {
             Some(diff) => diff.serial(),
@@ -425,6 +528,7 @@ impl HistoryInner {
         }
     }
 
+    /// Appends a new diff dropping old ones if necessary.
     pub fn push_diff(&mut self, diff: OriginsDiff) {
         if self.diffs.len() == self.keep {
             let _ = self.diffs.pop_back();
@@ -436,19 +540,34 @@ impl HistoryInner {
 
 //------------ AddressOrigin -------------------------------------------------
 
+/// A validated address orgin.
+///
+/// This is what RFC 6811 calls a ‘Validated ROA Payload.’ It consists of an
+/// IP address prefix, a maximum length, and the origin AS number. In
+/// addition, the address origin stores information about the trust anchor
+/// this origin was derived from.
 #[derive(Clone, Debug)]
 pub struct AddressOrigin {
+    /// The origin AS number.
     as_id: AsId,
+
+    /// The IP address prefix.
     prefix: AddressPrefix,
+
+    /// The maximum authorized prefix length of a route.
     max_length: u8,
+
+    /// Optional trust anchor information.
     tal: Option<Arc<TalInfo>>
 }
 
 impl AddressOrigin {
+    /// Creates a new address origin without trust anchor information.
     pub fn new(as_id: AsId, prefix: AddressPrefix, max_length: u8) -> Self {
         AddressOrigin { as_id, prefix, max_length, tal: None }
     }
 
+    /// Creates a new address origin from ROA content.
     fn from_roa(
         as_id: AsId,
         addr: FriendlyRoaIpAddress,
@@ -462,26 +581,34 @@ impl AddressOrigin {
         }
     }
 
+    /// Returns the origin AS number.
     pub fn as_id(&self) -> AsId {
         self.as_id
     }
 
+    /// Returns the IP address prefix.
     pub fn prefix(&self) -> AddressPrefix {
         self.prefix
     }
 
+    /// Returns the address part of the IP address prefix.
     pub fn address(&self) -> IpAddr {
         self.prefix.address()
     }
 
+    /// Returns the length part of the IP address prefix.
     pub fn address_length(&self) ->u8 {
         self.prefix.address_length()
     }
 
+    /// Returns the maximum authorized route prefix length.
     pub fn max_length(&self) -> u8 {
         self.max_length
     }
 
+    /// Returns the name of the TAL that this origin as based on.
+    ///
+    /// If there isn’t one, the name becomes `"N/A"`
     pub fn tal_name(&self) -> &str {
         match self.tal {
             Some(ref tal) => tal.name(),
@@ -517,6 +644,7 @@ impl hash::Hash for AddressOrigin {
 
 //------------ AddressPrefix -------------------------------------------------
 
+/// An IP address prefix: an IP address and a prefix length.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct AddressPrefix {
     addr: IpAddr,
@@ -524,18 +652,22 @@ pub struct AddressPrefix {
 }
 
 impl AddressPrefix {
+    /// Creates a new prefix from an address and a length.
     pub fn new(addr: IpAddr, len: u8) -> Self {
         AddressPrefix{addr, len}
     }
 
+    /// Returns the IP address part of a prefix.
     pub fn address(self) -> IpAddr {
         self.addr
     }
 
+    /// Returns the length part of a prefix.
     pub fn address_length(self) -> u8 {
         self.len
     }
 
+    /// Returns whether `self` covers `other`.
     pub fn covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
@@ -586,6 +718,7 @@ impl FromStr for AddressPrefix {
 
 //------------ FromStrError --------------------------------------------------
 
+/// Creating an IP address prefix from a string has failed.
 #[derive(Clone, Debug, Fail)]
 #[fail(display="bad prefix {}", _0)]
 pub struct FromStrError(String);
@@ -610,7 +743,7 @@ pub mod tests {
         let inner_mid = make_pfx("10.0.61.0", 24);
         let inner_hi = make_pfx("10.0.255.0", 24);
 
-        assert!(! outer.covers(sibling));
+        assert!(!outer.covers(sibling));
         assert!(outer.covers(inner_low));
         assert!(outer.covers(inner_mid));
         assert!(outer.covers(inner_hi));

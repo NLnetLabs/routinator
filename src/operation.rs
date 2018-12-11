@@ -1,6 +1,11 @@
 //! What Routinator can do for you.
 //!
-//! This module contains all the commands you can give to the executable.
+//! This module implements all the commands users can ask Routinator to
+//! perform. They are encapsulated in the type [`Operation`] which can
+//! determine the command from the command line argumments and then execute
+//! it.
+//!
+//! [`Operation`]: enum.Operation.html
 
 use std::{fs, io};
 use std::collections::HashMap;
@@ -20,57 +25,63 @@ use crate::repository::Repository;
 use crate::rtr::{rtr_listener, NotifySender};
 
 
-//------------ Orders --------------------------------------------------------
-
-/// Routinator’s orders.
-///
-/// This type combines the config and the command in one convenient package
-/// for use with `lazy_static!`.
-pub struct Orders {
-    config: Config,
-    operation: Operation,
-}
-
-impl Orders {
-    pub fn from_args<'a: 'b, 'b>(app: App<'a, 'b>) -> Result<Self, Error> {
-        let matches = Operation::config_args(
-            Config::config_args(app)
-        ).get_matches();
-        let mut config = Config::from_arg_matches(&matches)?;
-        let operation = Operation::from_arg_matches(&matches, &mut config)?;
-        Ok(Orders { config, operation })
-    }
-
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
-    pub fn operation(&self) -> &Operation {
-        &self.operation
-    }
-
-    pub fn run(self) -> Result<(), Error> {
-        self.operation.run(self.config)
-    }
-}
-
-
 //------------ Operation -----------------------------------------------------
 
-/// The command to run.
+/// The command to execute.
+///
+/// This type collects all the commands we have defined plus any possible
+/// extra configuration they support.
+///
+/// You can create a value from the command line arguments. First, you add
+/// all necessary sub-commands and arguments to a clap `App` via
+/// [`config_args`] and then process the argument matches into a value in
+/// [`from_arg_matches`]. Finally, you can execute the created command
+/// through the [`run`] method.
+///
+/// [`config_args`]: #method.config_args
+/// [`from_arg_matches`]: #method.from_arg_matches
+/// [`run`]: #method.run
 pub enum Operation {
+    /// Show the manual page.
     Man {
+        /// Output the page instead of showing it.
+        ///
+        /// Output is requested by this being some. If there is a path,
+        /// then we output to the file identified by the path, otherwise
+        /// we print to stdout.
         output: Option<Option<PathBuf>>,
     },
+
+    /// Run the RTR server.
+    Rtrd {
+        /// Stay attached to the terminal.
+        ///
+        /// If this is `true`, we just start the server and keep going. If
+        /// this is `false`, we detach from the terminal into daemon mode
+        /// which has a few extra consequences.
+        attached: bool,
+    },
+
+    /// Update the local repository.
+    ///
+    /// This will also do a validation run in order to discover possible new
+    /// publication points.
     Update,
+
+    /// Produce a list of Validated ROA Payload.
     Vrps {
+        /// The destination to output the list to.
+        ///
+        /// If this is some path, then we print the list into that file.
+        /// Otherwise we just dump it to stdout.
         output: Option<PathBuf>,
+
+        /// The desired output format.
         format: OutputFormat,
+
+        /// Don’t update the repository.
         noupdate: bool,
     },
-    Rtrd {
-        attached: bool,
-    }
 }
 
 impl Operation {
@@ -87,6 +98,7 @@ impl Operation {
                 .value_name("FILE")
                 .help("output file")
                 .takes_value(true)
+                .default_value("-")
             )
             .arg(Arg::with_name("format")
                 .short("f")
@@ -136,6 +148,8 @@ impl Operation {
     }
 
     /// Creates a command from clap matches.
+    ///
+    /// This function prints errors to stderr.
     pub fn from_arg_matches(
         matches: &ArgMatches,
         config: &mut Config
@@ -192,6 +206,10 @@ impl Operation {
         })
     }
 
+    /// Runs the command.
+    ///
+    /// Depending on the command, this method may switch to logging at some
+    /// point.
     pub fn run(self, config: Config) -> Result<(), Error> {
         match self {
             Operation::Man { output } => {
@@ -208,7 +226,14 @@ impl Operation {
                 => Self::vrps(config, output, format, noupdate),
         }
     }
+}
 
+/// # Running Actual Commands
+///
+impl Operation {
+    /// Outputs the manual page to the given path.
+    ///
+    /// If the path is `None`, outputs to stdout.
     fn output_man(output: Option<PathBuf>) -> Result<(), Error> {
         match output {
             Some(path) => {
@@ -226,6 +251,10 @@ impl Operation {
                     eprintln!("Failed to write to output file: {}", err);
                     return Err(Error)
                 }
+                info!(
+                    "Successfully writen manual page to {}",
+                    path.display()
+                );
             }
             None => {
                 let out = io::stdout();
@@ -239,9 +268,13 @@ impl Operation {
         Ok(())
     }
 
+    /// Displays the manual page.
+    ///
+    /// This puts the manual page into a temporary file and then executes
+    /// the `man` command. This probably doesn’t work on Windows.
     fn display_man() -> Result<(), Error> {
         let mut file = NamedTempFile::new().map_err(|err| {
-            println!(
+            eprintln!(
                 "Can't display man page: \
                  Failed to create temporary file: {}.",
                 err
@@ -249,7 +282,7 @@ impl Operation {
             Error
         })?;
         file.write_all(MAN_PAGE).map_err(|err| {
-            println!(
+            eprintln!(
                 "Can't display man page: \
                 Failed to write to temporary file: {}.",
                 err
@@ -257,7 +290,7 @@ impl Operation {
             Error
         })?;
         Command::new("man").arg(file.path()).status().map_err(|err| {
-            println!("Failed to run man: {}", err);
+            eprintln!("Failed to run man: {}", err);
             Error
         }).and_then(|exit| {
             if exit.success() {
@@ -269,12 +302,16 @@ impl Operation {
         })
     }
 
+    /// Starts the RTR server.
+    ///
+    /// If `attached` is `false`, will fork the server and exit. Otherwise
+    /// just runs the server forever.
     fn rtrd(config: Config, attached: bool) -> Result<(), Error> {
         let repo = config.create_repository(true)?;
 
         if !attached {
             if let Err(err) = daemonize::Daemonize::new().start() {
-                println!("Detaching failed: {}", err);
+                eprintln!("Detaching failed: {}", err);
                 return Err(Error)
             }
         }
@@ -284,13 +321,12 @@ impl Operation {
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
         if let Err(_) = repo.update() {
-            warn!("Update failed. Continuing anyway.");
+            warn!("Repository update failed. Continuing anyway.");
         }
         let roas = match repo.process() {
             Ok(roas) => roas,
-            Err(err) => {
-                error!("Fatal: Validation failed: {}", err);
-                error!("Aborting.");
+            Err(_) => {
+                error!("Fatal: Validation failed. Aborting");
                 return Err(Error)
             }
         };
@@ -304,16 +340,30 @@ impl Operation {
         info!("Starting RTR listener...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
         tokio::runtime::run(
-            update_future(repo, history, notify, config)
+            Self::update_future(repo, history, notify, config)
+            .map_err(|_| ())
             .select(rtr).map(|_| ()).map_err(|_| ())
         );
         Ok(())
     }
 
+    /// Updates the repository.
+    ///
+    /// This runs both an update of the already known publication points but
+    /// also does validation in order to discover new points.
+    ///
+    /// Which turns out is just a shortcut for `vrps` with no output.
     fn update(config: Config) -> Result<(), Error> {
         Self::vrps(config, None, OutputFormat::None, false)
     }
 
+    /// Produces a list of Validated ROA Payload.
+    ///
+    /// The list will be written to the file identified by `output` or
+    /// stdout if that is `None`. The format is determined by `format`.
+    /// If `noupdate` is `false`, the local repository will be updated first
+    /// and rsync will be enabled during validation to sync any new
+    /// publication points.
     fn vrps(
         config: Config,
         output: Option<PathBuf>,
@@ -321,16 +371,16 @@ impl Operation {
         noupdate: bool
     ) -> Result<(), Error> {
         let repo = config.create_repository(!noupdate)?;
-        let exceptions = config.load_exceptions()?;
         config.switch_logging(false)?;
+        let exceptions = config.load_exceptions()?;
 
         if let Err(_) = repo.update() {
-            println!("Update failed. Continuing anyway.");
+            warn!("Update failed. Continuing anyway.");
         }
         let roas = match repo.process() {
             Ok(roas) => roas,
-            Err(err) => {
-                error!("Validation failed: {}", err);
+            Err(_) => {
+                error!("Validation failed. Aborting.");
                 return Err(Error)
             }
         };
@@ -357,83 +407,105 @@ impl Operation {
             }
         }
     }
-}
 
-
-fn update_future(
-    repo: Repository,
-    history: OriginsHistory,
-    notify: NotifySender,
-    config: Config,
-) -> impl Future<Item=(), Error=()> {
-    future::loop_fn(
-        (repo, history, notify, config),
-        |(repo, history, mut notify, config)| {
-            Delay::new(Instant::now() + config.refresh)
-            .map_err(|e| error!("timer failed; err={:?}", e))
-            .and_then(move |_| {
-                repo.start();
-                Ok(repo)
-            })
-            .and_then(|repo| {
-                repo.update_async()
-                .then(|res| {
-                    // Print error but keep going.
-                    if let Err(err) = res {
-                        error!("repository update failed: {}", err);
-                    }
+    /// Returns a future that updates and validates the local repository.
+    ///
+    /// The future periodically runs an update and validation on `repo`. It
+    /// sdds the result to `history`. If there are changes, it also triggers
+    /// a notification on `notify`. 
+    fn update_future(
+        repo: Repository,
+        history: OriginsHistory,
+        notify: NotifySender,
+        config: Config,
+    ) -> impl Future<Item=(), Error=Error> {
+        future::loop_fn(
+            (repo, history, notify, config),
+            |(repo, history, mut notify, config)| {
+                Delay::new(Instant::now() + config.refresh)
+                .map_err(|e| {
+                    error!("Fatal: wait timer failed ({})", e);
+                    Error
+                })
+                .and_then(move |_| {
+                    repo.start();
                     Ok(repo)
                 })
-            })
-            .and_then(|repo| {
-                repo.process_async()
-                .then(move |origins| {
-                    let origins = match origins {
-                        Ok(origins) => origins,
-                        Err(err) => {
-                            error!(
-                                "repository processing failed; err={:?}",
-                                err
-                            );
-                            return Ok(
-                                future::Loop::Continue(
-                                    (repo, history, notify, config)
-                                )
-                            )
-                        }
-                    };
-                    let must_notify = match config.load_exceptions() {
-                        Ok(exceptions) => {
-                            history.update(Some(origins), &exceptions)
-                        }
-                        Err(_) => {
-                            false
-                        }
-                    };
-                    debug!("New serial is {}.", history.serial());
-                    if must_notify {
-                        debug!("Sending out notifications.");
-                        notify.notify();
-                    }
-                    Ok(future::Loop::Continue((repo, history, notify, config)))
+                .and_then(|repo| {
+                    info!("Updating the local repository.");
+                    repo.update_async().map(|()| repo)
                 })
-            })
-        }
-    )
+                .and_then(|repo| {
+                    info!("Starting validation of local repository.");
+                    repo.process_async()
+                    .and_then(move |origins| {
+                        info!("Loading exceptions.");
+                        let must_notify = match config.load_exceptions() {
+                            Ok(exceptions) => {
+                                history.update(Some(origins), &exceptions)
+                            }
+                            Err(_) => {
+                                warn!(
+                                    "Failed to load exceptions. \
+                                     Discarding this validation run but \
+                                     continuing."
+                                );
+                                false
+                            }
+                        };
+                        info!("New serial is {}.", history.serial());
+                        if must_notify {
+                            info!("Sending out notifications.");
+                            notify.notify();
+                        }
+                        Ok(future::Loop::Continue(
+                            (repo, history, notify, config))
+                        )
+                    })
+                })
+            }
+        )
+    }
 }
+
 
 //------------ OutputFormat --------------------------------------------------
 
+/// The output format for VRPs.
 #[derive(Clone, Copy, Debug)]
 pub enum OutputFormat {
+    /// CSV format.
+    ///
+    /// Each row has the AS number, prefix, max-length, and TA.
     Csv,
+
+    /// RIPE NCC Validator JSON format.
+    ///
+    /// This is a JSON object with one element `"roas"` which is an array
+    /// of objects, each with the elements `"asn"`, `"prefix"`, `"maxLength"`,
+    /// and `"ta"`.
     Json,
+
+    /// OpenBGPD configuration format.
+    ///
+    /// Specifically, this produces as `roa-set`.
     Openbgpd,
+
+    /// RPSL output.
+    ///
+    /// This produces a sequence of RPSL objects with various fields.
     Rpsl,
+
+    /// No output.
+    ///
+    /// Seriously: no output.
     None,
 }
 
 impl OutputFormat {
+    /// Outputs `vrps` to `target` in this format.
+    ///
+    /// This method loggs error messages.
     fn output<W: io::Write>(
         self,
         vrps: &AddressOrigins,
@@ -548,16 +620,33 @@ impl OutputFormat {
 ///
 /// This is really just a placeholder type. All necessary output has happend
 /// already.
+///
+/// When returning this error, you should specify whether error is printed
+/// to stderr, as should happen in early stages of operation, or should be
+/// logged.
 #[derive(Clone, Copy, Debug)]
 pub struct Error;
 
 
 //------------ RpslSource ----------------------------------------------------
 
+/// A mapping between trust anchor names and RPSL source strings.
+///
+/// Because RPSL source strings in the RIPE NCC Validator are upper case,
+/// we believe caching the produced name is cheaper than uppercasing the
+/// TAL name on the fly.
+///
+/// This type produces the correct source via the `display` function by
+/// returning it from a cache, possibly creating it if it isn’t in there
+/// yet.
 #[derive(Default)]
 struct RpslSource(HashMap<String, String>);
 
 impl RpslSource {
+    /// Returns the RPSL source string for `tal`.
+    ///
+    /// Since this may need to create that string, the method needs a mutable
+    /// self.
     fn display(&mut self, tal: &str) -> &str {
         if self.0.contains_key(tal) {
             // This is double lookup is necessary for the borrow checker ...
@@ -573,5 +662,6 @@ impl RpslSource {
 
 //------------ The Man Page --------------------------------------------------
 
+/// The raw bytes of the manual page.
 const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
 
