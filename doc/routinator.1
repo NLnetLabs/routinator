@@ -74,7 +74,7 @@ command
 Routinator
 collects and processes Resource Public Key Infrastructure (RPKI) data. It
 validates the route origin attestations contained in the data and makes
-them available for routing.
+them available to your BGP routing workflow.
 .P
 It can either run in one-shot mode outputting a list of validated route
 origins in various formats or as a server for the RPKI-to-Router (RTR)
@@ -92,7 +92,10 @@ The available options are:
 Provides the path to a file containing basic configuration. If this option
 is not given, Routinator will try to use
 .I $HOME/.routinator.conf
-if that exists. See
+if that exists. If that doesn’t exist, either, default values for the
+options as descrined here are used.
+.IP
+See
 .B CONFIGURATION FILE
 below for more information on the format and contents of the configuration
 file.
@@ -176,6 +179,7 @@ facility to use. The default is
 .TP
 .BI \-\-logfile= path
 Redirect logging output to the given file.
+.TP
 .BR \-h , " \-\-help"
 Print some help information.
 .TP
@@ -189,7 +193,7 @@ These can be requested by providing different commands on the command line.
 .SS vrps
 This command requests that Routinator update the local repository and then
 validate the Route Origin Authorizations in the repository and output the
-valid route origins, which are also knwon as Valid ROA Payload or VRPs, as
+valid route origins, which are also known as Valid ROA Payload or VRPs, as
 a list.
 .TP
 .BI -o\  file \fR,\ \fB\-\-output= file
@@ -204,8 +208,8 @@ The output format to use. Routinator currently supports the following formats:
 .TP
 .B csv
 The list is formatted as lines of comma-separated values of the prefix in
-slash notation, the maximum prefix length, the autonomous system, and an
-abbreviation for the trust anchor the entry is derived from. The latter is
+slash notation, the maximum prefix length, the autonomous system number, and
+an abbreviation for the trust anchor the entry is derived from. The latter is
 the name of the TAL file without the extension
 .IR ".tal" .
 .IP
@@ -217,7 +221,7 @@ option is missing.
 The list is placed into a JSON object with a single element
 .I "roas"
 which contains an array of objects with four elements each: The autonomous
-system number of the system authorized to originate a prefix in
+system number of the network authorized to originate a prefix in
 .IR "asn" ,
 the prefix in slash notation in
 .IR "prefix" ,
@@ -321,7 +325,7 @@ Updates the local repository by resyncing all known publication points. The
 command will also validate the updated repository to discover any new
 publication points that appear in the repository and fetch their data.
 .PP
-As such, the command really a shortcut for running
+As such, the command really is a shortcut for running
 .B routinator vrps -f none\fR.
 
 .SS man
@@ -373,20 +377,19 @@ is present, this file is used.
 .PP
 The configuration file is a file in TOML format. In short, it consists of
 a sequence of key-value pairs, each on its own line. Strings are to be
-enclosed in double quotes. Lists can be given be enclosing a comma-separated
+enclosed in double quotes. Lists can be given by enclosing a comma-separated
 list of values in square brackets.
 .PP
 The configuration file can contain the following entries. All path values
 are interpreted relative to the directory the configuration file is located.
-All values can be overwritten via the command line options.
-in.
+in. All values can be overwritten via the command line options.
 .TP
 .B repository-dir
 A string containing the path to the directory to store the local repository
 in. This entry is mandatory.
 .TP
 .B tal-dir
-A string containing the path to he directory that contains the Trust Anchor
+A string containing the path to the directory that contains the Trust Anchor
 Locators. This entry is mandatory.
 .TP
 .B exceptions
