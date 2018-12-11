@@ -98,6 +98,7 @@ impl Operation {
                 .value_name("FILE")
                 .help("output file")
                 .takes_value(true)
+                .default_value("-")
             )
             .arg(Arg::with_name("format")
                 .short("f")
@@ -324,9 +325,8 @@ impl Operation {
         }
         let roas = match repo.process() {
             Ok(roas) => roas,
-            Err(err) => {
-                error!("Fatal: Validation failed: {}", err);
-                error!("Aborting.");
+            Err(_) => {
+                error!("Fatal: Validation failed. Aborting");
                 return Err(Error)
             }
         };
@@ -341,6 +341,7 @@ impl Operation {
         let (notify, rtr) = rtr_listener(history.clone(), &config);
         tokio::runtime::run(
             Self::update_future(repo, history, notify, config)
+            .map_err(|_| ())
             .select(rtr).map(|_| ()).map_err(|_| ())
         );
         Ok(())
@@ -378,8 +379,8 @@ impl Operation {
         }
         let roas = match repo.process() {
             Ok(roas) => roas,
-            Err(err) => {
-                error!("Validation failed: {}", err);
+            Err(_) => {
+                error!("Validation failed. Aborting.");
                 return Err(Error)
             }
         };
@@ -417,50 +418,27 @@ impl Operation {
         history: OriginsHistory,
         notify: NotifySender,
         config: Config,
-    ) -> impl Future<Item=(), Error=()> {
+    ) -> impl Future<Item=(), Error=Error> {
         future::loop_fn(
             (repo, history, notify, config),
             |(repo, history, mut notify, config)| {
                 Delay::new(Instant::now() + config.refresh)
-                .map_err(|e| error!("Fatal: wait timer failed ({})", e))
+                .map_err(|e| {
+                    error!("Fatal: wait timer failed ({})", e);
+                    Error
+                })
                 .and_then(move |_| {
                     repo.start();
                     Ok(repo)
                 })
                 .and_then(|repo| {
                     info!("Updating the local repository.");
-                    repo.update_async()
-                    .then(|res| {
-                        // Print error but keep going.
-                        if let Err(err) = res {
-                            warn!(
-                                "Repository update failed: {}. \
-                                 Continuing anyway.",
-                                err
-                            );
-                        }
-                        Ok(repo)
-                    })
+                    repo.update_async().map(|()| repo)
                 })
                 .and_then(|repo| {
                     info!("Starting validation of local repository.");
                     repo.process_async()
-                    .then(move |origins| {
-                        let origins = match origins {
-                            Ok(origins) => origins,
-                            Err(err) => {
-                                error!(
-                                    "Validation of repository failed: {}. \
-                                     Continuing anyway.",
-                                    err
-                                );
-                                return Ok(
-                                    future::Loop::Continue(
-                                        (repo, history, notify, config)
-                                    )
-                                )
-                            }
-                        };
+                    .and_then(move |origins| {
                         info!("Loading exceptions.");
                         let must_notify = match config.load_exceptions() {
                             Ok(exceptions) => {

@@ -435,10 +435,7 @@ impl Config {
         update: bool
     ) -> Result<Repository, Error> {
         self.prepare_dirs()?;
-        Repository::new(self, update).map_err(|err| {
-            eprintln!("{}", err);
-            Error
-        })
+        Repository::new(self, update)
     }
 
     /// Loads the local exceptions for this configuration.
