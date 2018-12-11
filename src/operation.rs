@@ -453,7 +453,7 @@ impl Operation {
                                 false
                             }
                         };
-                        debug!("New serial is {}.", history.serial());
+                        info!("New serial is {}.", history.serial());
                         if must_notify {
                             info!("Sending out notifications.");
                             notify.notify();

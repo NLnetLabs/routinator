@@ -263,7 +263,7 @@ impl OriginsDiff {
         }
         let withdraw: Vec<_> = current.into_iter().collect();
         let announce: Vec<_> = announce.into_iter().collect();
-        debug!(
+        info!(
             "Diff with {} announced and {} withdrawn.",
             announce.len(), withdraw.len()
         );
