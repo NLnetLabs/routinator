@@ -78,6 +78,12 @@ pub struct Config {
     /// Should we do strict validation?
     pub strict: bool,
 
+    /// The command to run for rsync.
+    pub rsync_command: String,
+
+    /// Arguments passed to rsync.
+    pub rsync_args: Option<Vec<String>>,
+
     /// Number of parallel rsync commands.
     pub rsync_count: usize,
 
@@ -153,6 +159,12 @@ impl Config {
         .arg(Arg::with_name("strict")
              .long("strict")
              .help("parse RPKI data in strict mode")
+        )
+        .arg(Arg::with_name("rsync-command")
+             .long("rsync-command")
+             .value_name("COMMAND")
+             .help("the command to run for rsync")
+             .takes_value(true)
         )
         .arg(Arg::with_name("rsync-count")
              .long("rsync-count")
@@ -328,6 +340,11 @@ impl Config {
         // strict
         if matches.is_present("strict") {
             self.strict = true
+        }
+
+        // rsync_command
+        if let Some(value) = matches.value_of("rsync-command") {
+            self.rsync_command = value.into()
         }
 
         // rsync_count
@@ -611,6 +628,11 @@ impl Config {
             tal_dir: file.take_mandatory_path("tal-dir")?,
             exceptions: file.take_path_array("exceptions")?,
             strict: file.take_bool("strict")?.unwrap_or(false),
+            rsync_command: {
+                file.take_string("rsync-command")?
+                    .unwrap_or_else(|| "rsync".into())
+            },
+            rsync_args: file.take_opt_string_array("rsync-args")?,
             rsync_count: {
                 file.take_usize("rsync-count")?.unwrap_or(DEFAULT_RSYNC_COUNT)
             },
@@ -654,6 +676,8 @@ impl Config {
             tal_dir,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
+            rsync_command: "rsync".into(),
+            rsync_args: None,
             rsync_count: DEFAULT_RSYNC_COUNT,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1042,6 +1066,41 @@ impl ConfigFile {
                 Err(Error)
             }
             None => Ok(Vec::new())
+        }
+    }
+
+    fn take_opt_string_array(
+        &mut self,
+        key: &str
+    ) -> Result<Option<Vec<String>>, Error> {
+        match self.content.remove(key) {
+            Some(::toml::Value::Array(vec)) => {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
+                    if let ::toml::Value::String(value) = value {
+                        res.push(value)
+                    }
+                    else {
+                        eprintln!(
+                            "Error in config file {}: \
+                            '{}' expected to be a array of strings.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error);
+                    }
+                }
+                Ok(Some(res))
+            }
+            Some(_) => {
+                eprintln!(
+                    "Error in config file {}: \
+                     '{}' expected to be a array of strings.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+            None => Ok(None)
         }
     }
 

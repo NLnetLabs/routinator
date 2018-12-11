@@ -42,6 +42,16 @@ tal-dir = ...
 # for information on what is allowed when strict mode is off.
 #strict = false
 
+# Rsync command
+#
+# This is the command to run as rsync. This is only command, no options.
+#rsync-command = "rsync"
+
+# Rsync arguments
+#
+# This is a list of arguments to give to rsync.
+#rsync-args = []
+
 # Number of parallel rsync commands
 #
 # This is the maximum number of rsync commands that are run in parallel.
