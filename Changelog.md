@@ -1,5 +1,16 @@
 # Change Log
 
+## Unrelease next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.2.0 ‘Instant Gezellig’
 
 Breaking Changes
