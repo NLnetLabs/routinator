@@ -166,7 +166,7 @@ and providing the service for routers to access this list via a protocol
 known as RPKI-to-Router protocol or RTR.
 
 These (and all other functions) of Routinator are accessible on the
-command lines via sub-commands. The commands are `vrps` and `rtrd`,
+command line via sub-commands. The commands are `vrps` and `rtrd`,
 respectively.
 
 So, to have Routinator print the list, you say
@@ -231,6 +231,21 @@ minutes, the above command becomes
 ```bash
 routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
 ```
+
+## Configuration Files
+
+Routinator can take its configuration from a file, too. You can specify
+such a configuration file via the `-c` option. If you don’t, Routinator
+will check if there is a file `$HOME/.routinator.conf` and if it exists,
+use it. If it doesn’t exist and there is no `-c` option, default values
+are used.
+
+The configuration file is a TOML file. Its entries are named similarly to
+the command line options. Details about the available entries and there
+meaning can be found in the manual page. In addition, a complete sample
+configuration file showing all the default values can be found in the
+repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.toml).
+
 
 ## Local Exceptions
 

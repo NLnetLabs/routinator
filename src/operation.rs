@@ -10,7 +10,7 @@
 use std::{fs, io};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 use chrono::Utc;
@@ -152,6 +152,7 @@ impl Operation {
     /// This function prints errors to stderr.
     pub fn from_arg_matches(
         matches: &ArgMatches,
+        cur_dir: &Path,
         config: &mut Config
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
@@ -166,7 +167,7 @@ impl Operation {
                 }
             }
             ("rtrd", Some(matches)) => {
-                config.apply_rtrd_arg_matches(matches)?;
+                config.apply_rtrd_arg_matches(matches, cur_dir)?;
                 Operation::Rtrd {
                     attached: matches.is_present("attached")
                 }
@@ -306,17 +307,15 @@ impl Operation {
     ///
     /// If `attached` is `false`, will fork the server and exit. Otherwise
     /// just runs the server forever.
-    fn rtrd(config: Config, attached: bool) -> Result<(), Error> {
+    fn rtrd(mut config: Config, attached: bool) -> Result<(), Error> {
         let repo = config.create_repository(true)?;
-
         if !attached {
-            if let Err(err) = daemonize::Daemonize::new().start() {
+            if let Err(err) = config.daemonize()?.start() {
                 eprintln!("Detaching failed: {}", err);
                 return Err(Error)
             }
         }
         config.switch_logging(!attached)?;
-
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.

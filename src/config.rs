@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
+use daemonize::Daemonize;
 use dirs::home_dir;
 use fern;
 use log::LevelFilter;
@@ -104,6 +105,15 @@ pub struct Config {
 
     /// Should we log to stderr?
     pub log_target: LogTarget,
+
+    /// The optional PID file for daemon mode.
+    pub pid_file: Option<PathBuf>,
+
+    /// The optional working directory for daemon mode.
+    pub working_dir: Option<PathBuf>,
+
+    /// The optional directory to chroot to in daemon mode.
+    pub chroot: Option<PathBuf>,
 }
 
 impl Config {
@@ -209,37 +219,55 @@ impl Config {
     pub fn rtrd_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
         .arg(Arg::with_name("refresh")
-             .long("refresh")
-             .value_name("SECONDS")
-             .default_value("3600")
-             .help("refresh interval in seconds")
+            .long("refresh")
+            .value_name("SECONDS")
+            .default_value("3600")
+            .help("refresh interval in seconds")
         )
         .arg(Arg::with_name("retry")
-             .long("retry")
-             .value_name("SECONDS")
-             .default_value("600")
-             .help("RTR retry interval in seconds")
+            .long("retry")
+            .value_name("SECONDS")
+            .default_value("600")
+            .help("RTR retry interval in seconds")
         )
         .arg(Arg::with_name("expire")
-             .long("expire")
-             .value_name("SECONDS")
-             .default_value("600")
-             .help("RTR expire interval in seconds")
+            .long("expire")
+            .value_name("SECONDS")
+            .default_value("600")
+            .help("RTR expire interval in seconds")
         )
         .arg(Arg::with_name("history")
-             .long("history")
-             .value_name("COUNT")
-             .default_value("10")
-             .help("number of history items to keep in repeat mode")
+            .long("history")
+            .value_name("COUNT")
+            .default_value("10")
+            .help("number of history items to keep in repeat mode")
         )
         .arg(Arg::with_name("listen")
-             .short("l")
-             .long("listen")
-             .value_name("ADDR:PORT")
-             .help("listen addr:port for RTR.")
-             .takes_value(true)
-             .multiple(true)
-             .number_of_values(1)
+            .short("l")
+            .long("listen")
+            .value_name("ADDR:PORT")
+            .help("listen addr:port for RTR.")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
+        )
+        .arg(Arg::with_name("pid-file")
+            .long("pid-file")
+            .value_name("PATH")
+            .help("the file for keep the daemon process's PID in")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("working-dir")
+            .long("working-dir")
+            .value_name("PATH")
+            .help("the working directory of the daemon process")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("chroot")
+            .long("chroot")
+            .value_name("PATH")
+            .help("root directory for the daemon process")
+            .takes_value(true)
         )
     }
 
@@ -255,18 +283,10 @@ impl Config {
     /// This functions prints all its error messages directly to stderr.
     ///
     /// [`apply_rtrd_arg_matches`]: #method.apply_rtrd_arg_matches
-    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
-        let cur_dir = match env::current_dir() {
-            Ok(dir) => dir,
-            Err(err) => {
-                eprintln!(
-                    "Fatal: cannot get current directory ({}). Aborting.",
-                    err
-                );
-                return Err(Error);
-            }
-        };
-
+    pub fn from_arg_matches(
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<Self, Error> {
         let mut res = Self::create_base_config(
             Self::path_value_of(matches, "config", &cur_dir)
                 .as_ref().map(AsRef::as_ref)
@@ -382,7 +402,8 @@ impl Config {
     /// This functions prints all its error messages directly to stderr.
     pub fn apply_rtrd_arg_matches(
         &mut self,
-        matches: &ArgMatches
+        matches: &ArgMatches,
+        cur_dir: &Path,
     ) -> Result<(), Error> {
         // refresh
         if let Some(value) = from_str_value_of(matches, "refresh")? {
@@ -416,6 +437,21 @@ impl Config {
                     }
                 }
             }
+        }
+
+        // pid_file
+        if let Some(pid_file) = matches.value_of("pid-file") {
+            self.pid_file = Some(cur_dir.join(pid_file))
+        }
+
+        // working_dir
+        if let Some(working_dir) = matches.value_of("working-dir") {
+            self.working_dir = Some(cur_dir.join(working_dir))
+        }
+
+        // chroot
+        if let Some(chroot) = matches.value_of("chroot") {
+            self.chroot = Some(cur_dir.join(chroot))
         }
 
         Ok(())
@@ -641,7 +677,10 @@ impl Config {
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
-            log_target
+            log_target,
+            pid_file: file.take_path("pid-file")?,
+            working_dir: file.take_path("working-dir")?,
+            chroot: file.take_path("chroot")?,
         };
         file.check_exhausted()?;
         Ok(res)
@@ -665,6 +704,9 @@ impl Config {
             ],
             log_level: LevelFilter::Warn,
             log_target: LogTarget::Default(Facility::LOG_DAEMON),
+            pid_file: None,
+            working_dir: None,
+            chroot: None
         }
     }
 
@@ -713,6 +755,87 @@ impl Config {
             }
         }
         Ok(())
+    }
+
+    /// Returns a daemonizer based on the configuration.
+    ///
+    /// This also changes the paths in the configuration if `chroot` is set.
+    /// As this may fail, this whole method may fail.
+    ///
+    /// The method prints any error messages to stderr.
+    pub fn daemonize(&mut self) -> Result<Daemonize<()>, Error> {
+        if let Some(ref chroot) = self.chroot {
+            self.cache_dir = match self.cache_dir.strip_prefix(chroot) {
+                Ok(dir) => dir.into(),
+                Err(_) => {
+                    eprintln!(
+                        "Fatal: Repository directory {} \
+                         not under chroot {}.",
+                         self.cache_dir.display(), chroot.display()
+                    );
+                    return Err(Error)
+                }
+            };
+            self.tal_dir = match self.tal_dir.strip_prefix(chroot) {
+                Ok(dir) => dir.into(),
+                Err(_) => {
+                    eprintln!(
+                        "Fatal: TAL directory {} not under chroot {}.",
+                         self.tal_dir.display(), chroot.display()
+                    );
+                    return Err(Error)
+                }
+            };
+            for item in &mut self.exceptions {
+                *item = match item.strip_prefix(chroot) {
+                    Ok(path) => path.into(),
+                    Err(_) => {
+                        eprintln!(
+                            "Fatal: Exception file {} not under chroot {}.",
+                             item.display(), chroot.display()
+                        );
+                        return Err(Error)
+                    }
+                }
+            }
+            if let LogTarget::File(ref mut file) = self.log_target {
+                *file = match file.strip_prefix(chroot) {
+                    Ok(path) => path.into(),
+                    Err(_) => {
+                        eprintln!(
+                            "Fatal: Log file {} not under chroot {}.",
+                             file.display(), chroot.display()
+                        );
+                        return Err(Error)
+                    }
+                };
+            }
+            // XXX I _think_ the pid_file remains where it is outside the
+            //     chroot?
+            if let Some(ref mut dir) = self.working_dir {
+                *dir = match dir.strip_prefix(chroot) {
+                    Ok(path) => path.into(),
+                    Err(_) => {
+                        eprintln!(
+                            "Fatal: working directory {} not under chroot {}.",
+                             dir.display(), chroot.display()
+                        );
+                        return Err(Error)
+                    }
+                }
+            }
+        }
+        let mut res = Daemonize::new();
+        if let Some(ref pid_file) = self.pid_file {
+            res = res.pid_file(pid_file)
+        }
+        if let Some(ref dir) = self.working_dir {
+            res = res.working_directory(dir)
+        }
+        if let Some(ref chroot) = self.chroot {
+            res = res.chroot(chroot)
+        }
+        Ok(res)
     }
 }
 
