@@ -30,7 +30,7 @@ New
   according to log settings. Output to stderr is logged with log level
   _warn,_ stdout is logged with _info._ [(#27)]
 * New options for daemon mode: `pid-file`, `working-dir`, and `chroot`.
-  Options to change the user and group in daemon mode are common soon.
+  Options to change the user and group in daemon mode are coming soon.
   [(#42)]
 * In daemon mode, forking now happens _after_ the TALs are checked so that
   you can see the error messages and that it fails.
@@ -51,8 +51,6 @@ Performance Improvements
 * Caching of CRL serial numbers for CAs with large manifests leads to
   about half the validation time for the current repository. [(#34)]
 
-
-Dependencies
 
 [(#21)]: https://github.com/NLnetLabs/routinator/pull/21
 [(#23)]: https://github.com/NLnetLabs/routinator/pull/23
