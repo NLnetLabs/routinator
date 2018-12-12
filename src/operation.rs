@@ -141,7 +141,6 @@ impl Operation {
                 .long("output")
                 .value_name("FILE")
                 .help("output file, '-' or not present for stdout")
-                .default_value("-")
                 .takes_value(true)
             )
         )
