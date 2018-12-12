@@ -18,6 +18,9 @@ New
 * Output from the rsync runs is now send to the logger and will be handled
   according to log settings. Output to stderr is logged with log level
   _warn,_ stdout is logged with _info._ [(#27)]
+* New options for daemon mode: `pid-file`, `working-dir`, and `chroot`.
+  Options to change the user and group in daemon mode are common soon.
+  [(#42)]
 * In daemon mode, forking now happens _after_ the TALs are checked so that
   you can see the error messages and that it fails.
 * New VRP output format `openbgpd` which produces a `roa-set` for
@@ -47,6 +50,7 @@ Dependencies
 [(#34)]: https://github.com/NLnetLabs/routinator/pull/34
 [(#35)]: https://github.com/NLnetLabs/routinator/pull/35
 [(#41)]: https://github.com/NLnetLabs/routinator/pull/41
+[(#42)]: https://github.com/NLnetLabs/routinator/pull/42
 
 
 ## 0.1.2 ‘And I Cry If I Want To’
