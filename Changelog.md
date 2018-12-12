@@ -1,6 +1,6 @@
 # Change Log
 
-## Next Version
+## 0.2.0 ‘Instant Gezellig’
 
 Breaking Changes
 
