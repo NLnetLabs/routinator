@@ -127,3 +127,23 @@ tal-dir = ...
 # The path to the file to log to if file logging is used. If the path is
 # relative, it is relative to the directory this config file lives in.
 #log-file = ...
+
+# Daemon PID file
+#
+# When in daemon mode, Routinator can store its process ID in a file given
+# through this entry. It will keep that file locked while running. By default,
+# no pid file is used.
+#pid-file = ...
+
+# Daemon working directory
+#
+# If this entry is given, the daemon process will change its working directory
+# to this directory. Otherwise it remains in the current directory.
+#working-dir = ...
+
+# Daemon Chroot
+#
+# If this entry is given, the daemon process will change its root directory to
+# this directory. Startup will fail if any of the other directories given is
+# not within this directory.
+#chroot = ...
