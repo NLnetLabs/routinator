@@ -42,6 +42,9 @@ use crate::rtr::{rtr_listener, NotifySender};
 /// [`from_arg_matches`]: #method.from_arg_matches
 /// [`run`]: #method.run
 pub enum Operation {
+    /// Shows the current configuration.
+    Config,
+
     /// Show the manual page.
     Man {
         /// Output the page instead of showing it.
@@ -88,6 +91,11 @@ impl Operation {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
+
+        // config
+        .subcommand(Config::rtrd_args(SubCommand::with_name("config")
+            .about("Prints the current config and exits.")
+        ))
 
         // vrps
         .subcommand(SubCommand::with_name("vrps")
@@ -156,6 +164,10 @@ impl Operation {
         config: &mut Config
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
+            ("config", Some(matches)) => {
+                config.apply_rtrd_arg_matches(matches, cur_dir)?;
+                Operation::Config
+            }
             ("man", Some(matches)) => {
                 Operation::Man {
                     output: matches.value_of("output").map(|value| {
@@ -213,6 +225,8 @@ impl Operation {
     /// point.
     pub fn run(self, config: Config) -> Result<(), Error> {
         match self {
+            Operation::Config => 
+                Self::print_config(config),
             Operation::Man { output } => {
                 match output {
                     Some(output) => Self::output_man(output),
@@ -232,6 +246,15 @@ impl Operation {
 /// # Running Actual Commands
 ///
 impl Operation {
+    /// Prints the current configuration to stdout and exits.
+    fn print_config(mut config: Config) -> Result<(), Error> {
+        if config.chroot.is_some() {
+            config.daemonize()?;
+        }
+        println!("{:#?}", config);
+        Ok(())
+    }
+
     /// Outputs the manual page to the given path.
     ///
     /// If the path is `None`, outputs to stdout.
