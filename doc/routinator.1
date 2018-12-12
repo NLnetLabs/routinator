@@ -24,6 +24,10 @@
 .IR exceptions-file
 [...]]]
 .RB [ \-\-strict ]
+.RB [ \-\-rsync\-command=\fIcommand\fR]
+.RB [ \-\-rsync\-args=\fIargs\fR]
+.RB [ \-\-rsync-count=\fIcount\fR]
+.RB [ \-\-validation-threads=\fIcount\fR]
 .RB [ \-v | \c
 .BR \-vv | \c
 .BR \-q  | \c
@@ -142,6 +146,26 @@ practice.
 See
 .B RELAXED VALIDATION
 below for more information.
+.TP
+.BI \-\-rsync\-command= command
+Provides the command to run for rsync. This is only the command itself.
+If you need to provide options to rsync, use the
+.B rsync\-args
+configuration file setting instead.
+.IP
+If this option is not given, Routinator will simply run
+.I rsync
+and hope that it is in the path.
+.TP
+.BI \-\-rsync\-count= count
+Sets the maximum number of rsync commands to be run in parallel. The default
+is 4.
+.TP
+.BI \-\-validation\-threads= count
+Sets the number of threads to distribute work to for validation. Note that
+the current processing model validates trust anchors all in one go, so you
+are likely to see less than that number of threads used throughout the
+validation run.
 .TP
 .BR \-v ,\  \fB\-\-verbose
 Print more information. If given twice, even more information is printed.
@@ -399,6 +423,23 @@ If missing, no local exception files are used.
 .B strict
 A boolean specifying whether strict validation should be employed. If missing,
 strict validation will not be used.
+.TP
+.B rsync-command
+A string specifying the command to use for running rsync. The default is
+simply
+.IR rsync .
+.TP
+.B rsync-args
+A list of strings containing the arguments to be passed to the rsync command.
+Each string is an argument of its own.
+.PP
+If this
+option is not provided, Routinator will try to find out if your rsync
+understands the
+.B \-\-contimeout
+option and, if so, will set it to 10 thus letting connection attempts time
+out after ten seconds. If your rsync is too old to support this option, no
+arguments are used.
 .TP
 .B rsync-count
 An integer value specifying the number of rsync commands that should at most

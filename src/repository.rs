@@ -119,7 +119,7 @@ impl Repository {
             rsync: if rsync {
                 Some((
                     Mutex::new(RsyncState::new()),
-                    RsyncCommand::detect()?
+                    RsyncCommand::detect(config)?
                 ))
             }
             else {
@@ -795,12 +795,14 @@ impl RsyncState {
 
 #[derive(Clone, Debug)]
 pub struct RsyncCommand {
-    has_contimeout: bool
+    command: String,
+    args: Vec<String>,
 }
 
 impl RsyncCommand {
-    pub fn detect() -> Result<Self, Error> {
-        let output = match process::Command::new("rsync").arg("-h").output() {
+    pub fn detect(config: &Config) -> Result<Self, Error> {
+        let command = config.rsync_command.clone();
+        let output = match process::Command::new(&command).arg("-h").output() {
             Ok(output) => output,
             Err(err) => {
                 eprintln!(
@@ -817,10 +819,24 @@ impl RsyncCommand {
             );
             return Err(Error);
         }
-        Ok(RsyncCommand {
-            has_contimeout:
-                output.stdout.windows(12)
-                             .any(|window| window == b"--contimeout")
+        Ok(match config.rsync_args {
+            Some(ref args) => {
+                RsyncCommand { command, args: args.clone() }
+            }
+            None => {
+                let has_contimeout =
+                   output.stdout.windows(12)
+                  .any(|window| window == b"--contimeout");
+                if has_contimeout {
+                    RsyncCommand {
+                        command,
+                        args: vec!["--contimeout=10".into()]
+                    }
+                }
+                else {
+                    RsyncCommand { command, args: Vec::new() }
+                }
+            }
         })
     }
 
@@ -871,13 +887,13 @@ impl RsyncCommand {
         if !destination.ends_with("/") {
             destination.push('/')
         }
-        let mut cmd = process::Command::new("rsync");
-        cmd.arg("-rltz")
-           .arg("--delete");
-        if self.has_contimeout {
-            cmd.arg("--contimeout=10");
+        let mut cmd = process::Command::new(&self.command);
+        for item in &self.args {
+            cmd.arg(item);
         }
-        cmd.arg(source.to_string())
+        cmd.arg("-rltz")
+           .arg("--delete")
+           .arg(source.to_string())
            .arg(destination);
         debug!("Running command {:?}", cmd);
         Ok(cmd)

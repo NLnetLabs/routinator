@@ -23,6 +23,9 @@ New
 * New VRP output format `openbgpd` which produces a `roa-set` for
   [OpenBGPD](http://www.openbgpd.org/) config.
   Thanks to Job Snijders. [(#32)]
+* A new command line and config file option `rsync-command` allows to
+  choose which command to run for rsync. A new config file option
+  `rsync-args` allows to provide arguments to rsync. [(#41)]
 
 Bug Fixes
 
@@ -43,6 +46,7 @@ Dependencies
 [(#32)]: https://github.com/NLnetLabs/routinator/pull/32
 [(#34)]: https://github.com/NLnetLabs/routinator/pull/34
 [(#35)]: https://github.com/NLnetLabs/routinator/pull/35
+[(#41)]: https://github.com/NLnetLabs/routinator/pull/41
 
 
 ## 0.1.2 ‘And I Cry If I Want To’
