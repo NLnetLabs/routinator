@@ -1311,7 +1311,7 @@ mod test {
                 App::new("routinator"))
         ).get_matches_from_safe(args).unwrap();
         config.apply_arg_matches(&matches, Path::new("/test")).unwrap();
-        config.apply_rtrd_arg_matches(&matches).unwrap();
+        config.apply_rtrd_arg_matches(&matches, Path::new("/test")).unwrap();
         config
     }
 
