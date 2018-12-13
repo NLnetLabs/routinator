@@ -1,7 +1,12 @@
 # Routinator Configuration
 #
-# The configuration file is a TOML file. See https://github.com/toml-lang/toml
-# for information on the format.
+# The configuration file is a TOML file. It consists of a sequence of
+# key-value pairs, each on its own line. Strings are to be enclosed in
+# double quotes. Lists of values can be given by enclosing a
+# comma-separated sequence of these values in square brackets.
+#
+# See https://github.com/toml-lang/toml for detailed information on the
+# format.
 #
 # This file contains all configuration settings with explanations and their
 # default values.
@@ -14,7 +19,7 @@
 #
 # This setting is mandatory.
 #
-repository-dir = ...
+repository-dir = "..."
 
 # Trust Anchor Locator (TAL) directory
 #
@@ -26,7 +31,7 @@ repository-dir = ...
 #
 # This setting is mandatory.
 #
-tal-dir = ...
+tal-dir = "..."
 
 # Local exceptions files
 #
