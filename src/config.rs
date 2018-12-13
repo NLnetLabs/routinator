@@ -1400,7 +1400,7 @@ mod test {
              exceptions = [\"ex1\", \"/ex2\"]\n\
              strict = true\n\
              rsync-count = 12\n\
-             validation-threads = 1000000\n\
+             validation-threads = 1000\n\
              refresh = 6\n\
              retry = 7\n\
              expire = 8\n\
@@ -1420,7 +1420,7 @@ mod test {
         );
         assert_eq!(config.strict, true);
         assert_eq!(config.rsync_count, 12);
-        assert_eq!(config.validation_threads, 1000000);
+        assert_eq!(config.validation_threads, 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
         assert_eq!(config.expire, Duration::from_secs(8));
