@@ -8,6 +8,8 @@ New
 
 Bug Fixes
 
+* Fix a compile time error on 32 bit systems.
+
 Dependencies
 
 

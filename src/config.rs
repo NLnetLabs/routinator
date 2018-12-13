@@ -670,10 +670,11 @@ impl Config {
             },
             rsync_args: file.take_opt_string_array("rsync-args")?,
             rsync_count: {
-                file.take_usize("rsync-count")?.unwrap_or(DEFAULT_RSYNC_COUNT)
+                file.take_small_usize("rsync-count")?
+                    .unwrap_or(DEFAULT_RSYNC_COUNT)
             },
             validation_threads: {
-                file.take_usize("validation-threads")?
+                file.take_small_usize("validation-threads")?
                     .unwrap_or(::num_cpus::get())
             },
             refresh: {
@@ -692,7 +693,7 @@ impl Config {
                 )
             },
             history_size: {
-                file.take_usize("history-size")?
+                file.take_small_usize("history-size")?
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
             tcp_listen: file.take_from_str_array("listen-tcp")?,
@@ -1067,7 +1068,7 @@ impl ConfigFile {
         }
     }
 
-    fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
+    fn take_small_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
         match self.content.remove(key) {
             Some(value) => {
                 if let toml::Value::Integer(res) = value {
@@ -1079,7 +1080,7 @@ impl ConfigFile {
                         );
                         Err(Error)
                     }
-                    else if is_large_i64(res) {
+                    else if res > ::std::u16::MAX.into() {
                         eprintln!(
                             "Error in config file {}: \
                             value for '{}' is too large.",
@@ -1318,16 +1319,6 @@ where T: FromStr, T::Err: fmt::Display {
         }
         None => Ok(None)
     }
-}
-
-#[cfg(target_pointer_width = "32")]
-fn is_large_i64(x: i64) -> bool {
-    res > ::std::usize::MAX as i64
-}
-
-#[cfg(not(target_pointer_width = "32"))]
-fn is_large_i64(_: i64) -> bool {
-    false
 }
 
 
