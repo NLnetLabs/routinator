@@ -580,7 +580,7 @@ impl Config {
     /// Creates the correct base configuration for the given config file.
     /// 
     /// If no config path is given, tries to read the default config in
-    /// `$HOME/.routinator.toml`. If that doesn’t exist, creates a default
+    /// `$HOME/.routinator.conf`. If that doesn’t exist, creates a default
     /// config.
     ///
     /// This functions prints all its error messages directly to stderr.
@@ -600,7 +600,7 @@ impl Config {
             None => {
                 match home_dir() {
                     Some(dir) => match ConfigFile::read(
-                                            &dir.join(".routinator.toml"))? {
+                                            &dir.join(".routinator.conf"))? {
                         Some(file) => file,
                         None => return Ok(Self::default()),
                     }
