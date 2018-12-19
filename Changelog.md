@@ -8,9 +8,13 @@ New
 
 Bug Fixes
 
+* Actually use `$HOME/.routinator.conf` as the default config file as
+  promised by the documentation. [(#49)]
 * Fix a compile time error on 32 bit systems.
 
 Dependencies
+
+[(#49)]: https://github.com/NLnetLabs/routinator/pull/49
 
 
 ## 0.2.0 ‘Instant Gezellig’
