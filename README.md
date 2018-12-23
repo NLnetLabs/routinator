@@ -1,6 +1,6 @@
 # Routinator
 
-[![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator) [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
+[![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator) [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 
