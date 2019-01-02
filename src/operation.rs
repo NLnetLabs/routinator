@@ -250,7 +250,7 @@ impl Operation {
         if config.chroot.is_some() {
             config.daemonize()?;
         }
-        println!("{:#?}", config);
+        println!("{}", config);
         Ok(())
     }
 

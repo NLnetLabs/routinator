@@ -862,6 +862,89 @@ impl Config {
         }
         Ok(res)
     }
+
+    /// Returns a TOML representation of the config.
+    pub fn to_toml(&self) -> toml::Value {
+        let mut res = toml::value::Table::new();
+        res.insert(
+            "repository-dir".into(),
+            self.cache_dir.display().to_string().into()
+        );
+        res.insert(
+            "tal-dir".into(),
+            self.tal_dir.display().to_string().into()
+        );
+        res.insert(
+            "exceptions".into(),
+            toml::Value::Array(
+                self.exceptions.iter()
+                    .map(|p| p.display().to_string().into())
+                    .collect()
+            )
+        );
+        res.insert("strict".into(), self.strict.into());
+        res.insert("rsync-command".into(), self.rsync_command.clone().into());
+        if let Some(ref args) = self.rsync_args {
+            res.insert(
+                "rsync-args".into(),
+                toml::Value::Array(
+                    args.iter().map(|a| a.clone().into()).collect()
+                )
+            );
+        }
+        res.insert("rsync-count".into(), (self.rsync_count as i64).into());
+        res.insert(
+            "validation-threads".into(),
+            (self.validation_threads as i64).into()
+        );
+        res.insert("refresh".into(), (self.refresh.as_secs() as i64).into());
+        res.insert("retry".into(), (self.retry.as_secs() as i64).into());
+        res.insert("expire".into(), (self.expire.as_secs() as i64).into());
+        res.insert("history-size".into(), (self.history_size as i64).into());
+        res.insert(
+            "listen-tcp".into(),
+            toml::Value::Array(
+                self.tcp_listen.iter().map(|a| a.to_string().into()).collect()
+            )
+        );
+        res.insert("log-level".into(), self.log_level.to_string().into());
+        match self.log_target {
+            LogTarget::Default(facility) => {
+                res.insert("log".into(), "default".into());
+                res.insert(
+                    "syslog-facility".into(),
+                    facility_to_string(facility).into()
+                );
+            }
+            LogTarget::Syslog(facility) => {
+                res.insert("log".into(), "syslog".into());
+                res.insert(
+                    "syslog-facility".into(),
+                    facility_to_string(facility).into()
+                );
+            }
+            LogTarget::Stderr => {
+                res.insert("log".into(), "stderr".into());
+            }
+            LogTarget::File(ref file) => {
+                res.insert("log".into(), "file".into());
+                res.insert(
+                    "log-file".into(),
+                    file.display().to_string().into()
+                );
+            }
+        }
+        if let Some(ref file) = self.pid_file {
+            res.insert("pid-file".into(), file.display().to_string().into());
+        }
+        if let Some(ref dir) = self.working_dir {
+            res.insert("working-dir".into(), dir.display().to_string().into());
+        }
+        if let Some(ref dir) = self.chroot {
+            res.insert("chroot".into(), dir.display().to_string().into());
+        }
+        res.into()
+    }
 }
 
 
@@ -883,6 +966,15 @@ impl Default for Config {
                 )
             }
         }
+    }
+}
+
+
+//--- Display
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_toml())
     }
 }
 
@@ -1321,6 +1413,32 @@ where T: FromStr, T::Err: fmt::Display {
     }
 }
 
+fn facility_to_string(facility: Facility) -> String {
+    use syslog::Facility::*;
+
+    match facility {
+        LOG_KERN => "kern",
+        LOG_USER => "user",
+        LOG_MAIL => "mail",
+        LOG_DAEMON => "daemon",
+        LOG_AUTH => "auth",
+        LOG_SYSLOG => "syslog",
+        LOG_LPR => "lpr",
+        LOG_NEWS => "news",
+        LOG_UUCP => "uucp",
+        LOG_CRON => "cron",
+        LOG_AUTHPRIV => "authpriv",
+        LOG_FTP => "ftp",
+        LOG_LOCAL0 => "local0",
+        LOG_LOCAL1 => "local1",
+        LOG_LOCAL2 => "local2",
+        LOG_LOCAL3 => "local3",
+        LOG_LOCAL4 => "local4",
+        LOG_LOCAL5 => "local5",
+        LOG_LOCAL6 => "local6",
+        LOG_LOCAL7 => "local7",
+    }.into()
+}
 
 //------------ DEFAULT_TALS --------------------------------------------------
 
