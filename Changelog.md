@@ -1,10 +1,14 @@
 # Change Log
 
-## Unrelease next version
+## Unreleased next version
 
 Breaking Changes
 
 New
+
+* The `config` command now prints the configuration in TOML format and
+  can be used to create a configuration file for the current
+  configuration. [(#54)]
 
 Bug Fixes
 
@@ -15,6 +19,7 @@ Bug Fixes
 Dependencies
 
 [(#49)]: https://github.com/NLnetLabs/routinator/pull/49
+[(#54)]: https://github.com/NLnetLabs/routinator/pull/54
 
 
 ## 0.2.0 ‘Instant Gezellig’
