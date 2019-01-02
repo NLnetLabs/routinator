@@ -506,6 +506,11 @@ A string value specifying the syslog facility to use for logging to syslog.
 The default value if this entry is missing is
 .IR daemon .
 .TP
+.TP
+.B listen-tcp
+An array of string values each providing the address and port which the RTR
+daemon should listen on in TCP mode. Address and port should be separated by
+a colon. IPv6 address should be enclosed in square braces.
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in RTR server mode. The default is
