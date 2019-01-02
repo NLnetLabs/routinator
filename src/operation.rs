@@ -246,10 +246,18 @@ impl Operation {
 ///
 impl Operation {
     /// Prints the current configuration to stdout and exits.
+    #[cfg(unix)]
     fn print_config(mut config: Config) -> Result<(), Error> {
         if config.chroot.is_some() {
             config.daemonize()?;
         }
+        println!("{}", config);
+        Ok(())
+    }
+
+    /// Prints the current configuration to stdout and exits.
+    #[cfg(not(unix))]
+    fn print_config(config: Config) -> Result<(), Error> {
         println!("{}", config);
         Ok(())
     }
@@ -331,12 +339,7 @@ impl Operation {
     /// just runs the server forever.
     fn rtrd(mut config: Config, attached: bool) -> Result<(), Error> {
         let repo = config.create_repository(true)?;
-        if !attached {
-            if let Err(err) = config.daemonize()?.start() {
-                eprintln!("Detaching failed: {}", err);
-                return Err(Error)
-            }
-        }
+        Self::daemonize(&mut config)?;
         config.switch_logging(!attached)?;
 
         // Start out with validation so that we only fire up our sockets
@@ -365,6 +368,22 @@ impl Operation {
             .map_err(|_| ())
             .select(rtr).map(|_| ()).map_err(|_| ())
         );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn daemonize(config: &mut Config) -> Result<(), Error> {
+        if !attached {
+            if let Err(err) = config.daemonize()?.start() {
+                eprintln!("Detaching failed: {}", err);
+                return Err(Error)
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    fn daemonize(_config: &mut Config) -> Result<(), Error> {
         Ok(())
     }
 
