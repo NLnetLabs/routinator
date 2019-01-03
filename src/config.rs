@@ -1620,6 +1620,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn good_file_config() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
