@@ -1097,7 +1097,7 @@ pub enum LogTarget {
 #[cfg(unix)]
 impl Default for LogTarget {
     fn default() -> Self {
-        LogTarget::Default(Facility::Daemon)
+        LogTarget::Default(Facility::LOG_DAEMON)
     }
 }
 

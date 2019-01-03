@@ -339,7 +339,9 @@ impl Operation {
     /// just runs the server forever.
     fn rtrd(mut config: Config, attached: bool) -> Result<(), Error> {
         let repo = config.create_repository(true)?;
-        Self::daemonize(&mut config)?;
+        if !attached {
+            Self::daemonize(&mut config)?;
+        }
         config.switch_logging(!attached)?;
 
         // Start out with validation so that we only fire up our sockets
@@ -373,11 +375,9 @@ impl Operation {
 
     #[cfg(unix)]
     fn daemonize(config: &mut Config) -> Result<(), Error> {
-        if !attached {
-            if let Err(err) = config.daemonize()?.start() {
-                eprintln!("Detaching failed: {}", err);
-                return Err(Error)
-            }
+        if let Err(err) = config.daemonize()?.start() {
+            eprintln!("Detaching failed: {}", err);
+            return Err(Error)
         }
         Ok(())
     }
