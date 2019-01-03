@@ -1592,6 +1592,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn default_config() {
         let config = get_default_config();
         assert_eq!(
@@ -1684,6 +1685,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn basic_args() {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository", "-t", "tals",
