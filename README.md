@@ -104,6 +104,10 @@ We are not quite sure which particular version you need at the very least,
 but whatever is being shipped with current Linux and \*BSD distributions
 and macOS should be fine.
 
+On Windows, Routinator requires the `rsync` version that comes with
+[Cygwin](https://www.cygwin.com/) – make sure to select rsync during the
+installation phase. And yes, Routinator totally works on Windows, too.
+
 If you don’t have rsync, please head to http://rsync.samba.org/
 
 ### Rust

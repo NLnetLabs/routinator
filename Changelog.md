@@ -9,6 +9,10 @@ New
 * The `config` command now prints the configuration in TOML format and
   can be used to create a configuration file for the current
   configuration. [(#54)]
+* Routinator now builds and runs on Windows. Given that Windows is a Rust
+  tier 1 platform, we wanted to see how difficult it is to get this
+  going. Note that you will need the `rsync` executable that comes with
+  [Cygwin](https://www.cygwin.com/). [(#55)]
 
 Bug Fixes
 
@@ -20,6 +24,7 @@ Dependencies
 
 [(#49)]: https://github.com/NLnetLabs/routinator/pull/49
 [(#54)]: https://github.com/NLnetLabs/routinator/pull/54
+[(#55)]: https://github.com/NLnetLabs/routinator/pull/55
 
 
 ## 0.2.0 ‘Instant Gezellig’
