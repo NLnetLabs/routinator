@@ -883,10 +883,19 @@ impl RsyncCommand {
         info!("rsyncing from {}.", source);
         let destination = destination.as_ref();
         create_dir_all(destination)?;
-        let mut destination = format!("{}", destination.display());
-        if !destination.ends_with("/") {
-            destination.push('/')
-        }
+        let destination = match Self::format_destination(destination) {
+            Ok(some) => some,
+            Err(_) => {
+                error!(
+                    "rsync: illegal destination path {}.",
+                    destination.display()
+                );
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "illegal destination path"
+                ));
+            }
+        };
         let mut cmd = process::Command::new(&self.command);
         for item in &self.args {
             cmd.arg(item);
@@ -897,6 +906,71 @@ impl RsyncCommand {
            .arg(destination);
         debug!("Running command {:?}", cmd);
         Ok(cmd)
+    }
+
+    #[cfg(not(windows))]
+    fn format_destination(path: &Path) -> Result<String, Error> {
+        let mut destination = format!("{}", path.display());
+        if !destination.ends_with("/") {
+            destination.push('/')
+        }
+        Ok(destination)
+    }
+
+    #[cfg(windows)]
+    fn format_destination(path: &Path) -> Result<String, Error> {
+        // On Windows we are using Cygwin rsync which requires Unix-style
+        // paths. In particular, the drive parameter needs to be turned
+        // from e.g. `C:` into `/cygdrive/c` and all backslashes should
+        // become slashes.
+        use std::path::{Component, Prefix};
+
+        let mut destination = String::new();
+        for component in path.components() {
+            match component {
+                Component::Prefix(prefix) => {
+                    // We only accept UNC and Disk prefixes. Everything else
+                    // causes an error.
+                    match prefix.kind() {
+                        Prefix::UNC(server, share) => {
+                            let (server, share) = match (server.to_str(),
+                                                         share.to_str()) {
+                                (Some(srv), Some(shr)) => (srv, shr),
+                                _ => return Err(Error)
+                            };
+                            destination.push_str(server);
+                            destination.push('/');
+                            destination.push_str(share);
+                        }
+                        Prefix::Disk(disk) => {
+                            let disk = if disk.is_ascii() {
+                                (disk as char).to_ascii_lowercase()
+                            }
+                            else {
+                                return Err(Error)
+                            };
+                            destination.push_str("/cygdrive/");
+                            destination.push(disk);
+                        }
+                        _ => return Err(Error)
+                    }
+                }
+                Component::CurDir | Component::RootDir => {
+                    continue
+                }
+                Component::ParentDir => {
+                    destination.push_str("..");
+                }
+                Component::Normal(s) => {
+                    match s.to_str() {
+                        Some(s) => destination.push_str(s),
+                        None => return Err(Error)
+                    }
+                }
+            }
+            destination.push_str("/");
+        }
+        Ok(destination)
     }
 
     fn log_output(source: &uri::RsyncModule, output: Output) -> ExitStatus {

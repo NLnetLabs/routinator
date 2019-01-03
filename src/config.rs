@@ -11,11 +11,11 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
-use daemonize::Daemonize;
+#[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
 use fern;
 use log::LevelFilter;
-use syslog::Facility;
+#[cfg(unix)] use syslog::Facility;
 use toml;
 use crate::operation::Error;
 use crate::repository::Repository;
@@ -42,7 +42,7 @@ const DEFAULT_EXPIRE: u64 = 7200;
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
 
-//------------ Config --------------------------------------------------------
+//------------ Config --------------------------------------------------------  
 
 /// Routinator configuration.
 ///
@@ -390,6 +390,17 @@ impl Config {
         }
 
         // log_target
+        self.apply_log_matches(matches, cur_dir)?;
+
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn apply_log_matches(
+        &mut self,
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<(), Error> {
         if matches.is_present("syslog") {
             self.log_target = LogTarget::Syslog(
                 match Facility::from_str(
@@ -410,9 +421,26 @@ impl Config {
                 self.log_target = LogTarget::File(cur_dir.join(file))
             }
         }
-
         Ok(())
     }
+
+    #[cfg(not(unix))]
+    fn apply_log_matches(
+        &mut self,
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<(), Error> {
+        if let Some(file) = matches.value_of("logfile") {
+            if file == "-" {
+                self.log_target = LogTarget::Stderr
+            }
+            else {
+                self.log_target = LogTarget::File(cur_dir.join(file))
+            }
+        }
+        Ok(())
+    }
+
 
     /// Applies the RTR server command line arguments to a config.
     ///
@@ -520,28 +548,30 @@ impl Config {
     /// stderr.
     ///
     /// This functions prints all its error messages directly to stderr.
+    #[allow(unused_variables)] // for cfg(not(unix))
     pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
         match self.log_target {
-            LogTarget::Default(fac) if daemon => {
-                if let Err(err) = syslog::init(fac, self.log_level, None) {
-                    eprintln!("Failed to init syslog: {}", err);
-                    return Err(Error)
+            #[cfg(unix)]
+            LogTarget::Default(fac) => {
+                if daemon {
+                    if let Err(err) = syslog::init(fac, self.log_level, None) {
+                        eprintln!("Failed to init syslog: {}", err);
+                        return Err(Error)
+                    }
+                }
+                else {
+                    self.switch_stderr_logging()?;
                 }
             }
+            #[cfg(unix)]
             LogTarget::Syslog(fac) => {
                 if let Err(err) = syslog::init(fac, self.log_level, None) {
                     eprintln!("Failed to init syslog: {}", err);
                     return Err(Error)
                 }
             }
-            LogTarget::Stderr | LogTarget::Default(_) => {
-                let dispatch = fern::Dispatch::new()
-                    .level(self.log_level)
-                    .chain(io::stderr());
-                if let Err(err) = dispatch.apply() {
-                    eprintln!("Failed to init stderr logging: {}", err);
-                    return Err(Error)
-                }
+            LogTarget::Stderr => {
+                self.switch_stderr_logging()?;
             }
             LogTarget::File(ref path) => {
                 let file = match fern::log_file(path) {
@@ -562,6 +592,18 @@ impl Config {
                     return Err(Error)
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Switches to stderr logging.
+    fn switch_stderr_logging(&self) -> Result<(), Error> {
+        let dispatch = fern::Dispatch::new()
+            .level(self.log_level)
+            .chain(io::stderr());
+        if let Err(err) = dispatch.apply() {
+            eprintln!("Failed to init stderr logging: {}", err);
+            return Err(Error)
         }
         Ok(())
     }
@@ -615,50 +657,7 @@ impl Config {
     ///
     /// This functions prints all its error messages directly to stderr.
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Error> {
-        let facility = file.take_string("syslog-facility")?;
-        let facility = facility.as_ref().map(AsRef::as_ref)
-                               .unwrap_or("daemon");
-        let facility = match Facility::from_str(facility) {
-            Ok(value) => value,
-            Err(_) => {
-                eprintln!(
-                    "Error in config file {}: \
-                     invalid syslog-facility.",
-                     file.path.display()
-                );
-                return Err(Error);
-            }
-        };
-        let log_target = file.take_string("log")?;
-        let log_file = file.take_path("log-file")?;
-        let log_target = match log_target.as_ref().map(AsRef::as_ref) {
-            Some("default") | None => LogTarget::Default(facility),
-            Some("syslog") => LogTarget::Syslog(facility),
-            Some("stderr") =>  LogTarget::Stderr,
-            Some("file") => {
-                LogTarget::File(match log_file {
-                    Some(file) => file,
-                    None => {
-                        eprintln!(
-                            "Error in config file {}: \
-                             log target \"file\" requires 'log-file' value.",
-                             file.path.display()
-                        );
-                        return Err(Error);
-                    }
-                })
-            }
-            Some(value) => {
-                eprintln!(
-                    "Error in config file {}: \
-                     invalid log target '{}'",
-                     file.path.display(),
-                     value
-                );
-                return Err(Error);
-            }
-        };
-
+        let log_target = Self::log_target_from_config_file(&mut file)?;
         let res = Config {
             cache_dir: file.take_mandatory_path("repository-dir")?,
             tal_dir: file.take_mandatory_path("tal-dir")?,
@@ -709,6 +708,90 @@ impl Config {
         Ok(res)
     }
 
+    /// Determines the logging target from the config file.
+    #[cfg(unix)]
+    fn log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<LogTarget, Error> {
+        let facility = file.take_string("syslog-facility")?;
+        let facility = facility.as_ref().map(AsRef::as_ref)
+                               .unwrap_or("daemon");
+        let facility = match Facility::from_str(facility) {
+            Ok(value) => value,
+            Err(_) => {
+                eprintln!(
+                    "Error in config file {}: \
+                     invalid syslog-facility.",
+                     file.path.display()
+                );
+                return Err(Error);
+            }
+        };
+        let log_target = file.take_string("log")?;
+        let log_file = file.take_path("log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | None => Ok(LogTarget::Default(facility)),
+            Some("syslog") => Ok(LogTarget::Syslog(facility)),
+            Some("stderr") =>  Ok(LogTarget::Stderr),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(LogTarget::File(file)),
+                    None => {
+                        eprintln!(
+                            "Error in config file {}: \
+                             log target \"file\" requires 'log-file' value.",
+                             file.path.display()
+                        );
+                        Err(Error)
+                    }
+                }
+            }
+            Some(value) => {
+                eprintln!(
+                    "Error in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Error)
+            }
+        }
+    }
+
+    /// Determines the logging target from the config file.
+    #[cfg(not(unix))]
+    fn log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<LogTarget, Error> {
+        let log_target = file.take_string("log")?;
+        let log_file = file.take_path("log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | Some("stderr") | None => Ok(LogTarget::Stderr),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(LogTarget::File(file)),
+                    None => {
+                        eprintln!(
+                            "Error in config file {}: \
+                             log target \"file\" requires 'log-file' value.",
+                             file.path.display()
+                        );
+                        Err(Error)
+                    }
+                }
+            }
+            Some(value) => {
+                eprintln!(
+                    "Error in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Error)
+            }
+        }
+    }
+
     /// Creates a default config with the given paths.
     fn default_with_paths(cache_dir: PathBuf, tal_dir: PathBuf) -> Self {
         Config {
@@ -728,7 +811,7 @@ impl Config {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
             ],
             log_level: LevelFilter::Warn,
-            log_target: LogTarget::Default(Facility::LOG_DAEMON),
+            log_target: LogTarget::default(),
             pid_file: None,
             working_dir: None,
             chroot: None
@@ -788,6 +871,7 @@ impl Config {
     /// As this may fail, this whole method may fail.
     ///
     /// The method prints any error messages to stderr.
+    #[cfg(unix)]
     pub fn daemonize(&mut self) -> Result<Daemonize<()>, Error> {
         if let Some(ref chroot) = self.chroot {
             self.cache_dir = match self.cache_dir.strip_prefix(chroot) {
@@ -909,6 +993,7 @@ impl Config {
         );
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
+            #[cfg(unix)]
             LogTarget::Default(facility) => {
                 res.insert("log".into(), "default".into());
                 res.insert(
@@ -916,6 +1001,7 @@ impl Config {
                     facility_to_string(facility).into()
                 );
             }
+            #[cfg(unix)]
             LogTarget::Syslog(facility) => {
                 res.insert("log".into(), "syslog".into());
                 res.insert(
@@ -987,11 +1073,13 @@ pub enum LogTarget {
     /// Default.
     ///
     /// Logs to `Syslog(facility)` in daemon mode and `Stderr` otherwise.
+    #[cfg(unix)]
     Default(Facility),
 
     /// Syslog.
     ///
     /// The argument is the syslog facility to use.
+    #[cfg(unix)]
     Syslog(Facility),
 
     /// Stderr.
@@ -1004,14 +1092,33 @@ pub enum LogTarget {
 }
 
 
+//--- Default
+
+#[cfg(unix)]
+impl Default for LogTarget {
+    fn default() -> Self {
+        LogTarget::Default(Facility::LOG_DAEMON)
+    }
+}
+
+#[cfg(not(unix))]
+impl Default for LogTarget {
+    fn default() -> Self {
+        LogTarget::Stderr
+    }
+}
+
+
 //--- PartialEq and Eq
 
 impl PartialEq for LogTarget {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            #[cfg(unix)]
             (&LogTarget::Default(s), &LogTarget::Default(o)) => {
                 (s as usize) == (o as usize)
             }
+            #[cfg(unix)]
             (&LogTarget::Syslog(s), &LogTarget::Syslog(o)) => {
                 (s as usize) == (o as usize)
             }
@@ -1413,6 +1520,7 @@ where T: FromStr, T::Err: fmt::Display {
     }
 }
 
+#[cfg(unix)]
 fn facility_to_string(facility: Facility) -> String {
     use syslog::Facility::*;
 
@@ -1484,6 +1592,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn default_config() {
         let config = get_default_config();
         assert_eq!(
@@ -1511,6 +1620,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn good_file_config() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
@@ -1576,6 +1686,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn basic_args() {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository", "-t", "tals",

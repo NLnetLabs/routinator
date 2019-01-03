@@ -6,7 +6,7 @@
 extern crate bytes;
 extern crate chrono;
 extern crate clap;
-extern crate daemonize;
+#[cfg(unix)] extern crate daemonize;
 extern crate dirs;
 #[macro_use] extern crate failure;
 extern crate fern;
@@ -17,7 +17,7 @@ extern crate json;
 extern crate num_cpus;
 extern crate rpki;
 extern crate slab;
-extern crate syslog;
+#[cfg(unix)] extern crate syslog;
 extern crate tempfile;
 extern crate tokio;
 extern crate tokio_process;
