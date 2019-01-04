@@ -1,8 +1,6 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking Changes
+## 0.2.1 ‘Rated R’
 
 New
 
@@ -19,8 +17,6 @@ Bug Fixes
 * Actually use `$HOME/.routinator.conf` as the default config file as
   promised by the documentation. [(#49)]
 * Fix a compile time error on 32 bit systems.
-
-Dependencies
 
 [(#49)]: https://github.com/NLnetLabs/routinator/pull/49
 [(#54)]: https://github.com/NLnetLabs/routinator/pull/54
