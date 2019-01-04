@@ -1,13 +1,14 @@
 # Routinator
 
-[![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator) [![](https://img.shields.io/docker/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator) [![](https://img.shields.io/crates/v/routinator.svg)](https://crates.io/crates/routinator) [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
+[![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
+[![AppVeyor Build
+Status](https://ci.appveyor.com/api/projects/status/github/NLnetLabs/routinator?svg=true)](https://ci.appveyor.com/project/partim/routinator)
+[![](https://img.shields.io/docker/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
+[![](https://img.shields.io/crates/v/routinator.svg)](https://crates.io/crates/routinator)
+[![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
-Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
-
-Even though it is still early days for the Routinator, we have decided to
-provide a release in the spirit of open development. Please consider this
-when using the software. If you have any feedback, we would love to hear
-from you. Don’t hesitate to
+Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust. 
+If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
 
