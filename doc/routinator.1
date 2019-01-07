@@ -581,13 +581,13 @@ Signed objects are defined as a profile on CMS messages defined in RFC
 .TP
 .B DER Encoding
 RFC 6488 demands all signed objects to be DER encoded while the more
-general CMS format allows any BER encoding – DER is a stricter subset of
+general CMS format allows any BER encoding -- DER is a stricter subset of
 the more general BER. At least one CA does indeed produce BER encoded
 signed objects.
 .IP
 In relaxed mode, we will allow BER encoding.
 .IP
-Note that this isn’t just nit-picking. In BER encoding, octet strings can
+Note that this isn't just nit-picking. In BER encoding, octet strings can
 be broken up into a sequence of sub-strings. Since those strings are in
 some places used to carry encoded content themselves, such an encoding
 does make parsing significantly more difficult. At least one CA does
