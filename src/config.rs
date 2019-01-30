@@ -21,6 +21,7 @@ use crate::operation::Error;
 use crate::repository::Repository;
 use crate::slurm::LocalExceptions;
 
+
 //------------ Defaults for Some Values --------------------------------------
 
 /// Are we doing strict validation by default?
@@ -121,6 +122,7 @@ pub struct Config {
     /// The optional directory to chroot to in daemon mode.
     pub chroot: Option<PathBuf>,
 }
+
 
 impl Config {
     /// Adds the basic arguments to a clapp app.
@@ -513,20 +515,24 @@ impl Config {
     /// This functions prints all its error messages directly to stderr.
     pub fn create_repository(
         &self,
-        update: bool
+        extra_output: bool,
+        update: bool,
     ) -> Result<Repository, Error> {
         self.prepare_dirs()?;
-        Repository::new(self, update)
+        Repository::new(self, extra_output, update)
     }
 
     /// Loads the local exceptions for this configuration.
     ///
     /// This function logs its error messages.
-    pub fn load_exceptions(&self) -> Result<LocalExceptions, Error> {
+    pub fn load_exceptions(
+        &self,
+        extra_info: bool
+    ) -> Result<LocalExceptions, Error> {
         let mut res = LocalExceptions::empty();
         let mut ok = true;
         for path in &self.exceptions {
-            if let Err(err) = res.extend_from_file(path) {
+            if let Err(err) = res.extend_from_file(path, extra_info) {
                 error!(
                     "Failed to load exceptions file {}: {}",
                     path.display(), err
@@ -1547,6 +1553,7 @@ fn facility_to_string(facility: Facility) -> String {
         LOG_LOCAL7 => "local7",
     }.into()
 }
+
 
 //------------ DEFAULT_TALS --------------------------------------------------
 

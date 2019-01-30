@@ -5,12 +5,13 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use json;
 use json::JsonValue;
 use json::object::Object as JsonObject;
 use rpki::asres::AsId;
 use super::origins;
-use super::origins::{AddressOrigin, AddressPrefix};
+use super::origins::{AddressOrigin, AddressPrefix, OriginInfo};
 
 
 //------------ LocalExceptions -----------------------------------------------
@@ -29,33 +30,56 @@ impl LocalExceptions {
         }
     }
 
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, LoadError> {
-        let mut file = File::open(path)?;
+    pub fn from_file<P: AsRef<Path>>(
+        path: P,
+        extra_info: bool
+    ) -> Result<Self, LoadError> {
+        let mut file = File::open(path.as_ref())?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
-        Ok(Self::from_json(json::parse(&buf)?)?)
+        Ok(Self::from_json(
+            json::parse(&buf)?,
+            &Self::info_from_path(path, extra_info)
+        )?)
     }
 
-    pub fn from_json(json: JsonValue) -> Result<Self, ParseError> {
+    pub fn from_json(
+        json: JsonValue,
+        info: &OriginInfo
+    ) -> Result<Self, ParseError> {
         let mut res = Self::empty();
-        res.extend_from_json(json)?;
+        res.extend_from_json(json, info)?;
         Ok(res)
     }
 
     pub fn extend_from_file<P: AsRef<Path>>(
         &mut self,
-        path: P
+        path: P,
+        extra_info: bool
     ) -> Result<(), LoadError> {
-        let mut file = File::open(path)?;
+        let mut file = File::open(path.as_ref())?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
-        self.extend_from_json(json::parse(&buf)?)?;
+        self.extend_from_json(
+            json::parse(&buf)?,
+            &Self::info_from_path(path, extra_info)
+        )?;
         Ok(())
+    }
+
+    fn info_from_path<P: AsRef<Path>>(path: P, extra: bool) -> OriginInfo {
+        if extra {
+            OriginInfo::Exception(Arc::new(path.as_ref().into()))
+        }
+        else {
+            OriginInfo::None
+        }
     }
 
     pub fn extend_from_json(
         &mut self,
-        json: JsonValue
+        json: JsonValue,
+        info: &OriginInfo,
     ) -> Result<(), ParseError> {
         let mut json = match json {
             JsonValue::Object(json) => json,
@@ -103,7 +127,9 @@ impl LocalExceptions {
                 )
             )?;
         PrefixFilter::extend_from_json(filters, &mut self.filters)?;
-        AddressOrigin::extend_from_json(assertions, &mut self.assertions)?;
+        AddressOrigin::extend_from_json(
+            assertions, info, &mut self.assertions
+        )?;
         Ok(())
     }
 
@@ -228,6 +254,7 @@ impl PrefixFilter {
 impl AddressOrigin {
     fn extend_from_json(
         json: JsonValue,
+        info: &OriginInfo,
         vec: &mut Vec<Self>
     ) -> Result<(), ParseError> {
         let json = match json {
@@ -241,18 +268,21 @@ impl AddressOrigin {
         };
         vec.reserve(json.len());
         for item in json {
-            vec.push(Self::from_json(item)?);
+            vec.push(Self::from_json(item, info)?);
         }
         Ok(())
     }
 
-    fn from_json(json: JsonValue) -> Result<Self, ParseError> {
+    fn from_json(
+        json: JsonValue,
+        info: &OriginInfo,
+    ) -> Result<Self, ParseError> {
         match json {
             JsonValue::Object(mut value) => {
                 let prefix = Self::prefix_from_json(&mut value)?;
                 let asn = Self::asn_from_json(&mut value)?;
                 let max_len = Self::max_len_from_json(&mut value, &prefix)?;
-                Ok(AddressOrigin::new(asn, prefix, max_len))
+                Ok(AddressOrigin::new(asn, prefix, max_len, info.clone()))
             }
             _ => {
                 Err(ParseError::type_error(
@@ -435,7 +465,8 @@ pub mod tests {
                 ip_string.parse().unwrap(),
                 length
             ),
-            max_length
+            max_length,
+            OriginInfo::None,
         )
     }
 
@@ -459,7 +490,9 @@ pub mod tests {
     fn should_parse_empty_slurm_file() {
         let empty = include_str!("../test/slurm/empty.json");
         let json = json::parse(empty).unwrap();
-        let exceptions = LocalExceptions::from_json(json).unwrap();
+        let exceptions = LocalExceptions::from_json(
+            json, &OriginInfo::None
+        ).unwrap();
 
         assert_eq!(0, exceptions.assertions.len());
         assert_eq!(0, exceptions.filters.len());
@@ -469,7 +502,9 @@ pub mod tests {
     fn should_parse_full_slurm_file() {
         let empty = include_str!("../test/slurm/full.json");
         let json = json::parse(empty).unwrap();
-        let exceptions = LocalExceptions::from_json(json).unwrap();
+        let exceptions = LocalExceptions::from_json(
+            json, &OriginInfo::None
+        ).unwrap();
 
         assert_eq!(2, exceptions.assertions.len());
         assert!(
