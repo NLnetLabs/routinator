@@ -6,9 +6,15 @@ Breaking Changes
 
 New
 
+* New output format `csvext` that mimics the output format of the Original
+  RIPE NCC Validator. [(#59)]
+
+
 Bug Fixes
 
 Dependencies
+
+[(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 
 
 ## 0.2.1 ‘Rated R’
