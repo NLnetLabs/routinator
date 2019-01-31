@@ -8,7 +8,12 @@ New
 
 Bug Fixes
 
+* Converts the endianess of the serial number in the SerialNotify RTR PDU.
+  Reported by Massimiliano Stucchi. [(#60)]
+
 Dependencies
+
+[(#60)]: https://github.com/NLnetLabs/routinator/pull/60
 
 
 ## 0.2.1 ‘Rated R’
