@@ -27,6 +27,7 @@ use tokio_process::CommandExt;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::RouteOrigins;
+use crate::slurm::LocalExceptions;
 
 
 //------------ Configuration -------------------------------------------------
@@ -66,6 +67,9 @@ struct RepoInner {
     /// Should we be strict when decoding data?
     strict: bool,
 
+    /// Should we keep extended information about ROAs?
+    extra_output: bool,
+
     /// Number of rsync commands.
     rsync_threads: usize,
 
@@ -85,7 +89,11 @@ impl Repository {
     /// rsyncing is disabled.
     ///
     /// This function writes error messages to stderr.
-    pub fn new(config: &Config, rsync: bool) -> Result<Self, Error> {
+    pub fn new(
+        config: &Config,
+        extra_output: bool,
+        rsync: bool
+    ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             eprintln!(
                 "Failed to open repository directory {}: {}",
@@ -114,6 +122,7 @@ impl Repository {
             cache_dir: config.cache_dir.clone(),
             tal_dir: config.tal_dir.clone(),
             strict: config.strict,
+            extra_output,
             rsync_threads: config.rsync_count,
             validation_threads: config.validation_threads,
             rsync: if rsync {
@@ -223,6 +232,14 @@ impl Repository {
     /// This is the synchronous version of `process_async`.
     pub fn process(&self) -> Result<RouteOrigins, Error> {
         self.process_async().wait()
+    }
+
+    /// Loads the exceptions.
+    pub fn load_exceptions(
+        &self,
+        config: &Config
+    ) -> Result<LocalExceptions, Error> {
+        config.load_exceptions(self.0.extra_output)
     }
 }
 
@@ -561,8 +578,11 @@ impl Repository {
                     return
                 }
             };
+            let mut extra = None;
             let route = roa.process(issuer, self.0.strict, |cert| {
-                self.check_crl(cert, issuer, crl)
+                self.check_crl(cert, issuer, crl)?;
+                extra = Some(8u8);
+                Ok(())
             });
             match route {
                 Ok(route) => routes.push(route),
@@ -683,7 +703,7 @@ impl Repository {
                 Ok(crl) => crl,
                 Err(_) => continue
             };
-            if let Err(_) = crl.validate(issuer) {
+            if let Err(_) = crl.validate(issuer.as_ref().subject_public_key_info()) {
                 continue
             }
 

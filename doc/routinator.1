@@ -241,6 +241,18 @@ This is the default format used if the
 .B -f
 option is missing.
 .TP
+.B csvext
+An extended version of
+.I csv
+each line contains these comma-separated values: the rsync URI of the ROA
+the line is taken from (or "N/A" if it isn't from a ROA), the autonomous
+system number, the prefix in slash notation, the maximum prefix length, the
+not-before date and not-after date of the validity of the ROA.
+.IP
+This format was used in the RIPE NCC Validator version 1. That version
+produce one file per trust anchor. This is not currently supported by
+Routinator -- all entries will be in one single output file.
+.TP
 .B json
 The list is placed into a JSON object with a single element
 .I "roas"

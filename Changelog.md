@@ -6,6 +6,10 @@ Breaking Changes
 
 New
 
+* New output format `csvext` that mimics the output format of the Original
+  RIPE NCC Validator. [(#59)]
+
+
 Bug Fixes
 
 * Converts the endianess of the serial number in the SerialNotify RTR PDU.
@@ -13,6 +17,7 @@ Bug Fixes
 
 Dependencies
 
+[(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
 
 

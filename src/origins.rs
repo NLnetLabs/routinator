@@ -6,9 +6,11 @@
 use std::{hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use rpki::asres::AsId;
+use rpki::cert::ResourceCert;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use super::slurm::LocalExceptions;
@@ -117,12 +119,16 @@ impl AddressOrigins {
     pub fn from_route_origins(
         origins: RouteOrigins,
         exceptions: &LocalExceptions,
+        extra_info: bool,
     ) -> Self {
         let mut res = HashSet::new();
-        for roa in origins {
+        for mut roa in origins {
+            let info = OriginInfo::from_roa(&mut roa, extra_info);
             for addr in roa.iter() {
                 let addr = AddressOrigin::from_roa(
-                    roa.as_id(), addr, roa.status().tal().map(Clone::clone)
+                    roa.as_id(),
+                    addr,
+                    info.clone()
                 );
                 if exceptions.keep_origin(&addr) {
                     let _ = res.insert(addr);
@@ -231,16 +237,18 @@ impl OriginsDiff {
         mut current: HashSet<AddressOrigin>,
         origins: Option<RouteOrigins>,
         exceptions: &LocalExceptions,
-        serial: u32
+        serial: u32,
+        extra_info: bool,
     ) -> (AddressOrigins, Self) {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
 
         if let Some(origins) = origins {
-            for roa in origins {
+            for mut roa in origins {
+                let info = OriginInfo::from_roa(&mut roa, extra_info);
                 for addr in roa.iter() {
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(), addr, roa.status().tal().map(Clone::clone)
+                        roa.as_id(), addr, info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
                         continue
@@ -491,7 +499,8 @@ impl OriginsHistory {
     pub fn update(
         &self,
         origins: Option<RouteOrigins>,
-        exceptions: &LocalExceptions
+        exceptions: &LocalExceptions,
+        extra_info: bool,
     ) -> bool {
         let (serial, current) = {
             let history = self.0.read().unwrap();
@@ -501,7 +510,7 @@ impl OriginsHistory {
         };
         let current: HashSet<_> = current.iter().map(Clone::clone).collect();
         let (next, diff) = OriginsDiff::construct(
-            current, origins, exceptions, serial
+            current, origins, exceptions, serial, extra_info
         );
         if !diff.is_empty() {
             let mut history = self.0.write().unwrap();
@@ -557,27 +566,32 @@ pub struct AddressOrigin {
     /// The maximum authorized prefix length of a route.
     max_length: u8,
 
-    /// Optional trust anchor information.
-    tal: Option<Arc<TalInfo>>
+    /// Extra origin information.
+    info: OriginInfo,
 }
 
 impl AddressOrigin {
     /// Creates a new address origin without trust anchor information.
-    pub fn new(as_id: AsId, prefix: AddressPrefix, max_length: u8) -> Self {
-        AddressOrigin { as_id, prefix, max_length, tal: None }
+    pub fn new(
+        as_id: AsId,
+        prefix: AddressPrefix,
+        max_length: u8,
+        info: OriginInfo,
+    ) -> Self {
+        AddressOrigin { as_id, prefix, max_length, info: info }
     }
 
     /// Creates a new address origin from ROA content.
     fn from_roa(
         as_id: AsId,
         addr: FriendlyRoaIpAddress,
-        tal: Option<Arc<TalInfo>>
+        info: OriginInfo
     ) -> Self {
         AddressOrigin {
             as_id,
             prefix: AddressPrefix::from(&addr),
             max_length: addr.max_length(),
-            tal
+            info
         }
     }
 
@@ -606,14 +620,16 @@ impl AddressOrigin {
         self.max_length
     }
 
+    /// Returns a reference to the resource certificate if available.
+    pub fn cert(&self) -> Option<&ResourceCert> {
+        self.info.cert()
+    }
+
     /// Returns the name of the TAL that this origin as based on.
     ///
     /// If there isn’t one, the name becomes `"N/A"`
     pub fn tal_name(&self) -> &str {
-        match self.tal {
-            Some(ref tal) => tal.name(),
-            None => "N/A"
-        }
+        self.info.tal_name()
     }
 }
 
@@ -716,6 +732,56 @@ impl FromStr for AddressPrefix {
 }
 
 
+//------------ OriginInfo ----------------------------------------------------
+
+/// Extended information about an origin.
+#[derive(Clone, Debug)]
+pub enum OriginInfo {
+    /// No information.
+    None,
+
+    /// The resource certificate of a ROA.
+    RoaCert(Arc<ResourceCert>),
+
+    /// The trust anchor info of a ROA.
+    RoaTal(Arc<TalInfo>),
+
+    /// The path of a local exceptions file.
+    Exception(Arc<PathBuf>),
+}
+
+impl OriginInfo {
+    fn from_roa(roa: &mut RouteOriginAttestation, extra_info: bool) -> Self {
+        if let Some(cert) = roa.take_cert() {
+            if extra_info {
+                OriginInfo::RoaCert(Arc::new(cert))
+            }
+            else {
+                OriginInfo::RoaTal(cert.into_tal())
+            }
+        }
+        else {
+            OriginInfo::None
+        }
+    }
+
+    fn cert(&self) -> Option<&ResourceCert> {
+        match *self {
+            OriginInfo::RoaCert(ref cert) => Some(cert),
+            _ => None
+        }
+    }
+
+    fn tal_name(&self) -> &str {
+        match *self {
+            OriginInfo::RoaCert(ref cert) => cert.tal().name(),
+            OriginInfo::RoaTal(ref tal) => tal.name(),
+            _ => "N/A"
+        }
+    }
+}
+
+
 //------------ FromStrError --------------------------------------------------
 
 /// Creating an IP address prefix from a string has failed.
@@ -748,8 +814,5 @@ pub mod tests {
         assert!(outer.covers(inner_mid));
         assert!(outer.covers(inner_hi));
     }
-
-
-
-
 }
+

@@ -113,7 +113,7 @@ impl Operation {
                 .long("format")
                 .value_name("FORMAT")
                 .possible_values(&[
-                    "csv", "json", "openbgpd", "rpsl", "none"
+                    "csv", "csvext", "json", "openbgpd", "rpsl", "none"
                 ])
                 .default_value("csv")
                 .help("sets the output format")
@@ -192,6 +192,7 @@ impl Operation {
                     },
                     format: match matches.value_of("format").unwrap() {
                         "csv" => OutputFormat::Csv,
+                        "csvext" => OutputFormat::ExtendedCsv,
                         "json" => OutputFormat::Json,
                         "openbgpd" => OutputFormat::Openbgpd,
                         "rpsl" => OutputFormat::Rpsl,
@@ -338,7 +339,7 @@ impl Operation {
     /// If `attached` is `false`, will fork the server and exit. Otherwise
     /// just runs the server forever.
     fn rtrd(mut config: Config, attached: bool) -> Result<(), Error> {
-        let repo = config.create_repository(true)?;
+        let repo = config.create_repository(false, true)?;
         if !attached {
             Self::daemonize(&mut config)?;
         }
@@ -358,7 +359,7 @@ impl Operation {
         };
         let history = OriginsHistory::new(
             AddressOrigins::from_route_origins(
-                roas, &config.load_exceptions()?
+                roas, &config.load_exceptions(false)?, false
             ),
             config.history_size
         );
@@ -410,9 +411,9 @@ impl Operation {
         format: OutputFormat,
         noupdate: bool
     ) -> Result<(), Error> {
-        let repo = config.create_repository(!noupdate)?;
+        let repo = config.create_repository(format.extra_output(), !noupdate)?;
         config.switch_logging(false)?;
-        let exceptions = config.load_exceptions()?;
+        let exceptions = repo.load_exceptions(&config)?;
 
         if let Err(_) = repo.update() {
             warn!("Update failed. Continuing anyway.");
@@ -425,7 +426,9 @@ impl Operation {
             }
         };
         debug!("Found {} ROAs.", roas.len());
-        let vrps = AddressOrigins::from_route_origins(roas, &exceptions);
+        let vrps = AddressOrigins::from_route_origins(
+            roas, &exceptions, format.extra_output()
+        );
         match output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -480,9 +483,13 @@ impl Operation {
                     repo.process_async()
                     .and_then(move |origins| {
                         info!("Loading exceptions.");
-                        let must_notify = match config.load_exceptions() {
+                        let must_notify = match repo.load_exceptions(&config) {
                             Ok(exceptions) => {
-                                history.update(Some(origins), &exceptions)
+                                history.update(
+                                    Some(origins),
+                                    &exceptions,
+                                    false
+                                )
                             }
                             Err(_) => {
                                 warn!(
@@ -519,6 +526,11 @@ pub enum OutputFormat {
     /// Each row has the AS number, prefix, max-length, and TA.
     Csv,
 
+    /// Extended CSV format.
+    ///
+    /// Each row has URI, ASN, prefix, max-length, not before, not after.
+    ExtendedCsv,
+
     /// RIPE NCC Validator JSON format.
     ///
     /// This is a JSON object with one element `"roas"` which is an array
@@ -543,6 +555,14 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
+    /// Returns whether this output format requires extra output.
+    fn extra_output(self) -> bool {
+        match self {
+            OutputFormat::ExtendedCsv => true,
+            _ => false
+        }
+    }
+
     /// Outputs `vrps` to `target` in this format.
     ///
     /// This method loggs error messages.
@@ -553,6 +573,7 @@ impl OutputFormat {
     ) -> Result<(), Error> {
         let res = match self {
             OutputFormat::Csv => Self::output_csv(vrps, target),
+            OutputFormat::ExtendedCsv => Self::output_ext_csv(vrps, target),
             OutputFormat::Json => Self::output_json(vrps, target),
             OutputFormat::Openbgpd => Self::output_openbgpd(vrps, target),
             OutputFormat::Rpsl => Self::output_rpsl(vrps, target),
@@ -582,6 +603,63 @@ impl OutputFormat {
                 addr.max_length(),
                 addr.tal_name(),
             )?;
+        }
+        Ok(())
+    }
+
+    fn output_ext_csv<W: io::Write>(
+        vrps: &AddressOrigins,
+        output: &mut W,
+    ) -> Result<(), io::Error> {
+        use chrono::format::{Item, Numeric, Pad};
+
+        // 2017-08-25 13:12:19
+        const TIME_ITEMS: &'static [Item<'static>] = &[
+            Item::Numeric(Numeric::Year, Pad::Zero),
+            Item::Literal("-"),
+            Item::Numeric(Numeric::Month, Pad::Zero),
+            Item::Literal("-"),
+            Item::Numeric(Numeric::Day, Pad::Zero),
+            Item::Literal(" "),
+            Item::Numeric(Numeric::Hour, Pad::Zero),
+            Item::Literal(":"),
+            Item::Numeric(Numeric::Minute, Pad::Zero),
+            Item::Literal(":"),
+            Item::Numeric(Numeric::Second, Pad::Zero),
+        ];
+        writeln!(
+            output, "URI,ASN,IP Prefix,Max Length,Not Before,Not After"
+        )?;
+        for addr in vrps.iter() {
+            match addr.cert() {
+                Some(cert) => {
+                    match cert.signed_object_uri() {
+                        Some(uri) => {
+                            write!(output, "{}", uri)?;
+                        }
+                        None => write!(output, "N/A")?
+                    }
+                    let val = cert.validity();
+                    writeln!(output, ",{},{}/{},{},{},{}",
+                        addr.as_id(),
+                        addr.address(), addr.address_length(),
+                        addr.max_length(),
+                        val.not_before().format_with_items(
+                            TIME_ITEMS.iter().cloned()
+                        ),
+                        val.not_after().format_with_items(
+                            TIME_ITEMS.iter().cloned()
+                        ),
+                    )?;
+                }
+                None => {
+                    writeln!(output, "N/A,{},{}/{},{},N/A,N/A",
+                        addr.as_id(),
+                        addr.address(), addr.address_length(),
+                        addr.max_length(),
+                    )?;
+                }
+            }
         }
         Ok(())
     }
