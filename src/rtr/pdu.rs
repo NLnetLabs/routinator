@@ -77,7 +77,7 @@ impl SerialNotify {
     pub fn new(version: u8, session: u16, serial: u32) -> Self {
         SerialNotify {
             header: Header::new(version, Self::PDU, session, Self::LEN),
-            serial
+            serial: serial.to_be(),
         }
     }
 }
