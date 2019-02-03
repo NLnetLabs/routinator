@@ -50,5 +50,6 @@ section = "rust"
 priority = "optional"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/routinator/", "644"],
 ]
 maintainer-scripts = "debian"
