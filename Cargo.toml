@@ -36,3 +36,19 @@ syslog		=  "4.0"
 bcder = { git="https://github.com/NLnetLabs/bcder.git" }
 rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
+[package.metadata.deb]
+maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
+license-file = ["LICENSE", "0"]
+extended-description = """\
+The Resource Public Key Infrastructure provides cryptographically signed \
+statements about the association of Internet routing resources. \
+In particular, it allows the holder of an IP address prefix to publish which \
+AS number will be the origin of BGP route announcements for it. \
+Routinator is a RPKI relying party software written in Rust. """
+depends = "$auto, rsync"
+section = "rust"
+priority = "optional"
+assets = [
+    ["target/release/routinator", "usr/bin/", "755"],
+]
+maintainer-scripts = "debian"
