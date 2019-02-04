@@ -11,7 +11,8 @@ New
   RIPE NCC Validator. [(#59)]
 
 * Support for alternative resource extensions and validation defined in
-  [RFC 8360]. [(#63)]
+  [RFC 8360]. (The accompanying changes made it quite a bit faster, too.)
+  [(#63)]
 
 * Support for [cargo-deb]-based Debian packaging. Thanks to David
   Monosov. [(#62)]
