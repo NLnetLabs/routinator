@@ -9,6 +9,9 @@ New
 * New output format `csvext` that mimics the output format of the Original
   RIPE NCC Validator. [(#59)]
 
+* Support for alternative resource extensions and validation defined in
+  [RFC 8360]. [(#63)]
+
 
 Bug Fixes
 
@@ -17,8 +20,11 @@ Bug Fixes
 
 Dependencies
 
+
 [(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
+[(#63)]: https://github.com/NLnetLabs/routinator/pull/63
+
 
 
 ## 0.2.1 ‘Rated R’
