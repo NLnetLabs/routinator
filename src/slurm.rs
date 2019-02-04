@@ -9,7 +9,7 @@ use std::sync::Arc;
 use json;
 use json::JsonValue;
 use json::object::Object as JsonObject;
-use rpki::asres::AsId;
+use rpki::resources::AsId;
 use super::origins;
 use super::origins::{AddressOrigin, AddressPrefix, OriginInfo};
 
