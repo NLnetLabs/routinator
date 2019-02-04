@@ -4,6 +4,7 @@
 
 Breaking Changes
 
+
 New
 
 * New output format `csvext` that mimics the output format of the Original
@@ -12,17 +13,28 @@ New
 * Support for alternative resource extensions and validation defined in
   [RFC 8360]. [(#63)]
 
+* Support for [cargo-deb]-based Debian packaging. Thanks to David
+  Monosov. [(#62)]
+
+* Log warnings for stale manifests and CRLs.
+
 
 Bug Fixes
 
 * Converts the endianess of the serial number in the SerialNotify RTR PDU.
   Reported by Massimiliano Stucchi. [(#60)]
 
+
 Dependencies
+
+* Docker build updated to Rust 1.32 and Alpine Linux 3.9. Thanks to David
+  Monosov. [(#61)]
 
 
 [(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
+[(#61)]: https://github.com/NLnetLabs/routinator/pull/61
+[(#62)]: https://github.com/NLnetLabs/routinator/pull/62
 [(#63)]: https://github.com/NLnetLabs/routinator/pull/63
 
 
