@@ -648,6 +648,9 @@ impl Repository {
                     continue
                 }
             };
+            if manifest.is_stale() {
+                warn!("{}: stale manifest", uri);
+            }
             if manifest.len() > CRL_CACHE_LIMIT {
                 debug!(
                     "{}: Manifest with {} entries: enabling serial caching",
@@ -703,8 +706,12 @@ impl Repository {
                 Ok(crl) => crl,
                 Err(_) => continue
             };
-            if let Err(_) = crl.validate(issuer.as_ref().subject_public_key_info()) {
+            if let Err(_) = crl.validate(issuer.as_ref().
+                                                 subject_public_key_info()) {
                 continue
+            }
+            if crl.is_stale() {
+                warn!("{}: stale CRL.", uri);
             }
 
             let revoked = crl.contains(&cert.serial_number());
