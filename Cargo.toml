@@ -51,6 +51,7 @@ priority = "optional"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/routinator/", "644"],
+    ["doc/misc.md", "usr/share/doc/routinator/misc.md", "644"],
     ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
 ]
 maintainer-scripts = "debian"
