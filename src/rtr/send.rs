@@ -95,7 +95,6 @@ impl<A: AsyncWrite> Future for Sender<A> {
     fn poll(&mut self) -> Result<Async<A>, ()> {
         self.real_poll().map_err(|err| {
             debug!("RTR write error: {}", err);
-            ()
         })
     }
 }
@@ -213,15 +212,13 @@ impl Iterator for SendDiff {
                 Some(pdu::Prefix::new(self.version, 1, res))
             }
         }
+        else if self.next_idx >= self.diff.withdraw().len() {
+            None
+        }
         else {
-            if self.next_idx >= self.diff.withdraw().len() {
-                None
-            }
-            else {
-                let res = &self.diff.withdraw()[self.next_idx];
-                self.next_idx += 1;
-                Some(pdu::Prefix::new(self.version, 0, res))
-            }
+            let res = &self.diff.withdraw()[self.next_idx];
+            self.next_idx += 1;
+            Some(pdu::Prefix::new(self.version, 0, res))
         }
     }
 }

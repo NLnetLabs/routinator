@@ -347,7 +347,7 @@ impl Operation {
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
-        if let Err(_) = repo.update() {
+        if repo.update().is_err() {
             warn!("Repository update failed. Continuing anyway.");
         }
         let roas = match repo.process() {
@@ -415,7 +415,7 @@ impl Operation {
         config.switch_logging(false)?;
         let exceptions = repo.load_exceptions(&config)?;
 
-        if let Err(_) = repo.update() {
+        if repo.update().is_err() {
             warn!("Update failed. Continuing anyway.");
         }
         let roas = match repo.process() {
@@ -614,7 +614,7 @@ impl OutputFormat {
         use chrono::format::{Item, Numeric, Pad};
 
         // 2017-08-25 13:12:19
-        const TIME_ITEMS: &'static [Item<'static>] = &[
+        const TIME_ITEMS: &[Item<'static>] = &[
             Item::Numeric(Numeric::Year, Pad::Zero),
             Item::Literal("-"),
             Item::Numeric(Numeric::Month, Pad::Zero),
@@ -675,7 +675,7 @@ impl OutputFormat {
                 first = false
             }
             else {
-                write!(output, ",\n")?;
+                writeln!(output, ",")?;
             }
             write!(output,
                 "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
@@ -768,11 +768,11 @@ impl RpslSource {
     fn display(&mut self, tal: &str) -> &str {
         if self.0.contains_key(tal) {
             // This is double lookup is necessary for the borrow checker ...
-            self.0.get(tal).unwrap()
+            &self.0[tal]
         }
         else {
             self.0.entry(tal.to_string())
-                .or_insert(format!("ROA-{}-RPKI-ROOT", tal.to_uppercase()))
+                .or_insert_with(|| format!("ROA-{}-RPKI-ROOT", tal.to_uppercase()))
         }
     }
 }

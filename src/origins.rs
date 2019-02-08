@@ -253,20 +253,16 @@ impl OriginsDiff {
                     if !exceptions.keep_origin(&addr) {
                         continue
                     }
-                    if next.insert(addr.clone()) {
-                        if !current.remove(&addr) {
-                            let _ = announce.insert(addr);
-                        }
+                    if next.insert(addr.clone()) && !current.remove(&addr) {
+                        let _ = announce.insert(addr);
                     }
                 }
             }
         }
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
-            if next.insert(addr.clone()) {
-                if !current.remove(addr) {
-                    announce.insert(addr.clone());
-                }
+            if next.insert(addr.clone()) && !current.remove(addr)  {
+                announce.insert(addr.clone());
             }
         }
         let withdraw: Vec<_> = current.into_iter().collect();
@@ -578,7 +574,7 @@ impl AddressOrigin {
         max_length: u8,
         info: OriginInfo,
     ) -> Self {
-        AddressOrigin { as_id, prefix, max_length, info: info }
+        AddressOrigin { as_id, prefix, max_length, info }
     }
 
     /// Creates a new address origin from ROA content.

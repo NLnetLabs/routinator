@@ -535,7 +535,7 @@ impl Repository {
                     return
                 }
             };
-            if let Err(_) = hash.verify(&bytes) {
+            if hash.verify(&bytes).is_err() {
                 info!("{}: file has wrong hash.", uri);
                 return
             }
@@ -553,7 +553,7 @@ impl Repository {
                     return
                 }
             };
-            if let Err(_) = self.check_crl(&cert, issuer, crl) {
+            if self.check_crl(&cert, issuer, crl).is_err() {
                 info!("{}: certificate has been revoked", uri);
                 return
             }
@@ -567,7 +567,7 @@ impl Repository {
                     return
                 }
             };
-            if let Err(_) = hash.verify(&bytes) {
+            if hash.verify(&bytes).is_err() {
                 info!("{}: file has wrong hash.", uri);
                 return
             }
@@ -659,7 +659,7 @@ impl Repository {
                 );
                 store.enable_serial_caching();
             }
-            if let Err(_) = self.check_crl(cert, issuer, store) {
+            if self.check_crl(cert, issuer, store).is_err() {
                 info!("{}: certificate has been revoked", uri);
                 continue
             }
@@ -706,8 +706,7 @@ impl Repository {
                 Ok(crl) => crl,
                 Err(_) => continue
             };
-            if let Err(_) = crl.validate(issuer.as_ref().
-                                                 subject_public_key_info()) {
+            if crl.validate(issuer.as_ref().subject_public_key_info()).is_err() {
                 continue
             }
             if crl.is_stale() {
@@ -938,7 +937,7 @@ impl RsyncCommand {
     #[cfg(not(windows))]
     fn format_destination(path: &Path) -> Result<String, Error> {
         let mut destination = format!("{}", path.display());
-        if !destination.ends_with("/") {
+        if !destination.ends_with('/') {
             destination.push('/')
         }
         Ok(destination)
