@@ -4,7 +4,6 @@
 
 Breaking Changes
 
-
 New
 
 * New output format `csvext` that mimics the output format of the Original
@@ -19,26 +18,21 @@ New
 
 * Log warnings for stale manifests and CRLs.
 
-
 Bug Fixes
 
 * Converts the endianess of the serial number in the SerialNotify RTR PDU.
   Reported by Massimiliano Stucchi. [(#60)]
-
 
 Dependencies
 
 * Docker build updated to Rust 1.32 and Alpine Linux 3.9. Thanks to David
   Monosov. [(#61)]
 
-
 [(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
 [(#61)]: https://github.com/NLnetLabs/routinator/pull/61
 [(#62)]: https://github.com/NLnetLabs/routinator/pull/62
 [(#63)]: https://github.com/NLnetLabs/routinator/pull/63
-
-
 
 ## 0.2.1 ‘Rated R’
 
@@ -61,7 +55,6 @@ Bug Fixes
 [(#49)]: https://github.com/NLnetLabs/routinator/pull/49
 [(#54)]: https://github.com/NLnetLabs/routinator/pull/54
 [(#55)]: https://github.com/NLnetLabs/routinator/pull/55
-
 
 ## 0.2.0 ‘Instant Gezellig’
 
@@ -103,7 +96,6 @@ Performance Improvements
 * Caching of CRL serial numbers for CAs with large manifests leads to
   about half the validation time for the current repository. [(#34)]
 
-
 [(#21)]: https://github.com/NLnetLabs/routinator/pull/21
 [(#23)]: https://github.com/NLnetLabs/routinator/pull/23
 [(#27)]: https://github.com/NLnetLabs/routinator/pull/27
@@ -112,7 +104,6 @@ Performance Improvements
 [(#35)]: https://github.com/NLnetLabs/routinator/pull/35
 [(#41)]: https://github.com/NLnetLabs/routinator/pull/41
 [(#42)]: https://github.com/NLnetLabs/routinator/pull/42
-
 
 ## 0.1.2 ‘And I Cry If I Want To’
 
@@ -124,7 +115,6 @@ Bug Fixes
 
 [17]: https://github.com/NLnetLabs/routinator/issues/17
 
-
 ## 0.1.1 ‘Five-second Rule’
 
 Bug Fixes
@@ -133,8 +123,6 @@ Bug Fixes
 
 [15]: https://github.com/NLnetLabs/routinator/issues/15
 
-
 ## 0.1.0 ‘Godspeed!’
 
 Initial public release.
-
