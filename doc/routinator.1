@@ -569,7 +569,10 @@ When run in
 .B rtrd
 mode, Routinator can provide an HTTP service in addtion to the RTR service.
 The primary intention of this service is to allow integration into
-monitoring systems. The service only supports GET requests with the following
+monitoring systems. For this reason, the service does not support HTTPS and
+should only be used within the local network.
+.P
+The service only supports GET requests with the following
 paths:
 
 .TP
