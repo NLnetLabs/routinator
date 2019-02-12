@@ -198,6 +198,7 @@ impl Response {
                 }
                 "/rpsl" => VrpResponse::new(sock, origins, OutputFormat::Rpsl),
                 "/status" => Self::text(sock, "200", "fine"),
+                "/version" => Self::text(sock, "200", crate_version!()),
                 _ => Self::text(sock, "404", "not found"),
             }
         }

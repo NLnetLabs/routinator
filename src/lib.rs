@@ -5,7 +5,7 @@
 
 extern crate bytes;
 extern crate chrono;
-extern crate clap;
+#[macro_use] extern crate clap;
 #[cfg(unix)] extern crate daemonize;
 extern crate dirs;
 #[macro_use] extern crate failure;
