@@ -733,7 +733,7 @@ impl Repository {
 /// # Rsyncing
 ///
 impl Repository {
-    #[allow(clippy::mutex_atomic)] // XXX Double check maybe they are right?
+    #[allow(mutex_atomic)] // XXX Double check maybe they are right?
     fn rsync_module(&self, module: &uri::RsyncModule) {
         if let Some((ref state, ref command)) = self.0.rsync {
             if state.lock().unwrap().have_seen(module) {
@@ -775,7 +775,7 @@ struct RsyncState {
     /// The first element of each list item is the module for which the
     /// process runs, the second is a conditional variable that is going
     /// to be triggered when the process finishes.
-    #[allow(clippy::type_complexity)]
+    #[allow(type_complexity)]
     running: Vec<(uri::RsyncModule, Arc<(Mutex<bool>, Condvar)>)>,
 
     /// The rsync modules we already tried in this iteration.
@@ -790,7 +790,7 @@ impl RsyncState {
         }
     }
 
-    #[allow(clippy::type_complexity, clippy::mutex_atomic)]
+    #[allow(type_complexity, mutex_atomic)]
     fn get_running(
         &mut self,
         module: &uri::RsyncModule

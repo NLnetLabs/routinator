@@ -2,6 +2,7 @@
 //!
 //! This crate contains all the moving parts of the Routinator. The
 //! application itself, via `main.rs` is only a very tiny frontend.
+#![allow(unknown_lints)] // Clippy for 1.30.
 
 extern crate bytes;
 extern crate chrono;
