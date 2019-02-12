@@ -230,7 +230,7 @@ impl Response {
     fn write_all<T: AsRef<[u8]> + 'static + Send>(
         sock: TcpStream, t: T
     ) -> Self {
-        Self(Box::new(write_all(sock, t).map(|_| ())))
+        Response(Box::new(write_all(sock, t).map(|_| ())))
     }
 }
 
