@@ -11,8 +11,8 @@ use futures::{Async, Future, IntoFuture, Stream};
 use tokio;
 use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
-use ::config::Config;
-use ::origins::OriginsHistory;
+use crate::config::Config;
+use crate::origins::OriginsHistory;
 use super::send::{Sender, Timing};
 use super::query::{Input, InputStream, Query};
 use super::notify::{Dispatch, NotifyReceiver, NotifySender};
@@ -82,7 +82,9 @@ fn single_listener(
     })
     .and_then(move |listener| {
         listener.incoming()
-        .map_err(|err| error!("Failed to accept connection: {}", err))
+        .map_err(|err| {
+            error!("Failed to accept RTR connection: {}", err);
+        })
         .for_each(move |sock| {
             let notify = dispatch.get_receiver();
             tokio::spawn(
