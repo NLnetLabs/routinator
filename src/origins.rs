@@ -25,7 +25,7 @@ use super::slurm::LocalExceptions;
 /// for generating the real origins kept in [`AddressOrigins`].
 ///
 /// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
     /// The list of route origin attestations.
     origins: Vec<RouteOriginAttestation>
@@ -34,7 +34,7 @@ pub struct RouteOrigins {
 impl RouteOrigins {
     /// Creates a new, empty list of route origins.
     pub fn new() -> Self {
-        RouteOrigins { origins: Vec::new() }
+        Self::default()
     }
 
     /// Appends the given attestation to the set.
@@ -51,6 +51,11 @@ impl RouteOrigins {
     /// either.
     pub fn merge(&mut self, mut other: RouteOrigins) {
         self.origins.append(&mut other.origins)
+    }
+
+    /// Returns whetehr the list of attestations is empty.
+    pub fn is_empty(&self) -> bool {
+        self.origins.is_empty()
     }
 
     /// Returns the number of attestations in the list.
@@ -97,7 +102,7 @@ impl<'a> IntoIterator for &'a RouteOrigins {
 /// self-referential types in futures.
 ///
 /// [`AddressOrigin`]: struct.AddressOrigin.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AddressOrigins {
     /// A list of (unique) address origins.
     origins: Vec<AddressOrigin>,
@@ -106,9 +111,7 @@ pub struct AddressOrigins {
 impl AddressOrigins {
     /// Creates a new, empty set of address origins.
     pub fn new() -> Self {
-        AddressOrigins {
-            origins: Vec::new()
-        }
+        Self::default()
     }
 
     /// Creates a set from the raw route origins and exceptions.
