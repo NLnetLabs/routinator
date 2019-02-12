@@ -1,7 +1,12 @@
 //! Everything regarding monitoring.
 //!
+//! The module provides all functionality to expose monitoring endpoints to
+//! those interested. The only public item, [`monitor_listener`] creates all
+//! necessary networking services based on the current configuration.
+//!
+//! [`monitor_listener`]: fn.monitor_listener.html
 
-use std::{cmp, io};
+use std::{cmp, io, mem};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use futures::future;
@@ -13,23 +18,19 @@ use crate::output::OutputFormat;
 use crate::origins::{OriginsHistory, AddressOrigins};
 
 
-//------------ Constants -----------------------------------------------------
-
-const ERROR_500: &[u8] = b"\
-    HTTP/1.1 500 Internal Server Error\r\n\
-    Content-Type: text/plain\r\n\
-    Content-Length: 21\r\n\
-    \r\n\
-    Internal Server Error";
-
-
 //------------ monitor_listener ----------------------------------------------
 
-/// Returns a future for all the monitoring server listeners we support.
+/// Returns a future for all monitoring server listeners.
+///
+/// Which servers these are, if any, is determined by `config`. The data for
+/// monitoring is taken from `history`. As a consequence, if you need new
+/// data to be exposed, add it to [`OriginsHistory`] somehow.
+///
+/// [`OriginsHistory`]: ../origins/struct.OriginsHistory.html
 pub fn monitor_listener(
     history: OriginsHistory,
     config: &Config,
-) -> impl Future<Item=(), Error=()> {
+) -> impl Future<Item= (), Error = ()> {
     if config.http_listen.is_empty() {
         future::Either::A(future::empty())
     }
@@ -45,6 +46,11 @@ pub fn monitor_listener(
 }
 
 /// Returns a future for a single HTTP listener.
+///
+/// The future will never resolve unless an error happens that breaks the
+/// listener, in which case it will print an error and resolve the error case.
+/// It will listen on `addr` for incoming connection. Each new connection will
+/// be handled via a brand new `HttpConnection`.
 fn http_listener(
     addr: SocketAddr,
     history: OriginsHistory,
@@ -79,26 +85,32 @@ fn http_listener(
 //------------ HttpConnection ------------------------------------------------
 
 /// The future for a HTTP monitor connection.
+///
+/// The future will read and parse an HTTP request, produce a response and
+/// send it out, close the socket, and resolve successfully. An error will
+/// be returned if an IO error happens only. If an error happens further up,
+/// it will try to send a 500 response back.
 enum HttpConnection {
+    /// Phase 1: Read a request.
     Read(ReadRequest),
+
+    /// Phase 2: Send a response.
     Response(Response),
+
+    /// Phase 3: Done.
     Done
 }
 
 impl HttpConnection {
-    /// Creates a new connection for a socket.
+    /// Creates a new connection for a socket and the history.
     pub fn new(
         sock: TcpStream,
         origins: OriginsHistory,
     ) -> Self {
-        HttpConnection::Read(ReadRequest {
-            sock: Some(sock),
-            origins: Some(origins),
-            buf: [0; 1024],
-            read: 0
-        })
+        HttpConnection::Read(ReadRequest::new(sock, origins))
     }
 
+    /// Returns whether the connection has arrived at the ‘done’ state.
     fn is_done(&self) -> bool {
         match self {
             &HttpConnection::Done => true,
@@ -133,11 +145,40 @@ impl Future for HttpConnection {
 
 //------------ ReadRequest ---------------------------------------------------
 
+/// A future that reads a request and turns it into a response.
+///
+/// The future will keep reading from the socket until it either successfully
+/// parses an HTTP request or runs out of space as it internally uses a fixed
+/// size buffer of 1024 bytes for the message - enough for our purposes. In
+/// either case it will resolve into a response to send back, which will be a
+/// 500 error if anything goes wrong.
 struct ReadRequest {
+    /// The socket to read from.
+    ///
+    /// If this becomes `None`, we are done.
     sock: Option<TcpStream>,
+
+    /// The history to generate responses from.
+    ///
+    /// Like `sock`, this will be turned into `None` when we are done.
     origins: Option<OriginsHistory>,
+
+    /// The read buffer.
     buf: [u8; 1024],
+
+    /// The current position in the read buffer.
     read: usize
+}
+
+impl ReadRequest {
+    fn new(sock: TcpStream, origins: OriginsHistory) -> Self {
+        ReadRequest {
+            sock: Some(sock),
+            origins: Some(origins),
+            buf: unsafe { mem::uninitialized() },
+            read: 0
+        }
+    }
 }
 
 impl Future for ReadRequest {
@@ -181,7 +222,12 @@ impl Future for ReadRequest {
 
 //------------ Response ------------------------------------------------------
 
-struct Response(Box<Future<Item=(), Error=io::Error> + 'static + Send>);
+/// A future sending a response back to the client.
+enum Response {
+    Static(WriteAll<TcpStream, &'static [u8]>),
+    Vec(WriteAll<TcpStream, Vec<u8>>),
+    Vrp(VrpResponse),
+}
 
 impl Response {
     fn from_request(
@@ -246,17 +292,11 @@ impl Response {
             content.len(),
             content
         );
-        Self::write_all(sock, output)
+        Response::Vec(write_all(sock, output.into_bytes()))
     }
 
     fn error(sock: TcpStream) -> Self {
-        Self::write_all(sock, &ERROR_500)
-    }
-
-    fn write_all<T: AsRef<[u8]> + 'static + Send>(
-        sock: TcpStream, t: T
-    ) -> Self {
-        Response(Box::new(write_all(sock, t).map(|_| ())))
+        Response::Static(write_all(sock, &ERROR_500))
     }
 }
 
@@ -265,7 +305,18 @@ impl Future for Response {
     type Error = io::Error;
 
     fn poll(&mut self) -> Result<Async<()>, io::Error> {
-        self.0.poll()
+        match *self {
+            Response::Static(ref mut fut) => {
+                let _ = try_ready!(fut.poll());
+            }
+            Response::Vec(ref mut fut) => {
+                let _ = try_ready!(fut.poll());
+            }
+            Response::Vrp(ref mut fut) => {
+                let _  = try_ready!(fut.poll());
+            }
+        };
+        Ok(Async::Ready(()))
     }
 }
 
@@ -294,12 +345,12 @@ impl VrpResponse {
             \r\n",
             GetLength::get(|w| format.output(&origins, w).unwrap())
         ).into_bytes();
-        Response(Box::new(VrpResponse {
+        Response::Vrp(VrpResponse {
             write: write_all(sock, header),
             origins,
             next_id: 0,
             format
-        }))
+        })
     }
 
     fn next_batch(&mut self) -> Option<Vec<u8>> {
@@ -346,7 +397,7 @@ impl Future for VrpResponse {
 //------------ GetLength -----------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct GetLength(usize);
+struct GetLength(usize);
 
 impl GetLength {
     pub fn get<F: FnOnce(&mut Self)>(op: F) -> usize {
@@ -366,4 +417,14 @@ impl io::Write for GetLength {
         Ok(())
     }
 }
+
+
+//------------ Constants -----------------------------------------------------
+
+const ERROR_500: &[u8] = b"\
+    HTTP/1.1 500 Internal Server Error\r\n\
+    Content-Type: text/plain\r\n\
+    Content-Length: 21\r\n\
+    \r\n\
+    Internal Server Error";
 
