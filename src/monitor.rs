@@ -7,6 +7,7 @@
 //! [`monitor_listener`]: fn.monitor_listener.html
 
 use std::{cmp, io, mem};
+use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use futures::future;
@@ -223,18 +224,32 @@ impl Future for ReadRequest {
 //------------ Response ------------------------------------------------------
 
 /// A future sending a response back to the client.
+///
+/// This type collects all possible types of responses.
 enum Response {
+    /// A response returning static content.
     Static(WriteAll<TcpStream, &'static [u8]>),
+
+    /// A response returning dynamic content.
     Vec(WriteAll<TcpStream, Vec<u8>>),
+
+    /// A response returning a list of VRPs.
+    ///
+    /// These lists are too big to create a temporary buffer first, so we
+    /// have a type that smartly sends them out in chunks.
     Vrp(VrpResponse),
 }
 
 impl Response {
+    /// Produces the correct response for the given request.
     fn from_request(
         sock: TcpStream,
         origins: OriginsHistory,
         req: &httparse::Request
     ) -> Self {
+        if req.method != Some("GET") {
+            return Self::method_not_allowed(sock)
+        }
         if let Some(path) = req.path {
             match path {
                 "/csv" => VrpResponse::new(sock, origins, OutputFormat::Csv),
@@ -250,13 +265,17 @@ impl Response {
             }
         }
         else {
-            Self::error(sock)
+            Self::not_found(sock)
         }
     }
 
+    /// Produces the response for the `/metrics` path.
+    ///
+    /// This is a temporary placeholder for now. We are going to make this
+    /// way more awesome!
     fn metrics(sock: TcpStream, origins: OriginsHistory) -> Self {
         Self::from_content(
-            sock, "200", "text/plain; version=0.0.4",
+            sock, "200 OK", "text/plain; version=0.0.4",
             &format!(
                 "# HELP vrps_total total number of VRPs seen\n\
                  # TYPE vrps_total gauge\n\
@@ -266,37 +285,61 @@ impl Response {
         )
     }
 
+    /// Produces a response returning some plain text.
     fn text<T: AsRef<str> + ?Sized>(sock: TcpStream, text: &T) -> Self {
-        Self::from_content(sock, "200", "text/plain;charset=utf-8", text)
+        Self::from_content(
+            sock,
+            "200 OK",
+            "text/plain;charset=utf-8",
+            text.as_ref().as_bytes()
+        )
     }
 
-    fn not_found(sock: TcpStream) -> Self {
-        Self::from_content(sock, "404", "text/plain", "not found")
-    }
-
-    fn from_content<T: AsRef<str> + ?Sized>(
+    /// Produces the response for some content.
+    ///
+    /// Assembles the response in a newly allocated buffer before sending.
+    /// The response will be sent to `sock`. It will have the status code
+    /// `status` which must be both the numerical code and the reason phrase.
+    /// The content type of the response will be set to `content_type`. The
+    /// content will be taken from content.
+    fn from_content<T: AsRef<[u8]> + ?Sized>(
         sock: TcpStream,
         status: &'static str,
         content_type: &'static str,
         content: &T
     ) -> Self {
         let content = content.as_ref();
-        let output = format!("\
-            HTTP/1.1 {} OK\r\n\
-            Content-Type: {}\r\n\
-            Content-Length: {}\r\n\
-            \r\n\
-            {}",
+        let mut res = Vec::with_capacity(
+            status.len() + content_type.len() + content.len()
+            + 12 // for content length -- should be enough
+            + 11 + 16 + 18 + 2 // Presumably, the compiler is smart enough ...
+        ); 
+        write!(&mut res, 
+            "HTTP/1.1 {}\r\n\
+             Content-Type: {}\r\n\
+             Content-Length: {}\r\n\
+             \r\n",
             status,
             content_type,
             content.len(),
-            content
-        );
-        Response::Vec(write_all(sock, output.into_bytes()))
+        ).unwrap();
+        res.extend_from_slice(content);
+        Response::Vec(write_all(sock, res))
     }
 
+    /// Produces a 500 Internal Server Error response.
     fn error(sock: TcpStream) -> Self {
         Response::Static(write_all(sock, &ERROR_500))
+    }
+
+    /// Produces a 404 Not Found response.
+    fn not_found(sock: TcpStream) -> Self {
+        Response::Static(write_all(sock, &ERROR_404))
+    }
+
+    /// Produces a 405 Method Not Allowed response.
+    fn method_not_allowed(sock: TcpStream) -> Self {
+        Response::Static(write_all(sock, &ERROR_405))
     }
 }
 
@@ -324,6 +367,8 @@ impl Future for Response {
 //------------ VrpResponse --------------------------------------------------
 
 /// A response providing the VRP output.
+///
+/// This will send out the list of VRPs in chunks of 1000 entries.
 struct VrpResponse {
     write: WriteAll<TcpStream, Vec<u8>>,
     origins: Arc<AddressOrigins>,
@@ -332,11 +377,17 @@ struct VrpResponse {
 }
 
 impl VrpResponse {
+    /// Creates a new VRP response.
+    ///
+    /// The response will be sent to the socket `sock`. The list will be the
+    /// current list from `origins`. It will be formatted in `format`.
     pub fn new(
         sock: TcpStream,
         origins: OriginsHistory,
         format: OutputFormat
     ) -> Response {
+        // We’ll start out with the HTTP header which we can assemble
+        // already. For the length, we have our magical `GetLength` type.
         let origins = origins.current();
         let header = format!("\
             HTTP/1.1 200 OK\r\n\
@@ -353,6 +404,11 @@ impl VrpResponse {
         })
     }
 
+    /// Creates the next batch of VRPs.
+    ///
+    /// Returns a buffer with the new batch or `None` if we are done. The
+    /// first batch will include the header, the last batch will include the
+    /// footer.
     fn next_batch(&mut self) -> Option<Vec<u8>> {
         if self.next_id == self.origins.len() {
             return None
@@ -396,10 +452,14 @@ impl Future for VrpResponse {
 
 //------------ GetLength -----------------------------------------------------
 
+/// A writer that adds up the length of whatever has been written.
 #[derive(Clone, Copy, Debug, Default)]
 struct GetLength(usize);
 
 impl GetLength {
+    /// Returns the length of what’s been written in the closure.
+    ///
+    /// The closure receives a writer it should write to.
     pub fn get<F: FnOnce(&mut Self)>(op: F) -> usize {
         let mut target = Self::default();
         op(&mut target);
@@ -421,6 +481,23 @@ impl io::Write for GetLength {
 
 //------------ Constants -----------------------------------------------------
 
+/// The literal content of a 404 error.
+const ERROR_404: &[u8] = b"\
+    HTTP/1.1 404 Not Found\r\n\
+    Content-Type: text/plain\r\n\
+    Content-Length: 9\r\n\
+    \r\n\
+    Not Found";
+
+/// The literal content of a 405 error.
+const ERROR_405: &[u8] = b"\
+    HTTP/1.1 405 Method Not Allowed\r\n\
+    Content-Type: text/plain\r\n\
+    Content-Length: 18\r\n\
+    \r\n\
+    Method Not Allowed";
+
+/// The literal content of a 500 error.
 const ERROR_500: &[u8] = b"\
     HTTP/1.1 500 Internal Server Error\r\n\
     Content-Type: text/plain\r\n\
