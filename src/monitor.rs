@@ -193,13 +193,14 @@ impl Response {
             match path {
                 "/csv" => VrpResponse::new(sock, origins, OutputFormat::Csv),
                 "/json" => VrpResponse::new(sock, origins, OutputFormat::Json),
+                "/metrics" => Self::metrics(sock, origins),
                 "/openbgpd" => {
                     VrpResponse::new(sock, origins, OutputFormat::Openbgpd)
                 }
                 "/rpsl" => VrpResponse::new(sock, origins, OutputFormat::Rpsl),
-                "/status" => Self::text(sock, "200", "fine"),
-                "/version" => Self::text(sock, "200", crate_version!()),
-                _ => Self::text(sock, "404", "not found"),
+                "/status" => Self::text(sock, "fine"),
+                "/version" => Self::text(sock, crate_version!()),
+                _ => Self::not_found(sock),
             }
         }
         else {
@@ -207,19 +208,43 @@ impl Response {
         }
     }
 
-    fn text<T: AsRef<str> + ?Sized>(
-        sock: TcpStream, status: &'static str, text: &T
+    fn metrics(sock: TcpStream, origins: OriginsHistory) -> Self {
+        Self::from_content(
+            sock, "200", "text/plain; version=0.0.4",
+            &format!(
+                "# HELP vrps_total total number of VRPs seen\n\
+                 # TYPE vrps_total gauge\n\
+                 vrps_total {}\n",
+                origins.current().len()
+            )
+        )
+    }
+
+    fn text<T: AsRef<str> + ?Sized>(sock: TcpStream, text: &T) -> Self {
+        Self::from_content(sock, "200", "text/plain;charset=utf-8", text)
+    }
+
+    fn not_found(sock: TcpStream) -> Self {
+        Self::from_content(sock, "404", "text/plain", "not found")
+    }
+
+    fn from_content<T: AsRef<str> + ?Sized>(
+        sock: TcpStream,
+        status: &'static str,
+        content_type: &'static str,
+        content: &T
     ) -> Self {
-        let text = text.as_ref();
+        let content = content.as_ref();
         let output = format!("\
             HTTP/1.1 {} OK\r\n\
-            Content-Type: text/plain;charset=utf-8\r\n\
+            Content-Type: {}\r\n\
             Content-Length: {}\r\n\
             \r\n\
             {}",
             status,
-            text.len(),
-            text
+            content_type,
+            content.len(),
+            content
         );
         Self::write_all(sock, output)
     }
