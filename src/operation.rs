@@ -347,7 +347,7 @@ impl Operation {
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
-        if let Err(_) = repo.update() {
+        if repo.update().is_err() {
             warn!("Repository update failed. Continuing anyway.");
         }
         let roas = match repo.process() {
@@ -417,7 +417,7 @@ impl Operation {
         config.switch_logging(false)?;
         let exceptions = repo.load_exceptions(&config)?;
 
-        if let Err(_) = repo.update() {
+        if repo.update().is_err() {
             warn!("Update failed. Continuing anyway.");
         }
         let roas = match repo.process() {

@@ -9,11 +9,10 @@ Status](https://ci.appveyor.com/api/projects/status/github/NLnetLabs/routinator?
 [![](https://img.shields.io/badge/Spotify-∞-green.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
-Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust. 
+Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
-
 
 ## Quick Start
 
@@ -33,7 +32,6 @@ If you have an older version of the Routinator, you can update via
 ```bash
 cargo install -f routinator
 ```
-
 
 ## Quick Start with Docker
 
@@ -204,9 +202,7 @@ routinator man
 ```
 
 It is also available online on the
-[NLnetLabs documentation
-site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
-
+[NLnetLabs documentation site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
 
 ## Feeding a Router with RPKI-RTR
 
@@ -253,7 +249,6 @@ meaning can be found in the manual page. In addition, a complete sample
 configuration file showing all the default values can be found in the
 repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf).
 
-
 ## Local Exceptions
 
 If you would like to add exceptions to the validated RPKI data in the
@@ -266,4 +261,3 @@ Routinator will re-read that file on every validation run, so you can
 simply update the file whenever your exceptions change.
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
-

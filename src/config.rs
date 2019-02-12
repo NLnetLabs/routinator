@@ -486,7 +486,7 @@ impl Config {
         // tcp_listen
         if let Some(list) = matches.values_of("listen") {
             self.tcp_listen = Vec::new();
-            for value in list.into_iter() {
+            for value in list {
                 match SocketAddr::from_str(value) {
                     Ok(some) => self.tcp_listen.push(some),
                     Err(_) => {
@@ -706,7 +706,7 @@ impl Config {
             },
             validation_threads: {
                 file.take_small_usize("validation-threads")?
-                    .unwrap_or(::num_cpus::get())
+                    .unwrap_or_else(::num_cpus::get)
             },
             refresh: {
                 Duration::from_secs(
@@ -1249,7 +1249,7 @@ impl ConfigFile {
         Ok(ConfigFile {
             content,
             path: path.into(),
-            dir: dir
+            dir
         })
     }
 
