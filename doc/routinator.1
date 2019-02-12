@@ -532,6 +532,11 @@ The default value if this entry is missing is
 An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
 a colon. IPv6 address should be enclosed in square braces.
+.TP
+.B listen-http
+An array of string values each providing the address and port which the HTTP
+service should listen on. Address and port should be separated by
+a colon. IPv6 address should be enclosed in square braces.
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in RTR server mode. The default is
