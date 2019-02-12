@@ -679,19 +679,19 @@ impl Header {
         }
     }
 
-    pub fn version(&self) -> u8 {
+    pub fn version(self) -> u8 {
         self.version
     }
 
-    pub fn pdu(&self) -> u8 {
+    pub fn pdu(self) -> u8 {
         self.pdu
     }
 
-    pub fn session(&self) -> u16 {
+    pub fn session(self) -> u16 {
         u16::from_be(self.session)
     }
 
-    pub fn length(&self) -> u32 {
+    pub fn length(self) -> u32 {
         u32::from_be(self.length)
     }
 }
