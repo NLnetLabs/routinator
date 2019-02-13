@@ -8,19 +8,19 @@
 //! [`Operation`]: enum.Operation.html
 
 use std::{fs, io};
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use chrono::Utc;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::future;
 use futures::future::Future;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
 use crate::config::Config;
+use crate::monitor::monitor_listener;
 use crate::origins::{AddressOrigins, OriginsHistory};
+use crate::output::OutputFormat;
 use crate::repository::Repository;
 use crate::rtr::{rtr_listener, NotifySender};
 
@@ -367,10 +367,12 @@ impl Operation {
 
         info!("Starting RTR listener...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
+        let monitor = monitor_listener(history.clone(), &config);
         tokio::runtime::run(
             Self::update_future(repo, history, notify, config)
             .map_err(|_| ())
             .select(rtr).map(|_| ()).map_err(|_| ())
+            .select(monitor).map(|_| ()).map_err(|_| ())
         );
         Ok(())
     }
@@ -430,7 +432,7 @@ impl Operation {
         let vrps = AddressOrigins::from_route_origins(
             roas, &exceptions, format.extra_output()
         );
-        match output {
+        let res = match output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
                     Ok(file) => file,
@@ -449,7 +451,14 @@ impl Operation {
                 let mut out = out.lock();
                 format.output(&vrps, &mut out)
             }
-        }
+        };
+        res.map_err(|err| {
+            error!(
+                "Failed to output result: {}",
+                err
+            );
+            Error
+        })
     }
 
     /// Returns a future that updates and validates the local repository.
@@ -517,222 +526,6 @@ impl Operation {
 }
 
 
-//------------ OutputFormat --------------------------------------------------
-
-/// The output format for VRPs.
-#[derive(Clone, Copy, Debug)]
-pub enum OutputFormat {
-    /// CSV format.
-    ///
-    /// Each row has the AS number, prefix, max-length, and TA.
-    Csv,
-
-    /// Extended CSV format.
-    ///
-    /// Each row has URI, ASN, prefix, max-length, not before, not after.
-    ExtendedCsv,
-
-    /// RIPE NCC Validator JSON format.
-    ///
-    /// This is a JSON object with one element `"roas"` which is an array
-    /// of objects, each with the elements `"asn"`, `"prefix"`, `"maxLength"`,
-    /// and `"ta"`.
-    Json,
-
-    /// OpenBGPD configuration format.
-    ///
-    /// Specifically, this produces as `roa-set`.
-    Openbgpd,
-
-    /// RPSL output.
-    ///
-    /// This produces a sequence of RPSL objects with various fields.
-    Rpsl,
-
-    /// No output.
-    ///
-    /// Seriously: no output.
-    None,
-}
-
-impl OutputFormat {
-    /// Returns whether this output format requires extra output.
-    fn extra_output(self) -> bool {
-        match self {
-            OutputFormat::ExtendedCsv => true,
-            _ => false
-        }
-    }
-
-    /// Outputs `vrps` to `target` in this format.
-    ///
-    /// This method loggs error messages.
-    fn output<W: io::Write>(
-        self,
-        vrps: &AddressOrigins,
-        target: &mut W,
-    ) -> Result<(), Error> {
-        let res = match self {
-            OutputFormat::Csv => Self::output_csv(vrps, target),
-            OutputFormat::ExtendedCsv => Self::output_ext_csv(vrps, target),
-            OutputFormat::Json => Self::output_json(vrps, target),
-            OutputFormat::Openbgpd => Self::output_openbgpd(vrps, target),
-            OutputFormat::Rpsl => Self::output_rpsl(vrps, target),
-            OutputFormat::None => Ok(())
-        };
-        if let Err(err) = res {
-            error!(
-                "Failed to output result: {}",
-                err
-            );
-            Err(Error)
-        }
-        else {
-            Ok(())
-        }
-    }
-
-    fn output_csv<W: io::Write>(
-        vrps: &AddressOrigins,
-        output: &mut W,
-    ) -> Result<(), io::Error> {
-        writeln!(output, "ASN,IP Prefix,Max Length,Trust Anchor")?;
-        for addr in vrps.iter() {
-            writeln!(output, "{},{}/{},{},{}",
-                addr.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length(),
-                addr.tal_name(),
-            )?;
-        }
-        Ok(())
-    }
-
-    fn output_ext_csv<W: io::Write>(
-        vrps: &AddressOrigins,
-        output: &mut W,
-    ) -> Result<(), io::Error> {
-        use chrono::format::{Item, Numeric, Pad};
-
-        // 2017-08-25 13:12:19
-        const TIME_ITEMS: &[Item<'static>] = &[
-            Item::Numeric(Numeric::Year, Pad::Zero),
-            Item::Literal("-"),
-            Item::Numeric(Numeric::Month, Pad::Zero),
-            Item::Literal("-"),
-            Item::Numeric(Numeric::Day, Pad::Zero),
-            Item::Literal(" "),
-            Item::Numeric(Numeric::Hour, Pad::Zero),
-            Item::Literal(":"),
-            Item::Numeric(Numeric::Minute, Pad::Zero),
-            Item::Literal(":"),
-            Item::Numeric(Numeric::Second, Pad::Zero),
-        ];
-        writeln!(
-            output, "URI,ASN,IP Prefix,Max Length,Not Before,Not After"
-        )?;
-        for addr in vrps.iter() {
-            match addr.cert() {
-                Some(cert) => {
-                    match cert.signed_object_uri() {
-                        Some(uri) => {
-                            write!(output, "{}", uri)?;
-                        }
-                        None => write!(output, "N/A")?
-                    }
-                    let val = cert.validity();
-                    writeln!(output, ",{},{}/{},{},{},{}",
-                        addr.as_id(),
-                        addr.address(), addr.address_length(),
-                        addr.max_length(),
-                        val.not_before().format_with_items(
-                            TIME_ITEMS.iter().cloned()
-                        ),
-                        val.not_after().format_with_items(
-                            TIME_ITEMS.iter().cloned()
-                        ),
-                    )?;
-                }
-                None => {
-                    writeln!(output, "N/A,{},{}/{},{},N/A,N/A",
-                        addr.as_id(),
-                        addr.address(), addr.address_length(),
-                        addr.max_length(),
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn output_json<W: io::Write>(
-        vrps: &AddressOrigins,
-        output: &mut W,
-    ) -> Result<(), io::Error> {
-        let mut first = true;
-        writeln!(output, "{{\n  \"roas\": [")?;
-        for addr in vrps.iter() {
-            if first {
-                first = false
-            }
-            else {
-                writeln!(output, ",")?;
-            }
-            write!(output,
-                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-                \"maxLength\": {}, \"ta\": \"{}\" }}",
-                addr.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length(),
-                addr.tal_name(),
-            )?;
-        }
-        writeln!(output, "\n  ]\n}}")?;
-        Ok(())
-    }
-
-    fn output_openbgpd<W: io::Write>(
-        vrps: &AddressOrigins,
-        output: &mut W,
-    ) -> Result<(), io::Error> {
-        writeln!(output, "roa-set {{")?;
-        for addr in vrps.iter() {
-            write!(output, "    {}/{}",
-                addr.address(), addr.address_length(),
-            )?;
-            if addr.address_length() < addr.max_length() {
-                write!(output, " maxlen {}",
-                    addr.max_length(),
-                )?;
-            }
-            writeln!(output, " source-as {}",
-                u32::from(addr.as_id()),
-            )?;
-        }
-        writeln!(output, "}}")?;
-        Ok(())
-    }
-
-    fn output_rpsl<W: io::Write>(
-        vrps: &AddressOrigins,
-        output: &mut W,
-    ) -> Result<(), io::Error> {
-        let now = Utc::now().to_rfc3339();
-        let mut source = RpslSource::default();
-        for addr in vrps.iter() {
-            writeln!(output,
-                "\r\nroute: {}/{}\r\norigin: {}\r\n\
-                descr: RPKI attestation\r\nmnt-by: NA\r\ncreated: {}\r\n\
-                last-modified: {}\r\nsource: {}\r\n",
-                addr.address(), addr.address_length(),
-                addr.as_id(), now, now, source.display(addr.tal_name())
-            )?;
-        }
-        Ok(())
-    }
-}
-
-
 //------------ Error ---------------------------------------------------------
 
 /// An error has occurred during operation.
@@ -745,38 +538,6 @@ impl OutputFormat {
 /// logged.
 #[derive(Clone, Copy, Debug)]
 pub struct Error;
-
-
-//------------ RpslSource ----------------------------------------------------
-
-/// A mapping between trust anchor names and RPSL source strings.
-///
-/// Because RPSL source strings in the RIPE NCC Validator are upper case,
-/// we believe caching the produced name is cheaper than uppercasing the
-/// TAL name on the fly.
-///
-/// This type produces the correct source via the `display` function by
-/// returning it from a cache, possibly creating it if it isn’t in there
-/// yet.
-#[derive(Default)]
-struct RpslSource(HashMap<String, String>);
-
-impl RpslSource {
-    /// Returns the RPSL source string for `tal`.
-    ///
-    /// Since this may need to create that string, the method needs a mutable
-    /// self.
-    fn display(&mut self, tal: &str) -> &str {
-        if self.0.contains_key(tal) {
-            // This is double lookup is necessary for the borrow checker ...
-            &self.0[tal]
-        }
-        else {
-            self.0.entry(tal.to_string())
-                .or_insert_with(|| format!("ROA-{}-RPKI-ROOT", tal.to_uppercase()))
-        }
-    }
-}
 
 
 //------------ The Man Page --------------------------------------------------

@@ -312,7 +312,7 @@ Routinator supports both protocol version 0 defined in RFC 6810 and version
 1 defined in RFC 8210. However, it does not support router keys introduced
 in version 1.
 .TP
-.BI \-l\ addr:port\fR, \ \-\-listen= addr:port
+.BI \-l\  addr:port\fR,\ \fB\-\-listen=\fIaddr:port
 Specifies the local address and port to listen on for incoming RTR
 connections. IPv6 addresses must be enclosed in square brackets. You can
 provide the option multiple times to let Routinator listen on multiple
@@ -324,6 +324,15 @@ Note how this is a localhost address for security reasons. We also don't
 use the standard RTR port 323 as this is a privileged port that would
 require Routinator to be run as root or otherwise receive permission which
 otherwise isn't necessary at all.
+.TP
+.BI \-\-listen\-http= addr:port
+Specifies the address and port to listen on for incoming HTTP connections.
+See
+.B HTTP SERVICE
+below for more information on the HTTP service provided by Routinator.
+.IP
+If this option is omitted, no HTTP service will be provided.
+
 .TP
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
@@ -523,6 +532,11 @@ The default value if this entry is missing is
 An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
 a colon. IPv6 address should be enclosed in square braces.
+.TP
+.B listen-http
+An array of string values each providing the address and port which the HTTP
+service should listen on. Address and port should be separated by
+a colon. IPv6 address should be enclosed in square braces.
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in RTR server mode. The default is
@@ -554,6 +568,44 @@ process.
 .B chroot
 A string value containing the path any daemon process should use as its
 root directory.
+
+.SH HTTP SERVICE
+When run in
+.B rtrd
+mode, Routinator can provide an HTTP service in addtion to the RTR service.
+The primary intention of this service is to allow integration into
+monitoring systems. For this reason, the service does not support HTTPS and
+should only be used within the local network.
+.P
+The service only supports GET requests with the following
+paths:
+
+.TP
+.B /csv
+Returns the current set of VRPs in
+.B csv
+output format.
+.TP
+.B /json
+Returns the current set of VRPs in
+.B json
+output format.
+.TP
+.B /metrics
+Returns a set of monitoring metrics in the format used by Prometheus.
+.TP
+.B /openbgpd
+Returns the current set of VRPs in
+.B openbgpd
+output format.
+.TP
+.B /rpsl
+Returns the current set of VRPs in
+.B rpsl
+output format.
+.TP
+.B /version
+Returns the version of the Routinator instance.
 
 .SH RELAXED VALIDATION
 The documents defining RPKI include a number of very strict rules

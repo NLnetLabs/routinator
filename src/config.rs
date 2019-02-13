@@ -104,8 +104,11 @@ pub struct Config {
     /// How many diffs to keep in the history.
     pub history_size: usize,
 
-    /// Addresses to listen for RTR TCP transport connections on.
+    /// Addresses to listen on for RTR TCP transport connections.
     pub tcp_listen: Vec<SocketAddr>,
+
+    /// Addresses to listen on for HTTP monitoring connectsion.
+    pub http_listen: Vec<SocketAddr>,
 
     /// The log levels to be logged.
     pub log_level: LevelFilter,
@@ -260,7 +263,15 @@ impl Config {
             .short("l")
             .long("listen")
             .value_name("ADDR:PORT")
-            .help("listen addr:port for RTR.")
+            .help("listen addr:port for RTR")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
+        )
+        .arg(Arg::with_name("listen-http")
+            .long("listen-http")
+            .value_name("ADDR:PORT")
+            .help("listen addr:port for monitoring")
             .takes_value(true)
             .multiple(true)
             .number_of_values(1)
@@ -486,6 +497,21 @@ impl Config {
             }
         }
 
+        // http_listen
+        if let Some(list) = matches.values_of("listen-http") {
+            self.http_listen = Vec::new();
+            for value in list.into_iter() {
+                match SocketAddr::from_str(value) {
+                    Ok(some) => self.http_listen.push(some),
+                    Err(_) => {
+                        eprintln!("Invalid value for listen-http: {}", value);
+                        return Err(Error);
+                    }
+                }
+            }
+        }
+
+
         // pid_file
         if let Some(pid_file) = matches.value_of("pid-file") {
             self.pid_file = Some(cur_dir.join(pid_file))
@@ -702,6 +728,7 @@ impl Config {
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
             tcp_listen: file.take_from_str_array("listen-tcp")?,
+            http_listen: file.take_from_str_array("listen-http")?,
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -816,6 +843,7 @@ impl Config {
             tcp_listen: vec![
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
             ],
+            http_listen: Vec::new(),
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             pid_file: None,

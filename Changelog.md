@@ -18,6 +18,10 @@ New
 
 * Log warnings for stale manifests and CRLs.
 
+* Optional HTTP service in `rtrd` mode. This can be enabled via the
+  `--listen-http` command line option and the `listen-http` config option.
+  This is only the beginning of more extensive monitoring support. [(#68)]
+
 Bug Fixes
 
 * Converts the endianess of the serial number in the SerialNotify RTR PDU.
@@ -33,6 +37,7 @@ Dependencies
 [(#61)]: https://github.com/NLnetLabs/routinator/pull/61
 [(#62)]: https://github.com/NLnetLabs/routinator/pull/62
 [(#63)]: https://github.com/NLnetLabs/routinator/pull/63
+[(#63)]: https://github.com/NLnetLabs/routinator/pull/68
 
 ## 0.2.1 ‘Rated R’
 

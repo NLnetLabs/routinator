@@ -13,13 +13,14 @@
 
 extern crate bytes;
 extern crate chrono;
-extern crate clap;
+#[macro_use] extern crate clap;
 #[cfg(unix)] extern crate daemonize;
 extern crate dirs;
 #[macro_use] extern crate failure;
 extern crate fern;
 #[macro_use] extern crate futures;
 extern crate futures_cpupool;
+extern crate httparse;
 extern crate json;
 #[macro_use] extern crate log;
 extern crate num_cpus;
@@ -35,8 +36,10 @@ pub use self::config::Config;
 pub use self::operation::{Error, Operation};
 
 pub mod config;
+pub mod monitor;
 pub mod operation;
 pub mod origins;
+pub mod output;
 pub mod repository;
 pub mod rtr;
 pub mod slurm;
