@@ -500,7 +500,7 @@ impl Config {
         // http_listen
         if let Some(list) = matches.values_of("listen-http") {
             self.http_listen = Vec::new();
-            for value in list.into_iter() {
+            for value in list {
                 match SocketAddr::from_str(value) {
                     Ok(some) => self.http_listen.push(some),
                     Err(_) => {

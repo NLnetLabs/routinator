@@ -153,7 +153,7 @@ fn csv_footer<W: io::Write>(
 //------------ ext_csv -------------------------------------------------------
 
 // 2017-08-25 13:12:19
-const TIME_ITEMS: &'static [Item<'static>] = &[
+const TIME_ITEMS: &[Item<'static>] = &[
     Item::Numeric(Numeric::Year, Pad::Zero),
     Item::Literal("-"),
     Item::Numeric(Numeric::Month, Pad::Zero),
@@ -233,7 +233,7 @@ fn json_origin<W: io::Write>(
     output: &mut W,
 ) -> Result<(), io::Error> {
     if !first {
-        write!(output, ",\n")?;
+        writeln!(output, ",")?;
     }
     write!(output,
         "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \

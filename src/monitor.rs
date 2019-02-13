@@ -91,6 +91,7 @@ fn http_listener(
 /// send it out, close the socket, and resolve successfully. An error will
 /// be returned if an IO error happens only. If an error happens further up,
 /// it will try to send a 500 response back.
+#[allow(large_enum_variant)]
 enum HttpConnection {
     /// Phase 1: Read a request.
     Read(ReadRequest),
@@ -113,8 +114,8 @@ impl HttpConnection {
 
     /// Returns whether the connection has arrived at the ‘done’ state.
     fn is_done(&self) -> bool {
-        match self {
-            &HttpConnection::Done => true,
+        match *self {
+            HttpConnection::Done => true,
             _ => false
         }
     }
@@ -133,7 +134,7 @@ impl Future for HttpConnection {
                     ))
                 }
                 HttpConnection::Response(ref mut fut) => {
-                    let _ = try_ready!(fut.poll().map_err(|_| ()));
+                    try_ready!(fut.poll().map_err(|_| ()));
                     HttpConnection::Done
                 }
                 HttpConnection::Done => panic!("polling resolved future")
@@ -252,13 +253,25 @@ impl Response {
         }
         if let Some(path) = req.path {
             match path {
-                "/csv" => VrpResponse::new(sock, origins, OutputFormat::Csv),
-                "/json" => VrpResponse::new(sock, origins, OutputFormat::Json),
-                "/metrics" => Self::metrics(sock, origins),
-                "/openbgpd" => {
-                    VrpResponse::new(sock, origins, OutputFormat::Openbgpd)
+                "/csv" => {
+                    VrpResponse::response(sock, origins, OutputFormat::Csv)
                 }
-                "/rpsl" => VrpResponse::new(sock, origins, OutputFormat::Rpsl),
+                "/json" => {
+                    VrpResponse::response(sock, origins, OutputFormat::Json)
+                }
+                "/metrics" => {
+                    Self::metrics(sock, origins)
+                }
+                "/openbgpd" => {
+                    VrpResponse::response(
+                        sock, origins, OutputFormat::Openbgpd
+                    )
+                }
+                "/rpsl" => {
+                    VrpResponse::response(
+                        sock, origins, OutputFormat::Rpsl
+                    )
+                }
                 "/status" => Self::text(sock, "fine"),
                 "/version" => Self::text(sock, crate_version!()),
                 _ => Self::not_found(sock),
@@ -356,7 +369,7 @@ impl Future for Response {
                 let _ = try_ready!(fut.poll());
             }
             Response::Vrp(ref mut fut) => {
-                let _  = try_ready!(fut.poll());
+                try_ready!(fut.poll());
             }
         };
         Ok(Async::Ready(()))
@@ -381,7 +394,7 @@ impl VrpResponse {
     ///
     /// The response will be sent to the socket `sock`. The list will be the
     /// current list from `origins`. It will be formatted in `format`.
-    pub fn new(
+    pub fn response(
         sock: TcpStream,
         origins: OriginsHistory,
         format: OutputFormat
