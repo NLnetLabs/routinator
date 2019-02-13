@@ -4,6 +4,9 @@
 
 Breaking Changes
 
+* Several API and organizational changes in the Routinator library crate
+  for the various improvements.
+
 New
 
 * New output format `csvext` that mimics the output format of the Original
@@ -32,12 +35,19 @@ Dependencies
 * Docker build updated to Rust 1.32 and Alpine Linux 3.9. Thanks to David
   Monosov. [(#61)]
 
+Housekeeping
+
+* Included [Clippy] in Travis runs for better code quality. [(#65)]
+
 [(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
 [(#61)]: https://github.com/NLnetLabs/routinator/pull/61
 [(#62)]: https://github.com/NLnetLabs/routinator/pull/62
 [(#63)]: https://github.com/NLnetLabs/routinator/pull/63
-[(#63)]: https://github.com/NLnetLabs/routinator/pull/68
+[(#65)]: https://github.com/NLnetLabs/routinator/pull/65
+[(#68)]: https://github.com/NLnetLabs/routinator/pull/68
+[Clippy]: https://github.com/rust-lang/rust-clippy
+
 
 ## 0.2.1 ‘Rated R’
 
