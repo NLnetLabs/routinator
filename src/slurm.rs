@@ -377,21 +377,21 @@ impl JsonValueExt for JsonValue {
 
 //------------ ParseError ----------------------------------------------------
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Display)]
 pub enum ParseError {
-    #[fail(display="expected {} for '{}'", expected, element)]
+    #[display(fmt="expected {} for '{}'", expected, element)]
     TypeError {
         element: &'static str,
         expected: &'static str,
     },
 
-    #[fail(display="missing field {}", _0)]
+    #[display(fmt="missing field {}", _0)]
     MissingElement(&'static str),
 
-    #[fail(display="{}", _0)]
+    #[display(fmt="{}", _0)]
     BadPrefix(origins::FromStrError),
 
-    #[fail(display="{}", _0)]
+    #[display(fmt="{}", _0)]
     BadVersion(u8),
 }
 
@@ -414,15 +414,15 @@ impl From<origins::FromStrError> for ParseError {
 
 //------------ LoadError ----------------------------------------------------
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Display)]
 pub enum LoadError {
-    #[fail(display="{}", _0)]
+    #[display(fmt="{}", _0)]
     Io(io::Error),
 
-    #[fail(display="{}", _0)]
+    #[display(fmt="{}", _0)]
     Json(json::Error),
 
-    #[fail(display="{}", _0)]
+    #[display(fmt="{}", _0)]
     Parse(ParseError),
 }
 

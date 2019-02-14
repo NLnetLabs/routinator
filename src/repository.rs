@@ -1048,12 +1048,12 @@ fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
 
 //------------ RsyncError ---------------------------------------------------
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Display)]
 pub enum RsyncError {
-    #[fail(display="unable to run rsync:\n{}", _0)]
+    #[display(fmt="unable to run rsync:\n{}", _0)]
     Command(io::Error),
 
-    #[fail(display="unable to run rsync:\n{}", _0)]
+    #[display(fmt="unable to run rsync:\n{}", _0)]
     Output(String),
 }
 

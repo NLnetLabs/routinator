@@ -5,7 +5,7 @@
 Breaking Changes
 
 * Several API and organizational changes in the Routinator library crate
-  for the various improvements.
+  for the various improvements below.
 
 New
 

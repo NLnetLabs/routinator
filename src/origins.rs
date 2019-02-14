@@ -784,8 +784,8 @@ impl OriginInfo {
 //------------ FromStrError --------------------------------------------------
 
 /// Creating an IP address prefix from a string has failed.
-#[derive(Clone, Debug, Fail)]
-#[fail(display="bad prefix {}", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="bad prefix {}", _0)]
 pub struct FromStrError(String);
 
 
