@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased Next Version
+## 0.3.0 ‘It’s More Fun at the Zoo’
 
 Breaking Changes
 
@@ -38,6 +38,7 @@ Dependencies
 Housekeeping
 
 * Included [Clippy] in Travis runs for better code quality. [(#65)]
+
 
 [(#59)]: https://github.com/NLnetLabs/routinator/pull/59
 [(#60)]: https://github.com/NLnetLabs/routinator/pull/60
