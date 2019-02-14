@@ -48,6 +48,7 @@ Housekeeping
 [(#65)]: https://github.com/NLnetLabs/routinator/pull/65
 [(#68)]: https://github.com/NLnetLabs/routinator/pull/68
 [Clippy]: https://github.com/rust-lang/rust-clippy
+[cargo-deb]: https://github.com/mmstick/cargo-deb
 
 
 ## 0.2.1 ‘Rated R’
