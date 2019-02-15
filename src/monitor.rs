@@ -1,4 +1,4 @@
-//! Everything regarding monitoring.
+//! Delivering monitoring information.
 //!
 //! The module provides all functionality to expose monitoring endpoints to
 //! those interested. The only public item, [`monitor_listener`] creates all

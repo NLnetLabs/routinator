@@ -61,8 +61,8 @@ struct RepoInner {
     /// The directory our local copy of the respository lives in.
     cache_dir: PathBuf, 
 
-    /// The directory the TALs live in.
-    tal_dir: PathBuf,
+    /// The list of our TALs. 
+    tals: Vec<Tal>,
 
     /// Should we be strict when decoding data?
     strict: bool,
@@ -101,26 +101,10 @@ impl Repository {
             );
             return Err(Error)
         }
-        if let Err(err) = fs::read_dir(&config.tal_dir) {
-            eprintln!(
-                "Failed to open TAL directory {}: {}",
-                config.tal_dir.display(), err
-            );
-            return Err(Error)
-        }
-
-        // Let’s quickly go over the TALs to break as early as possible if
-        // they aren’t good.
-        //
-        // XXX This is here for now to get the message about You-know-who’s
-        //     TAL printed early.
-        if let Ok(iter) = Tal::read_dir(&config.tal_dir) {
-            iter.for_each(|_| ())
-        }
 
         Ok(Repository(Arc::new(RepoInner {
             cache_dir: config.cache_dir.clone(),
-            tal_dir: config.tal_dir.clone(),
+            tals: Self::load_tals(&config.tal_dir)?,
             strict: config.strict,
             extra_output,
             rsync_threads: config.rsync_count,
@@ -135,6 +119,62 @@ impl Repository {
                 None
             }
         })))
+    }
+
+    /// Loads the TAL files from the given directory.
+    fn load_tals(tal_dir: &Path) -> Result<Vec<Tal>, Error> {
+        let mut res = Vec::new();
+        let dir = match fs::read_dir(tal_dir) {
+            Ok(dir) => dir,
+            Err(err) => {
+                error!("Failed to open TAL directory: {}", err);
+                return Err(Error)
+            }
+        };
+        for entry in dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    error!(
+                        "Failed to iterate over tal directory: {}",
+                        err
+                    );
+                    return Err(Error)
+                }
+            };
+            let path = entry.path();
+            if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+                warn!("{}: garbage in TAL directory.", path.display());
+                continue
+            }
+            let mut file = match File::open(&path) {
+                Ok(file) => {
+                    info!("Processing TAL {}", path.display());
+                    file
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to open TAL {}: {}. \
+                         Aborting.",
+                         path.display(), err
+                    );
+                    return Err(Error)
+                }
+            };
+            let tal = match Tal::read(&path, &mut file) {
+                Ok(tal) => tal,
+                Err(err) => {
+                    error!(
+                        "Failed to read TAL {}: {}. \
+                         Aborting.",
+                        path.display(), err
+                    );
+                    return Err(Error)
+                }
+            };
+            res.push(tal);
+        }
+        Ok(res)
     }
 
     /// Starts a validation run.
@@ -204,29 +244,14 @@ impl Repository {
     ) -> impl Future<Item=RouteOrigins, Error=Error> {
         let pool = CpuPool::new(self.0.validation_threads);
         let repo = self.clone();
-        fs::read_dir(&self.0.tal_dir).map_err(|err| {
-            error!("Failed to open TAL directory: {}", err);
-            Error
-        }).into_future()
-        .and_then(move |dir| {
-            future::join_all(dir.map(move |entry| {
-                let repo = repo.clone();
-                let pool = pool.clone();
-                entry.map_err(|err| {
-                    error!(
-                        "Failed to iterate over tal directory: {}",
-                        err
-                    );
-                    Error
-                }).into_future()
-                .and_then(move |entry| {
-                    pool.spawn(future::lazy(|| repo.process_tal(entry)))
-                })
-            })).and_then(|x| {
-                let mut res = RouteOrigins::new();
-                x.into_iter().for_each(|item| res.merge(item));
-                Ok(res)
-            })
+        future::join_all((0..self.0.tals.len()).into_iter().map(move |idx| {
+            let repo = repo.clone();
+            let pool = pool.clone();
+            pool.spawn(future::lazy(move || repo.process_tal(idx)))
+        })).and_then(|x| {
+            let mut res = RouteOrigins::new();
+            x.into_iter().for_each(|item| res.merge(item));
+            Ok(res)
         })
     }
 
@@ -406,68 +431,40 @@ impl Repository {
     /// This method logs all its error messages.
     pub fn process_tal(
         self,
-        entry: DirEntry
+        //entry: DirEntry
+        idx: usize
     ) -> Result<RouteOrigins, Error> {
-        let path = entry.path();
         let mut res = RouteOrigins::new();
-        if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-            warn!("{}: garbage in TAL directory.", path.display());
-            return Ok(res)
-        }
-        let mut file = match File::open(&path) {
-            Ok(file) => {
-                info!("Processing TAL {}", path.display());
-                file
-            }
-            Err(err) => {
-                error!(
-                    "Failed to open TAL {}: {}. \
-                     Aborting.",
-                     path.display(), err
-                );
-                return Err(Error)
-            }
-        };
-        let tal = match Tal::read(&path, &mut file) {
-            Ok(tal) => tal,
-            Err(err) => {
-                error!(
-                    "Failed to read TAL {}: {}. \
-                     Aborting.",
-                    path.display(), err
-                );
-                return Err(Error)
-            }
-        };
+        let tal = &self.0.tals[idx];
         for uri in tal.uris() {
-                let cert = match self.load_ta(&uri) {
-                    Ok(Some(cert)) => cert,
-                    _ => continue,
-                };
-                if cert.subject_public_key_info() != tal.key_info() {
+            let cert = match self.load_ta(&uri) {
+                Ok(Some(cert)) => cert,
+                _ => continue,
+            };
+            if cert.subject_public_key_info() != tal.key_info() {
+                info!(
+                    "Trust anchor {}: key doesn’t match TAL.",
+                    uri
+                );
+                continue;
+            }
+            let cert = match cert.validate_ta(tal.info().clone(),
+                                              self.0.strict) {
+                Ok(cert) => cert,
+                Err(_) => {
                     info!(
-                        "Trust anchor {}: key doesn’t match TAL.",
+                        "Trust anchor {}: doesn’t validate.",
                         uri
                     );
                     continue;
                 }
-                let cert = match cert.validate_ta(tal.info().clone(),
-                                                  self.0.strict) {
-                    Ok(cert) => cert,
-                    Err(_) => {
-                        info!(
-                            "Trust anchor {}: doesn’t validate.",
-                            uri
-                        );
-                        continue;
-                    }
-                };
-                info!("Found valid trust anchor {}. Processing.", uri);
-                self.process_ca(cert, &uri, &mut res);
-                // We stop once we have had the first working URI.
-                return Ok(res)
+            };
+            info!("Found valid trust anchor {}. Processing.", uri);
+            self.process_ca(cert, &uri, &mut res);
+            // We stop once we have had the first working URI.
+            return Ok(res)
         }
-        warn!("No valid trust anchor for TAL {}", path.display());
+        warn!("No valid trust anchor for TAL {}", tal.info().name());
         Ok(res)
     }
 
