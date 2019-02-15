@@ -12,7 +12,9 @@ Status](https://ci.appveyor.com/api/projects/status/github/NLnetLabs/routinator?
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
-or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
+or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki). 
+You can lean more about Routinator and RPKI technology by reading our documentation on 
+[Read the Docs](https://rpki.readthedocs.io/).
 
 ## Quick Start
 
