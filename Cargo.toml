@@ -33,10 +33,6 @@ toml            = "^0.4"
 daemonize	= "^0.3"
 syslog		= "^4.0"
 
-[patch.crates-io]
-bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
-
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
 license-file = ["LICENSE", "0"]
