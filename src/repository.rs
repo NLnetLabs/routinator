@@ -244,7 +244,7 @@ impl Repository {
     ) -> impl Future<Item=RouteOrigins, Error=Error> {
         let pool = CpuPool::new(self.0.validation_threads);
         let repo = self.clone();
-        future::join_all((0..self.0.tals.len()).into_iter().map(move |idx| {
+        future::join_all((0..self.0.tals.len()).map(move |idx| {
             let repo = repo.clone();
             let pool = pool.clone();
             pool.spawn(future::lazy(move || repo.process_tal(idx)))
