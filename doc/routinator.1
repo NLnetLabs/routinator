@@ -300,13 +300,16 @@ The repository will not be updated before producing the list.
 
 .SS rtrd
 This command causes Routinator to act as a server for the RPKI-to-Router
-protocol (RTR). After a quick sanity check, it will detach from the
-terminal unless the
+protocol (RTR). In this mode, Routinator will read all the TALs (See
+.B TRUST ANCHOR LOCATORS
+below) and will then detach from the terminal unless the
 .B -a
 option is given.
 .PP
 The server will periodically update the local repository, hourly by default,
-notify any clients of changes, and let them fetch validated data.
+notify any clients of changes, and let them fetch validated data. It will not,
+however, reread the trust anchor locators. Thus, if you update them, you will
+have to restart Routinator.
 .PP
 Routinator supports both protocol version 0 defined in RFC 6810 and version
 1 defined in RFC 8210. However, it does not support router keys introduced
@@ -324,6 +327,9 @@ Note how this is a localhost address for security reasons. We also don't
 use the standard RTR port 323 as this is a privileged port that would
 require Routinator to be run as root or otherwise receive permission which
 otherwise isn't necessary at all.
+.IP
+Routinator will only start listening on these ports after an intitial
+validation run has finished.
 .TP
 .BI \-\-listen\-http= addr:port
 Specifies the address and port to listen on for incoming HTTP connections.

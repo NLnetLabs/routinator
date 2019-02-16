@@ -7,11 +7,17 @@ Breaking Changes
 
 New
 
+* TAL files will only be written once when Routinator starts. This
+  improves robustness at the cost of having to restart Routinator when the
+  TALs change. [(#74)]
+
 
 Bug Fixes
 
 
 Dependencies
+
+[(#74)]: https://github.com/NLnetLabs/routinator/pull/74
 
 
 ## 0.3.0 ‘It’s More Fun at the Zoo’
