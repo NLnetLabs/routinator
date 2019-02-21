@@ -27,6 +27,7 @@
 .RB [ \-\-rsync\-command=\fIcommand\fR]
 .RB [ \-\-rsync\-args=\fIargs\fR]
 .RB [ \-\-rsync-count=\fIcount\fR]
+.RB [ \-\-rsync-timeout=\fIseconds\fR]
 .RB [ \-\-validation-threads=\fIcount\fR]
 .RB [ \-v | \c
 .BR \-vv | \c
@@ -160,6 +161,12 @@ and hope that it is in the path.
 .BI \-\-rsync\-count= count
 Sets the maximum number of rsync commands to be run in parallel. The default
 is 4.
+.TP
+.BI \-\-rsync\-timeout= seconds
+Sets the number of seconds an rsync command is allowed to run before it is
+terminated early. This protects against hanging rsync commands that prevent
+Routinator from continuing. The default is 300 seconds which should be long
+enough except for very slow networks.
 .TP
 .BI \-\-validation\-threads= count
 Sets the number of threads to distribute work to for validation. Note that
@@ -485,6 +492,11 @@ arguments are used.
 .B rsync-count
 An integer value specifying the number of rsync commands that should at most
 be run in parallel. The default if this value is missing is 4 commands.
+.TP
+.B rsync-timeout
+An integer value specifying th number seconds an rsync command is allowed to
+run before it is being terminated. The default if the value is missing is
+300 seconds.
 .TP
 .B validation-threads
 An integer value specifying the number of threads to be used during

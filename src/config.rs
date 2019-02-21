@@ -30,6 +30,9 @@ const DEFAULT_STRICT: bool = false;
 /// The default number of rsync commands run in parallel.
 const DEFAULT_RSYNC_COUNT: usize = 4;
 
+/// The default timeout for running rsync commands in seconds.
+const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
+
 /// The default refresh interval in seconds.
 const DEFAULT_REFRESH: u64 = 3600;
 
@@ -88,6 +91,9 @@ pub struct Config {
 
     /// Number of parallel rsync commands.
     pub rsync_count: usize,
+
+    /// Timeout for rsync commands.
+    pub rsync_timeout: Duration,
 
     /// Number of parallel validations.
     pub validation_threads: usize,
@@ -186,6 +192,13 @@ impl Config {
              .value_name("COUNT")
              .help("number of parallel rsync commands")
              .takes_value(true)
+        )
+        .arg(Arg::with_name("rsync-timeout")
+            .long("rsync-timeout")
+            .value_name("SECONDS")
+            .default_value("600")
+            .help("timeout for rsync commands")
+            .takes_value(true)
         )
         .arg(Arg::with_name("validation-threads")
              .long("validation-threads")
@@ -383,6 +396,11 @@ impl Config {
         // rsync_count
         if let Some(value) = from_str_value_of(matches, "rsync-count")? {
             self.rsync_count = value
+        }
+
+        // rsync_timeout
+        if let Some(value) = from_str_value_of(matches, "rsync-timeout")? {
+            self.rsync_timeout = Duration::from_secs(value)
         }
 
         // validation_threads
@@ -704,6 +722,12 @@ impl Config {
                 file.take_small_usize("rsync-count")?
                     .unwrap_or(DEFAULT_RSYNC_COUNT)
             },
+            rsync_timeout: {
+                Duration::from_secs(
+                    file.take_u64("rsync-timeout")?
+                        .unwrap_or(DEFAULT_RSYNC_TIMEOUT)
+                )
+            },
             validation_threads: {
                 file.take_small_usize("validation-threads")?
                     .unwrap_or_else(::num_cpus::get)
@@ -835,6 +859,7 @@ impl Config {
             rsync_command: "rsync".into(),
             rsync_args: None,
             rsync_count: DEFAULT_RSYNC_COUNT,
+            rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             retry: Duration::from_secs(DEFAULT_RETRY),
@@ -1011,6 +1036,10 @@ impl Config {
             );
         }
         res.insert("rsync-count".into(), (self.rsync_count as i64).into());
+        res.insert(
+            "rsync-timeout".into(),
+            (self.rsync_timeout.as_secs() as i64).into()
+        );
         res.insert(
             "validation-threads".into(),
             (self.validation_threads as i64).into()
