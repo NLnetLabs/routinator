@@ -10,6 +10,9 @@ New
 * TAL files will only be written once when Routinator starts. This
   improves robustness at the cost of having to restart Routinator when the
   TALs change. [(#74)]
+* New option `--rsync-timeout` setting the maximum number of seconds any
+  rsync command is allowed to run. This prevents hanging rsync from
+  blocking Routinator. [(#76)]
 
 
 Bug Fixes
@@ -18,6 +21,7 @@ Bug Fixes
 Dependencies
 
 [(#74)]: https://github.com/NLnetLabs/routinator/pull/74
+[(#76)]: https://github.com/NLnetLabs/routinator/pull/76
 
 
 ## 0.3.0 ‘It’s More Fun at the Zoo’
