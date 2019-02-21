@@ -36,6 +36,7 @@ pub use self::config::Config;
 pub use self::operation::{Error, Operation};
 
 pub mod config;
+pub mod metrics;
 pub mod monitor;
 pub mod operation;
 pub mod origins;

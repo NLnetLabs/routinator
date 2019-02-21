@@ -18,6 +18,7 @@ use futures::future::Future;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
 use crate::config::Config;
+use crate::metrics::Metrics;
 use crate::monitor::monitor_listener;
 use crate::origins::{AddressOrigins, OriginsHistory};
 use crate::output::OutputFormat;
@@ -358,12 +359,14 @@ impl Operation {
                 return Err(Error)
             }
         };
+        let mut metrics = Metrics::new();
         let history = OriginsHistory::new(
             AddressOrigins::from_route_origins(
-                roas, &config.load_exceptions(false)?, false
+                roas, &config.load_exceptions(false)?, false, &mut metrics,
             ),
             config.history_size
         );
+        history.push_metrics(metrics);
 
         info!("Starting RTR listener...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
@@ -429,9 +432,11 @@ impl Operation {
             }
         };
         debug!("Found {} ROAs.", roas.len());
+        let mut metrics = Metrics::new();
         let vrps = AddressOrigins::from_route_origins(
-            roas, &exceptions, format.extra_output()
+            roas, &exceptions, format.extra_output(), &mut metrics
         );
+        metrics.log();
         let res = match output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {

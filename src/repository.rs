@@ -243,24 +243,20 @@ impl Repository {
     /// The method logs all error messages.
     pub fn process_async(
         &self
-    ) -> impl Future<Item=RouteOrigins, Error=Error> {
+    ) -> impl Future<Item=Vec<RouteOrigins>, Error=Error> {
         let pool = CpuPool::new(self.0.validation_threads);
         let repo = self.clone();
         future::join_all((0..self.0.tals.len()).map(move |idx| {
             let repo = repo.clone();
             let pool = pool.clone();
             pool.spawn(future::lazy(move || repo.process_tal(idx)))
-        })).and_then(|x| {
-            let mut res = RouteOrigins::new();
-            x.into_iter().for_each(|item| res.merge(item));
-            Ok(res)
-        })
+        }))
     }
 
     /// Process the local repository and produce a list of route origins.
     ///
     /// This is the synchronous version of `process_async`.
-    pub fn process(&self) -> Result<RouteOrigins, Error> {
+    pub fn process(&self) -> Result<Vec<RouteOrigins>, Error> {
         self.process_async().wait()
     }
 
@@ -436,8 +432,8 @@ impl Repository {
         //entry: DirEntry
         idx: usize
     ) -> Result<RouteOrigins, Error> {
-        let mut res = RouteOrigins::new();
         let tal = &self.0.tals[idx];
+        let mut res = RouteOrigins::new(tal.info().clone());
         for uri in tal.uris() {
             let cert = match self.load_ta(&uri) {
                 Ok(Some(cert)) => cert,
