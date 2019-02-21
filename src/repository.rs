@@ -12,6 +12,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 use bytes::Bytes;
 use futures::future;
 use futures::{Future, IntoFuture};
@@ -23,6 +24,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+use tokio::timer::Timeout;
 use tokio_process::CommandExt;
 use crate::config::Config;
 use crate::operation::Error;
@@ -117,7 +119,7 @@ impl Repository {
             }
             else {
                 None
-            }
+            },
         })))
     }
 
@@ -826,6 +828,8 @@ impl RsyncState {
 pub struct RsyncCommand {
     command: String,
     args: Vec<String>,
+    timeout: Duration,
+
 }
 
 impl RsyncCommand {
@@ -848,24 +852,24 @@ impl RsyncCommand {
             );
             return Err(Error);
         }
-        Ok(match config.rsync_args {
-            Some(ref args) => {
-                RsyncCommand { command, args: args.clone() }
-            }
+        let args = match config.rsync_args {
+            Some(ref args) => args.clone(),
             None => {
                 let has_contimeout =
                    output.stdout.windows(12)
-                  .any(|window| window == b"--contimeout");
+                   .any(|window| window == b"--contimeout");
                 if has_contimeout {
-                    RsyncCommand {
-                        command,
-                        args: vec!["--contimeout=10".into()]
-                    }
+                    vec!["--contimeout=10".into()]
                 }
                 else {
-                    RsyncCommand { command, args: Vec::new() }
+                    Vec::new()
                 }
             }
+        };
+        Ok(RsyncCommand {
+            command,
+            args,
+            timeout: config.rsync_timeout
         })
     }
 
@@ -889,9 +893,18 @@ impl RsyncCommand {
     ) -> impl Future<Item=(), Error=io::Error> {
         let cmd = self.command(source, destination);
         let source = source.clone();
+        let timeout = self.timeout.clone();
         future::lazy(|| cmd)
-        .and_then(|mut cmd| {
-            cmd.output_async()
+        .and_then(move |mut cmd| {
+            Timeout::new(cmd.output_async(), timeout)
+            .map_err(|err| {
+                err.into_inner().unwrap_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "rsync command took too long"
+                    )
+                })
+            })
         })
         .and_then(move |output| {
             let status = Self::log_output(&source, output);
