@@ -292,11 +292,11 @@ impl Response {
             "# HELP valid_roas number of valid ROAs seen\n\
              # TYPE valid_roas gauge"
         ).unwrap();
-        origins.metrics(|item| {
+        origins.current_metrics(|item| {
             for tal in item.tals() {
                 writeln!(res,
-                    "valid_roas{{tal={}}} {} {}",
-                    tal.tal.name(), tal.roas, item.timestamp()
+                    "valid_roas{{tal=\"{}\"}} {}",
+                    tal.tal.name(), tal.roas
                 ).unwrap();
             }
         });
@@ -307,11 +307,11 @@ impl Response {
              # HELP vrps_total total number of VRPs seen\n\
              # TYPE vrps_total gauge"
         ).unwrap();
-        origins.metrics(|item| {
+        origins.current_metrics(|item| {
             for tal in item.tals() {
                 writeln!(res,
-                    "vrps_total{{tal={}}} {} {}",
-                    tal.tal.name(), tal.vrps, item.timestamp()
+                    "vrps_total{{tal=\"{}\"}} {}",
+                    tal.tal.name(), tal.vrps
                 ).unwrap();
             }
         });

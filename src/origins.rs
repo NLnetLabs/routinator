@@ -504,7 +504,11 @@ impl OriginsHistory {
         (history.current.clone(), history.serial())
     }
 
-    /// Returns a slice with the available metrics.
+    pub fn current_metrics<F>(&self, op: F)
+    where F: FnMut(&Metrics) {
+        self.0.read().unwrap().metrics.iter().next().map(op);
+    }
+
     pub fn metrics<F>(&self, op: F)
     where F: FnMut(&Metrics) {
         self.0.read().unwrap().metrics.iter().for_each(op)
