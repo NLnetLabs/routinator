@@ -893,7 +893,7 @@ impl RsyncCommand {
     ) -> impl Future<Item=(), Error=io::Error> {
         let cmd = self.command(source, destination);
         let source = source.clone();
-        let timeout = self.timeout.clone();
+        let timeout = self.timeout;
         future::lazy(|| cmd)
         .and_then(move |mut cmd| {
             Timeout::new(cmd.output_async(), timeout)
