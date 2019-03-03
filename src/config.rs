@@ -1697,7 +1697,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(unix)]
+    #[cfg(unix)] // ... because of drive letters in absolute paths on Windows.
     fn good_config_file() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
@@ -1745,6 +1745,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)] // ... because of drive letters in absolute paths on Windows.
     fn minimal_config_file() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
