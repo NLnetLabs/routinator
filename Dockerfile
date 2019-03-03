@@ -1,5 +1,5 @@
 # -- stage 1: build static routinator with musl libc for alpine
-FROM rust:1.32.0-stretch as build
+FROM rust:1.33.0-stretch as build
 
 RUN apt-get -yq update && \
     apt-get -yq install musl-tools
