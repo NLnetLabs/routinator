@@ -7,6 +7,7 @@
 //! [`monitor_listener`]: fn.monitor_listener.html
 
 use std::{cmp, io, mem};
+use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -283,18 +284,41 @@ impl Response {
     }
 
     /// Produces the response for the `/metrics` path.
-    ///
-    /// This is a temporary placeholder for now. We are going to make this
-    /// way more awesome!
     fn metrics(sock: TcpStream, origins: OriginsHistory) -> Self {
+        let mut res = String::new();
+
+        // valid_roas 
+        writeln!(res,
+            "# HELP valid_roas number of valid ROAs seen\n\
+             # TYPE valid_roas gauge"
+        ).unwrap();
+        origins.current_metrics(|item| {
+            for tal in item.tals() {
+                writeln!(res,
+                    "valid_roas{{tal=\"{}\"}} {}",
+                    tal.tal.name(), tal.roas
+                ).unwrap();
+            }
+        });
+
+        // vrps_total
+        writeln!(res,
+            "\n\
+             # HELP vrps_total total number of VRPs seen\n\
+             # TYPE vrps_total gauge"
+        ).unwrap();
+        origins.current_metrics(|item| {
+            for tal in item.tals() {
+                writeln!(res,
+                    "vrps_total{{tal=\"{}\"}} {}",
+                    tal.tal.name(), tal.vrps
+                ).unwrap();
+            }
+        });
+
         Self::from_content(
             sock, "200 OK", "text/plain; version=0.0.4",
-            &format!(
-                "# HELP vrps_total total number of VRPs seen\n\
-                 # TYPE vrps_total gauge\n\
-                 vrps_total {}\n",
-                origins.current().len()
-            )
+            &res
         )
     }
 

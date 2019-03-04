@@ -1,19 +1,21 @@
 # Change Log
 
-## Unrelease next version
+## Unreleased next version
 
 Breaking Changes
 
 
 New
 
-* TAL files will only be written once when Routinator starts. This
+* TAL files will only be read once when Routinator starts. This
   improves robustness at the cost of having to restart Routinator when the
   TALs change. [(#74)]
 * New option `--rsync-timeout` setting the maximum number of seconds any
   rsync command is allowed to run. This prevents hanging rsync from
   blocking Routinator. [(#76)]
-
+* Additional Prometheus metric `valid_roas` reporting the number of
+  verified ROAs. Additionally, both metrics are now reported separately
+  for each TAL. [(#78)]
 
 Bug Fixes
 
@@ -25,6 +27,7 @@ Dependencies
 
 [(#74)]: https://github.com/NLnetLabs/routinator/pull/74
 [(#76)]: https://github.com/NLnetLabs/routinator/pull/76
+[(#78)]: https://github.com/NLnetLabs/routinator/pull/78
 [(#80)]: https://github.com/NLnetLabs/routinator/pull/80
 
 

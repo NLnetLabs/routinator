@@ -13,6 +13,7 @@ use rpki::cert::ResourceCert;
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
+use super::metrics::{Metrics, TalMetrics};
 use super::slurm::LocalExceptions;
 
 
@@ -25,16 +26,22 @@ use super::slurm::LocalExceptions;
 /// for generating the real origins kept in [`AddressOrigins`].
 ///
 /// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RouteOrigins {
     /// The list of route origin attestations.
-    origins: Vec<RouteOriginAttestation>
+    origins: Vec<RouteOriginAttestation>,
+
+    /// The TAL for this list.
+    tal: Arc<TalInfo>,
 }
 
 impl RouteOrigins {
     /// Creates a new, empty list of route origins.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(tal: Arc<TalInfo>) -> Self {
+        RouteOrigins {
+            origins: Vec::new(),
+            tal
+        }
     }
 
     /// Appends the given attestation to the set.
@@ -45,15 +52,7 @@ impl RouteOrigins {
         self.origins.push(attestation)
     }
 
-    /// Merges another list of route origins into this one.
-    ///
-    /// Despite the name, this method doesn’t do any duplicate checking,
-    /// either.
-    pub fn merge(&mut self, mut other: RouteOrigins) {
-        self.origins.append(&mut other.origins)
-    }
-
-    /// Returns whetehr the list of attestations is empty.
+    /// Returns whether the list of attestations is empty.
     pub fn is_empty(&self) -> bool {
         self.origins.is_empty()
     }
@@ -120,23 +119,30 @@ impl AddressOrigins {
     /// duplicates, drop the origins filtered in `execptions` and add the
     /// assertions from `exceptions`.
     pub fn from_route_origins(
-        origins: RouteOrigins,
+        origins: Vec<RouteOrigins>,
         exceptions: &LocalExceptions,
         extra_info: bool,
+        metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
-        for mut roa in origins {
-            let info = OriginInfo::from_roa(&mut roa, extra_info);
-            for addr in roa.iter() {
-                let addr = AddressOrigin::from_roa(
-                    roa.as_id(),
-                    addr,
-                    info.clone()
-                );
-                if exceptions.keep_origin(&addr) {
-                    let _ = res.insert(addr);
+        for mut item in origins {
+            let mut tal_metrics = TalMetrics::new(item.tal.clone());
+            for mut roa in item {
+                tal_metrics.roas += 1;
+                let info = OriginInfo::from_roa(&mut roa, extra_info);
+                for addr in roa.iter() {
+                    tal_metrics.vrps += 1;
+                    let addr = AddressOrigin::from_roa(
+                        roa.as_id(),
+                        addr,
+                        info.clone()
+                    );
+                    if exceptions.keep_origin(&addr) {
+                        let _ = res.insert(addr);
+                    }
                 }
             }
+            metrics.push_tal(tal_metrics);
         }
         for addr in exceptions.assertions() {
             let _ = res.insert(addr.clone());
@@ -238,28 +244,35 @@ impl OriginsDiff {
     /// origins with the serial number of `serial` plus one.
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
-        origins: Option<RouteOrigins>,
+        origins: Option<Vec<RouteOrigins>>,
         exceptions: &LocalExceptions,
         serial: u32,
         extra_info: bool,
-    ) -> (AddressOrigins, Self) {
+    ) -> (AddressOrigins, Self, Metrics) {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
+        let mut metrics = Metrics::new();
 
         if let Some(origins) = origins {
-            for mut roa in origins {
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
-                for addr in roa.iter() {
-                    let addr = AddressOrigin::from_roa(
-                        roa.as_id(), addr, info.clone()
-                    );
-                    if !exceptions.keep_origin(&addr) {
-                        continue
-                    }
-                    if next.insert(addr.clone()) && !current.remove(&addr) {
-                        let _ = announce.insert(addr);
+            for item in origins {
+                let mut tal_metrics = TalMetrics::new(item.tal.clone());
+                for mut roa in item {
+                    tal_metrics.roas += 1;
+                    let info = OriginInfo::from_roa(&mut roa, extra_info);
+                    for addr in roa.iter() {
+                        tal_metrics.vrps += 1;
+                        let addr = AddressOrigin::from_roa(
+                            roa.as_id(), addr, info.clone()
+                        );
+                        if !exceptions.keep_origin(&addr) {
+                            continue
+                        }
+                        if next.insert(addr.clone()) && !current.remove(&addr) {
+                            let _ = announce.insert(addr);
+                        }
                     }
                 }
+                metrics.push_tal(tal_metrics);
             }
         }
         for addr in exceptions.assertions() {
@@ -274,7 +287,7 @@ impl OriginsDiff {
             "Diff with {} announced and {} withdrawn.",
             announce.len(), withdraw.len()
         );
-        (next.into(), OriginsDiff { serial, announce, withdraw })
+        (next.into(), OriginsDiff { serial, announce, withdraw }, metrics)
     }
 
     /// Returns the serial number of this origins diff.
@@ -389,7 +402,12 @@ pub struct HistoryInner {
     /// The newest diff will be at the front of the queue.
     diffs: VecDeque<Arc<OriginsDiff>>,
 
-    /// The number of diffs to keep.
+    /// A list of metrics.
+    ///
+    /// The newest metric will be at the front of the queue.
+    metrics: VecDeque<Metrics>,
+
+    /// The number of diffs and metrics to keep.
     keep: usize,
 }
 
@@ -404,6 +422,7 @@ impl OriginsHistory {
             HistoryInner {
                 current: Arc::new(current),
                 diffs: VecDeque::with_capacity(keep),
+                metrics: VecDeque::with_capacity(keep),
                 keep
             }
         )))
@@ -485,6 +504,16 @@ impl OriginsHistory {
         (history.current.clone(), history.serial())
     }
 
+    pub fn current_metrics<F>(&self, op: F)
+    where F: FnMut(&Metrics) {
+        self.0.read().unwrap().metrics.front().map(op);
+    }
+
+    pub fn metrics<F>(&self, op: F)
+    where F: FnMut(&Metrics) {
+        self.0.read().unwrap().metrics.iter().for_each(op)
+    }
+
     /// Updates the history.
     ///
     /// Produces a new list of address origins based on the route origins
@@ -497,7 +526,7 @@ impl OriginsHistory {
     /// history.
     pub fn update(
         &self,
-        origins: Option<RouteOrigins>,
+        origins: Option<Vec<RouteOrigins>>,
         exceptions: &LocalExceptions,
         extra_info: bool,
     ) -> bool {
@@ -508,13 +537,14 @@ impl OriginsHistory {
             (serial, current)
         };
         let current: HashSet<_> = current.iter().map(Clone::clone).collect();
-        let (next, diff) = OriginsDiff::construct(
+        let (next, diff, metrics) = OriginsDiff::construct(
             current, origins, exceptions, serial, extra_info
         );
+        let mut history = self.0.write().unwrap();
         if !diff.is_empty() {
-            let mut history = self.0.write().unwrap();
             history.current = Arc::new(next);
             history.push_diff(diff);
+            history.push_metrics(metrics);
             true
         }
         else {
@@ -522,6 +552,10 @@ impl OriginsHistory {
         }
     }
 
+    /// Adds a set of metrics to the history.
+    pub fn push_metrics(&self, metrics: Metrics) {
+        self.0.write().unwrap().push_metrics(metrics)
+    }
 }
 
 impl HistoryInner {
@@ -542,6 +576,14 @@ impl HistoryInner {
             let _ = self.diffs.pop_back();
         }
         self.diffs.push_front(Arc::new(diff))
+    }
+
+    /// Appends a new set of metrics dropping old ones if necessary.
+    pub fn push_metrics(&mut self, metrics: Metrics) {
+        if self.metrics.len() == self.keep {
+            let _ = self.metrics.pop_back();
+        }
+        self.metrics.push_front(metrics)
     }
 }
 
