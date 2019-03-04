@@ -739,20 +739,26 @@ impl Config {
             },
             retry: {
                 Duration::from_secs(
-                    file.take_u64("retry")?.unwrap_or(DEFAULT_REFRESH)
+                    file.take_u64("retry")?.unwrap_or(DEFAULT_RETRY)
                 )
             },
             expire: {
                 Duration::from_secs(
-                    file.take_u64("expire")?.unwrap_or(DEFAULT_REFRESH)
+                    file.take_u64("expire")?.unwrap_or(DEFAULT_EXPIRE)
                 )
             },
             history_size: {
                 file.take_small_usize("history-size")?
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
-            tcp_listen: file.take_from_str_array("listen-tcp")?,
-            http_listen: file.take_from_str_array("listen-http")?,
+            tcp_listen: {
+                file.take_from_str_array("listen-tcp")?
+                    .unwrap_or_else(Self::default_tcp_listen)
+            },
+            http_listen: {
+                file.take_from_str_array("listen-http")?
+                    .unwrap_or_else(Vec::new)
+            },
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -865,9 +871,7 @@ impl Config {
             retry: Duration::from_secs(DEFAULT_RETRY),
             expire: Duration::from_secs(DEFAULT_EXPIRE),
             history_size: DEFAULT_HISTORY_SIZE,
-            tcp_listen: vec![
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
-            ],
+            tcp_listen: Self::default_tcp_listen(),
             http_listen: Vec::new(),
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
@@ -877,6 +881,12 @@ impl Config {
         }
     }
 
+    /// Returns the default tcp-listen value.
+    fn default_tcp_listen() -> Vec<SocketAddr> {
+        vec![
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
+        ]
+    }
 
     /// Prepares and returns the cache dir and tal dir.
     ///
@@ -1490,7 +1500,10 @@ impl ConfigFile {
         }
     }
 
-    fn take_from_str_array<T>(&mut self, key: &str) -> Result<Vec<T>, Error>
+    fn take_from_str_array<T>(
+        &mut self,
+        key: &str
+    ) -> Result<Option<Vec<T>>, Error>
     where T: FromStr, T::Err: fmt::Display {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
@@ -1519,7 +1532,7 @@ impl ConfigFile {
                         return Err(Error)
                     }
                 }
-                Ok(res)
+                Ok(Some(res))
             }
             Some(_) => {
                 eprintln!(
@@ -1529,7 +1542,7 @@ impl ConfigFile {
                 );
                 Err(Error)
             }
-            None => Ok(Vec::new())
+            None => Ok(None)
         }
     }
 
@@ -1684,8 +1697,8 @@ mod test {
     }
 
     #[test]
-    #[cfg(unix)]
-    fn good_file_config() {
+    #[cfg(unix)] // ... because of drive letters in absolute paths on Windows.
+    fn good_config_file() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
              tal-dir = \"taldir\"\n\
@@ -1728,6 +1741,37 @@ mod test {
         assert_eq!(
             config.log_target,
             LogTarget::File(PathBuf::from("/test/foo.log"))
+        );
+    }
+
+    #[test]
+    #[cfg(unix)] // ... because of drive letters in absolute paths on Windows.
+    fn minimal_config_file() {
+        let config = ConfigFile::parse(
+            "repository-dir = \"/repodir\"\n\
+             tal-dir = \"taldir\"",
+            &Path::new("/test/routinator.conf")
+        ).unwrap();
+        let config = Config::from_config_file(config).unwrap();
+        assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
+        assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
+        assert!(config.exceptions.is_empty());
+        assert_eq!(config.strict, false);
+        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
+        assert_eq!(config.validation_threads, ::num_cpus::get());
+        assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
+        assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
+        assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
+        assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
+        assert_eq!(
+            config.tcp_listen,
+            Config::default_tcp_listen()
+        );
+        assert!(config.http_listen.is_empty());
+        assert_eq!(config.log_level, LevelFilter::Warn);
+        assert_eq!(
+            config.log_target,
+            LogTarget::default()
         );
     }
 

@@ -19,12 +19,16 @@ New
 
 Bug Fixes
 
+* A missing `tcp-listen` option in the config file caused Routinator to
+  crash in `rtrd` mode instead of using the default socket. [(#80)]
+
 
 Dependencies
 
 [(#74)]: https://github.com/NLnetLabs/routinator/pull/74
 [(#76)]: https://github.com/NLnetLabs/routinator/pull/76
 [(#78)]: https://github.com/NLnetLabs/routinator/pull/78
+[(#80)]: https://github.com/NLnetLabs/routinator/pull/80
 
 
 ## 0.3.0 ‘It’s More Fun at the Zoo’
