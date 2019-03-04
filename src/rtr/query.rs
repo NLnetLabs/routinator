@@ -4,6 +4,7 @@ use std::io;
 use futures::{Async, Future, Stream};
 use tokio::io::{AsyncRead, ReadExact};
 use super::{notify, pdu};
+use super::serial::Serial;
 
 
 //------------ Query and Input -----------------------------------------------
@@ -11,7 +12,7 @@ use super::{notify, pdu};
 pub enum Query {
     Serial {
         session: u16,
-        serial: u32,
+        serial: Serial,
     },
     Reset,
     Error(pdu::BoxedError),
