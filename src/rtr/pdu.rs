@@ -13,6 +13,7 @@ use tokio::io::{
     AsyncRead, AsyncWrite, ReadExact, WriteAll, read_exact, write_all
 };
 use ::origins::AddressOrigin;
+use super::serial::Serial;
 
 
 //------------ Macro for Common Impls ----------------------------------------
@@ -74,7 +75,7 @@ impl SerialNotify {
     pub const PDU: u8 = 0;
     pub const LEN: u32 = 12;
 
-    pub fn new(version: u8, session: u16, serial: u32) -> Self {
+    pub fn new(version: u8, session: u16, serial: Serial) -> Self {
         SerialNotify {
             header: Header::new(version, Self::PDU, session, Self::LEN),
             serial: serial.to_be(),
@@ -103,7 +104,7 @@ impl SerialQuery {
     pub const PDU: u8 = 1;
     pub const LEN: u32 = 12;
 
-    pub fn new(version: u8, session: u16, serial: u32) -> Self {
+    pub fn new(version: u8, session: u16, serial: Serial) -> Self {
         SerialQuery {
             header: Header::new(version, Self::PDU, session, 12),
             payload: SerialQueryPayload::new(serial),
@@ -118,7 +119,7 @@ impl SerialQuery {
         u16::from_be(self.header.session)
     }
 
-    pub fn serial(&self) -> u32 {
+    pub fn serial(&self) -> Serial {
         self.payload.serial()
     }
 }
@@ -135,14 +136,14 @@ pub struct SerialQueryPayload {
 }
 
 impl SerialQueryPayload {
-    pub fn new(serial: u32) -> Self {
+    pub fn new(serial: Serial) -> Self {
         SerialQueryPayload {
             serial: serial.to_be()
         }
     }
 
-    pub fn serial(&self) -> u32 {
-        u32::from_be(self.serial)
+    pub fn serial(&self) -> Serial {
+        Serial::from_be(self.serial)
     }
 }
 
@@ -402,7 +403,7 @@ impl EndOfData {
     pub fn new(
         version: u8,
         session: u16,
-        serial: u32,
+        serial: Serial,
         refresh: u32,
         retry: u32,
         expire: u32
@@ -453,7 +454,7 @@ pub struct EndOfDataV0 {
 
 #[allow(dead_code)]
 impl EndOfDataV0 {
-    pub fn new(session: u16, serial: u32) -> Self {
+    pub fn new(session: u16, serial: Serial) -> Self {
         EndOfDataV0 {
             header: Header::new(0, 7, session, 12),
             serial: serial.to_be()
@@ -468,8 +469,8 @@ impl EndOfDataV0 {
         u16::from_be(self.header.session)
     }
 
-    pub fn serial(&self) -> u32 {
-        u32::from_be(self.serial)
+    pub fn serial(&self) -> Serial {
+        Serial::from_be(self.serial)
     }
 }
 
@@ -494,7 +495,7 @@ impl EndOfDataV1 {
     pub fn new(
         version: u8,
         session: u16,
-        serial: u32,
+        serial: Serial,
         refresh: u32,
         retry: u32,
         expire: u32
@@ -516,8 +517,8 @@ impl EndOfDataV1 {
         u16::from_be(self.header.session)
     }
 
-    pub fn serial(&self) -> u32 {
-        u32::from_be(self.serial)
+    pub fn serial(&self) -> Serial {
+        Serial::from_be(self.serial)
     }
 
     pub fn refresh(&self) -> u32 {

@@ -14,6 +14,7 @@ use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use super::metrics::{Metrics, TalMetrics};
+use super::rtr::Serial;
 use super::slurm::LocalExceptions;
 
 
@@ -204,7 +205,7 @@ pub struct OriginsDiff {
     ///
     /// Serial numbers start from zero and are guaranteed to be incremented
     /// by one between versions of address origin sets.
-    serial: u32,
+    serial: Serial,
 
     /// The address origins added by this diff.
     announce: Vec<AddressOrigin>,
@@ -217,7 +218,7 @@ impl OriginsDiff {
     /// Creates an empty origins diff with the given serial number.
     ///
     /// Both the announce and withdraw lists will be empty.
-    pub fn empty(serial: u32) -> Self {
+    pub fn empty(serial: Serial) -> Self {
         OriginsDiff {
             serial,
             announce: Vec::new(),
@@ -246,7 +247,7 @@ impl OriginsDiff {
         mut current: HashSet<AddressOrigin>,
         origins: Option<Vec<RouteOrigins>>,
         exceptions: &LocalExceptions,
-        serial: u32,
+        serial: Serial,
         extra_info: bool,
     ) -> (AddressOrigins, Self, Metrics) {
         let mut next = HashSet::new();
@@ -291,7 +292,7 @@ impl OriginsDiff {
     }
 
     /// Returns the serial number of this origins diff.
-    pub fn serial(&self) -> u32 {
+    pub fn serial(&self) -> Serial {
         self.serial
     }
 
@@ -308,7 +309,7 @@ impl OriginsDiff {
     /// Unwraps the diff into the serial number, announce and withdraw lists.
     pub fn unwrap(
         self
-    ) -> (u32, Vec<AddressOrigin>, Vec<AddressOrigin>) {
+    ) -> (Serial, Vec<AddressOrigin>, Vec<AddressOrigin>) {
         (self.serial, self.announce, self.withdraw)
     }
 }
@@ -324,7 +325,7 @@ impl OriginsDiff {
 #[derive(Clone, Debug)]
 struct DiffMerger {
     /// The serial number of the combined diff.
-    serial: u32,
+    serial: Serial,
 
     /// The set of added address origins.
     announce: HashSet<AddressOrigin>,
@@ -439,10 +440,7 @@ impl OriginsHistory {
     /// a diff from that version to the current version if it can. If it
     /// can’t, either because it doesn’t have enough history data or because
     /// the serial is actually in the future.
-    ///
-    /// The method current doesn’t correctly treat serial number wrap around.
-    /// See [issue #38](https://github.com/NLnetLabs/routinator/issues/38).
-    pub fn get(&self, serial: u32) -> Option<Arc<OriginsDiff>> {
+    pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
         debug!("Fetching diff for serial {}", serial);
         let history = self.0.read().unwrap();
         if let Some(diff) = history.diffs.front() {
@@ -456,7 +454,7 @@ impl OriginsHistory {
                 debug!("Same, producing empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
-            else if diff.serial() == serial + 1 {
+            else if diff.serial() == serial.add(1) {
                 // This relies on serials increasing by one always.
                 debug!("One behind, just clone.");
                 return Some(diff.clone())
@@ -494,12 +492,12 @@ impl OriginsHistory {
     }
 
     /// Returns the serial number of the current version of the origin list.
-    pub fn serial(&self) -> u32 {
+    pub fn serial(&self) -> Serial {
         self.0.read().unwrap().serial()
     }
 
     /// Returns the current list of address origins and its serial number.
-    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, u32) {
+    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, Serial) {
         let history = self.0.read().unwrap();
         (history.current.clone(), history.serial())
     }
@@ -532,7 +530,7 @@ impl OriginsHistory {
     ) -> bool {
         let (serial, current) = {
             let history = self.0.read().unwrap();
-            let serial = history.serial().wrapping_add(1);
+            let serial = history.serial().add(1);
             let current = history.current.clone();
             (serial, current)
         };
@@ -563,10 +561,10 @@ impl HistoryInner {
     ///
     /// This is either the serial of the first diff or 0 if there are no
     /// diffs.
-    pub fn serial(&self) -> u32 {
+    pub fn serial(&self) -> Serial {
         match self.diffs.front() {
             Some(diff) => diff.serial(),
-            None => 0
+            None => Serial(0)
         }
     }
 

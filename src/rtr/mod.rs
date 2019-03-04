@@ -11,10 +11,12 @@
 
 pub use self::net::rtr_listener;
 pub use self::notify::NotifySender;
+pub use self::serial::Serial;
 
 mod pdu;
 mod net;
 mod notify;
 mod query;
 mod send;
+mod serial;
 

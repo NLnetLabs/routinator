@@ -7,6 +7,7 @@ use tokio::io::{AsyncWrite, WriteAll};
 use crate::config::Config;
 use crate::origins::{AddressOrigins, OriginsDiff};
 use super::pdu;
+use super::serial::Serial;
 
 
 //------------ Sender --------------------------------------------------------
@@ -20,7 +21,7 @@ pub enum Sender<A> {
 }
 
 impl<A: AsyncWrite> Sender<A> {
-    pub fn notify(sock: A, version: u8, session: u16, serial: u32) -> Self {
+    pub fn notify(sock: A, version: u8, session: u16, serial: Serial) -> Self {
         Sender::Notify(
             pdu::SerialNotify::new(version, session, serial).write(sock)
         )
@@ -48,7 +49,7 @@ impl<A: AsyncWrite> Sender<A> {
         sock: A,
         version: u8,
         session: u16,
-        serial: u32,
+        serial: Serial,
         current: Arc<AddressOrigins>,
         timing: Timing,
     ) -> Self {
@@ -113,7 +114,7 @@ impl<A: AsyncWrite, D> Wrapped<A, D> {
         sock: A,
         version: u8,
         session: u16,
-        serial: u32,
+        serial: Serial,
         iter: D,
         timing: Timing,
     ) -> Self {

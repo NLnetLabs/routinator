@@ -16,6 +16,7 @@ New
 * Additional Prometheus metric `valid_roas` reporting the number of
   verified ROAs. Additionally, both metrics are now reported separately
   for each TAL. [(#78)]
+* Compare RTR serial numbers according to RFC 1932. [(#81)]
 
 Bug Fixes
 
@@ -29,6 +30,7 @@ Dependencies
 [(#76)]: https://github.com/NLnetLabs/routinator/pull/76
 [(#78)]: https://github.com/NLnetLabs/routinator/pull/78
 [(#80)]: https://github.com/NLnetLabs/routinator/pull/80
+[(#81)]: https://github.com/NLnetLabs/routinator/pull/81
 
 
 ## 0.3.0 ‘It’s More Fun at the Zoo’
