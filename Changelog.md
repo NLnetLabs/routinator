@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased next version
+
+Breaking
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.3.1 ‘More Intensity’
 
 New

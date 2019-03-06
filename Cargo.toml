@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -32,6 +32,10 @@ toml            = "^0.4"
 [target.'cfg(unix)'.dependencies]
 daemonize	= "^0.3"
 syslog		= "^4.0"
+
+[patch.crates-io]
+bcder = { git="https://github.com/NLnetLabs/bcder.git" }
+rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
