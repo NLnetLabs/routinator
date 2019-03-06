@@ -1,9 +1,6 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking Changes
-
+## 0.3.1 ‘More Intensity’
 
 New
 
@@ -22,15 +19,15 @@ Bug Fixes
 
 * A missing `tcp-listen` option in the config file caused Routinator to
   crash in `rtrd` mode instead of using the default socket. [(#80)]
-
-
-Dependencies
+* Decoding manifest and ROAs now checks that the content type field in the
+  signed object has the correct object identifier. [(rpki-rs #27)]
 
 [(#74)]: https://github.com/NLnetLabs/routinator/pull/74
 [(#76)]: https://github.com/NLnetLabs/routinator/pull/76
 [(#78)]: https://github.com/NLnetLabs/routinator/pull/78
 [(#80)]: https://github.com/NLnetLabs/routinator/pull/80
 [(#81)]: https://github.com/NLnetLabs/routinator/pull/81
+[(rpki-rs #27)]: https://github.com/NLnetLabs/rpki-rs/pull/27
 
 
 ## 0.3.0 ‘It’s More Fun at the Zoo’
