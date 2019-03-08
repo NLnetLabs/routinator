@@ -8,7 +8,13 @@ New
 
 Bug Fixes
 
+* Print errors when reading the trust anchor locators to standard error
+  instead of logging them since logging isn’t set up yet at that point.
+  [(#89)]
+
 Dependencies
+
+[(#89)]: https://github.com/NLnetLabs/routinator/pull/89
 
 
 ## 0.3.1 ‘More Intensity’

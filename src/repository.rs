@@ -129,7 +129,7 @@ impl Repository {
         let dir = match fs::read_dir(tal_dir) {
             Ok(dir) => dir,
             Err(err) => {
-                error!("Failed to open TAL directory: {}", err);
+                eprintln!("Failed to open TAL directory: {}", err);
                 return Err(Error)
             }
         };
@@ -137,7 +137,7 @@ impl Repository {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
-                    error!(
+                    eprintln!(
                         "Failed to iterate over tal directory: {}",
                         err
                     );
@@ -146,17 +146,16 @@ impl Repository {
             };
             let path = entry.path();
             if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                warn!("{}: garbage in TAL directory.", path.display());
+                eprintln!("{}: garbage in TAL directory.", path.display());
                 continue
             }
             let mut file = match File::open(&path) {
                 Ok(file) => {
-                    info!("Processing TAL {}", path.display());
                     file
                 }
                 Err(err) => {
-                    error!(
-                        "Failed to open TAL {}: {}. \
+                    eprintln!(
+                        "Failed to open TAL {}: {}. \n\
                          Aborting.",
                          path.display(), err
                     );
@@ -166,8 +165,8 @@ impl Repository {
             let tal = match Tal::read(&path, &mut file) {
                 Ok(tal) => tal,
                 Err(err) => {
-                    error!(
-                        "Failed to read TAL {}: {}. \
+                    eprintln!(
+                        "Failed to read TAL {}: {}. \n\
                          Aborting.",
                         path.display(), err
                     );
