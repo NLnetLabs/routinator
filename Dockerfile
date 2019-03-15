@@ -12,7 +12,7 @@ COPY . .
 RUN cargo build --target=x86_64-unknown-linux-musl --release --locked
 
 # -- stage 2: create alpine-based container with the static routinator executable
-FROM alpine:3.9
+FROM alpine:3.9.2
 COPY --from=build /tmp/routinator/target/x86_64-unknown-linux-musl/release/routinator /usr/local/bin/
 
 # Install rsync as routinator depends on it
@@ -31,4 +31,4 @@ RUN mkdir -p /root/.rpki-cache/tals
 COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
 
 EXPOSE 3323/tcp
-CMD ["routinator", "rtrd", "-a","-l","0.0.0.0:3323"]
+CMD ["routinator", "rtrd", "-a", "-l", "0.0.0.0:3323"]
