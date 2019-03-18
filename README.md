@@ -77,6 +77,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
   ([RFC 8416](https://tools.ietf.org/html/rfc8416))
 * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
       supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810), [RFC 8210](https://tools.ietf.org/html/rfc8210))
+* [x] Monitoring endpoint (Prometheus)    
 * [ ] Exhaustive interoperability and compliance testing
 * [ ] Integration with alerting and monitoring services so that route
       hijacks, misconfigurations, connectivity and application problems
@@ -86,6 +87,15 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 * [ ] Implement a basic web-based user interface and Command Line Interface
 * [ ] Expose an API
 * [ ] Add the ability to process Internet Routing Registry data
+
+## System Requirements
+
+Routinator is designed to be lean and is capable of running on minimalist
+hardware, such as a Raspberry Pi. Running it on a system with 1GB of 
+available RAM and 1GB of available disk space will give the global RPKI
+data set enough room to grow for the forseeable future. A powerful CPU is
+not required, as cryptographic validation currently takes less than two 
+seconds on an average system.
 
 ## Getting Started
 
