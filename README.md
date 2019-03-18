@@ -12,8 +12,8 @@ Status](https://ci.appveyor.com/api/projects/status/github/NLnetLabs/routinator?
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
-or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki). 
-You can lean more about Routinator and RPKI technology by reading our documentation on 
+or post a message on our [RPKI mailing list](https://nlnetlabs.nl/mailman/listinfo/rpki).
+You can lean more about Routinator and RPKI technology by reading our documentation on
 [Read the Docs](https://rpki.readthedocs.io/).
 
 ## Quick Start
@@ -271,5 +271,19 @@ to refer to your file with local exceptions.
 
 Routinator will re-read that file on every validation run, so you can
 simply update the file whenever your exceptions change.
+
+## Monitoring
+
+Monitoring a Routinator instance is possible by enabling the integrated
+[Prometheus](https://prometheus.io/) exporter using the `listen-http`
+configuration option or command line parameter.
+
+Port [9556](https://github.com/prometheus/prometheus/wiki/Default-port-allocations)
+is allocated for this use. A Routinator instance with monitoring on this
+port can be launched so:
+
+```bash
+routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --listen-http 192.0.2.13:9556
+```
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
