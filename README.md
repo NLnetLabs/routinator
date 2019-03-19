@@ -247,6 +247,15 @@ minutes, the above command becomes
 routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
 ```
 
+## Secure Transports for RPKI-RTR
+
+[RFC6810](https://tools.ietf.org/html/rfc6810#page-17) defines a number of
+secure transports for RPKI-RTR that can be used for communication between
+a router and a RPKI relying party.
+
+Documentation on configuring secure transports with Routinator can be
+found [here](doc/transports.md).
+
 ## Configuration Files
 
 Routinator can take its configuration from a file, too. You can specify
