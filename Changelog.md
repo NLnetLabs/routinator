@@ -12,9 +12,14 @@ Bug Fixes
   instead of logging them since logging isn’t set up yet at that point.
   [(#89)]
 
+* Use `route6:` fields in RPSL output for IPv6 prefixes. ([#96], reported
+  by [@matsm])
+
 Dependencies
 
 [(#89)]: https://github.com/NLnetLabs/routinator/pull/89
+[#96]: https://github.com/NLnetLabs/routinator/pull/96
+[@matsm]: https://github.com/matsm
 
 
 ## 0.3.1 ‘More Intensity’
