@@ -11,14 +11,17 @@ Bug Fixes
 * Print errors when reading the trust anchor locators to standard error
   instead of logging them since logging isn’t set up yet at that point.
   [(#89)]
-
 * Use `route6:` fields in RPSL output for IPv6 prefixes. ([#96], reported
   by [@matsm])
+* Use LF as line endings in RPSL output. Seems that’s what whois uses in
+  practice, too. ([#97], reported by [@matsm])
+
 
 Dependencies
 
 [(#89)]: https://github.com/NLnetLabs/routinator/pull/89
 [#96]: https://github.com/NLnetLabs/routinator/pull/96
+[#97]: https://github.com/NLnetLabs/routinator/pull/97
 [@matsm]: https://github.com/matsm
 
 
