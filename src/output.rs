@@ -298,9 +298,9 @@ fn rpsl_origin<W: io::Write>(
 ) -> Result<(), io::Error> {
     let now = Utc::now().to_rfc3339();
     writeln!(output,
-        "\r\n{}: {}/{}\r\norigin: {}\r\n\
-        descr: RPKI attestation\r\nmnt-by: NA\r\ncreated: {}\r\n\
-        last-modified: {}\r\nsource: ROA-{}-RPKI-ROOT\r\n",
+        "\n{}: {}/{}\norigin: {}\n\
+        descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
+        last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
         if addr.address().is_ipv4() { "route" }
         else { "route6" },
         addr.address(), addr.address_length(),
