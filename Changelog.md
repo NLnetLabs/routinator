@@ -1,10 +1,6 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking
-
-New
+## 0.3.2 ‘Bitter and Twisted’
 
 Bug Fixes
 
@@ -15,9 +11,6 @@ Bug Fixes
   by [@matsm])
 * Use LF as line endings in RPSL output. Seems that’s what whois uses in
   practice, too. ([#97], reported by [@matsm])
-
-
-Dependencies
 
 [(#89)]: https://github.com/NLnetLabs/routinator/pull/89
 [#96]: https://github.com/NLnetLabs/routinator/pull/96
