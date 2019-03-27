@@ -1,5 +1,17 @@
 # Change Log
 
+## Unreleased future version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
+
 ## 0.3.2 ‘Bitter and Twisted’
 
 Bug Fixes
