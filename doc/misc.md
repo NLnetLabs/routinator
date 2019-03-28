@@ -24,3 +24,25 @@ sudo apt-get install musl-tools
 rustup target add x86_64-unknown-linux-musl
 cargo build --target=x86_64-unknown-linux-musl --release
 ```
+
+## Building on CentOS 6
+
+If you are trying to build Routinator on CentOS 6, you will end up with a
+long list of error messages about missing assembler instructions. This is
+because the assembler shipped with CentOS 6 is too old.
+
+You can get the necessary version by installing the [Developer Toolset 6]
+from the [Software Collections] repository. On a virgin system, you can
+get Routinator in these six steps:
+
+```
+sudo yum install centos-release-scl
+sudo yum install devtoolset-6
+scl enable devtoolset-6 bash
+curl https://sh.rustup.rs -sSf | sh
+source $HOME/.cargo/env
+cargo install routinator
+```
+
+[Developer Toolset 6]: https://www.softwarecollections.org/en/scls/rhscl/devtoolset-6/
+[Software Collections]: https://wiki.centos.org/AdditionalResources/Repositories/SCL

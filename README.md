@@ -154,6 +154,13 @@ set of packages to build from C sources. If you are unsure, try to run
 `cc` on a command line and if there’s a complaint about missing input
 files, you are probably good to go.
 
+On some older systems, the toolchain may not be up-to-date enough. We
+are collecting information as it comes up in a
+[separate document](doc/misc.md). One such instance is
+[CentOS 6](doc/misc.md#building-on-centos-6).
+
+
+
 ## Building and Running
 
 The easiest way to get Routinator is to leave it to cargo by saying
