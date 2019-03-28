@@ -8,8 +8,12 @@ New
 
 Bug Fixes
 
+* The config file option specific to `rtrd` mode weren’t picked up.
+  ([#102], reported by Jay Borkenhagen)
+
 Dependencies
 
+[#102]: https://github.com/NLnetLabs/routinator/pull/102
 
 
 ## 0.3.2 ‘Bitter and Twisted’
