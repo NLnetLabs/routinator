@@ -14,10 +14,10 @@ Bug Fixes
 Dependencies
 
 * There’s now a crude way to check if you have the minimum Rust version
-  required and stop building. [(#103)]
+  required and stop building. [(#104)]
 
 [#102]: https://github.com/NLnetLabs/routinator/pull/102
-[(#103)]: https://github.com/NLnetLabs/routinator/pull/103
+[(#104)]: https://github.com/NLnetLabs/routinator/pull/104
 
 
 ## 0.3.2 ‘Bitter and Twisted’
