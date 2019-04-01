@@ -1,10 +1,6 @@
 # Change Log
 
-## Unreleased future version
-
-Breaking Changes
-
-New
+## 0.3.3 ‘Big Bada Boom’
 
 Bug Fixes
 
@@ -12,6 +8,8 @@ Bug Fixes
   ([#102], reported by Jay Borkenhagen)
 * Ignore ‘broken pipe’ errors when outputting VRPs to make Routinator play
   nice with piping output into scripts etc. [(#105)]
+* Fixes a crash when validating certain invalid resource sets on
+  certificates. [(rpki-rs #30)]
 
 Dependencies
 
@@ -21,6 +19,7 @@ Dependencies
 [#102]: https://github.com/NLnetLabs/routinator/pull/102
 [(#104)]: https://github.com/NLnetLabs/routinator/pull/104
 [(#105)]: https://github.com/NLnetLabs/routinator/pull/105
+[(rpki-rs #30)]: https://github.com/NLnetLabs/rpki-rs/pull/30
 
 
 ## 0.3.2 ‘Bitter and Twisted’
