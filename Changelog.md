@@ -10,10 +10,13 @@ Bug Fixes
 
 * The config file option specific to `rtrd` mode weren’t picked up.
   ([#102], reported by Jay Borkenhagen)
+* Ignore ‘broken pipe’ errors when outputting VRPs to make Routinator play
+  nice with piping output into scripts etc. [(#105)]
 
 Dependencies
 
 [#102]: https://github.com/NLnetLabs/routinator/pull/102
+[(#105)]: https://github.com/NLnetLabs/routinator/pull/105
 
 
 ## 0.3.2 ‘Bitter and Twisted’
