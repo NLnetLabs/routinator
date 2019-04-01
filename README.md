@@ -18,9 +18,9 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have rsync and the C toolchain but not yet Rust, here’s how
-you get the Routinator to run as an RTR server listening on 127.0.0.1 port
-3323:
+Assuming you have rsync and the C toolchain but not yet [Rust 1.30](#rust) 
+or newer, here’s how you get the Routinator to run as an RTR server listening 
+on 127.0.0.1 port 3323:
 
 ```bash
 curl https://sh.rustup.rs -sSf | sh
