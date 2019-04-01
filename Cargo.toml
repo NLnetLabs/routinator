@@ -37,10 +37,6 @@ syslog		= "^4.0"
 [build-dependencies]
 rustc_version   = "^0.2.3"
 
-[patch.crates-io]
-bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki  = { git="https://github.com/NLnetLabs/rpki-rs.git" }
-
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
 license-file = ["LICENSE", "0"]
