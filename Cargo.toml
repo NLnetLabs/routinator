@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -36,6 +36,10 @@ syslog		= "^4.0"
 
 [build-dependencies]
 rustc_version   = "^0.2.3"
+
+[patch.crates-io]
+bcder = { git="https://github.com/NLnetLabs/bcder.git" }
+rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
