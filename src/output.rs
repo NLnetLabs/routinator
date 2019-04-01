@@ -61,6 +61,18 @@ impl OutputFormat {
         vrps: &AddressOrigins,
         target: &mut W,
     ) -> Result<(), io::Error> {
+        match self._output(vrps, target) {
+            Ok(()) => Ok(()),
+            Err(ref err) if err.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+            Err(err) => Err(err)
+        }
+    }
+
+    fn _output<W: io::Write>(
+        self,
+        vrps: &AddressOrigins,
+        target: &mut W,
+    ) -> Result<(), io::Error> {
         self.output_header(vrps, target)?;
         let mut iter = vrps.iter();
         if let Some(vrp) = iter.next() {
