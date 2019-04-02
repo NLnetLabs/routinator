@@ -100,11 +100,11 @@ seconds on an average system.
 ## Getting Started
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
-There are three things you need for Routinator: rsync, Rust and a C
-toolchain. You need rsync because the RPKI repository currently uses rsync
-as its main means of distribution. You need Rust because that’s what the
-Routinator has been written in. Some of the cryptographic primitives used
-by the Routinator require a C toolchain, so you need that, too.
+There are three things you need for Routinator: rsync, a C toolchain and 
+Rust. You need rsync because the RPKI repository currently uses rsync
+as its main means of distribution. Some of the cryptographic primitives 
+used by the Routinator require a C toolchain, so you need that, too. You 
+need Rust because that’s what Routinator has been written in. 
 
 Since this currently is an early version, we decided not to distribute
 binary packages just yet. But don’t worry, getting Rust and building
@@ -123,14 +123,31 @@ installation phase. And yes, Routinator totally works on Windows, too.
 
 If you don’t have rsync, please head to http://rsync.samba.org/
 
+### C Toolchain
+
+Some of the libraries Routinator depends on require a C toolchain to be
+present. Your system probably has some easy way to install the minimum
+set of packages to build from C sources. If you are unsure, try to run
+`cc` on a command line and if there’s a complaint about missing input
+files, you are probably good to go.
+
+On some older systems, the toolchain may not be up-to-date enough. We
+are collecting information as it comes up in a
+[separate document](doc/misc.md). One such instance is
+[CentOS 6](doc/misc.md#building-on-centos-6).
+
 ### Rust
 
-While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.30 or
-newer. We therefore suggest to use the canonical Rust installation via a
-tool called *rustup.*
+The Rust compiler runs on, and compiles to, a great number of platforms.
+The official [Rust Platform Support](https://forge.rust-lang.org/platform-support.html)
+page provides an overview of the various platforms and support levels.
 
-To install *rustup* and Rust, simply do:
+While some system distributions include Rust as system packages, 
+Routinator relies on a relatively new version of Rust, currently 1.30 or 
+newer. We therefore suggest to use the canonical Rust installation via a
+tool called ``rustup``.
+
+To install ``rustup`` and Rust, simply do:
 
 ```bash
 curl https://sh.rustup.rs -sSf | sh
@@ -145,21 +162,6 @@ You can update your Rust installation later by simply running
 ```bash
 rustup update
 ```
-
-### C Toolchain
-
-Some of the libraries Routinator depends on require a C toolchain to be
-present. Your system probably has some easy way to install the minimum
-set of packages to build from C sources. If you are unsure, try to run
-`cc` on a command line and if there’s a complaint about missing input
-files, you are probably good to go.
-
-On some older systems, the toolchain may not be up-to-date enough. We
-are collecting information as it comes up in a
-[separate document](doc/misc.md). One such instance is
-[CentOS 6](doc/misc.md#building-on-centos-6).
-
-
 
 ## Building and Running
 
