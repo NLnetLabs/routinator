@@ -1060,6 +1060,12 @@ impl Config {
                 self.tcp_listen.iter().map(|a| a.to_string().into()).collect()
             )
         );
+        res.insert(
+            "listen-http".into(),
+            toml::Value::Array(
+                self.http_listen.iter().map(|a| a.to_string().into()).collect()
+            )
+        );
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
             #[cfg(unix)]
