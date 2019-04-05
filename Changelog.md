@@ -8,7 +8,12 @@ New
 
 Bug Fixes
 
+* The value of the `listen-http` config option wasn’t include in the
+  output of the `config` command. Now it is. [(#109)]
+
 Dependencies
+
+[(#109)]: https://github.com/NLnetLabs/routinator/pull/109
 
 
 ## 0.3.3 ‘Big Bada Boom’
