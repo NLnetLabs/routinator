@@ -18,7 +18,7 @@ use futures::future;
 use futures::{Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use rpki::uri;
-use rpki::cert::{Cert, ResourceCert};
+use rpki::cert::{Cert, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
@@ -478,7 +478,7 @@ impl Repository {
         routes: &mut RouteOrigins
     ) {
         let mut store = CrlStore::new();
-        let repo_uri = match cert.repository_uri() {
+        let repo_uri = match cert.ca_repository() {
             Some(uri) => uri,
             None => {
                 info!("CA cert {} has no repository URI. Ignoring.", uri);
@@ -493,11 +493,7 @@ impl Repository {
             }
         };
 
-        for item in manifest.iter_uris(repo_uri) {
-            let (uri, hash) = match item {
-                Ok(item) => item,
-                Err(_) => continue,
-            };
+        for (uri, hash) in manifest.iter_uris(repo_uri) {
             self.process_object(uri, hash, &cert, &mut store, routes);
         }
     }
@@ -616,110 +612,100 @@ impl Repository {
         issuer_uri: &uri::Rsync,
         store: &mut CrlStore,
     ) -> Option<ManifestContent> {
-        for uri in issuer.manifest_uris() {
-            let uri = match uri.into_rsync_uri() {
-                Some(uri) => uri,
-                None => {
-                    continue
-                }
-            };
-            let bytes = match self.load_file(&uri, true) {
-                Some(bytes) => bytes,
-                None => {
-                    info!("{}: failed to load.", uri);
-                    continue
-                }
-            };
-            let manifest = match Manifest::decode(bytes, self.0.strict) {
-                Ok(manifest) => manifest,
-                Err(_) => {
-                    info!("{}: failed to decode", uri);
-                    continue
-                }
-            };
-            let (cert, manifest) = match manifest.validate(issuer,
-                                                           self.0.strict) {
-                Ok(manifest) => manifest,
-                Err(_) => {
-                    info!("{}: failed to validate", uri);
-                    continue
-                }
-            };
-            if manifest.is_stale() {
-                warn!("{}: stale manifest", uri);
+        let uri = match issuer.rpki_manifest() {
+            Some(ref uri) => uri.clone(),
+            None => {
+                info!("{}: No valid manifest found. Ignoring.", issuer_uri);
+                return None
             }
-            if manifest.len() > CRL_CACHE_LIMIT {
-                debug!(
-                    "{}: Manifest with {} entries: enabling serial caching",
-                    uri,
-                    manifest.len()
-                );
-                store.enable_serial_caching();
+        };
+        let bytes = match self.load_file(&uri, true) {
+            Some(bytes) => bytes,
+            None => {
+                info!("{}: failed to load.", uri);
+                return None;
             }
-            if self.check_crl(cert, issuer, store).is_err() {
-                info!("{}: certificate has been revoked", uri);
-                continue
+        };
+        let manifest = match Manifest::decode(bytes, self.0.strict) {
+            Ok(manifest) => manifest,
+            Err(_) => {
+                info!("{}: failed to decode", uri);
+                return None;
             }
-            return Some(manifest)
+        };
+        let (cert, manifest) = match manifest.validate(issuer,
+                                                       self.0.strict) {
+            Ok(manifest) => manifest,
+            Err(_) => {
+                info!("{}: failed to validate", uri);
+                return None;
+            }
+        };
+        if manifest.is_stale() {
+            warn!("{}: stale manifest", uri);
         }
-        info!("{}: No valid manifest found. Ignoring.", issuer_uri);
-        None
+        if manifest.len() > CRL_CACHE_LIMIT {
+            debug!(
+                "{}: Manifest with {} entries: enabling serial caching",
+                uri,
+                manifest.len()
+            );
+            store.enable_serial_caching();
+        }
+        if self.check_crl(cert, issuer, store).is_err() {
+            info!("{}: certificate has been revoked", uri);
+            return None
+        }
+        Some(manifest)
     }
 
-    /// Checks wheter a certificate is listen on its CRL.
-    fn check_crl<C: AsRef<Cert>>(
+    /// Checks wheter a certificate is listed on its CRL.
+    fn check_crl<C: AsRef<TbsCert>>(
         &self,
         cert: C,
         issuer: &ResourceCert,
         store: &mut CrlStore,
     ) -> Result<(), ValidationError> {
         let cert = cert.as_ref();
-        let uri_list = match cert.crl_distribution() {
+        let uri = match cert.crl_uri() {
             Some(some) => some,
             None => return Ok(())
         };
-        for uri in uri_list.iter() {
-            let uri = match uri.into_rsync_uri() {
-                Some(uri) => uri,
-                None => continue
-            };
 
-            // If we already have that CRL, use it.
-            if let Some(crl) = store.get(&uri) {
-                if crl.contains(&cert.serial_number()) {
-                    return Err(ValidationError)
-                }
-                else {
-                    return Ok(())
-                }
-            }
-
-            // Otherwise, try to load it, use it, and then store it.
-            let bytes = match self.load_file(&uri, true) {
-                Some(bytes) => bytes,
-                _ => continue
-            };
-            let crl = match Crl::decode(bytes) {
-                Ok(crl) => crl,
-                Err(_) => continue
-            };
-            if crl.validate(issuer.as_ref().subject_public_key_info()).is_err() {
-                continue
-            }
-            if crl.is_stale() {
-                warn!("{}: stale CRL.", uri);
-            }
-
-            let revoked = crl.contains(&cert.serial_number());
-            store.push(uri, crl);
-            if revoked {
+        // If we already have that CRL, use it.
+        if let Some(crl) = store.get(&uri) {
+            if crl.contains(cert.serial_number()) {
                 return Err(ValidationError)
             }
             else {
                 return Ok(())
             }
         }
-        Err(ValidationError)
+
+        // Otherwise, try to load it, use it, and then store it.
+        let bytes = match self.load_file(&uri, true) {
+            Some(bytes) => bytes,
+            _ => return Err(ValidationError),
+        };
+        let crl = match Crl::decode(bytes) {
+            Ok(crl) => crl,
+            Err(_) => return Err(ValidationError)
+        };
+        if crl.validate(issuer.subject_public_key_info()).is_err() {
+            return Err(ValidationError)
+        }
+        if crl.is_stale() {
+            warn!("{}: stale CRL.", uri);
+        }
+
+        let revoked = crl.contains(cert.serial_number());
+        store.push(uri.clone(), crl);
+        if revoked {
+            return Err(ValidationError)
+        }
+        else {
+            return Ok(())
+        }
     }
 }
 
