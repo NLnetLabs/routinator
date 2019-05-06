@@ -63,5 +63,5 @@ maintainer-scripts = "debian"
 
 [patch.crates-io]
 bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki = { git="https://github.com/NLnetLabs/rpki-rs.git", branch="revised-cert-handling" }
+rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
