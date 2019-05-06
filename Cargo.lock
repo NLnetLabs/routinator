@@ -707,7 +707,7 @@ dependencies = [
  "json 0.11.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rpki 0.4.0 (git+https://github.com/NLnetLabs/rpki-rs.git?branch=revised-cert-handling)",
+ "rpki 0.4.0 (git+https://github.com/NLnetLabs/rpki-rs.git)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "syslog 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.4.0"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=revised-cert-handling#6d3f14374ff015bde00ddaa85a9be07b740913fd"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#bf9a12c05e77df135f1e1e343002dbe33e049a49"
 dependencies = [
  "base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "bcder 0.3.0 (git+https://github.com/NLnetLabs/bcder.git)",
@@ -1288,7 +1288,7 @@ dependencies = [
 "checksum redox_users 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3fe5204c3a17e97dde73f285d49be585df59ed84b50a872baf416e73b62c3828"
 "checksum remove_dir_all 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3488ba1b9a2084d38645c4c08276a1752dcbf2c7130d74f1569681ad5d2799c5"
 "checksum ring 0.13.5 (registry+https://github.com/rust-lang/crates.io-index)" = "2c4db68a2e35f3497146b7e4563df7d4773a2433230c5e4b448328e31740458a"
-"checksum rpki 0.4.0 (git+https://github.com/NLnetLabs/rpki-rs.git?branch=revised-cert-handling)" = "<none>"
+"checksum rpki 0.4.0 (git+https://github.com/NLnetLabs/rpki-rs.git)" = "<none>"
 "checksum rustc-demangle 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "ccc78bfd5acd7bf3e89cffcf899e5cb1a52d6fafa8dec2739ad70c9577a57288"
 "checksum rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 "checksum safemem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8dca453248a96cb0749e36ccdfe2b0b4e54a61bfef89fb97ec621eb8e0a93dd9"
