@@ -613,7 +613,7 @@ impl Repository {
         store: &mut CrlStore,
     ) -> Option<ManifestContent> {
         let uri = match issuer.rpki_manifest() {
-            Some(ref uri) => uri.clone(),
+            Some(uri) => uri,
             None => {
                 info!("{}: No valid manifest found. Ignoring.", issuer_uri);
                 return None
@@ -701,10 +701,10 @@ impl Repository {
         let revoked = crl.contains(cert.serial_number());
         store.push(uri.clone(), crl);
         if revoked {
-            return Err(ValidationError)
+            Err(ValidationError)
         }
         else {
-            return Ok(())
+            Ok(())
         }
     }
 }
