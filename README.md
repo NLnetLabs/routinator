@@ -18,7 +18,7 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have rsync and the C toolchain but not yet [Rust 1.30](#rust) 
+Assuming you have rsync and the C toolchain but not yet [Rust 1.34](#rust) 
 or newer, here’s how you get the Routinator to run as an RTR server listening 
 on 127.0.0.1 port 3323:
 
@@ -143,7 +143,7 @@ The official [Rust Platform Support](https://forge.rust-lang.org/platform-suppor
 page provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages, 
-Routinator relies on a relatively new version of Rust, currently 1.30 or 
+Routinator relies on a relatively new version of Rust, currently 1.34 or 
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called ``rustup``.
 

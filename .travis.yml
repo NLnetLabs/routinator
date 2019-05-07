@@ -5,10 +5,9 @@ os:
 rust:
   - stable
   - beta
-  - 1.30.0  # The minimal Rust version we claim we need.
+  - 1.34.0  # The minimal Rust version we claim we need.
 before_script:
-  # Get clippy-preview if clippy is not available for 1.30.0 not to break
-  - rustup component add clippy || rustup component add clippy-preview
+  - rustup component add clippy
 script:
   - cargo clippy -- -D warnings
   - cargo test --verbose
