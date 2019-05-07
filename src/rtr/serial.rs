@@ -48,7 +48,7 @@ impl Serial {
     /// # Panics
     ///
     /// This method panics if `other` is greater than `2^31 - 1`.
-    #[allow(should_implement_trait)]
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, other: u32) -> Self {
         assert!(other <= 0x7FFF_FFFF);
         Serial(self.0.wrapping_add(other))

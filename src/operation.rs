@@ -53,7 +53,7 @@ pub enum Operation {
         /// Output is requested by this being some. If there is a path,
         /// then we output to the file identified by the path, otherwise
         /// we print to stdout.
-        #[allow(option_option)]
+        #[allow(clippy::option_option)]
         output: Option<Option<PathBuf>>,
     },
 

@@ -92,7 +92,7 @@ fn http_listener(
 /// send it out, close the socket, and resolve successfully. An error will
 /// be returned if an IO error happens only. If an error happens further up,
 /// it will try to send a 500 response back.
-#[allow(large_enum_variant)]
+#[allow(clippy::large_enum_variant)]
 enum HttpConnection {
     /// Phase 1: Read a request.
     Read(ReadRequest),
