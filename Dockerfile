@@ -1,5 +1,5 @@
 # -- stage 1: build static routinator with musl libc for alpine
-FROM rust:1.33.0-stretch as build
+FROM rust:1.34.1-stretch as build
 
 RUN apt-get -yq update && \
     apt-get -yq install musl-tools
@@ -12,7 +12,7 @@ COPY . .
 RUN cargo build --target=x86_64-unknown-linux-musl --release --locked
 
 # -- stage 2: create alpine-based container with the static routinator executable
-FROM alpine:3.9.2
+FROM alpine:3.9.4
 COPY --from=build /tmp/routinator/target/x86_64-unknown-linux-musl/release/routinator /usr/local/bin/
 
 # Install rsync as routinator depends on it
