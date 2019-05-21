@@ -12,6 +12,8 @@ Bug Fixes
 
 * The value of the `listen-http` config option wasn’t include in the
   output of the `config` command. Now it is. [(#109)]
+* The HTTP server would eventually hang Routinator in a tight loop if
+  connections were closed early by the peer. [(#120)]
 
 Dependencies
 
@@ -20,6 +22,7 @@ Dependencies
 [(#109)]: https://github.com/NLnetLabs/routinator/pull/109
 [(#111)]: https://github.com/NLnetLabs/routinator/pull/111
 [(#112)]: https://github.com/NLnetLabs/routinator/pull/112
+[(#120)]: https://github.com/NLnetLabs/routinator/pull/120
 
 
 ## 0.3.3 ‘Big Bada Boom’
