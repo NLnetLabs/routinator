@@ -190,10 +190,19 @@ impl Future for ReadRequest {
 
     fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
         loop {
-            self.read += try_ready!(
+            let read = try_ready!(
                 self.sock.as_mut().expect("polling resolved future)")
                     .poll_read(&mut self.buf[self.read..])
             );
+            if read == 0 {
+                return Err(
+                    io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "closed by peer"
+                    )
+                )
+            }
+            self.read += read;
             let mut headers = [httparse::EMPTY_HEADER; 16];
             let mut req = httparse::Request::new(&mut headers);
             match req.parse(&self.buf[..self.read]) {
