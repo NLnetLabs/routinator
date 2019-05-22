@@ -325,6 +325,34 @@ impl Response {
             }
         });
 
+        // last_update_state, last_update_done
+        let (start, done, duration) = origins.update_times();
+
+        unwrap!(write!(res,
+            "\n\
+            # HELP last_update_start seconds since last update started\n\
+            # TYPE gauge\n\
+            last_update_start {}\n\
+            \n\
+            # HELP last_update_duration duration in seconds of last update\n\
+            # TYPE gauge\n\
+            last_update_duration {}\n\
+            \n\
+            # HELP last_update_done seconds since last update finished\n\
+            # TYPE gauge\n\
+            last_update_done ",
+            start.elapsed().as_secs(),
+            duration.map(|duration| duration.as_secs()).unwrap_or(0),
+        ));
+        match done {
+            Some(instant) => {
+                unwrap!(writeln!(res, "{}", instant.elapsed().as_secs()));
+            }
+            None => {
+                unwrap!(writeln!(res, "Nan"));
+            }
+        }
+
         Self::from_content(
             sock, "200 OK", "text/plain; version=0.0.4",
             &res

@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use rpki::cert::ResourceCert;
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
@@ -410,6 +411,15 @@ pub struct HistoryInner {
 
     /// The number of diffs and metrics to keep.
     keep: usize,
+
+    /// The instant when we started an update the last time.
+    last_update_start: Instant,
+
+    /// The instant we successfully (!) finished an update the last time.
+    last_update_done: Option<Instant>,
+
+    /// The duration of the last update run.
+    last_update_duration: Option<Duration>,
 }
 
 impl OriginsHistory {
@@ -424,7 +434,10 @@ impl OriginsHistory {
                 current: Arc::new(current),
                 diffs: VecDeque::with_capacity(keep),
                 metrics: VecDeque::with_capacity(keep),
-                keep
+                keep,
+                last_update_start: Instant::now(),
+                last_update_done: None,
+                last_update_duration: None,
             }
         )))
     }
@@ -512,6 +525,17 @@ impl OriginsHistory {
         self.0.read().unwrap().metrics.iter().for_each(op)
     }
 
+    pub fn update_times(
+        &self
+    ) -> (Instant, Option<Instant>, Option<Duration>) {
+        let locked = self.0.read().unwrap();
+        (
+            locked.last_update_start,
+            locked.last_update_done,
+            locked.last_update_duration,
+        )
+    }
+
     /// Updates the history.
     ///
     /// Produces a new list of address origins based on the route origins
@@ -553,6 +577,18 @@ impl OriginsHistory {
     /// Adds a set of metrics to the history.
     pub fn push_metrics(&self, metrics: Metrics) {
         self.0.write().unwrap().push_metrics(metrics)
+    }
+
+    /// Marks the beginning of an update cycle.
+    pub fn mark_update_start(&self) {
+        self.0.write().unwrap().last_update_start = Instant::now();
+    }
+
+    /// Marks the end of an update cycle.
+    pub fn mark_update_done(&self) {
+        let mut locked = self.0.write().unwrap();
+        locked.last_update_done = Some(Instant::now());
+        locked.last_update_duration = Some(locked.last_update_start.elapsed());
     }
 }
 
