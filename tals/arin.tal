@@ -4,7 +4,13 @@ This file isn’t ARIN’s TAL but rather a placeholder. Until you replace
 it with the actual TAL you can find at the above URL, Routinator will
 not run.
 
-Please download the TAL in RFC 7730 format and copy it here.
+Please download the TAL in RFC 7730 format after reviewing the usage agreement
+at https://www.arin.net/resources/manage/rpki/tal/ and copy it here.
+
+Example (assumes system-wide routinator installation):
+
+# curl -o /etc/routinator/tals/arin.tal \
+  https://www.arin.net/resources/manage/rpki/arin-rfc7730.tal
 
 Apologies for the inconvenience. Be assured that this procedure isn’t
 our choice.
