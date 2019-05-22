@@ -14,6 +14,8 @@ Bug Fixes
   output of the `config` command. Now it is. [(#109)]
 * The HTTP server would eventually hang Routinator in a tight loop if
   connections were closed early by the peer. [(#120)]
+* Only read files ending in `.tal` in the TAL directory as is already
+  documented. [(#121)]
 
 Dependencies
 
@@ -23,6 +25,7 @@ Dependencies
 [(#111)]: https://github.com/NLnetLabs/routinator/pull/111
 [(#112)]: https://github.com/NLnetLabs/routinator/pull/112
 [(#120)]: https://github.com/NLnetLabs/routinator/pull/120
+[(#121)]: https://github.com/NLnetLabs/routinator/pull/121
 
 
 ## 0.3.3 ‘Big Bada Boom’
