@@ -144,11 +144,16 @@ impl Repository {
                     return Err(Error)
                 }
             };
-            let path = entry.path();
+
             if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                eprintln!("{}: garbage in TAL directory.", path.display());
                 continue
             }
+
+            let path = entry.path();
+            if path.extension().map(|ext| ext != "tal").unwrap_or(true) {
+                continue
+            }
+
             let mut file = match File::open(&path) {
                 Ok(file) => {
                     file
