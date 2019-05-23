@@ -8,6 +8,10 @@ Breaking Changes
 
 New
 
+* Three new monitoring gauges `last_update_start`, `last_update_done`, and
+  `last_update_duration` that will allow alerting if Routinator stops
+  updating. [(#122)]
+
 Bug Fixes
 
 * The value of the `listen-http` config option wasn’t include in the
@@ -26,6 +30,7 @@ Dependencies
 [(#112)]: https://github.com/NLnetLabs/routinator/pull/112
 [(#120)]: https://github.com/NLnetLabs/routinator/pull/120
 [(#121)]: https://github.com/NLnetLabs/routinator/pull/121
+[(#122)]: https://github.com/NLnetLabs/routinator/pull/122
 
 
 ## 0.3.3 ‘Big Bada Boom’

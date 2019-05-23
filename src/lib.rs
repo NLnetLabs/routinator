@@ -23,6 +23,7 @@ extern crate tempfile;
 extern crate tokio;
 extern crate tokio_process;
 extern crate toml;
+#[macro_use] extern crate unwrap;
 
 pub use self::config::Config;
 pub use self::operation::{Error, Operation};

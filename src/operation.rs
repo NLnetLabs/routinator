@@ -367,6 +367,7 @@ impl Operation {
             config.history_size
         );
         history.push_metrics(metrics);
+        history.mark_update_done();
 
         info!("Starting RTR listener...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
@@ -487,13 +488,14 @@ impl Operation {
                 })
                 .and_then(move |_| {
                     repo.start();
-                    Ok(repo)
+                    history.mark_update_start();
+                    Ok((repo, history))
                 })
-                .and_then(|repo| {
+                .and_then(|(repo, history)| {
                     info!("Updating the local repository.");
-                    repo.update_async().map(|()| repo)
+                    repo.update_async().map(|()| (repo, history))
                 })
-                .and_then(|repo| {
+                .and_then(|(repo, history)| {
                     info!("Starting validation of local repository.");
                     repo.process_async()
                     .and_then(move |origins| {
@@ -515,6 +517,7 @@ impl Operation {
                                 false
                             }
                         };
+                        history.mark_update_done();
                         info!("New serial is {}.", history.serial());
                         if must_notify {
                             info!("Sending out notifications.");
