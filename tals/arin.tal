@@ -7,7 +7,8 @@ not run.
 Please download the TAL in RFC 7730 format after reviewing the usage agreement
 at https://www.arin.net/resources/manage/rpki/tal/ and copy it here.
 
-Example (assumes system-wide routinator installation):
+For a system that stores the TALs in /etc/routinator/tals, this can be
+achieved by running:
 
 # curl -o /etc/routinator/tals/arin.tal \
   https://www.arin.net/resources/manage/rpki/arin-rfc7730.tal
