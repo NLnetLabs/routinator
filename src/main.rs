@@ -1,4 +1,5 @@
 #[macro_use] extern crate clap;
+#[macro_use] extern crate log;
 extern crate routinator;
 
 use std::env::current_dir;
@@ -10,10 +11,11 @@ use routinator::{Config, Error, Operation};
 // in our case we only get an `Error` if all is said and done, we make our
 // own, more quiet version.
 fn _main() -> Result<(), Error> {
+    Operation::init()?;
     let cur_dir = match current_dir() {
         Ok(dir) => dir,
         Err(err) => {
-            eprintln!(
+            error!(
                 "Fatal: cannot get current directory ({}). Aborting.",
                 err
             );
