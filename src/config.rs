@@ -621,6 +621,7 @@ impl Config {
             }
         };
         log_reroute::reroute_boxed(logger);
+        log::set_max_level(self.log_level);
         Ok(())
     }
 
