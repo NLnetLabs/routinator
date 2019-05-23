@@ -126,7 +126,7 @@ impl AddressOrigins {
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
-        for mut item in origins {
+        for item in origins {
             let mut tal_metrics = TalMetrics::new(item.tal.clone());
             for mut roa in item {
                 tal_metrics.roas += 1;
