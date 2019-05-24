@@ -89,15 +89,13 @@ impl Repository {
     ///
     /// Takes all necessary information from `config`. If `rsync` is `false`,
     /// rsyncing is disabled.
-    ///
-    /// This function writes error messages to stderr.
     pub fn new(
         config: &Config,
         extra_output: bool,
         rsync: bool
     ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
-            eprintln!(
+            error!(
                 "Failed to open repository directory {}: {}",
                 config.cache_dir.display(), err
             );
@@ -129,7 +127,7 @@ impl Repository {
         let dir = match fs::read_dir(tal_dir) {
             Ok(dir) => dir,
             Err(err) => {
-                eprintln!("Failed to open TAL directory: {}", err);
+                error!("Failed to open TAL directory: {}", err);
                 return Err(Error)
             }
         };
@@ -137,7 +135,7 @@ impl Repository {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
-                    eprintln!(
+                    error!(
                         "Failed to iterate over tal directory: {}",
                         err
                     );
@@ -159,7 +157,7 @@ impl Repository {
                     file
                 }
                 Err(err) => {
-                    eprintln!(
+                    error!(
                         "Failed to open TAL {}: {}. \n\
                          Aborting.",
                          path.display(), err
@@ -170,7 +168,7 @@ impl Repository {
             let tal = match Tal::read(&path, &mut file) {
                 Ok(tal) => tal,
                 Err(err) => {
-                    eprintln!(
+                    error!(
                         "Failed to read TAL {}: {}. \n\
                          Aborting.",
                         path.display(), err
@@ -824,7 +822,7 @@ impl RsyncCommand {
         let output = match process::Command::new(&command).arg("-h").output() {
             Ok(output) => output,
             Err(err) => {
-                eprintln!(
+                error!(
                     "Failed to run rsync: {}",
                     err
                 );
@@ -832,7 +830,7 @@ impl RsyncCommand {
             }
         };
         if !output.status.success() {
-            eprintln!(
+            error!(
                 "Running rsync failed with output: \n{}",
                 String::from_utf8_lossy(&output.stderr)
             );

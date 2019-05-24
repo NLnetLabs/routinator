@@ -90,6 +90,13 @@ pub enum Operation {
 }
 
 impl Operation {
+    /// Initialize everything.
+    ///
+    /// Call this before doing anything else.
+    pub fn init() -> Result<(), Error> {
+        Config::init_logging()
+    }
+
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
@@ -157,8 +164,6 @@ impl Operation {
     }
 
     /// Creates a command from clap matches.
-    ///
-    /// This function prints errors to stderr.
     pub fn from_arg_matches(
         matches: &ArgMatches,
         cur_dir: &Path,
@@ -205,7 +210,7 @@ impl Operation {
                 }
             }
             ("", _) => {
-                eprintln!(
+                error!(
                     "Error: a command is required.\n\
                      \nCommonly used commands are:\
                      \n   vrps   produces a list of validated ROA payload\
@@ -274,7 +279,7 @@ impl Operation {
                 let mut file = match fs::File::create(&path) {
                     Ok(file) => file,
                     Err(err) => {
-                        eprintln!(
+                        error!(
                             "Failed to open output file {}: {}",
                             path.display(), err
                         );
@@ -282,7 +287,7 @@ impl Operation {
                     }
                 };
                 if let Err(err) = file.write_all(MAN_PAGE) {
-                    eprintln!("Failed to write to output file: {}", err);
+                    error!("Failed to write to output file: {}", err);
                     return Err(Error)
                 }
                 info!(
@@ -294,7 +299,7 @@ impl Operation {
                 let out = io::stdout();
                 let mut out = out.lock();
                 if let Err(err) = out.write_all(MAN_PAGE) {
-                    eprintln!("Failed to write man page: {}", err);
+                    error!("Failed to write man page: {}", err);
                     return Err(Error)
                 }
             }
@@ -308,7 +313,7 @@ impl Operation {
     /// the `man` command. This probably doesn’t work on Windows.
     fn display_man() -> Result<(), Error> {
         let mut file = NamedTempFile::new().map_err(|err| {
-            eprintln!(
+            error!(
                 "Can't display man page: \
                  Failed to create temporary file: {}.",
                 err
@@ -316,7 +321,7 @@ impl Operation {
             Error
         })?;
         file.write_all(MAN_PAGE).map_err(|err| {
-            eprintln!(
+            error!(
                 "Can't display man page: \
                 Failed to write to temporary file: {}.",
                 err
@@ -324,7 +329,7 @@ impl Operation {
             Error
         })?;
         Command::new("man").arg(file.path()).status().map_err(|err| {
-            eprintln!("Failed to run man: {}", err);
+            error!("Failed to run man: {}", err);
             Error
         }).and_then(|exit| {
             if exit.success() {
@@ -384,7 +389,7 @@ impl Operation {
     #[cfg(unix)]
     fn daemonize(config: &mut Config) -> Result<(), Error> {
         if let Err(err) = config.daemonize()?.start() {
-            eprintln!("Detaching failed: {}", err);
+            error!("Detaching failed: {}", err);
             return Err(Error)
         }
         Ok(())
