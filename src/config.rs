@@ -637,7 +637,7 @@ impl Config {
             ).map(|name|
                 name.to_string()
             )
-        ).unwrap_or(String::from("routinator"));
+        ).unwrap_or_else(|| String::from("routinator"));
         let pid = unsafe { libc::getpid() };
         let formatter = syslog::Formatter3164 {
             facility,
