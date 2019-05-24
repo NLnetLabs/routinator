@@ -5,7 +5,6 @@
 //! as well as for the RTR server.
 
 use std::{env, fmt, fs, io};
-use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -633,7 +632,9 @@ impl Config {
         facility: syslog::Facility
     ) -> Result<Box<dyn Log>, Error> {
         let process = env::current_exe().ok().and_then(|path|
-            path.file_name().and_then(OsStr::to_str).map(ToString::to_string)
+            path.file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(ToString::to_string)
         ).unwrap_or_else(|| String::from("routinator"));
         let pid = unsafe { libc::getpid() };
         let formatter = syslog::Formatter3164 {
