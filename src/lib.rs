@@ -14,6 +14,7 @@ extern crate fern;
 extern crate futures_cpupool;
 extern crate httparse;
 extern crate json;
+extern crate listenfd;
 #[cfg(unix)] extern crate libc;
 #[macro_use] extern crate log;
 extern crate log_reroute;

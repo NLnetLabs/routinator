@@ -11,6 +11,9 @@ New
 * Three new monitoring gauges `last_update_start`, `last_update_done`, and
   `last_update_duration` that will allow alerting if Routinator stops
   updating. [(#122)]
+* Accept RTR listening socket from systemd. This allows to listen on port
+  323 without special privileges. Enable via the new `--listen-systemd`
+  option. [(#127)].
 
 Bug Fixes
 
@@ -31,6 +34,7 @@ Dependencies
 [(#120)]: https://github.com/NLnetLabs/routinator/pull/120
 [(#121)]: https://github.com/NLnetLabs/routinator/pull/121
 [(#122)]: https://github.com/NLnetLabs/routinator/pull/122
+[(#127)]: https://github.com/NLnetLabs/routinator/pull/127
 
 
 ## 0.3.3 ‘Big Bada Boom’

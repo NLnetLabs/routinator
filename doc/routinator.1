@@ -329,14 +329,24 @@ provide the option multiple times to let Routinator listen on multiple
 address-port pairs.
 .IP
 If this options is omitted, Routinator will listen on
-.BR 127.0.0.1:3323 .
-Note how this is a localhost address for security reasons. We also don't
-use the standard RTR port 323 as this is a privileged port that would
-require Routinator to be run as root or otherwise receive permission which
-otherwise isn't necessary at all.
+.B 127.0.0.1:3323
+unless the
+.B \-\-listen\-systemd
+option is provided, in which case it will only listen on the address and
+port provided via systemd.
+.PP
+Note that the default address is a localhost address for security reasons.
+We also don't use the standard RTR port 323 as this is a privileged port that
+would require Routinator to be run as root or otherwise receive permission
+which otherwise isn't necessary at all.
 .IP
 Routinator will only start listening on these ports after an intitial
 validation run has finished.
+.TP
+.BI \-\-listen\-systemd
+The RTR TCP listening socket will be acquired from systemd via socket
+activation. Use this option together with systemd’s socket units to allow a
+Routinator running as a regular user to bind to the default RTR port 323.
 .TP
 .BI \-\-listen\-http= addr:port
 Specifies the address and port to listen on for incoming HTTP connections.
@@ -551,6 +561,10 @@ An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
 a colon. IPv6 address should be enclosed in square braces.
 .TP
+.B listen-systemd
+The RTR TCP listening socket will be acquired from systemd via socket
+activation. Use this option together with systemd’s socket units to allow a
+Routinator running as a regular user to bind to the default RTR port 323.
 .B listen-http
 An array of string values each providing the address and port which the HTTP
 service should listen on. Address and port should be separated by
