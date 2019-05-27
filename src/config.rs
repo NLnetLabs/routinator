@@ -113,6 +113,9 @@ pub struct Config {
     /// Addresses to listen on for RTR TCP transport connections.
     pub tcp_listen: Vec<SocketAddr>,
 
+    /// Get the RTR TCP socket from systemd.
+    pub tcp_systemd: bool,
+
     /// Addresses to listen on for HTTP monitoring connectsion.
     pub http_listen: Vec<SocketAddr>,
 
@@ -276,6 +279,10 @@ impl Config {
             .takes_value(true)
             .multiple(true)
             .number_of_values(1)
+        )
+        .arg(Arg::with_name("listen-systemd")
+            .long("listen-systemd")
+            .help("acquire a RTR TCP listener from systemd")
         )
         .arg(Arg::with_name("listen-http")
             .long("listen-http")
@@ -503,6 +510,11 @@ impl Config {
                     }
                 }
             }
+        }
+
+        // tcp_systemd
+        if matches.is_present("listen-systemd") {
+            self.tcp_systemd = true
         }
 
         // http_listen
@@ -777,6 +789,7 @@ impl Config {
                 file.take_from_str_array("listen-tcp")?
                     .unwrap_or_else(Self::default_tcp_listen)
             },
+            tcp_systemd: file.take_bool("listen-systemd")?.unwrap_or(false),
             http_listen: {
                 file.take_from_str_array("listen-http")?
                     .unwrap_or_else(Vec::new)
@@ -892,6 +905,7 @@ impl Config {
             expire: Duration::from_secs(DEFAULT_EXPIRE),
             history_size: DEFAULT_HISTORY_SIZE,
             tcp_listen: Self::default_tcp_listen(),
+            tcp_systemd: false,
             http_listen: Vec::new(),
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
@@ -1080,6 +1094,7 @@ impl Config {
                 self.tcp_listen.iter().map(|a| a.to_string().into()).collect()
             )
         );
+        res.insert("listen-systemd".into(), self.tcp_systemd.into());
         res.insert(
             "listen-http".into(),
             toml::Value::Array(
@@ -1711,6 +1726,7 @@ mod test {
             config.tcp_listen,
             vec![SocketAddr::from_str("127.0.0.1:3323").unwrap()]
         );
+        assert_eq!(config.tcp_systemd, false);
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(config.log_target, LogTarget::Default(Facility::LOG_DAEMON));
     }
@@ -1730,6 +1746,7 @@ mod test {
              expire = 8\n\
              history-size = 5000\n\
              listen-tcp = [\"[2001:db8::4]:323\", \"192.0.2.4:323\"]\n\
+             listen-systemd = true\n\
              log-level = \"info\"\n\
              log = \"file\"\n\
              log-file = \"foo.log\"",
@@ -1756,6 +1773,7 @@ mod test {
                 SocketAddr::from_str("192.0.2.4:323").unwrap(),
             ]
         );
+        assert_eq!(config.tcp_systemd, true);
         assert_eq!(config.log_level, LevelFilter::Info);
         assert_eq!(
             config.log_target,
@@ -1786,6 +1804,7 @@ mod test {
             config.tcp_listen,
             Config::default_tcp_listen()
         );
+        assert_eq!(config.tcp_systemd, false);
         assert!(config.http_listen.is_empty());
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(
@@ -1851,7 +1870,8 @@ mod test {
         let config = process_rtrd_args(&[
             "routinator", "--refresh", "7", "--retry", "8", "--expire", "9",
             "--history", "1000", "-l", "[2001:db8::4]:323",
-            "--listen", "192.0.2.4:323"
+            "--listen", "192.0.2.4:323",
+            "--listen-systemd",
         ]);
         assert_eq!(config.refresh, Duration::from_secs(7));
         assert_eq!(config.retry, Duration::from_secs(8));
@@ -1864,6 +1884,7 @@ mod test {
                 SocketAddr::from_str("192.0.2.4:323").unwrap(),
             ]
         );
+        assert_eq!(config.tcp_systemd, true);
     }
 }
 

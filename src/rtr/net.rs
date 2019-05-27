@@ -7,11 +7,12 @@ use std::mem;
 use std::net::SocketAddr;
 use std::time::SystemTime;
 use futures::future;
-use futures::{Async, Future, IntoFuture, Stream};
+use futures::{Async, Future, Stream};
 use tokio;
 use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
+use crate::operation::Error;
 use crate::origins::OriginsHistory;
 use super::send::{Sender, Timing};
 use super::query::{Input, InputStream, Query};
@@ -38,9 +39,14 @@ pub fn rtr_listener(
     let timing = Timing::new(config);
     let fut = dispatch_fut.select(
         future::select_all(
-            config.tcp_listen.iter().map(|addr| {
+            systemd_listener(config).into_iter().chain(
+                config.tcp_listen.iter()
+                    .map(Clone::clone).map(bind_listener)
+                    .filter_map(|x| x)
+            ).map(|listener| {
+                info!("Starting RTR listener.");
                 single_listener(
-                    *addr, session, history.clone(),
+                    listener, session, history.clone(),
                     dispatch.clone(), timing
                 )
             })
@@ -56,44 +62,77 @@ fn session_id() -> u16 {
         .as_secs() as u16
 }
 
+/// Binds a listener.
+fn bind_listener(
+    addr: SocketAddr,
+) -> Option<TcpListener> {
+    TcpListener::bind(&addr).map(|listener| {
+        info!("RTR: Listening on {}.", addr);
+        listener
+    }).map_err(|err| {
+        error!("Failed to bind RTR listener {}: {}", addr, err);
+        Error
+    }).ok()
+}
+
+/// Optionally gets an RTR listener from systemd.
+fn systemd_listener(config: &Config) -> Option<TcpListener> {
+    if config.tcp_systemd {
+        match listenfd::ListenFd::from_env().take_tcp_listener(0) {
+            Ok(Some(res)) => {
+                debug!("Got listener from systemd.");
+                match TcpListener::from_std(res, &Default::default()) {
+                    Ok(res) => {
+                        debug!("Converted listener into a tokio listener.");
+                        Some(res)
+                    }
+                    Err(err) => {
+                        error!(
+                            "Cannot use RTR listener provided by sytemd: {}",
+                            err
+                        );
+                        None
+                    }
+                }
+            }
+            Ok(None) => {
+                error!("No RTR listener provided by systemd.");
+                None
+            }
+            Err(err) => {
+                error!("Failed to acquire RTR listener from systemd: {}", err);
+                None
+            }
+        }
+    }
+    else {
+        None
+    }
+}
+
 /// Creates the future for a single RTR TCP listener.
 ///
-/// The future binds to `addr` and then spawns a new `Connection` for every
-/// incoming connection on the default Tokio runtime.
+/// The future spawns a new `Connection` for every incoming connection on the
+/// default Tokio runtime.
 fn single_listener(
-    addr: SocketAddr,
+    listener: TcpListener,
     session: u16,
     history: OriginsHistory,
     mut dispatch: Dispatch,
     timing: Timing,
 ) -> impl Future<Item=(), Error=()> {
-    TcpListener::bind(&addr).into_future()
-    .then(move |res| {
-        match res {
-            Ok(some) => {
-                info!("RTR: Listening on {}.", addr);
-                Ok(some)
-            }
-            Err(err) => {
-                error!("Failed to bind RTR listener {}: {}", addr, err);
-                Err(())
-            }
-        }
+    listener.incoming()
+    .map_err(|err| {
+        error!("Failed to accept RTR connection: {}", err);
     })
-    .and_then(move |listener| {
-        listener.incoming()
-        .map_err(|err| {
-            error!("Failed to accept RTR connection: {}", err);
-        })
-        .for_each(move |sock| {
-            let notify = dispatch.get_receiver();
-            tokio::spawn(
-                Connection::new(
-                    sock, session, history.clone(), notify,
-                    timing,
-                )
+    .for_each(move |sock| {
+        let notify = dispatch.get_receiver();
+        tokio::spawn(
+            Connection::new(
+                sock, session, history.clone(), notify,
+                timing,
             )
-        })
+        )
     })
 }
 
