@@ -865,9 +865,11 @@ impl RsyncCommand {
         let output = self.command(source, destination)?.output()?;
         let status = Self::log_output(source, output);
         if status.success() {
-            return Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+            Ok(())
         }
-        Ok(())
+        else {
+            Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+        }
     }
 
     pub fn update_async<P: AsRef<Path>>(
@@ -893,7 +895,6 @@ impl RsyncCommand {
         .and_then(move |output| {
             let status = Self::log_output(&source, output);
             if status.success() {
-                debug!("rsync {} completed.", source);
                 Ok(())
             }
             else {
@@ -931,7 +932,10 @@ impl RsyncCommand {
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
-        debug!("Running command {:?}", cmd);
+        debug!(
+            "rsync://{}/{}: Running command {:?}",
+            source.authority(), source.module(), cmd
+        );
         Ok(cmd)
     }
 
@@ -1003,21 +1007,27 @@ impl RsyncCommand {
     fn log_output(source: &uri::RsyncModule, output: Output) -> ExitStatus {
         if !output.status.success() {
             warn!(
-                "rsync {}/{}: failed with status {}",
+                "rsync://{}/{}: failed with status {}",
                 source.authority(), source.module(), output.status
+            );
+        }
+        else {
+            debug!(
+                "rsync://{}/{}: successfully completed.",
+                source.authority(), source.module(),
             );
         }
         if !output.stderr.is_empty() {
             String::from_utf8_lossy(&output.stderr).lines().for_each(|l| {
                 warn!(
-                    "rsync {}/{}: {}", source.authority(), source.module(), l
+                    "rsync://{}/{}: {}", source.authority(), source.module(), l
                 );
             })
         }
         if !output.stdout.is_empty() {
             String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
                 info!(
-                    "rsync {}/{}: {}", source.authority(), source.module(), l
+                    "rsync://{}/{}: {}", source.authority(), source.module(), l
                 )
             })
         }
