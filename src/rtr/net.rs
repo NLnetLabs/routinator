@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use std::time::SystemTime;
 use futures::future;
 use futures::{Async, Future, Stream};
+use listenfd::ListenFd;
 use tokio;
 use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
@@ -39,7 +40,7 @@ pub fn rtr_listener(
     let timing = Timing::new(config);
     let fut = dispatch_fut.select(
         future::select_all(
-            systemd_listener(config).into_iter().chain(
+            SystemdListeners::new(config).chain(
                 config.tcp_listen.iter()
                     .map(Clone::clone).map(bind_listener)
                     .filter_map(|x| x)
@@ -75,37 +76,65 @@ fn bind_listener(
     }).ok()
 }
 
-/// Optionally gets an RTR listener from systemd.
-fn systemd_listener(config: &Config) -> Option<TcpListener> {
-    if config.tcp_systemd {
-        match listenfd::ListenFd::from_env().take_tcp_listener(0) {
-            Ok(Some(res)) => {
-                debug!("Got listener from systemd.");
-                match TcpListener::from_std(res, &Default::default()) {
-                    Ok(res) => {
-                        debug!("Converted listener into a tokio listener.");
-                        Some(res)
-                    }
-                    Err(err) => {
-                        error!(
-                            "Cannot use RTR listener provided by sytemd: {}",
-                            err
-                        );
-                        None
-                    }
-                }
+struct SystemdListeners {
+    listenfd: Option<ListenFd>,
+    pos: usize
+}
+
+impl SystemdListeners {
+    fn new(config: &Config) -> Self {
+        Self {
+            listenfd: if config.tcp_systemd {
+                Some(ListenFd::from_env())
             }
-            Ok(None) => {
-                error!("No RTR listener provided by systemd.");
+            else {
                 None
-            }
-            Err(err) => {
-                error!("Failed to acquire RTR listener from systemd: {}", err);
-                None
-            }
+            },
+            pos: 0
         }
     }
-    else {
+}
+
+impl Iterator for SystemdListeners {
+    type Item = TcpListener;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let listenfd = match self.listenfd.as_mut() {
+            Some(listenfd) => listenfd,
+            None => return None
+        };
+        while listenfd.len() > self.pos {
+            match listenfd.take_tcp_listener(self.pos) {
+                Ok(Some(res)) => {
+                    debug!("Got listener #{} from systemd.", self.pos);
+                    match TcpListener::from_std(res, &Default::default()) {
+                        Ok(res) => {
+                            debug!("Converted listener into a tokio listener.");
+                            return Some(res)
+                        }
+                        Err(err) => {
+                            error!(
+                                "Cannot use RTR listener from sytemd: {}",
+                                err
+                            );
+                            // keep going
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // keep going
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to acquire RTR listener from systemd: {}",
+                        err
+                    );
+                    self.pos = listenfd.len();
+                    return None
+                }
+            }
+            self.pos += 1;
+        }
         None
     }
 }
