@@ -606,7 +606,7 @@ impl Config {
                     self.syslog_logger(fac)?
                 }
                 else {
-                    self.stderr_logger()?
+                    self.stderr_logger(false)?
                 }
             }
             #[cfg(unix)]
@@ -614,7 +614,7 @@ impl Config {
                 self.syslog_logger(fac)?
             }
             LogTarget::Stderr => {
-                self.stderr_logger()?
+                self.stderr_logger(daemon)?
             }
             LogTarget::File(ref path) => {
                 self.file_logger(path)?
@@ -658,13 +658,27 @@ impl Config {
     }
 
     /// Creates a stderr logger.
-    fn stderr_logger(&self) -> Result<Box<dyn Log>, Error> {
-        Ok(
+    ///
+    /// If we are in daemon mode, we add a timestamp to the output.
+    fn stderr_logger(&self, daemon: bool) -> Result<Box<dyn Log>, Error> {
+        let dispatch = if daemon {
             fern::Dispatch::new()
-                .level(self.log_level)
-                .chain(io::stderr())
-                .into_log().1
-        )
+            .format(|out, message, _record| {
+                out.finish(format_args!(
+                    "{} {}",
+                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+                    message
+                ))
+            })
+        }
+        else {
+            fern::Dispatch::new()
+        };
+        let dispatch = dispatch
+            .level(self.log_level)
+            .chain(io::stderr())
+            .into_log().1;
+        Ok(dispatch)
     }
 
     /// Creates a file logger.
@@ -680,6 +694,13 @@ impl Config {
             }
         };
         Ok(fern::Dispatch::new()
+            .format(|out, message, _record| {
+                out.finish(format_args!(
+                    "{} {}",
+                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+                    message
+                ))
+            })
             .level(self.log_level)
             .chain(file)
             .into_log().1
