@@ -893,6 +893,7 @@ impl RsyncCommand {
         .and_then(move |output| {
             let status = Self::log_output(&source, output);
             if status.success() {
+                debug!("rsync {} completed.", source);
                 Ok(())
             }
             else {
