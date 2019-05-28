@@ -5,7 +5,7 @@
 //! as well as for the RTR server.
 
 use std::{env, fmt, fs, io};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -550,17 +550,12 @@ impl Config {
 
     /// Creates and returns the repository for this configuration.
     ///
-    /// This will create the cache and TAL directories if they don’t exist
-    /// and, in this case, populate the TAL directoy with the default set
-    /// of TALS.
-    ///
     /// If `update` is `false`, all updates in the respository are disabled.
     pub fn create_repository(
         &self,
         extra_output: bool,
         update: bool,
     ) -> Result<Repository, Error> {
-        self.prepare_dirs()?;
         Repository::new(self, extra_output, update)
     }
 
@@ -932,50 +927,6 @@ impl Config {
             working_dir: None,
             chroot: None
         }
-    }
-
-    /// Prepares and returns the cache dir and tal dir.
-    ///
-    /// If the cache dir doesn’t exist, tries to create it. If the tal dir
-    /// doesn’t exist, tries to create it and populate it with the default
-    /// set of TALs.
-    fn prepare_dirs(&self) -> Result<(), Error> {
-        if let Err(err) = fs::create_dir_all(&self.cache_dir) {
-            error!(
-                "Can't create repository directory {}: {}.\nAborting.",
-                self.cache_dir.display(), err
-            );
-            return Err(Error);
-        }
-        if fs::read_dir(&self.tal_dir).is_err() {
-            if let Err(err) = fs::create_dir_all(&self.tal_dir) {
-                error!(
-                    "Can't create TAL directory {}: {}.\nAborting.",
-                    self.tal_dir.display(), err
-                );
-                return Err(Error);
-            }
-            for (name, content) in &DEFAULT_TALS {
-                let mut file = match fs::File::create(self.tal_dir.join(name)) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        error!(
-                            "Can't create TAL file {}: {}.\n Aborting.",
-                            self.tal_dir.join(name).display(), err
-                        );
-                        return Err(Error);
-                    }
-                };
-                if let Err(err) = file.write_all(content) {
-                    error!(
-                        "Can't create TAL file {}: {}.\n Aborting.",
-                        self.tal_dir.join(name).display(), err
-                    );
-                    return Err(Error);
-                }
-            }
-        }
-        Ok(())
     }
 
     /// Returns a daemonizer based on the configuration.
@@ -1669,17 +1620,6 @@ fn facility_to_string(facility: Facility) -> String {
         LOG_LOCAL7 => "local7",
     }.into()
 }
-
-
-//------------ DEFAULT_TALS --------------------------------------------------
-
-const DEFAULT_TALS: [(&str, &[u8]); 5] = [
-    ("afrinic.tal", include_bytes!("../tals/afrinic.tal")),
-    ("apnic.tal", include_bytes!("../tals/apnic.tal")),
-    ("arin.tal", include_bytes!("../tals/arin.tal")),
-    ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
-    ("ripe.tal", include_bytes!("../tals/ripe.tal")),
-];
 
 
 //============ Tests =========================================================

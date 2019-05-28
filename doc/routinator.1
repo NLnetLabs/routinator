@@ -40,6 +40,11 @@ command
 .PP
 .B routinator
 [options]
+.B init
+.RB [ \-f ]
+.PP
+.B routinator
+[options]
 .B vrps
 .RB [ \-o
 .IR output-file ]
@@ -222,6 +227,25 @@ Print version information.
 .SH COMMANDS
 Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
+
+.SS init
+Prepares the local repositry directories and the TAL directory for running
+Routinator. Specifically, makes sure the local repository directory exists,
+and creates the TAL directory and fills it with the TALs of the five RIRs.
+.P
+For more information about TALs, see
+.B TRUST ANCHOR LOCATORS
+below.
+.TP
+.B -f
+Forces installation of the TALs even if the TAL directory already exists.
+.TP
+.B --accept-arin-rpa
+Before you can use the ARIN TAL, you need to agree to the ARIN Relying Party
+Agreement (RPA). You can find it at
+.I https://www.arin.net/resources/manage/rpki/rpa.pdf
+and explicitely agree to it via this option. Routinator will not install
+any TALs unless you agree in order to avoid incomplete installations.
 
 .SS vrps
 This command requests that Routinator update the local repository and then
@@ -433,13 +457,10 @@ under the directory specified in this option. The default location, if
 no options are used at all is
 .I $HOME/.rpki-cache/tals\fR.
 .P
-If the specified or default directory does not exist, Routinator will try
-to create it and populate it with the TALs of the five Regional Internet
-Registries (RIRs). Unfortunately, the terms and conditions of the
-North American registry ARIN do not allow us to include their TAL with the
-Routinator. We instead include a crippled version that will cause
-Routinator to refuse to work and print instructions on how to get the
-TAL instead.
+This directory can be created and populated with the TALs of the five
+Regional Internet Registries (RIRs) via the
+.B init
+command. 
 .P
 If the directory does exist, Routinator will use all files with an extension
 of

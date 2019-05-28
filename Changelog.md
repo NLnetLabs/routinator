@@ -15,6 +15,11 @@ Breaking Changes
   been replaced by a `-d` option. In other words, the default is now to
   stay attached to the terminal and only fork into the background if `-d`
   is given. [(#134)]
+* The TAL directory will no longer be automatically populated. Instead,
+  you can install the bundled TALs via the new `init` command.  After
+  having received permission from ARIN, we are now also bundling the ARIN
+  TAL in Routinator and require specific agreement to ARIN’s Relying Party
+  Agreement via a command line option. [(#135)]
 * The minimum supported Rust version is now 1.34.0. [(#112)]
 
 New
@@ -54,6 +59,7 @@ Dependencies
 [#131]: https://github.com/NLnetLabs/routinator/pull/131
 [(#133)]: https://github.com/NLnetLabs/routinator/pull/133
 [(#134)]: https://github.com/NLnetLabs/routinator/pull/134
+[(#135)]: https://github.com/NLnetLabs/routinator/pull/135
 
 
 ## 0.3.3 ‘Big Bada Boom’
