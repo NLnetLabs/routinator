@@ -11,16 +11,19 @@ use std::{fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 use std::time::Instant;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::future;
 use futures::future::Future;
+use rpki::resources::AsId;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::metrics::Metrics;
-use crate::origins::{AddressOrigins, OriginsHistory};
+use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
+use crate::output;
 use crate::output::OutputFormat;
 use crate::repository::Repository;
 use crate::rtr::{rtr_listener, NotifySender};
@@ -77,6 +80,9 @@ pub enum Operation {
 
         /// The desired output format.
         format: OutputFormat,
+
+        /// Optional output filters.
+        filters: Option<Vec<output::Filter>>,
 
         /// Don’t update the repository.
         noupdate: bool,
@@ -157,6 +163,22 @@ impl Operation {
                 .long("noupdate")
                 .help("don't update the local cache")
             )
+            .arg(Arg::with_name("filter-prefix")
+                .short("p")
+                .long("filter-prefix")
+                .help("filter for an address prefix")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)
+            )
+            .arg(Arg::with_name("filter-asn")
+                .short("a")
+                .long("filter-asn")
+                .help("filter or an AS number")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)
+            )
         )
 
         // update
@@ -214,6 +236,7 @@ impl Operation {
             ("update", _) => Operation::Update,
             ("vrps", Some(matches)) => {
                 Operation::Vrps {
+                    filters: Self::output_filters(matches)?,
                     output: match matches.value_of("output").unwrap() {
                         "-" => None,
                         path => Some(path.into())
@@ -271,8 +294,8 @@ impl Operation {
                 => Self::prepare(config, force, accept_arin_rpa),
             Operation::Server { detach }
                 => Self::server(config, detach),
-            Operation::Vrps { output, format, noupdate } 
-                => Self::vrps(config, output, format, noupdate),
+            Operation::Vrps { output, format, filters, noupdate } 
+                => Self::vrps(config, output, format, filters, noupdate),
             Operation::Update
                 => Self::update(config),
             Operation::Config => 
@@ -458,7 +481,7 @@ impl Operation {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn update(config: Config) -> Result<(), Error> {
-        Self::vrps(config, None, OutputFormat::None, false)
+        Self::vrps(config, None, OutputFormat::None, None, false)
     }
 
     /// Produces a list of Validated ROA Payload.
@@ -472,6 +495,7 @@ impl Operation {
         config: Config,
         output: Option<PathBuf>,
         format: OutputFormat,
+        filters: Option<Vec<output::Filter>>,
         noupdate: bool
     ) -> Result<(), Error> {
         let repo = config.create_repository(format.extra_output(), !noupdate)?;
@@ -494,6 +518,7 @@ impl Operation {
             roas, &exceptions, format.extra_output(), &mut metrics
         );
         metrics.log();
+        let filters = filters.as_ref().map(AsRef::as_ref);
         let res = match output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -506,12 +531,12 @@ impl Operation {
                         return Err(Error)
                     }
                 };
-                format.output(&vrps, &mut file)
+                format.output(&vrps, filters, &mut file)
             }
             None => {
                 let out = io::stdout();
                 let mut out = out.lock();
-                format.output(&vrps, &mut out)
+                format.output(&vrps, filters, &mut out)
             }
         };
         res.map_err(|err| {
@@ -521,6 +546,44 @@ impl Operation {
             );
             Error
         })
+    }
+
+    /// Creates the filters for the vrps command.
+    fn output_filters(
+        matches: &ArgMatches
+    ) -> Result<Option<Vec<output::Filter>>, Error> {
+        let mut res = Vec::new();
+        if let Some(list) = matches.values_of("filter-prefix") {
+            for value in list {
+                match AddressPrefix::from_str(value) {
+                    Ok(some) => res.push(output::Filter::Prefix(some)),
+                    Err(_) => {
+                        error!(
+                            "Invalid prefix \"{}\" in --filter-prefix",
+                            value
+                        );
+                        return Err(Error)
+                    }
+                }
+            }
+        }
+        if let Some(list) = matches.values_of("filter-asn") {
+            for value in list {
+                match AsId::from_str(value) {
+                    Ok(some) => res.push(output::Filter::As(some)),
+                    Err(_) => {
+                        error!("Invalid ASN \"{}\" in --filter-asn", value);
+                        return Err(Error)
+                    }
+                }
+            }
+        }
+        if res.is_empty() {
+            Ok(None)
+        }
+        else {
+            Ok(Some(res))
+        }
     }
 
     /// Returns a future that updates and validates the local repository.

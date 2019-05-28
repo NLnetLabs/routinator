@@ -10,15 +10,19 @@ use std::{cmp, io, mem};
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Duration;
 use chrono::offset::Utc;
 use futures::{Async, Future, IntoFuture, Stream};
+use rpki::resources::AsId;
 use tokio::io::{AsyncRead, WriteAll, write_all};
 use tokio::net::{TcpListener, TcpStream};
+use crate::output;
 use crate::config::Config;
+use crate::operation::Error;
+use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
-use crate::origins::{OriginsHistory, AddressOrigins};
 use crate::utils::finish_all;
 
 
@@ -257,24 +261,32 @@ impl Response {
             return Self::method_not_allowed(sock)
         }
         if let Some(path) = req.path {
+            let (path, query) = match path.find('?') {
+                Some(idx) => (&path[..idx], &path[idx + 1..]),
+                None => (path, "")
+            };
             match path {
                 "/csv" => {
-                    VrpResponse::response(sock, origins, OutputFormat::Csv)
+                    VrpResponse::response(
+                        sock, origins, query, OutputFormat::Csv
+                    )
                 }
                 "/json" => {
-                    VrpResponse::response(sock, origins, OutputFormat::Json)
+                    VrpResponse::response(
+                        sock, origins, query, OutputFormat::Json
+                    )
                 }
                 "/metrics" => {
                     Self::metrics(sock, origins)
                 }
                 "/openbgpd" => {
                     VrpResponse::response(
-                        sock, origins, OutputFormat::Openbgpd
+                        sock, origins, query, OutputFormat::Openbgpd
                     )
                 }
                 "/rpsl" => {
                     VrpResponse::response(
-                        sock, origins, OutputFormat::Rpsl
+                        sock, origins, query, OutputFormat::Rpsl
                     )
                 }
                 "/status" => Self::status(sock, origins),
@@ -480,6 +492,11 @@ impl Response {
         Response::Static(write_all(sock, &ERROR_500))
     }
 
+    /// Produces a 400 Bad Request response.
+    fn bad_request(sock: TcpStream) -> Self {
+        Response::Static(write_all(sock, &ERROR_400))
+    }
+
     /// Produces a 404 Not Found response.
     fn not_found(sock: TcpStream) -> Self {
         Response::Static(write_all(sock, &ERROR_404))
@@ -522,6 +539,7 @@ struct VrpResponse {
     origins: Arc<AddressOrigins>,
     next_id: usize,
     format: OutputFormat,
+    filters: Option<Vec<output::Filter>>,
 }
 
 impl VrpResponse {
@@ -532,8 +550,13 @@ impl VrpResponse {
     pub fn response(
         sock: TcpStream,
         origins: OriginsHistory,
+        query: &str,
         format: OutputFormat
     ) -> Response {
+        let filters = match Self::output_filters(query) {
+            Ok(filters) => filters,
+            Err(_) => return Response::bad_request(sock),
+        };
         // We’ll start out with the HTTP header which we can assemble
         // already. For the length, we have our magical `GetLength` type.
         let origins = origins.current();
@@ -542,14 +565,62 @@ impl VrpResponse {
             Content-Type: text/plain;charset=utf-8\r\n\
             Content-Length: {}\r\n\
             \r\n",
-            GetLength::get(|w| format.output(&origins, w).unwrap())
+            GetLength::get(|w| unwrap!(
+                format.output(&origins, filters.as_ref().map(AsRef::as_ref), w)
+            ))
         ).into_bytes();
         Response::Vrp(VrpResponse {
             write: write_all(sock, header),
             origins,
             next_id: 0,
-            format
+            format,
+            filters
         })
+    }
+
+    /// Produces the output filters from a query string.
+    fn output_filters(
+        mut query: &str
+    ) -> Result<Option<Vec<output::Filter>>, Error> {
+        let mut res = Vec::new();
+        while !query.is_empty() {
+            // Take out one pair.
+            let (part, rest) = match query.find('&') {
+                Some(idx) => (&query[..idx], &query[idx + 1..]),
+                None => (query, "")
+            };
+            query = rest;
+
+            // Split the pair.
+            let equals = match part.find('=') {
+                Some(equals) => equals,
+                None => return Err(Error)
+            };
+            let key = &part[..equals];
+            let value = &part[equals + 1..];
+
+            if key == "filter-prefix" {
+                match AddressPrefix::from_str(value) {
+                    Ok(some) => res.push(output::Filter::Prefix(some)),
+                    Err(_) => return Err(Error)
+                }
+            }
+            else if key == "filter-asn" {
+                match AsId::from_str(value) {
+                    Ok(some) => res.push(output::Filter::As(some)),
+                    Err(_) => return Err(Error)
+                }
+            }
+            else {
+                return Err(Error)
+            }
+        }
+        if res.is_empty() {
+            Ok(None)
+        }
+        else {
+            Ok(Some(res))
+        }
     }
 
     /// Creates the next batch of VRPs.
@@ -562,15 +633,19 @@ impl VrpResponse {
             return None
         }
         let end = cmp::min(self.next_id + 1000, self.origins.len());
+        let filters = self.filters.as_ref().map(AsRef::as_ref);
         let mut target = Vec::new();
         if self.next_id == 0 {
             self.format.output_header(&self.origins, &mut target).unwrap();
-            self.format.output_origin(&self.origins[0], true, &mut target)
-                .unwrap();
+            unwrap!(self.format.output_origin(
+                &self.origins[0], filters, true, &mut target
+            ));
             self.next_id = 1;
         }
         for addr in &self.origins[self.next_id..end] {
-            self.format.output_origin(addr, false, &mut target).unwrap();
+            unwrap!(self.format.output_origin(
+                addr, filters, false, &mut target
+            ));
         }
         if end == self.origins.len() {
             self.format.output_footer(&self.origins, &mut target).unwrap();
@@ -628,6 +703,14 @@ impl io::Write for GetLength {
 
 
 //------------ Constants -----------------------------------------------------
+
+/// The literal content of a 404 error.
+const ERROR_400: &[u8] = b"\
+    HTTP/1.1 400 Bad Request\r\n\
+    Content-Type: text/plain\r\n\
+    Content-Length: 11\r\n\
+    \r\n\
+    Bad Request";
 
 /// The literal content of a 404 error.
 const ERROR_404: &[u8] = b"\

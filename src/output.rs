@@ -3,7 +3,8 @@
 use std::io;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
-use crate::origins::{AddressOrigin, AddressOrigins};
+use rpki::resources::AsId;
+use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
 //------------ OutputFormat --------------------------------------------------
@@ -59,9 +60,10 @@ impl OutputFormat {
     pub fn output<W: io::Write>(
         self,
         vrps: &AddressOrigins,
+        filters: Option<&[Filter]>,
         target: &mut W,
     ) -> Result<(), io::Error> {
-        match self._output(vrps, target) {
+        match self._output(vrps, filters, target) {
             Ok(()) => Ok(()),
             Err(ref err) if err.kind() == io::ErrorKind::BrokenPipe => Ok(()),
             Err(err) => Err(err)
@@ -71,15 +73,16 @@ impl OutputFormat {
     fn _output<W: io::Write>(
         self,
         vrps: &AddressOrigins,
+        filters: Option<&[Filter]>,
         target: &mut W,
     ) -> Result<(), io::Error> {
         self.output_header(vrps, target)?;
         let mut iter = vrps.iter();
         if let Some(vrp) = iter.next() {
-            self.output_origin(vrp, true, target)?;
+            self.output_origin(vrp, filters, true, target)?;
         }
         for vrp in iter {
-            self.output_origin(vrp, false, target)?;
+            self.output_origin(vrp, filters, false, target)?;
         }
         self.output_footer(vrps, target)
     }
@@ -102,16 +105,38 @@ impl OutputFormat {
     pub fn output_origin<W: io::Write>(
         self,
         vrp: &AddressOrigin,
+        filters: Option<&[Filter]>,
         first: bool,
         target: &mut W
-    ) -> Result<(), io::Error> {
+    ) -> Result<bool, io::Error> {
+        if Self::skip_origin(vrp, filters) {
+            return Ok(false)
+        }
         match self {
-            OutputFormat::Csv => csv_origin(vrp, first, target),
-            OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target),
-            OutputFormat::Json => json_origin(vrp, first, target),
-            OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target),
-            OutputFormat::Rpsl => rpsl_origin(vrp, first, target),
-            OutputFormat::None => Ok(())
+            OutputFormat::Csv => csv_origin(vrp, first, target)?,
+            OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
+            OutputFormat::Json => json_origin(vrp, first, target)?,
+            OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
+            OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
+            OutputFormat::None => { }
+        }
+        Ok(true)
+    }
+
+    fn skip_origin(
+        origin: &AddressOrigin,
+        filters: Option<&[Filter]>
+    ) -> bool {
+        match filters {
+            Some(filters) => {
+                for filter in filters {
+                    if filter.covers(origin) {
+                        return false
+                    }
+                }
+                true
+            }
+            None => false
         }
     }
 
@@ -325,5 +350,24 @@ fn rpsl_footer<W: io::Write>(
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
+}
+
+
+//------------ Filter --------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum Filter {
+    As(AsId),
+    Prefix(AddressPrefix),
+}
+
+impl Filter {
+    /// Returns whether this filter covers this origin.
+    fn covers(self, origin: &AddressOrigin) -> bool {
+        match self {
+            Filter::As(as_id) => origin.as_id() == as_id,
+            Filter::Prefix(prefix) => origin.prefix().covers(prefix)
+        }
+    }
 }
 
