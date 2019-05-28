@@ -95,10 +95,20 @@ impl Repository {
         rsync: bool
     ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
-            error!(
-                "Failed to open repository directory {}: {}",
-                config.cache_dir.display(), err
-            );
+            if err.kind() == io::ErrorKind::NotFound {
+                error!(
+                    "Missing repository directory {}.\n\
+                     You may have to initialize it via \
+                     \'routinator init\'.",
+                     config.cache_dir.display()
+                );
+            }
+            else {
+                error!(
+                    "Failed to open repository directory {}: {}",
+                    config.cache_dir.display(), err
+                );
+            }
             return Err(Error)
         }
 
@@ -127,7 +137,17 @@ impl Repository {
         let dir = match fs::read_dir(tal_dir) {
             Ok(dir) => dir,
             Err(err) => {
-                error!("Failed to open TAL directory: {}", err);
+                if err.kind() == io::ErrorKind::NotFound {
+                    error!(
+                        "Missing TAL directory {}.\n\
+                         You may have to initialize it via \
+                         \'routinator init\'.",
+                         tal_dir.display()
+                    );
+                }
+                else {
+                    error!("Failed to open TAL directory: {}.", err);
+                }
                 return Err(Error)
             }
         };
