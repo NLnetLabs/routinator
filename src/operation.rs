@@ -43,18 +43,18 @@ use crate::rtr::{rtr_listener, NotifySender};
 /// [`from_arg_matches`]: #method.from_arg_matches
 /// [`run`]: #method.run
 pub enum Operation {
-    /// Shows the current configuration.
-    Config,
-
-    /// Show the manual page.
-    Man {
-        /// Output the page instead of showing it.
+    /// Initialize the local repository.
+    Prepare {
+        /// Force installation of TALs.
         ///
-        /// Output is requested by this being some. If there is a path,
-        /// then we output to the file identified by the path, otherwise
-        /// we print to stdout.
-        #[allow(clippy::option_option)]
-        output: Option<Option<PathBuf>>,
+        /// If the TAL directory is present, we will not touch it unless this
+        /// flag is `true`.
+        force: bool,
+
+        /// Accept the ARIN Relying Party Agreement.
+        ///
+        /// We can only install the ARIN TAL if this flag is `true`.
+        accept_arin_rpa: bool,
     },
 
     /// Run as server.
@@ -66,12 +66,6 @@ pub enum Operation {
         /// which has a few extra consequences.
         detach: bool,
     },
-
-    /// Update the local repository.
-    ///
-    /// This will also do a validation run in order to discover possible new
-    /// publication points.
-    Update,
 
     /// Produce a list of Validated ROA Payload.
     Vrps {
@@ -87,6 +81,26 @@ pub enum Operation {
         /// Don’t update the repository.
         noupdate: bool,
     },
+
+    /// Update the local repository.
+    ///
+    /// This will also do a validation run in order to discover possible new
+    /// publication points.
+    Update,
+
+    /// Shows the current configuration.
+    Config,
+
+    /// Show the manual page.
+    Man {
+        /// Output the page instead of showing it.
+        ///
+        /// Output is requested by this being some. If there is a path,
+        /// then we output to the file identified by the path, otherwise
+        /// we print to stdout.
+        #[allow(clippy::option_option)]
+        output: Option<Option<PathBuf>>,
+    },
 }
 
 impl Operation {
@@ -101,10 +115,20 @@ impl Operation {
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
 
-        // config
-        .subcommand(Config::server_args(SubCommand::with_name("config")
-            .about("Prints the current config and exits.")
-        ))
+        // init
+        .subcommand(SubCommand::with_name("init")
+            .about("Initialized the local repository.")
+            .arg(Arg::with_name("force")
+                .short("f")
+                .long("force")
+                .help("force creation of TALs")
+            )
+            .arg(Arg::with_name("accept-arin-rpa")
+                .long("accept-arin-rpa")
+                .help("You have read and accept \
+                       https://www.arin.net/resources/manage/rpki/rpa.pdf")
+            )
+        )
 
         // vrps
         .subcommand(SubCommand::with_name("vrps")
@@ -150,6 +174,11 @@ impl Operation {
             )
         ))
 
+        // config
+        .subcommand(Config::server_args(SubCommand::with_name("config")
+            .about("Prints the current config and exits.")
+        ))
+
         // man
         .subcommand(SubCommand::with_name("man")
             .about("Shows the man page")
@@ -170,18 +199,10 @@ impl Operation {
         config: &mut Config
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
-            ("config", Some(matches)) => {
-                config.apply_server_arg_matches(matches, cur_dir)?;
-                Operation::Config
-            }
-            ("man", Some(matches)) => {
-                Operation::Man {
-                    output: matches.value_of("output").map(|value| {
-                        match value {
-                            "-" => None,
-                            path => Some(path.into())
-                        }
-                    })
+            ("init", Some(matches)) => {
+                Operation::Prepare {
+                    force: matches.is_present("force"),
+                    accept_arin_rpa: matches.is_present("accept-arin-rpa"),
                 }
             }
             ("server", Some(matches)) => {
@@ -209,6 +230,20 @@ impl Operation {
                     noupdate: matches.is_present("noupdate")
                 }
             }
+            ("config", Some(matches)) => {
+                config.apply_server_arg_matches(matches, cur_dir)?;
+                Operation::Config
+            }
+            ("man", Some(matches)) => {
+                Operation::Man {
+                    output: matches.value_of("output").map(|value| {
+                        match value {
+                            "-" => None,
+                            path => Some(path.into())
+                        }
+                    })
+                }
+            }
             ("", _) => {
                 error!(
                     "Error: a command is required.\n\
@@ -232,6 +267,14 @@ impl Operation {
     /// point.
     pub fn run(self, config: Config) -> Result<(), Error> {
         match self {
+            Operation::Prepare { force, accept_arin_rpa }
+                => Self::prepare(config, force, accept_arin_rpa),
+            Operation::Server { detach }
+                => Self::server(config, detach),
+            Operation::Vrps { output, format, noupdate } 
+                => Self::vrps(config, output, format, noupdate),
+            Operation::Update
+                => Self::update(config),
             Operation::Config => 
                 Self::print_config(config),
             Operation::Man { output } => {
@@ -240,12 +283,6 @@ impl Operation {
                     None => Self::display_man(),
                 }
             }
-            Operation::Server { detach }
-                => Self::server(config, detach),
-            Operation::Update
-                => Self::update(config),
-            Operation::Vrps { output, format, noupdate } 
-                => Self::vrps(config, output, format, noupdate),
         }
     }
 }
@@ -253,92 +290,107 @@ impl Operation {
 /// # Running Actual Commands
 ///
 impl Operation {
-    /// Prints the current configuration to stdout and exits.
-    #[cfg(unix)]
-    fn print_config(mut config: Config) -> Result<(), Error> {
-        if config.chroot.is_some() {
-            config.daemonize()?;
-        }
-        println!("{}", config);
-        Ok(())
-    }
-
-    /// Prints the current configuration to stdout and exits.
-    #[cfg(not(unix))]
-    fn print_config(config: Config) -> Result<(), Error> {
-        println!("{}", config);
-        Ok(())
-    }
-
-    /// Outputs the manual page to the given path.
+    /// Initializes the local repository.
     ///
-    /// If the path is `None`, outputs to stdout.
-    fn output_man(output: Option<PathBuf>) -> Result<(), Error> {
-        match output {
-            Some(path) => {
-                let mut file = match fs::File::create(&path) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        error!(
-                            "Failed to open output file {}: {}",
-                            path.display(), err
-                        );
-                        return Err(Error)
-                    }
-                };
-                if let Err(err) = file.write_all(MAN_PAGE) {
-                    error!("Failed to write to output file: {}", err);
-                    return Err(Error)
-                }
-                info!(
-                    "Successfully writen manual page to {}",
-                    path.display()
-                );
-            }
-            None => {
-                let out = io::stdout();
-                let mut out = out.lock();
-                if let Err(err) = out.write_all(MAN_PAGE) {
-                    error!("Failed to write man page: {}", err);
-                    return Err(Error)
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Displays the manual page.
+    /// Tries to create `config.cache_dir` if it doesn’t exist. Creates the
+    /// `config.tal_dir` if it doesn’t exist and installs the bundled TALs.
+    /// It also does the latter if the directory exists and `force` is
+    /// `true`.
     ///
-    /// This puts the manual page into a temporary file and then executes
-    /// the `man` command. This probably doesn’t work on Windows.
-    fn display_man() -> Result<(), Error> {
-        let mut file = NamedTempFile::new().map_err(|err| {
+    /// We will, however, refuse to install any TALs until `accept_arin_rpa`
+    /// is `true`. If it isn’t we just print a friendly reminder instead.
+    fn prepare(
+        config: Config,
+        force: bool,
+        accept_arin_rpa: bool
+    ) -> Result<(), Error> {
+        if let Err(err) = fs::create_dir_all(&config.cache_dir) {
             error!(
-                "Can't display man page: \
-                 Failed to create temporary file: {}.",
-                err
+                "Failed to create repository directory {}: {}.",
+                config.cache_dir.display(), err
             );
-            Error
-        })?;
-        file.write_all(MAN_PAGE).map_err(|err| {
-            error!(
-                "Can't display man page: \
-                Failed to write to temporary file: {}.",
-                err
-            );
-            Error
-        })?;
-        Command::new("man").arg(file.path()).status().map_err(|err| {
-            error!("Failed to run man: {}", err);
-            Error
-        }).and_then(|exit| {
-            if exit.success() {
-                Ok(())
+            return Err(Error);
+        }
+
+        // Check if TAL directory exists and error out if needed.
+        if let Ok(metadata) = fs::metadata(&config.tal_dir) {
+            if metadata.is_dir() {
+                if !force {
+                    error!(
+                        "TAL directory {} exists.\n\
+                        Use -f to force installation of TALs.",
+                        config.tal_dir.display()
+                    );
+                    return Err(Error);
+                }
             }
             else {
-                Err(Error)
+                error!(
+                    "TAL directory {} exists and is not a directory.",
+                    config.tal_dir.display()
+                );
+                return Err(Error)
             }
-        })
+        }
+
+        // Do the ARIN thing. We need to do this before trying to create
+        // the directory or it will be there already next time and confuse
+        // people.
+        if !accept_arin_rpa {
+            error!(
+                "Before we can install the ARIN TAL, you must have read\n\
+                 and agree to the ARIN Relying Party Agreement. It is\n\
+                 available at\n\
+                 \n\
+                 https://www.arin.net/resources/manage/rpki/rpa.pdf\n\
+                 \n\
+                 If you agree to the agreement, please run the command\n\
+                 again with the --accept-arin-rpa option."
+            );
+            return Err(Error)
+        }
+
+        // Try to create the TAL directory and error out if that fails.
+        if let Err(err) = fs::create_dir_all(&config.tal_dir) {
+            error!(
+                "Cannot create TAL directory {}: {}",
+                config.tal_dir.display(), err
+            );
+            return Err(Error)
+        }
+
+        // Now write all the TALs. Overwrite existing ones.
+        for (name, content) in &DEFAULT_TALS {
+            let mut file = match fs::File::create(config.tal_dir.join(name)) {
+                Ok(file) => file,
+                Err(err) => {
+                    error!(
+                        "Can't create TAL file {}: {}.\n Aborting.",
+                        config.tal_dir.join(name).display(), err
+                    );
+                    return Err(Error);
+                }
+            };
+            if let Err(err) = file.write_all(content) {
+                error!(
+                    "Can't create TAL file {}: {}.\n Aborting.",
+                    config.tal_dir.join(name).display(), err
+                );
+                return Err(Error);
+            }
+        }
+
+        // Not really an error, but that’s our log level right now.
+        error!(
+            "Created local repository directory {}",
+            config.cache_dir.display()
+        );
+        error!(
+            "Installed the five TALs in {}",
+            config.tal_dir.display()
+        );
+
+        Ok(())
     }
 
     /// Starts the RTR server.
@@ -535,6 +587,94 @@ impl Operation {
             }
         ).map_err(|_| ())
     }
+
+    /// Prints the current configuration to stdout and exits.
+    #[cfg(unix)]
+    fn print_config(mut config: Config) -> Result<(), Error> {
+        if config.chroot.is_some() {
+            config.daemonize()?;
+        }
+        println!("{}", config);
+        Ok(())
+    }
+
+    /// Prints the current configuration to stdout and exits.
+    #[cfg(not(unix))]
+    fn print_config(config: Config) -> Result<(), Error> {
+        println!("{}", config);
+        Ok(())
+    }
+
+    /// Outputs the manual page to the given path.
+    ///
+    /// If the path is `None`, outputs to stdout.
+    fn output_man(output: Option<PathBuf>) -> Result<(), Error> {
+        match output {
+            Some(path) => {
+                let mut file = match fs::File::create(&path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        error!(
+                            "Failed to open output file {}: {}",
+                            path.display(), err
+                        );
+                        return Err(Error)
+                    }
+                };
+                if let Err(err) = file.write_all(MAN_PAGE) {
+                    error!("Failed to write to output file: {}", err);
+                    return Err(Error)
+                }
+                info!(
+                    "Successfully writen manual page to {}",
+                    path.display()
+                );
+            }
+            None => {
+                let out = io::stdout();
+                let mut out = out.lock();
+                if let Err(err) = out.write_all(MAN_PAGE) {
+                    error!("Failed to write man page: {}", err);
+                    return Err(Error)
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Displays the manual page.
+    ///
+    /// This puts the manual page into a temporary file and then executes
+    /// the `man` command. This probably doesn’t work on Windows.
+    fn display_man() -> Result<(), Error> {
+        let mut file = NamedTempFile::new().map_err(|err| {
+            error!(
+                "Can't display man page: \
+                 Failed to create temporary file: {}.",
+                err
+            );
+            Error
+        })?;
+        file.write_all(MAN_PAGE).map_err(|err| {
+            error!(
+                "Can't display man page: \
+                Failed to write to temporary file: {}.",
+                err
+            );
+            Error
+        })?;
+        Command::new("man").arg(file.path()).status().map_err(|err| {
+            error!("Failed to run man: {}", err);
+            Error
+        }).and_then(|exit| {
+            if exit.success() {
+                Ok(())
+            }
+            else {
+                Err(Error)
+            }
+        })
+    }
 }
 
 
@@ -556,4 +696,15 @@ pub struct Error;
 
 /// The raw bytes of the manual page.
 const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
+
+
+//------------ DEFAULT_TALS --------------------------------------------------
+
+const DEFAULT_TALS: [(&str, &[u8]); 5] = [
+    ("afrinic.tal", include_bytes!("../tals/afrinic.tal")),
+    ("apnic.tal", include_bytes!("../tals/apnic.tal")),
+    ("arin.tal", include_bytes!("../tals/arin.tal")),
+    ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
+    ("ripe.tal", include_bytes!("../tals/ripe.tal")),
+];
 
