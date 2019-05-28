@@ -6,7 +6,6 @@
 use std::mem;
 use std::net::SocketAddr;
 use std::time::SystemTime;
-use futures::future;
 use futures::{Async, Future, Stream};
 use listenfd::ListenFd;
 use tokio;
@@ -15,6 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::OriginsHistory;
+use crate::utils::finish_all;
 use super::send::{Sender, Timing};
 use super::query::{Input, InputStream, Query};
 use super::notify::{Dispatch, NotifyReceiver, NotifySender};
@@ -39,9 +39,9 @@ pub fn rtr_listener(
     let (dispatch, dispatch_fut) = Dispatch::new();
     let timing = Timing::new(config);
     let fut = dispatch_fut.select(
-        future::select_all(
+        finish_all(
             SystemdListeners::new(config).chain(
-                config.tcp_listen.iter()
+                config.rtr_listen.iter()
                     .map(Clone::clone).map(bind_listener)
                     .filter_map(|x| x)
             ).map(|listener| {
@@ -84,7 +84,7 @@ struct SystemdListeners {
 impl SystemdListeners {
     fn new(config: &Config) -> Self {
         Self {
-            listenfd: if config.tcp_systemd {
+            listenfd: if config.systemd_listen {
                 Some(ListenFd::from_env())
             }
             else {

@@ -16,7 +16,7 @@ New
   option. ([#127] and [#130]).
 * Improved path `/status` in HTTP output that provides the same
   information as the `/metrics` endpoint in slightly different format that
-  might make it easier to use in processing.  [(#131)]
+  might make it easier to use in processing. [(#131)]
 
 Bug Fixes
 

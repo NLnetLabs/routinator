@@ -6,7 +6,7 @@
 
 use std::{env, fmt, fs, io};
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -56,19 +56,19 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 ///
 /// All values are public and can be accessed directly.
 ///
-/// The two functions [`config_args`] and [`rtrd_args`] can be used to create
+/// The two functions [`config_args`] and [`server_args`] can be used to create
 /// the clap application. Its matches can then be used to create the basic
 /// config via [`from_arg_matches`]. If the RTR server configuration is
-/// necessary, it can be added via [`apply_rtrd_arg_matches`] from the RTR
+/// necessary, it can be added via [`apply_server_arg_matches`] from the RTR
 /// server subcommand matches.
 ///
 /// A few methods are provided that do mundane tasks that heavily depend on
 /// the configuration.
 ///
 /// [`config_args`]: #method.config_args
-/// [`rtrd_args`]: #method.rtrd_args
+/// [`server_args`]: #method.server_args
 /// [`from_arg_matches`]: #method.from_arg_matches
-/// [`apply_rtrd_arg_matches`]: #method.apply_rtrd_arg_matches
+/// [`apply_server_arg_matches`]: #method.apply_server_arg_matches
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Path to the directory that contains the repository cache.
@@ -111,13 +111,13 @@ pub struct Config {
     pub history_size: usize,
 
     /// Addresses to listen on for RTR TCP transport connections.
-    pub tcp_listen: Vec<SocketAddr>,
-
-    /// Get the RTR TCP socket from systemd.
-    pub tcp_systemd: bool,
+    pub rtr_listen: Vec<SocketAddr>,
 
     /// Addresses to listen on for HTTP monitoring connectsion.
     pub http_listen: Vec<SocketAddr>,
+
+    /// Get the listening sockets from systemd.
+    pub systemd_listen: bool,
 
     /// The log levels to be logged.
     pub log_level: LevelFilter,
@@ -240,7 +240,7 @@ impl Config {
         )
     }
 
-    /// Adds the relevant config args to the rtrd subcommand.
+    /// Adds the relevant config args to the server subcommand.
     ///
     /// Some of the options in the config only makes sense to have for the
     /// RTR server. Having them in the global part of the clap command line
@@ -249,7 +249,7 @@ impl Config {
     ///
     /// It follows clap’s builder pattern: It takes an app, adds a bunch of
     /// arguments to it, and returns it in the end.
-    pub fn rtrd_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+    pub fn server_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
         .arg(Arg::with_name("refresh")
             .long("refresh")
@@ -269,28 +269,27 @@ impl Config {
         .arg(Arg::with_name("history")
             .long("history")
             .value_name("COUNT")
-            .help("number of history items to keep in repeat mode [default 10]")
+            .help("number of history items to keep [default 10]")
         )
-        .arg(Arg::with_name("listen")
-            .short("l")
-            .long("listen")
+        .arg(Arg::with_name("rtr-listen")
+            .long("rtr")
             .value_name("ADDR:PORT")
-            .help("listen addr:port for RTR")
+            .help("listen on address/port for RTR")
             .takes_value(true)
             .multiple(true)
             .number_of_values(1)
         )
-        .arg(Arg::with_name("listen-systemd")
-            .long("listen-systemd")
-            .help("acquire a RTR TCP listener from systemd")
-        )
-        .arg(Arg::with_name("listen-http")
-            .long("listen-http")
+        .arg(Arg::with_name("http-listen")
+            .long("http")
             .value_name("ADDR:PORT")
-            .help("listen addr:port for monitoring")
+            .help("listen on address/port for HTTP")
             .takes_value(true)
             .multiple(true)
             .number_of_values(1)
+        )
+        .arg(Arg::with_name("systemd-listen")
+            .long("systemd-listen")
+            .help("acquire listening sockets from systemd")
         )
         .arg(Arg::with_name("pid-file")
             .long("pid-file")
@@ -319,9 +318,9 @@ impl Config {
     /// options to it.
     ///
     /// If you are trying to run the RTR server, you need to also apply the
-    /// RTR server arguments via [`apply_rtrd_arg_matches`].
+    /// RTR server arguments via [`apply_server_arg_matches`].
     ///
-    /// [`apply_rtrd_arg_matches`]: #method.apply_rtrd_arg_matches
+    /// [`apply_server_arg_matches`]: #method.apply_server_arg_matches
     pub fn from_arg_matches(
         matches: &ArgMatches,
         cur_dir: &Path,
@@ -473,7 +472,7 @@ impl Config {
 
 
     /// Applies the RTR server command line arguments to a config.
-    pub fn apply_rtrd_arg_matches(
+    pub fn apply_server_arg_matches(
         &mut self,
         matches: &ArgMatches,
         cur_dir: &Path,
@@ -498,39 +497,38 @@ impl Config {
             self.history_size = value
         }
 
-        // tcp_listen
-        if let Some(list) = matches.values_of("listen") {
-            self.tcp_listen = Vec::new();
+        // rtr_listen
+        if let Some(list) = matches.values_of("rtr-listen") {
+            self.rtr_listen = Vec::new();
             for value in list {
                 match SocketAddr::from_str(value) {
-                    Ok(some) => self.tcp_listen.push(some),
+                    Ok(some) => self.rtr_listen.push(some),
                     Err(_) => {
-                        error!("Invalid value for listen: {}", value);
+                        error!("Invalid value for rtr: {}", value);
                         return Err(Error);
                     }
                 }
             }
         }
 
-        // tcp_systemd
-        if matches.is_present("listen-systemd") {
-            self.tcp_systemd = true
-        }
-
         // http_listen
-        if let Some(list) = matches.values_of("listen-http") {
+        if let Some(list) = matches.values_of("http-listen") {
             self.http_listen = Vec::new();
             for value in list {
                 match SocketAddr::from_str(value) {
                     Ok(some) => self.http_listen.push(some),
                     Err(_) => {
-                        error!("Invalid value for listen-http: {}", value);
+                        error!("Invalid value for http: {}", value);
                         return Err(Error);
                     }
                 }
             }
         }
 
+        // systemd_listen
+        if matches.is_present("systemd-listen") {
+            self.systemd_listen = true
+        }
 
         // pid_file
         if let Some(pid_file) = matches.value_of("pid-file") {
@@ -806,15 +804,15 @@ impl Config {
                 file.take_small_usize("history-size")?
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
-            tcp_listen: {
-                file.take_from_str_array("listen-tcp")?
-                    .unwrap_or_else(Self::default_tcp_listen)
-            },
-            tcp_systemd: file.take_bool("listen-systemd")?.unwrap_or(false),
-            http_listen: {
-                file.take_from_str_array("listen-http")?
+            rtr_listen: {
+                file.take_from_str_array("rtr-listen")?
                     .unwrap_or_else(Vec::new)
             },
+            http_listen: {
+                file.take_from_str_array("http-listen")?
+                    .unwrap_or_else(Vec::new)
+            },
+            systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -925,22 +923,15 @@ impl Config {
             retry: Duration::from_secs(DEFAULT_RETRY),
             expire: Duration::from_secs(DEFAULT_EXPIRE),
             history_size: DEFAULT_HISTORY_SIZE,
-            tcp_listen: Self::default_tcp_listen(),
-            tcp_systemd: false,
+            rtr_listen: Vec::new(),
             http_listen: Vec::new(),
+            systemd_listen: false,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             pid_file: None,
             working_dir: None,
             chroot: None
         }
-    }
-
-    /// Returns the default tcp-listen value.
-    fn default_tcp_listen() -> Vec<SocketAddr> {
-        vec![
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3323)
-        ]
     }
 
     /// Prepares and returns the cache dir and tal dir.
@@ -1110,18 +1101,18 @@ impl Config {
         res.insert("expire".into(), (self.expire.as_secs() as i64).into());
         res.insert("history-size".into(), (self.history_size as i64).into());
         res.insert(
-            "listen-tcp".into(),
+            "rtr-listen".into(),
             toml::Value::Array(
-                self.tcp_listen.iter().map(|a| a.to_string().into()).collect()
+                self.rtr_listen.iter().map(|a| a.to_string().into()).collect()
             )
         );
-        res.insert("listen-systemd".into(), self.tcp_systemd.into());
         res.insert(
-            "listen-http".into(),
+            "http-listen".into(),
             toml::Value::Array(
                 self.http_listen.iter().map(|a| a.to_string().into()).collect()
             )
         );
+        res.insert("systemd-listen".into(), self.systemd_listen.into());
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
             #[cfg(unix)]
@@ -1713,13 +1704,13 @@ mod test {
         config
     }
 
-    fn process_rtrd_args(args: &[&str]) -> Config {
+    fn process_server_args(args: &[&str]) -> Config {
         let mut config = get_default_config();
-        let matches = Config::rtrd_args(Config::config_args(
+        let matches = Config::server_args(Config::config_args(
                 App::new("routinator"))
         ).get_matches_from_safe(args).unwrap();
         config.apply_arg_matches(&matches, Path::new("/test")).unwrap();
-        config.apply_rtrd_arg_matches(&matches, Path::new("/test")).unwrap();
+        config.apply_server_arg_matches(&matches, Path::new("/test")).unwrap();
         config
     }
 
@@ -1743,11 +1734,9 @@ mod test {
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
         assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
         assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
-        assert_eq!(
-            config.tcp_listen,
-            vec![SocketAddr::from_str("127.0.0.1:3323").unwrap()]
-        );
-        assert_eq!(config.tcp_systemd, false);
+        assert!(config.rtr_listen.is_empty());
+        assert!(config.http_listen.is_empty());
+        assert_eq!(config.systemd_listen, false);
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(config.log_target, LogTarget::Default(Facility::LOG_DAEMON));
     }
@@ -1766,8 +1755,9 @@ mod test {
              retry = 7\n\
              expire = 8\n\
              history-size = 5000\n\
-             listen-tcp = [\"[2001:db8::4]:323\", \"192.0.2.4:323\"]\n\
-             listen-systemd = true\n\
+             rtr-listen = [\"[2001:db8::4]:323\", \"192.0.2.4:323\"]\n\
+             http-listen = [\"192.0.2.4:8080\"]\n\
+             systemd-listen = true\n\
              log-level = \"info\"\n\
              log = \"file\"\n\
              log-file = \"foo.log\"",
@@ -1788,13 +1778,17 @@ mod test {
         assert_eq!(config.expire, Duration::from_secs(8));
         assert_eq!(config.history_size, 5000);
         assert_eq!(
-            config.tcp_listen,
+            config.rtr_listen,
             vec![
                 SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
                 SocketAddr::from_str("192.0.2.4:323").unwrap(),
             ]
         );
-        assert_eq!(config.tcp_systemd, true);
+        assert_eq!(
+            config.http_listen,
+            vec![SocketAddr::from_str("192.0.2.4:8080").unwrap()]
+        );
+        assert_eq!(config.systemd_listen, true);
         assert_eq!(config.log_level, LevelFilter::Info);
         assert_eq!(
             config.log_target,
@@ -1821,11 +1815,9 @@ mod test {
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
         assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
         assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
-        assert_eq!(
-            config.tcp_listen,
-            Config::default_tcp_listen()
-        );
-        assert_eq!(config.tcp_systemd, false);
+        assert!(config.rtr_listen.is_empty());
+        assert!(config.http_listen.is_empty());
+        assert_eq!(config.systemd_listen, false);
         assert!(config.http_listen.is_empty());
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(
@@ -1887,25 +1879,31 @@ mod test {
     }
 
     #[test]
-    fn rtrd_args() {
-        let config = process_rtrd_args(&[
+    fn server_args() {
+        let config = process_server_args(&[
             "routinator", "--refresh", "7", "--retry", "8", "--expire", "9",
-            "--history", "1000", "-l", "[2001:db8::4]:323",
-            "--listen", "192.0.2.4:323",
-            "--listen-systemd",
+            "--history", "1000",
+            "--rtr", "[2001:db8::4]:323",
+            "--rtr", "192.0.2.4:323",
+            "--http", "192.0.2.4:8080",
+            "--systemd-listen",
         ]);
         assert_eq!(config.refresh, Duration::from_secs(7));
         assert_eq!(config.retry, Duration::from_secs(8));
         assert_eq!(config.expire, Duration::from_secs(9));
         assert_eq!(config.history_size, 1000);
         assert_eq!(
-            config.tcp_listen,
+            config.rtr_listen,
             vec![
                 SocketAddr::from_str("[2001:db8::4]:323").unwrap(),
                 SocketAddr::from_str("192.0.2.4:323").unwrap(),
             ]
         );
-        assert_eq!(config.tcp_systemd, true);
+        assert_eq!(
+            config.http_listen,
+            vec![SocketAddr::from_str("192.0.2.4:8080").unwrap()]
+        );
+        assert_eq!(config.systemd_listen, true);
     }
 }
 
