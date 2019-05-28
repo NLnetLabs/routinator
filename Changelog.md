@@ -11,6 +11,10 @@ Breaking Changes
   is now `--rtr` for RTR listeners (previously just `--listen`) and
   `--http` for HTTP listeners (previously `--listen-http`). The config
   file fields are `rtr-listen` and `http-listen`, respectively. [(#133)]
+* In `server` (formerly `rtrd`) mode, the `-a` option is gone and has
+  been replaced by a `-d` option. In other words, the default is now to
+  stay attached to the terminal and only fork into the background if `-d`
+  is given. [(#134)]
 * The minimum supported Rust version is now 1.34.0. [(#112)]
 
 New
@@ -49,6 +53,7 @@ Dependencies
 [(#131)]: https://github.com/NLnetLabs/routinator/pull/131
 [#131]: https://github.com/NLnetLabs/routinator/pull/131
 [(#133)]: https://github.com/NLnetLabs/routinator/pull/133
+[(#134)]: https://github.com/NLnetLabs/routinator/pull/134
 
 
 ## 0.3.3 ‘Big Bada Boom’
