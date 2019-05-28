@@ -8,12 +8,15 @@ Breaking Changes
 
 New
 
-* Three new monitoring gauges `last_update_start`, `last_update_done`, and
-  `last_update_duration` that will allow alerting if Routinator stops
-  updating. [(#122)]
+* Four new monitoring gauges `last_update_start`, `last_update_done`, 
+  `last_update_duration`, and `serial` that will allow alerting if
+  Routinator stops updating. ([#122] and [#131])
 * Accept RTR listening socket from systemd. This allows to listen on port
   323 without special privileges. Enable via the new `--listen-systemd`
   option. ([#127] and [#130]).
+* Improved path `/status` in HTTP output that provides the same
+  information as the `/metrics` endpoint in slightly different format that
+  might make it easier to use in processing.  [(#131)]
 
 Bug Fixes
 
@@ -33,9 +36,11 @@ Dependencies
 [(#112)]: https://github.com/NLnetLabs/routinator/pull/112
 [(#120)]: https://github.com/NLnetLabs/routinator/pull/120
 [(#121)]: https://github.com/NLnetLabs/routinator/pull/121
-[(#122)]: https://github.com/NLnetLabs/routinator/pull/122
+[#122]: https://github.com/NLnetLabs/routinator/pull/122
 [#127]: https://github.com/NLnetLabs/routinator/pull/127
 [#130]: https://github.com/NLnetLabs/routinator/pull/130
+[(#131)]: https://github.com/NLnetLabs/routinator/pull/131
+[#131]: https://github.com/NLnetLabs/routinator/pull/131
 
 
 ## 0.3.3 ‘Big Bada Boom’

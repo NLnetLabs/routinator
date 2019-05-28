@@ -11,6 +11,8 @@ use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use chrono::Duration;
+use chrono::offset::Utc;
 use futures::future;
 use futures::{Async, Future, IntoFuture, Stream};
 use tokio::io::{AsyncRead, WriteAll, write_all};
@@ -282,7 +284,7 @@ impl Response {
                         sock, origins, OutputFormat::Rpsl
                     )
                 }
-                "/status" => Self::text(sock, "fine"),
+                "/status" => Self::status(sock, origins),
                 "/version" => Self::text(sock, crate_version!()),
                 _ => Self::not_found(sock),
             }
@@ -325,9 +327,8 @@ impl Response {
             }
         });
 
-        // last_update_state, last_update_done
+        // last_update_state, last_update_done, last_update_duration
         let (start, done, duration) = origins.update_times();
-
         unwrap!(write!(res,
             "\n\
             # HELP last_update_start seconds since last update started\n\
@@ -352,6 +353,86 @@ impl Response {
                 unwrap!(writeln!(res, "Nan"));
             }
         }
+
+        // serial
+        unwrap!(write!(res,
+            "\n\
+            # HELP serial current RTR serial number\n\
+            # TYPE gauge\n\
+            serial {}",
+            origins.serial()
+        ));
+
+        Self::from_content(
+            sock, "200 OK", "text/plain; version=0.0.4",
+            &res
+        )
+    }
+
+    /// Produces a response for the `/status` path.
+    fn status(sock: TcpStream, origins: OriginsHistory) -> Self {
+        let mut res = String::new();
+        let (start, done, duration) = origins.update_times();
+        let start = unwrap!(Duration::from_std(start.elapsed()));
+        let done = done.map(|done|
+            unwrap!(Duration::from_std(done.elapsed()))
+        );
+        let duration = duration.map(|duration| 
+            unwrap!(Duration::from_std(duration))
+        );
+        let now = Utc::now();
+
+        // serial
+        unwrap!(writeln!(res, "serial: {}", origins.serial()));
+
+        // last-update-start-at and -ago
+        unwrap!(writeln!(res, "last-update-start-at:  {}", now - start));
+        unwrap!(writeln!(res, "last-update-start-ago: {}", start));
+
+        // last-update-dona-at and -ago
+        if let Some(done) = done {
+            unwrap!(writeln!(res, "last-update-done-at:   {}", now - done));
+            unwrap!(writeln!(res, "last-update-done-ago:  {}", done));
+        }
+        else {
+            unwrap!(writeln!(res, "last-update-done-at:   -"));
+            unwrap!(writeln!(res, "last-update-done-ago:  -"));
+        }
+
+        // last-update-duration
+        if let Some(duration) = duration {
+            unwrap!(writeln!(res, "last-update-duration:  {}", duration));
+        }
+        else {
+            unwrap!(writeln!(res, "last-update-duration:  -"));
+        }
+
+        origins.current_metrics(|metrics| {
+            // valid-roas
+            unwrap!(writeln!(res, "valid-roas: {}",
+                metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
+            ));
+
+            // valid-roas-per-tal
+            unwrap!(write!(res, "valid-roas-per-tal: "));
+            for tal in metrics.tals() {
+                unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.roas));
+            }
+            unwrap!(writeln!(res, ""));
+
+            // vrps
+            unwrap!(writeln!(res, "vrps: {}",
+                metrics.tals().iter().map(|tal| tal.vrps).sum::<u32>()
+            ));
+
+            // vrps-per-tal
+            unwrap!(write!(res, "vrps-per-tal: "));
+            for tal in metrics.tals() {
+                unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
+            }
+            unwrap!(writeln!(res, ""));
+
+        });
 
         Self::from_content(
             sock, "200 OK", "text/plain; version=0.0.4",
