@@ -59,12 +59,12 @@ pub enum Operation {
 
     /// Run as server.
     Server {
-        /// Stay attached to the terminal.
+        /// Detach from the terminal.
         ///
-        /// If this is `true`, we just start the server and keep going. If
-        /// this is `false`, we detach from the terminal into daemon mode
+        /// If this is `false`, we just start the server and keep going. If
+        /// this is `true`, we detach from the terminal into daemon mode
         /// which has a few extra consequences.
-        attached: bool,
+        detach: bool,
     },
 
     /// Update the local repository.
@@ -143,10 +143,10 @@ impl Operation {
         // server
         .subcommand(Config::server_args(SubCommand::with_name("server")
             .about("Starts as a server.")
-            .arg(Arg::with_name("attached")
-                .short("a")
-                .long("attached")
-                .help("stay attached to the terminal")
+            .arg(Arg::with_name("detach")
+                .short("d")
+                .long("detach")
+                .help("detach from the terminal")
             )
         ))
 
@@ -187,7 +187,7 @@ impl Operation {
             ("server", Some(matches)) => {
                 config.apply_server_arg_matches(matches, cur_dir)?;
                 Operation::Server {
-                    attached: matches.is_present("attached")
+                    detach: matches.is_present("detach")
                 }
             }
             ("update", _) => Operation::Update,
@@ -240,8 +240,8 @@ impl Operation {
                     None => Self::display_man(),
                 }
             }
-            Operation::Server { attached }
-                => Self::server(config, attached),
+            Operation::Server { detach }
+                => Self::server(config, detach),
             Operation::Update
                 => Self::update(config),
             Operation::Vrps { output, format, noupdate } 
@@ -343,14 +343,14 @@ impl Operation {
 
     /// Starts the RTR server.
     ///
-    /// If `attached` is `false`, will fork the server and exit. Otherwise
+    /// If `detach` is `true`, will fork the server and exit. Otherwise
     /// just runs the server forever.
-    fn server(mut config: Config, attached: bool) -> Result<(), Error> {
+    fn server(mut config: Config, detach: bool) -> Result<(), Error> {
         let repo = config.create_repository(false, true)?;
-        if !attached {
+        if detach {
             Self::daemonize(&mut config)?;
         }
-        config.switch_logging(!attached)?;
+        config.switch_logging(detach)?;
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
