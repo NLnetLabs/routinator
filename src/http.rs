@@ -1,10 +1,10 @@
-//! Delivering monitoring information.
+//! The HTTP server
 //!
-//! The module provides all functionality to expose monitoring endpoints to
-//! those interested. The only public item, [`monitor_listener`] creates all
+//! The module provides all functionality to expose HTTP endpoints to
+//! those interested. The only public item, [`http_listener`] creates all
 //! necessary networking services based on the current configuration.
 //!
-//! [`monitor_listener`]: fn.monitor_listener.html
+//! [`http_listener`]: fn.http_listener.html
 
 use std::{cmp, io, mem};
 use std::fmt::Write as FmtWrite;
@@ -13,40 +13,33 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use chrono::Duration;
 use chrono::offset::Utc;
-use futures::future;
 use futures::{Async, Future, IntoFuture, Stream};
 use tokio::io::{AsyncRead, WriteAll, write_all};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
 use crate::output::OutputFormat;
 use crate::origins::{OriginsHistory, AddressOrigins};
+use crate::utils::finish_all;
 
 
-//------------ monitor_listener ----------------------------------------------
+//------------ http_listener -------------------------------------------------
 
-/// Returns a future for all monitoring server listeners.
+/// Returns a future for all HTTP server listeners.
 ///
-/// Which servers these are, if any, is determined by `config`. The data for
-/// monitoring is taken from `history`. As a consequence, if you need new
+/// Which servers these are, if any, is determined by `config`. The data 
+/// taken from `history`. As a consequence, if you need new
 /// data to be exposed, add it to [`OriginsHistory`] somehow.
 ///
 /// [`OriginsHistory`]: ../origins/struct.OriginsHistory.html
-pub fn monitor_listener(
+pub fn http_listener(
     history: OriginsHistory,
     config: &Config,
 ) -> impl Future<Item= (), Error = ()> {
-    if config.http_listen.is_empty() {
-        future::Either::A(future::empty())
-    }
-    else {
-        future::Either::B(
-            future::select_all(
-                config.http_listen.iter().map(|addr| {
-                    http_listener(*addr, history.clone())
-                })
-            ).then(|_| Ok(()))
-        )
-    }
+    finish_all(
+        config.http_listen.iter().map(|addr| {
+            single_http_listener(*addr, history.clone())
+        })
+    )
 }
 
 /// Returns a future for a single HTTP listener.
@@ -55,7 +48,7 @@ pub fn monitor_listener(
 /// listener, in which case it will print an error and resolve the error case.
 /// It will listen on `addr` for incoming connection. Each new connection will
 /// be handled via a brand new `HttpConnection`.
-fn http_listener(
+fn single_http_listener(
     addr: SocketAddr,
     history: OriginsHistory,
 ) -> impl Future<Item=(), Error=()> {

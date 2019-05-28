@@ -50,12 +50,14 @@ command
 .PP
 .B routinator
 [options]
-.B rtrd
-.RB [ \-l
+.B server
+.RB [ \-\-rtr
 .I addr:port
-.RB [ \-l
+[...]]
+.RB [ \-\-http
 .I addr:port
-[...]]]
+[...]]
+.RB [ \-\-listen\-systemd ]
 .RB [ \-\-refresh
 .IR seconds ]
 .RB [ \-\-retry
@@ -83,7 +85,7 @@ them available to your BGP routing workflow.
 .P
 It can either run in one-shot mode outputting a list of validated route
 origins in various formats or as a server for the RPKI-to-Router (RTR)
-protocol that routers often implement to access the data.
+protocol that routers often implement to access the data or via HTTP.
 .P
 These modes and additional operations can be chosen  via commands. For
 the available commands, see
@@ -305,9 +307,10 @@ This format produces no output whatsoever.
 .BR \-n ,\  \-\-noupdate
 The repository will not be updated before producing the list.
 
-.SS rtrd
+.SS server
 This command causes Routinator to act as a server for the RPKI-to-Router
-protocol (RTR). In this mode, Routinator will read all the TALs (See
+(RTR) and HTTP protocols. In this mode, Routinator will read all the TALs
+(See
 .B TRUST ANCHOR LOCATORS
 below) and will then detach from the terminal unless the
 .B -a
@@ -318,44 +321,41 @@ notify any clients of changes, and let them fetch validated data. It will not,
 however, reread the trust anchor locators. Thus, if you update them, you will
 have to restart Routinator.
 .PP
+You can provide a number of addresses and ports to listen on for RTR and HTTP
+through command line options or their configuration file equivalent.
+Currently, Routinator will only start listening on these ports after an
+intitial validation run has finished.
+.PP
+It will not listen on any sockets unless explicitely specified. It
+will still run and periodically update the repository. This might be useful
+for use with
+.B vrps
+mode with the
+.B -n
+option.
+.TP
+.BI \-\-rtr=  addr:port
+Specifies a local address and port to listen on for incoming RTR connections.
+.IP
 Routinator supports both protocol version 0 defined in RFC 6810 and version
 1 defined in RFC 8210. However, it does not support router keys introduced
-in version 1.
-.TP
-.BI \-l\  addr:port\fR,\ \fB\-\-listen=\fIaddr:port
-Specifies the local address and port to listen on for incoming RTR
-connections. IPv6 addresses must be enclosed in square brackets. You can
+in version 1. IPv6 addresses must be enclosed in square brackets. You can
 provide the option multiple times to let Routinator listen on multiple
 address-port pairs.
-.IP
-If this options is omitted, Routinator will listen on
-.B 127.0.0.1:3323
-unless the
-.B \-\-listen\-systemd
-option is provided, in which case it will only listen on the address and
-port provided via systemd.
-.PP
-Note that the default address is a localhost address for security reasons.
-We also don't use the standard RTR port 323 as this is a privileged port that
-would require Routinator to be run as root or otherwise receive permission
-which otherwise isn't necessary at all.
-.IP
-Routinator will only start listening on these ports after an intitial
-validation run has finished.
 .TP
-.BI \-\-listen\-systemd
-The RTR TCP listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd’s socket units to allow a
-Routinator running as a regular user to bind to the default RTR port 323.
-.TP
-.BI \-\-listen\-http= addr:port
+.BI \-\-http= addr:port
 Specifies the address and port to listen on for incoming HTTP connections.
 See
 .B HTTP SERVICE
 below for more information on the HTTP service provided by Routinator.
+.TP
+.BI \-\-listen\-systemd
+The RTR listening socket will be acquired from systemd via socket
+activation. Use this option together with systemd’s socket units to allow a
+Routinator running as a regular user to bind to the default RTR port 323.
 .IP
-If this option is omitted, no HTTP service will be provided.
-
+Currently, all TCP listener sockets handed over by systemd will be used for 
+the RTR protocol.
 .TP
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
@@ -490,7 +490,7 @@ simply
 .B rsync-args
 A list of strings containing the arguments to be passed to the rsync command.
 Each string is an argument of its own.
-.PP
+.IP
 If this
 option is not provided, Routinator will try to find out if your rsync
 understands the
@@ -555,20 +555,21 @@ A string value specifying the syslog facility to use for logging to syslog.
 The default value if this entry is missing is
 .IR daemon .
 .TP
-.TP
-.B listen-tcp
+.B rtr-listen
 An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
+a colon. IPv6 address should be enclosed in square braces.
+.TP
+.B http-listen
+An array of string values each providing the address and port which the HTTP
+service should listen on. Address and port should be separated by
 a colon. IPv6 address should be enclosed in square braces.
 .TP
 .B listen-systemd
 The RTR TCP listening socket will be acquired from systemd via socket
 activation. Use this option together with systemd’s socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
-.B listen-http
-An array of string values each providing the address and port which the HTTP
-service should listen on. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square braces.
+.TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in RTR server mode. The default is

@@ -32,12 +32,13 @@ pub use self::config::Config;
 pub use self::operation::{Error, Operation};
 
 pub mod config;
+pub mod http;
 pub mod metrics;
-pub mod monitor;
 pub mod operation;
 pub mod origins;
 pub mod output;
 pub mod repository;
 pub mod rtr;
 pub mod slurm;
+pub mod utils;
 

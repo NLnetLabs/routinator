@@ -4,6 +4,13 @@
 
 Breaking Changes
 
+* Major cleanup of the command line and configuration file for server
+  mode. The command is now `server` (instead of `rtrd`). RTR and HTTP are
+  now equals. There is no more default listeners being created, you have to
+  specify them explicitly via command line options or config file. The option
+  is now `--rtr` for RTR listeners (previously just `--listen`) and
+  `--http` for HTTP listeners (previously `--listen-http`). The config
+  file fields are `rtr-listen` and `http-listen`, respectively. [(#133)]
 * The minimum supported Rust version is now 1.34.0. [(#112)]
 
 New
@@ -16,7 +23,7 @@ New
   option. ([#127] and [#130]).
 * Improved path `/status` in HTTP output that provides the same
   information as the `/metrics` endpoint in slightly different format that
-  might make it easier to use in processing.  [(#131)]
+  might make it easier to use in processing. [(#131)]
 
 Bug Fixes
 
@@ -41,6 +48,7 @@ Dependencies
 [#130]: https://github.com/NLnetLabs/routinator/pull/130
 [(#131)]: https://github.com/NLnetLabs/routinator/pull/131
 [#131]: https://github.com/NLnetLabs/routinator/pull/131
+[(#133)]: https://github.com/NLnetLabs/routinator/pull/133
 
 
 ## 0.3.3 ‘Big Bada Boom’

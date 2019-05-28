@@ -18,8 +18,8 @@ use futures::future::Future;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
 use crate::config::Config;
+use crate::http::http_listener;
 use crate::metrics::Metrics;
-use crate::monitor::monitor_listener;
 use crate::origins::{AddressOrigins, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::repository::Repository;
@@ -57,8 +57,8 @@ pub enum Operation {
         output: Option<Option<PathBuf>>,
     },
 
-    /// Run the RTR server.
-    Rtrd {
+    /// Run as server.
+    Server {
         /// Stay attached to the terminal.
         ///
         /// If this is `true`, we just start the server and keep going. If
@@ -102,7 +102,7 @@ impl Operation {
         app
 
         // config
-        .subcommand(Config::rtrd_args(SubCommand::with_name("config")
+        .subcommand(Config::server_args(SubCommand::with_name("config")
             .about("Prints the current config and exits.")
         ))
 
@@ -140,9 +140,9 @@ impl Operation {
             .about("Updates the local RPKI repository.")
         )
 
-        // rtrd
-        .subcommand(Config::rtrd_args(SubCommand::with_name("rtrd")
-            .about("Starts the RTR server.")
+        // server
+        .subcommand(Config::server_args(SubCommand::with_name("server")
+            .about("Starts as a server.")
             .arg(Arg::with_name("attached")
                 .short("a")
                 .long("attached")
@@ -171,7 +171,7 @@ impl Operation {
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
             ("config", Some(matches)) => {
-                config.apply_rtrd_arg_matches(matches, cur_dir)?;
+                config.apply_server_arg_matches(matches, cur_dir)?;
                 Operation::Config
             }
             ("man", Some(matches)) => {
@@ -184,9 +184,9 @@ impl Operation {
                     })
                 }
             }
-            ("rtrd", Some(matches)) => {
-                config.apply_rtrd_arg_matches(matches, cur_dir)?;
-                Operation::Rtrd {
+            ("server", Some(matches)) => {
+                config.apply_server_arg_matches(matches, cur_dir)?;
+                Operation::Server {
                     attached: matches.is_present("attached")
                 }
             }
@@ -213,9 +213,9 @@ impl Operation {
                 error!(
                     "Error: a command is required.\n\
                      \nCommonly used commands are:\
-                     \n   vrps   produces a list of validated ROA payload\
-                     \n   rtrd   start the RTR server\
-                     \n   man    show the manual page\
+                     \n   vrps    produces a list of validated ROA payload\
+                     \n   server  start the RTR server\
+                     \n   man     show the manual page\
                      \n\
                      \nSee routinator -h for a usage summary or\
                        routinator man for detailed help."
@@ -240,8 +240,8 @@ impl Operation {
                     None => Self::display_man(),
                 }
             }
-            Operation::Rtrd { attached }
-                => Self::rtrd(config, attached),
+            Operation::Server { attached }
+                => Self::server(config, attached),
             Operation::Update
                 => Self::update(config),
             Operation::Vrps { output, format, noupdate } 
@@ -345,7 +345,7 @@ impl Operation {
     ///
     /// If `attached` is `false`, will fork the server and exit. Otherwise
     /// just runs the server forever.
-    fn rtrd(mut config: Config, attached: bool) -> Result<(), Error> {
+    fn server(mut config: Config, attached: bool) -> Result<(), Error> {
         let repo = config.create_repository(false, true)?;
         if !attached {
             Self::daemonize(&mut config)?;
@@ -374,14 +374,13 @@ impl Operation {
         history.push_metrics(metrics);
         history.mark_update_done();
 
-        info!("Starting RTR listener...");
+        info!("Starting listeners...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
-        let monitor = monitor_listener(history.clone(), &config);
+        let http = http_listener(history.clone(), &config);
         tokio::runtime::run(
             Self::update_future(repo, history, notify, config)
-            .map_err(|_| ())
-            .select(rtr).map(|_| ()).map_err(|_| ())
-            .select(monitor).map(|_| ()).map_err(|_| ())
+            .join3(rtr, http)
+            .map(|_| ())
         );
         Ok(())
     }
@@ -482,7 +481,7 @@ impl Operation {
         history: OriginsHistory,
         notify: NotifySender,
         config: Config,
-    ) -> impl Future<Item=(), Error=Error> {
+    ) -> impl Future<Item=(), Error=()> {
         future::loop_fn(
             (repo, history, notify, config),
             |(repo, history, mut notify, config)| {
@@ -534,7 +533,7 @@ impl Operation {
                     })
                 })
             }
-        )
+        ).map_err(|_| ())
     }
 }
 
