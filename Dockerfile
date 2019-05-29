@@ -30,5 +30,6 @@ RUN mkdir -p /root/.rpki-cache/tals
 #COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
 
 EXPOSE 3323/tcp
+EXPOSE 8323/tcp
 ENTRYPOINT ["routinator"]
-CMD ["server", "--rtr", "0.0.0.0:3323"]
+CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:8323"]
