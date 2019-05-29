@@ -40,19 +40,20 @@ cargo install -f routinator
 Due to the impracticality of complying with the ARIN TAL distribution terms
 in an unsupervised Docker environment, prior to launching the container it
 is necessary to first review and agree to the ARIN TAL terms available at
-https://www.arin.net/resources/rpki/tal.html
+https://www.arin.net/resources/rpki/tal.html. If you agree to the terms,
+you can let the Routinator Docker image install the TALs into a mounted
+volume that is later reused for the server:
 
-The ARIN TAL RFC 7730 format file available at that URL will then need to
-be downloaded and mounted into the docker container as a replacement for
-the dummy arin.tal file that is shipped with Routinator.
 
 ```bash
 # Create a local directory for the RPKI cache
 sudo mkdir -p /etc/routinator/tals
-# Fetch the ARIN TAL (after agreeing to the distribution terms as described above)
-sudo wget https://www.arin.net/resources/manage/rpki/arin-rfc7730.tal -P /etc/routinator/tals
-# Launch a detached container named 'routinator' (will listen on 0.0.0.0:3323 and expose that port)
-sudo docker run -d --name routinator -p 3323:3323 -v /etc/routinator/tals/arin-rfc7730.tal:/root/.rpki-cache/tals/arin.tal nlnetlabs/routinator
+# Review the ARIN terms.
+# Run a disposable contains to install TALs.
+sudo docker run --rm -v /etc/routinator/tals:/root/.rpki-cache/tals
+nlnetlabs/routinator init -f --accept-arin-rpa
+# Launch the final detached container named 'routinator' (will listen on 0.0.0.0:3323 and expose that port)
+sudo docker run -d --name routinator -p 3323:3323 -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator
 ```
 
 ## RPKI
