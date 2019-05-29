@@ -31,4 +31,4 @@ RUN mkdir -p /root/.rpki-cache/tals
 COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
 
 EXPOSE 3323/tcp
-CMD ["routinator", "rtrd", "-a", "-l", "0.0.0.0:3323"]
+CMD ["routinator", "server", "--rtr", "0.0.0.0:3323"]
