@@ -778,7 +778,7 @@ impl AddressPrefix {
             }
             (IpAddr::V6(left), IpAddr::V6(right)) => {
                 if self.len > 127 {
-                    return left == right
+                    left == right
                 }
                 else if self.len > other.len {
                     false
