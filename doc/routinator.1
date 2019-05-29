@@ -50,8 +50,11 @@ command
 .IR output-file ]
 .RB [ \-f
 .IR format ]
-.RB [ \-n
-]
+.RB [ \-n ]
+.RB [ \-a
+.IR asn ]
+.RB [ \-p
+.IR prefix ]
 .PP
 .B routinator
 [options]
@@ -330,6 +333,26 @@ This format produces no output whatsoever.
 .TP
 .BR \-n ,\  \-\-noupdate
 The repository will not be updated before producing the list.
+.TP
+.BI \-a \ asn\fR,\  \-\-filter\-asn= asn
+Only output VRPs for the given ASN. The option can be given multiple times,
+in which case VRPs for all provided ASNs are provided. ASNs need to be given
+as the AS number prefixed with 
+.B AS 
+and not just the number
+e.g., the correct form is
+.BR "AS65555" .
+.TP 
+.BI \-p \ prefix\fR,\  \-\-filter\-prefix= prefix
+Only output VRPs with an address prefix that covers the given prefix, i.e.,
+whose prefix is equal or less specific than the given prefix. This will
+include VRPs irregardless of their ASN and max length. In other words, the
+output will include all VRPs that need to be considered when deciding whether
+an announcement for the prefix.
+.IP
+The option can be given multiple times, in which case VRPs for all prefixes
+are provided. It can also be combined with one or more ASN filters. Then all
+matching VRPs are included. That is, filters combine as "or" not "and."
 
 .SS server
 This command causes Routinator to act as a server for the RPKI-to-Router
@@ -660,6 +683,19 @@ output format.
 .TP
 .B /version
 Returns the version of the Routinator instance.
+
+.P
+The paths that output the current set of VRPs accept filter expressions to
+limit the VRPs returned in the form of a query string. The field
+.B filter-asn
+can be used to filter for ASNs and the field
+.B filer-prefix
+can be used to filter for prefixes. The fields can be repeated multiple
+times.
+.P
+This works in the same way as the options of the same name to the
+.B vrps
+command.
 
 .SH RELAXED VALIDATION
 The documents defining RPKI include a number of very strict rules
