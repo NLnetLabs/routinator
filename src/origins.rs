@@ -762,20 +762,34 @@ impl AddressPrefix {
     pub fn covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
-                if self.len > other.len {
-                    return false
+                if self.len > 31 {
+                    left == right
                 }
-                let left = u32::from(left) & !(::std::u32::MAX >> self.len);
-                let right = u32::from(right) & !(::std::u32::MAX >> self.len);
-                left == right
+                else if self.len > other.len {
+                    false
+                }
+                else {
+                    let left = u32::from(left)
+                             & !(::std::u32::MAX >> self.len);
+                    let right = u32::from(right)
+                              & !(::std::u32::MAX >> self.len);
+                    left == right
+                }
             }
             (IpAddr::V6(left), IpAddr::V6(right)) => {
-                if self.len > other.len {
-                    return false
+                if self.len > 127 {
+                    return left == right
                 }
-                let left = u128::from(left) & !(::std::u128::MAX >> self.len);
-                let right = u128::from(right) & !(::std::u128::MAX >> self.len);
-                left == right
+                else if self.len > other.len {
+                    false
+                }
+                else {
+                    let left = u128::from(left)
+                             & !(::std::u128::MAX >> self.len);
+                    let right = u128::from(right)
+                              & !(::std::u128::MAX >> self.len);
+                    left == right
+                }
             }
             _ => false
         }
