@@ -26,7 +26,9 @@ on 127.0.0.1 port 3323:
 curl https://sh.rustup.rs -sSf | sh
 source ~/.cargo/env
 cargo install routinator
-routinator rtrd -al 127.0.0.1:3323
+routinator init
+# Follow instructions provided
+routinator server --rtr 127.0.0.1:3323
 ```
 
 If you have an older version of the Routinator, you can update via
@@ -163,7 +165,7 @@ You can update your Rust installation later by simply running
 rustup update
 ```
 
-## Building and Running
+## Building
 
 The easiest way to get Routinator is to leave it to cargo by saying
 
@@ -186,32 +188,43 @@ The command will build Routinator and install it in the same directory
 that cargo itself lives in (likely `$HOME/.cargo/bin`).
 Which means Routinator will be in your path, too.
 
-There are currently two major functions of the Routinator: printing the
+
+## Running
+
+All functions of Routinator are accessible on the command line via
+sub-commands.
+
+The first thing you need to do before running Routinator is
+prepare its working environment via the `init` command. This will prepare
+both the directory for the local RPKI cache as well as the TAL directory.
+By default both directories will be located under `$HOME/.rpki-cache`, but
+you can change their locations via command line options.
+
+TALs provide hints for the trust anchor certificates to be used both to
+discover and validate all RPKI content. The five TALs that are necessary
+for RPKI are bundled with Routinator and installed by the `init` command.
+
+However, the one from the North American RIR ARIN requires you to agree to
+their Relying Party Agreement before you can use it. Running the `init`
+command will provide you with instructions where to find the agreement and
+how to express your acceptance of its terms.
+
+Once you have successfully prepared the working environment, your can run
+Routinator in one of two possible modes: printing the
 list of valid route origins, also known as _Validated ROA Payload_ or VRP,
-and providing the service for routers to access this list via a protocol
-known as RPKI-to-Router protocol or RTR.
+or providing the service for routers and other clients to access this list
+via HTTP or a dedicated protocol known as RPKI-to-Router protocol or RTR.
 
-These (and all other functions) of Routinator are accessible on the
-command line via sub-commands. The commands are `vrps` and `rtrd`,
-respectively.
-
-So, to have Routinator print the list, you say
+To have Routinator print the list, you say
 
 ```bash
 routinator vrps
 ```
 
-If this is the first time you’ve
-been using Routinator, it will create `$HOME/.rpki-cache`, put the
-trust anchor locators of the five RIRs there, and then complain that
-ARIN’s TAL is in fact not really there.
-
-Follow the instructions provided and try again. You can also add
-additional trust anchors by simple dropping their TAL file in RFC 7730
-format into `$HOME/.rpki-cache/tals`.
-
-Now Routinator will rsync the entire RPKI repository to your machine
-(which will take a while during the first run), validate it and produce
+When you first run this command, Routinator will rsync the entire RPKI 
+repository to your machine which will take a while. Later, rsync only needs
+to check for changes so subsequent runs will be quicker. Once it has
+gathered all data, it will validate it and produce
 a long list of AS numbers and prefixes.
 
 Information about additional command line arguments is available via the
@@ -229,21 +242,18 @@ It is also available online on the
 
 Routinator supports RPKI-RTR as specified in RFC 8210 as well as the older
 version from RFC 6810. It will act as an RTR server if you start it with
-the `rtrd` sub-command. It will do so as a daemon and detach from your
-terminal unless you provide the `-a` (for attached) option.
+the `server` command.
 
-You can specify the address(es) to listen on via the `-l` (or `--listen`)
-option. If you don’t, it will listen on `127.0.0.1:3323` by default. This
-isn’t the IANA-assigned default port for the protocol, which would be 323.
-But since that is a privileged port you’d need to be running Routinator as
-root when otherwise there is no reason to do that. Also, note that the
-default address is a localhost address for security reasons.
+You can specify the address(es) to listen on via the `--rtr`
+option. If you don’t, it will still start but not listen on anything. This
+may seem a bit odd, but this way, you can keep your local repository copy
+up-to-date for faster use of the `vrps` command.
 
 So, in order to run Routinator as an RTR server listening on port 3323 on
-both 192.0.2.13 and 2001:0DB8::13 without detaching from the terminal, run
+both 192.0.2.13 and 2001:0DB8::13, run
 
 ```bash
-routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323
+routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323
 ```
 
 By default, the repository will be updated and re-validated every hour as
@@ -253,7 +263,7 @@ seconds. That is, if you rather have Routinator validate every fifteen
 minutes, the above command becomes
 
 ```bash
-routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --refresh=900
+routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --refresh=900
 ```
 
 ## Secure Transports for RPKI-RTR
@@ -290,10 +300,13 @@ to refer to your file with local exceptions.
 Routinator will re-read that file on every validation run, so you can
 simply update the file whenever your exceptions change.
 
+[SLURM]: https://tools.ietf.org/html/rfc8416
+
+
 ## Monitoring
 
 Monitoring a Routinator instance is possible by enabling the integrated
-[Prometheus](https://prometheus.io/) exporter using the `listen-http`
+[Prometheus](https://prometheus.io/) exporter using the `--http`
 configuration option or command line parameter.
 
 Port [9556](https://github.com/prometheus/prometheus/wiki/Default-port-allocations)
@@ -301,7 +314,6 @@ is allocated for this use. A Routinator instance with monitoring on this
 port can be launched so:
 
 ```bash
-routinator rtrd -a -l 192.0.2.13:3323 -l [2001:0DB8::13]:3323 --listen-http 192.0.2.13:9556
+routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.2.13:9556
 ```
 
-[SLURM]: https://tools.ietf.org/html/rfc8416
