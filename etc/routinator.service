@@ -4,7 +4,7 @@ Documentation=man:routinator(1)
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/routinator --config=/etc/routinator/routinator.conf --syslog rtrd -a
+ExecStart=/usr/bin/routinator --config=/etc/routinator/routinator.conf --syslog server
 Type=exec
 RestartSec=0
 User=routinator
