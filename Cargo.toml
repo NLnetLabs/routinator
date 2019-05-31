@@ -62,6 +62,7 @@ assets = [
     ["README.md", "usr/share/doc/routinator/", "644"],
     ["doc/misc.md", "usr/share/doc/routinator/misc.md", "644"],
     ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
+    ["etc/routinator.service", "lib/systemd/system/routinator.service", "644"]
 ]
 maintainer-scripts = "debian"
 
