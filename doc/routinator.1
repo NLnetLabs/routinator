@@ -345,10 +345,10 @@ e.g., the correct form is
 .TP 
 .BI \-p \ prefix\fR,\  \-\-filter\-prefix= prefix
 Only output VRPs with an address prefix that covers the given prefix, i.e.,
-whose prefix is equal or less specific than the given prefix. This will
-include VRPs irregardless of their ASN and max length. In other words, the
+whose prefix is equal to or less specific than the given prefix. This will
+include VRPs regardless of their ASN and max length. In other words, the
 output will include all VRPs that need to be considered when deciding whether
-an announcement for the prefix.
+an announcement for the prefix is RPKI valid or invalid.
 .IP
 The option can be given multiple times, in which case VRPs for all prefixes
 are provided. It can also be combined with one or more ASN filters. Then all
@@ -689,7 +689,7 @@ The paths that output the current set of VRPs accept filter expressions to
 limit the VRPs returned in the form of a query string. The field
 .B filter-asn
 can be used to filter for ASNs and the field
-.B filer-prefix
+.B filter-prefix
 can be used to filter for prefixes. The fields can be repeated multiple
 times.
 .P
