@@ -644,7 +644,7 @@ impl<P: Default + Sized, T: Default + Sized> AsMut<[u8]> for Error<P, T> {
 
 //------------ BoxedError ----------------------------------------------------
 
-pub struct BoxedError(Box<AsRef<[u8]> + Send>);
+pub struct BoxedError(Box<dyn AsRef<[u8]> + Send>);
 
 impl BoxedError {
     pub fn write<A: AsyncWrite>(self, a: A) -> WriteAll<A, Self> {
