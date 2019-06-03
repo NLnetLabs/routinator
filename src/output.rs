@@ -154,6 +154,15 @@ impl OutputFormat {
             OutputFormat::None => Ok(())
         }
     }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            OutputFormat::Csv | OutputFormat::ExtendedCsv
+                => "text/csv;charset=utf-8;header=present",
+            OutputFormat::Json => "application/json",
+            _ => "text/plain;charset=utf-8",
+        }
+    }
 }
 
 

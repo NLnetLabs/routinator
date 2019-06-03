@@ -562,9 +562,10 @@ impl VrpResponse {
         let origins = origins.current();
         let header = format!("\
             HTTP/1.1 200 OK\r\n\
-            Content-Type: text/plain;charset=utf-8\r\n\
+            Content-Type: {}\r\n\
             Content-Length: {}\r\n\
             \r\n",
+            format.content_type(),
             GetLength::get(|w| unwrap!(
                 format.output(&origins, filters.as_ref().map(AsRef::as_ref), w)
             ))
