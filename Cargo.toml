@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.3.4"
+version = "0.4.0"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
