@@ -589,10 +589,14 @@ impl VrpResponse {
                 }
             }
             else if key == "filter-asn" {
-                match AsId::from_str(value) {
-                    Ok(some) => res.push(output::Filter::As(some)),
-                    Err(_) => return Err(Error)
-                }
+                let asn = match AsId::from_str(value) {
+                    Ok(asn) => asn,
+                    Err(_) => match u32::from_str(value) {
+                        Ok(asn) => asn.into(),
+                        Err(_) => return Err(Error)
+                    }
+                };
+                res.push(output::Filter::As(asn))
             }
             else {
                 return Err(Error)
