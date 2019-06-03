@@ -6,7 +6,7 @@
 //!
 //! [`http_listener`]: fn.http_listener.html
 
-use std::{cmp, io, mem};
+use std::{io, mem};
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -536,10 +536,7 @@ impl Future for Response {
 /// This will send out the list of VRPs in chunks of 1000 entries.
 struct VrpResponse {
     write: WriteAll<TcpStream, Vec<u8>>,
-    origins: Arc<AddressOrigins>,
-    next_id: usize,
-    format: OutputFormat,
-    filters: Option<Vec<output::Filter>>,
+    stream: VrpStream,
 }
 
 impl VrpResponse {
@@ -557,24 +554,10 @@ impl VrpResponse {
             Ok(filters) => filters,
             Err(_) => return Response::bad_request(sock),
         };
-        // We’ll start out with the HTTP header which we can assemble
-        // already. For the length, we have our magical `GetLength` type.
-        let origins = origins.current();
-        let header = format!("\
-            HTTP/1.1 200 OK\r\n\
-            Content-Type: text/plain;charset=utf-8\r\n\
-            Content-Length: {}\r\n\
-            \r\n",
-            GetLength::get(|w| unwrap!(
-                format.output(&origins, filters.as_ref().map(AsRef::as_ref), w)
-            ))
-        ).into_bytes();
+        let mut stream = VrpStream::new(origins.current(), format, filters);
         Response::Vrp(VrpResponse {
-            write: write_all(sock, header),
-            origins,
-            next_id: 0,
-            format,
-            filters
+            write: write_all(sock, stream.start()),
+            stream
         })
     }
 
@@ -606,10 +589,14 @@ impl VrpResponse {
                 }
             }
             else if key == "filter-asn" {
-                match AsId::from_str(value) {
-                    Ok(some) => res.push(output::Filter::As(some)),
-                    Err(_) => return Err(Error)
-                }
+                let asn = match AsId::from_str(value) {
+                    Ok(asn) => asn,
+                    Err(_) => match u32::from_str(value) {
+                        Ok(asn) => asn.into(),
+                        Err(_) => return Err(Error)
+                    }
+                };
+                res.push(output::Filter::As(asn))
             }
             else {
                 return Err(Error)
@@ -622,37 +609,6 @@ impl VrpResponse {
             Ok(Some(res))
         }
     }
-
-    /// Creates the next batch of VRPs.
-    ///
-    /// Returns a buffer with the new batch or `None` if we are done. The
-    /// first batch will include the header, the last batch will include the
-    /// footer.
-    fn next_batch(&mut self) -> Option<Vec<u8>> {
-        if self.next_id == self.origins.len() {
-            return None
-        }
-        let end = cmp::min(self.next_id + 1000, self.origins.len());
-        let filters = self.filters.as_ref().map(AsRef::as_ref);
-        let mut target = Vec::new();
-        if self.next_id == 0 {
-            self.format.output_header(&self.origins, &mut target).unwrap();
-            unwrap!(self.format.output_origin(
-                &self.origins[0], filters, true, &mut target
-            ));
-            self.next_id = 1;
-        }
-        for addr in &self.origins[self.next_id..end] {
-            unwrap!(self.format.output_origin(
-                addr, filters, false, &mut target
-            ));
-        }
-        if end == self.origins.len() {
-            self.format.output_footer(&self.origins, &mut target).unwrap();
-        }
-        self.next_id = end;
-        Some(target)
-    }
 }
 
 impl Future for VrpResponse {
@@ -662,7 +618,7 @@ impl Future for VrpResponse {
     fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
         loop {
             let (sock, _) = try_ready!(self.write.poll());
-            if let Some(batch) = self.next_batch() {
+            if let Some(batch) = self.stream.next() {
                 self.write = write_all(sock, batch)
             }
             else {
@@ -670,6 +626,86 @@ impl Future for VrpResponse {
             }
         }
     }
+}
+
+
+//------------ VrpStream -----------------------------------------------------
+
+struct VrpStream {
+    origins: Arc<AddressOrigins>,
+    next_id: usize,
+    format: OutputFormat,
+    filters: Option<Vec<output::Filter>>,
+} 
+
+impl VrpStream {
+    pub fn new(
+        origins: Arc<AddressOrigins>,
+        format: OutputFormat,
+        filters: Option<Vec<output::Filter>>,
+    ) -> Self {
+        Self {
+            origins,
+            next_id: 0,
+            format,
+            filters
+        }
+    }
+
+    pub fn start(&mut self) -> Vec<u8> {
+        // We’ll start out with the HTTP header which we can assemble
+        // already. For the length, we have our magical `GetLength` type.
+        let mut target = format!("\
+            HTTP/1.1 200 OK\r\n\
+            Content-Type: {}\r\n\
+            Content-Length: {}\r\n\
+            \r\n",
+            self.format.content_type(),
+            GetLength::get(|w| unwrap!(
+                self.format.output(
+                    &self.origins, self.filters.as_ref().map(AsRef::as_ref), w
+                )
+            ))
+        ).into_bytes();
+        unwrap!(self.format.output_header(&self.origins, &mut target));
+        self.next_batch(true, &mut target);
+        target
+    }
+
+    pub fn next(&mut self) -> Option<Vec<u8>> {
+        if !self.has_next_batch() {
+            return None
+        }
+        let mut target = Vec::new();
+        self.next_batch(false, &mut target);
+        Some(target)
+    }
+
+    fn has_next_batch(&self) -> bool {
+        self.next_id < self.origins.len()
+    }
+
+    /// Creates the next batch of VRPs.
+    ///
+    /// Adds the output to `target`. Returns `true` if output was added or
+    /// `false` if there isn’t anything left.
+    fn next_batch(&mut self, mut first: bool, target: &mut Vec<u8>) {
+        let mut len = 0;
+        let filters = self.filters.as_ref().map(AsRef::as_ref);
+        while self.next_id < self.origins.len() && len < 1000 {
+            if unwrap!(self.format.output_origin(
+                &self.origins[self.next_id], filters, first, target
+            )) {
+                first = false;
+                len += 1;
+            }
+            self.next_id += 1;
+        }
+        if self.next_id == self.origins.len() {
+            self.format.output_footer(&self.origins, target).unwrap();
+        }
+    }
+
 }
 
 

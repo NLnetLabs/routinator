@@ -569,13 +569,20 @@ impl Operation {
         }
         if let Some(list) = matches.values_of("filter-asn") {
             for value in list {
-                match AsId::from_str(value) {
-                    Ok(some) => res.push(output::Filter::As(some)),
-                    Err(_) => {
-                        error!("Invalid ASN \"{}\" in --filter-asn", value);
-                        return Err(Error)
+                let asn = match AsId::from_str(value) {
+                    Ok(asn) => asn,
+                    Err(_) => match u32::from_str(value) {
+                        Ok(asn) => asn.into(),
+                        Err(_) => {
+                            error!(
+                                "Invalid ASN \"{}\" in --filter-asn",
+                                value
+                            );
+                            return Err(Error)
+                        }
                     }
-                }
+                };
+                res.push(output::Filter::As(asn))
             }
         }
         if res.is_empty() {

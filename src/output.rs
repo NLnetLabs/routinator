@@ -77,12 +77,11 @@ impl OutputFormat {
         target: &mut W,
     ) -> Result<(), io::Error> {
         self.output_header(vrps, target)?;
-        let mut iter = vrps.iter();
-        if let Some(vrp) = iter.next() {
-            self.output_origin(vrp, filters, true, target)?;
-        }
-        for vrp in iter {
-            self.output_origin(vrp, filters, false, target)?;
+        let mut first = true;
+        for vrp in vrps.iter() {
+            if self.output_origin(vrp, filters, first, target)? {
+                first = false;
+            }
         }
         self.output_footer(vrps, target)
     }
@@ -152,6 +151,15 @@ impl OutputFormat {
             OutputFormat::Openbgpd => openbgpd_footer(vrps, target),
             OutputFormat::Rpsl => rpsl_footer(vrps, target),
             OutputFormat::None => Ok(())
+        }
+    }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            OutputFormat::Csv | OutputFormat::ExtendedCsv
+                => "text/csv;charset=utf-8;header=present",
+            OutputFormat::Json => "application/json",
+            _ => "text/plain;charset=utf-8",
         }
     }
 }

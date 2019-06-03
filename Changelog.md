@@ -42,6 +42,8 @@ Bug Fixes
   connections were closed early by the peer. [(#120)]
 * Only read files ending in `.tal` in the TAL directory as is already
   documented. [(#121)]
+* Announce the correct content type in HTTP output with formats JSON and
+  CSV. [(#146)]
 
 Dependencies
 
@@ -60,6 +62,7 @@ Dependencies
 [(#133)]: https://github.com/NLnetLabs/routinator/pull/133
 [(#134)]: https://github.com/NLnetLabs/routinator/pull/134
 [(#135)]: https://github.com/NLnetLabs/routinator/pull/135
+[(#146)]: https://github.com/NLnetLabs/routinator/pull/146
 
 
 ## 0.3.3 ‘Big Bada Boom’
