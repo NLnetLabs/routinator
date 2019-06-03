@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.4.0 ‘The Bumpy Road to Love’
 
 Breaking Changes

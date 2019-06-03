@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -65,4 +65,8 @@ assets = [
     ["etc/routinator.service", "lib/systemd/system/routinator.service", "644"]
 ]
 maintainer-scripts = "debian"
+
+[patch.crates-io]
+bcder = { git="https://github.com/NLnetLabs/bcder.git" }
+rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
