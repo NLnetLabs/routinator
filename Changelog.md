@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased Next Version
+## 0.4.0 ‘The Bumpy Road to Love’
 
 Breaking Changes
 
