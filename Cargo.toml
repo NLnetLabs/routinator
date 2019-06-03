@@ -15,7 +15,7 @@ bytes           = "^0.4"
 chrono          = "^0.4"
 clap            = "^2.0"
 derive_more     = "^0.14"
-dirs            = "^1.0"
+dirs            = "^2.0"
 fern		= "^0.5"
 futures         = "^0.1"
 futures-cpupool = "^0.1"
@@ -65,8 +65,4 @@ assets = [
     ["etc/routinator.service", "lib/systemd/system/routinator.service", "644"]
 ]
 maintainer-scripts = "debian"
-
-[patch.crates-io]
-bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 
