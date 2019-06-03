@@ -33,6 +33,8 @@ New
 * Improved path `/status` in HTTP output that provides the same
   information as the `/metrics` endpoint in slightly different format that
   might make it easier to use in processing. [(#131)]
+* Filtering for address prefixes and ASNs in VRP output via the `vrps`
+  command or in HTTP output. [(#137)]
 
 Bug Fixes
 
@@ -62,6 +64,7 @@ Dependencies
 [(#133)]: https://github.com/NLnetLabs/routinator/pull/133
 [(#134)]: https://github.com/NLnetLabs/routinator/pull/134
 [(#135)]: https://github.com/NLnetLabs/routinator/pull/135
+[(#137)]: https://github.com/NLnetLabs/routinator/pull/137
 [(#146)]: https://github.com/NLnetLabs/routinator/pull/146
 
 
