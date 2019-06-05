@@ -220,7 +220,7 @@ impl Config {
              .long("quiet")
              .multiple(true)
              .conflicts_with("verbose")
-             .help("log less informatio, twice for no information")
+             .help("log less information, twice for no information")
         )
         .arg(Arg::with_name("syslog")
              .long("syslog")
