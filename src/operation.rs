@@ -123,11 +123,11 @@ impl Operation {
 
         // init
         .subcommand(SubCommand::with_name("init")
-            .about("Initialized the local repository.")
+            .about("Initializes the local repository")
             .arg(Arg::with_name("force")
                 .short("f")
                 .long("force")
-                .help("force creation of TALs")
+                .help("Force creation of TALs")
             )
             .arg(Arg::with_name("accept-arin-rpa")
                 .long("accept-arin-rpa")
@@ -138,12 +138,12 @@ impl Operation {
 
         // vrps
         .subcommand(SubCommand::with_name("vrps")
-            .about("Produces a list of validated ROA payload.")
+            .about("Produces a list of validated ROA payload")
             .arg(Arg::with_name("output")
                 .short("o")
                 .long("output")
                 .value_name("FILE")
-                .help("output file")
+                .help("Output file")
                 .takes_value(true)
                 .default_value("-")
             )
@@ -155,18 +155,18 @@ impl Operation {
                     "csv", "csvext", "json", "openbgpd", "rpsl", "none"
                 ])
                 .default_value("csv")
-                .help("sets the output format")
+                .help("Sets the output format")
                 .takes_value(true)
             )
             .arg(Arg::with_name("noupdate")
                 .short("n")
                 .long("noupdate")
-                .help("don't update the local cache")
+                .help("Don't update the local cache")
             )
             .arg(Arg::with_name("filter-prefix")
                 .short("p")
                 .long("filter-prefix")
-                .help("filter for an address prefix")
+                .help("Filter for an address prefix")
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
@@ -174,7 +174,7 @@ impl Operation {
             .arg(Arg::with_name("filter-asn")
                 .short("a")
                 .long("filter-asn")
-                .help("filter or an AS number")
+                .help("Filter for an AS number")
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
@@ -183,22 +183,22 @@ impl Operation {
 
         // update
         .subcommand(SubCommand::with_name("update")
-            .about("Updates the local RPKI repository.")
+            .about("Updates the local RPKI repository")
         )
 
         // server
         .subcommand(Config::server_args(SubCommand::with_name("server")
-            .about("Starts as a server.")
+            .about("Starts as a server")
             .arg(Arg::with_name("detach")
                 .short("d")
                 .long("detach")
-                .help("detach from the terminal")
+                .help("Detach from the terminal")
             )
         ))
 
         // config
         .subcommand(Config::server_args(SubCommand::with_name("config")
-            .about("Prints the current config and exits.")
+            .about("Prints the current config and exits")
         ))
 
         // man
@@ -208,7 +208,7 @@ impl Operation {
                 .short("o")
                 .long("output")
                 .value_name("FILE")
-                .help("output file, '-' or not present for stdout")
+                .help("Output file, '-' or not present for stdout")
                 .takes_value(true)
             )
         )
@@ -271,11 +271,11 @@ impl Operation {
                 error!(
                     "Error: a command is required.\n\
                      \nCommonly used commands are:\
-                     \n   vrps    produces a list of validated ROA payload\
-                     \n   server  start the RTR server\
-                     \n   man     show the manual page\
+                     \n   vrps    Produces a list of validated ROA payload\
+                     \n   server  Start the RTR server\
+                     \n   man     Show the manual page\
                      \n\
-                     \nSee routinator -h for a usage summary or\
+                     \nSee routinator -h for a usage summary or \
                        routinator man for detailed help."
                 );
                 return Err(Error)
@@ -362,12 +362,12 @@ impl Operation {
         if !accept_arin_rpa {
             error!(
                 "Before we can install the ARIN TAL, you must have read\n\
-                 and agree to the ARIN Relying Party Agreement. It is\n\
-                 available at\n\
+                 and agree to the ARIN Relying Party Agreement (RPA).\n\
+                 It is available at\n\
                  \n\
                  https://www.arin.net/resources/manage/rpki/rpa.pdf\n\
                  \n\
-                 If you agree to the agreement, please run the command\n\
+                 If you agree to the RPA, please run the command\n\
                  again with the --accept-arin-rpa option."
             );
             return Err(Error)

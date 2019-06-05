@@ -88,12 +88,12 @@ command
 .SH "DESCRIPTION"
 Routinator
 collects and processes Resource Public Key Infrastructure (RPKI) data. It
-validates the route origin attestations contained in the data and makes
+validates the Route Origin Attestations contained in the data and makes
 them available to your BGP routing workflow.
 .P
 It can either run in one-shot mode outputting a list of validated route
 origins in various formats or as a server for the RPKI-to-Router (RTR)
-protocol that routers often implement to access the data or via HTTP.
+protocol that routers often implement to access the data, or via HTTP.
 .P
 These modes and additional operations can be chosen  via commands. For
 the available commands, see
@@ -252,9 +252,9 @@ any TALs unless you agree in order to avoid incomplete installations.
 
 .SS vrps
 This command requests that Routinator update the local repository and then
-validate the Route Origin Authorizations in the repository and output the
-valid route origins, which are also known as Valid ROA Payload or VRPs, as
-a list.
+validate the Route Origin Attestations in the repository and output the
+valid route origins, which are also known as Validated ROA Payload or VRPs, 
+as a list.
 .TP
 .BI -o\  file \fR,\ \fB\-\-output= file
 Specifies the output file to write the list to. If this option is missing
@@ -285,8 +285,8 @@ the line is taken from (or "N/A" if it isn't from a ROA), the autonomous
 system number, the prefix in slash notation, the maximum prefix length, the
 not-before date and not-after date of the validity of the ROA.
 .IP
-This format was used in the RIPE NCC Validator version 1. That version
-produce one file per trust anchor. This is not currently supported by
+This format was used in the RIPE NCC RPKI Validator version 1. That version
+produces one file per trust anchor. This is not currently supported by
 Routinator -- all entries will be in one single output file.
 .TP
 .B json
@@ -301,9 +301,9 @@ the maximum prefix length of the announced route in
 .IR "maxLength" ,
 and the trust anchor from which the authorization was derived in
 .IR "ta" .
-This format is identical to that produced by the RIPE NCC validator except
-for different naming of the trust anchor. Routinator uses the name of the
-TAL file without the extension
+This format is identical to that produced by the RIPE NCC RPKI Validator
+except for different naming of the trust anchor. Routinator uses the name
+of the TAL file without the extension
 .IR ".tal"
 whereas the RIPE NCC Validator has a dedicated name for each.
 .TP
@@ -359,8 +359,8 @@ This command causes Routinator to act as a server for the RPKI-to-Router
 (RTR) and HTTP protocols. In this mode, Routinator will read all the TALs
 (See
 .B TRUST ANCHOR LOCATORS
-below) and will then detach from the terminal unless the
-.B -a
+below) and will stay attached to the terminal unless the
+.B -d
 option is given.
 .PP
 The server will periodically update the local repository, hourly by default,
@@ -647,12 +647,9 @@ A string value containing the path any daemon process should use as its
 root directory.
 
 .SH HTTP SERVICE
-When run in
-.B rtrd
-mode, Routinator can provide an HTTP service in addtion to the RTR service.
-The primary intention of this service is to allow integration into
-monitoring systems. For this reason, the service does not support HTTPS and
-should only be used within the local network.
+Routinator can provide an HTTP service allowing to fetch the Validated ROA
+Payload in various formats. The service does not support HTTPS and should 
+only be used within the local network.
 .P
 The service only supports GET requests with the following
 paths:
