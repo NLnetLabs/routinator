@@ -52,7 +52,8 @@ volume that is later reused for the server:
 sudo mkdir -p /etc/routinator/tals
 # Review the ARIN terms.
 # Run a disposable container to install TALs.
-sudo docker run --rm -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator init -f --accept-arin-rpa
+sudo docker run --rm -v /etc/routinator/tals:/root/.rpki-cache/tals \
+    nlnetlabs/routinator init -f --accept-arin-rpa
 # Launch the final detached container named 'routinator' exposing RTR on
 # port 3323 and HTTP on port 9556
 sudo docker run -d --name routinator -p 3323:3323 -p 9556:9556 \
