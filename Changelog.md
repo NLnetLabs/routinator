@@ -8,7 +8,12 @@ New
 
 Bug Fixes
 
+* Fix Prometheus metrics output – Prometheus insists on a line break at the
+  end of the last line. [(#156)]
+
 Dependencies
+
+[(#156)]: https://github.com/NLnetLabs/routinator/pull/156
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’
