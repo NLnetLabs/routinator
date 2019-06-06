@@ -368,6 +368,8 @@ impl Response {
             origins.serial()
         ));
 
+        unwrap!(writeln!(res, ""));
+
         Self::from_content(
             sock, "200 OK", "text/plain; version=0.0.4",
             &res
