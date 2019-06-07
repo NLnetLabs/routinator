@@ -10,10 +10,13 @@ Bug Fixes
 
 * Fix Prometheus metrics output – Prometheus insists on a line break at the
   end of the last line. [(#156)]
+* Fix Prometheus metrics definitions. ([#161] by [@momorientes])
 
 Dependencies
 
 [(#156)]: https://github.com/NLnetLabs/routinator/pull/156
+[#161]: https://github.com/NLnetLabs/routinator/pull/161
+[@momorientes]: https://github.com/momorientes
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’
