@@ -337,15 +337,15 @@ impl Response {
         unwrap!(write!(res,
             "\n\
             # HELP last_update_start seconds since last update started\n\
-            # TYPE gauge\n\
+            # TYPE last_update_start gauge\n\
             last_update_start {}\n\
             \n\
             # HELP last_update_duration duration in seconds of last update\n\
-            # TYPE gauge\n\
+            # TYPE last_update_duration gauge\n\
             last_update_duration {}\n\
             \n\
             # HELP last_update_done seconds since last update finished\n\
-            # TYPE gauge\n\
+            # TYPE last_update_done gauge\n\
             last_update_done ",
             start.elapsed().as_secs(),
             duration.map(|duration| duration.as_secs()).unwrap_or(0),
@@ -363,7 +363,7 @@ impl Response {
         unwrap!(write!(res,
             "\n\
             # HELP serial current RTR serial number\n\
-            # TYPE gauge\n\
+            # TYPE serial gauge\n\
             serial {}",
             origins.serial()
         ));
