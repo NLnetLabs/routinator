@@ -347,6 +347,7 @@ impl Response {
             # HELP routinator_last_update_done seconds since last update finished\n\
             # TYPE routinator_last_update_done gauge\n\
             routinator_last_update_done ",
+
             start.elapsed().as_secs(),
             duration.map(|duration| duration.as_secs()).unwrap_or(0),
         ));
@@ -365,6 +366,7 @@ impl Response {
             # HELP routinator_serial current RTR serial number\n\
             # TYPE routinator_serial gauge\n\
             routinator_serial {}",
+
             origins.serial()
         ));
 
