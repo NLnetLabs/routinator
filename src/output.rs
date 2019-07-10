@@ -197,15 +197,6 @@ where
         self.next_batch(true, target)
     }
 
-    pub fn next(&mut self) -> Option<Vec<u8>> {
-        if !self.has_next_batch() {
-            return None
-        }
-        let mut target = Vec::new();
-        unwrap!(self.next_batch(false, &mut target));
-        Some(target)
-    }
-
     fn has_next_batch(&self) -> bool {
         self.next_id < self.origins.as_ref().len()
     }
@@ -300,6 +291,24 @@ where
         }
     }
 
+}
+
+impl<T, F, M> Iterator for OutputStream<T, F, M>
+where
+    T: AsRef<AddressOrigins>,
+    F: AsRef<[Filter]>,
+    M: AsRef<Metrics>
+{
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Vec<u8>> {
+        if !self.has_next_batch() {
+            return None
+        }
+        let mut target = Vec::new();
+        unwrap!(self.next_batch(false, &mut target));
+        Some(target)
+    }
 }
 
 
