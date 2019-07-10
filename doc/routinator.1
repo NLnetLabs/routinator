@@ -327,6 +327,12 @@ and
 .IR last-modified ,
 are present with more or less meaningful values.
 .TP
+.B summary
+This format produces a summary of the content of the RPKI repository. For
+each trust anchor, it will print the number of verified ROAs and VRPs. Note
+that this format does not take filters into account. It will always provide
+numbers for the complete repository.
+.TP
 .B none
 This format produces no output whatsoever.
 .RE

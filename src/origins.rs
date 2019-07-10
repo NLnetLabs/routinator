@@ -182,6 +182,12 @@ impl ops::Deref for AddressOrigins {
     }
 }
 
+impl AsRef<Self> for AddressOrigins {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 impl AsRef<[AddressOrigin]> for AddressOrigins {
     fn as_ref(&self) -> &[AddressOrigin] {
         self.origins.as_ref()
@@ -407,7 +413,7 @@ pub struct HistoryInner {
     /// A list of metrics.
     ///
     /// The newest metric will be at the front of the queue.
-    metrics: VecDeque<Metrics>,
+    metrics: VecDeque<Arc<Metrics>>,
 
     /// The number of diffs and metrics to keep.
     keep: usize,
@@ -469,7 +475,7 @@ impl OriginsHistory {
             }
             else if diff.serial() == serial.add(1) {
                 // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
+                debug!("One behind, just cloself.0.read().unwrap().metrics.front().map(op)ne.");
                 return Some(diff.clone())
             }
         }
@@ -515,14 +521,10 @@ impl OriginsHistory {
         (history.current.clone(), history.serial())
     }
 
-    pub fn current_metrics<F>(&self, op: F)
-    where F: FnMut(&Metrics) {
-        self.0.read().unwrap().metrics.front().map(op);
-    }
-
-    pub fn metrics<F>(&self, op: F)
-    where F: FnMut(&Metrics) {
-        self.0.read().unwrap().metrics.iter().for_each(op)
+    pub fn current_metrics(&self) -> Arc<Metrics> {
+        self.0.read().unwrap().metrics.front().cloned().unwrap_or_else(|| {
+            Arc::new(Metrics::new())
+        })
     }
 
     pub fn update_times(
@@ -617,7 +619,7 @@ impl HistoryInner {
         if self.metrics.len() == self.keep {
             let _ = self.metrics.pop_back();
         }
-        self.metrics.push_front(metrics)
+        self.metrics.push_front(Arc::new(metrics))
     }
 }
 

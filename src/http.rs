@@ -20,9 +20,10 @@ use tokio::io::{AsyncRead, WriteAll, write_all};
 use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
+use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
-use crate::output::OutputFormat;
+use crate::output::{OutputFormat, OutputStream};
 use crate::utils::finish_all;
 
 
@@ -302,20 +303,19 @@ impl Response {
     /// Produces the response for the `/metrics` path.
     fn metrics(sock: TcpStream, origins: OriginsHistory) -> Self {
         let mut res = String::new();
+        let metrics = origins.current_metrics();
 
         // valid_roas 
         writeln!(res,
             "# HELP valid_roas number of valid ROAs seen\n\
              # TYPE valid_roas gauge"
         ).unwrap();
-        origins.current_metrics(|item| {
-            for tal in item.tals() {
-                writeln!(res,
-                    "valid_roas{{tal=\"{}\"}} {}",
-                    tal.tal.name(), tal.roas
-                ).unwrap();
-            }
-        });
+        for tal in metrics.tals() {
+            writeln!(res,
+                "valid_roas{{tal=\"{}\"}} {}",
+                tal.tal.name(), tal.roas
+            ).unwrap();
+        }
 
         // vrps_total
         writeln!(res,
@@ -323,14 +323,12 @@ impl Response {
              # HELP vrps_total total number of VRPs seen\n\
              # TYPE vrps_total gauge"
         ).unwrap();
-        origins.current_metrics(|item| {
-            for tal in item.tals() {
-                writeln!(res,
-                    "vrps_total{{tal=\"{}\"}} {}",
-                    tal.tal.name(), tal.vrps
-                ).unwrap();
-            }
-        });
+        for tal in metrics.tals() {
+            writeln!(res,
+                "vrps_total{{tal=\"{}\"}} {}",
+                tal.tal.name(), tal.vrps
+            ).unwrap();
+        }
 
         // last_update_state, last_update_done, last_update_duration
         let (start, done, duration) = origins.update_times();
@@ -414,32 +412,30 @@ impl Response {
             unwrap!(writeln!(res, "last-update-duration:  -"));
         }
 
-        origins.current_metrics(|metrics| {
-            // valid-roas
-            unwrap!(writeln!(res, "valid-roas: {}",
-                metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
-            ));
+        let metrics = origins.current_metrics();
+        // valid-roas
+        unwrap!(writeln!(res, "valid-roas: {}",
+            metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
+        ));
 
-            // valid-roas-per-tal
-            unwrap!(write!(res, "valid-roas-per-tal: "));
-            for tal in metrics.tals() {
-                unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.roas));
-            }
-            unwrap!(writeln!(res, ""));
+        // valid-roas-per-tal
+        unwrap!(write!(res, "valid-roas-per-tal: "));
+        for tal in metrics.tals() {
+            unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.roas));
+        }
+        unwrap!(writeln!(res, ""));
 
-            // vrps
-            unwrap!(writeln!(res, "vrps: {}",
-                metrics.tals().iter().map(|tal| tal.vrps).sum::<u32>()
-            ));
+        // vrps
+        unwrap!(writeln!(res, "vrps: {}",
+            metrics.tals().iter().map(|tal| tal.vrps).sum::<u32>()
+        ));
 
-            // vrps-per-tal
-            unwrap!(write!(res, "vrps-per-tal: "));
-            for tal in metrics.tals() {
-                unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
-            }
-            unwrap!(writeln!(res, ""));
-
-        });
+        // vrps-per-tal
+        unwrap!(write!(res, "vrps-per-tal: "));
+        for tal in metrics.tals() {
+            unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
+        }
+        unwrap!(writeln!(res, ""));
 
         Self::from_content(
             sock, "200 OK", "text/plain; version=0.0.4",
@@ -538,7 +534,9 @@ impl Future for Response {
 /// This will send out the list of VRPs in chunks of 1000 entries.
 struct VrpResponse {
     write: WriteAll<TcpStream, Vec<u8>>,
-    stream: VrpStream,
+    stream: OutputStream<
+                Arc<AddressOrigins>, Vec<output::Filter>, Arc<Metrics>
+            >,
 }
 
 impl VrpResponse {
@@ -556,9 +554,23 @@ impl VrpResponse {
             Ok(filters) => filters,
             Err(_) => return Response::bad_request(sock),
         };
-        let mut stream = VrpStream::new(origins.current(), format, filters);
+        let mut stream = format.stream(
+            origins.current(), filters, origins.current_metrics()
+        );
+
+        // We’ll start out with the HTTP header which we can assemble
+        // already. For the length, we have our magical `GetLength` type.
+        let mut target = format!("\
+            HTTP/1.1 200 OK\r\n\
+            Content-Type: {}\r\n\
+            Content-Length: {}\r\n\
+            \r\n",
+            format.content_type(),
+            stream.output_len(),
+        ).into_bytes();
+        unwrap!(stream.output_start(&mut target));
         Response::Vrp(VrpResponse {
-            write: write_all(sock, stream.start()),
+            write: write_all(sock, target),
             stream
         })
     }
@@ -627,115 +639,6 @@ impl Future for VrpResponse {
                 return Ok(Async::Ready(()))
             }
         }
-    }
-}
-
-
-//------------ VrpStream -----------------------------------------------------
-
-struct VrpStream {
-    origins: Arc<AddressOrigins>,
-    next_id: usize,
-    format: OutputFormat,
-    filters: Option<Vec<output::Filter>>,
-} 
-
-impl VrpStream {
-    pub fn new(
-        origins: Arc<AddressOrigins>,
-        format: OutputFormat,
-        filters: Option<Vec<output::Filter>>,
-    ) -> Self {
-        Self {
-            origins,
-            next_id: 0,
-            format,
-            filters
-        }
-    }
-
-    pub fn start(&mut self) -> Vec<u8> {
-        // We’ll start out with the HTTP header which we can assemble
-        // already. For the length, we have our magical `GetLength` type.
-        let mut target = format!("\
-            HTTP/1.1 200 OK\r\n\
-            Content-Type: {}\r\n\
-            Content-Length: {}\r\n\
-            \r\n",
-            self.format.content_type(),
-            GetLength::get(|w| unwrap!(
-                self.format.output(
-                    &self.origins, self.filters.as_ref().map(AsRef::as_ref), w
-                )
-            ))
-        ).into_bytes();
-        unwrap!(self.format.output_header(&self.origins, &mut target));
-        self.next_batch(true, &mut target);
-        target
-    }
-
-    pub fn next(&mut self) -> Option<Vec<u8>> {
-        if !self.has_next_batch() {
-            return None
-        }
-        let mut target = Vec::new();
-        self.next_batch(false, &mut target);
-        Some(target)
-    }
-
-    fn has_next_batch(&self) -> bool {
-        self.next_id < self.origins.len()
-    }
-
-    /// Creates the next batch of VRPs.
-    ///
-    /// Adds the output to `target`. Returns `true` if output was added or
-    /// `false` if there isn’t anything left.
-    fn next_batch(&mut self, mut first: bool, target: &mut Vec<u8>) {
-        let mut len = 0;
-        let filters = self.filters.as_ref().map(AsRef::as_ref);
-        while self.next_id < self.origins.len() && len < 1000 {
-            if unwrap!(self.format.output_origin(
-                &self.origins[self.next_id], filters, first, target
-            )) {
-                first = false;
-                len += 1;
-            }
-            self.next_id += 1;
-        }
-        if self.next_id == self.origins.len() {
-            self.format.output_footer(&self.origins, target).unwrap();
-        }
-    }
-
-}
-
-
-//------------ GetLength -----------------------------------------------------
-
-/// A writer that adds up the length of whatever has been written.
-#[derive(Clone, Copy, Debug, Default)]
-struct GetLength(usize);
-
-impl GetLength {
-    /// Returns the length of what’s been written in the closure.
-    ///
-    /// The closure receives a writer it should write to.
-    pub fn get<F: FnOnce(&mut Self)>(op: F) -> usize {
-        let mut target = Self::default();
-        op(&mut target);
-        target.0
-    }
-}
-
-impl io::Write for GetLength {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        self.0 += buf.len();
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> Result<(), io::Error> {
-        Ok(())
     }
 }
 
