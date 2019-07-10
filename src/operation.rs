@@ -151,10 +151,8 @@ impl Operation {
                 .short("f")
                 .long("format")
                 .value_name("FORMAT")
-                .possible_values(&[
-                    "csv", "csvext", "json", "openbgpd", "rpsl", "none"
-                ])
-                .default_value("csv")
+                .possible_values(OutputFormat::VALUES)
+                .default_value(OutputFormat::DEFAULT_VALUE)
                 .help("Sets the output format")
                 .takes_value(true)
             )
@@ -241,15 +239,9 @@ impl Operation {
                         "-" => None,
                         path => Some(path.into())
                     },
-                    format: match matches.value_of("format").unwrap() {
-                        "csv" => OutputFormat::Csv,
-                        "csvext" => OutputFormat::ExtendedCsv,
-                        "json" => OutputFormat::Json,
-                        "openbgpd" => OutputFormat::Openbgpd,
-                        "rpsl" => OutputFormat::Rpsl,
-                        "none" => OutputFormat::None,
-                        _ => panic!("unexpected format argument")
-                    },
+                    format: OutputFormat::from_str(
+                        matches.value_of("format").unwrap()
+                    )?,
                     noupdate: matches.is_present("noupdate")
                 }
             }
@@ -531,12 +523,12 @@ impl Operation {
                         return Err(Error)
                     }
                 };
-                format.output(&vrps, filters, &mut file)
+                format.output(&vrps, filters, &metrics, &mut file)
             }
             None => {
                 let out = io::stdout();
                 let mut out = out.lock();
-                format.output(&vrps, filters, &mut out)
+                format.output(&vrps, filters, &metrics, &mut out)
             }
         };
         res.map_err(|err| {

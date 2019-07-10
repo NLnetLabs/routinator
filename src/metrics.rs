@@ -28,6 +28,10 @@ impl Metrics {
         self.tals.push(tal)
     }
 
+    pub fn time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
     pub fn timestamp(&self) -> i64 {
         self.time.timestamp()
     }
@@ -36,9 +40,9 @@ impl Metrics {
         &self.tals
     }
 
-    pub fn log(self) {
+    pub fn log(&self) {
         info!("Summary:");
-        for tal in self.tals {
+        for tal in &self.tals {
             info!(
                 "{}: {} valid ROAs, {} VRPs.",
                 tal.tal.name(), tal.roas, tal.vrps
@@ -50,6 +54,12 @@ impl Metrics {
 impl Default for Metrics {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl AsRef<Self> for Metrics {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }
 

@@ -6,6 +6,9 @@ Breaking Changes
 
 New
 
+* Output format `summary` which will print a summary of the content of the
+  RPKI repository. [(#167)]
+
 Bug Fixes
 
 * Fix Prometheus metrics output – Prometheus insists on a line break at the
@@ -17,6 +20,7 @@ Dependencies
 [(#156)]: https://github.com/NLnetLabs/routinator/pull/156
 [#161]: https://github.com/NLnetLabs/routinator/pull/161
 [@momorientes]: https://github.com/momorientes
+[(#167)]: https://github.com/NLnetLabs/routinator/pull/167
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’

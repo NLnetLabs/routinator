@@ -1,9 +1,12 @@
 //! Output of lists of VRPs.
 
 use std::io;
+use std::str::FromStr;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use rpki::resources::AsId;
+use crate::metrics::Metrics;
+use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
@@ -39,10 +42,45 @@ pub enum OutputFormat {
     /// This produces a sequence of RPSL objects with various fields.
     Rpsl,
 
+    /// Summary output.
+    ///
+    /// Produces a textual summary of the ROAs and VRPS.
+    Summary,
+
     /// No output.
     ///
     /// Seriously: no output.
     None,
+}
+
+impl OutputFormat {
+    /// A list of the known output formats.
+    pub const VALUES: &'static [&'static str] = &[
+        "csv", "csvext", "json", "openbgpd", "rpsl", "summary", "none"
+    ];
+
+    /// The default output format.
+    pub const DEFAULT_VALUE: &'static str = "csv";
+}
+
+impl FromStr for OutputFormat {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self, Error> {
+        match value {
+            "csv" => Ok(OutputFormat::Csv),
+            "csvext" => Ok(OutputFormat::ExtendedCsv),
+            "json" => Ok(OutputFormat::Json),
+            "openbgpd" => Ok(OutputFormat::Openbgpd),
+            "rpsl" => Ok(OutputFormat::Rpsl),
+            "summary" => Ok(OutputFormat::Summary),
+            "none" => Ok(OutputFormat::None),
+            _ => {
+                error!("Unknown output format '{}'", value);
+                Err(Error)
+            }
+        }
+    }
 }
 
 impl OutputFormat {
@@ -54,6 +92,24 @@ impl OutputFormat {
         }
     }
 
+    /// Returns whether this output format requires metrics.
+    pub fn needs_metrics(self) -> bool {
+        match self {
+            OutputFormat::Summary => true,
+            _ => false,
+        }
+    }
+
+    /// Creates an output stream for this format.
+    pub fn stream<T, F, M>(
+        self,
+        origins: T,
+        filters: Option<F>,
+        metrics: M
+    ) -> OutputStream<T, F, M> {
+        OutputStream::new(origins, self, filters, metrics)
+    }
+
     /// Outputs `vrps` to `target` in this format.
     ///
     /// This method loggs error messages.
@@ -61,74 +117,155 @@ impl OutputFormat {
         self,
         vrps: &AddressOrigins,
         filters: Option<&[Filter]>,
+        metrics: &Metrics,
         target: &mut W,
     ) -> Result<(), io::Error> {
-        match self._output(vrps, filters, target) {
+        match self.stream(vrps, filters, metrics).output(target) {
             Ok(()) => Ok(()),
             Err(ref err) if err.kind() == io::ErrorKind::BrokenPipe => Ok(()),
             Err(err) => Err(err)
         }
     }
 
-    fn _output<W: io::Write>(
-        self,
-        vrps: &AddressOrigins,
-        filters: Option<&[Filter]>,
-        target: &mut W,
+    pub fn content_type(self) -> &'static str {
+        match self {
+            OutputFormat::Csv | OutputFormat::ExtendedCsv
+                => "text/csv;charset=utf-8;header=present",
+            OutputFormat::Json => "application/json",
+            _ => "text/plain;charset=utf-8",
+        }
+    }
+}
+
+
+//------------ OutputStream --------------------------------------------------
+
+pub struct OutputStream<T, F, M> {
+    origins: T,
+    next_id: usize,
+    format: OutputFormat,
+    filters: Option<F>,
+    metrics: M,
+} 
+
+impl<T, F, M> OutputStream<T, F, M> {
+    fn new(
+        origins: T,
+        format: OutputFormat,
+        filters: Option<F>,
+        metrics: M,
+    ) -> Self {
+        Self {
+            origins,
+            next_id: 0,
+            format,
+            filters,
+            metrics
+        }
+    }
+}
+
+impl<T, F, M> OutputStream<T, F, M>
+where
+    T: AsRef<AddressOrigins>,
+    F: AsRef<[Filter]>,
+    M: AsRef<Metrics>
+{
+    pub fn output<W: io::Write>(
+        &self,
+        target: &mut W
     ) -> Result<(), io::Error> {
-        self.output_header(vrps, target)?;
+        self.output_header(target)?;
         let mut first = true;
-        for vrp in vrps.iter() {
-            if self.output_origin(vrp, filters, first, target)? {
+        for vrp in self.origins.as_ref().iter() {
+            if self.output_origin(vrp, first, target)? {
                 first = false;
             }
         }
-        self.output_footer(vrps, target)
+        self.output_footer(target)
+    }
+
+    pub fn output_len(&self) -> usize {
+        GetLength::get(|w| unwrap!(self.output(w)))
+    }
+
+    pub fn output_start<W: io::Write>(
+        &mut self,
+        target: &mut W
+    ) -> Result<(), io::Error> {
+        self.output_header(target)?;
+        self.next_batch(true, target)
+    }
+
+    fn has_next_batch(&self) -> bool {
+        self.next_id < self.origins.as_ref().len()
+    }
+
+    fn next_batch<W: io::Write>(
+        &mut self,
+        mut first: bool,
+        target: &mut W 
+    ) -> Result<(), io::Error> {
+        let origins = self.origins.as_ref();
+        let mut len = 0;
+        while self.next_id < origins.len() && len < 1000 {
+            if self.output_origin(
+                &origins[self.next_id], first, target
+            )? {
+                first = false;
+                len += 1;
+            }
+            self.next_id += 1;
+        }
+        if self.next_id == origins.len() {
+            self.output_footer(target)?;
+        }
+        Ok(())
     }
 
     pub fn output_header<W: io::Write>(
-        self,
-        vrps: &AddressOrigins,
+        &self,
         target: &mut W
     ) -> Result<(), io::Error> {
-        match self {
+        let vrps = self.origins.as_ref();
+        match self.format {
             OutputFormat::Csv => csv_header(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_header(vrps, target),
             OutputFormat::Json => json_header(vrps, target),
             OutputFormat::Openbgpd => openbgpd_header(vrps, target),
             OutputFormat::Rpsl => rpsl_header(vrps, target),
+            OutputFormat::Summary => summary_header(&self.metrics, target),
             OutputFormat::None => Ok(())
         }
     }
 
     pub fn output_origin<W: io::Write>(
-        self,
+        &self,
         vrp: &AddressOrigin,
-        filters: Option<&[Filter]>,
         first: bool,
         target: &mut W
     ) -> Result<bool, io::Error> {
-        if Self::skip_origin(vrp, filters) {
+        if self.skip_origin(vrp) {
             return Ok(false)
         }
-        match self {
+        match self.format {
             OutputFormat::Csv => csv_origin(vrp, first, target)?,
             OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
             OutputFormat::Json => json_origin(vrp, first, target)?,
             OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
             OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
-            OutputFormat::None => { }
+            _ => { }
         }
         Ok(true)
     }
 
     fn skip_origin(
+        &self, 
         origin: &AddressOrigin,
-        filters: Option<&[Filter]>
     ) -> bool {
-        match filters {
+        match self.filters.as_ref() {
             Some(filters) => {
-                for filter in filters {
+                for filter in filters.as_ref() {
                     if filter.covers(origin) {
                         return false
                     }
@@ -140,27 +277,37 @@ impl OutputFormat {
     }
 
     pub fn output_footer<W: io::Write>(
-        self,
-        vrps: &AddressOrigins,
+        &self,
         target: &mut W
     ) -> Result<(), io::Error> {
-        match self {
+        let vrps = self.origins.as_ref();
+        match self.format {
             OutputFormat::Csv => csv_footer(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_footer(vrps, target),
             OutputFormat::Json => json_footer(vrps, target),
             OutputFormat::Openbgpd => openbgpd_footer(vrps, target),
             OutputFormat::Rpsl => rpsl_footer(vrps, target),
-            OutputFormat::None => Ok(())
+            _ => Ok(())
         }
     }
 
-    pub fn content_type(self) -> &'static str {
-        match self {
-            OutputFormat::Csv | OutputFormat::ExtendedCsv
-                => "text/csv;charset=utf-8;header=present",
-            OutputFormat::Json => "application/json",
-            _ => "text/plain;charset=utf-8",
+}
+
+impl<T, F, M> Iterator for OutputStream<T, F, M>
+where
+    T: AsRef<AddressOrigins>,
+    F: AsRef<[Filter]>,
+    M: AsRef<Metrics>
+{
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Vec<u8>> {
+        if !self.has_next_batch() {
+            return None
         }
+        let mut target = Vec::new();
+        unwrap!(self.next_batch(false, &mut target));
+        Some(target)
     }
 }
 
@@ -361,6 +508,27 @@ fn rpsl_footer<W: io::Write>(
 }
 
 
+//------------ summary -------------------------------------------------------
+
+fn summary_header<M: AsRef<Metrics>, W: io::Write>(
+    metrics: &M,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    let mut roas = 0;
+    let mut vrps = 0;
+    writeln!(output, "Summary at {}", metrics.as_ref().time())?;
+    for tal in metrics.as_ref().tals() {
+        writeln!(
+            output, "{}: {} verified ROAs, {} VRPs.",
+            tal.tal.name(), tal.roas, tal.vrps
+        )?;
+        roas += tal.roas;
+        vrps += tal.vrps;
+    }
+    writeln!(output, "total: {} verified ROAs, {} VRPs.", roas, vrps)
+}
+
+
 //------------ Filter --------------------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
@@ -376,6 +544,35 @@ impl Filter {
             Filter::As(as_id) => origin.as_id() == as_id,
             Filter::Prefix(prefix) => origin.prefix().covers(prefix)
         }
+    }
+}
+
+
+//------------ GetLength -----------------------------------------------------
+
+/// A writer that adds up the length of whatever has been written.
+#[derive(Clone, Copy, Debug, Default)]
+struct GetLength(usize);
+
+impl GetLength {
+    /// Returns the length of what’s been written in the closure.
+    ///
+    /// The closure receives a writer it should write to.
+    pub fn get<F: FnOnce(&mut Self)>(op: F) -> usize {
+        let mut target = Self::default();
+        op(&mut target);
+        target.0
+    }
+}
+
+impl io::Write for GetLength {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        Ok(())
     }
 }
 
