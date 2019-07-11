@@ -11,6 +11,8 @@ New
 
 * Output format `summary` which will print a summary of the content of the
   RPKI repository. [(#167)]
+* The ARIN TAL can now be skipped during `init` with the `--decline-arin-tal`
+  option. [(#169)]
 
 Bug Fixes
 
@@ -27,6 +29,7 @@ Dependencies
 [#162]: https://github.com/NLnetLabs/routinator/pull/162
 [@momorientes]: https://github.com/momorientes
 [(#167)]: https://github.com/NLnetLabs/routinator/pull/167
+[(#169)]: https://github.com/NLnetLabs/routinator/pull/169
 [(#171)]: https://github.com/NLnetLabs/routinator/pull/171
 [hyper]: https://hyper.rs/
 
