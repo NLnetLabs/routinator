@@ -13,6 +13,7 @@ extern crate fern;
 #[macro_use] extern crate futures;
 extern crate futures_cpupool;
 extern crate httparse;
+extern crate hyper;
 extern crate json;
 extern crate listenfd;
 #[cfg(unix)] extern crate libc;

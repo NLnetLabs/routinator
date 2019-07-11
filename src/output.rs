@@ -302,12 +302,19 @@ where
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Vec<u8>> {
-        if !self.has_next_batch() {
-            return None
+        if self.next_id == 0 {
+            let mut target = Vec::new();
+            unwrap!(self.output_start(&mut target));
+            Some(target)
         }
-        let mut target = Vec::new();
-        unwrap!(self.next_batch(false, &mut target));
-        Some(target)
+        else if !self.has_next_batch() {
+            None
+        }
+        else {
+            let mut target = Vec::new();
+            unwrap!(self.next_batch(false, &mut target));
+            Some(target)
+        }
     }
 }
 

@@ -443,7 +443,7 @@ impl Operation {
 
         info!("Starting listeners...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
-        let http = http_listener(history.clone(), &config);
+        let http = http_listener(&history, &config);
         tokio::runtime::run(
             Self::update_future(repo, history, notify, config)
             .join3(rtr, http)
