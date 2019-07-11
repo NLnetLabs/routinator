@@ -4,6 +4,9 @@
 
 Breaking Changes
 
+* Prometheus metrics are now prefixed with `routinator_`. ([#162] by
+  [@momorientes])
+
 New
 
 * Output format `summary` which will print a summary of the content of the
@@ -19,6 +22,7 @@ Dependencies
 
 [(#156)]: https://github.com/NLnetLabs/routinator/pull/156
 [#161]: https://github.com/NLnetLabs/routinator/pull/161
+[#162]: https://github.com/NLnetLabs/routinator/pull/162
 [@momorientes]: https://github.com/momorientes
 [(#167)]: https://github.com/NLnetLabs/routinator/pull/167
 
