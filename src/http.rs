@@ -6,26 +6,20 @@
 //!
 //! [`http_listener`]: fn.http_listener.html
 
-use std::{io, mem};
-use std::fmt::Write as FmtWrite;
-use std::io::Write;
+use std::fmt::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
-use chrono::Duration;
-use chrono::offset::Utc;
-use futures::{Async, Future, IntoFuture, Stream};
+use chrono::{Duration, Utc};
+use futures::{future, stream};
+use futures::future::{Future, FutureResult};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use rpki::resources::AsId;
-use tokio::io::{AsyncRead, WriteAll, write_all};
-use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
-use crate::metrics::Metrics;
 use crate::operation::Error;
-use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
-use crate::output::{OutputFormat, OutputStream};
+use crate::origins::{AddressPrefix, OriginsHistory};
+use crate::output::OutputFormat;
 use crate::utils::finish_all;
-
 
 //------------ http_listener -------------------------------------------------
 
@@ -37,12 +31,12 @@ use crate::utils::finish_all;
 ///
 /// [`OriginsHistory`]: ../origins/struct.OriginsHistory.html
 pub fn http_listener(
-    history: OriginsHistory,
+    origins: &OriginsHistory,
     config: &Config,
-) -> impl Future<Item= (), Error = ()> {
+) -> impl Future<Item = (), Error = ()> {
     finish_all(
         config.http_listen.iter().map(|addr| {
-            single_http_listener(*addr, history.clone())
+            single_http_listener(*addr, origins.clone())
         })
     )
 }
@@ -55,255 +49,73 @@ pub fn http_listener(
 /// be handled via a brand new `HttpConnection`.
 fn single_http_listener(
     addr: SocketAddr,
-    history: OriginsHistory,
+    origins: OriginsHistory,
 ) -> impl Future<Item=(), Error=()> {
-    TcpListener::bind(&addr).into_future()
-    .then(move |res| {
-        match res {
-            Ok(some) => {
-                info!("HTTP monitor: Listening on {}.", addr);
-                Ok(some)
-            }
-            Err(err) => {
-                error!("Failed to bind HTTP monitor to {}: {}", addr, err);
-                Err(())
-            }
-        }
-    })
-    .and_then(move |listener| {
-        listener.incoming()
-        .map_err(|err| {
-            error!("Failed to accept HTTP monitor connection: {}", err)
-        })
-        .for_each(move |sock| {
-            tokio::spawn(
-                HttpConnection::new(sock, history.clone())
-            )
-        })
+    Server::bind(&addr)
+    .serve(Service { origins })
+    .map_err(|err| {
+        error!("HTTP server error: {}", err);
     })
 }
 
 
-//------------ HttpConnection ------------------------------------------------
+//------------ Service -------------------------------------------------------
 
-/// The future for a HTTP monitor connection.
-///
-/// The future will read and parse an HTTP request, produce a response and
-/// send it out, close the socket, and resolve successfully. An error will
-/// be returned if an IO error happens only. If an error happens further up,
-/// it will try to send a 500 response back.
-#[allow(clippy::large_enum_variant)]
-enum HttpConnection {
-    /// Phase 1: Read a request.
-    Read(ReadRequest),
-
-    /// Phase 2: Send a response.
-    Response(Response),
-
-    /// Phase 3: Done.
-    Done
+#[derive(Clone)]
+struct Service {
+    origins: OriginsHistory,
 }
 
-impl HttpConnection {
-    /// Creates a new connection for a socket and the history.
-    pub fn new(
-        sock: TcpStream,
-        origins: OriginsHistory,
-    ) -> Self {
-        HttpConnection::Read(ReadRequest::new(sock, origins))
-    }
+impl<Ctx> hyper::service::MakeService<Ctx> for Service {
+    type ReqBody = Body;
+    type ResBody = Body;
+    type Service = Self;
+    type Error = hyper::Error;
+    type MakeError = hyper::Error;
+    type Future = FutureResult<Self, hyper::Error>;
 
-    /// Returns whether the connection has arrived at the ‘done’ state.
-    fn is_done(&self) -> bool {
-        match *self {
-            HttpConnection::Done => true,
-            _ => false
-        }
+    fn make_service(&mut self, _ctx: Ctx) -> Self::Future {
+        future::ok(self.clone())
     }
 }
 
-impl Future for HttpConnection {
-    type Item = ();
-    type Error = ();
+impl hyper::service::Service for Service {
+    type ReqBody = Body;
+    type ResBody = Body;
+    type Error = hyper::Error;
+    type Future = FutureResult<Response<Body>, hyper::Error>;
 
-    fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
-        while !self.is_done() {
-            *self = match *self {
-                HttpConnection::Read(ref mut fut) => {
-                    HttpConnection::Response(try_ready!(
-                        fut.poll().map_err(|_| ())
-                    ))
-                }
-                HttpConnection::Response(ref mut fut) => {
-                    try_ready!(fut.poll().map_err(|_| ()));
-                    HttpConnection::Done
-                }
-                HttpConnection::Done => panic!("polling resolved future")
-            };
-        }
-        Ok(Async::Ready(()))
-    }
-}
-
-
-//------------ ReadRequest ---------------------------------------------------
-
-/// A future that reads a request and turns it into a response.
-///
-/// The future will keep reading from the socket until it either successfully
-/// parses an HTTP request or runs out of space as it internally uses a fixed
-/// size buffer of 1024 bytes for the message - enough for our purposes. In
-/// either case it will resolve into a response to send back, which will be a
-/// 500 error if anything goes wrong.
-struct ReadRequest {
-    /// The socket to read from.
-    ///
-    /// If this becomes `None`, we are done.
-    sock: Option<TcpStream>,
-
-    /// The history to generate responses from.
-    ///
-    /// Like `sock`, this will be turned into `None` when we are done.
-    origins: Option<OriginsHistory>,
-
-    /// The read buffer.
-    buf: [u8; 1024],
-
-    /// The current position in the read buffer.
-    read: usize
-}
-
-impl ReadRequest {
-    fn new(sock: TcpStream, origins: OriginsHistory) -> Self {
-        ReadRequest {
-            sock: Some(sock),
-            origins: Some(origins),
-            buf: unsafe { mem::uninitialized() },
-            read: 0
-        }
-    }
-}
-
-impl Future for ReadRequest {
-    type Item = Response;
-    type Error = io::Error;
-
-    fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
-        loop {
-            let read = try_ready!(
-                self.sock.as_mut().expect("polling resolved future)")
-                    .poll_read(&mut self.buf[self.read..])
-            );
-            if read == 0 {
-                return Err(
-                    io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "closed by peer"
-                    )
-                )
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        future::ok(
+            if *req.method() != Method::GET {
+                self.method_not_allowed()
             }
-            self.read += read;
-            let mut headers = [httparse::EMPTY_HEADER; 16];
-            let mut req = httparse::Request::new(&mut headers);
-            match req.parse(&self.buf[..self.read]) {
-                Ok(res) if res.is_partial() => {
-                    if self.read >= self.buf.len() {
-                        return Ok(Async::Ready(
-                            Response::error(self.sock.take().unwrap())
-                        ))    
+            else {
+                match req.uri().path() {
+                    "/csv" => self.vrps(req.uri().query(), OutputFormat::Csv),
+                    "/json" => {
+                        self.vrps(req.uri().query(), OutputFormat::Json)
                     }
-                    // else we continue reading another fragment.
-                }
-                Ok(_) => {
-                    return Ok(Async::Ready(Response::from_request(
-                        self.sock.take().unwrap(),
-                        self.origins.take().unwrap(),
-                        &req
-                    )))
-                }
-                Err(_) => {
-                    return Ok(Async::Ready(
-                        Response::error(self.sock.take().unwrap())
-                    ))    
+                    "/metrics" => self.metrics(),
+                    "/openbgpd" => {
+                        self.vrps(req.uri().query(), OutputFormat::Openbgpd)
+                    }
+                    "/rpsl" => {
+                        self.vrps(req.uri().query(), OutputFormat::Csv)
+                    }
+                    "/status" => self.status(),
+                    "/version" => self.version(),
+                    _ => self.not_found()
                 }
             }
-        }
+        )
     }
 }
 
-
-//------------ Response ------------------------------------------------------
-
-/// A future sending a response back to the client.
-///
-/// This type collects all possible types of responses.
-enum Response {
-    /// A response returning static content.
-    Static(WriteAll<TcpStream, &'static [u8]>),
-
-    /// A response returning dynamic content.
-    Vec(WriteAll<TcpStream, Vec<u8>>),
-
-    /// A response returning a list of VRPs.
-    ///
-    /// These lists are too big to create a temporary buffer first, so we
-    /// have a type that smartly sends them out in chunks.
-    Vrp(VrpResponse),
-}
-
-impl Response {
-    /// Produces the correct response for the given request.
-    fn from_request(
-        sock: TcpStream,
-        origins: OriginsHistory,
-        req: &httparse::Request
-    ) -> Self {
-        if req.method != Some("GET") {
-            return Self::method_not_allowed(sock)
-        }
-        if let Some(path) = req.path {
-            let (path, query) = match path.find('?') {
-                Some(idx) => (&path[..idx], &path[idx + 1..]),
-                None => (path, "")
-            };
-            match path {
-                "/csv" => {
-                    VrpResponse::response(
-                        sock, origins, query, OutputFormat::Csv
-                    )
-                }
-                "/json" => {
-                    VrpResponse::response(
-                        sock, origins, query, OutputFormat::Json
-                    )
-                }
-                "/metrics" => {
-                    Self::metrics(sock, origins)
-                }
-                "/openbgpd" => {
-                    VrpResponse::response(
-                        sock, origins, query, OutputFormat::Openbgpd
-                    )
-                }
-                "/rpsl" => {
-                    VrpResponse::response(
-                        sock, origins, query, OutputFormat::Rpsl
-                    )
-                }
-                "/status" => Self::status(sock, origins),
-                "/version" => Self::text(sock, crate_version!()),
-                _ => Self::not_found(sock),
-            }
-        }
-        else {
-            Self::not_found(sock)
-        }
-    }
-
-    /// Produces the response for the `/metrics` path.
-    fn metrics(sock: TcpStream, origins: OriginsHistory) -> Self {
+impl Service {
+    fn metrics(&self) -> Response<Body> {
         let mut res = String::new();
-        let metrics = origins.current_metrics();
+        let metrics = self.origins.current_metrics();
 
         // valid_roas 
         writeln!(res,
@@ -331,7 +143,7 @@ impl Response {
         }
 
         // last_update_state, last_update_done, last_update_duration
-        let (start, done, duration) = origins.update_times();
+        let (start, done, duration) = self.origins.update_times();
         unwrap!(write!(res,
             "\n\
             # HELP routinator_last_update_start seconds since last update \
@@ -368,21 +180,21 @@ impl Response {
             # TYPE routinator_serial gauge\n\
             routinator_serial {}",
 
-            origins.serial()
+            self.origins.serial()
         ));
 
         unwrap!(writeln!(res, ""));
 
-        Self::from_content(
-            sock, "200 OK", "text/plain; version=0.0.4",
-            &res
+        unwrap!(
+            Response::builder()
+            .header("Content-Type", "text/plain; version=0.0.4")
+            .body(res.into())
         )
     }
 
-    /// Produces a response for the `/status` path.
-    fn status(sock: TcpStream, origins: OriginsHistory) -> Self {
+    fn status(&self) -> Response<Body> {
         let mut res = String::new();
-        let (start, done, duration) = origins.update_times();
+        let (start, done, duration) = self.origins.update_times();
         let start = unwrap!(Duration::from_std(start.elapsed()));
         let done = done.map(|done|
             unwrap!(Duration::from_std(done.elapsed()))
@@ -393,7 +205,7 @@ impl Response {
         let now = Utc::now();
 
         // serial
-        unwrap!(writeln!(res, "serial: {}", origins.serial()));
+        unwrap!(writeln!(res, "serial: {}", self.origins.serial()));
 
         // last-update-start-at and -ago
         unwrap!(writeln!(res, "last-update-start-at:  {}", now - start));
@@ -417,7 +229,7 @@ impl Response {
             unwrap!(writeln!(res, "last-update-duration:  -"));
         }
 
-        let metrics = origins.current_metrics();
+        let metrics = self.origins.current_metrics();
         // valid-roas
         unwrap!(writeln!(res, "valid-roas: {}",
             metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
@@ -442,148 +254,77 @@ impl Response {
         }
         unwrap!(writeln!(res, ""));
 
-        Self::from_content(
-            sock, "200 OK", "text/plain; version=0.0.4",
-            &res
+        unwrap!(
+            Response::builder()
+            .header("Content-Type", "text/plain")
+            .body(res.into())
         )
     }
 
-    /// Produces a response returning some plain text.
-    fn text<T: AsRef<str> + ?Sized>(sock: TcpStream, text: &T) -> Self {
-        Self::from_content(
-            sock,
-            "200 OK",
-            "text/plain;charset=utf-8",
-            text.as_ref().as_bytes()
+    fn version(&self) -> Response<Body> {
+        unwrap!(
+            Response::builder()
+            .header("Content-Type", "text/plain")
+            .body(crate_version!().into())
         )
     }
 
-    /// Produces the response for some content.
-    ///
-    /// Assembles the response in a newly allocated buffer before sending.
-    /// The response will be sent to `sock`. It will have the status code
-    /// `status` which must be both the numerical code and the reason phrase.
-    /// The content type of the response will be set to `content_type`. The
-    /// content will be taken from content.
-    fn from_content<T: AsRef<[u8]> + ?Sized>(
-        sock: TcpStream,
-        status: &'static str,
-        content_type: &'static str,
-        content: &T
-    ) -> Self {
-        let content = content.as_ref();
-        let mut res = Vec::with_capacity(
-            status.len() + content_type.len() + content.len()
-            + 12 // for content length -- should be enough
-            + 11 + 16 + 18 + 2 // Presumably, the compiler is smart enough ...
-        ); 
-        write!(&mut res, 
-            "HTTP/1.1 {}\r\n\
-             Content-Type: {}\r\n\
-             Content-Length: {}\r\n\
-             \r\n",
-            status,
-            content_type,
-            content.len(),
-        ).unwrap();
-        res.extend_from_slice(content);
-        Response::Vec(write_all(sock, res))
-    }
-
-    /// Produces a 500 Internal Server Error response.
-    fn error(sock: TcpStream) -> Self {
-        Response::Static(write_all(sock, &ERROR_500))
-    }
-
-    /// Produces a 400 Bad Request response.
-    fn bad_request(sock: TcpStream) -> Self {
-        Response::Static(write_all(sock, &ERROR_400))
-    }
-
-    /// Produces a 404 Not Found response.
-    fn not_found(sock: TcpStream) -> Self {
-        Response::Static(write_all(sock, &ERROR_404))
-    }
-
-    /// Produces a 405 Method Not Allowed response.
-    fn method_not_allowed(sock: TcpStream) -> Self {
-        Response::Static(write_all(sock, &ERROR_405))
-    }
-}
-
-impl Future for Response {
-    type Item = ();
-    type Error = io::Error;
-
-    fn poll(&mut self) -> Result<Async<()>, io::Error> {
-        match *self {
-            Response::Static(ref mut fut) => {
-                let _ = try_ready!(fut.poll());
-            }
-            Response::Vec(ref mut fut) => {
-                let _ = try_ready!(fut.poll());
-            }
-            Response::Vrp(ref mut fut) => {
-                try_ready!(fut.poll());
-            }
-        };
-        Ok(Async::Ready(()))
-    }
-}
-
-
-//------------ VrpResponse --------------------------------------------------
-
-/// A response providing the VRP output.
-///
-/// This will send out the list of VRPs in chunks of 1000 entries.
-struct VrpResponse {
-    write: WriteAll<TcpStream, Vec<u8>>,
-    stream: OutputStream<
-                Arc<AddressOrigins>, Vec<output::Filter>, Arc<Metrics>
-            >,
-}
-
-impl VrpResponse {
-    /// Creates a new VRP response.
-    ///
-    /// The response will be sent to the socket `sock`. The list will be the
-    /// current list from `origins`. It will be formatted in `format`.
-    pub fn response(
-        sock: TcpStream,
-        origins: OriginsHistory,
-        query: &str,
+    fn vrps(
+        &self,
+        query: Option<&str>,
         format: OutputFormat
-    ) -> Response {
+    ) -> Response<Body> {
         let filters = match Self::output_filters(query) {
             Ok(filters) => filters,
-            Err(_) => return Response::bad_request(sock),
+            Err(_) => return self.bad_request(),
         };
-        let mut stream = format.stream(
-            origins.current(), filters, origins.current_metrics()
+        let stream = format.stream(
+            self.origins.current(), filters, self.origins.current_metrics()
         );
 
-        // We’ll start out with the HTTP header which we can assemble
-        // already. For the length, we have our magical `GetLength` type.
-        let mut target = format!("\
-            HTTP/1.1 200 OK\r\n\
-            Content-Type: {}\r\n\
-            Content-Length: {}\r\n\
-            \r\n",
-            format.content_type(),
-            stream.output_len(),
-        ).into_bytes();
-        unwrap!(stream.output_start(&mut target));
-        Response::Vrp(VrpResponse {
-            write: write_all(sock, target),
-            stream
-        })
+        unwrap!(
+            Response::builder()
+            .header("Content-Type", format.content_type())
+            .header("content-length", stream.output_len())
+            .body(Body::wrap_stream(stream::iter_ok::<_, hyper::Error>(stream)))
+        )
+    }
+
+    fn bad_request(&self) -> Response<Body> {
+        unwrap!(
+            Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header("Content-Type", "text/plain")
+            .body("Bad Request".into())
+        )
+    }
+
+    fn method_not_allowed(&self) -> Response<Body> {
+        unwrap!(
+            Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED)
+            .header("Content-Type", "text/plain")
+            .body("Method Not Allowed".into())
+        )
+    }
+
+    fn not_found(&self) -> Response<Body> {
+        unwrap!(
+            Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("Content-Type", "text/plain")
+            .body("Not Found".into())
+        )
     }
 
     /// Produces the output filters from a query string.
     fn output_filters(
-        mut query: &str
+        query: Option<&str>
     ) -> Result<Option<Vec<output::Filter>>, Error> {
+        let mut query = match query {
+            Some(query) => query,
+            None => return Ok(None)
+        };
         let mut res = Vec::new();
         while !query.is_empty() {
             // Take out one pair.
@@ -629,56 +370,4 @@ impl VrpResponse {
         }
     }
 }
-
-impl Future for VrpResponse {
-    type Item = ();
-    type Error = io::Error;
-
-    fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
-        loop {
-            let (sock, _) = try_ready!(self.write.poll());
-            if let Some(batch) = self.stream.next() {
-                self.write = write_all(sock, batch)
-            }
-            else {
-                return Ok(Async::Ready(()))
-            }
-        }
-    }
-}
-
-
-//------------ Constants -----------------------------------------------------
-
-/// The literal content of a 404 error.
-const ERROR_400: &[u8] = b"\
-    HTTP/1.1 400 Bad Request\r\n\
-    Content-Type: text/plain\r\n\
-    Content-Length: 11\r\n\
-    \r\n\
-    Bad Request";
-
-/// The literal content of a 404 error.
-const ERROR_404: &[u8] = b"\
-    HTTP/1.1 404 Not Found\r\n\
-    Content-Type: text/plain\r\n\
-    Content-Length: 9\r\n\
-    \r\n\
-    Not Found";
-
-/// The literal content of a 405 error.
-const ERROR_405: &[u8] = b"\
-    HTTP/1.1 405 Method Not Allowed\r\n\
-    Content-Type: text/plain\r\n\
-    Content-Length: 18\r\n\
-    \r\n\
-    Method Not Allowed";
-
-/// The literal content of a 500 error.
-const ERROR_500: &[u8] = b"\
-    HTTP/1.1 500 Internal Server Error\r\n\
-    Content-Type: text/plain\r\n\
-    Content-Length: 21\r\n\
-    \r\n\
-    Internal Server Error";
 

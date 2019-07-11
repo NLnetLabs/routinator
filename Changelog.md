@@ -19,6 +19,8 @@ Bug Fixes
 * Fix Prometheus metrics output – Prometheus insists on a line break at the
   end of the last line. [(#156)]
 * Fix Prometheus metrics definitions. ([#161] by [@momorientes])
+* The HTTP server can now deal with unreasonably large requests. It has
+  been switched to using [hyper]. [(#171)]
 
 Dependencies
 
@@ -28,6 +30,8 @@ Dependencies
 [@momorientes]: https://github.com/momorientes
 [(#167)]: https://github.com/NLnetLabs/routinator/pull/167
 [(#169)]: https://github.com/NLnetLabs/routinator/pull/169
+[(#171)]: https://github.com/NLnetLabs/routinator/pull/171
+[hyper]: https://hyper.rs/
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’
