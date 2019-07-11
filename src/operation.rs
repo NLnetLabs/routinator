@@ -58,6 +58,11 @@ pub enum Operation {
         ///
         /// We can only install the ARIN TAL if this flag is `true`.
         accept_arin_rpa: bool,
+
+        /// Decline the ARIN Relying Party Agreement.
+        ///
+        /// If this is `true`, we won’t install the ARIN TAL at all.
+        decline_arin_rpa: bool,
     },
 
     /// Run as server.
@@ -133,6 +138,11 @@ impl Operation {
                 .long("accept-arin-rpa")
                 .help("You have read and accept \
                        https://www.arin.net/resources/manage/rpki/rpa.pdf")
+            )
+            .arg(Arg::with_name("decline-arin-rpa")
+                .long("decline-arin-rpa")
+                .conflicts_with("accept-arin-rpa")
+                .help("You have read and declined the ARIN RPA")
             )
         )
 
@@ -223,6 +233,7 @@ impl Operation {
                 Operation::Prepare {
                     force: matches.is_present("force"),
                     accept_arin_rpa: matches.is_present("accept-arin-rpa"),
+                    decline_arin_rpa: matches.is_present("decline-arin-rpa"),
                 }
             }
             ("server", Some(matches)) => {
@@ -282,8 +293,9 @@ impl Operation {
     /// point.
     pub fn run(self, config: Config) -> Result<(), Error> {
         match self {
-            Operation::Prepare { force, accept_arin_rpa }
-                => Self::prepare(config, force, accept_arin_rpa),
+            Operation::Prepare { force, accept_arin_rpa, decline_arin_rpa }
+                => Self::prepare(config, force, accept_arin_rpa,
+                                 decline_arin_rpa),
             Operation::Server { detach }
                 => Self::server(config, detach),
             Operation::Vrps { output, format, filters, noupdate } 
@@ -317,7 +329,8 @@ impl Operation {
     fn prepare(
         config: Config,
         force: bool,
-        accept_arin_rpa: bool
+        accept_arin_rpa: bool,
+        decline_arin_rpa: bool,
     ) -> Result<(), Error> {
         if let Err(err) = fs::create_dir_all(&config.cache_dir) {
             error!(
@@ -351,7 +364,7 @@ impl Operation {
         // Do the ARIN thing. We need to do this before trying to create
         // the directory or it will be there already next time and confuse
         // people.
-        if !accept_arin_rpa {
+        if !accept_arin_rpa && !decline_arin_rpa {
             error!(
                 "Before we can install the ARIN TAL, you must have read\n\
                  and agree to the ARIN Relying Party Agreement (RPA).\n\
@@ -376,23 +389,10 @@ impl Operation {
 
         // Now write all the TALs. Overwrite existing ones.
         for (name, content) in &DEFAULT_TALS {
-            let mut file = match fs::File::create(config.tal_dir.join(name)) {
-                Ok(file) => file,
-                Err(err) => {
-                    error!(
-                        "Can't create TAL file {}: {}.\n Aborting.",
-                        config.tal_dir.join(name).display(), err
-                    );
-                    return Err(Error);
-                }
-            };
-            if let Err(err) = file.write_all(content) {
-                error!(
-                    "Can't create TAL file {}: {}.\n Aborting.",
-                    config.tal_dir.join(name).display(), err
-                );
-                return Err(Error);
-            }
+            Self::write_tal(&config, name, content)?;
+        }
+        if accept_arin_rpa {
+            Self::write_tal(&config, ARIN_TAL.0, ARIN_TAL.1)?;
         }
 
         // Not really an error, but that’s our log level right now.
@@ -401,10 +401,42 @@ impl Operation {
             config.cache_dir.display()
         );
         error!(
-            "Installed the five TALs in {}",
+            "Installed {} TALs in {}",
+            if accept_arin_rpa {
+                DEFAULT_TALS.as_ref().len() + 1
+            }
+            else {
+                DEFAULT_TALS.as_ref().len()
+            },
             config.tal_dir.display()
         );
 
+        Ok(())
+    }
+
+    /// Writes the given tal.
+    fn write_tal(
+        config: &Config,
+        name: &str,
+        content: &[u8]
+    ) -> Result<(), Error> {
+        let mut file = match fs::File::create(config.tal_dir.join(name)) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Can't create TAL file {}: {}.\n Aborting.",
+                    config.tal_dir.join(name).display(), err
+                );
+                return Err(Error);
+            }
+        };
+        if let Err(err) = file.write_all(content) {
+            error!(
+                "Can't create TAL file {}: {}.\n Aborting.",
+                config.tal_dir.join(name).display(), err
+            );
+            return Err(Error);
+        }
         Ok(())
     }
 
@@ -762,11 +794,13 @@ const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
 
 //------------ DEFAULT_TALS --------------------------------------------------
 
-const DEFAULT_TALS: [(&str, &[u8]); 5] = [
+const DEFAULT_TALS: [(&str, &[u8]); 4] = [
     ("afrinic.tal", include_bytes!("../tals/afrinic.tal")),
     ("apnic.tal", include_bytes!("../tals/apnic.tal")),
-    ("arin.tal", include_bytes!("../tals/arin.tal")),
     ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
     ("ripe.tal", include_bytes!("../tals/ripe.tal")),
 ];
+const ARIN_TAL: (&str, &[u8]) =
+    ("arin.tal", include_bytes!("../tals/arin.tal"))
+;
 

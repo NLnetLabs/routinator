@@ -249,6 +249,12 @@ Agreement (RPA). You can find it at
 .I https://www.arin.net/resources/manage/rpki/rpa.pdf
 and explicitely agree to it via this option. Routinator will not install
 any TALs unless you agree in order to avoid incomplete installations.
+.TP
+.B --decline-arin-rpa
+If, after reading the ARIN Relying Party Agreement, yo decide you do not or
+cannot agree to it, this option allows you to skip installation of the ARIN
+TAL. Note that this means Routinator will not have access to any information
+published for resources assigned under ARIN.
 
 .SS vrps
 This command requests that Routinator update the local repository and then
