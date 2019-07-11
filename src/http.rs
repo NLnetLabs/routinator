@@ -307,12 +307,12 @@ impl Response {
 
         // valid_roas 
         writeln!(res,
-            "# HELP valid_roas number of valid ROAs seen\n\
-             # TYPE valid_roas gauge"
+            "# HELP routinator_valid_roas number of valid ROAs seen\n\
+             # TYPE routinator_valid_roas gauge"
         ).unwrap();
         for tal in metrics.tals() {
             writeln!(res,
-                "valid_roas{{tal=\"{}\"}} {}",
+                "routinator_valid_roas{{tal=\"{}\"}} {}",
                 tal.tal.name(), tal.roas
             ).unwrap();
         }
@@ -320,12 +320,12 @@ impl Response {
         // vrps_total
         writeln!(res,
             "\n\
-             # HELP vrps_total total number of VRPs seen\n\
-             # TYPE vrps_total gauge"
+             # HELP routinator_vrps_total total number of VRPs seen\n\
+             # TYPE routinator_vrps_total gauge"
         ).unwrap();
         for tal in metrics.tals() {
             writeln!(res,
-                "vrps_total{{tal=\"{}\"}} {}",
+                "routinator_vrps_total{{tal=\"{}\"}} {}",
                 tal.tal.name(), tal.vrps
             ).unwrap();
         }
@@ -334,17 +334,21 @@ impl Response {
         let (start, done, duration) = origins.update_times();
         unwrap!(write!(res,
             "\n\
-            # HELP last_update_start seconds since last update started\n\
-            # TYPE last_update_start gauge\n\
-            last_update_start {}\n\
+            # HELP routinator_last_update_start seconds since last update \
+                started\n\
+            # TYPE routinator_last_update_start gauge\n\
+            routinator_last_update_start {}\n\
             \n\
-            # HELP last_update_duration duration in seconds of last update\n\
-            # TYPE last_update_duration gauge\n\
-            last_update_duration {}\n\
+            # HELP routinator_last_update_duration duration in seconds of \
+                last update\n\
+            # TYPE routinator_last_update_duration gauge\n\
+            routinator_last_update_duration {}\n\
             \n\
-            # HELP last_update_done seconds since last update finished\n\
-            # TYPE last_update_done gauge\n\
-            last_update_done ",
+            # HELP routinator_last_update_done seconds since last update \
+                finished\n\
+            # TYPE routinator_last_update_done gauge\n\
+            routinator_last_update_done ",
+
             start.elapsed().as_secs(),
             duration.map(|duration| duration.as_secs()).unwrap_or(0),
         ));
@@ -360,9 +364,10 @@ impl Response {
         // serial
         unwrap!(write!(res,
             "\n\
-            # HELP serial current RTR serial number\n\
-            # TYPE serial gauge\n\
-            serial {}",
+            # HELP routinator_serial current RTR serial number\n\
+            # TYPE routinator_serial gauge\n\
+            routinator_serial {}",
+
             origins.serial()
         ));
 
