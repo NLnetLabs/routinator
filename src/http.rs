@@ -23,6 +23,7 @@ use crate::operation::Error;
 use crate::origins::{AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::finish_all;
+use crate::validity::RouteValidity;
 
 //------------ http_listener -------------------------------------------------
 
@@ -107,7 +108,11 @@ impl hyper::service::Service for Service {
                         self.vrps(req.uri().query(), OutputFormat::Csv)
                     }
                     "/status" => self.status(),
+                    "/validity" => self.validity_query(req.uri().query()),
                     "/version" => self.version(),
+                    path if path.starts_with("/api/v1/validity/") => {
+                        self.validity_path(&path[17..])
+                    }
                     _ => self.not_found()
                 }
             }
@@ -264,6 +269,64 @@ impl Service {
         )
     }
 
+    fn validity_path(&self, path: &str) -> Response<Body> {
+        let mut path = path.splitn(2, '/');
+        let asn = match path.next() {
+            Some(asn) => asn,
+            None => return self.bad_request()
+        };
+        let prefix = match path.next() {
+            Some(prefix) => prefix,
+            None => return self.bad_request()
+        };
+        self.validity(asn, prefix)
+    }
+
+    fn validity_query(&self, query: Option<&str>) -> Response<Body> {
+        let mut asn = None;
+        let mut prefix = None;
+        for (key, value) in query_iter(query) {
+            if key == "asn" {
+                asn = value
+            }
+            else if key == "prefix" {
+                prefix = value
+            }
+            else {
+                return self.bad_request()
+            }
+        }
+        let asn = match asn {
+            Some(asn) => asn,
+            None => return self.bad_request()
+        };
+        let prefix = match prefix {
+            Some(prefix) => prefix,
+            None => return self.bad_request()
+        };
+        self.validity(asn, prefix)
+    }
+
+    fn validity(&self, asn: &str, prefix: &str) -> Response<Body> {
+        let asn = match AsId::from_str(asn) {
+            Ok(asn) => asn,
+            Err(_) => return self.bad_request()
+        };
+        let prefix = match AddressPrefix::from_str(prefix) {
+            Ok(prefix) => prefix,
+            Err(_) => return self.bad_request()
+        };
+        unwrap!(
+            Response::builder()
+            .header("Content-Type", "application/json")
+            .body(
+                RouteValidity::new(prefix, asn, &self.origins.current())
+                .into_json()
+                .into()
+            )
+        )
+    }
+
     fn version(&self) -> Response<Body> {
         unwrap!(
             Response::builder()
@@ -372,5 +435,18 @@ impl Service {
             Ok(Some(res))
         }
     }
+}
+
+
+fn query_iter<'a>(
+    query: Option<&'a str>
+) -> impl Iterator<Item=(&'a str, Option<&'a str>)> + 'a {
+    let query = query.unwrap_or("");
+    query.split("&").map(|item| {
+        let mut item = item.splitn(2, "=");
+        let key = unwrap!(item.next());
+        let value = item.next();
+        (key, value)
+    })
 }
 
