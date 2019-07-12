@@ -14,7 +14,7 @@ use clap::{App, Arg, ArgMatches};
 #[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
 use fern;
-use log::{LevelFilter, Log};
+use log::{LevelFilter, Log, error};
 #[cfg(unix)] use syslog::Facility;
 use toml;
 use crate::operation::Error;

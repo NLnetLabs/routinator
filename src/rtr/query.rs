@@ -1,7 +1,8 @@
 //! Reading an RTR query from a client.
 
 use std::io;
-use futures::{Async, Future, Stream};
+use futures::{Async, Future, Stream, try_ready};
+use log::debug;
 use tokio::io::{AsyncRead, ReadExact};
 use super::{notify, pdu};
 use super::serial::Serial;

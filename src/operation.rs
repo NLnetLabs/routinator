@@ -16,6 +16,7 @@ use std::time::Instant;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::future;
 use futures::future::Future;
+use log::{debug, error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
