@@ -442,8 +442,8 @@ fn query_iter<'a>(
     query: Option<&'a str>
 ) -> impl Iterator<Item=(&'a str, Option<&'a str>)> + 'a {
     let query = query.unwrap_or("");
-    query.split("&").map(|item| {
-        let mut item = item.splitn(2, "=");
+    query.split('&').map(|item| {
+        let mut item = item.splitn(2, '=');
         let key = unwrap!(item.next());
         let value = item.next();
         (key, value)
