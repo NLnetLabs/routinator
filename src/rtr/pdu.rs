@@ -12,7 +12,7 @@ use futures::future::Future;
 use tokio::io::{
     AsyncRead, AsyncWrite, ReadExact, WriteAll, read_exact, write_all
 };
-use ::origins::AddressOrigin;
+use crate::origins::AddressOrigin;
 use super::serial::Serial;
 
 

@@ -1,10 +1,7 @@
-#[macro_use] extern crate clap;
-#[macro_use] extern crate log;
-extern crate routinator;
-
 use std::env::current_dir;
 use std::process::exit;
-use clap::App;
+use clap::{App, crate_authors, crate_version};
+use log::error;
 use routinator::{Config, Error, Operation};
 
 // Since `main` with a result currently insists on printing a message, but

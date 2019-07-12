@@ -2,7 +2,8 @@
 
 use std::io;
 use std::sync::Arc;
-use futures::{Async, Future};
+use futures::{Async, Future, try_ready};
+use log::debug;
 use tokio::io::{AsyncWrite, WriteAll};
 use crate::config::Config;
 use crate::origins::{AddressOrigins, OriginsDiff};
