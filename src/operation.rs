@@ -16,10 +16,11 @@ use std::time::Instant;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::future;
 use futures::future::Future;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
 use tokio::timer::Delay;
+use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::metrics::Metrics;
@@ -28,6 +29,7 @@ use crate::output;
 use crate::output::OutputFormat;
 use crate::repository::Repository;
 use crate::rtr::{rtr_listener, NotifySender};
+use crate::validity::RouteValidity;
 
 
 //------------ Operation -----------------------------------------------------
@@ -92,6 +94,21 @@ pub enum Operation {
 
         /// Don’t update the repository.
         noupdate: bool,
+    },
+
+    /// Validate a route announcement.
+    Validate {
+        /// The address prefix of the announcement.
+        prefix: AddressPrefix,
+
+        /// The origin AS number of the announcement.
+        asn: AsId,
+
+        /// Don’t update the repository.
+        noupdate: bool,
+
+        /// Output details in JSON.
+        json: bool,
     },
 
     /// Update the local repository.
@@ -190,6 +207,33 @@ impl Operation {
             )
         )
 
+        // validate
+        .subcommand(SubCommand::with_name("validate")
+            .about("Validates a route announcement")
+            .arg(Arg::with_name("prefix")
+                .short("p")
+                .long("prefix")
+                .help("Address prefix of the announcement")
+                .takes_value(true)
+            )
+            .arg(Arg::with_name("asn")
+                .short("a")
+                .long("asn")
+                .help("Origin AS number of the announcement")
+                .takes_value(true)
+            )
+            .arg(Arg::with_name("noupdate")
+                .short("n")
+                .long("noupdate")
+                .help("Don't update the local cache")
+            )
+            .arg(Arg::with_name("json")
+                .short("j")
+                .long("json")
+                .help("Output detailed analysis in JSON")
+            )
+        )
+
         // update
         .subcommand(SubCommand::with_name("update")
             .about("Updates the local RPKI repository")
@@ -257,6 +301,35 @@ impl Operation {
                     noupdate: matches.is_present("noupdate")
                 }
             }
+            ("validate", Some(matches)) => {
+                Operation::Validate {
+                    prefix: {
+                        let prefix = unwrap!(matches.value_of("prefix"));
+                        match AddressPrefix::from_str(prefix) {
+                            Ok(prefix) => prefix,
+                            Err(err) => {
+                                error!("illegal address prefix: {}", err);
+                                return Err(Error);
+                            }
+                        }
+                    },
+                    asn: {
+                        let asn = unwrap!(matches.value_of("asn"));
+                        match AsId::from_str(asn) {
+                            Ok(asn) => asn,
+                            Err(_) => match u32::from_str(asn) {
+                                Ok(asn) => asn.into(),
+                                Err(_) => {
+                                    error!("illegal AS number");
+                                    return Err(Error);
+                                }
+                            }
+                        }
+                    }, 
+                    noupdate: matches.is_present("noupdate"),
+                    json: matches.is_present("json")
+                }
+            }
             ("config", Some(matches)) => {
                 config.apply_server_arg_matches(matches, cur_dir)?;
                 Operation::Config
@@ -301,6 +374,8 @@ impl Operation {
                 => Self::server(config, detach),
             Operation::Vrps { output, format, filters, noupdate } 
                 => Self::vrps(config, output, format, filters, noupdate),
+            Operation::Validate { prefix, asn, noupdate, json }
+                => Self::validate(config, prefix, asn, noupdate, json),
             Operation::Update
                 => Self::update(config),
             Operation::Config => 
@@ -506,7 +581,7 @@ impl Operation {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn update(config: Config) -> Result<(), Error> {
-        Self::vrps(config, None, OutputFormat::None, None, false)
+        Self::get_vrps_and_metrics(config, false, false).map(|_| ())
     }
 
     /// Produces a list of Validated ROA Payload.
@@ -523,26 +598,9 @@ impl Operation {
         filters: Option<Vec<output::Filter>>,
         noupdate: bool
     ) -> Result<(), Error> {
-        let repo = config.create_repository(format.extra_output(), !noupdate)?;
-        config.switch_logging(false)?;
-        let exceptions = repo.load_exceptions(&config)?;
-
-        if repo.update().is_err() {
-            warn!("Update failed. Continuing anyway.");
-        }
-        let roas = match repo.process() {
-            Ok(roas) => roas,
-            Err(_) => {
-                error!("Validation failed. Aborting.");
-                return Err(Error)
-            }
-        };
-        debug!("Found {} ROAs.", roas.len());
-        let mut metrics = Metrics::new();
-        let vrps = AddressOrigins::from_route_origins(
-            roas, &exceptions, format.extra_output(), &mut metrics
-        );
-        metrics.log();
+        let (vrps, metrics) = Self::get_vrps_and_metrics(
+            config, format.extra_output(), noupdate
+        )?;
         let filters = filters.as_ref().map(AsRef::as_ref);
         let res = match output {
             Some(ref path) => {
@@ -571,6 +629,58 @@ impl Operation {
             );
             Error
         })
+    }
+
+    /// Outputs whether the given route announcement is valid.
+    fn validate(
+        config: Config,
+        prefix: AddressPrefix,
+        asn: AsId,
+        noupdate: bool,
+        json: bool
+    ) -> Result<(), Error> {
+        let (vrps, _) = Self::get_vrps_and_metrics( config, false, noupdate)?;
+        let validity = RouteValidity::new(prefix, asn, &vrps);
+        if json {
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            validity.write_json(&mut stdout).map_err(|err| {
+                error!("Writing to stdout failed: {}", err);
+                Error
+            })
+        }
+        else {
+            println!("{}", validity.state());
+            Ok(())
+        }
+    }
+
+    /// Updates the repository and returns metrics and VPRs.
+    fn get_vrps_and_metrics(
+        config: Config,
+        extra_output: bool,
+        noupdate: bool
+    ) -> Result<(AddressOrigins, Metrics), Error> {
+        let repo = config.create_repository(extra_output, !noupdate)?;
+        config.switch_logging(false)?;
+        let exceptions = repo.load_exceptions(&config)?;
+
+        if repo.update().is_err() {
+            warn!("Update failed. Continuing anyway.");
+        }
+        let roas = match repo.process() {
+            Ok(roas) => roas,
+            Err(_) => {
+                error!("Validation failed. Aborting.");
+                return Err(Error)
+            }
+        };
+        let mut metrics = Metrics::new();
+        let vrps = AddressOrigins::from_route_origins(
+            roas, &exceptions, extra_output, &mut metrics
+        );
+        metrics.log();
+        Ok((vrps, metrics))
     }
 
     /// Creates the filters for the vrps command.

@@ -9,6 +9,10 @@ Breaking Changes
 
 New
 
+* You can now check your BGP announcements for their RPKI origin
+  validation status either via the HTTP interface or the new `validate`
+  command. The HTTP API is the same as that used by the RIPE NCC RPKI
+  Valiator for easy migration. [(#173)]
 * Output format `summary` which will print a summary of the content of the
   RPKI repository. [(#167)]
 * The ARIN TAL can now be skipped during `init` with the `--decline-arin-tal`
@@ -32,6 +36,7 @@ Dependencies
 [(#169)]: https://github.com/NLnetLabs/routinator/pull/169
 [(#171)]: https://github.com/NLnetLabs/routinator/pull/171
 [hyper]: https://hyper.rs/
+[(#173)]: https://github.com/NLnetLabs/routinator/pull/173
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’

@@ -3,7 +3,7 @@
 /// The types in this module store route origins, sets of route origins, and
 /// the history of changes necessary for RTR.
 
-use std::{hash, ops, slice, vec};
+use std::{fmt, hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -477,7 +477,7 @@ impl OriginsHistory {
             }
             else if diff.serial() == serial.add(1) {
                 // This relies on serials increasing by one always.
-                debug!("One behind, just cloself.0.read().unwrap().metrics.front().map(op)ne.");
+                debug!("One behind, just clone.");
                 return Some(diff.clone())
             }
         }
@@ -821,6 +821,12 @@ impl FromStr for AddressPrefix {
         let len = u8::from_str(len)
                      .map_err(|_| FromStrError(s.into()))?;
         Ok(AddressPrefix { addr, len })
+    }
+}
+
+impl fmt::Display for AddressPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}", self.addr, self.len)
     }
 }
 

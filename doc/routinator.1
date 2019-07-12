@@ -58,6 +58,16 @@ command
 .PP
 .B routinator
 [options]
+.B validate
+.RB [ \-n ]
+.RB [ \-j ]
+.RB [ \-a
+.IR asn ]
+.RB [ \-p
+.IR prefix ]
+.PP
+.B routinator
+[options]
 .B server
 .RB [ \-\-rtr
 .I addr:port
@@ -348,12 +358,9 @@ The repository will not be updated before producing the list.
 .TP
 .BI \-a \ asn\fR,\  \-\-filter\-asn= asn
 Only output VRPs for the given ASN. The option can be given multiple times,
-in which case VRPs for all provided ASNs are provided. ASNs need to be given
-as the AS number prefixed with 
-.B AS 
-and not just the number
-e.g., the correct form is
-.BR "AS65555" .
+in which case VRPs for all provided ASNs are provided. ASNs can be given with
+or without the prefix
+.IR AS .
 .TP 
 .BI \-p \ prefix\fR,\  \-\-filter\-prefix= prefix
 Only output VRPs with an address prefix that covers the given prefix, i.e.,
@@ -365,6 +372,29 @@ an announcement for the prefix is RPKI valid or invalid.
 The option can be given multiple times, in which case VRPs for all prefixes
 are provided. It can also be combined with one or more ASN filters. Then all
 matching VRPs are included. That is, filters combine as "or" not "and."
+
+.SS validate
+This command can be used to perform RPKI route origin validation for a route
+announcement. Routinator will determine whether the provided announcement is
+RPKI valid, invalid, or not found.
+.TP
+.BI \-a \ asn\fR,\  \-\-asn= asn
+The AS number of the autonomous system that originated the route
+announcement. ASNs can be given with
+or without the prefix
+.IR AS .
+.TP
+.BI \-p \ prefix\fR,\  \-\-prefix= prefix
+The address prefix the route announcement is for.
+.TP
+.BR \-n ,\  \-\-noupdate
+The repository will not be updated before performing validation.
+.TP
+.BR \-j ,\  \-\-json
+A detailed analysis on the reasoning behind the validation is printed in
+JSON format including lists of the VPRs that caused the particular result.
+If this option is omitted, Routinator will only print the determined
+state.
 
 .SS server
 This command causes Routinator to act as a server for the RPKI-to-Router
@@ -690,8 +720,24 @@ Returns the current set of VRPs in
 .B rpsl
 output format.
 .TP
+.B /status
+Returns the current status of the Routinator instance. This is similar to
+the output of the
+.B /metrics
+endpoint but in a more human friendly format.
+.TP
 .B /version
 Returns the version of the Routinator instance.
+.TP
+.B /api/v1/validity/\fIas-number\fB/\fIprefix
+Returns a JSON object describing whether the route announcement given by
+its origin AS number and address preifx is RPKI valid, invalid, or not found.
+The returned object is compatible with that provided by the RIPE NCC RPKI
+Validator. For more information, see
+.I https://www.ripe.net/support/documentation/developer-documentation/rpki-validator-api
+.TP
+.B /validity?asn=\fIas-number\fB&prefix=\fIprefix
+Same as above but with a more form-friendly calling convention.
 
 .P
 The paths that output the current set of VRPs accept filter expressions to
