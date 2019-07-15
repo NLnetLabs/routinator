@@ -6,6 +6,10 @@ Breaking Changes
 
 * Prometheus metrics are now prefixed with `routinator_`. ([#162] by
   [@momorientes])
+* Added `--timeout` option to `rsync` call. This seems to be available on
+  most all rsync versions in use. Should that not be the case, you can use
+  the `rsync-args` config file option to define your own set of rsync
+  arguments, overriding this behaviour. ([#176])
 
 New
 
@@ -37,6 +41,7 @@ Dependencies
 [(#171)]: https://github.com/NLnetLabs/routinator/pull/171
 [hyper]: https://hyper.rs/
 [(#173)]: https://github.com/NLnetLabs/routinator/pull/173
+[(#176)]: https://github.com/NLnetLabs/routinator/pull/176
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’

@@ -26,8 +26,6 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
-use tokio::timer::Timeout;
-use tokio_process::CommandExt;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::RouteOrigins;
@@ -835,7 +833,6 @@ pub struct RsyncCommand {
     command: String,
     args: Vec<String>,
     timeout: Duration,
-
 }
 
 impl RsyncCommand {
@@ -864,11 +861,15 @@ impl RsyncCommand {
                 let has_contimeout =
                    output.stdout.windows(12)
                    .any(|window| window == b"--contimeout");
+                let timeout = format!(
+                    "--timeout={}",
+                    config.rsync_timeout.as_secs()
+                );
                 if has_contimeout {
-                    vec!["--contimeout=10".into()]
+                    vec!["--contimeout=10".into(), timeout]
                 }
                 else {
-                    Vec::new()
+                    vec![timeout]
                 }
             }
         };
@@ -892,37 +893,6 @@ impl RsyncCommand {
         else {
             Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
         }
-    }
-
-    pub fn update_async<P: AsRef<Path>>(
-        &self,
-        source: &uri::RsyncModule,
-        destination: P
-    ) -> impl Future<Item=(), Error=io::Error> {
-        let cmd = self.command(source, destination);
-        let source = source.clone();
-        let timeout = self.timeout;
-        future::lazy(|| cmd)
-        .and_then(move |mut cmd| {
-            Timeout::new(cmd.output_async(), timeout)
-            .map_err(|err| {
-                err.into_inner().unwrap_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "rsync command took too long"
-                    )
-                })
-            })
-        })
-        .and_then(move |output| {
-            let status = Self::log_output(&source, output);
-            if status.success() {
-                Ok(())
-            }
-            else {
-                Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
-            }
-        })
     }
 
     fn command<P: AsRef<Path>>(
