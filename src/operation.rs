@@ -319,12 +319,9 @@ impl Operation {
                         let asn = unwrap!(matches.value_of("asn"));
                         match AsId::from_str(asn) {
                             Ok(asn) => asn,
-                            Err(_) => match u32::from_str(asn) {
-                                Ok(asn) => asn.into(),
-                                Err(_) => {
-                                    error!("illegal AS number");
-                                    return Err(Error);
-                                }
+                            Err(_) => {
+                                error!("illegal AS number");
+                                return Err(Error);
                             }
                         }
                     }, 
@@ -708,15 +705,12 @@ impl Operation {
             for value in list {
                 let asn = match AsId::from_str(value) {
                     Ok(asn) => asn,
-                    Err(_) => match u32::from_str(value) {
-                        Ok(asn) => asn.into(),
-                        Err(_) => {
-                            error!(
-                                "Invalid ASN \"{}\" in --filter-asn",
-                                value
-                            );
-                            return Err(Error)
-                        }
+                    Err(_) => {
+                        error!(
+                            "Invalid ASN \"{}\" in --filter-asn",
+                            value
+                        );
+                        return Err(Error)
                     }
                 };
                 res.push(output::Filter::As(asn))
