@@ -63,9 +63,20 @@ assets = [
     ["README.md", "usr/share/doc/routinator/", "644"],
     ["doc/misc.md", "usr/share/doc/routinator/misc.md", "644"],
     ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
-    ["etc/routinator.service", "lib/systemd/system/routinator.service", "644"]
+    ["etc/routinator.service", "lib/systemd/system/routinator.service", "644"],
+    ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
 maintainer-scripts = "debian"
+
+[package.metadata.deb.variants.minimal]
+assets = [
+    ["target/release/routinator", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/routinator/", "644"],
+    ["doc/misc.md", "usr/share/doc/routinator/misc.md", "644"],
+    ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
+    ["etc/routinator.service.minimal", "lib/systemd/system/routinator.service", "644"],
+    ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
+]
 
 [patch.crates-io]
 bcder = { git="https://github.com/NLnetLabs/bcder.git" }

@@ -1,0 +1,24 @@
+# Configuration for Running Routinator as a System Service
+# ========================================================
+#
+# This configuration assumes that the TALs are placed in
+# /etc/routinator/tals and the repository is maintained in
+# /var/lib/routinator/repository.
+#
+# It will start Routinator with an RTR server listening on port 3323 and
+# an HTTP server listening on port 8323. Both are limited to localhost by
+# default.
+#
+# You can use this configuration as
+# /etc/routinator/routinator.conf and start Routinator with
+# --config /etc/routinator/routinator.conf.
+#
+# This file contains only the relevant configuration options. For a complete
+# example, see etc/routinator.conf.example in the source distribution or
+# consult the manual page.
+
+repository-dir = "/var/lib/routinator"
+tal-dir = "/etc/routinator/tals"
+rtr-listen = ["127.0.0.1:3323"]
+http-listen = ["127.0.0.1:8323"]
+
