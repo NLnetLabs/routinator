@@ -23,6 +23,7 @@ New
   option. [(#169)]
 * Various commands have received a `--complete` option that causes them to
   exit with status code 2 if any of the rsync commands fails. ([#177)]
+* Metrics showing the duration of rsync commands. [(#178)]
 
 Bug Fixes
 
