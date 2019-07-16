@@ -23,6 +23,7 @@ New
   option. [(#169)]
 * Various commands have received a `--complete` option that causes them to
   exit with status code 2 if any of the rsync commands fails. ([#177)]
+* Metrics showing the duration of rsync commands. [(#178)]
 
 Bug Fixes
 
@@ -45,6 +46,7 @@ Dependencies
 [(#173)]: https://github.com/NLnetLabs/routinator/pull/173
 [(#176)]: https://github.com/NLnetLabs/routinator/pull/176
 [(#177)]: https://github.com/NLnetLabs/routinator/pull/177
+[(#178)]: https://github.com/NLnetLabs/routinator/pull/178
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’

@@ -182,7 +182,7 @@ impl Service {
         }
 
         // serial
-        unwrap!(write!(res,
+        unwrap!(writeln!(res,
             "\n\
             # HELP routinator_serial current RTR serial number\n\
             # TYPE routinator_serial gauge\n\
@@ -191,7 +191,41 @@ impl Service {
             self.origins.serial()
         ));
 
-        unwrap!(writeln!(res, ""));
+        // rsync_status
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rsync_status exit status of rsync command\n\
+            # TYPE routinator_rsync_status gauge"
+        ));
+        for (module, metrics) in metrics.rsync() {
+            unwrap!(writeln!(
+                res,
+                "routinator_rsync_status{{uri=\"{}\"}} {}",
+                module,
+                match metrics.status {
+                    Ok(status) => status.code().unwrap_or(-1),
+                    Err(_) => -1
+                }
+            ));
+        }
+
+        // rsync_duration
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rsync_duration duration of rsync in seconds\n\
+            # TYPE routinator_rsync_duration gauge"
+        ));
+        for (module, metrics) in metrics.rsync() {
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
+                    module,
+                    duration.as_secs() as f64
+                    + f64::from(duration.subsec_millis()) / 1000.
+                ));
+            }
+        }
 
         unwrap!(
             Response::builder()
@@ -261,6 +295,31 @@ impl Service {
             unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
         }
         unwrap!(writeln!(res, ""));
+
+        // rsync_status
+        unwrap!(writeln!(res, "rsync-durations:"));
+        for (module, metrics) in metrics.rsync() {
+            unwrap!(write!(
+                res,
+                "   {}: status={}",
+                module,
+                match metrics.status {
+                    Ok(status) => status.code().unwrap_or(-1),
+                    Err(_) => -1
+                }
+            ));
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    ", duration={:.3}s",
+                    duration.as_secs() as f64
+                    + f64::from(duration.subsec_millis()) / 1000.
+                ));
+            }
+            else {
+                unwrap!(writeln!(res, ""))
+            }
+        }
 
         unwrap!(
             Response::builder()
