@@ -4,7 +4,7 @@
 //! application itself, via `main.rs` is only a very tiny frontend.
 
 pub use self::config::Config;
-pub use self::operation::{Error, Operation};
+pub use self::operation::{Error, ExitError, Operation};
 
 pub mod config;
 pub mod http;

@@ -19,7 +19,7 @@ New
   Valiator for easy migration. [(#173)]
 * Output format `summary` which will print a summary of the content of the
   RPKI repository. [(#167)]
-* The ARIN TAL can now be skipped during `init` with the `--decline-arin-tal`
+* The ARIN TAL can now be skipped during `init` with the `--decline-arin-rpa`
   option. [(#169)]
 
 Bug Fixes

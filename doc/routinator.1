@@ -356,6 +356,11 @@ This format produces no output whatsoever.
 .BR \-n ,\  \-\-noupdate
 The repository will not be updated before producing the list.
 .TP
+.B \-\-complete
+If any of the rsync commands needed to update the repository failed, complete
+the operation but provide exit status 2. If this option is not given, the
+operation will complete with exit status 0 in this case.
+.TP
 .BI \-a \ asn\fR,\  \-\-filter\-asn= asn
 Only output VRPs for the given ASN. The option can be given multiple times,
 in which case VRPs for all provided ASNs are provided. ASNs can be given with
@@ -387,14 +392,19 @@ or without the prefix
 .BI \-p \ prefix\fR,\  \-\-prefix= prefix
 The address prefix the route announcement is for.
 .TP
-.BR \-n ,\  \-\-noupdate
-The repository will not be updated before performing validation.
-.TP
 .BR \-j ,\  \-\-json
 A detailed analysis on the reasoning behind the validation is printed in
 JSON format including lists of the VPRs that caused the particular result.
 If this option is omitted, Routinator will only print the determined
 state.
+.TP
+.BR \-n ,\  \-\-noupdate
+The repository will not be updated before performing validation.
+.TP
+.B \-\-complete
+If any of the rsync commands needed to update the repository failed, complete
+the operation but provide exit status 2. If this option is not given, the
+operation will complete with exit status 0 in this case.
 
 .SS server
 This command causes Routinator to act as a server for the RPKI-to-Router
@@ -498,6 +508,11 @@ publication points that appear in the repository and fetch their data.
 .PP
 As such, the command really is a shortcut for running
 .B routinator vrps -f none\fR.
+.TP
+.B \-\-complete
+If any of the rsync commands needed to update the repository failed, complete
+the operation but provide exit status 2. If this option is not given, the
+operation will complete with exit status 0 in this case.
 
 .SS man
 Displays the manual page, i.e., this page.
@@ -801,6 +816,13 @@ be broken up into a sequence of sub-strings. Since those strings are in
 some places used to carry encoded content themselves, such an encoding
 does make parsing significantly more difficult. At least one CA does
 produce such broken-up strings.
+
+.SH EXIT STATUS
+Upon success, the exit status 0 is returned. If any fatal error happens,
+the exit status will be 1. Some commands provide a
+.B --complete
+option which will cause the exit status to be 2 if any of the rsync commands
+to update the repository fail.
 
 .SH AUTHOR
 .P

@@ -2,13 +2,13 @@ use std::env::current_dir;
 use std::process::exit;
 use clap::{App, crate_authors, crate_version};
 use log::error;
-use routinator::{Config, Error, Operation};
+use routinator::{Config, ExitError, Operation};
 
 // Since `main` with a result currently insists on printing a message, but
-// in our case we only get an `Error` if all is said and done, we make our
+// in our case we only get an `ExitError` if all is said and done, we make our
 // own, more quiet version.
-fn _main() -> Result<(), Error> {
-    Operation::init()?;
+fn _main() -> Result<(), ExitError> {
+    Operation::prepare()?;
     let cur_dir = match current_dir() {
         Ok(dir) => dir,
         Err(err) => {
@@ -16,7 +16,7 @@ fn _main() -> Result<(), Error> {
                 "Fatal: cannot get current directory ({}). Aborting.",
                 err
             );
-            return Err(Error);
+            return Err(ExitError::Generic);
         }
     };
     let matches = Operation::config_args(Config::config_args(
@@ -35,7 +35,8 @@ fn _main() -> Result<(), Error> {
 fn main() {
     match _main() {
         Ok(_) => exit(0),
-        Err(_) => exit(1),
+        Err(ExitError::Generic) => exit(1),
+        Err(ExitError::IncompleteUpdate) => exit(2),
     }
 }
 
