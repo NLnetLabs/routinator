@@ -222,7 +222,7 @@ impl Service {
                     "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
                     module,
                     duration.as_secs() as f64
-                    + duration.subsec_millis() as f64 / 1000.
+                    + f64::from(duration.subsec_millis()) / 1000.
                 ));
             }
         }
@@ -313,7 +313,7 @@ impl Service {
                     res,
                     ", duration={:.3}s",
                     duration.as_secs() as f64
-                    + duration.subsec_millis() as f64 / 1000.
+                    + f64::from(duration.subsec_millis()) / 1000.
                 ));
             }
             else {
