@@ -46,6 +46,7 @@ Dependencies
 [(#173)]: https://github.com/NLnetLabs/routinator/pull/173
 [(#176)]: https://github.com/NLnetLabs/routinator/pull/176
 [(#177)]: https://github.com/NLnetLabs/routinator/pull/177
+[(#178)]: https://github.com/NLnetLabs/routinator/pull/178
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’
