@@ -182,7 +182,7 @@ impl Service {
         }
 
         // serial
-        unwrap!(write!(res,
+        unwrap!(writeln!(res,
             "\n\
             # HELP routinator_serial current RTR serial number\n\
             # TYPE routinator_serial gauge\n\
@@ -191,7 +191,23 @@ impl Service {
             self.origins.serial()
         ));
 
-        unwrap!(writeln!(res, ""));
+        // rsync_duration
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rsync_duration duration of rsync in seconds\n\
+            # TYPE routinator_rsync_duration gauge"
+        ));
+        for (module, metrics) in metrics.rsync() {
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
+                    module,
+                    duration.as_secs() as f64
+                    + duration.subsec_millis() as f64 / 1000.
+                ));
+            }
+        }
 
         unwrap!(
             Response::builder()
@@ -261,6 +277,20 @@ impl Service {
             unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
         }
         unwrap!(writeln!(res, ""));
+
+        // rsync_duration
+        unwrap!(writeln!(res, "rsync-durations:"));
+        for (module, metrics) in metrics.rsync() {
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    "   {}: {:.3}",
+                    module,
+                    duration.as_secs() as f64
+                    + duration.subsec_millis() as f64 / 1000.
+                ));
+            }
+        }
 
         unwrap!(
             Response::builder()

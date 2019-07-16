@@ -388,10 +388,11 @@ impl Server {
             ),
             config.history_size
         );
+        metrics.set_rsync(repo.take_rsync_metrics());
         history.push_metrics(metrics);
         history.mark_update_done();
 
-        info!("Starting listeners...");
+        warn!("Starting listeners...");
         let (notify, rtr) = rtr_listener(history.clone(), &config);
         let http = http_listener(&history, &config);
         tokio::runtime::run(
@@ -449,12 +450,14 @@ impl Server {
                     repo.process_async()
                     .and_then(move |origins| {
                         info!("Loading exceptions.");
+                        let rsync = repo.take_rsync_metrics();
                         let must_notify = match repo.load_exceptions(&config) {
                             Ok(exceptions) => {
                                 history.update(
                                     Some(origins),
                                     &exceptions,
-                                    false
+                                    false,
+                                    rsync
                                 )
                             }
                             Err(_) => {
