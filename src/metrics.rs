@@ -4,29 +4,39 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use log::info;
 use rpki::tal::TalInfo;
+use rpki::uri::RsyncModule;
+use crate::repository::RsyncMetrics;
 
 
 //------------ Metrics -------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Metrics {
     /// Time when these metrics have been collected.
     time: DateTime<Utc>,
 
     /// Per-TAL metrics.
     tals: Vec<TalMetrics>,
+
+    /// Rsync metrics.
+    rsync: Vec<(RsyncModule, RsyncMetrics)>,
 }
 
 impl Metrics {
     pub fn new() -> Self {
         Metrics {
             time: Utc::now(),
-            tals: Vec::new()
+            tals: Vec::new(),
+            rsync: Vec::new(),
         }
     }
 
     pub fn push_tal(&mut self, tal: TalMetrics) {
         self.tals.push(tal)
+    }
+
+    pub fn set_rsync(&mut self, rsync: Vec<(RsyncModule, RsyncMetrics)>) {
+        self.rsync = rsync
     }
 
     pub fn time(&self) -> DateTime<Utc> {
@@ -39,6 +49,21 @@ impl Metrics {
 
     pub fn tals(&self) -> &[TalMetrics] {
         &self.tals
+    }
+
+    pub fn rsync(&self) -> &[(RsyncModule, RsyncMetrics)] {
+        &self.rsync
+    }
+
+    pub fn rsync_complete(&self) -> bool {
+        for (_, metrics) in &self.rsync {
+            match metrics.status {
+                Ok(status) if !status.success() => return false,
+                Err(_) => return false,
+                _ => { }
+            }
+        }
+        true
     }
 
     pub fn log(&self) {

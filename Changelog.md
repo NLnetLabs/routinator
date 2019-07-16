@@ -19,8 +19,10 @@ New
   Valiator for easy migration. [(#173)]
 * Output format `summary` which will print a summary of the content of the
   RPKI repository. [(#167)]
-* The ARIN TAL can now be skipped during `init` with the `--decline-arin-tal`
+* The ARIN TAL can now be skipped during `init` with the `--decline-arin-rpa`
   option. [(#169)]
+* Various commands have received a `--complete` option that causes them to
+  exit with status code 2 if any of the rsync commands fails. ([#177)]
 
 Bug Fixes
 
@@ -42,6 +44,7 @@ Dependencies
 [hyper]: https://hyper.rs/
 [(#173)]: https://github.com/NLnetLabs/routinator/pull/173
 [(#176)]: https://github.com/NLnetLabs/routinator/pull/176
+[(#177)]: https://github.com/NLnetLabs/routinator/pull/177
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’

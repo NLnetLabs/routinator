@@ -6,13 +6,13 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fs, io, process};
+use std::{fs, io, mem, process};
 use std::fs::{DirEntry, File, create_dir_all};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, SystemTimeError};
 use bytes::Bytes;
 use derive_more::Display;
 use futures::future;
@@ -288,6 +288,19 @@ impl Repository {
         config: &Config
     ) -> Result<LocalExceptions, Error> {
         config.load_exceptions(self.0.extra_output)
+    }
+
+    /// Returns the rsync metrics.
+    ///
+    /// This can only be done once per update as it replaces the current
+    /// metrics with an empty set.
+    pub fn take_rsync_metrics(&self) -> Vec<(uri::RsyncModule, RsyncMetrics)> {
+        if let Some(ref rsync) = self.0.rsync {
+            rsync.0.lock().unwrap().take_seen()
+        }
+        else {
+            Vec::new()
+        }
     }
 }
 
@@ -754,11 +767,11 @@ impl Repository {
                 }
                 Err(cvar) => {
                     let mut finished = cvar.0.lock().unwrap();
-                    let _ = command.update(module, path);
+                    let metrics = command.update(module, path);
                     {
                         let mut state = state.lock().unwrap();
                         state.remove_running(module);
-                        state.add_seen(module);
+                        state.add_seen(module, metrics);
                     }
                     *finished = true;
                     cvar.1.notify_all();
@@ -771,7 +784,7 @@ impl Repository {
 
 //------------ RsyncState ----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct RsyncState {
     /// Rsync processes currently running.
     ///
@@ -782,7 +795,7 @@ struct RsyncState {
     running: Vec<(uri::RsyncModule, Arc<(Mutex<bool>, Condvar)>)>,
 
     /// The rsync modules we already tried in this iteration.
-    seen: Vec<uri::RsyncModule>,
+    seen: Vec<(uri::RsyncModule, RsyncMetrics)>,
 }
 
 impl RsyncState {
@@ -812,16 +825,20 @@ impl RsyncState {
         self.running.retain(|item| !item.0.eq(module))
     }
 
-    fn add_seen(&mut self, module: &uri::RsyncModule) {
-        self.seen.push(module.clone());
+    fn add_seen(&mut self, module: &uri::RsyncModule, metrics: RsyncMetrics) {
+        self.seen.push((module.clone(), metrics));
     }
 
     fn have_seen(&self, module: &uri::RsyncModule) -> bool {
-        self.seen.contains(module)
+        self.seen.iter().any(|x| x.0 == *module)
     }
 
     fn clear_seen(&mut self) {
         self.seen.clear()
+    }
+
+    fn take_seen(&mut self) -> Vec<(uri::RsyncModule, RsyncMetrics)> {
+        mem::replace(&mut self.seen, Vec::new())
     }
 }
 
@@ -884,14 +901,20 @@ impl RsyncCommand {
         &self,
         source: &uri::RsyncModule,
         destination: P
-    ) -> Result<(), io::Error> {
-        let output = self.command(source, destination)?.output()?;
-        let status = Self::log_output(source, output);
-        if status.success() {
-            Ok(())
-        }
-        else {
-            Err(io::Error::new(io::ErrorKind::Other, "rsync failed"))
+    ) -> RsyncMetrics {
+        let start = SystemTime::now();
+        let status = {
+            match self.command(source, destination) {
+                Ok(mut command) => match command.output() {
+                    Ok(output) => Ok(Self::log_output(source, output)),
+                    Err(err) => Err(err)
+                }
+                Err(err) => Err(err)
+            }
+        };
+        RsyncMetrics {
+            status,
+            duration: SystemTime::now().duration_since(start)
         }
     }
 
@@ -1025,6 +1048,15 @@ impl RsyncCommand {
         }
         output.status
     }
+}
+
+
+//------------ RsyncMetrics --------------------------------------------------
+
+#[derive(Debug)]
+pub struct RsyncMetrics {
+    pub status: Result<ExitStatus, io::Error>,
+    pub duration: Result<Duration, SystemTimeError>
 }
 
 
