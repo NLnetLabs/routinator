@@ -191,6 +191,24 @@ impl Service {
             self.origins.serial()
         ));
 
+        // rsync_status
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rsync_status exit status of rsync command\n\
+            # TYPE routinator_rsync_status gauge"
+        ));
+        for (module, metrics) in metrics.rsync() {
+            unwrap!(writeln!(
+                res,
+                "routinator_rsync_status{{uri=\"{}\"}} {}",
+                module,
+                match metrics.status {
+                    Ok(status) => status.code().unwrap_or(-1),
+                    Err(_) => -1
+                }
+            ));
+        }
+
         // rsync_duration
         unwrap!(writeln!(res, "
             \n\
@@ -278,17 +296,28 @@ impl Service {
         }
         unwrap!(writeln!(res, ""));
 
-        // rsync_duration
+        // rsync_status
         unwrap!(writeln!(res, "rsync-durations:"));
         for (module, metrics) in metrics.rsync() {
+            unwrap!(write!(
+                res,
+                "   {}: status={}",
+                module,
+                match metrics.status {
+                    Ok(status) => status.code().unwrap_or(-1),
+                    Err(_) => -1
+                }
+            ));
             if let Ok(duration) = metrics.duration {
                 unwrap!(writeln!(
                     res,
-                    "   {}: {:.3}",
-                    module,
+                    ", duration={:.3}s",
                     duration.as_secs() as f64
                     + duration.subsec_millis() as f64 / 1000.
                 ));
+            }
+            else {
+                unwrap!(writeln!(res, ""))
             }
         }
 
