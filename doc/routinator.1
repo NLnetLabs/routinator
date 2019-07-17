@@ -188,6 +188,10 @@ terminated early. This protects against hanging rsync commands that prevent
 Routinator from continuing. The default is 300 seconds which should be long
 enough except for very slow networks.
 .TP
+.B --dirty
+If this option is present, unused files and directories will not be deleted
+from the repository directory after each validation run.
+.TP
 .BI \-\-validation\-threads= count
 Sets the number of threads to distribute work to for validation. Note that
 the current processing model validates trust anchors all in one go, so you
@@ -608,6 +612,11 @@ be run in parallel. The default if this value is missing is 4 commands.
 An integer value specifying th number seconds an rsync command is allowed to
 run before it is being terminated. The default if the value is missing is
 300 seconds.
+.TP
+.B dirty
+A boolean value which, if true, specififies that unused files and directories
+should not be deleted from the repository directory after each validation run.
+If left out, its value will be false and unused files will be deleted.
 .TP
 .B validation-threads
 An integer value specifying the number of threads to be used during
