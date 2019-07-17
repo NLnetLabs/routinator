@@ -13,6 +13,10 @@ Breaking Changes
 
 New
 
+* The local copy of the repository is now cleaned up after each validation
+  run, removing directories and files that were’t referenced during the
+  run. This can be disabled with the new `--dirty` command line and
+  `dirty` config file options. [(#180)]
 * You can now check your BGP announcements for their RPKI origin
   validation status either via the HTTP interface or the new `validate`
   command. The HTTP API is the same as that used by the RIPE NCC RPKI
@@ -47,6 +51,7 @@ Dependencies
 [(#176)]: https://github.com/NLnetLabs/routinator/pull/176
 [(#177)]: https://github.com/NLnetLabs/routinator/pull/177
 [(#178)]: https://github.com/NLnetLabs/routinator/pull/178
+[(#180)]: https://github.com/NLnetLabs/routinator/pull/180
 
 
 ## 0.4.0 ‘The Bumpy Road to Love’
