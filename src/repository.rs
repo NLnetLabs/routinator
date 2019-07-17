@@ -7,6 +7,7 @@
 //! [`Repository`]: struct.Repository.html
 
 use std::{fs, io, mem, process};
+use std::collections::HashMap;
 use std::fs::{DirEntry, File, create_dir_all};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+use unwrap::unwrap;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::RouteOrigins;
@@ -82,6 +84,9 @@ struct RepoInner {
     ///
     /// If this is `None`, we don’t rsync.
     rsync: Option<(Mutex<RsyncState>, RsyncCommand)>,
+
+    /// Should we leave the repository dirty after a valiation run.
+    dirty_repository: bool,
 }
 
 impl Repository {
@@ -128,6 +133,7 @@ impl Repository {
             else {
                 None
             },
+            dirty_repository: config.dirty_repository,
         })))
     }
 
@@ -268,11 +274,19 @@ impl Repository {
     ) -> impl Future<Item=Vec<RouteOrigins>, Error=Error> {
         let pool = CpuPool::new(self.0.validation_threads);
         let repo = self.clone();
+        let clean_repo = self.clone();
         future::join_all((0..self.0.tals.len()).map(move |idx| {
             let repo = repo.clone();
             let pool = pool.clone();
             pool.spawn(future::lazy(move || repo.process_tal(idx)))
-        }))
+        })).and_then(move |res| {
+            if !clean_repo.0.dirty_repository {
+                if let Some(rsync) = &clean_repo.0.rsync {
+                    clean_repo.cleanup(&unwrap!(rsync.0.lock()))?;
+                }
+            }
+            Ok(res)
+        })
     }
 
     /// Process the local repository and produce a list of route origins.
@@ -331,6 +345,9 @@ impl Repository {
     ) -> Option<Bytes> {
         match File::open(self.uri_to_path(uri)) {
             Ok(mut file) => {
+                if let Some(rsync) = self.0.rsync.as_ref() {
+                    unwrap!(rsync.0.lock()).mark_used(uri.module())
+                }
                 let mut data = Vec::new();
                 if let Err(err) = file.read_to_end(&mut data) {
                     warn!(
@@ -746,6 +763,117 @@ impl Repository {
 }
 
 
+/// # Cleaning up
+///
+impl Repository {
+    fn cleanup(&self, rsync: &RsyncState) -> Result<(), Error> {
+        let dir = fs::read_dir(&self.0.cache_dir).map_err(|err| {
+            error!(
+                "Failed to read repository directory: {}",
+                err
+            );
+            Error
+        })?;
+        for entry in dir {
+            let entry = entry.map_err(|err| {
+                error!(
+                    "Failed to iterate over repository directory: {}",
+                    err
+                );
+                Error
+            })?;
+            self.cleanup_host(entry, rsync);
+        }
+        Ok(())
+    }
+
+    fn cleanup_host(&self, entry: DirEntry, rsync: &RsyncState) {
+        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            return
+        }
+        let path = entry.path();
+        let host = match entry_to_uri_component(&entry) {
+            Some(host) => host,
+            None => {
+                warn!(
+                    "{}: illegal host directory. Skipping.",
+                    path.display()
+                );
+                return
+            }
+        };
+        let dir = match fs::read_dir(&path) {
+            Ok(dir) => dir,
+            Err(err) => {
+                warn!(
+                    "Failed to read directory {}: {}. Skipping.",
+                    path.display(), err
+                );
+                return
+            }
+        };
+        for entry in dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    warn!(
+                        "Failed to iterate over directory {}: {}",
+                        path.display(), err
+                    );
+                    return
+                }
+            };
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                warn!(
+                    "{}: unexpected file. Skipping.",
+                    entry.path().display()
+                );
+                continue
+            }
+            match entry_to_uri_component(&entry) {
+                Some(module) => {
+                    self.cleanup_module(
+                        uri::RsyncModule::new(host.clone(), module),
+                        entry.path(),
+                        rsync
+                    )
+                }
+                None => {
+                    warn!(
+                        "{}: illegal module directory. Skipping",
+                        entry.path().display()
+                    )
+                }
+            }
+        }
+        // Now we just try to delete the whole host directory which fails
+        // if there are still modules left.
+        let _ = fs::remove_dir(path);
+    }
+
+    fn cleanup_module(
+        &self,
+        module: uri::RsyncModule,
+        path: PathBuf,
+        rsync: &RsyncState
+    ) {
+        if !rsync.was_used(&module) {
+            debug!("Cleanup: trying to delete {}.", path.display());
+            if let Err(err) = fs::remove_dir_all(&path) {
+                error!(
+                    "Failed to delete rsync module directory {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
+        else {
+            debug!("Cleanup: keeping {}.", path.display());
+        }
+    }
+}
+
+
 /// # Rsyncing
 ///
 impl Repository {
@@ -771,7 +899,7 @@ impl Repository {
                     {
                         let mut state = state.lock().unwrap();
                         state.remove_running(module);
-                        state.add_seen(module, metrics);
+                        state.add_seen(module.clone(), metrics);
                     }
                     *finished = true;
                     cvar.1.notify_all();
@@ -795,14 +923,14 @@ struct RsyncState {
     running: Vec<(uri::RsyncModule, Arc<(Mutex<bool>, Condvar)>)>,
 
     /// The rsync modules we already tried in this iteration.
-    seen: Vec<(uri::RsyncModule, RsyncMetrics)>,
+    seen: HashMap<uri::RsyncModule, RsyncMetrics>,
 }
 
 impl RsyncState {
     fn new() -> Self {
         RsyncState {
             running: Vec::new(),
-            seen: Vec::new(),
+            seen: HashMap::new(),
         }
     }
 
@@ -825,12 +953,20 @@ impl RsyncState {
         self.running.retain(|item| !item.0.eq(module))
     }
 
-    fn add_seen(&mut self, module: &uri::RsyncModule, metrics: RsyncMetrics) {
-        self.seen.push((module.clone(), metrics));
+    fn add_seen(&mut self, module: uri::RsyncModule, metrics: RsyncMetrics) {
+        let _ = self.seen.insert(module, metrics);
+    }
+
+    fn mark_used(&mut self, module: &uri::RsyncModule) {
+        unwrap!(self.seen.get_mut(module)).used = true;
     }
 
     fn have_seen(&self, module: &uri::RsyncModule) -> bool {
-        self.seen.iter().any(|x| x.0 == *module)
+        self.seen.contains_key(module)
+    }
+
+    fn was_used(&self, module: &uri::RsyncModule) -> bool {
+        self.seen.get(module).map(|state| state.used).unwrap_or(false)
     }
 
     fn clear_seen(&mut self) {
@@ -838,7 +974,7 @@ impl RsyncState {
     }
 
     fn take_seen(&mut self) -> Vec<(uri::RsyncModule, RsyncMetrics)> {
-        mem::replace(&mut self.seen, Vec::new())
+        mem::replace(&mut self.seen, HashMap::new()).into_iter().collect()
     }
 }
 
@@ -914,7 +1050,8 @@ impl RsyncCommand {
         };
         RsyncMetrics {
             status,
-            duration: SystemTime::now().duration_since(start)
+            duration: SystemTime::now().duration_since(start),
+            used: false,
         }
     }
 
@@ -1056,7 +1193,8 @@ impl RsyncCommand {
 #[derive(Debug)]
 pub struct RsyncMetrics {
     pub status: Result<ExitStatus, io::Error>,
-    pub duration: Result<Duration, SystemTimeError>
+    pub duration: Result<Duration, SystemTimeError>,
+    pub used: bool,
 }
 
 

@@ -33,6 +33,9 @@ const DEFAULT_RSYNC_COUNT: usize = 4;
 /// The default timeout for running rsync commands in seconds.
 const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
 
+/// The we leaving the repository dirty by default?
+const DEFAULT_DIRTY_REPOSITORY: bool = false;
+
 /// The default refresh interval in seconds.
 const DEFAULT_REFRESH: u64 = 3600;
 
@@ -94,6 +97,9 @@ pub struct Config {
 
     /// Timeout for rsync commands.
     pub rsync_timeout: Duration,
+
+    /// Don’t cleanup the repository directory after a validation run.
+    pub dirty_repository: bool,
 
     /// Number of parallel validations.
     pub validation_threads: usize,
@@ -202,6 +208,10 @@ impl Config {
             .default_value("600")
             .help("Timeout for rsync commands")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("dirty-repository")
+            .long("dirty")
+            .help("Do not clean up repository directory after validation")
         )
         .arg(Arg::with_name("validation-threads")
              .long("validation-threads")
@@ -399,6 +409,11 @@ impl Config {
         // rsync_timeout
         if let Some(value) = from_str_value_of(matches, "rsync-timeout")? {
             self.rsync_timeout = Duration::from_secs(value)
+        }
+
+        // dirty_repository
+        if matches.is_present("dirty-repository") {
+            self.dirty_repository = true
         }
 
         // validation_threads
@@ -776,6 +791,7 @@ impl Config {
                         .unwrap_or(DEFAULT_RSYNC_TIMEOUT)
                 )
             },
+            dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
                     .unwrap_or_else(::num_cpus::get)
@@ -913,6 +929,7 @@ impl Config {
             rsync_args: None,
             rsync_count: DEFAULT_RSYNC_COUNT,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
+            dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             retry: Duration::from_secs(DEFAULT_RETRY),
@@ -1043,6 +1060,7 @@ impl Config {
             "rsync-timeout".into(),
             (self.rsync_timeout.as_secs() as i64).into()
         );
+        res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
             "validation-threads".into(),
             (self.validation_threads as i64).into()
