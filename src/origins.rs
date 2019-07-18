@@ -414,10 +414,8 @@ pub struct HistoryInner {
     /// The newest diff will be at the front of the queue.
     diffs: VecDeque<Arc<OriginsDiff>>,
 
-    /// A list of metrics.
-    ///
-    /// The newest metric will be at the front of the queue.
-    metrics: VecDeque<Arc<Metrics>>,
+    /// The current metrics.
+    metrics: Arc<Metrics>,
 
     /// The number of diffs and metrics to keep.
     keep: usize,
@@ -443,7 +441,7 @@ impl OriginsHistory {
             HistoryInner {
                 current: Arc::new(current),
                 diffs: VecDeque::with_capacity(keep),
-                metrics: VecDeque::with_capacity(keep),
+                metrics: Arc::new(Metrics::new()),
                 keep,
                 last_update_start: Instant::now(),
                 last_update_done: None,
@@ -526,9 +524,7 @@ impl OriginsHistory {
     }
 
     pub fn current_metrics(&self) -> Arc<Metrics> {
-        self.0.read().unwrap().metrics.front().cloned().unwrap_or_else(|| {
-            Arc::new(Metrics::new())
-        })
+        self.0.read().unwrap().metrics.clone()
     }
 
     pub fn update_times(
@@ -571,10 +567,10 @@ impl OriginsHistory {
         );
         metrics.set_rsync(rsync);
         let mut history = self.0.write().unwrap();
+        history.metrics = Arc::new(metrics);
         if !diff.is_empty() {
             history.current = Arc::new(next);
             history.push_diff(diff);
-            history.push_metrics(metrics);
             true
         }
         else {
@@ -584,7 +580,7 @@ impl OriginsHistory {
 
     /// Adds a set of metrics to the history.
     pub fn push_metrics(&self, metrics: Metrics) {
-        self.0.write().unwrap().push_metrics(metrics)
+        self.0.write().unwrap().metrics = Arc::new(metrics)
     }
 
     /// Marks the beginning of an update cycle.
@@ -618,14 +614,6 @@ impl HistoryInner {
             let _ = self.diffs.pop_back();
         }
         self.diffs.push_front(Arc::new(diff))
-    }
-
-    /// Appends a new set of metrics dropping old ones if necessary.
-    pub fn push_metrics(&mut self, metrics: Metrics) {
-        if self.metrics.len() == self.keep {
-            let _ = self.metrics.pop_back();
-        }
-        self.metrics.push_front(Arc::new(metrics))
     }
 }
 
