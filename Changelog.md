@@ -1,5 +1,14 @@
 # Change Log
 
+## Unreleased future version
+
+Breaking Changes
+
+News
+
+Bug Fixes
+
+
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
 
 Breaking Changes
