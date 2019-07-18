@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2018"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
@@ -30,11 +30,11 @@ rpki            = "^0.5.0"
 slab            = "^0.4"
 tempfile        = "^3.0"
 tokio           = "^0.1"
-toml            = "^0.4"
+toml            = "^0.5"
 unwrap          = "^1.2.1"
 
 [target.'cfg(unix)'.dependencies]
-daemonize	= "^0.3"
+daemonize	= "^0.4"
 libc		= "^0.2"
 syslog		= "^4.0"
 
@@ -76,8 +76,4 @@ assets = [
     ["etc/routinator.service.minimal", "lib/systemd/system/routinator.service", "644"],
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
-
-[patch.crates-io]
-bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 

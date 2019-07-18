@@ -1,33 +1,34 @@
 # Change Log
 
-## Unreleased next version
+## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
 
 Breaking Changes
 
 * Prometheus metrics are now prefixed with `routinator_`. ([#162] by
   [@momorientes])
 * Added `--timeout` option to `rsync` call. This seems to be available on
-  most all rsync versions in use. Should that not be the case, you can use
+  most rsync versions in use. Should that not be the case, you can use
   the `rsync-args` config file option to define your own set of rsync
   arguments, overriding this behaviour. ([#176])
 
 New
 
 * The local copy of the repository is now cleaned up after each validation
-  run, removing directories and files that were’t referenced during the
+  run, removing directories and files that weren’t referenced during the
   run. This can be disabled with the new `--dirty` command line and
   `dirty` config file options. [(#180)]
-* You can now check your BGP announcements for their RPKI origin
-  validation status either via the HTTP interface or the new `validate`
+* You can now check pairs of address prefix and AS number for their RPKI
+  origin validation status either via the HTTP interface or the new `validate`
   command. The HTTP API is the same as that used by the RIPE NCC RPKI
-  Valiator for easy migration. [(#173)]
+  Validator for easy migration. [(#173)]
 * Output format `summary` which will print a summary of the content of the
   RPKI repository. [(#167)]
 * The ARIN TAL can now be skipped during `init` with the `--decline-arin-rpa`
   option. [(#169)]
 * Various commands have received a `--complete` option that causes them to
   exit with status code 2 if any of the rsync commands fails. ([#177)]
-* Metrics showing the duration of rsync commands. [(#178)]
+* Additional metrics showing the status and duration of rsync commands.
+  [(#178)]
 
 Bug Fixes
 
@@ -36,8 +37,6 @@ Bug Fixes
 * Fix Prometheus metrics definitions. ([#161] by [@momorientes])
 * The HTTP server can now deal with unreasonably large requests. It has
   been switched to using [hyper]. [(#171)]
-
-Dependencies
 
 [(#156)]: https://github.com/NLnetLabs/routinator/pull/156
 [#161]: https://github.com/NLnetLabs/routinator/pull/161
