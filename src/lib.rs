@@ -14,6 +14,7 @@ pub mod origins;
 pub mod output;
 pub mod repository;
 pub mod rtr;
+pub mod rsync;
 pub mod slurm;
 pub mod utils;
 pub mod validity;

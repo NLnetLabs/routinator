@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use log::info;
+use rpki::uri;
 use rpki::tal::TalInfo;
-use rpki::uri::RsyncModule;
-use crate::repository::RsyncMetrics;
+use crate::rsync;
 
 
 //------------ Metrics -------------------------------------------------------
@@ -19,7 +19,7 @@ pub struct Metrics {
     tals: Vec<TalMetrics>,
 
     /// Rsync metrics.
-    rsync: Vec<(RsyncModule, RsyncMetrics)>,
+    rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>,
 }
 
 impl Metrics {
@@ -35,7 +35,10 @@ impl Metrics {
         self.tals.push(tal)
     }
 
-    pub fn set_rsync(&mut self, rsync: Vec<(RsyncModule, RsyncMetrics)>) {
+    pub fn set_rsync(
+        &mut self,
+        rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>
+    ) {
         self.rsync = rsync
     }
 
@@ -51,7 +54,7 @@ impl Metrics {
         &self.tals
     }
 
-    pub fn rsync(&self) -> &[(RsyncModule, RsyncMetrics)] {
+    pub fn rsync(&self) -> &[(uri::RsyncModule, rsync::ModuleMetrics)] {
         &self.rsync
     }
 

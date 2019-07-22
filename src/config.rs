@@ -205,7 +205,6 @@ impl Config {
         .arg(Arg::with_name("rsync-timeout")
             .long("rsync-timeout")
             .value_name("SECONDS")
-            .default_value("600")
             .help("Timeout for rsync commands")
             .takes_value(true)
         )

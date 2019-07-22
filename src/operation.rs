@@ -371,9 +371,6 @@ impl Server {
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
-        if repo.update().is_err() {
-            warn!("Repository update failed. Continuing anyway.");
-        }
         let roas = match repo.process() {
             Ok(roas) => roas,
             Err(_) => {
@@ -388,7 +385,7 @@ impl Server {
             ),
             config.history_size
         );
-        metrics.set_rsync(repo.take_rsync_metrics());
+        repo.update_metrics(&mut metrics);
         history.push_metrics(metrics);
         history.mark_update_done();
 
@@ -441,23 +438,24 @@ impl Server {
                     history.mark_update_start();
                     Ok((repo, history))
                 })
+                /*
                 .and_then(|(repo, history)| {
                     info!("Updating the local repository.");
                     repo.update_async().map(|()| (repo, history))
                 })
+                */
                 .and_then(|(repo, history)| {
                     info!("Starting validation of local repository.");
                     repo.process_async()
                     .and_then(move |origins| {
                         info!("Loading exceptions.");
-                        let rsync = repo.take_rsync_metrics();
                         let must_notify = match repo.load_exceptions(&config) {
                             Ok(exceptions) => {
                                 history.update(
                                     Some(origins),
                                     &exceptions,
                                     false,
-                                    rsync
+                                    &repo
                                 )
                             }
                             Err(_) => {
@@ -1009,9 +1007,6 @@ fn get_vrps_and_metrics(
     config.switch_logging(false)?;
     let exceptions = repo.load_exceptions(&config)?;
 
-    if repo.update().is_err() {
-        warn!("Update failed. Continuing anyway.");
-    }
     let roas = match repo.process() {
         Ok(roas) => roas,
         Err(_) => {
