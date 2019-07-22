@@ -23,7 +23,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
-use crate::rsync;
+use crate::{rrdp, rsync};
 use crate::metrics::Metrics;
 use crate::config::Config;
 use crate::operation::Error;
@@ -77,6 +77,9 @@ struct RepoInner {
     /// Number of validation threads.
     validation_threads: usize,
 
+    /// The RRDP cache.
+    rrdp: rrdp::Cache,
+
     /// The rsync cache.
     rsync: rsync::Cache,
 
@@ -119,6 +122,9 @@ impl Repository {
             extra_output,
             rsync_threads: config.rsync_count,
             validation_threads: config.validation_threads,
+            rrdp: rrdp::Cache::new(
+                config, config.cache_dir.join("rrdp"), update
+            )?,
             rsync: rsync::Cache::new(
                 config, config.cache_dir.join("rsync"), update
             
@@ -260,7 +266,7 @@ impl Repository {
         uri: &uri::Rsync
     ) -> Result<Option<Cert>, Error> {
         Ok(
-            self.load_file(uri, true)
+            self.load_file(None, uri, true)
             .and_then(|bytes| Cert::decode(bytes).ok())
         )
     }
@@ -272,9 +278,15 @@ impl Repository {
     /// If loading the file fails, logs a warning and returns `None`.
     fn load_file(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         uri: &uri::Rsync,
         create: bool
     ) -> Option<Bytes> {
+        if let Some(id) = rrdp_server {
+            if let Some(res) = self.0.rrdp.load_file(id, uri, create) {
+                return Some(res)
+            }
+        }
         self.0.rsync.load_file(uri, create)
     }
 }
@@ -350,7 +362,10 @@ impl Repository {
                 return
             }
         };
-        let manifest = match self.get_manifest(&cert, uri, &mut store) {
+        let rrdp_server = cert.rpki_notify().and_then(|uri| {
+            self.0.rrdp.load_server(uri)
+        });
+        let mft = match self.get_manifest(rrdp_server, &cert, uri, &mut store) {
             Some(manifest) => manifest,
             None => {
                 info!("No valid manifest for CA {}. Ignoring.", uri);
@@ -358,8 +373,10 @@ impl Repository {
             }
         };
 
-        for (uri, hash) in manifest.iter_uris(repo_uri) {
-            self.process_object(uri, hash, &cert, &mut store, routes);
+        for (uri, hash) in mft.iter_uris(repo_uri) {
+            self.process_object(
+                rrdp_server, uri, hash, &cert, &mut store, routes
+            );
         }
     }
 
@@ -376,6 +393,7 @@ impl Repository {
     /// This method logs all its messages.
     fn process_object(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &ResourceCert,
@@ -386,7 +404,7 @@ impl Repository {
         //     manifest. So we should be fine calling load_file without
         //     request for file creation.
         if uri.ends_with(".cer") {
-            let bytes = match self.load_file(&uri, false) {
+            let bytes = match self.load_file(rrdp_server, &uri, false) {
                 Some(bytes) => bytes,
                 None => {
                     info!("{}: failed to load.", uri);
@@ -411,14 +429,14 @@ impl Repository {
                     return
                 }
             };
-            if self.check_crl(&cert, issuer, crl).is_err() {
+            if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
                 info!("{}: certificate has been revoked", uri);
                 return
             }
             self.process_ca(cert, &uri, routes)
         }
         else if uri.ends_with(".roa") {
-            let bytes = match self.load_file(&uri, false) {
+            let bytes = match self.load_file(rrdp_server, &uri, false) {
                 Some(bytes) => bytes,
                 None => {
                     info!("{}: failed to load.", uri);
@@ -438,7 +456,7 @@ impl Repository {
             };
             let mut extra = None;
             let route = roa.process(issuer, self.0.strict, |cert| {
-                self.check_crl(cert, issuer, crl)?;
+                self.check_crl(rrdp_server, cert, issuer, crl)?;
                 extra = Some(8u8);
                 Ok(())
             });
@@ -473,6 +491,7 @@ impl Repository {
     /// The RFC says we need to decide what to do, so this is fine.
     fn get_manifest(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         issuer: &ResourceCert,
         issuer_uri: &uri::Rsync,
         store: &mut CrlStore,
@@ -484,7 +503,7 @@ impl Repository {
                 return None
             }
         };
-        let bytes = match self.load_file(&uri, true) {
+        let bytes = match self.load_file(rrdp_server, &uri, true) {
             Some(bytes) => bytes,
             None => {
                 info!("{}: failed to load.", uri);
@@ -517,7 +536,7 @@ impl Repository {
             );
             store.enable_serial_caching();
         }
-        if self.check_crl(cert, issuer, store).is_err() {
+        if self.check_crl(rrdp_server, cert, issuer, store).is_err() {
             info!("{}: certificate has been revoked", uri);
             return None
         }
@@ -527,6 +546,7 @@ impl Repository {
     /// Checks wheter a certificate is listed on its CRL.
     fn check_crl<C: AsRef<TbsCert>>(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         cert: C,
         issuer: &ResourceCert,
         store: &mut CrlStore,
@@ -548,7 +568,7 @@ impl Repository {
         }
 
         // Otherwise, try to load it, use it, and then store it.
-        let bytes = match self.load_file(&uri, true) {
+        let bytes = match self.load_file(rrdp_server, &uri, true) {
             Some(bytes) => bytes,
             _ => return Err(ValidationError),
         };

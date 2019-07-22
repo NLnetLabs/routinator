@@ -21,7 +21,7 @@ use crate::operation::Error;
 /// Access to local copies of repositories synchronized via rsync.
 #[derive(Debug)]
 pub struct Cache {
-    /// The directory of the cache.
+    /// The base directory of the cache.
     cache_dir: CacheDir,
 
     /// Running rsync.
@@ -499,7 +499,7 @@ impl State {
             Some(host) => host,
             None => {
                 warn!(
-                    "{}: illegal host directory. Skipping.",
+                    "{}: illegal rsync host directory. Skipping.",
                     path.display()
                 );
                 return

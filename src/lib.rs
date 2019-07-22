@@ -13,6 +13,7 @@ pub mod operation;
 pub mod origins;
 pub mod output;
 pub mod repository;
+pub mod rrdp;
 pub mod rtr;
 pub mod rsync;
 pub mod slurm;
