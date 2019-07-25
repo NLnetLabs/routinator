@@ -23,6 +23,7 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
 use rpki::tal::Tal;
 use rpki::x509::ValidationError;
+//use unwrap::unwrap;
 use crate::{rrdp, rsync};
 use crate::metrics::Metrics;
 use crate::config::Config;
@@ -78,7 +79,7 @@ struct RepoInner {
     validation_threads: usize,
 
     /// The RRDP cache.
-    rrdp: rrdp::Cache,
+    rrdp: Option<rrdp::Cache>,
 
     /// The rsync cache.
     rsync: rsync::Cache,
@@ -124,7 +125,7 @@ impl Repository {
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(
                 config, config.cache_dir.join("rrdp"), update
-            )?,
+            ).ok(),
             rsync: rsync::Cache::new(
                 config, config.cache_dir.join("rsync"), update
             
@@ -208,8 +209,12 @@ impl Repository {
     /// This resets the update cache that lists the rsync modules we have
     /// already tried updating. It is therefore really important to call this
     /// method before doing any new update.
-    pub fn start(&self) {
-        self.0.rsync.start()
+    pub fn start(&self) -> Result<(), Error> {
+        self.0.rsync.start()?;
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.start()?;
+        }
+        Ok(())
     }
 
     /// Process the local repository and produce a list of route origins.
@@ -283,8 +288,10 @@ impl Repository {
         create: bool
     ) -> Option<Bytes> {
         if let Some(id) = rrdp_server {
-            if let Some(res) = self.0.rrdp.load_file(id, uri, create) {
-                return Some(res)
+            if let Some(rrdp) = self.0.rrdp.as_ref() {
+                if let Some(res) = rrdp.load_file(id, uri) {
+                    return Some(res)
+                }
             }
         }
         self.0.rsync.load_file(uri, create)
@@ -363,7 +370,7 @@ impl Repository {
             }
         };
         let rrdp_server = cert.rpki_notify().and_then(|uri| {
-            self.0.rrdp.load_server(uri)
+            self.0.rrdp.as_ref().and_then(|rrdp| rrdp.load_server(uri))
         });
         let mft = match self.get_manifest(rrdp_server, &cert, uri, &mut store) {
             Some(manifest) => manifest,

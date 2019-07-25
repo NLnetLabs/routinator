@@ -47,8 +47,10 @@ impl Cache {
     }
 
     /// Start a new validation run.
-    pub fn start(&self) {
+    pub fn start(&self) -> Result<(), Error> {
+        // XXX Check for existing directory here.
         self.command.as_ref().map(Command::start);
+        Ok(())
     }
 
     /// Loads the content of a file from the given URI.
@@ -527,7 +529,7 @@ impl State {
                 }
             };
             if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                warn!(
+                info!(
                     "{}: unexpected file. Skipping.",
                     entry.path().display()
                 );
@@ -541,7 +543,7 @@ impl State {
                     )
                 }
                 None => {
-                    warn!(
+                    info!(
                         "{}: illegal module directory. Skipping",
                         entry.path().display()
                     )

@@ -434,7 +434,7 @@ impl Server {
                     Error
                 })
                 .and_then(move |_| {
-                    repo.start();
+                    repo.start()?;
                     history.mark_update_start();
                     Ok((repo, history))
                 })
