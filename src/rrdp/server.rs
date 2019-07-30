@@ -247,6 +247,7 @@ impl Server {
         notify: &NotificationFile,
         http: &HttpClient
     ) -> Result<(), Error> {
+        info!("RRDP {}: updating from snapshot.", self.notify_uri);
         let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
         if let Err(_) = self.snapshot_into_tmp(notify, http, &tmp_dir) {
             let _ = fs::remove_dir_all(tmp_dir.base());

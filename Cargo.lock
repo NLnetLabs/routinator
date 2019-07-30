@@ -1213,7 +1213,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.5.1"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rrdp-improvements#8bdebfccd9bc5b8b178c07940f98ee8204e52ad2"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rrdp-improvements#0161698686e9abcb6dafed79d20445a7e1818c82"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bcder 0.3.2 (git+https://github.com/NLnetLabs/bcder.git)",
