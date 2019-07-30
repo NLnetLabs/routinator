@@ -2,7 +2,7 @@
 //!
 //! This is a private module and exists only for organizational reasons.
 
-use std::{fmt, fs, io, ops};
+use std::{fs, io};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -14,7 +14,7 @@ use log::{info, warn};
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
-use rpki::rrdp::{NotificationFile, UriAndHash};
+use rpki::rrdp::{DigestHex, NotificationFile, UriAndHash};
 use unwrap::unwrap;
 use uuid::Uuid;
 use crate::operation::Error;
@@ -92,8 +92,8 @@ impl Server {
     /// if something goes wrong.
     pub fn create(notify_uri: uri::Https, cache_dir: &Path) -> Self {
         let (server_dir, broken) = match ServerDir::create(cache_dir) {
-            Ok(server_dir) => (server_dir, true),
-            Err(server_dir) => (server_dir, false),
+            Ok(server_dir) => (server_dir, false),
+            Err(server_dir) => (server_dir, true),
         };
         Self::new(notify_uri, server_dir, broken)
     }
@@ -103,8 +103,8 @@ impl Server {
     /// If the server already has been updated, does nothing. Otherwise starts
     /// an update run.
     pub fn update(&self, http: &HttpClient) {
-        // See if we need to update, get the lock, see if we need to update
-        // again.
+        // See if we need to update, get the lock, see if we still need to
+        // update.
         if self.updated.load(Relaxed) {
             return
         }
@@ -113,8 +113,10 @@ impl Server {
             return
         }
 
-        if self._update(http).is_err() {
-            self.check_broken();
+        if self.try_update(http).is_err() {
+            if self.check_broken() {
+                let _ = fs::remove_dir_all(self.server_dir.base());
+            }
         }
         self.updated.store(true, Relaxed);
     }
@@ -122,10 +124,11 @@ impl Server {
     /// Performs the actual update.
     ///
     /// Returns an error if the update fails.
-    fn _update(&self, http: &HttpClient) -> Result<(), Error> {
-        let mut notify = http.notification_file(&self.notify_uri)?;
-        notify.deltas.sort_by_key(|delta| delta.0);
-        if self.delta_update(&mut notify, http).is_ok() {
+    fn try_update(&self, http: &HttpClient) -> Result<(), Error> {
+        info!("RRDP {}: Updating server", self.notify_uri);
+        let notify = http.notification_file(&self.notify_uri)?;
+        if self.delta_update(&notify, http).is_ok() {
+            info!("RRDP {}: Delta update succeeded.", self.notify_uri);
             return Ok(())
         }
         self.snapshot_update(&notify, http)
@@ -140,36 +143,34 @@ impl Server {
         let mut state = ServerState::load(self.server_dir.state_path())?;
         let deltas = match Self::calc_deltas(notify, &state)? {
             Some(deltas) => deltas,
-            None => return Ok(()),
+            None => {
+                return self.server_dir.check_digest(&state.hash)
+            }
         };
-        let tmp_dir = self.move_to_tmp(http)?;
         let targets = self.collect_delta_targets(
-            &state, notify, deltas, &tmp_dir, http
+            &state, notify, deltas, http
         );
         let targets = match targets {
             Ok(targets) => targets,
             Err(_) => {
-                let _ = self.move_back(tmp_dir);
                 return Err(Error)
             }
         };
+        self.server_dir.check_digest(&state.hash)?;
         if let Err(_) = targets.apply() {
-            let _ = fs::remove_dir_all(tmp_dir.base());
             return Err(Error);
         }
         state.serial = notify.serial;
-        state.hash = match tmp_dir.digest() {
+        state.hash = match self.server_dir.digest() {
             Ok(hash) => hash.into(),
             Err(_) => {
-                let _ = fs::remove_dir_all(tmp_dir.base());
                 return Err(Error);
             }
         };
-        if let Err(_) = state.save(tmp_dir.state_path()) {
-            let _ = fs::remove_dir_all(tmp_dir.base());
+        if let Err(_) = state.save(self.server_dir.state_path()) {
             return Err(Error);
         }
-        self.move_back(tmp_dir)
+        Ok(())
     }
 
     /// Calculates the slice of deltas to follow for updating.
@@ -182,8 +183,10 @@ impl Server {
         state: &ServerState
     ) -> Result<Option<&'a [(usize, UriAndHash)]>, Error> {
         if notify.session_id != state.session {
+            info!("New session. Need to get snapshot.");
             return Err(Error);
         }
+        info!("Serials: us {}, them {}", state.serial, notify.serial);
         if notify.serial == state.serial {
             return Ok(None);
         }
@@ -219,53 +222,58 @@ impl Server {
         Ok(Some(deltas))
     }
 
-    /// Moves the content of the server directory to a new location.
-    ///
-    /// The location will be under `http.tmp_dir()`. The old server directory
-    /// will remain present (just so no other process accidentally grabs it
-    /// for a new server). Upon error, the original server directory should
-    /// be considered broken, but we will try our best not to leave any
-    /// garbage in the tmp dir.
-    fn move_to_tmp(&self, http: &HttpClient) -> Result<ServerDir, Error> {
-        let tmp_dir = match ServerDir::create(http.tmp_dir()) {
-            Ok(dir) => dir,
-            Err(_) => return Err(Error)
-        };
-        let state_res = fs::rename(
-            self.server_dir.state_path(), tmp_dir.state_path()
-        ).map_err(|err| {
-            info!(
-                "Failed to move RRDP state file '{}' to temporary location \
-                '{}': {}.",
-                self.server_dir.state_path().display(),
-                tmp_dir.state_path().display(),
-                err
-            );
-            Error
-        });
-        let data_res = fs::rename(
-            self.server_dir.data_path(), tmp_dir.data_path()
-        ).map_err(|err| {
-            info!(
-                "Failed to move RRDP data directory '{}' to temporary \
-                 location '{}': {}.",
-                self.server_dir.data_path().display(),
-                tmp_dir.data_path().display(),
-                err
-            );
-            Error
-        });
-        if state_res.is_err() || data_res.is_err() {
+    /// Performs a delta update in the temporary location.
+    fn collect_delta_targets(
+        &self,
+        state: &ServerState,
+        notify: &NotificationFile,
+        deltas: &[(usize, UriAndHash)],
+        http: &HttpClient
+    ) -> Result<DeltaTargets, Error> {
+        self.server_dir.check_digest(&state.hash)?;
+        let mut targets = DeltaTargets::new(http.tmp_dir())?;
+        for delta in deltas {
+            http.delta(
+                &self.notify_uri, notify, delta, &mut targets,
+                |uri| self.server_dir.uri_path(uri)
+            )?
+        }
+        Ok(targets)
+    }
+
+    /// Try updating via the deltas.
+    fn snapshot_update(
+        &self,
+        notify: &NotificationFile,
+        http: &HttpClient
+    ) -> Result<(), Error> {
+        let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
+        if let Err(_) = self.snapshot_into_tmp(notify, http, &tmp_dir) {
             let _ = fs::remove_dir_all(tmp_dir.base());
-            Err(Error)
+            return Err(Error);
         }
-        else {
-            Ok(tmp_dir)
-        }
+        self.move_from_tmp(tmp_dir)
+    }
+
+    fn snapshot_into_tmp(
+        &self,
+        notify: &NotificationFile,
+        http: &HttpClient,
+        tmp_dir: &ServerDir,
+    ) -> Result<(), Error> {
+        http.snapshot(notify, |uri| tmp_dir.uri_path(uri))?;
+        let state = ServerState {
+            notify_uri: self.notify_uri().clone(),
+            session: notify.session_id,
+            serial: notify.serial,
+            hash: tmp_dir.digest()?.into(),
+        };
+        state.save(tmp_dir.state_path())
     }
 
     /// Moves everything back from a temporary directory.
-    fn move_back(&self, tmp_dir: ServerDir) -> Result<(), Error> {
+    fn move_from_tmp(&self, tmp_dir: ServerDir) -> Result<(), Error> {
+        let _ = fs::remove_file(self.server_dir.state_path());
         let state_res = fs::rename(
             tmp_dir.state_path(), self.server_dir.state_path()
         ).map_err(|err| {
@@ -278,6 +286,7 @@ impl Server {
             );
             Error
         });
+        let _ = fs::remove_dir_all(self.server_dir.data_path());
         let data_res = fs::rename(
             tmp_dir.data_path(), self.server_dir.data_path()
         ).map_err(|err| {
@@ -299,56 +308,6 @@ impl Server {
         }
     }
 
-    /// Performs a delta update in the temporary location.
-    fn collect_delta_targets(
-        &self,
-        state: &ServerState,
-        notify: &NotificationFile,
-        deltas: &[(usize, UriAndHash)],
-        tmp_dir: &ServerDir,
-        http: &HttpClient
-    ) -> Result<DeltaTargets, Error> {
-        tmp_dir.check_digest(&state.hash)?;
-        let mut targets = DeltaTargets::new(http.tmp_dir())?;
-        for delta in deltas {
-            http.delta(
-                &self.notify_uri, notify, delta, &mut targets,
-                |uri| tmp_dir.uri_path(uri)
-            )?
-        }
-        Ok(targets)
-    }
-
-    /// Try updating via the deltas.
-    fn snapshot_update(
-        &self,
-        notify: &NotificationFile,
-        http: &HttpClient
-    ) -> Result<(), Error> {
-        let tmp_dir = self.move_to_tmp(http)?;
-        if let Err(_) = self.snapshot_into_tmp(notify, http, &tmp_dir) {
-            let _ = fs::remove_dir_all(tmp_dir.base());
-            return Err(Error);
-        }
-        self.move_back(tmp_dir)
-    }
-
-    fn snapshot_into_tmp(
-        &self,
-        notify: &NotificationFile,
-        http: &HttpClient,
-        tmp_dir: &ServerDir,
-    ) -> Result<(), Error> {
-        http.snapshot(notify, |uri| tmp_dir.uri_path(uri))?;
-        let state = ServerState {
-            notify_uri: self.notify_uri().clone(),
-            session: notify.session_id,
-            serial: notify.serial,
-            hash: tmp_dir.digest()?.into(),
-        };
-        state.save(tmp_dir.state_path())
-    }
-
     /// Checks whether the server in its current state is usable.
     ///
     /// For a server to be usable, it has to have a state file that can be
@@ -356,7 +315,7 @@ impl Server {
     ///
     /// Assumes that the server isn’t currently marked broken and sets the
     /// `broken` flag if anything is fishy.
-    fn check_broken(&self) {
+    fn check_broken(&self) -> bool {
         let state = match ServerState::load(self.server_dir.state_path()) {
             Ok(state) => state,
             Err(_) => {
@@ -366,7 +325,7 @@ impl Server {
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
-                return;
+                return true;
             }
         };
         let digest = match self.server_dir.digest() {
@@ -378,7 +337,7 @@ impl Server {
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
-                return;
+                return true;
             }
         };
         if verify_slices_are_equal(digest.as_ref(), state.hash.as_ref())
@@ -389,6 +348,10 @@ impl Server {
                 self.notify_uri
             );
             self.broken.store(true, Relaxed);
+            true
+        }
+        else {
+            false
         }
     }
 
@@ -512,14 +475,18 @@ impl ServerDir {
         // A vec to keep the sorted content of a directory.
         //
         // When iterating a directory, we push the directories and regular
-        // files into this vec as pairs of their full path and whether they
-        // are a directory. Once we are done, we sort this vec by name and
-        // then process it.
+        // files into this vec as pairs. The first item in the pair is the
+        // file name within the parent directory. The second item is a result.
+        // Directories will have `Ok(path)` where `path` is their full path.
+        // Regular files will have `Err(len)` where `len` is their file size.
+        //
+        // After adding, will sort by the file name and then hash the entries.
+        // For each item we hash the name. For files we also hash the size.
         let mut entries = Vec::new();
 
         // A stack with the directories we still have to process.
         //
-        // The paths of directories in `entries` are push to the back of this
+        // The paths of directories in `entries` are pushed to the back of this
         // vec in their sorted order. When we are done with one directory, we
         // take the last one off the stack and process it. Rince and repeat
         // until the stack is empty.
@@ -530,35 +497,26 @@ impl ServerDir {
         // The digest context.
         let mut context = digest::Context::new(&digest::SHA256);
 
-        // A buffer for reading files.
-        let mut buf = [0u8; 4096];
-
         while let Some(dir) = dirs.pop() {
             for entry in dir.read_dir()? {
                 let entry = entry?;
-                let ftype = entry.file_type()?;
-                if ftype.is_dir() {
-                    entries.push((entry.path(), true))
+                let metadata = entry.metadata()?;
+                let name = entry.file_name();
+                if metadata.is_dir() {
+                    entries.push((name, Ok(entry.path())))
                 }
-                else if ftype.is_file() {
-                    entries.push((entry.path(), false))
+                else if metadata.is_file() {
+                    entries.push((name, Err(metadata.len())))
                 }
             }
-            entries.sort_by(|left, right| left.cmp(right));
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
 
-            for (path, is_dir) in entries.drain(..) {
-                if is_dir {
-                    dirs.push(path);
-                }
-                else {
-                    let mut file = fs::File::open(path)?;
-                    loop {
-                        let read = file.read(&mut buf)?;
-                        if read == 0 {
-                            break
-                        }
-                        context.update(&buf[..read]);
-                    }
+            for (name, other) in entries.drain(..) {
+                context.update(name.to_string_lossy().as_bytes());
+                
+                match other {
+                    Ok(path) => dirs.push(path),
+                    Err(len) => context.update(&len.to_ne_bytes()),
                 }
             }
         }
@@ -637,7 +595,7 @@ impl ServerState {
     fn _save(&self, path: &Path) -> Result<(), io::Error> {
         let mut file = fs::File::create(path)?;
         writeln!(
-            file, "notify-uri: {}\nsession: {}\nserial: {}\n hash: {}",
+            file, "notify-uri: {}\nsession: {}\nserial: {}\nhash: {}",
             self.notify_uri, self.session, self.serial, self.hash
         )
     }
@@ -672,68 +630,6 @@ fn process_line<B: io::BufRead, T: FromStr>(
     match T::from_str(value) {
         Ok(value) => Ok(value),
         Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "bad value"))
-    }
-}
-
-
-//------------ DigestHex -----------------------------------------------------
-
-/// A helper type to encode a digest as a sequence of hex-digits.
-#[derive(Clone, Debug)]
-pub struct DigestHex(Vec<u8>);
-
-impl From<Vec<u8>> for DigestHex {
-    fn from(value: Vec<u8>) -> DigestHex {
-        DigestHex(value)
-    }
-}
-
-impl From<digest::Digest> for DigestHex {
-    fn from(value: digest::Digest) -> DigestHex {
-        DigestHex(Vec::from(value.as_ref()))
-    }
-}
-
-impl FromStr for DigestHex {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut res = Vec::new();
-        let mut s = s.chars();
-        loop {
-            let first = match s.next() {
-                Some(first) => first.to_digit(16).ok_or("invalid digest")?,
-                None => break
-            };
-            let second = s.next().ok_or("invalid digest")?
-                .to_digit(16).ok_or("invalid digest")?;
-
-            res.push((first << 8 | second) as u8);
-        }
-        Ok(DigestHex(res))
-    }
-}
-
-impl ops::Deref for DigestHex {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsRef<[u8]> for DigestHex {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl fmt::Display for DigestHex {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for &ch in self.0.as_slice() {
-            write!(f, "{:02x}", ch)?;
-        }
-        Ok(())
     }
 }
 

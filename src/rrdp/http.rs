@@ -5,13 +5,14 @@
 use std::{fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use bytes::Bytes;
 use derive_more::{Display, From};
 use log::{error, info};
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
-use rpki::rrdp::{NotificationFile, ProcessDelta, ProcessSnapshot, UriAndHash};
+use rpki::rrdp::{
+    DigestHex, NotificationFile, ProcessDelta, ProcessSnapshot, UriAndHash
+};
 use rpki::xml::decode as xml;
 use tempfile::TempDir;
 use unwrap::unwrap;
@@ -55,7 +56,10 @@ impl HttpClient {
         uri: &uri::Https
     ) -> Result<NotificationFile, Error> {
         match NotificationFile::parse(io::BufReader::new(self.response(uri)?)) {
-            Ok(res) => Ok(res),
+            Ok(mut res) => {
+                res.deltas.sort_by_key(|delta| delta.0);
+                Ok(res)
+            }
             Err(err) => {
                 error!("{}: {}", uri, err);
                 Err(Error)
@@ -79,7 +83,7 @@ impl HttpClient {
         let digest = reader.into_inner().into_digest();
         if let Err(_) = verify_slices_are_equal(digest.as_ref(),
                                             notify.snapshot.hash().as_ref()) {
-            error!("{}: hash value mismatch.", notify.snapshot.uri());
+            info!("{}: hash value mismatch.", notify.snapshot.uri());
             return Err(Error)
         }
         Ok(())
@@ -137,7 +141,7 @@ impl<R> DigestRead<R> {
     pub fn sha256(reader: R) -> Self {
         DigestRead {
             reader,
-            context: digest::Context::new(&digest::SHA384)
+            context: digest::Context::new(&digest::SHA256)
         }
     }
 
@@ -148,7 +152,7 @@ impl<R> DigestRead<R> {
     pub fn read_all(mut self) -> Result<digest::Digest, io::Error>
     where R: io::Read {
         let mut buf = [0u8; 4096];
-        while self.reader.read(&mut buf)? > 0 { }
+        while io::Read::read(&mut self, &mut buf)? > 0 { }
         Ok(self.into_digest())
     }
 }
@@ -243,7 +247,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
     fn check_hash(
         uri: &uri::Rsync,
         path: &Path,
-        hash: Bytes
+        hash: DigestHex
     ) -> Result<(), ProcessError> {
         let file = match fs::File::open(&path) {
             Ok(file) => file,
@@ -267,7 +271,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
         };
         verify_slices_are_equal(hash.as_ref(), digest.as_ref()).map_err(|_| {
             info!(
-                "RRDP Hash mismatch in local file {}.", uri
+                "RRDP hash mismatch in local file {}.", uri
             );
             ProcessError::Error
         })
@@ -294,7 +298,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
         if serial != self.delta.0 {
             info!(
                 "RRDP server {}: \
-                Mismatch between annound and actual serial in delta.",
+                Mismatch between announced and actual serial in delta.",
                 self.server_uri
             );
             return Err(ProcessError::Error)
@@ -305,9 +309,10 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     fn publish(
         &mut self,
         uri: uri::Rsync,
-        hash: Option<Bytes>,
+        hash: Option<DigestHex>,
         data: Vec<u8>
     ) -> Result<(), Self::Err> {
+        info!("Publishing {}", uri);
         let target = (self.path_op)(&uri);
         if let Some(hash) = hash {
             Self::check_hash(&uri, &target, hash)?;
@@ -318,8 +323,9 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     fn withdraw(
         &mut self,
         uri: uri::Rsync,
-        hash: Bytes
+        hash: DigestHex
     ) -> Result<(), Self::Err> {
+        info!("Withdrawing {}", uri);
         let target = (self.path_op)(&uri);
         Self::check_hash(&uri, &target, hash)?;
         self.targets.withdraw(target);
@@ -456,6 +462,24 @@ pub enum ProcessError {
 impl From<Error> for ProcessError {
     fn from(_: Error) -> ProcessError {
         ProcessError::Error
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use ring::digest;
+    use super::*;
+
+    #[test]
+    fn digest_read_read_all() {
+        let test = b"sdafkljfasdkjlfashjklfasdklhjfasdklhjfasd";
+        assert_eq!(
+            unwrap!(DigestRead::sha256(test.as_ref()).read_all()).as_ref(),
+            digest::digest(&digest::SHA256, test).as_ref()
+        );
     }
 }
 

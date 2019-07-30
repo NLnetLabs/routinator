@@ -134,6 +134,34 @@ impl Repository {
         })))
     }
 
+    pub fn init(config: &Config) -> Result<(), Error> {
+        let rsync_dir = config.cache_dir.join("rsync");
+        if let Err(err) = fs::create_dir_all(&rsync_dir) {
+            error!(
+                "Failed to create rsync cache directory {}: {}.",
+                rsync_dir.display(), err
+            );
+            return Err(Error);
+        }
+        let rrdp_dir = config.cache_dir.join("rrdp");
+        if let Err(err) = fs::create_dir_all(&rrdp_dir) {
+            error!(
+                "Failed to create RRDP cache directory {}: {}.",
+                rrdp_dir.display(), err
+            );
+            return Err(Error);
+        }
+        let tmp_dir = config.cache_dir.join("tmp");
+        if let Err(err) = fs::create_dir_all(&tmp_dir) {
+            error!(
+                "Failed to create temporary directory {}: {}.",
+                rrdp_dir.display(), err
+            );
+            return Err(Error);
+        }
+        Ok(())
+    }
+
     /// Loads the TAL files from the given directory.
     fn load_tals(tal_dir: &Path) -> Result<Vec<Tal>, Error> {
         let mut res = Vec::new();
@@ -633,6 +661,8 @@ impl Repository {
             };
             match entry.file_name().to_str() {
                 Some("rsync") => continue,
+                Some("rrdp") => continue,
+                Some("tmp") => continue,
                 _ => { }
             }
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {

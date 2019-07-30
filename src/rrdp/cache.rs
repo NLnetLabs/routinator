@@ -93,8 +93,13 @@ impl Cache {
                 continue
             }
             let path = entry.path();
-            match ServerState::load(&path) {
+            match ServerState::load(&path.join("state.txt")) {
                 Ok(state) => {
+                    info!(
+                        "RRDP: Known server {} at {}",
+                        state.notify_uri,
+                        path.display()
+                    );
                     let _ = servers.insert(
                         Server::existing(state.notify_uri, path)
                     );

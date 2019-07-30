@@ -3,7 +3,7 @@
 //! This is a private module here only for organizional purposes.
 
 use std::io;
-use std::fs::{File, create_dir};
+use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf};
 use log::info;
 use rand::random;
@@ -14,7 +14,7 @@ use crate::operation::Error;
 pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
     for _ in 0..100 {
         let target = random_path(path);
-        match create_dir(&target) {
+        match create_dir_all(&target) {
             Ok(()) => return Ok(target),
             Err(err) => {
                 if err.kind() != io::ErrorKind::AlreadyExists {

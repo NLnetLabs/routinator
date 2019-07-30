@@ -209,13 +209,7 @@ impl Init {
     /// We will, however, refuse to install any TALs until `accept_arin_rpa`
     /// is `true`. If it isn’t we just print a friendly reminder instead.
     pub fn run(self, config: Config) -> Result<(), ExitError> {
-        if let Err(err) = fs::create_dir_all(&config.cache_dir) {
-            error!(
-                "Failed to create repository directory {}: {}.",
-                config.cache_dir.display(), err
-            );
-            return Err(Error.into());
-        }
+        Repository::init(&config)?;
 
         // Check if TAL directory exists and error out if needed.
         if let Ok(metadata) = fs::metadata(&config.tal_dir) {
