@@ -312,7 +312,6 @@ where F: Fn(&uri::Rsync) -> PathBuf {
         hash: Option<DigestHex>,
         data: Vec<u8>
     ) -> Result<(), Self::Err> {
-        info!("Publishing {}", uri);
         let target = (self.path_op)(&uri);
         if let Some(hash) = hash {
             Self::check_hash(&uri, &target, hash)?;
@@ -325,7 +324,6 @@ where F: Fn(&uri::Rsync) -> PathBuf {
         uri: uri::Rsync,
         hash: DigestHex
     ) -> Result<(), Self::Err> {
-        info!("Withdrawing {}", uri);
         let target = (self.path_op)(&uri);
         Self::check_hash(&uri, &target, hash)?;
         self.targets.withdraw(target);

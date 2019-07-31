@@ -317,8 +317,8 @@ impl Repository {
     ) -> Option<Bytes> {
         if let Some(id) = rrdp_server {
             if let Some(rrdp) = self.0.rrdp.as_ref() {
-                if let Some(res) = rrdp.load_file(id, uri) {
-                    return Some(res)
+                if let Ok(res) = rrdp.load_file(id, uri) {
+                    return res
                 }
             }
         }

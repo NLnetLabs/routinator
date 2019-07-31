@@ -141,15 +141,19 @@ impl Cache {
 
     /// Loads the content of a file from the given URI.
     ///
-    /// If `create` is `true`, it will try to rsync missing files.
-    ///
-    /// If loading the file fails, logs a warning and returns `None`.
+    /// Returns an error if the local cache for the given RRDP server is
+    /// unusable. Returns `Ok(None)` if RRDP is all fine but the file doesn’t
+    /// exist or loading the file fails. Returns `Ok(Some(bytes))` with the
+    /// file’s content if it does indeed exist.
     pub fn load_file(
         &self,
         server_id: ServerId,
         uri: &uri::Rsync,
-    ) -> Option<Bytes> {
-        let server = unwrap!(self.servers.read()).get(server_id)?;
+    ) -> Result<Option<Bytes>, Error> {
+        let server = match unwrap!(self.servers.read()).get(server_id) {
+            Some(server) => server,
+            None => return Err(Error)
+        };
         server.load_file(uri)
     }
 

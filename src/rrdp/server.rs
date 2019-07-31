@@ -196,6 +196,7 @@ impl Server {
         // serial differs from that noted in the notification file,
         // bail out.
         if notify.deltas.last().map(|delta| delta.0) != Some(notify.serial) {
+            info!("Last delta serial differs from current serial.");
             return Err(Error)
         }
 
@@ -207,9 +208,13 @@ impl Server {
         loop {
             let first = match deltas.first() {
                 Some(first) => first,
-                None => return Err(Error)
+                None => {
+                    info!("Ran out of deltas.");
+                    return Err(Error)
+                }
             };
             if first.0 > serial {
+                info!("First delta is too new ({})", first.0);
                 return Err(Error)
             }
             else if first.0 == serial {
@@ -365,9 +370,9 @@ impl Server {
     ///
     /// This assumes that the server is updated already. If there is no file
     /// corresponding to the URI, returns `None`.
-    pub fn load_file(&self, uri: &uri::Rsync) -> Option<Bytes> {
+    pub fn load_file(&self, uri: &uri::Rsync) -> Result<Option<Bytes>, Error> {
         if self.broken.load(Relaxed) {
-            return None
+            return Err(Error)
         }
         
         let path = self.server_dir.uri_path(uri);
@@ -383,7 +388,7 @@ impl Server {
                         path.display(), err
                     );
                 }
-                return None
+                return Ok(None)
             }
         };
         let mut data = Vec::new();
@@ -392,9 +397,9 @@ impl Server {
                 "Failed to read file '{}': {}",
                 path.display(), err
             );
-            return None
+            return Ok(None)
         }
-        Some(data.into())
+        Ok(Some(data.into()))
     }
 
     /// Removes the server’s local cache if it hasn’t been used.
