@@ -84,5 +84,5 @@ assets = [
 
 [patch.crates-io]
 bcder = { git="https://github.com/NLnetLabs/bcder.git" }
-rpki = { git="https://github.com/NLnetLabs/rpki-rs.git", branch="rrdp-improvements" }
+rpki = { git="https://github.com/NLnetLabs/rpki-rs.git" }
 

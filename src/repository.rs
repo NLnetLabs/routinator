@@ -6,7 +6,7 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fs, io};
+use std::{fmt, fs, io};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -21,7 +21,7 @@ use rpki::cert::{Cert, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
-use rpki::tal::Tal;
+use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
 //use unwrap::unwrap;
 use crate::{rrdp, rsync};
@@ -123,9 +123,7 @@ impl Repository {
             extra_output,
             rsync_threads: config.rsync_count,
             validation_threads: config.validation_threads,
-            rrdp: rrdp::Cache::new(
-                config, config.cache_dir.join("rrdp"), update
-            ).ok(),
+            rrdp: rrdp::Cache::new(config, update).ok(),
             rsync: rsync::Cache::new(
                 config, config.cache_dir.join("rsync"), update
             
@@ -143,22 +141,7 @@ impl Repository {
             );
             return Err(Error);
         }
-        let rrdp_dir = config.cache_dir.join("rrdp");
-        if let Err(err) = fs::create_dir_all(&rrdp_dir) {
-            error!(
-                "Failed to create RRDP cache directory {}: {}.",
-                rrdp_dir.display(), err
-            );
-            return Err(Error);
-        }
-        let tmp_dir = config.cache_dir.join("tmp");
-        if let Err(err) = fs::create_dir_all(&tmp_dir) {
-            error!(
-                "Failed to create temporary directory {}: {}.",
-                rrdp_dir.display(), err
-            );
-            return Err(Error);
-        }
+        rrdp::Cache::init(config)?;
         Ok(())
     }
 
@@ -296,12 +279,18 @@ impl Repository {
     /// Loads a trust anchor certificate from the given URI.
     fn load_ta(
         &self,
-        uri: &uri::Rsync
-    ) -> Result<Option<Cert>, Error> {
-        Ok(
-            self.load_file(None, uri, true)
-            .and_then(|bytes| Cert::decode(bytes).ok())
-        )
+        uri: &TalUri,
+        info: &TalInfo,
+    ) -> Option<Cert> {
+        match *uri {
+            TalUri::Rsync(ref uri) => {
+                self.load_file(None, uri, true)
+                .and_then(|bytes| Cert::decode(bytes).ok())
+            }
+            TalUri::Https(ref uri) => {
+                self.0.rrdp.as_ref().and_then(|rrdp| rrdp.load_ta(uri, info))
+            }
+        }
     }
 
     /// Loads the content of a file from the given URI.
@@ -346,8 +335,8 @@ impl Repository {
         let tal = &self.0.tals[idx];
         let mut res = RouteOrigins::new(tal.info().clone());
         for uri in tal.uris() {
-            let cert = match self.load_ta(&uri) {
-                Ok(Some(cert)) => cert,
+            let cert = match self.load_ta(&uri, tal.info()) {
+                Some(cert) => cert,
                 _ => continue,
             };
             if cert.subject_public_key_info() != tal.key_info() {
@@ -383,10 +372,10 @@ impl Repository {
     /// is only needed for composing error messages. Any route origins found
     /// in the objects issued directly or transitively by this CA are added
     /// to `routes`.
-    fn process_ca(
+    fn process_ca<U: fmt::Display>(
         &self,
         cert: ResourceCert,
-        uri: &uri::Rsync,
+        uri: &U,
         routes: &mut RouteOrigins
     ) {
         let mut store = CrlStore::new();
@@ -524,11 +513,11 @@ impl Repository {
     /// Note that currently we happily accept stale manifests, i.e., manifests
     /// whose certificate is still valid but the next_update time has passed.
     /// The RFC says we need to decide what to do, so this is fine.
-    fn get_manifest(
+    fn get_manifest<U: fmt::Display>(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
         issuer: &ResourceCert,
-        issuer_uri: &uri::Rsync,
+        issuer_uri: &U,
         store: &mut CrlStore,
     ) -> Option<ManifestContent> {
         let uri = match issuer.rpki_manifest() {
@@ -660,6 +649,7 @@ impl Repository {
                 }
             };
             match entry.file_name().to_str() {
+                Some("http") => continue,
                 Some("rsync") => continue,
                 Some("rrdp") => continue,
                 Some("tmp") => continue,

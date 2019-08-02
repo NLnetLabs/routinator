@@ -3,18 +3,28 @@
 //! This is a private module for organizational purposes with `Cache` and
 //! `ServerId` reexported by the parent module.
 
+use std::{fs, io};
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
-use log::{error, info};
+use log::{error, info, warn};
 use rpki::uri;
+use rpki::cert::Cert;
+use rpki::tal::TalInfo;
 use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
+
+
+///----------- Configuration Constants ---------------------------------------
+
+/// The maximum size of a HTTP response for a trust anchor certificate.
+const MAX_TA_SIZE: u64 = 64 * 1024;
 
 
 ///----------- Cache ---------------------------------------------------------
@@ -24,6 +34,9 @@ use super::server::{Server, ServerState};
 pub struct Cache {
     /// The base directory of the cache.
     cache_dir: PathBuf,
+
+    /// The base directory of the TA cache.
+    ta_dir: PathBuf,
 
     /// All the servers we know about.
     servers: RwLock<ServerSet>,
@@ -35,14 +48,36 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Initializes the RRDP cache.
+    pub fn init(config: &Config) -> Result<(), Error> {
+        let rrdp_dir = config.cache_dir.join("rrdp");
+        if let Err(err) = fs::create_dir_all(&rrdp_dir) {
+            error!(
+                "Failed to create RRDP cache directory {}: {}.",
+                rrdp_dir.display(), err
+            );
+            return Err(Error);
+        }
+        let http_dir = config.cache_dir.join("http");
+        if let Err(err) = fs::create_dir_all(&http_dir) {
+            error!(
+                "Failed to create HTTP cache directory {}: {}.",
+                http_dir.display(), err
+            );
+            return Err(Error);
+        }
+        HttpClient::init(config)?;
+        Ok(())
+    }
+
     /// Creates a new RRDP cache.
     pub fn new(
         config: &Config,
-        cache_dir: PathBuf,
         update: bool,
     ) -> Result<Self, Error> {
         let res = Cache {
-            cache_dir,
+            cache_dir: config.cache_dir.join("rrdp"),
+            ta_dir: config.cache_dir.join("http"),
             servers: RwLock::new(ServerSet::new()),
             http: if update { Some(HttpClient::new(config)?) }
                   else { None }
@@ -113,6 +148,133 @@ impl Cache {
             }
         }
         Ok(())
+    }
+
+    /// Loads a trust anchor certificate for the given URI.
+    pub fn load_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Cert> {
+        match self.get_ta(uri) {
+            Ok(Some((cert, bytes))) => {
+                self.store_ta(bytes, uri, info);
+                Some(cert)
+            }
+            Ok(None) => self.read_ta(uri, info),
+            Err(_) => {
+                self.remove_ta(info);
+                None
+            }
+        }
+    }
+
+    fn get_ta(
+        &self,
+        uri: &uri::Https
+    ) -> Result<Option<(Cert, Bytes)>, Error> {
+        let http = match self.http {
+            Some(ref http) => http,
+            None => return Ok(None),
+        };
+        let mut response = match http.response(uri) {
+            Ok(response) => response,
+            Err(_) => return Ok(None),
+        };
+        if response.content_length() > Some(MAX_TA_SIZE) {
+            warn!(
+                "Trust anchor certificate {} exceeds size limit of {} bytes. \
+                 Ignoring.",
+                uri, MAX_TA_SIZE
+            );
+            return Err(Error)
+        }
+        let mut bytes = Vec::new();
+        if let Err(err) = response.copy_to(&mut bytes) {
+            info!("Failed to get trust anchor {}: {}", uri, err);
+            return Ok(None)
+        }
+        let bytes = Bytes::from(bytes);
+        match Cert::decode(bytes.clone()) {
+            Ok(cert) => Ok(Some((cert, bytes))),
+            Err(err) => {
+                info!("Invalid trust anchor certificate {}: {}", uri, err);
+                Err(Error)
+            }
+        }
+    }
+
+    fn store_ta(&self, bytes: Bytes, uri: &uri::Https, info: &TalInfo) {
+        let path = self.ta_path(info);
+        let mut file = match fs::File::create(&path) {
+            Ok(file) => file,
+            Err(err) => {
+                warn!("Failed to create TA file {}: {}", path.display(), err);
+                return
+            }
+        };
+        if let Err(err) = file.write_all(
+                                 &(uri.as_str().len() as u64).to_be_bytes()) {
+            warn!("Failed to write to TA file {}: {}", path.display(), err);
+        }
+        if let Err(err) = file.write_all(uri.as_str().as_ref()) {
+            warn!("Failed to write to TA file {}: {}", path.display(), err);
+        }
+        if let Err(err) = file.write_all(bytes.as_ref()) {
+            warn!("Failed to write to TA file {}: {}", path.display(), err);
+        }
+    }
+
+    fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Cert> {
+        let path = self.ta_path(info);
+        let mut file = match fs::File::open(&path) {
+            Ok(file) => file,
+            Err(err) => {
+                if err.kind() != io::ErrorKind::NotFound {
+                    warn!(
+                        "Failed to open TA file {}: {}",
+                        path.display(), err
+                    );
+                }
+                return None
+            }
+        };
+        let mut len = [0u8; 8];
+        if let Err(err) = file.read_exact(&mut len) {
+            warn!("Failed to read TA file {}: {}", path.display(), err);
+            return None
+        };
+        let len = u64::from_be_bytes(len) as usize;
+        let mut read_uri = vec![0u8; len];
+        if let Err(err) = file.read_exact(&mut read_uri) {
+            warn!("Failed to read TA file {}: {}", path.display(), err);
+            return None
+        };
+        if read_uri != uri.as_str().as_bytes() {
+            warn!("TA file {} for wrong URI.", path.display());
+            return None
+        }
+        let mut bytes = Vec::new();
+        if let Err(err) = file.read_to_end(&mut bytes) {
+            warn!("Failed to read TA file {}: {}", path.display(), err);
+            return None
+        };
+        match Cert::decode(Bytes::from(bytes)) {
+            Ok(cert) => Some(cert),
+            Err(err) => {
+                info!(
+                    "Invalid cached trust anchor certificate {}: {}",
+                    uri, err
+                );
+                None
+            }
+        }
+    }
+
+    fn remove_ta(&self, info: &TalInfo) {
+        let _ = fs::remove_file(self.ta_path(info));
+    }
+
+    fn ta_path(&self, info: &TalInfo) -> PathBuf {
+        let mut res = self.ta_dir.join(info.name());
+        res.set_extension("cer");
+        res
     }
 
     /// Loads an RRDP server.

@@ -31,6 +31,18 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
+    pub fn init(config: &Config) -> Result<(), Error> {
+        let tmp_dir = config.cache_dir.join("tmp");
+        if let Err(err) = fs::create_dir_all(&tmp_dir) {
+            error!(
+                "Failed to create temporary directory {}: {}.",
+                tmp_dir.display(), err
+            );
+            return Err(Error);
+        }
+        Ok(())
+    }
+
     pub fn new(config: &Config) -> Result<Self, Error> {
         let builder = reqwest::Client::builder();
         let client = match builder.build() {
@@ -118,14 +130,16 @@ impl HttpClient {
         Ok(())
     }
 
-    fn response(&self, uri: &uri::Https) -> Result<reqwest::Response, Error> {
-        match self.client.get(uri.as_str()).send() {
-            Ok(response) => Ok(response),
-            Err(err) => {
-                error!("{}: {}", uri, err);
-                Err(Error)
-            }
-        }
+    pub fn response(
+        &self,
+        uri: &uri::Https
+    ) -> Result<reqwest::Response, Error> {
+        self.client.get(uri.as_str()).send().and_then(|res| {
+            res.error_for_status()
+        }).map_err(|err| {;
+            error!("{}: {}", uri, err);
+            Error
+        })
     }
 }
 
