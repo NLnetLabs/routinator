@@ -72,9 +72,6 @@ struct RepoInner {
     /// Should we keep extended information about ROAs?
     extra_output: bool,
 
-    /// Number of rsync commands.
-    rsync_threads: usize,
-
     /// Number of validation threads.
     validation_threads: usize,
 
@@ -121,7 +118,6 @@ impl Repository {
             tals: Self::load_tals(&config.tal_dir)?,
             strict: config.strict,
             extra_output,
-            rsync_threads: config.rsync_count,
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(config, update).ok(),
             rsync: rsync::Cache::new(

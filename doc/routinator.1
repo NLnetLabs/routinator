@@ -26,7 +26,6 @@
 .RB [ \-\-strict ]
 .RB [ \-\-rsync\-command=\fIcommand\fR]
 .RB [ \-\-rsync\-args=\fIargs\fR]
-.RB [ \-\-rsync-count=\fIcount\fR]
 .RB [ \-\-rsync-timeout=\fIseconds\fR]
 .RB [ \-\-validation-threads=\fIcount\fR]
 .RB [ \-v | \c
@@ -177,10 +176,6 @@ configuration file setting instead.
 If this option is not given, Routinator will simply run
 .I rsync
 and hope that it is in the path.
-.TP
-.BI \-\-rsync\-count= count
-Sets the maximum number of rsync commands to be run in parallel. The default
-is 4.
 .TP
 .BI \-\-rsync\-timeout= seconds
 Sets the number of seconds an rsync command is allowed to run before it is
@@ -603,10 +598,6 @@ understands the
 option and, if so, will set it to 10 thus letting connection attempts time
 out after ten seconds. If your rsync is too old to support this option, no
 arguments are used.
-.TP
-.B rsync-count
-An integer value specifying the number of rsync commands that should at most
-be run in parallel. The default if this value is missing is 4 commands.
 .TP
 .B rsync-timeout
 An integer value specifying th number seconds an rsync command is allowed to

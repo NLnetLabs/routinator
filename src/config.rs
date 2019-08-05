@@ -27,9 +27,6 @@ use crate::slurm::LocalExceptions;
 /// Are we doing strict validation by default?
 const DEFAULT_STRICT: bool = false;
 
-/// The default number of rsync commands run in parallel.
-const DEFAULT_RSYNC_COUNT: usize = 4;
-
 /// The default timeout for running rsync commands in seconds.
 const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
 
@@ -91,9 +88,6 @@ pub struct Config {
 
     /// Arguments passed to rsync.
     pub rsync_args: Option<Vec<String>>,
-
-    /// Number of parallel rsync commands.
-    pub rsync_count: usize,
 
     /// Timeout for rsync commands.
     pub rsync_timeout: Duration,
@@ -194,12 +188,6 @@ impl Config {
              .long("rsync-command")
              .value_name("COMMAND")
              .help("The command to run for rsync")
-             .takes_value(true)
-        )
-        .arg(Arg::with_name("rsync-count")
-             .long("rsync-count")
-             .value_name("COUNT")
-             .help("Number of parallel rsync commands")
              .takes_value(true)
         )
         .arg(Arg::with_name("rsync-timeout")
@@ -398,11 +386,6 @@ impl Config {
         // rsync_command
         if let Some(value) = matches.value_of("rsync-command") {
             self.rsync_command = value.into()
-        }
-
-        // rsync_count
-        if let Some(value) = from_str_value_of(matches, "rsync-count")? {
-            self.rsync_count = value
         }
 
         // rsync_timeout
@@ -780,10 +763,6 @@ impl Config {
                     .unwrap_or_else(|| "rsync".into())
             },
             rsync_args: file.take_opt_string_array("rsync-args")?,
-            rsync_count: {
-                file.take_small_usize("rsync-count")?
-                    .unwrap_or(DEFAULT_RSYNC_COUNT)
-            },
             rsync_timeout: {
                 Duration::from_secs(
                     file.take_u64("rsync-timeout")?
@@ -926,7 +905,6 @@ impl Config {
             strict: DEFAULT_STRICT,
             rsync_command: "rsync".into(),
             rsync_args: None,
-            rsync_count: DEFAULT_RSYNC_COUNT,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
@@ -1054,7 +1032,6 @@ impl Config {
                 )
             );
         }
-        res.insert("rsync-count".into(), (self.rsync_count as i64).into());
         res.insert(
             "rsync-timeout".into(),
             (self.rsync_timeout.as_secs() as i64).into()
@@ -1685,7 +1662,6 @@ mod test {
         );
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, DEFAULT_STRICT);
-        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -1706,7 +1682,6 @@ mod test {
              tal-dir = \"taldir\"\n\
              exceptions = [\"ex1\", \"/ex2\"]\n\
              strict = true\n\
-             rsync-count = 12\n\
              validation-threads = 1000\n\
              refresh = 6\n\
              retry = 7\n\
@@ -1728,7 +1703,6 @@ mod test {
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
         assert_eq!(config.strict, true);
-        assert_eq!(config.rsync_count, 12);
         assert_eq!(config.validation_threads, 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
@@ -1766,7 +1740,6 @@ mod test {
         assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, false);
-        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -1807,7 +1780,7 @@ mod test {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository", "-t", "tals",
             "-x", "/x1", "--exceptions", "x2", "--strict",
-            "--rsync-count", "1000", "--validation-threads", "2000",
+            "--validation-threads", "2000",
             "--syslog", "--syslog-facility", "auth"
         ]);
         assert_eq!(config.cache_dir, Path::new("/repository"));
@@ -1816,7 +1789,6 @@ mod test {
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
         assert_eq!(config.strict, true);
-        assert_eq!(config.rsync_count, 1000);
         assert_eq!(config.validation_threads, 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }
