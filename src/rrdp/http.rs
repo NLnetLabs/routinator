@@ -65,9 +65,27 @@ impl HttpClient {
 
     pub fn notification_file(
         &self,
-        uri: &uri::Https
+        uri: &uri::Https,
+        status: &mut Option<reqwest::StatusCode>,
     ) -> Result<NotificationFile, Error> {
-        match NotificationFile::parse(io::BufReader::new(self.response(uri)?)) {
+        let response = match self.response(uri) {
+            Ok(response) => {
+                *status = Some(response.status());
+                response
+            }
+            Err(_) => {
+                *status = None;
+                return Err(Error);
+            }
+        };
+        if !response.status().is_success() {
+            info!(
+                "RRDP {}: Getting notification file failed with status {}",
+                uri, response.status()
+            );
+            return Err(Error);
+        }
+        match NotificationFile::parse(io::BufReader::new(response)) {
             Ok(mut res) => {
                 res.deltas.sort_by_key(|delta| delta.0);
                 Ok(res)
@@ -141,7 +159,7 @@ impl HttpClient {
         self.client.get(uri.as_str()).send().and_then(|res| {
             res.error_for_status()
         }).map_err(|err| {;
-            error!("{}: {}", uri, err);
+            info!("{}: {}", uri, err);
             Error
         })
     }

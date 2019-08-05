@@ -265,6 +265,9 @@ impl Repository {
     /// Update metrics for this validation run.
     pub fn update_metrics(&self, metrics: &mut Metrics) {
         self.0.rsync.update_metrics(metrics);
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.update_metrics(metrics)
+        }
     }
 }
 

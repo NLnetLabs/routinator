@@ -227,6 +227,42 @@ impl Service {
             }
         }
 
+        // rrdp_status
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rrdp_status status code for getting \
+                notification file\n\
+            # TYPE routinator_rrdp_status gauge"
+        ));
+        for metrics in metrics.rrdp() {
+            unwrap!(writeln!(
+                res,
+                "routinator_rrdp_status{{uri=\"{}\"}} {}",
+                metrics.notify_uri,
+                metrics.notify_status.map(|code| {
+                    code.as_u16() as i16
+                }).unwrap_or(-1),
+            ));
+        }
+
+        // rrdp_duration
+        unwrap!(writeln!(res, "
+            \n\
+            # HELP routinator_rrdp_duration duration of rsync in seconds\n\
+            # TYPE routinator_rrdo_duration gauge"
+        ));
+        for metrics in metrics.rrdp() {
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    "routinator_rrdp_duration{{uri=\"{}\"}} {:.3}",
+                    metrics.notify_uri,
+                    duration.as_secs() as f64
+                    + f64::from(duration.subsec_millis()) / 1000.
+                ));
+            }
+        }
+
         unwrap!(
             Response::builder()
             .header("Content-Type", "text/plain; version=0.0.4")

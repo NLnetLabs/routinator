@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
+use std::time::{Duration, SystemTime, SystemTimeError};
 use bytes::Bytes;
 use log::{info, warn};
 use ring::digest;
@@ -54,7 +55,10 @@ pub struct Server {
     /// succeeds, check whether an update is still necessary. If not, drop
     /// the mutex. If it is still necessary, perform the update, set the flags
     /// and drop the mutex.
-    mutex: Mutex<()>,
+    ///
+    /// Because the metrics are only used while updating (and after everything
+    /// is done, anyway), we keep them inside the mutex.
+    mutex: Mutex<ServerMetrics>,
 }
 
 
@@ -66,22 +70,12 @@ impl Server {
         broken: bool
     ) -> Self {
         Server {
+            mutex: Mutex::new(ServerMetrics::new(notify_uri.clone())),
             notify_uri,
             server_dir,
             updated: AtomicBool::new(broken),
             broken: AtomicBool::new(broken),
-            mutex: Mutex::new(())
         }
-    }
-
-    /// Returns a reference to the server directory.
-    pub fn server_dir(&self) -> &Path {
-        &self.server_dir.base
-    }
-
-    /// Converts the server into its server directory.
-    pub fn into_server_dir(self) -> PathBuf {
-        self.server_dir.base
     }
 
     /// Creates a new server for an existing, not updated server.
@@ -108,6 +102,11 @@ impl Server {
         Self::new(notify_uri, server_dir, broken)
     }
 
+    /// Returns a reference to the server directory.
+    pub fn server_dir(&self) -> &Path {
+        &self.server_dir.base
+    }
+
     /// Makes sure the server is up-to-date.
     ///
     /// If the server already has been updated, does nothing. Otherwise starts
@@ -118,35 +117,45 @@ impl Server {
         if self.updated.load(Relaxed) {
             return
         }
-        let _lock = unwrap!(self.mutex.lock());
+        let mut metrics = unwrap!(self.mutex.lock());
         if self.updated.load(Relaxed) {
             return
         }
 
-        if self.try_update(http).is_err() && self.check_broken() {
+        let start_time = SystemTime::now();
+        if self.try_update(http, &mut metrics).is_err() && self.check_broken() {
             let _ = fs::remove_dir_all(self.server_dir.base());
         }
         self.updated.store(true, Relaxed);
+        metrics.duration = SystemTime::now().duration_since(start_time);
     }
 
     /// Performs the actual update.
     ///
     /// Returns an error if the update fails.
-    fn try_update(&self, http: &HttpClient) -> Result<(), Error> {
+    fn try_update(
+        &self,
+        http: &HttpClient,
+        metrics: &mut ServerMetrics
+    ) -> Result<(), Error> {
         info!("RRDP {}: Updating server", self.notify_uri);
-        let notify = http.notification_file(&self.notify_uri)?;
-        if self.delta_update(&notify, http).is_ok() {
+        metrics.serial = None;
+        let notify = http.notification_file(
+            &self.notify_uri, &mut metrics.notify_status
+        )?;
+        if self.delta_update(&notify, http, metrics).is_ok() {
             info!("RRDP {}: Delta update succeeded.", self.notify_uri);
             return Ok(())
         }
-        self.snapshot_update(&notify, http)
+        self.snapshot_update(&notify, http, metrics)
     }
 
     /// Try updating via the deltas.
     fn delta_update(
         &self,
         notify: &NotificationFile,
-        http: &HttpClient
+        http: &HttpClient,
+        metrics: &mut ServerMetrics
     ) -> Result<(), Error> {
         let mut state = ServerState::load(self.server_dir.state_path())?;
         let deltas = match Self::calc_deltas(notify, &state)? {
@@ -178,6 +187,7 @@ impl Server {
         if state.save(self.server_dir.state_path()).is_err() {
             return Err(Error);
         }
+        metrics.serial = Some(state.serial);
         Ok(())
     }
 
@@ -258,15 +268,21 @@ impl Server {
     fn snapshot_update(
         &self,
         notify: &NotificationFile,
-        http: &HttpClient
+        http: &HttpClient,
+        metrics: &mut ServerMetrics
     ) -> Result<(), Error> {
         info!("RRDP {}: updating from snapshot.", self.notify_uri);
         let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
-        if self.snapshot_into_tmp(notify, http, &tmp_dir).is_err() {
-            let _ = fs::remove_dir_all(tmp_dir.base());
-            return Err(Error);
-        }
-        self.move_from_tmp(tmp_dir)
+        let state =  match self.snapshot_into_tmp(notify, http, &tmp_dir) {
+            Ok(state) => state,
+            Err(_) => {
+                let _ = fs::remove_dir_all(tmp_dir.base());
+                return Err(Error);
+            }
+        };
+        self.move_from_tmp(tmp_dir)?;
+        metrics.serial = Some(state.serial);
+        Ok(())
     }
 
     fn snapshot_into_tmp(
@@ -274,7 +290,7 @@ impl Server {
         notify: &NotificationFile,
         http: &HttpClient,
         tmp_dir: &ServerDir,
-    ) -> Result<(), Error> {
+    ) -> Result<ServerState, Error> {
         http.snapshot(notify, |uri| tmp_dir.uri_path(uri))?;
         let state = ServerState {
             notify_uri: self.notify_uri().clone(),
@@ -282,7 +298,8 @@ impl Server {
             serial: notify.serial,
             hash: tmp_dir.digest()?.into(),
         };
-        state.save(tmp_dir.state_path())
+        state.save(tmp_dir.state_path())?;
+        Ok(state)
     }
 
     /// Moves everything back from a temporary directory.
@@ -419,6 +436,21 @@ impl Server {
         }
         let _ = fs::remove_dir_all(self.server_dir.base());
         true
+    }
+
+    /// Return the server metrics if the server was ever updated.
+    pub fn metrics(&self) -> Option<ServerMetrics> {
+        if self.updated.load(Relaxed) {
+            match self.mutex.try_lock() {
+                Ok(metrics) => Some(metrics.clone()),
+                Err(err) => {
+                    panic!("Failed to acquire metrics lock: {}", err);
+                }
+            }
+        }
+        else {
+            None
+        }
     }
 }
 
@@ -648,6 +680,28 @@ fn process_line<B: io::BufRead, T: FromStr>(
     match T::from_str(value) {
         Ok(value) => Ok(value),
         Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "bad value"))
+    }
+}
+
+
+//------------ ServerMetrics -------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct ServerMetrics {
+    pub notify_uri: uri::Https,
+    pub notify_status: Option<reqwest::StatusCode>,
+    pub serial: Option<usize>,
+    pub duration: Result<Duration, SystemTimeError>,
+}
+
+impl ServerMetrics {
+    fn new(notify_uri: uri::Https) -> Self {
+        ServerMetrics {
+            notify_uri,
+            notify_status: None,
+            serial: None,
+            duration: Ok(Duration::from_secs(0))
+        }
     }
 }
 

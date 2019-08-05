@@ -4,7 +4,7 @@
 //! `ServerId` reexported by the parent module.
 
 use std::{fs, io};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{PathBuf, Path};
 use std::sync::{Arc, RwLock};
@@ -323,7 +323,8 @@ impl Cache {
         unwrap!(self.servers.write()).cleanup(&self.cache_dir);
     }
 
-    pub fn update_metrics(&self, _metrics: &mut Metrics) {
+    pub fn update_metrics(&self, metrics: &mut Metrics) {
+        unwrap!(self.servers.read()).update_metrics(metrics);
     }
 }
 
@@ -406,18 +407,13 @@ impl ServerSet {
     /// This will call `remove_unused` and clear out the server set.
     pub fn cleanup(&mut self, cache_dir: &Path) {
         self.epoch = self.epoch.wrapping_add(1);
-        self.uris.clear();
-        let servers: HashSet<_> = self.servers.drain(..).filter_map(|server| {
-            if server.remove_unused() {
-                None
-            }
-            else {
-                match Arc::try_unwrap(server) {
-                    Ok(server) => Some(server.into_server_dir()),
-                    Err(server) => Some(server.server_dir().into()),
-                }
-            }
+        self.servers = self.servers.drain(..).filter(|server| {
+            !server.remove_unused()
         }).collect();
+        self.uris = self.servers.iter().enumerate().map(|(idx, server)| {
+            (server.notify_uri().clone(), ServerId::new(self.epoch, idx))
+        }).collect();
+
         let dir = match cache_dir.read_dir() {
             Ok(dir) => dir,
             Err(err) => {
@@ -440,7 +436,7 @@ impl ServerSet {
                 }
             };
             let path = entry.path();
-            if !servers.contains(&path) {
+            if !self.contains_server_dir(&path) {
                 if let Err(err) = fs::remove_dir_all(&path) {
                     info!(
                         "Failed to delete unused RRDP server dir '{}': {}",
@@ -449,6 +445,17 @@ impl ServerSet {
                 }
             }
         }
+    }
+
+    fn contains_server_dir(&self, path: &Path) -> bool {
+        self.servers.iter().any(|server| server.server_dir() == path)
+    }
+
+    pub fn update_metrics(&self, metrics: &mut Metrics) {
+        metrics.rrdp_mut().clear();
+        metrics.rrdp_mut().extend(
+            self.servers.iter().filter_map(|server| server.metrics())
+        );
     }
 }
 
