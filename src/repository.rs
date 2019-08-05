@@ -119,7 +119,12 @@ impl Repository {
             strict: config.strict,
             extra_output,
             validation_threads: config.validation_threads,
-            rrdp: rrdp::Cache::new(config, update).ok(),
+            rrdp: if config.disable_rrdp {
+                None
+            }
+            else {
+                Some(rrdp::Cache::new(config, update)?)
+            },
             rsync: rsync::Cache::new(
                 config, config.cache_dir.join("rsync"), update
             

@@ -27,7 +27,7 @@ log             = "^0.4"
 log-reroute	= "^0.1.2"
 num_cpus        = "^1.0"
 rand            = "^0.6"
-reqwest		= "^0.9.19"
+reqwest		= { version = "^0.9.19", features = [ "socks" ]}
 ring		= "^0.14"
 rpki            = "^0.5.1"
 serde		= "^1.0"

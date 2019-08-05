@@ -44,7 +44,34 @@ impl HttpClient {
     }
 
     pub fn new(config: &Config) -> Result<Self, Error> {
-        let builder = reqwest::Client::builder();
+        let mut builder = reqwest::Client::builder();
+        if let Some(timeout) = config.rrdp_timeout {
+            builder = builder.timeout(timeout);
+        }
+        if let Some(timeout) = config.rrdp_connect_timeout {
+            builder = builder.connect_timeout(Some(timeout));
+        }
+        if let Some(addr) = config.rrdp_local_addr {
+            builder = builder.local_address(addr)
+        }
+        for path in &config.rrdp_root_certs {
+            builder = builder.add_root_certificate(
+                Self::load_cert(path)?
+            );
+        }
+        for proxy in &config.rrdp_proxies {
+            let proxy = match reqwest::Proxy::all(proxy) {
+                Ok(proxy) => proxy,
+                Err(err) => {
+                    error!(
+                        "Invalid rrdp-proxy '{}': {}", proxy, err
+                    );
+                    return Err(Error)
+                }
+            };
+            builder = builder.proxy(proxy);
+        }
+
         let client = match builder.build() {
             Ok(client) => client,
             Err(err) => {
@@ -58,7 +85,35 @@ impl HttpClient {
             tmp_dir: config.cache_dir.join("tmp"),
         })
     }
-    
+
+    fn load_cert(path: &Path) -> Result<reqwest::Certificate, Error> {
+        let mut file = match fs::File::open(path) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Cannot open rrdp-root-cert file '{}': {}'",
+                    path.display(), err
+                );
+                return Err(Error);
+            }
+        };
+        let mut data = Vec::new();
+        if let Err(err) = io::Read::read_to_end(&mut file, &mut data) {
+            error!(
+                "Cannot read rrdp-root-cert file '{}': {}'",
+                path.display(), err
+            );
+            return Err(Error);
+        }
+        reqwest::Certificate::from_pem(&data).map_err(|err| {
+            error!(
+                "Cannot decode rrdp-root-cert file '{}': {}'",
+                path.display(), err
+            );
+            Error
+        })
+    }
+ 
     pub fn tmp_dir(&self) -> &Path {
         &self.tmp_dir
     }

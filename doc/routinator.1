@@ -27,6 +27,13 @@
 .RB [ \-\-rsync\-command=\fIcommand\fR]
 .RB [ \-\-rsync\-args=\fIargs\fR]
 .RB [ \-\-rsync-timeout=\fIseconds\fR]
+.RB [ --disable-rrdp ]
+.RB [ --rrdp-timeout=\fIseconds\fR]
+.RB [ --rrdp-connect-timeout=\fIseconds\fR]
+.RB [ --rrdp-local-addr=\fIaddr\fR]
+.RB [ --rrdp-root-cert=\fIpath\fR\ [...]]
+.RB [ --rrdp-proxy=\fIuri\fR\ [...]]
+.RB [ --dirty ]
 .RB [ \-\-validation-threads=\fIcount\fR]
 .RB [ \-v | \c
 .BR \-vv | \c
@@ -108,9 +115,12 @@ These modes and additional operations can be chosen  via commands. For
 the available commands, see
 .B COMMANDS
 below.
+
+
 .SH "OPTIONS"
 .P
 The available options are:
+
 .TP
 .BI \-c\  path \fR,\ \fB\-\-config= path
 Provides the path to a file containing basic configuration. If this option
@@ -123,6 +133,7 @@ See
 .B CONFIGURATION FILE
 below for more information on the format and contents of the configuration
 file.
+
 .TP
 .BI \-b\  dir \fR,\ \fB\-\-base\-dir= dir
 Specifies the base directory to keep status information in. Unless
@@ -137,11 +148,13 @@ and the TALs will be kept in the sub-directory
 .IP
 If omitted, the base directory defaults to
 .I $HOME/.rpki-cache\fR.
+
 .TP
 .BI \-r\  dir \fR,\ \fB\-\-repository\-dir= dir
 Specifies the directory to keep the local repository in. This is the place
 where Routinator stores the RPKI data it has collected and thus is a copy of
 all the data referenced via the trust anchors.
+
 .TP
 .BI \-t\  dir \fR,\ \fB\-\-tal\-dir= dir
 Specifies the directory containing the trust anchor locators (TALs) to use.
@@ -149,12 +162,14 @@ Trust anchor locators are the starting points for collecting and validating
 RPKI data. See
 .B TRUST ANCHOR LOCATORS
 for more information on what should be present in this directory.
+
 .TP
 .BI \-x\  file \fR,\ \fB\-\-exceptions= file
 Provides the path to a local exceptions file. The option can be used
 multiple times to specify more than one file to use. Each file is a JSON
 file as described in RFC 8416. It lists both route origins that should be
 filtered out of the output as well as origins that should be added.
+
 .TP
 .BR \-\-strict
 If this option is present, the repository will be validated in strict mode
@@ -166,6 +181,7 @@ practice.
 See
 .B RELAXED VALIDATION
 below for more information.
+
 .TP
 .BI \-\-rsync\-command= command
 Provides the command to run for rsync. This is only the command itself.
@@ -176,12 +192,49 @@ configuration file setting instead.
 If this option is not given, Routinator will simply run
 .I rsync
 and hope that it is in the path.
+
 .TP
 .BI \-\-rsync\-timeout= seconds
 Sets the number of seconds an rsync command is allowed to run before it is
 terminated early. This protects against hanging rsync commands that prevent
 Routinator from continuing. The default is 300 seconds which should be long
 enough except for very slow networks.
+
+.TP
+.B --disable-rrdp
+If this option is present, RRDP is disabled and only rsync will be used.
+.TP
+.BI --rrdp-timeout= seconds
+Sets the timeout in seconds for any RRDP-related network operation, i.e.,
+connects, reads, and writes. If this option is omitted, the default timeout
+of 30 seconds is used. Set the option to 0 to disable the timeout.
+
+.TP
+.BI --rrdp-connect-timeout= seconds
+Sets the timeout in seconds for RRDP connect requests. If omitted, the general
+timeout will be used.
+
+.TP
+.BI --rrdp-local-addr= addr
+If present, sets the local address that the RRDP client should bind to when
+doing outgoing requests.
+
+.TP
+.BI --rrdp-root-cert= path
+This option provides a path to a file that contains a certificate in PEM
+encoding that should be used as a trusted certificate for HTTPS server 
+authentication. The option can be given more then once.
+.IP
+Providing this option does
+.I not
+disable the set of regular HTTPS authentication trust certificates.
+
+.TP
+.BI --rrdp-proxy= uri
+This option provides the URI of a proxy to use for all HTTP connections made
+by the RRDP client. It can be either an HTTP or a SOCKS URI. The option can
+be given multiple times in which case proxies are tried in the given order.
+
 .TP
 .B --dirty
 If this option is present, unused files and directories will not be deleted
@@ -235,6 +288,7 @@ Print some help information.
 .TP
 .BR \-V , " \-\-version
 Print version information.
+
 
 .SH COMMANDS
 Routinator provides a number of operations around the local RPKI repository.
@@ -603,6 +657,36 @@ arguments are used.
 An integer value specifying th number seconds an rsync command is allowed to
 run before it is being terminated. The default if the value is missing is
 300 seconds.
+
+.TP
+.B disable-rrdp
+A boolean value that, if present and true, turns off the use of RRDP.
+
+.TP
+.B rrdp-timeout
+An integer value that provides a timeout in seconds for all individual
+RRDP-related network operations, i.e., connects, reads, and writes. If the
+value is missing, a default timeout of 30 seconds will be used. Set the value
+to 0 to turn the timeout off.
+
+.TP
+.B rrdp-connect-timeout
+An integer value that, if present, sets a separate timeout in seconds for
+RRDP connect requests only.
+
+.TP rrdp-local-addr
+A string value that provides the local address to be used by RRDP connections.
+
+.TP rrdp-root-certs
+A list of strings each providing a path to a file containing a trust anchor
+certificate for HTTPS authentication of RRDP connections. In addition to the
+certiciates provided via this option, the system's own trust store is used.
+
+.TP rrdp-proxies
+A list of string each providing the URI for a proxy for outgoing RRDP
+connections. The proxies are tried in order for each request. HTTP and SOCKS5
+proxies are supported.
+
 .TP
 .B dirty
 A boolean value which, if true, specififies that unused files and directories
