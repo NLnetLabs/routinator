@@ -93,8 +93,10 @@ impl HttpClient {
             return Err(Error)
         }
         let digest = reader.into_inner().into_digest();
-        if let Err(_) = verify_slices_are_equal(digest.as_ref(),
-                                            notify.snapshot.hash().as_ref()) {
+        if verify_slices_are_equal(
+            digest.as_ref(),
+            notify.snapshot.hash().as_ref()
+        ).is_err() {
             info!("{}: hash value mismatch.", notify.snapshot.uri());
             return Err(Error)
         }
@@ -122,8 +124,10 @@ impl HttpClient {
             return Err(Error)
         }
         let digest = reader.into_inner().into_digest();
-        if let Err(_) = verify_slices_are_equal(digest.as_ref(),
-                                                delta.1.hash().as_ref()) {
+        if verify_slices_are_equal(
+            digest.as_ref(),
+            delta.1.hash().as_ref()
+        ).is_err() {
             error!("{}: hash value mismatch.", delta.1.uri());
             return Err(Error)
         }
@@ -199,7 +203,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     ) -> Result<(), Self::Err> {
         if session_id != self.notify.session_id {
             return Err(SnapshotError::SessionMismatch {
-                expected: self.notify.session_id.clone(),
+                expected: self.notify.session_id,
                 received: session_id
             })
         }

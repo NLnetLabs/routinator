@@ -123,10 +123,8 @@ impl Server {
             return
         }
 
-        if self.try_update(http).is_err() {
-            if self.check_broken() {
-                let _ = fs::remove_dir_all(self.server_dir.base());
-            }
+        if self.try_update(http).is_err() && self.check_broken() {
+            let _ = fs::remove_dir_all(self.server_dir.base());
         }
         self.updated.store(true, Relaxed);
     }
@@ -167,7 +165,7 @@ impl Server {
             }
         };
         self.server_dir.check_digest(&state.hash)?;
-        if let Err(_) = targets.apply() {
+        if targets.apply().is_err() {
             return Err(Error);
         }
         state.serial = notify.serial;
@@ -177,7 +175,7 @@ impl Server {
                 return Err(Error);
             }
         };
-        if let Err(_) = state.save(self.server_dir.state_path()) {
+        if state.save(self.server_dir.state_path()).is_err() {
             return Err(Error);
         }
         Ok(())
@@ -264,7 +262,7 @@ impl Server {
     ) -> Result<(), Error> {
         info!("RRDP {}: updating from snapshot.", self.notify_uri);
         let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
-        if let Err(_) = self.snapshot_into_tmp(notify, http, &tmp_dir) {
+        if self.snapshot_into_tmp(notify, http, &tmp_dir).is_err() {
             let _ = fs::remove_dir_all(tmp_dir.base());
             return Err(Error);
         }

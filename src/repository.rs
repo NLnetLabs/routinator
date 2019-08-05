@@ -663,14 +663,12 @@ impl Repository {
                     );
                 }
             }
-            else {
-                if let Err(err) = fs::remove_file(entry.path()) {
-                    warn!(
-                        "Failed to delete unused repository entry {}:{}",
-                        entry.path().display(),
-                        err
-                    );
-                }
+            else if let Err(err) = fs::remove_file(entry.path()) {
+                warn!(
+                    "Failed to delete unused repository entry {}:{}",
+                    entry.path().display(),
+                    err
+                );
             }
         }
     }
