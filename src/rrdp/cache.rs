@@ -4,9 +4,9 @@
 //! `ServerId` reexported by the parent module.
 
 use std::{fs, io};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use log::{error, info, warn};
@@ -32,7 +32,7 @@ const MAX_TA_SIZE: u64 = 64 * 1024;
 /// Access to local copies of repositories synchronized via RRDP.
 #[derive(Debug)]
 pub struct Cache {
-    /// The base directory of the cache.
+    /// The base directory of the RRDP server cache.
     cache_dir: PathBuf,
 
     /// The base directory of the TA cache.
@@ -320,7 +320,7 @@ impl Cache {
     }
 
     pub fn cleanup(&self) {
-        unwrap!(self.servers.write()).cleanup();
+        unwrap!(self.servers.write()).cleanup(&self.cache_dir);
     }
 
     pub fn update_metrics(&self, _metrics: &mut Metrics) {
@@ -403,19 +403,51 @@ impl ServerSet {
 
     /// Cleans up the server set.
     ///
-    /// This will call `remove_unused` on all known servers and only keeps
-    /// those that return `false`.
-    pub fn cleanup(&mut self) {
+    /// This will call `remove_unused` and clear out the server set.
+    pub fn cleanup(&mut self, cache_dir: &Path) {
         self.epoch = self.epoch.wrapping_add(1);
-        self.servers = self.servers.drain(..)
-            .filter(|s| !s.remove_unused())
-            .collect();
         self.uris.clear();
-        for (idx, server) in self.servers.iter().enumerate() {
-            self.uris.insert(
-                server.notify_uri().clone(),
-                ServerId::new(self.epoch, idx)
-            );
+        let servers: HashSet<_> = self.servers.drain(..).filter_map(|server| {
+            if server.remove_unused() {
+                None
+            }
+            else {
+                match Arc::try_unwrap(server) {
+                    Ok(server) => Some(server.into_server_dir()),
+                    Err(server) => Some(server.server_dir().into()),
+                }
+            }
+        }).collect();
+        let dir = match cache_dir.read_dir() {
+            Ok(dir) => dir,
+            Err(err) => {
+                info!(
+                    "Failed to open RRDP cache directory '{}': {}",
+                    cache_dir.display(), err
+                );
+                return;
+            }
+        };
+        for entry in dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    info!(
+                        "Failed to read RRDP cache directory '{}': {}",
+                        cache_dir.display(), err
+                    );
+                    return;
+                }
+            };
+            let path = entry.path();
+            if !servers.contains(&path) {
+                if let Err(err) = fs::remove_dir_all(&path) {
+                    info!(
+                        "Failed to delete unused RRDP server dir '{}': {}",
+                        path.display(), err
+                    );
+                }
+            }
         }
     }
 }

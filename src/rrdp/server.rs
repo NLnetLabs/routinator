@@ -74,6 +74,16 @@ impl Server {
         }
     }
 
+    /// Returns a reference to the server directory.
+    pub fn server_dir(&self) -> &Path {
+        &self.server_dir.base
+    }
+
+    /// Converts the server into its server directory.
+    pub fn into_server_dir(self) -> PathBuf {
+        self.server_dir.base
+    }
+
     /// Creates a new server for an existing, not updated server.
     ///
     /// Assumes that the server directory exists. Marks the server as not
@@ -406,7 +416,11 @@ impl Server {
     ///
     /// Returns whether it indeed removed the cache.
     pub fn remove_unused(&self) -> bool {
-        unimplemented!()
+        if self.updated.load(Relaxed) && !self.broken.load(Relaxed) {
+            return false
+        }
+        let _ = fs::remove_dir_all(self.server_dir.base());
+        true
     }
 }
 

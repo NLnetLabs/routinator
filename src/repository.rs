@@ -627,6 +627,9 @@ impl Repository {
             return
         }
         self.0.rsync.cleanup();
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.cleanup()
+        }
         self.cleanup_base();
     }
 
