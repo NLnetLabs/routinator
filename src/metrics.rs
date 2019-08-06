@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use log::info;
+use rpki::uri;
 use rpki::tal::TalInfo;
-use rpki::uri::RsyncModule;
-use crate::repository::RsyncMetrics;
+use crate::{rrdp, rsync};
 
 
 //------------ Metrics -------------------------------------------------------
@@ -19,7 +19,10 @@ pub struct Metrics {
     tals: Vec<TalMetrics>,
 
     /// Rsync metrics.
-    rsync: Vec<(RsyncModule, RsyncMetrics)>,
+    rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>,
+
+    /// RRDP metrics.
+    rrdp: Vec<rrdp::ServerMetrics>,
 }
 
 impl Metrics {
@@ -28,6 +31,7 @@ impl Metrics {
             time: Utc::now(),
             tals: Vec::new(),
             rsync: Vec::new(),
+            rrdp: Vec::new(),
         }
     }
 
@@ -35,8 +39,15 @@ impl Metrics {
         self.tals.push(tal)
     }
 
-    pub fn set_rsync(&mut self, rsync: Vec<(RsyncModule, RsyncMetrics)>) {
+    pub fn set_rsync(
+        &mut self,
+        rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>
+    ) {
         self.rsync = rsync
+    }
+
+    pub fn rrdp_mut(&mut self) -> &mut Vec<rrdp::ServerMetrics> {
+        &mut self.rrdp
     }
 
     pub fn time(&self) -> DateTime<Utc> {
@@ -51,8 +62,12 @@ impl Metrics {
         &self.tals
     }
 
-    pub fn rsync(&self) -> &[(RsyncModule, RsyncMetrics)] {
+    pub fn rsync(&self) -> &[(uri::RsyncModule, rsync::ModuleMetrics)] {
         &self.rsync
+    }
+
+    pub fn rrdp(&self) -> &[rrdp::ServerMetrics] {
+        &self.rrdp
     }
 
     pub fn rsync_complete(&self) -> bool {

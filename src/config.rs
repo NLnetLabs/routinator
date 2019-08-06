@@ -6,7 +6,7 @@
 
 use std::{env, fmt, fs, io};
 use std::io::Read;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -26,9 +26,6 @@ use crate::slurm::LocalExceptions;
 
 /// Are we doing strict validation by default?
 const DEFAULT_STRICT: bool = false;
-
-/// The default number of rsync commands run in parallel.
-const DEFAULT_RSYNC_COUNT: usize = 4;
 
 /// The default timeout for running rsync commands in seconds.
 const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
@@ -92,11 +89,29 @@ pub struct Config {
     /// Arguments passed to rsync.
     pub rsync_args: Option<Vec<String>>,
 
-    /// Number of parallel rsync commands.
-    pub rsync_count: usize,
-
     /// Timeout for rsync commands.
     pub rsync_timeout: Duration,
+
+    /// Disable RRDP and only use rsync.
+    pub disable_rrdp: bool,
+
+    /// RRDP timeout in seconds.
+    ///
+    /// Use `Some(None)` for no timeout.
+    #[allow(clippy::option_option)]
+    pub rrdp_timeout: Option<Option<Duration>>,
+
+    /// RRDP connect timeout in seconds.
+    pub rrdp_connect_timeout: Option<Duration>,
+
+    /// RRDP local address to bind to when doing requests.
+    pub rrdp_local_addr: Option<IpAddr>,
+
+    /// RRDP additional root certificates for HTTPS.
+    pub rrdp_root_certs: Vec<PathBuf>,
+
+    /// RRDP HTTP proxies.
+    pub rrdp_proxies: Vec<String>,
 
     /// Don’t cleanup the repository directory after a validation run.
     pub dirty_repository: bool,
@@ -196,18 +211,49 @@ impl Config {
              .help("The command to run for rsync")
              .takes_value(true)
         )
-        .arg(Arg::with_name("rsync-count")
-             .long("rsync-count")
-             .value_name("COUNT")
-             .help("Number of parallel rsync commands")
-             .takes_value(true)
-        )
         .arg(Arg::with_name("rsync-timeout")
             .long("rsync-timeout")
             .value_name("SECONDS")
-            .default_value("600")
             .help("Timeout for rsync commands")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("disable-rrdp")
+            .long("disable-rrdp")
+            .help("Disable RRDP and only use rsync")
+        )
+        .arg(Arg::with_name("rrdp-timeout")
+            .long("rrdp-timeout")
+            .value_name("SECONDS")
+            .help("Timeout of network operation for RRDP (0 for none)")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-connect-timeout")
+            .long("rrdp-connect-timeout")
+            .value_name("SECONDS")
+            .help("Timeout for connecting to an RRDP server")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-local-addr")
+            .long("rrdp-local-addr")
+            .value_name("ADDR")
+            .help("Local address for outgoing RRDP connections")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-root-cert")
+            .long("rrdp-root-cert")
+            .value_name("PATH")
+            .help("Path to trusted PEM certificate for RRDP HTTPS")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
+        )
+        .arg(Arg::with_name("rrdp-proxy")
+            .long("rrdp-proxy")
+            .value_name("URI")
+            .help("Proxy server for RRDP (HTTP or SOCKS5)")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
         )
         .arg(Arg::with_name("dirty-repository")
             .long("dirty")
@@ -401,14 +447,51 @@ impl Config {
             self.rsync_command = value.into()
         }
 
-        // rsync_count
-        if let Some(value) = from_str_value_of(matches, "rsync-count")? {
-            self.rsync_count = value
-        }
-
         // rsync_timeout
         if let Some(value) = from_str_value_of(matches, "rsync-timeout")? {
             self.rsync_timeout = Duration::from_secs(value)
+        }
+
+        // disable_rrdp
+        if matches.is_present("disable-rrdp") {
+            self.disable_rrdp = true
+        }
+
+        // rrdp_timeout
+        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+            self.rrdp_timeout = match value {
+                0 => Some(None),
+                value => Some(Some(Duration::from_secs(value))),
+            }
+        }
+
+        // rrdp_connect_timeout
+        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+            self.rrdp_connect_timeout = Some(Duration::from_secs(value))
+        }
+
+        // rrdp_local_addr
+        if let Some(value) = from_str_value_of(matches, "rrdp-local-addr")? {
+            self.rrdp_local_addr = Some(value)
+        }
+
+        // rrdp_root_certs
+        if let Some(list) = matches.values_of("rrdp-root-cert") {
+            self.rrdp_root_certs = Vec::new();
+            for value in list {
+                match PathBuf::from_str(value) {
+                    Ok(path) => self.rrdp_root_certs.push(path),
+                    Err(_) => {
+                        error!("Invalid path for rrdp-root-cert '{}'", value);
+                        return Err(Error)
+                    }
+                };
+            }
+        }
+
+        // rrdp_proxies
+        if let Some(list) = matches.values_of("rrdp-proxy") {
+            self.rrdp_proxies = list.map(Into::into).collect();
         }
 
         // dirty_repository
@@ -781,14 +864,35 @@ impl Config {
                     .unwrap_or_else(|| "rsync".into())
             },
             rsync_args: file.take_opt_string_array("rsync-args")?,
-            rsync_count: {
-                file.take_small_usize("rsync-count")?
-                    .unwrap_or(DEFAULT_RSYNC_COUNT)
-            },
             rsync_timeout: {
                 Duration::from_secs(
                     file.take_u64("rsync-timeout")?
                         .unwrap_or(DEFAULT_RSYNC_TIMEOUT)
+                )
+            },
+            disable_rrdp: file.take_bool("disable-rrdp")?.unwrap_or(false),
+            rrdp_timeout: {
+                file.take_u64("rrdp-timeout")?
+                .map(|secs| {
+                    if secs == 0 {
+                        None
+                    }
+                    else {
+                        Some(Duration::from_secs(secs))
+                    }
+                })
+            },
+            rrdp_connect_timeout: {
+                file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
+            },
+            rrdp_local_addr: file.take_from_str("rrdp-local-addr")?,
+            rrdp_root_certs: {
+                file.take_from_str_array("rrdp-root-certs")?
+                    .unwrap_or_else(Vec::new)
+            },
+            rrdp_proxies: {
+                file.take_opt_string_array("rrdp-proxies")?.unwrap_or_else(
+                    Vec::new
                 )
             },
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
@@ -927,8 +1031,13 @@ impl Config {
             strict: DEFAULT_STRICT,
             rsync_command: "rsync".into(),
             rsync_args: None,
-            rsync_count: DEFAULT_RSYNC_COUNT,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
+            disable_rrdp: false,
+            rrdp_timeout: None,
+            rrdp_connect_timeout: None,
+            rrdp_local_addr: None,
+            rrdp_root_certs: Vec::new(),
+            rrdp_proxies: Vec::new(),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1055,10 +1164,39 @@ impl Config {
                 )
             );
         }
-        res.insert("rsync-count".into(), (self.rsync_count as i64).into());
         res.insert(
             "rsync-timeout".into(),
             (self.rsync_timeout.as_secs() as i64).into()
+        );
+        res.insert("disable-rrdp".into(), self.disable_rrdp.into());
+        if let Some(timeout) = self.rrdp_timeout {
+            res.insert(
+                "rrdp-timeout".into(),
+                ((timeout.map(|d| d.as_secs()).unwrap_or(0)) as i64).into()
+            );
+        }
+        if let Some(timeout) = self.rrdp_connect_timeout {
+            res.insert(
+                "rrdp-connect-timeout".into(),
+                (timeout.as_secs() as i64).into()
+            );
+        }
+        if let Some(addr) = self.rrdp_local_addr {
+            res.insert("rrdp-local-addr".into(), addr.to_string().into());
+        }
+        res.insert(
+            "rrdp-root-certs".into(),
+            toml::Value::Array(
+                self.rrdp_root_certs.iter()
+                    .map(|p| p.display().to_string().into())
+                    .collect()
+            )
+        );
+        res.insert(
+            "rrdp-proxies".into(),
+            toml::Value::Array(
+                self.rrdp_proxies.iter().map(|s| s.clone().into()).collect()
+            )
         );
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
@@ -1686,7 +1824,6 @@ mod test {
         );
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, DEFAULT_STRICT);
-        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -1707,7 +1844,6 @@ mod test {
              tal-dir = \"taldir\"\n\
              exceptions = [\"ex1\", \"/ex2\"]\n\
              strict = true\n\
-             rsync-count = 12\n\
              validation-threads = 1000\n\
              refresh = 6\n\
              retry = 7\n\
@@ -1729,7 +1865,6 @@ mod test {
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
         assert_eq!(config.strict, true);
-        assert_eq!(config.rsync_count, 12);
         assert_eq!(config.validation_threads, 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
@@ -1767,7 +1902,6 @@ mod test {
         assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, false);
-        assert_eq!(config.rsync_count, DEFAULT_RSYNC_COUNT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -1808,7 +1942,7 @@ mod test {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository", "-t", "tals",
             "-x", "/x1", "--exceptions", "x2", "--strict",
-            "--rsync-count", "1000", "--validation-threads", "2000",
+            "--validation-threads", "2000",
             "--syslog", "--syslog-facility", "auth"
         ]);
         assert_eq!(config.cache_dir, Path::new("/repository"));
@@ -1817,7 +1951,6 @@ mod test {
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
         assert_eq!(config.strict, true);
-        assert_eq!(config.rsync_count, 1000);
         assert_eq!(config.validation_threads, 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }

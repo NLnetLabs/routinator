@@ -6,18 +6,14 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fs, io, mem, process};
-use std::collections::HashMap;
-use std::fs::{DirEntry, File, create_dir_all};
-use std::io::Read;
+use std::{fmt, fs, io};
+use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::process::{ExitStatus, Output};
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::sync::Arc;
 use bytes::Bytes;
 use derive_more::Display;
 use futures::future;
-use futures::{Future, IntoFuture};
+use futures::Future;
 use futures_cpupool::CpuPool;
 use log::{debug, error, info, warn};
 use rpki::uri;
@@ -25,9 +21,11 @@ use rpki::cert::{Cert, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::Roa;
-use rpki::tal::Tal;
+use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
-use unwrap::unwrap;
+//use unwrap::unwrap;
+use crate::{rrdp, rsync};
+use crate::metrics::Metrics;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::RouteOrigins;
@@ -62,8 +60,8 @@ pub struct Repository(Arc<RepoInner>);
 
 #[derive(Debug)]
 struct RepoInner {
-    /// The directory our local copy of the respository lives in.
-    cache_dir: PathBuf, 
+    /// The base directory of the local cache.
+    cache_dir: PathBuf,
 
     /// The list of our TALs. 
     tals: Vec<Tal>,
@@ -74,16 +72,14 @@ struct RepoInner {
     /// Should we keep extended information about ROAs?
     extra_output: bool,
 
-    /// Number of rsync commands.
-    rsync_threads: usize,
-
     /// Number of validation threads.
     validation_threads: usize,
 
-    /// Information for running rsync.
-    ///
-    /// If this is `None`, we don’t rsync.
-    rsync: Option<(Mutex<RsyncState>, RsyncCommand)>,
+    /// The RRDP cache.
+    rrdp: Option<rrdp::Cache>,
+
+    /// The rsync cache.
+    rsync: rsync::Cache,
 
     /// Should we leave the repository dirty after a valiation run.
     dirty_repository: bool,
@@ -92,12 +88,12 @@ struct RepoInner {
 impl Repository {
     /// Creates a new repository.
     ///
-    /// Takes all necessary information from `config`. If `rsync` is `false`,
-    /// rsyncing is disabled.
+    /// Takes all necessary information from `config`. If `update` is `false`,
+    /// updating the local cache will not be updated from upstream.
     pub fn new(
         config: &Config,
         extra_output: bool,
-        rsync: bool
+        update: bool
     ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
@@ -122,19 +118,32 @@ impl Repository {
             tals: Self::load_tals(&config.tal_dir)?,
             strict: config.strict,
             extra_output,
-            rsync_threads: config.rsync_count,
             validation_threads: config.validation_threads,
-            rsync: if rsync {
-                Some((
-                    Mutex::new(RsyncState::new()),
-                    RsyncCommand::detect(config)?
-                ))
+            rrdp: if config.disable_rrdp {
+                None
             }
             else {
-                None
+                Some(rrdp::Cache::new(config, update)?)
             },
+            rsync: rsync::Cache::new(
+                config, config.cache_dir.join("rsync"), update
+            
+            )?,
             dirty_repository: config.dirty_repository,
         })))
+    }
+
+    pub fn init(config: &Config) -> Result<(), Error> {
+        let rsync_dir = config.cache_dir.join("rsync");
+        if let Err(err) = fs::create_dir_all(&rsync_dir) {
+            error!(
+                "Failed to create rsync cache directory {}: {}.",
+                rsync_dir.display(), err
+            );
+            return Err(Error);
+        }
+        rrdp::Cache::init(config)?;
+        Ok(())
     }
 
     /// Loads the TAL files from the given directory.
@@ -212,54 +221,12 @@ impl Repository {
     /// This resets the update cache that lists the rsync modules we have
     /// already tried updating. It is therefore really important to call this
     /// method before doing any new update.
-    pub fn start(&self) {
-        if let Some(ref rsync) = self.0.rsync {
-            rsync.0.lock().unwrap().clear_seen();
+    pub fn start(&self) -> Result<(), Error> {
+        self.0.rsync.start()?;
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.start()?;
         }
-    }
-
-    /// Asynchronously updates the content of the local repository.
-    ///
-    /// This goes over all the known repository publication points and runs
-    /// rsync on them to update.
-    ///
-    /// The method logs all error messages.
-    pub fn update_async(&self) -> impl Future<Item=(), Error=Error> {
-        let repo = self.clone();
-        let pool = CpuPool::new(self.0.rsync_threads);
-        fs::read_dir(&self.0.cache_dir).map_err(|err| {
-            error!(
-                "Failed to read repository directory: {}",
-                err
-            );
-            Error
-        }).into_future()
-        .and_then(|dir| {
-            future::join_all(dir.map(move |entry| {
-                let repo = repo.clone();
-                let pool = pool.clone();
-                entry.map_err(|err| {
-                    error!(
-                        "Failed to iterate over repository directory: {}",
-                        err
-                    );
-                    Error
-                }).into_future()
-                .and_then(move |entry| {
-                    pool.spawn(future::lazy(|| {
-                        repo.update_host(entry);
-                        Ok(())
-                    }))
-                })
-            })).map(|_| ())
-        })
-    }
-
-    /// Updates the content of the local repository.
-    ///
-    /// This is the synchronous version of `update_async`.
-    pub fn update(&self) -> Result<(), Error> {
-        self.update_async().wait()
+        Ok(())
     }
 
     /// Process the local repository and produce a list of route origins.
@@ -280,11 +247,7 @@ impl Repository {
             let pool = pool.clone();
             pool.spawn(future::lazy(move || repo.process_tal(idx)))
         })).and_then(move |res| {
-            if !clean_repo.0.dirty_repository {
-                if let Some(rsync) = &clean_repo.0.rsync {
-                    clean_repo.cleanup(&unwrap!(rsync.0.lock()))?;
-                }
-            }
+            clean_repo.cleanup();
             Ok(res)
         })
     }
@@ -304,16 +267,11 @@ impl Repository {
         config.load_exceptions(self.0.extra_output)
     }
 
-    /// Returns the rsync metrics.
-    ///
-    /// This can only be done once per update as it replaces the current
-    /// metrics with an empty set.
-    pub fn take_rsync_metrics(&self) -> Vec<(uri::RsyncModule, RsyncMetrics)> {
-        if let Some(ref rsync) = self.0.rsync {
-            rsync.0.lock().unwrap().take_seen()
-        }
-        else {
-            Vec::new()
+    /// Update metrics for this validation run.
+    pub fn update_metrics(&self, metrics: &mut Metrics) {
+        self.0.rsync.update_metrics(metrics);
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.update_metrics(metrics)
         }
     }
 }
@@ -325,12 +283,18 @@ impl Repository {
     /// Loads a trust anchor certificate from the given URI.
     fn load_ta(
         &self,
-        uri: &uri::Rsync
-    ) -> Result<Option<Cert>, Error> {
-        Ok(
-            self.load_file(uri, true)
-            .and_then(|bytes| Cert::decode(bytes).ok())
-        )
+        uri: &TalUri,
+        info: &TalInfo,
+    ) -> Option<Cert> {
+        match *uri {
+            TalUri::Rsync(ref uri) => {
+                self.load_file(None, uri, true)
+                .and_then(|bytes| Cert::decode(bytes).ok())
+            }
+            TalUri::Https(ref uri) => {
+                self.0.rrdp.as_ref().and_then(|rrdp| rrdp.load_ta(uri, info))
+            }
+        }
     }
 
     /// Loads the content of a file from the given URI.
@@ -340,130 +304,18 @@ impl Repository {
     /// If loading the file fails, logs a warning and returns `None`.
     fn load_file(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         uri: &uri::Rsync,
         create: bool
     ) -> Option<Bytes> {
-        match File::open(self.uri_to_path(uri)) {
-            Ok(mut file) => {
-                if let Some(rsync) = self.0.rsync.as_ref() {
-                    unwrap!(rsync.0.lock()).mark_used(uri.module())
-                }
-                let mut data = Vec::new();
-                if let Err(err) = file.read_to_end(&mut data) {
-                    warn!(
-                        "Failed to read file '{}': {}",
-                        self.uri_to_path(uri).display(),
-                        err
-                    );
-                    return None
-                }
-                Some(data.into())
-            }
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                if create {
-                    self.rsync_module(uri.module());
-                    self.load_file(uri, false)
-                }
-                else {
-                    info!("{}: not found in local repository", uri);
-                    None
-                }
-            }
-            Err(err) => {
-                warn!(
-                    "Failed to open file '{}': {}",
-                    self.uri_to_path(uri).display(), err
-                );
-                None
-            }
-        }
-    }
-
-    /// Converts an rsync module URI into a path.
-    fn module_to_path(&self, module: &uri::RsyncModule) -> PathBuf {
-        let mut res = self.0.cache_dir.clone();
-        res.push(module.authority());
-        res.push(module.module());
-        res
-    }
-
-    /// Converts an rsync URI into a path.
-    fn uri_to_path(&self, uri: &uri::Rsync) -> PathBuf {
-        let mut res = self.module_to_path(uri.module());
-        res.push(uri.path());
-        res
-    }
-}
-
-
-/// # Updating
-///
-impl Repository {
-    /// Updates content of the host-specific directory of the local copy.
-    ///
-    /// If something goes wrong, logs a message.
-    fn update_host(self, entry: DirEntry) {
-        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-            return
-        }
-        match entry_to_uri_component(&entry) {
-            Some(host) => self.update_module(host, entry.path()),
-            None => {
-                warn!(
-                    "{}: illegal host directory. Skipping.",
-                    entry.path().display()
-                );
-            }
-        }
-    }
-
-    /// Updates content of the module-specific directory of the local copy.
-    ///
-    /// If something goes wrong, logs a message.
-    fn update_module(&self, host: Bytes, path: PathBuf) {
-        let dir = match fs::read_dir(&path) {
-            Ok(dir) => dir,
-            Err(err) => {
-                warn!(
-                    "Failed to read directory {}: {}.",
-                    path.display(), err
-                );
-                return
-            }
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    warn!(
-                        "Failed to iterate over directory {}: {}",
-                        path.display(), err
-                    );
-                    // XXX Or continue?
-                    return
-                }
-            };
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                warn!(
-                    "{}: unexpected file. Skipping.",
-                    entry.path().display()
-                );
-                continue
-            }
-            match entry_to_uri_component(&entry) {
-                Some(module) => {
-                    self.rsync_module(
-                        &uri::RsyncModule::new(host.clone(), module)
-                    )
-                }
-                None => {
-                    warn!(
-                        "{}: illegal module directory. Skipping",
-                        entry.path().display()
-                    )
+        if let Some(id) = rrdp_server {
+            if let Some(rrdp) = self.0.rrdp.as_ref() {
+                if let Ok(res) = rrdp.load_file(id, uri) {
+                    return res
                 }
             }
         }
+        self.0.rsync.load_file(uri, create)
     }
 }
 
@@ -487,8 +339,8 @@ impl Repository {
         let tal = &self.0.tals[idx];
         let mut res = RouteOrigins::new(tal.info().clone());
         for uri in tal.uris() {
-            let cert = match self.load_ta(&uri) {
-                Ok(Some(cert)) => cert,
+            let cert = match self.load_ta(&uri, tal.info()) {
+                Some(cert) => cert,
                 _ => continue,
             };
             if cert.subject_public_key_info() != tal.key_info() {
@@ -524,10 +376,10 @@ impl Repository {
     /// is only needed for composing error messages. Any route origins found
     /// in the objects issued directly or transitively by this CA are added
     /// to `routes`.
-    fn process_ca(
+    fn process_ca<U: fmt::Display>(
         &self,
         cert: ResourceCert,
-        uri: &uri::Rsync,
+        uri: &U,
         routes: &mut RouteOrigins
     ) {
         let mut store = CrlStore::new();
@@ -538,7 +390,10 @@ impl Repository {
                 return
             }
         };
-        let manifest = match self.get_manifest(&cert, uri, &mut store) {
+        let rrdp_server = cert.rpki_notify().and_then(|uri| {
+            self.0.rrdp.as_ref().and_then(|rrdp| rrdp.load_server(uri))
+        });
+        let mft = match self.get_manifest(rrdp_server, &cert, uri, &mut store) {
             Some(manifest) => manifest,
             None => {
                 info!("No valid manifest for CA {}. Ignoring.", uri);
@@ -546,8 +401,10 @@ impl Repository {
             }
         };
 
-        for (uri, hash) in manifest.iter_uris(repo_uri) {
-            self.process_object(uri, hash, &cert, &mut store, routes);
+        for (uri, hash) in mft.iter_uris(repo_uri) {
+            self.process_object(
+                rrdp_server, uri, hash, &cert, &mut store, routes
+            );
         }
     }
 
@@ -564,6 +421,7 @@ impl Repository {
     /// This method logs all its messages.
     fn process_object(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &ResourceCert,
@@ -574,7 +432,7 @@ impl Repository {
         //     manifest. So we should be fine calling load_file without
         //     request for file creation.
         if uri.ends_with(".cer") {
-            let bytes = match self.load_file(&uri, false) {
+            let bytes = match self.load_file(rrdp_server, &uri, false) {
                 Some(bytes) => bytes,
                 None => {
                     info!("{}: failed to load.", uri);
@@ -599,14 +457,14 @@ impl Repository {
                     return
                 }
             };
-            if self.check_crl(&cert, issuer, crl).is_err() {
+            if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
                 info!("{}: certificate has been revoked", uri);
                 return
             }
             self.process_ca(cert, &uri, routes)
         }
         else if uri.ends_with(".roa") {
-            let bytes = match self.load_file(&uri, false) {
+            let bytes = match self.load_file(rrdp_server, &uri, false) {
                 Some(bytes) => bytes,
                 None => {
                     info!("{}: failed to load.", uri);
@@ -626,7 +484,7 @@ impl Repository {
             };
             let mut extra = None;
             let route = roa.process(issuer, self.0.strict, |cert| {
-                self.check_crl(cert, issuer, crl)?;
+                self.check_crl(rrdp_server, cert, issuer, crl)?;
                 extra = Some(8u8);
                 Ok(())
             });
@@ -659,10 +517,11 @@ impl Repository {
     /// Note that currently we happily accept stale manifests, i.e., manifests
     /// whose certificate is still valid but the next_update time has passed.
     /// The RFC says we need to decide what to do, so this is fine.
-    fn get_manifest(
+    fn get_manifest<U: fmt::Display>(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         issuer: &ResourceCert,
-        issuer_uri: &uri::Rsync,
+        issuer_uri: &U,
         store: &mut CrlStore,
     ) -> Option<ManifestContent> {
         let uri = match issuer.rpki_manifest() {
@@ -672,7 +531,7 @@ impl Repository {
                 return None
             }
         };
-        let bytes = match self.load_file(&uri, true) {
+        let bytes = match self.load_file(rrdp_server, &uri, true) {
             Some(bytes) => bytes,
             None => {
                 info!("{}: failed to load.", uri);
@@ -705,7 +564,7 @@ impl Repository {
             );
             store.enable_serial_caching();
         }
-        if self.check_crl(cert, issuer, store).is_err() {
+        if self.check_crl(rrdp_server, cert, issuer, store).is_err() {
             info!("{}: certificate has been revoked", uri);
             return None
         }
@@ -715,6 +574,7 @@ impl Repository {
     /// Checks wheter a certificate is listed on its CRL.
     fn check_crl<C: AsRef<TbsCert>>(
         &self,
+        rrdp_server: Option<rrdp::ServerId>,
         cert: C,
         issuer: &ResourceCert,
         store: &mut CrlStore,
@@ -736,7 +596,7 @@ impl Repository {
         }
 
         // Otherwise, try to load it, use it, and then store it.
-        let bytes = match self.load_file(&uri, true) {
+        let bytes = match self.load_file(rrdp_server, &uri, true) {
             Some(bytes) => bytes,
             _ => return Err(ValidationError),
         };
@@ -763,52 +623,25 @@ impl Repository {
 }
 
 
-/// # Cleaning up
+/// # Cleanup
 ///
 impl Repository {
-    fn cleanup(&self, rsync: &RsyncState) -> Result<(), Error> {
-        let dir = fs::read_dir(&self.0.cache_dir).map_err(|err| {
-            error!(
-                "Failed to read repository directory: {}",
-                err
-            );
-            Error
-        })?;
-        for entry in dir {
-            let entry = entry.map_err(|err| {
-                error!(
-                    "Failed to iterate over repository directory: {}",
-                    err
-                );
-                Error
-            })?;
-            self.cleanup_host(entry, rsync);
-        }
-        Ok(())
-    }
-
-    fn cleanup_host(&self, entry: DirEntry, rsync: &RsyncState) {
-        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+    fn cleanup(&self) {
+        if self.0.dirty_repository {
             return
         }
-        let path = entry.path();
-        let host = match entry_to_uri_component(&entry) {
-            Some(host) => host,
-            None => {
-                warn!(
-                    "{}: illegal host directory. Skipping.",
-                    path.display()
-                );
-                return
-            }
-        };
-        let dir = match fs::read_dir(&path) {
+        self.0.rsync.cleanup();
+        if let Some(ref rrdp) = self.0.rrdp {
+            rrdp.cleanup()
+        }
+        self.cleanup_base();
+    }
+
+    fn cleanup_base(&self) {
+        let dir = match fs::read_dir(&self.0.cache_dir) {
             Ok(dir) => dir,
             Err(err) => {
-                warn!(
-                    "Failed to read directory {}: {}. Skipping.",
-                    path.display(), err
-                );
+                warn!("Failed to read repository directory: {}", err);
                 return
             }
         };
@@ -817,399 +650,36 @@ impl Repository {
                 Ok(entry) => entry,
                 Err(err) => {
                     warn!(
-                        "Failed to iterate over directory {}: {}",
-                        path.display(), err
+                        "Failed to iterate over repository directory: {}", err
                     );
                     return
                 }
             };
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                warn!(
-                    "{}: unexpected file. Skipping.",
-                    entry.path().display()
-                );
-                continue
+            match entry.file_name().to_str() {
+                Some("http") => continue,
+                Some("rsync") => continue,
+                Some("rrdp") => continue,
+                Some("tmp") => continue,
+                _ => { }
             }
-            match entry_to_uri_component(&entry) {
-                Some(module) => {
-                    self.cleanup_module(
-                        uri::RsyncModule::new(host.clone(), module),
-                        entry.path(),
-                        rsync
-                    )
-                }
-                None => {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                if let Err(err) = fs::remove_dir_all(entry.path()) {
                     warn!(
-                        "{}: illegal module directory. Skipping",
-                        entry.path().display()
-                    )
+                        "Failed to delete unused repository directory {}:{}",
+                        entry.path().display(),
+                        err
+                    );
                 }
             }
-        }
-        // Now we just try to delete the whole host directory which fails
-        // if there are still modules left.
-        let _ = fs::remove_dir(path);
-    }
-
-    fn cleanup_module(
-        &self,
-        module: uri::RsyncModule,
-        path: PathBuf,
-        rsync: &RsyncState
-    ) {
-        if !rsync.was_used(&module) {
-            debug!("Cleanup: trying to delete {}.", path.display());
-            if let Err(err) = fs::remove_dir_all(&path) {
-                error!(
-                    "Failed to delete rsync module directory {}: {}",
-                    path.display(),
-                    err
-                );
-            }
-        }
-        else {
-            debug!("Cleanup: keeping {}.", path.display());
-        }
-    }
-}
-
-
-/// # Rsyncing
-///
-impl Repository {
-    #[allow(clippy::mutex_atomic)] // XXX Double check maybe they are right?
-    fn rsync_module(&self, module: &uri::RsyncModule) {
-        if let Some((ref state, ref command)) = self.0.rsync {
-            if state.lock().unwrap().have_seen(module) {
-                return
-            }
-            let path = self.module_to_path(module);
-
-            let cvar = state.lock().unwrap().get_running(module);
-            match cvar {
-                Ok(cvar) => {
-                    let mut finished = cvar.0.lock().unwrap();
-                    while !*finished {
-                        finished = cvar.1.wait(finished).unwrap();
-                    }
-                }
-                Err(cvar) => {
-                    let mut finished = cvar.0.lock().unwrap();
-                    let metrics = command.update(module, path);
-                    {
-                        let mut state = state.lock().unwrap();
-                        state.remove_running(module);
-                        state.add_seen(module.clone(), metrics);
-                    }
-                    *finished = true;
-                    cvar.1.notify_all();
-                }
-            }
-        }
-    }
-}
-
-
-//------------ RsyncState ----------------------------------------------------
-
-#[derive(Debug)]
-struct RsyncState {
-    /// Rsync processes currently running.
-    ///
-    /// The first element of each list item is the module for which the
-    /// process runs, the second is a conditional variable that is going
-    /// to be triggered when the process finishes.
-    #[allow(clippy::type_complexity)]
-    running: Vec<(uri::RsyncModule, Arc<(Mutex<bool>, Condvar)>)>,
-
-    /// The rsync modules we already tried in this iteration.
-    seen: HashMap<uri::RsyncModule, RsyncMetrics>,
-}
-
-impl RsyncState {
-    fn new() -> Self {
-        RsyncState {
-            running: Vec::new(),
-            seen: HashMap::new(),
-        }
-    }
-
-    #[allow(clippy::type_complexity, clippy::mutex_atomic)]
-    fn get_running(
-        &mut self,
-        module: &uri::RsyncModule
-    ) -> Result<Arc<(Mutex<bool>, Condvar)>, Arc<(Mutex<bool>, Condvar)>> {
-        for item in &self.running {
-            if item.0.eq(module) {
-                return Ok(item.1.clone())
-            }
-        }
-        let res = Arc::new((Mutex::new(false), Condvar::new()));
-        self.running.push((module.clone(), res.clone()));
-        Err(res)
-    }
-
-    fn remove_running(&mut self, module: &uri::RsyncModule) {
-        self.running.retain(|item| !item.0.eq(module))
-    }
-
-    fn add_seen(&mut self, module: uri::RsyncModule, metrics: RsyncMetrics) {
-        let _ = self.seen.insert(module, metrics);
-    }
-
-    fn mark_used(&mut self, module: &uri::RsyncModule) {
-        unwrap!(self.seen.get_mut(module)).used = true;
-    }
-
-    fn have_seen(&self, module: &uri::RsyncModule) -> bool {
-        self.seen.contains_key(module)
-    }
-
-    fn was_used(&self, module: &uri::RsyncModule) -> bool {
-        self.seen.get(module).map(|state| state.used).unwrap_or(false)
-    }
-
-    fn clear_seen(&mut self) {
-        self.seen.clear()
-    }
-
-    fn take_seen(&mut self) -> Vec<(uri::RsyncModule, RsyncMetrics)> {
-        mem::replace(&mut self.seen, HashMap::new()).into_iter().collect()
-    }
-}
-
-
-//------------ RsyncCommand --------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct RsyncCommand {
-    command: String,
-    args: Vec<String>,
-    timeout: Duration,
-}
-
-impl RsyncCommand {
-    pub fn detect(config: &Config) -> Result<Self, Error> {
-        let command = config.rsync_command.clone();
-        let output = match process::Command::new(&command).arg("-h").output() {
-            Ok(output) => output,
-            Err(err) => {
-                error!(
-                    "Failed to run rsync: {}",
-                    err
-                );
-                return Err(Error)
-            }
-        };
-        if !output.status.success() {
-            error!(
-                "Running rsync failed with output: \n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            return Err(Error);
-        }
-        let args = match config.rsync_args {
-            Some(ref args) => args.clone(),
-            None => {
-                let has_contimeout =
-                   output.stdout.windows(12)
-                   .any(|window| window == b"--contimeout");
-                let timeout = format!(
-                    "--timeout={}",
-                    config.rsync_timeout.as_secs()
-                );
-                if has_contimeout {
-                    vec!["--contimeout=10".into(), timeout]
-                }
-                else {
-                    vec![timeout]
-                }
-            }
-        };
-        Ok(RsyncCommand {
-            command,
-            args,
-            timeout: config.rsync_timeout
-        })
-    }
-
-    pub fn update<P: AsRef<Path>>(
-        &self,
-        source: &uri::RsyncModule,
-        destination: P
-    ) -> RsyncMetrics {
-        let start = SystemTime::now();
-        let status = {
-            match self.command(source, destination) {
-                Ok(mut command) => match command.output() {
-                    Ok(output) => Ok(Self::log_output(source, output)),
-                    Err(err) => Err(err)
-                }
-                Err(err) => Err(err)
-            }
-        };
-        RsyncMetrics {
-            status,
-            duration: SystemTime::now().duration_since(start),
-            used: false,
-        }
-    }
-
-    fn command<P: AsRef<Path>>(
-        &self,
-        source: &uri::RsyncModule,
-        destination: P
-    ) -> Result<process::Command, io::Error> {
-        info!("rsyncing from {}.", source);
-        let destination = destination.as_ref();
-        create_dir_all(destination)?;
-        let destination = match Self::format_destination(destination) {
-            Ok(some) => some,
-            Err(_) => {
-                error!(
-                    "rsync: illegal destination path {}.",
-                    destination.display()
-                );
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "illegal destination path"
-                ));
-            }
-        };
-        let mut cmd = process::Command::new(&self.command);
-        for item in &self.args {
-            cmd.arg(item);
-        }
-        cmd.arg("-rltz")
-           .arg("--delete")
-           .arg(source.to_string())
-           .arg(destination);
-        debug!(
-            "rsync://{}/{}: Running command {:?}",
-            source.authority(), source.module(), cmd
-        );
-        Ok(cmd)
-    }
-
-    #[cfg(not(windows))]
-    fn format_destination(path: &Path) -> Result<String, Error> {
-        let mut destination = format!("{}", path.display());
-        if !destination.ends_with('/') {
-            destination.push('/')
-        }
-        Ok(destination)
-    }
-
-    #[cfg(windows)]
-    fn format_destination(path: &Path) -> Result<String, Error> {
-        // On Windows we are using Cygwin rsync which requires Unix-style
-        // paths. In particular, the drive parameter needs to be turned
-        // from e.g. `C:` into `/cygdrive/c` and all backslashes should
-        // become slashes.
-        use std::path::{Component, Prefix};
-
-        let mut destination = String::new();
-        for component in path.components() {
-            match component {
-                Component::Prefix(prefix) => {
-                    // We only accept UNC and Disk prefixes. Everything else
-                    // causes an error.
-                    match prefix.kind() {
-                        Prefix::UNC(server, share) => {
-                            let (server, share) = match (server.to_str(),
-                                                         share.to_str()) {
-                                (Some(srv), Some(shr)) => (srv, shr),
-                                _ => return Err(Error)
-                            };
-                            destination.push_str(server);
-                            destination.push('/');
-                            destination.push_str(share);
-                        }
-                        Prefix::Disk(disk) => {
-                            let disk = if disk.is_ascii() {
-                                (disk as char).to_ascii_lowercase()
-                            }
-                            else {
-                                return Err(Error)
-                            };
-                            destination.push_str("/cygdrive/");
-                            destination.push(disk);
-                        }
-                        _ => return Err(Error)
-                    }
-                }
-                Component::CurDir | Component::RootDir => {
-                    continue
-                }
-                Component::ParentDir => {
-                    destination.push_str("..");
-                }
-                Component::Normal(s) => {
-                    match s.to_str() {
-                        Some(s) => destination.push_str(s),
-                        None => return Err(Error)
-                    }
-                }
-            }
-            destination.push_str("/");
-        }
-        Ok(destination)
-    }
-
-    fn log_output(source: &uri::RsyncModule, output: Output) -> ExitStatus {
-        if !output.status.success() {
-            warn!(
-                "rsync://{}/{}: failed with status {}",
-                source.authority(), source.module(), output.status
-            );
-        }
-        else {
-            debug!(
-                "rsync://{}/{}: successfully completed.",
-                source.authority(), source.module(),
-            );
-        }
-        if !output.stderr.is_empty() {
-            String::from_utf8_lossy(&output.stderr).lines().for_each(|l| {
+            else if let Err(err) = fs::remove_file(entry.path()) {
                 warn!(
-                    "rsync://{}/{}: {}", source.authority(), source.module(), l
+                    "Failed to delete unused repository entry {}:{}",
+                    entry.path().display(),
+                    err
                 );
-            })
+            }
         }
-        if !output.stdout.is_empty() {
-            String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
-                info!(
-                    "rsync://{}/{}: {}", source.authority(), source.module(), l
-                )
-            })
-        }
-        output.status
     }
-}
-
-
-//------------ RsyncMetrics --------------------------------------------------
-
-#[derive(Debug)]
-pub struct RsyncMetrics {
-    pub status: Result<ExitStatus, io::Error>,
-    pub duration: Result<Duration, SystemTimeError>,
-    pub used: bool,
-}
-
-
-//------------ Helper Functions ----------------------------------------------
-
-fn entry_to_uri_component(entry: &DirEntry) -> Option<Bytes> {
-    let name = entry.file_name();
-    name.to_str().and_then(|name| {
-        if uri::is_uri_ascii(name) {
-            Some(Bytes::from(name.as_bytes()))
-        }
-        else {
-            None
-        }
-    })
 }
 
 

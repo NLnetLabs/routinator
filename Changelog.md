@@ -4,9 +4,20 @@
 
 Breaking Changes
 
+* Removed the `rsync-count` command line and configuration file option.
+  This option is now unused as modules are now rsync only when they are
+  first used. [(#XX)]
+
 News
 
+* Restructured repository directory. The rsync data now lives in a
+  sub-directory called `rsync`. The main repository directory will now be
+  kept clean and all unexpected files removed. [(#187)]
+
 Bug Fixes
+
+[(#187)]: https://github.com/NLnetLabs/routinator/pull/187
+[(#XX)]: XXX
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’

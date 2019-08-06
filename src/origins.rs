@@ -16,9 +16,8 @@ use rpki::cert::ResourceCert;
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
-use rpki::uri::RsyncModule;
 use crate::metrics::{Metrics, TalMetrics};
-use crate::repository::RsyncMetrics;
+use crate::repository::Repository;
 use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
 
@@ -553,7 +552,7 @@ impl OriginsHistory {
         origins: Option<Vec<RouteOrigins>>,
         exceptions: &LocalExceptions,
         extra_info: bool,
-        rsync: Vec<(RsyncModule, RsyncMetrics)>,
+        repo: &Repository,
     ) -> bool {
         let (serial, current) = {
             let history = self.0.read().unwrap();
@@ -565,7 +564,7 @@ impl OriginsHistory {
         let (next, diff, mut metrics) = OriginsDiff::construct(
             current, origins, exceptions, serial, extra_info
         );
-        metrics.set_rsync(rsync);
+        repo.update_metrics(&mut metrics);
         let mut history = self.0.write().unwrap();
         history.metrics = Arc::new(metrics);
         if !diff.is_empty() {
