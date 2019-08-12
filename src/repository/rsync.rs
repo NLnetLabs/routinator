@@ -4,12 +4,13 @@ use std::{fs, io, process};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::time::SystemTime;
 use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
 use unwrap::unwrap;
 use crate::config::Config;
+use crate::metrics::RsyncModuleMetrics;
 use crate::operation::Error;
 
 
@@ -78,7 +79,7 @@ pub struct Run<'a> {
 
     running: RwLock<HashMap<uri::RsyncModule, Arc<Mutex<()>>>>,
 
-    metrics: Mutex<Vec<ModuleMetrics>>,
+    metrics: Mutex<Vec<RsyncModuleMetrics>>,
 }
 
 
@@ -286,7 +287,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    pub fn into_metrics(self) -> Vec<ModuleMetrics> {
+    pub fn into_metrics(self) -> Vec<RsyncModuleMetrics> {
         unwrap!(self.metrics.into_inner())
     }
 }
@@ -351,7 +352,7 @@ impl Command {
         &self,
         source: &uri::RsyncModule,
         destination: &Path
-    ) -> ModuleMetrics {
+    ) -> RsyncModuleMetrics {
         let start = SystemTime::now();
         let status = {
             match self.command(source, destination) {
@@ -362,7 +363,7 @@ impl Command {
                 Err(err) => Err(err)
             }
         };
-        ModuleMetrics {
+        RsyncModuleMetrics {
             module: source.clone(),
             status,
             duration: SystemTime::now().duration_since(start),
@@ -529,16 +530,6 @@ impl CacheDir {
         res.push(uri.path());
         res
     }
-}
-
-
-//------------ ModuleMetrics -------------------------------------------------
-
-#[derive(Debug)]
-pub struct ModuleMetrics {
-    pub module: uri::RsyncModule,
-    pub status: Result<process::ExitStatus, io::Error>,
-    pub duration: Result<Duration, SystemTimeError>,
 }
 
 

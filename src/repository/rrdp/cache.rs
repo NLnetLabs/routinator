@@ -13,9 +13,10 @@ use rpki::uri;
 use rpki::tal::TalInfo;
 use unwrap::unwrap;
 use crate::config::Config;
+use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
 use super::http::HttpClient;
-use super::server::{Server, ServerMetrics, ServerState};
+use super::server::{Server, ServerState};
 
 
 ///----------- Configuration Constants ---------------------------------------
@@ -215,7 +216,7 @@ impl<'a> Run<'a> {
         unwrap!(self.servers.write()).cleanup(&self.cache.cache_dir);
     }
 
-    pub fn into_metrics(self) -> Vec<ServerMetrics> {
+    pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         unwrap!(self.servers.into_inner()).into_metrics()
     }
 }
@@ -424,7 +425,7 @@ impl ServerSet {
         self.servers.iter().any(|server| server.server_dir() == path)
     }
 
-    pub fn into_metrics(self) -> Vec<ServerMetrics> {
+    pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_iter().filter_map(|server| server.metrics()).collect()
     }
 }
