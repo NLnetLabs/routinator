@@ -391,6 +391,11 @@ impl Server {
         &self.notify_uri
     }
 
+    /// Returns whether the server is broken.
+    pub fn is_broken(&self) -> bool {
+        self.broken.load(Relaxed)
+    }
+
     /// Tries to load a file from this server.
     ///
     /// This assumes that the server is updated already. If there is no file

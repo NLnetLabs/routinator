@@ -197,11 +197,11 @@ impl Service {
             # HELP routinator_rsync_status exit status of rsync command\n\
             # TYPE routinator_rsync_status gauge"
         ));
-        for (module, metrics) in metrics.rsync() {
+        for metrics in metrics.rsync() {
             unwrap!(writeln!(
                 res,
                 "routinator_rsync_status{{uri=\"{}\"}} {}",
-                module,
+                metrics.module,
                 match metrics.status {
                     Ok(status) => status.code().unwrap_or(-1),
                     Err(_) => -1
@@ -215,12 +215,12 @@ impl Service {
             # HELP routinator_rsync_duration duration of rsync in seconds\n\
             # TYPE routinator_rsync_duration gauge"
         ));
-        for (module, metrics) in metrics.rsync() {
+        for metrics in metrics.rsync() {
             if let Ok(duration) = metrics.duration {
                 unwrap!(writeln!(
                     res,
                     "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
-                    module,
+                    metrics.module,
                     duration.as_secs() as f64
                     + f64::from(duration.subsec_millis()) / 1000.
                 ));
@@ -334,11 +334,11 @@ impl Service {
 
         // rsync_status
         unwrap!(writeln!(res, "rsync-durations:"));
-        for (module, metrics) in metrics.rsync() {
+        for metrics in metrics.rsync() {
             unwrap!(write!(
                 res,
                 "   {}: status={}",
-                module,
+                metrics.module,
                 match metrics.status {
                     Ok(status) => status.code().unwrap_or(-1),
                     Err(_) => -1

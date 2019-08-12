@@ -3,7 +3,6 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use log::info;
-use rpki::uri;
 use rpki::tal::TalInfo;
 use crate::{rrdp, rsync};
 
@@ -19,7 +18,7 @@ pub struct Metrics {
     tals: Vec<TalMetrics>,
 
     /// Rsync metrics.
-    rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>,
+    rsync: Vec<rsync::ModuleMetrics>,
 
     /// RRDP metrics.
     rrdp: Vec<rrdp::ServerMetrics>,
@@ -41,13 +40,16 @@ impl Metrics {
 
     pub fn set_rsync(
         &mut self,
-        rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>
+        rsync: Vec<rsync::ModuleMetrics>
     ) {
         self.rsync = rsync
     }
 
-    pub fn rrdp_mut(&mut self) -> &mut Vec<rrdp::ServerMetrics> {
-        &mut self.rrdp
+    pub fn set_rrdp(
+        &mut self,
+        rrdp: Vec<rrdp::ServerMetrics>
+    ) {
+        self.rrdp = rrdp
     }
 
     pub fn time(&self) -> DateTime<Utc> {
@@ -62,7 +64,7 @@ impl Metrics {
         &self.tals
     }
 
-    pub fn rsync(&self) -> &[(uri::RsyncModule, rsync::ModuleMetrics)] {
+    pub fn rsync(&self) -> &[rsync::ModuleMetrics] {
         &self.rsync
     }
 
@@ -71,7 +73,7 @@ impl Metrics {
     }
 
     pub fn rsync_complete(&self) -> bool {
-        for (_, metrics) in &self.rsync {
+        for metrics in &self.rsync {
             match metrics.status {
                 Ok(status) if !status.success() => return false,
                 Err(_) => return false,

@@ -83,6 +83,11 @@ pub struct Config {
     /// Should we do strict validation?
     pub strict: bool,
 
+    /// Disable rsync.
+    ///
+    /// This is not currently changeable.
+    pub disable_rsync: bool,
+
     /// The command to run for rsync.
     pub rsync_command: String,
 
@@ -859,6 +864,7 @@ impl Config {
             tal_dir: file.take_mandatory_path("tal-dir")?,
             exceptions: file.take_path_array("exceptions")?,
             strict: file.take_bool("strict")?.unwrap_or(false),
+            disable_rsync: false,
             rsync_command: {
                 file.take_string("rsync-command")?
                     .unwrap_or_else(|| "rsync".into())
@@ -1029,6 +1035,7 @@ impl Config {
             tal_dir,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
+            disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),

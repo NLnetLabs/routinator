@@ -17,9 +17,270 @@ use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use crate::metrics::{Metrics, TalMetrics};
-use crate::repository::Repository;
 use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
+
+
+//------------ OriginsReport -------------------------------------------------
+
+/// The output of a validation run.
+#[derive(Debug, Default)]
+pub struct OriginsReport {
+    origins: Vec<RouteOrigins>,
+}
+
+impl OriginsReport {
+    pub fn with_capacity(capacity: usize) -> Self {
+        OriginsReport {
+            origins: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub fn push_origins(&mut self, origins: RouteOrigins) {
+        self.origins.push(origins)
+    }
+}
+
+
+//------------ OriginsHistory ------------------------------------------------
+
+/// A shareable history of address orgins.
+///
+/// A value of this type allows access to the currently valid list of address
+/// origins and a list of diffs from earlier versions. The latter list is
+/// limited to a certain length. Older diffs are dropped.
+///
+/// These things are all hidden away behind an arc and a lock so you can copy
+/// and share values relatively cheaply and in a safe way.
+#[derive(Clone, Debug)]
+pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
+
+/// The inner, raw data of the origins history.
+///
+/// Various things are kept behind an arc in here so we can hand out copies
+/// to long-running tasks (like producing the CSV in the HTTP server) without
+/// instead of holding the lock.
+#[derive(Clone, Debug)]
+struct HistoryInner {
+    /// The current full set of adress origins.
+    current: Arc<AddressOrigins>,
+
+    /// A queue with a number of diffs.
+    ///
+    /// The newest diff will be at the front of the queue.
+    diffs: VecDeque<Arc<OriginsDiff>>,
+
+    /// The current metrics.
+    metrics: Arc<Metrics>,
+
+    /// The number of diffs to keep.
+    keep: usize,
+
+    /// The instant when we started an update the last time.
+    last_update_start: Instant,
+
+    /// The instant we successfully (!) finished an update the last time.
+    last_update_done: Option<Instant>,
+
+    /// The duration of the last update run.
+    last_update_duration: Option<Duration>,
+}
+
+impl OriginsHistory {
+    /// Creates a new history from the given initial data.
+    ///
+    /// The history will start out with `current` as its initial address
+    /// origins, an empty diff list, and a maximum length of the diff list
+    /// of `keep`.
+    pub fn new(
+        report: OriginsReport,
+        mut metrics: Metrics,
+        exceptions: &LocalExceptions,
+        extra_info: bool,
+        keep: usize
+    ) -> Self {
+        let origins = AddressOrigins::from_report(
+            report, exceptions, extra_info, &mut metrics
+        );
+        OriginsHistory(Arc::new(RwLock::new(
+            HistoryInner {
+                current: Arc::new(origins),
+                diffs: VecDeque::with_capacity(keep),
+                metrics: Arc::new(metrics),
+                keep,
+                last_update_start: Instant::now(),
+                last_update_done: None,
+                last_update_duration: None,
+            }
+        )))
+    }
+
+    /// Returns a reference to the current list of address origins.
+    pub fn current(&self) -> Arc<AddressOrigins> {
+        self.0.read().unwrap().current.clone()
+    }
+
+    /// Returns a diff from the given serial number.
+    ///
+    /// The serial is what the requestor has last seen. The method produces
+    /// a diff from that version to the current version if it can. If it
+    /// can’t, either because it doesn’t have enough history data or because
+    /// the serial is actually in the future.
+    pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
+        debug!("Fetching diff for serial {}", serial);
+        let history = self.0.read().unwrap();
+        if let Some(diff) = history.diffs.front() {
+            debug!("Our current serial is {}", diff.serial);
+            if diff.serial() < serial {
+                // If they give us a future serial, we reset.
+                debug!("Future, forcing reset.");
+                return None
+            }
+            else if diff.serial() == serial {
+                debug!("Same, producing empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else if diff.serial() == serial.add(1) {
+                // This relies on serials increasing by one always.
+                debug!("One behind, just clone.");
+                return Some(diff.clone())
+            }
+        }
+        else {
+            debug!("We are at serial 0.");
+            if serial == 0 {
+                debug!("Same, returning empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else {
+                // That pesky future serial again.
+                debug!("Future, forcing reset.");
+                return None
+            }
+        }
+        debug!("Merging diffs.");
+        let mut iter = history.diffs.iter().rev();
+        while let Some(diff) = iter.next() {
+            if serial < diff.serial() {
+                return None
+            }
+            else if diff.serial() == serial {
+                break
+            }
+        }
+        // We already know that the serial’s diff wasn’t last, so unwrap is
+        // fine.
+        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
+        for diff in iter {
+            res.merge(diff.as_ref())
+        }
+        Some(res.into_diff())
+    }
+
+    /// Returns the serial number of the current version of the origin list.
+    pub fn serial(&self) -> Serial {
+        self.0.read().unwrap().serial()
+    }
+
+    /// Returns the current list of address origins and its serial number.
+    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, Serial) {
+        let history = self.0.read().unwrap();
+        (history.current.clone(), history.serial())
+    }
+
+    pub fn current_metrics(&self) -> Arc<Metrics> {
+        self.0.read().unwrap().metrics.clone()
+    }
+
+    pub fn update_times(
+        &self
+    ) -> (Instant, Option<Instant>, Option<Duration>) {
+        let locked = self.0.read().unwrap();
+        (
+            locked.last_update_start,
+            locked.last_update_done,
+            locked.last_update_duration,
+        )
+    }
+
+    /// Updates the history.
+    ///
+    /// Produces a new list of address origins based on the route origins
+    /// and local exceptions. If this list differs from the current list
+    /// of address origins, adds a new version to the history.
+    ///
+    /// The method returns whether it added a new version.
+    ///
+    /// Note also that the method has to acquire the write lock on the
+    /// history.
+    pub fn update(
+        &self,
+        report: OriginsReport,
+        mut metrics: Metrics,
+        exceptions: &LocalExceptions,
+        extra_info: bool
+    ) -> bool {
+        let (serial, current) = {
+            let history = self.0.read().unwrap();
+            let serial = history.serial().add(1);
+            let current = history.current.clone();
+            (serial, current)
+        };
+        let current: HashSet<_> = current.iter().map(Clone::clone).collect();
+        let (next, diff) = OriginsDiff::construct(
+            current, report.origins, exceptions, serial, extra_info,
+            &mut metrics,
+        );
+        let mut history = self.0.write().unwrap();
+        history.metrics = Arc::new(metrics);
+        if !diff.is_empty() {
+            history.current = Arc::new(next);
+            history.push_diff(diff);
+            true
+        }
+        else {
+            false
+        }
+    }
+
+    /// Adds a set of metrics to the history.
+    pub fn push_metrics(&self, metrics: Metrics) {
+        self.0.write().unwrap().metrics = Arc::new(metrics)
+    }
+
+    /// Marks the beginning of an update cycle.
+    pub fn mark_update_start(&self) {
+        self.0.write().unwrap().last_update_start = Instant::now();
+    }
+
+    /// Marks the end of an update cycle.
+    pub fn mark_update_done(&self) {
+        let mut locked = self.0.write().unwrap();
+        locked.last_update_done = Some(Instant::now());
+        locked.last_update_duration = Some(locked.last_update_start.elapsed());
+    }
+}
+
+impl HistoryInner {
+    /// Returns the current serial.
+    ///
+    /// This is either the serial of the first diff or 0 if there are no
+    /// diffs.
+    pub fn serial(&self) -> Serial {
+        match self.diffs.front() {
+            Some(diff) => diff.serial(),
+            None => Serial(0)
+        }
+    }
+
+    /// Appends a new diff dropping old ones if necessary.
+    pub fn push_diff(&mut self, diff: OriginsDiff) {
+        if self.diffs.len() == self.keep {
+            let _ = self.diffs.pop_back();
+        }
+        self.diffs.push_front(Arc::new(diff))
+    }
+}
 
 
 //------------ RouteOrigins --------------------------------------------------
@@ -123,14 +384,14 @@ impl AddressOrigins {
     /// The function will take all the address origins in `origins`, drop
     /// duplicates, drop the origins filtered in `execptions` and add the
     /// assertions from `exceptions`.
-    pub fn from_route_origins(
-        origins: Vec<RouteOrigins>,
+    pub fn from_report(
+        report: OriginsReport,
         exceptions: &LocalExceptions,
         extra_info: bool,
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
-        for item in origins {
+        for item in report.origins {
             let mut tal_metrics = TalMetrics::new(item.tal.clone());
             for mut roa in item {
                 tal_metrics.roas += 1;
@@ -255,36 +516,34 @@ impl OriginsDiff {
     /// origins with the serial number of `serial` plus one.
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
-        origins: Option<Vec<RouteOrigins>>,
+        origins: Vec<RouteOrigins>,
         exceptions: &LocalExceptions,
         serial: Serial,
         extra_info: bool,
-    ) -> (AddressOrigins, Self, Metrics) {
+        metrics: &mut Metrics,
+    ) -> (AddressOrigins, Self) {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
-        let mut metrics = Metrics::new();
 
-        if let Some(origins) = origins {
-            for item in origins {
-                let mut tal_metrics = TalMetrics::new(item.tal.clone());
-                for mut roa in item {
-                    tal_metrics.roas += 1;
-                    let info = OriginInfo::from_roa(&mut roa, extra_info);
-                    for addr in roa.iter() {
-                        tal_metrics.vrps += 1;
-                        let addr = AddressOrigin::from_roa(
-                            roa.as_id(), addr, info.clone()
-                        );
-                        if !exceptions.keep_origin(&addr) {
-                            continue
-                        }
-                        if next.insert(addr.clone()) && !current.remove(&addr) {
-                            let _ = announce.insert(addr);
-                        }
+        for item in origins {
+            let mut tal_metrics = TalMetrics::new(item.tal.clone());
+            for mut roa in item {
+                tal_metrics.roas += 1;
+                let info = OriginInfo::from_roa(&mut roa, extra_info);
+                for addr in roa.iter() {
+                    tal_metrics.vrps += 1;
+                    let addr = AddressOrigin::from_roa(
+                        roa.as_id(), addr, info.clone()
+                    );
+                    if !exceptions.keep_origin(&addr) {
+                        continue
+                    }
+                    if next.insert(addr.clone()) && !current.remove(&addr) {
+                        let _ = announce.insert(addr);
                     }
                 }
-                metrics.push_tal(tal_metrics);
             }
+            metrics.push_tal(tal_metrics);
         }
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
@@ -298,7 +557,7 @@ impl OriginsDiff {
             "Diff with {} announced and {} withdrawn.",
             announce.len(), withdraw.len()
         );
-        (next.into(), OriginsDiff { serial, announce, withdraw }, metrics)
+        (next.into(), OriginsDiff { serial, announce, withdraw })
     }
 
     /// Returns the serial number of this origins diff.
@@ -385,234 +644,6 @@ impl DiffMerger {
             announce: self.announce.into_iter().collect(),
             withdraw: self.withdraw.into_iter().collect(),
         })
-    }
-}
-
-
-//------------ OriginsHistory ------------------------------------------------
-
-/// A shareable history of address orgins.
-///
-/// A value of this type allows access to the currently valid list of address
-/// origins and a list of diffs from earlier versions. The latter list is
-/// limited to a certain length. Older diffs are dropped.
-///
-/// These things are all hidden away behind an arc and a lock so you can copy
-/// and share values relatively cheaply and in a safe way.
-#[derive(Clone, Debug)]
-pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
-
-/// The inner, raw data of the origins history.
-#[derive(Clone, Debug)]
-pub struct HistoryInner {
-    /// The current full set of adress origins.
-    current: Arc<AddressOrigins>,
-
-    /// A queue with a number of diffs.
-    ///
-    /// The newest diff will be at the front of the queue.
-    diffs: VecDeque<Arc<OriginsDiff>>,
-
-    /// The current metrics.
-    metrics: Arc<Metrics>,
-
-    /// The number of diffs and metrics to keep.
-    keep: usize,
-
-    /// The instant when we started an update the last time.
-    last_update_start: Instant,
-
-    /// The instant we successfully (!) finished an update the last time.
-    last_update_done: Option<Instant>,
-
-    /// The duration of the last update run.
-    last_update_duration: Option<Duration>,
-}
-
-impl OriginsHistory {
-    /// Creates a new history from the given initial data.
-    ///
-    /// The history will start out with `current` as its initial address
-    /// origins, an empty diff list, and a maximum length of the diff list
-    /// of `keep`.
-    pub fn new(current: AddressOrigins, keep: usize) -> Self {
-        OriginsHistory(Arc::new(RwLock::new(
-            HistoryInner {
-                current: Arc::new(current),
-                diffs: VecDeque::with_capacity(keep),
-                metrics: Arc::new(Metrics::new()),
-                keep,
-                last_update_start: Instant::now(),
-                last_update_done: None,
-                last_update_duration: None,
-            }
-        )))
-    }
-
-    /// Returns a reference to the current list of address origins.
-    pub fn current(&self) -> Arc<AddressOrigins> {
-        self.0.read().unwrap().current.clone()
-    }
-
-    /// Returns a diff from the given serial number.
-    ///
-    /// The serial is what the requestor has last seen. The method produces
-    /// a diff from that version to the current version if it can. If it
-    /// can’t, either because it doesn’t have enough history data or because
-    /// the serial is actually in the future.
-    pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
-        debug!("Fetching diff for serial {}", serial);
-        let history = self.0.read().unwrap();
-        if let Some(diff) = history.diffs.front() {
-            debug!("Our current serial is {}", diff.serial);
-            if diff.serial() < serial {
-                // If they give us a future serial, we reset.
-                debug!("Future, forcing reset.");
-                return None
-            }
-            else if diff.serial() == serial {
-                debug!("Same, producing empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else if diff.serial() == serial.add(1) {
-                // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
-                return Some(diff.clone())
-            }
-        }
-        else {
-            debug!("We are at serial 0.");
-            if serial == 0 {
-                debug!("Same, returning empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else {
-                // That pesky future serial again.
-                debug!("Future, forcing reset.");
-                return None
-            }
-        }
-        debug!("Merging diffs.");
-        let mut iter = history.diffs.iter().rev();
-        while let Some(diff) = iter.next() {
-            if serial < diff.serial() {
-                return None
-            }
-            else if diff.serial() == serial {
-                break
-            }
-        }
-        // We already know that the serial’s diff wasn’t last, so unwrap is
-        // fine.
-        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
-        for diff in iter {
-            res.merge(diff.as_ref())
-        }
-        Some(res.into_diff())
-    }
-
-    /// Returns the serial number of the current version of the origin list.
-    pub fn serial(&self) -> Serial {
-        self.0.read().unwrap().serial()
-    }
-
-    /// Returns the current list of address origins and its serial number.
-    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, Serial) {
-        let history = self.0.read().unwrap();
-        (history.current.clone(), history.serial())
-    }
-
-    pub fn current_metrics(&self) -> Arc<Metrics> {
-        self.0.read().unwrap().metrics.clone()
-    }
-
-    pub fn update_times(
-        &self
-    ) -> (Instant, Option<Instant>, Option<Duration>) {
-        let locked = self.0.read().unwrap();
-        (
-            locked.last_update_start,
-            locked.last_update_done,
-            locked.last_update_duration,
-        )
-    }
-
-    /// Updates the history.
-    ///
-    /// Produces a new list of address origins based on the route origins
-    /// and local exceptions. If this list differs from the current list
-    /// of address origins, adds a new version to the history.
-    ///
-    /// The method returns whether it added a new version.
-    ///
-    /// Note also that the method has to acquire the write lock on the
-    /// history.
-    pub fn update(
-        &self,
-        origins: Option<Vec<RouteOrigins>>,
-        exceptions: &LocalExceptions,
-        extra_info: bool,
-        repo: &Repository,
-    ) -> bool {
-        let (serial, current) = {
-            let history = self.0.read().unwrap();
-            let serial = history.serial().add(1);
-            let current = history.current.clone();
-            (serial, current)
-        };
-        let current: HashSet<_> = current.iter().map(Clone::clone).collect();
-        let (next, diff, mut metrics) = OriginsDiff::construct(
-            current, origins, exceptions, serial, extra_info
-        );
-        repo.update_metrics(&mut metrics);
-        let mut history = self.0.write().unwrap();
-        history.metrics = Arc::new(metrics);
-        if !diff.is_empty() {
-            history.current = Arc::new(next);
-            history.push_diff(diff);
-            true
-        }
-        else {
-            false
-        }
-    }
-
-    /// Adds a set of metrics to the history.
-    pub fn push_metrics(&self, metrics: Metrics) {
-        self.0.write().unwrap().metrics = Arc::new(metrics)
-    }
-
-    /// Marks the beginning of an update cycle.
-    pub fn mark_update_start(&self) {
-        self.0.write().unwrap().last_update_start = Instant::now();
-    }
-
-    /// Marks the end of an update cycle.
-    pub fn mark_update_done(&self) {
-        let mut locked = self.0.write().unwrap();
-        locked.last_update_done = Some(Instant::now());
-        locked.last_update_duration = Some(locked.last_update_start.elapsed());
-    }
-}
-
-impl HistoryInner {
-    /// Returns the current serial.
-    ///
-    /// This is either the serial of the first diff or 0 if there are no
-    /// diffs.
-    pub fn serial(&self) -> Serial {
-        match self.diffs.front() {
-            Some(diff) => diff.serial(),
-            None => Serial(0)
-        }
-    }
-
-    /// Appends a new diff dropping old ones if necessary.
-    pub fn push_diff(&mut self, diff: OriginsDiff) {
-        if self.diffs.len() == self.keep {
-            let _ = self.diffs.pop_back();
-        }
-        self.diffs.push_front(Arc::new(diff))
     }
 }
 
