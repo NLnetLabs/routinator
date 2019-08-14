@@ -27,6 +27,7 @@ use crate::output;
 use crate::output::OutputFormat;
 use crate::repository::Repository;
 use crate::rtr::rtr_listener;
+use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
 
@@ -354,7 +355,7 @@ impl Server {
     /// just runs the server forever.
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
-        let repo = config.create_repository(false, true)?;
+        let repo = Repository::new(&config, false, true)?;
         if self.detach {
             Self::daemonize(&mut config)?;
         }
@@ -372,7 +373,7 @@ impl Server {
         };
         let history = OriginsHistory::new(
             report, metrics,
-            &config.load_exceptions(false)?,
+            &LocalExceptions::load(&config, false)?,
             false, config.history_size
         );
         warn!("Starting listeners...");
@@ -392,7 +393,7 @@ impl Server {
                 Ok(some) => some,
                 Err(_) => break
             };
-            let exceptions = match config.load_exceptions(false) {
+            let exceptions = match LocalExceptions::load(&config, false) {
                 Ok(exceptions) => exceptions,
                 Err(_) => {
                     warn!(
@@ -577,12 +578,12 @@ impl Vrps {
     /// publication points.
     fn run(self, config: Config) -> Result<(), ExitError> {
         let extra_info = self.format.extra_output();
-        let repo = config.create_repository(extra_info, !self.noupdate)?;
+        let repo = Repository::new(&config, extra_info, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(
             report,
-            &config.load_exceptions(extra_info)?,
+            &LocalExceptions::load(&config, extra_info)?,
             extra_info,
             &mut metrics
         );
@@ -713,12 +714,12 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let repo = config.create_repository(false, !self.noupdate)?;
+        let repo = Repository::new(&config, false, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(
             report,
-            &config.load_exceptions(false)?,
+            &LocalExceptions::load(&config, false)?,
             false,
             &mut metrics
         );
@@ -782,7 +783,7 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let (_, metrics) = config.create_repository(false, true)?.process()?;
+        let (_, metrics) = Repository::new(&config, false, true)?.process()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
