@@ -9,9 +9,11 @@ use std::sync::Arc;
 use derive_more::Display;
 use json::JsonValue;
 use json::object::Object as JsonObject;
+use log::error;
 use rpki::resources::AsId;
-use super::origins;
-use super::origins::{AddressOrigin, AddressPrefix, OriginInfo};
+use crate::config::Config;
+use crate::operation::Error;
+use crate::origins::{AddressOrigin, AddressPrefix, FromStrError, OriginInfo};
 
 
 //------------ LocalExceptions -----------------------------------------------
@@ -27,6 +29,26 @@ impl LocalExceptions {
         LocalExceptions {
             filters: Vec::new(),
             assertions: Vec::new(),
+        }
+    }
+
+    pub fn load(config: &Config, extra_info: bool) -> Result<Self, Error> {
+        let mut res = LocalExceptions::empty();
+        let mut ok = true;
+        for path in &config.exceptions {
+            if let Err(err) = res.extend_from_file(path, extra_info) {
+                error!(
+                    "Failed to load exceptions file {}: {}",
+                    path.display(), err
+                );
+                ok = false;
+            }
+        }
+        if ok {
+            Ok(res)
+        }
+        else {
+            Err(Error)
         }
     }
 
@@ -389,7 +411,7 @@ pub enum ParseError {
     MissingElement(&'static str),
 
     #[display(fmt="{}", _0)]
-    BadPrefix(origins::FromStrError),
+    BadPrefix(FromStrError),
 
     #[display(fmt="{}", _0)]
     BadVersion(u8),
@@ -405,8 +427,8 @@ impl ParseError {
     }
 }
 
-impl From<origins::FromStrError> for ParseError {
-    fn from(err: origins::FromStrError) -> ParseError {
+impl From<FromStrError> for ParseError {
+    fn from(err: FromStrError) -> ParseError {
         ParseError::BadPrefix(err)
     }
 }
@@ -451,7 +473,7 @@ impl From<ParseError> for LoadError {
 pub mod tests {
 
     use super::*;
-    use origins::AddressPrefix;
+    use crate::origins::AddressPrefix;
 
     fn address_origin(
         asn: u32,

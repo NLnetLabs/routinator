@@ -12,24 +12,22 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::Duration;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use derive_more::From;
-use futures::future;
 use futures::future::Future;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
-use tokio::timer::Delay;
 use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
-use crate::metrics::Metrics;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::repository::Repository;
-use crate::rtr::{rtr_listener, NotifySender};
+use crate::rtr::rtr_listener;
+use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
 
@@ -357,40 +355,70 @@ impl Server {
     /// just runs the server forever.
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
-        let repo = config.create_repository(false, true)?;
+        let repo = Repository::new(&config, false, true)?;
         if self.detach {
             Self::daemonize(&mut config)?;
         }
+        let idle = IdleWait::new()?; // Create early to fail early.
         config.switch_logging(self.detach)?;
 
         // Start out with validation so that we only fire up our sockets
         // once we are actually ready.
-        let roas = match repo.process() {
-            Ok(roas) => roas,
+        let (report, metrics) = match repo.process() {
+            Ok(report) => report,
             Err(_) => {
-                error!("Fatal: Validation failed. Aborting");
+                error!("Fatal: initial validation failed. Aborting.");
                 return Err(Error.into())
             }
         };
-        let mut metrics = Metrics::new();
         let history = OriginsHistory::new(
-            AddressOrigins::from_route_origins(
-                roas, &config.load_exceptions(false)?, false, &mut metrics,
-            ),
-            config.history_size
+            report, metrics,
+            &LocalExceptions::load(&config, false)?,
+            false, config.history_size
         );
-        repo.update_metrics(&mut metrics);
-        history.push_metrics(metrics);
-        history.mark_update_done();
-
         warn!("Starting listeners...");
-        let (notify, rtr) = rtr_listener(history.clone(), &config);
+        let (mut notify, rtr) = rtr_listener(history.clone(), &config);
         let http = http_listener(&history, &config);
-        tokio::runtime::run(
-            Self::update_future(repo, history, notify, config)
-            .join3(rtr, http)
-            .map(|_| ())
-        );
+        let mut runtime = match tokio::runtime::Runtime::new() {
+            Ok(runtime) => runtime,
+            Err(err) => {
+                error!("Failed to create Tokio runtime: {}", err);
+                return Err(Error.into())
+            }
+        };
+        runtime.spawn(rtr).spawn(http);
+
+        while idle.wait(config.refresh) {
+            history.mark_update_start();
+            let (report, metrics) = match repo.process() {
+                Ok(some) => some,
+                Err(_) => break
+            };
+            let exceptions = match LocalExceptions::load(&config, false) {
+                Ok(exceptions) => exceptions,
+                Err(_) => {
+                    warn!(
+                        "Failed to load exceptions. Discarding this \
+                        validation run but continuing."
+                    );
+                    continue
+                }
+            };
+            let must_notify = history.update(
+                report, metrics, &exceptions, false
+            );
+            history.mark_update_done();
+            info!(
+                "Validation completed. New serial is {}.",
+                history.serial()
+            );
+            if must_notify {
+                info!("Sending out notifications.");
+                notify.notify();
+            }
+        }
+
+        unwrap!(runtime.shutdown_now().wait());
         Ok(())
     }
 
@@ -407,75 +435,6 @@ impl Server {
     fn daemonize(_config: &mut Config) -> Result<(), Error> {
         Ok(())
     }
-
-    /// Returns a future that updates and validates the local repository.
-    ///
-    /// The future periodically runs an update and validation on `repo`. It
-    /// sdds the result to `history`. If there are changes, it also triggers
-    /// a notification on `notify`. 
-    fn update_future(
-        repo: Repository,
-        history: OriginsHistory,
-        notify: NotifySender,
-        config: Config,
-    ) -> impl Future<Item=(), Error=()> {
-        future::loop_fn(
-            (repo, history, notify, config),
-            |(repo, history, mut notify, config)| {
-                Delay::new(Instant::now() + config.refresh)
-                .map_err(|e| {
-                    error!("Fatal: wait timer failed ({})", e);
-                    Error
-                })
-                .and_then(move |_| {
-                    repo.start()?;
-                    history.mark_update_start();
-                    Ok((repo, history))
-                })
-                /*
-                .and_then(|(repo, history)| {
-                    info!("Updating the local repository.");
-                    repo.update_async().map(|()| (repo, history))
-                })
-                */
-                .and_then(|(repo, history)| {
-                    info!("Starting validation of local repository.");
-                    repo.process_async()
-                    .and_then(move |origins| {
-                        info!("Loading exceptions.");
-                        let must_notify = match repo.load_exceptions(&config) {
-                            Ok(exceptions) => {
-                                history.update(
-                                    Some(origins),
-                                    &exceptions,
-                                    false,
-                                    &repo
-                                )
-                            }
-                            Err(_) => {
-                                warn!(
-                                    "Failed to load exceptions. \
-                                     Discarding this validation run but \
-                                     continuing."
-                                );
-                                false
-                            }
-                        };
-                        history.mark_update_done();
-                        info!("New serial is {}.", history.serial());
-                        if must_notify {
-                            info!("Sending out notifications.");
-                            notify.notify();
-                        }
-                        Ok(future::Loop::Continue(
-                            (repo, history, notify, config))
-                        )
-                    })
-                })
-            }
-        ).map_err(|_| ())
-    }
-
 }
 
 
@@ -620,9 +579,16 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let (vrps, metrics) = get_vrps_and_metrics(
-            config, self.format.extra_output(), self.noupdate
-        )?;
+        let extra_info = self.format.extra_output();
+        let repo = Repository::new(&config, extra_info, !self.noupdate)?;
+        config.switch_logging(false)?;
+        let (report, mut metrics) = repo.process()?;
+        let vrps = AddressOrigins::from_report(
+            report,
+            &LocalExceptions::load(&config, extra_info)?,
+            extra_info,
+            &mut metrics
+        );
         let filters = self.filters.as_ref().map(AsRef::as_ref);
         let res = match self.output {
             Some(ref path) => {
@@ -750,9 +716,15 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let (vrps, metrics) = get_vrps_and_metrics(
-            config, false, self.noupdate
-        )?;
+        let repo = Repository::new(&config, false, !self.noupdate)?;
+        config.switch_logging(false)?;
+        let (report, mut metrics) = repo.process()?;
+        let vrps = AddressOrigins::from_report(
+            report,
+            &LocalExceptions::load(&config, false)?,
+            false,
+            &mut metrics
+        );
         let validity = RouteValidity::new(self.prefix, self.asn, &vrps);
         if self.json {
             let stdout = io::stdout();
@@ -813,7 +785,7 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let (_, metrics) = get_vrps_and_metrics(config, false, false)?;
+        let (_, metrics) = Repository::new(&config, false, true)?.process()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
@@ -988,35 +960,26 @@ impl Man {
 }
 
 
-//------------ Helper Functions ----------------------------------------------
+//------------ IdleWait ------------------------------------------------------
 
+/// Wait for the next validation run or a user telling us to quit.
+///
+/// This is going to receive a proper impl on Unix and possibly Windows.
+struct IdleWait;
 
-/// Updates the repository and returns metrics and VPRs.
-fn get_vrps_and_metrics(
-    config: Config,
-    extra_output: bool,
-    noupdate: bool
-) -> Result<(AddressOrigins, Metrics), Error> {
-    let repo = config.create_repository(extra_output, !noupdate)?;
-    config.switch_logging(false)?;
-    let exceptions = repo.load_exceptions(&config)?;
+impl IdleWait {
+    pub fn new() -> Result<Self, Error> {
+        Ok(IdleWait)
+    }
 
-    let roas = match repo.process() {
-        Ok(roas) => roas,
-        Err(_) => {
-            error!("Validation failed. Aborting.");
-            return Err(Error)
-        }
-    };
-    let mut metrics = Metrics::new();
-    let vrps = AddressOrigins::from_route_origins(
-        roas, &exceptions, extra_output, &mut metrics
-    );
-    metrics.log();
-    Ok((vrps, metrics))
+    /// Waits for the next thing to do.
+    ///
+    /// Returns whether to continue working.
+    pub fn wait(&self, timeout: Duration) -> bool {
+        std::thread::sleep(timeout);
+        true
+    }
 }
-
-
 
 
 //------------ Error ---------------------------------------------------------

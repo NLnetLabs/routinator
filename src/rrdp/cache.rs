@@ -1,21 +1,19 @@
-//! The overall RRDP cache.
-//!
-//! This is a private module for organizational purposes with `Cache` and
-//! `ServerId` reexported by the parent module.
+/// The RRDP cache.
+///
+/// This is a private module for organizational purposes.
 
 use std::{fs, io};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
-use rpki::cert::Cert;
 use rpki::tal::TalInfo;
 use unwrap::unwrap;
 use crate::config::Config;
-use crate::metrics::Metrics;
+use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
@@ -27,9 +25,9 @@ use super::server::{Server, ServerState};
 const MAX_TA_SIZE: u64 = 64 * 1024;
 
 
-///----------- Cache ---------------------------------------------------------
+//------------ Cache ---------------------------------------------------------
 
-/// Access to local copies of repositories synchronized via RRDP.
+/// A local copy of repositories synchronized via RRDP.
 #[derive(Debug)]
 pub struct Cache {
     /// The base directory of the RRDP server cache.
@@ -38,9 +36,6 @@ pub struct Cache {
     /// The base directory of the TA cache.
     ta_dir: PathBuf,
 
-    /// All the servers we know about.
-    servers: RwLock<ServerSet>,
-
     /// A HTTP client.
     ///
     /// If this is `None`, we don’t actually do updates.
@@ -48,9 +43,8 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Initializes the RRDP cache.
     pub fn init(config: &Config) -> Result<(), Error> {
-        let rrdp_dir = config.cache_dir.join("rrdp");
+        let rrdp_dir = Self::cache_dir(config);
         if let Err(err) = fs::create_dir_all(&rrdp_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",
@@ -58,11 +52,11 @@ impl Cache {
             );
             return Err(Error);
         }
-        let http_dir = config.cache_dir.join("http");
-        if let Err(err) = fs::create_dir_all(&http_dir) {
+        let ta_dir = Self::ta_dir(config);
+        if let Err(err) = fs::create_dir_all(&ta_dir) {
             error!(
                 "Failed to create HTTP cache directory {}: {}.",
-                http_dir.display(), err
+                ta_dir.display(), err
             );
             return Err(Error);
         }
@@ -70,41 +64,55 @@ impl Cache {
         Ok(())
     }
 
-    /// Creates a new RRDP cache.
-    pub fn new(
-        config: &Config,
-        update: bool,
-    ) -> Result<Self, Error> {
-        let res = Cache {
-            cache_dir: config.cache_dir.join("rrdp"),
-            ta_dir: config.cache_dir.join("http"),
-            servers: RwLock::new(ServerSet::new()),
-            http: if update { Some(HttpClient::new(config)?) }
-                  else { None }
-        };
-        res.start()?;
-        Ok(res)
+    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Error> {
+        if config.disable_rrdp {
+            Ok(None)
+        }
+        else {
+            Ok(Some(Cache {
+                cache_dir: Self::cache_dir(config),
+                ta_dir: Self::ta_dir(config),
+                http: if update { Some(HttpClient::new(config)?) }
+                      else { None }
+            }))
+        }
     }
 
-    /// Start a new validation run.
-    ///
-    /// Refreshes the set of servers from those present at the cache directory.
-    /// It assumes that all directories under that location are in fact
-    /// server directories. Tries to access their state file to determine
-    /// whether they really are and what notify URI they are responsible for.
-    /// Skips over all directories where reading the state file fails.
-    ///
-    /// This will fail if the cache directpry is unreadable or iterating over
-    /// its contents fails.
-    pub fn start(&self) -> Result<(), Error> {
-        let mut servers = unwrap!(self.servers.write());
-        servers.clear();
-        let dir = match self.cache_dir.read_dir() {
+    fn cache_dir(config: &Config) -> PathBuf {
+        config.cache_dir.join("rrdp")
+    }
+
+    fn ta_dir(config: &Config) -> PathBuf {
+        config.cache_dir.join("http")
+    }
+
+    pub fn start(&self) -> Result<Run, Error> {
+        Run::new(self)
+    }
+}
+
+
+//------------ Run -----------------------------------------------------------
+
+/// Information for a validation run.
+#[derive(Debug)]
+pub struct Run<'a> {
+    /// A reference to the underlying cache.
+    cache: &'a Cache,
+
+    /// All the servers we know about.
+    servers: RwLock<ServerSet>,
+}
+
+impl<'a> Run<'a> {
+    fn new(cache: &'a Cache) -> Result<Self, Error> {
+        let mut servers = ServerSet::new();
+        let dir = match cache.cache_dir.read_dir() {
             Ok(dir) => dir,
             Err(err) => {
                 error!(
                     "Fatal: Cannot open RRDP cache dir '{}': {}",
-                    self.cache_dir.display(), err
+                    cache.cache_dir.display(), err
                 );
                 return Err(Error)
             }
@@ -115,7 +123,7 @@ impl Cache {
                 Err(err) => {
                     error!(
                         "Fatal: Cannot iterate over RRDP cache dir '{}': {}",
-                        self.cache_dir.display(), err
+                        cache.cache_dir.display(), err
                     );
                     return Err(Error)
                 }
@@ -147,15 +155,17 @@ impl Cache {
                 }
             }
         }
-        Ok(())
+        Ok(Run {
+            cache,
+            servers: RwLock::new(servers)
+        })
     }
 
-    /// Loads a trust anchor certificate for the given URI.
-    pub fn load_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Cert> {
+    pub fn load_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
         match self.get_ta(uri) {
-            Ok(Some((cert, bytes))) => {
-                self.store_ta(bytes, uri, info);
-                Some(cert)
+            Ok(Some(bytes)) => {
+                self.store_ta(&bytes, uri, info);
+                Some(bytes)
             }
             Ok(None) => self.read_ta(uri, info),
             Err(_) => {
@@ -165,11 +175,60 @@ impl Cache {
         }
     }
 
+    /// Loads an RRDP server.
+    ///
+    /// If the server has already been used during this validation run,
+    /// it will simply return its server ID. Otherwise it will try to either
+    /// create or update the server and then return its ID.
+    ///
+    /// Returns `None` if creating failed or if the server is unknown and
+    /// updating is disabled
+    pub fn load_server(&self, notify_uri: &uri::Https) -> Option<ServerId> {
+        let res = unwrap!(self.servers.read()).find(notify_uri);
+        let (id, server) = match res {
+            Some(some) => some,
+            None => {
+                unwrap!(self.servers.write()).insert(
+                    Server::create(notify_uri.clone(), &self.cache.cache_dir)
+                )
+            }
+        };
+        if let Some(ref http) = self.cache.http {
+            server.update(http);
+        }
+        if server.is_broken() {
+            None
+        }
+        else {
+            Some(id)
+        }
+    }
+
+    pub fn load_file(
+        &self,
+        server_id: ServerId,
+        uri: &uri::Rsync
+    ) -> Result<Option<Bytes>, Error> {
+        unwrap!(self.servers.read()).get(server_id).load_file(uri)
+    }
+
+    pub fn cleanup(&self) {
+        unwrap!(self.servers.write()).cleanup(&self.cache.cache_dir);
+    }
+
+    pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
+        unwrap!(self.servers.into_inner()).into_metrics()
+    }
+}
+
+/// # Accessing TA Certificates
+///
+impl<'a> Run<'a> {
     fn get_ta(
         &self,
         uri: &uri::Https
-    ) -> Result<Option<(Cert, Bytes)>, Error> {
-        let http = match self.http {
+    ) -> Result<Option<Bytes>, Error> {
+        let http = match self.cache.http {
             Some(ref http) => http,
             None => return Ok(None),
         };
@@ -190,17 +249,10 @@ impl Cache {
             info!("Failed to get trust anchor {}: {}", uri, err);
             return Ok(None)
         }
-        let bytes = Bytes::from(bytes);
-        match Cert::decode(bytes.clone()) {
-            Ok(cert) => Ok(Some((cert, bytes))),
-            Err(err) => {
-                info!("Invalid trust anchor certificate {}: {}", uri, err);
-                Err(Error)
-            }
-        }
+        Ok(Some(Bytes::from(bytes)))
     }
 
-    fn store_ta(&self, bytes: Bytes, uri: &uri::Https, info: &TalInfo) {
+    fn store_ta(&self, bytes: &Bytes, uri: &uri::Https, info: &TalInfo) {
         let path = self.ta_path(info);
         let mut file = match fs::File::create(&path) {
             Ok(file) => file,
@@ -221,7 +273,7 @@ impl Cache {
         }
     }
 
-    fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Cert> {
+    fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
         let path = self.ta_path(info);
         let mut file = match fs::File::open(&path) {
             Ok(file) => file,
@@ -255,16 +307,7 @@ impl Cache {
             warn!("Failed to read TA file {}: {}", path.display(), err);
             return None
         };
-        match Cert::decode(Bytes::from(bytes)) {
-            Ok(cert) => Some(cert),
-            Err(err) => {
-                info!(
-                    "Invalid cached trust anchor certificate {}: {}",
-                    uri, err
-                );
-                None
-            }
-        }
+        Some(Bytes::from(bytes))
     }
 
     fn remove_ta(&self, info: &TalInfo) {
@@ -272,61 +315,12 @@ impl Cache {
     }
 
     fn ta_path(&self, info: &TalInfo) -> PathBuf {
-        let mut res = self.ta_dir.join(info.name());
+        let mut res = self.cache.ta_dir.join(info.name());
         res.set_extension("cer");
         res
     }
-
-    /// Loads an RRDP server.
-    ///
-    /// If the server has already been used during this validation run,
-    /// it will simply return its server ID. Otherwise it will try to either
-    /// create or update the server and then return its ID.
-    ///
-    /// Returns `None` if creating failed or if the server is unknown and
-    /// updating is disabled
-    pub fn load_server(&self, notify_uri: &uri::Https) -> Option<ServerId> {
-        let res = unwrap!(self.servers.read()).find(notify_uri);
-        let (id, server) = match res {
-            Some(some) => some,
-            None => {
-                unwrap!(self.servers.write()).insert(
-                    Server::create(notify_uri.clone(), &self.cache_dir)
-                )
-            }
-        };
-        if let Some(ref http) = self.http {
-            server.update(http);
-        }
-        Some(id)
-    }
-
-    /// Loads the content of a file from the given URI.
-    ///
-    /// Returns an error if the local cache for the given RRDP server is
-    /// unusable. Returns `Ok(None)` if RRDP is all fine but the file doesn’t
-    /// exist or loading the file fails. Returns `Ok(Some(bytes))` with the
-    /// file’s content if it does indeed exist.
-    pub fn load_file(
-        &self,
-        server_id: ServerId,
-        uri: &uri::Rsync,
-    ) -> Result<Option<Bytes>, Error> {
-        let server = match unwrap!(self.servers.read()).get(server_id) {
-            Some(server) => server,
-            None => return Err(Error)
-        };
-        server.load_file(uri)
-    }
-
-    pub fn cleanup(&self) {
-        unwrap!(self.servers.write()).cleanup(&self.cache_dir);
-    }
-
-    pub fn update_metrics(&self, metrics: &mut Metrics) {
-        unwrap!(self.servers.read()).update_metrics(metrics);
-    }
 }
+
 
 
 //------------ ServerSet -----------------------------------------------------
@@ -334,12 +328,6 @@ impl Cache {
 /// A collection of servers.
 #[derive(Clone, Debug)]
 pub struct ServerSet {
-    /// The epoch of this server set.
-    ///
-    /// This value is changed every time the repository is refreshed. This
-    /// is a measure to block reuse of server IDs beyond refreshs.
-    epoch: usize,
-
     /// The servers we know of.
     ///
     /// The index portion of server ID refers to indexes in this vector.
@@ -355,17 +343,9 @@ impl ServerSet {
     /// Creates a new empty server set.
     pub fn new() -> Self {
         ServerSet {
-            epoch: 0,
             servers: Default::default(),
             uris: Default::default(),
         }
-    }
-
-    /// Flushes all the servers and increases the epoch.
-    pub fn clear(&mut self) {
-        self.epoch = self.epoch.wrapping_add(1);
-        self.servers.clear();
-        self.uris.clear();
     }
 
     /// Moves a servers into the set and returns an arc of it.
@@ -373,7 +353,7 @@ impl ServerSet {
     /// If there is already a server with server’s this notify URI, the newly
     /// inserted server will take precedence.
     pub fn insert(&mut self, server: Server) -> (ServerId, Arc<Server>) {
-        let server_id = ServerId::new(self.epoch, self.servers.len());
+        let server_id = ServerId(self.servers.len());
         let _ = self.uris.insert(server.notify_uri().clone(), server_id);
         let arc = Arc::new(server);
         self.servers.push(arc.clone());
@@ -388,30 +368,24 @@ impl ServerSet {
         notify_uri: &uri::Https
     ) -> Option<(ServerId, Arc<Server>)> {
         let server_id = *self.uris.get(notify_uri)?;
-        let server = self.servers[server_id.index].clone();
+        let server = self.servers[server_id.0].clone();
         Some((server_id, server))
     }
 
     /// Looks up a server based on its server ID
-    pub fn get(&self, id: ServerId) -> Option<Arc<Server>> {
-        if id.epoch != self.epoch {
-            None
-        }
-        else {
-            Some(self.servers[id.index].clone())
-        }
+    pub fn get(&self, id: ServerId) -> Arc<Server> {
+        self.servers[id.0].clone()
     }
 
     /// Cleans up the server set.
     ///
     /// This will call `remove_unused` and clear out the server set.
     pub fn cleanup(&mut self, cache_dir: &Path) {
-        self.epoch = self.epoch.wrapping_add(1);
         self.servers = self.servers.drain(..).filter(|server| {
             !server.remove_unused()
         }).collect();
         self.uris = self.servers.iter().enumerate().map(|(idx, server)| {
-            (server.notify_uri().clone(), ServerId::new(self.epoch, idx))
+            (server.notify_uri().clone(), ServerId(idx))
         }).collect();
 
         let dir = match cache_dir.read_dir() {
@@ -451,11 +425,8 @@ impl ServerSet {
         self.servers.iter().any(|server| server.server_dir() == path)
     }
 
-    pub fn update_metrics(&self, metrics: &mut Metrics) {
-        metrics.rrdp_mut().clear();
-        metrics.rrdp_mut().extend(
-            self.servers.iter().filter_map(|server| server.metrics())
-        );
+    pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
+        self.servers.into_iter().filter_map(|server| server.metrics()).collect()
     }
 }
 
@@ -464,18 +435,5 @@ impl ServerSet {
 
 /// Identifies an RRDP server in the cache.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ServerId {
-    /// The epoch value of the repository for this server ID.
-    epoch: usize,
-
-    /// The index in the repository’s server list.
-    index: usize,
-}
-
-impl ServerId {
-    /// Creates a new ID from its components.
-    fn new(epoch: usize, index: usize) -> Self {
-        ServerId { epoch, index }
-    }
-}
+pub struct ServerId(usize);
 

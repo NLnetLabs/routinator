@@ -1,8 +1,10 @@
 //! Configuration.
 //!
-//! This module primarily contains the type [`Config`] that holds the
-//! configuration for how Routinator keeps and updates the local repository
-//! as well as for the RTR server.
+//! This module primarily contains the type [`Config`] that holds all the
+//! configuration used by Routinator. It can be loaded both from a TOML
+//! formatted config file and command line options.
+//!
+//! [`Config`]: struct.Config.html
 
 use std::{env, fmt, fs, io};
 use std::io::Read;
@@ -18,8 +20,6 @@ use log::{LevelFilter, Log, error};
 #[cfg(unix)] use syslog::Facility;
 use toml;
 use crate::operation::Error;
-use crate::repository::Repository;
-use crate::slurm::LocalExceptions;
 
 
 //------------ Defaults for Some Values --------------------------------------
@@ -30,7 +30,7 @@ const DEFAULT_STRICT: bool = false;
 /// The default timeout for running rsync commands in seconds.
 const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
 
-/// The we leaving the repository dirty by default?
+/// Are we leaving the repository dirty by default?
 const DEFAULT_DIRTY_REPOSITORY: bool = false;
 
 /// The default refresh interval in seconds.
@@ -51,24 +51,32 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 /// Routinator configuration.
 ///
 /// This type contains both the basic configuration of Routinator, such as
-/// where to keep the repository and how to update it, and the configuration
-/// for the RTR server.
+/// where to keep the repository and how to update it, as well as the
+/// configuration for server mode.
 ///
 /// All values are public and can be accessed directly.
 ///
-/// The two functions [`config_args`] and [`server_args`] can be used to create
-/// the clap application. Its matches can then be used to create the basic
-/// config via [`from_arg_matches`]. If the RTR server configuration is
-/// necessary, it can be added via [`apply_server_arg_matches`] from the RTR
+/// The two functions [`config_args`] and [`server_args`] can be used to
+/// create the clap application. Its matches can then be used to create the
+/// basic config via [`from_arg_matches`]. If the RTR server configuration is
+/// necessary, it can be added via [`apply_server_arg_matches`] from the
 /// server subcommand matches.
 ///
-/// A few methods are provided that do mundane tasks that heavily depend on
-/// the configuration.
+/// The methods [`init_logging`] and [`switch_logging`] can be used to
+/// configure logging according to the strategy provided by the configuration.
+/// On Unix systems only, the method [`daemonize`] creates a correctly
+/// configured `Daemonizer`. Finally, [`to_toml`] can be used to produce a
+/// TOML value that contains a configuration file content representing the
+/// current configuration.
 ///
 /// [`config_args`]: #method.config_args
 /// [`server_args`]: #method.server_args
 /// [`from_arg_matches`]: #method.from_arg_matches
 /// [`apply_server_arg_matches`]: #method.apply_server_arg_matches
+/// [`init_logging`]: #method.init_logging
+/// [`switch_logging`]: #method.switch_logging
+/// [`daemonize`]: #method.daemonize
+/// [`to_toml`]: #method.to_toml
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Path to the directory that contains the repository cache.
@@ -81,42 +89,62 @@ pub struct Config {
     pub exceptions: Vec<PathBuf>,
 
     /// Should we do strict validation?
+    ///
+    /// See [the relevant RPKI crate documentattion](https://github.com/NLnetLabs/rpki-rs/blob/master/doc/relaxed-validation.md)
+    /// for more information.
     pub strict: bool,
+
+    /// Wether to disable rsync.
+    ///
+    /// This is not currently changeable.
+    pub disable_rsync: bool,
 
     /// The command to run for rsync.
     pub rsync_command: String,
 
-    /// Arguments passed to rsync.
+    /// Optional arguments passed to rsync.
+    ///
+    /// If these are present, they overide the arguments automatically
+    /// determined otherwise. Thus, `Some<Vec::new()>` will supress all
+    /// arguments.
     pub rsync_args: Option<Vec<String>>,
 
     /// Timeout for rsync commands.
     pub rsync_timeout: Duration,
 
-    /// Disable RRDP and only use rsync.
+    /// Wether to disable RRDP.
     pub disable_rrdp: bool,
 
-    /// RRDP timeout in seconds.
+    /// Optional RRDP timeout in seconds.
     ///
-    /// Use `Some(None)` for no timeout.
+    /// If this is not set, the default timeouts of the `reqwest` crate are
+    /// used. Use `Some(None)` for no timeout.
     #[allow(clippy::option_option)]
     pub rrdp_timeout: Option<Option<Duration>>,
 
-    /// RRDP connect timeout in seconds.
+    /// Optional RRDP connect timeout in seconds.
     pub rrdp_connect_timeout: Option<Duration>,
 
-    /// RRDP local address to bind to when doing requests.
+    /// Optional RRDP local address to bind to when doing requests.
     pub rrdp_local_addr: Option<IpAddr>,
 
     /// RRDP additional root certificates for HTTPS.
+    ///
+    /// These do not overide the default system root certififcates.
     pub rrdp_root_certs: Vec<PathBuf>,
 
     /// RRDP HTTP proxies.
     pub rrdp_proxies: Vec<String>,
 
-    /// Don’t cleanup the repository directory after a validation run.
+    /// Wether to not cleanup the repository directory after a validation run.
+    ///
+    /// If this is `false` and update has not been disabled otherwise, all
+    /// data for rsync modules (if rsync is enabled) and RRDP servers (if
+    /// RRDP is enabled) that have not been used during validation will be
+    /// deleted.
     pub dirty_repository: bool,
 
-    /// Number of parallel validations.
+    /// Number of threads used during validation.
     pub validation_threads: usize,
 
     /// The refresh interval for repository validation.
@@ -137,13 +165,13 @@ pub struct Config {
     /// Addresses to listen on for HTTP monitoring connectsion.
     pub http_listen: Vec<SocketAddr>,
 
-    /// Get the listening sockets from systemd.
+    /// Whether to get the listening sockets from systemd.
     pub systemd_listen: bool,
 
     /// The log levels to be logged.
     pub log_level: LevelFilter,
 
-    /// Should we log to stderr?
+    /// The target to log to.
     pub log_target: LogTarget,
 
     /// The optional PID file for daemon mode.
@@ -298,13 +326,14 @@ impl Config {
 
     /// Adds the relevant config args to the server subcommand.
     ///
-    /// Some of the options in the config only makes sense to have for the
+    /// Some of the options in the config only make sense for the
     /// RTR server. Having them in the global part of the clap command line
     /// is confusing, so we stick to defaults unless we actually run the
-    /// server. This function adds the relevant args to the subcommand.
+    /// server. This function adds the relevant arguments to the subcommand
+    /// provided via `app`.
     ///
-    /// It follows clap’s builder pattern: It takes an app, adds a bunch of
-    /// arguments to it, and returns it in the end.
+    /// It follows clap’s builder pattern and returns the app with all
+    /// arguments added.
     pub fn server_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         app
         .arg(Arg::with_name("refresh")
@@ -367,14 +396,20 @@ impl Config {
         )
     }
 
-    /// Creates a configuration from the command line arguments.
+    /// Creates a configuration from command line matches.
     ///
-    /// The function will try to read a config file, either the one provided
-    /// via the command line or the default, and apply all basic command line
-    /// options to it.
+    /// The function attempts to create configuration from the command line
+    /// arguments provided via `matches`. It will try to read a config file
+    /// if provided via the config file option (`-c` or `--config`) or a
+    /// file in `$HOME/.routinator.conf` otherwise. If the latter doesn’t
+    /// exist either, starts with a default configuration.
     ///
-    /// If you are trying to run the RTR server, you need to also apply the
-    /// RTR server arguments via [`apply_server_arg_matches`].
+    /// All relative paths given in command line arguments will be interpreted
+    /// relative to `cur_dir`. Conversely, paths in the config file are
+    /// treated as relative to the config file’s directory.
+    ///
+    /// If you are runming in server mode, you need to also apply the server
+    /// arguments via [`apply_server_arg_matches`].
     ///
     /// [`apply_server_arg_matches`]: #method.apply_server_arg_matches
     pub fn from_arg_matches(
@@ -522,6 +557,10 @@ impl Config {
         Ok(())
     }
 
+    /// Applies the logging-specific command line arguments to the config.
+    ///
+    /// This is the Unix version that also considers syslog as a valid
+    /// target.
     #[cfg(unix)]
     fn apply_log_matches(
         &mut self,
@@ -551,6 +590,9 @@ impl Config {
         Ok(())
     }
 
+    /// Applies the logging-specific command line arguments to the config.
+    ///
+    /// This is the non-Unix version that does not use syslog.
     #[cfg(not(unix))]
     fn apply_log_matches(
         &mut self,
@@ -569,7 +611,9 @@ impl Config {
     }
 
 
-    /// Applies the RTR server command line arguments to a config.
+    /// Applies the RTR server command line arguments to an existing config.
+    ///
+    /// All paths used in arguments are interpreted relative to `cur_dir`.
     pub fn apply_server_arg_matches(
         &mut self,
         matches: &ArgMatches,
@@ -646,42 +690,14 @@ impl Config {
         Ok(())
     }
 
-    /// Creates and returns the repository for this configuration.
-    ///
-    /// If `update` is `false`, all updates in the respository are disabled.
-    pub fn create_repository(
-        &self,
-        extra_output: bool,
-        update: bool,
-    ) -> Result<Repository, Error> {
-        Repository::new(self, extra_output, update)
-    }
-
-    /// Loads the local exceptions for this configuration.
-    pub fn load_exceptions(
-        &self,
-        extra_info: bool
-    ) -> Result<LocalExceptions, Error> {
-        let mut res = LocalExceptions::empty();
-        let mut ok = true;
-        for path in &self.exceptions {
-            if let Err(err) = res.extend_from_file(path, extra_info) {
-                error!(
-                    "Failed to load exceptions file {}: {}",
-                    path.display(), err
-                );
-                ok = false;
-            }
-        }
-        if ok {
-            Ok(res)
-        }
-        else {
-            Err(Error)
-        }
-    }
-
     /// Initialize logging.
+    ///
+    /// All diagnostic output of Routinator is done via logging, never to
+    /// stderr directly. Thus, it is important to initalize logging before
+    /// doing anything else that may result in such output. This function
+    /// does exactly that. It sets a maximum log level of `warn`, leading
+    /// only printing important information, and directs all logging to
+    /// stderr.
     pub fn init_logging() -> Result<(), Error> {
         log::set_max_level(LevelFilter::Warn);
         if let Err(err) = log_reroute::init() {
@@ -698,8 +714,8 @@ impl Config {
 
     /// Switches logging to the configured target.
     ///
-    /// If `daemon` is `true`, the default target is syslog, otherwise it is
-    /// stderr.
+    /// Once the configuration has been successfully loaded, logging should
+    /// be switched to whatever the user asked for via this method.
     #[allow(unused_variables)] // for cfg(not(unix))
     pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
         let logger = match self.log_target {
@@ -728,7 +744,7 @@ impl Config {
         Ok(())
     }
 
-    /// Creates a syslog logger.
+    /// Creates a syslog logger and configures correctly.
     #[cfg(unix)]
     fn syslog_logger(
         &self,
@@ -784,7 +800,7 @@ impl Config {
         Ok(dispatch)
     }
 
-    /// Creates a file logger.
+    /// Creates a file logger using the file provided by `path`.
     fn file_logger(&self, path: &Path) -> Result<Box<dyn Log>, Error> {
         let file = match fern::log_file(path) {
             Ok(file) => file,
@@ -821,7 +837,7 @@ impl Config {
         matches.value_of(key).map(|path| dir.join(path))
     }
 
-    /// Creates the correct base configuration for the given config file.
+    /// Creates the correct base configuration for the given config file path.
     /// 
     /// If no config path is given, tries to read the default config in
     /// `$HOME/.routinator.conf`. If that doesn’t exist, creates a default
@@ -857,13 +873,16 @@ impl Config {
         let res = Config {
             cache_dir: file.take_mandatory_path("repository-dir")?,
             tal_dir: file.take_mandatory_path("tal-dir")?,
-            exceptions: file.take_path_array("exceptions")?,
+            exceptions: {
+                file.take_path_array("exceptions")?.unwrap_or_else(Vec::new)
+            },
             strict: file.take_bool("strict")?.unwrap_or(false),
+            disable_rsync: false,
             rsync_command: {
                 file.take_string("rsync-command")?
                     .unwrap_or_else(|| "rsync".into())
             },
-            rsync_args: file.take_opt_string_array("rsync-args")?,
+            rsync_args: file.take_string_array("rsync-args")?,
             rsync_timeout: {
                 Duration::from_secs(
                     file.take_u64("rsync-timeout")?
@@ -891,7 +910,7 @@ impl Config {
                     .unwrap_or_else(Vec::new)
             },
             rrdp_proxies: {
-                file.take_opt_string_array("rrdp-proxies")?.unwrap_or_else(
+                file.take_string_array("rrdp-proxies")?.unwrap_or_else(
                     Vec::new
                 )
             },
@@ -941,6 +960,8 @@ impl Config {
     }
 
     /// Determines the logging target from the config file.
+    ///
+    /// This is the Unix version that also deals with syslog.
     #[cfg(unix)]
     fn log_target_from_config_file(
         file: &mut ConfigFile
@@ -990,6 +1011,8 @@ impl Config {
     }
 
     /// Determines the logging target from the config file.
+    ///
+    /// This is the non-Unix version that only logs to stderr or a file.
     #[cfg(not(unix))]
     fn log_target_from_config_file(
         file: &mut ConfigFile
@@ -1023,12 +1046,16 @@ impl Config {
     }
 
     /// Creates a default config with the given paths.
+    ///
+    /// Uses default values for everything except for the cache and TAL
+    /// directories which are provided.
     fn default_with_paths(cache_dir: PathBuf, tal_dir: PathBuf) -> Self {
         Config {
             cache_dir,
             tal_dir,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
+            disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
@@ -1445,6 +1472,11 @@ impl ConfigFile {
         })
     }
 
+    /// Takes a boolean value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t a booelan.
     fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Error> {
         match self.content.remove(key) {
             Some(value) => {
@@ -1464,6 +1496,11 @@ impl ConfigFile {
         }
     }
     
+    /// Takes an unsigned integer value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer or if it is negative.
     fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Error> {
         match self.content.remove(key) {
             Some(value) => {
@@ -1493,6 +1530,14 @@ impl ConfigFile {
         }
     }
 
+    /// Takes a small unsigned integer value from the config file.
+    ///
+    /// While the result is returned as an `usize`, it musn’t be in the
+    /// range of a `u16`.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer or if it is out of bounds.
     fn take_small_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
         match self.content.remove(key) {
             Some(value) => {
@@ -1530,6 +1575,11 @@ impl ConfigFile {
         }
     }
 
+    /// Takes a string value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t a string.
     fn take_string(&mut self, key: &str) -> Result<Option<String>, Error> {
         match self.content.remove(key) {
             Some(value) => {
@@ -1549,6 +1599,13 @@ impl ConfigFile {
         }
     }
 
+    /// Takes a string encoded value from the config file.
+    ///
+    /// The value is taken from the given `key`. It is expected to be a
+    /// string and will be converted to the final type via `FromStr::from_str`.
+    ///
+    /// Returns `Ok(None)` if the key doesn’t exist. Returns an error if the
+    /// key exists but the value isn’t a string or conversion fails.
     fn take_from_str<T>(&mut self, key: &str) -> Result<Option<T>, Error>
     where T: FromStr, T::Err: fmt::Display {
         match self.take_string(key)? {
@@ -1569,10 +1626,25 @@ impl ConfigFile {
         }
     }
 
+    /// Takes a path value from the config file.
+    ///
+    /// The path is taken from the given `key`. It must be a string value.
+    /// It is treated as relative to the directory of the config file. If it
+    /// is indeed a relative path, it is expanded accordingly and an absolute
+    /// path is returned.
+    ///
+    /// Returns `Ok(None)` if the key does not exist. Returns an error if the
+    /// key exists but the value isn’t a string.
     fn take_path(&mut self, key: &str) -> Result<Option<PathBuf>, Error> {
         self.take_string(key).map(|opt| opt.map(|path| self.dir.join(path)))
     }
 
+    /// Takes a mandatory path value from the config file.
+    ///
+    /// This is the pretty much the same as [`take_path`] but also returns
+    /// an error if the key does not exist.
+    ///
+    /// [`take_path`]: #method.take_path
     fn take_mandatory_path(&mut self, key: &str) -> Result<PathBuf, Error> {
         match self.take_path(key)? {
             Some(res) => Ok(res),
@@ -1586,39 +1658,13 @@ impl ConfigFile {
         }
     }
 
-    fn take_path_array(&mut self, key: &str) -> Result<Vec<PathBuf>, Error> {
-        match self.content.remove(key) {
-            Some(::toml::Value::Array(vec)) => {
-                let mut res = Vec::new();
-                for value in vec.into_iter() {
-                    if let ::toml::Value::String(value) = value {
-                        res.push(self.dir.join(value))
-                    }
-                    else {
-                        error!(
-                            "Error in config file {}: \
-                            '{}' expected to be a array of paths.",
-                            self.path.display(),
-                            key
-                        );
-                        return Err(Error);
-                    }
-                }
-                Ok(res)
-            }
-            Some(_) => {
-                error!(
-                    "Error in config file {}: \
-                     '{}' expected to be a array of paths.",
-                    self.path.display(), key
-                );
-                Err(Error)
-            }
-            None => Ok(Vec::new())
-        }
-    }
-
-    fn take_opt_string_array(
+    /// Takes an array of strings from the config file.
+    ///
+    /// The value is taken from the entry with the given `key` and, if
+    /// present, the entry is removed. The value must be an array of strings.
+    /// If the key is not present, returns `Ok(None)`. If the entry is present
+    /// but not an array of strings, returns an error.
+    fn take_string_array(
         &mut self,
         key: &str
     ) -> Result<Option<Vec<String>>, Error> {
@@ -1653,6 +1699,15 @@ impl ConfigFile {
         }
     }
 
+    /// Takes an array of string encoded values from the config file.
+    ///
+    /// The value is taken from the entry with the given `key` and, if
+    /// present, the entry is removed. The value must be an array of strings.
+    /// Each string is converted to the output type via `FromStr::from_str`.
+    ///
+    /// If the key is not present, returns `Ok(None)`. If the entry is present
+    /// but not an array of strings or if converting any of the strings fails,
+    /// returns an error.
     fn take_from_str_array<T>(
         &mut self,
         key: &str
@@ -1699,6 +1754,53 @@ impl ConfigFile {
         }
     }
 
+    /// Takes an array of paths from the config file.
+    ///
+    /// The values are taken from the given `key` which must be an array of
+    /// strings. Each path is treated as relative to the directory of the
+    /// config file. All paths are expanded if necessary and are returned as
+    /// absolute paths.
+    ///
+    /// Returns `Ok(None)` if the key does not exist. Returns an error if the
+    /// key exists but the value isn’t an array of string.
+    fn take_path_array(
+        &mut self,
+        key: &str
+    ) -> Result<Option<Vec<PathBuf>>, Error> {
+        match self.content.remove(key) {
+            Some(::toml::Value::Array(vec)) => {
+                let mut res = Vec::new();
+                for value in vec.into_iter() {
+                    if let ::toml::Value::String(value) = value {
+                        res.push(self.dir.join(value))
+                    }
+                    else {
+                        error!(
+                            "Error in config file {}: \
+                            '{}' expected to be a array of paths.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error);
+                    }
+                }
+                Ok(Some(res))
+            }
+            Some(_) => {
+                error!(
+                    "Error in config file {}: \
+                     '{}' expected to be a array of paths.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Checks whether the config file is now empty.
+    ///
+    /// If it isn’t, logs a complaint and returns an error.
     fn check_exhausted(&self) -> Result<(), Error> {
         if !self.content.is_empty() {
             print!(
@@ -1727,6 +1829,11 @@ impl ConfigFile {
 
 //------------ Helpers -------------------------------------------------------
 
+/// Try to convert a string encoded value.
+///
+/// This helper function just changes error handling. Instead of returning
+/// the actual conversion error, it logs it as an invalid value for entry
+/// `key` and returns the standard error.
 fn from_str_value_of<T>(
     matches: &ArgMatches,
     key: &str
@@ -1749,6 +1856,7 @@ where T: FromStr, T::Err: fmt::Display {
     }
 }
 
+/// Converts the syslog facility name to the facility type.
 #[cfg(unix)]
 fn facility_to_string(facility: Facility) -> String {
     use syslog::Facility::*;

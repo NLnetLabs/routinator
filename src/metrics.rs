@@ -1,11 +1,12 @@
 //! Monitoring metrics.
 
+use std::{io, process};
 use std::sync::Arc;
+use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, Utc};
 use log::info;
 use rpki::uri;
 use rpki::tal::TalInfo;
-use crate::{rrdp, rsync};
 
 
 //------------ Metrics -------------------------------------------------------
@@ -19,10 +20,10 @@ pub struct Metrics {
     tals: Vec<TalMetrics>,
 
     /// Rsync metrics.
-    rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>,
+    rsync: Vec<RsyncModuleMetrics>,
 
     /// RRDP metrics.
-    rrdp: Vec<rrdp::ServerMetrics>,
+    rrdp: Vec<RrdpServerMetrics>,
 }
 
 impl Metrics {
@@ -41,13 +42,16 @@ impl Metrics {
 
     pub fn set_rsync(
         &mut self,
-        rsync: Vec<(uri::RsyncModule, rsync::ModuleMetrics)>
+        rsync: Vec<RsyncModuleMetrics>
     ) {
         self.rsync = rsync
     }
 
-    pub fn rrdp_mut(&mut self) -> &mut Vec<rrdp::ServerMetrics> {
-        &mut self.rrdp
+    pub fn set_rrdp(
+        &mut self,
+        rrdp: Vec<RrdpServerMetrics>
+    ) {
+        self.rrdp = rrdp
     }
 
     pub fn time(&self) -> DateTime<Utc> {
@@ -62,16 +66,16 @@ impl Metrics {
         &self.tals
     }
 
-    pub fn rsync(&self) -> &[(uri::RsyncModule, rsync::ModuleMetrics)] {
+    pub fn rsync(&self) -> &[RsyncModuleMetrics] {
         &self.rsync
     }
 
-    pub fn rrdp(&self) -> &[rrdp::ServerMetrics] {
+    pub fn rrdp(&self) -> &[RrdpServerMetrics] {
         &self.rrdp
     }
 
     pub fn rsync_complete(&self) -> bool {
-        for (_, metrics) in &self.rsync {
+        for metrics in &self.rsync {
             match metrics.status {
                 Ok(status) if !status.success() => return false,
                 Err(_) => return false,
@@ -127,5 +131,37 @@ impl TalMetrics {
             vrps: 0
         }
     }
+}
+
+
+//------------ RrdpServerMetrics ---------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct RrdpServerMetrics {
+    pub notify_uri: uri::Https,
+    pub notify_status: Option<reqwest::StatusCode>,
+    pub serial: Option<usize>,
+    pub duration: Result<Duration, SystemTimeError>,
+}
+
+impl RrdpServerMetrics {
+    pub fn new(notify_uri: uri::Https) -> Self {
+        RrdpServerMetrics {
+            notify_uri,
+            notify_status: None,
+            serial: None,
+            duration: Ok(Duration::from_secs(0))
+        }
+    }
+}
+
+
+//------------ RsyncModuleMetrics --------------------------------------------
+
+#[derive(Debug)]
+pub struct RsyncModuleMetrics {
+    pub module: uri::RsyncModule,
+    pub status: Result<process::ExitStatus, io::Error>,
+    pub duration: Result<Duration, SystemTimeError>,
 }
 

@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::time::SystemTime;
 use bytes::Bytes;
 use log::{info, warn};
 use ring::digest;
@@ -18,6 +18,7 @@ use rpki::uri;
 use rpki::rrdp::{DigestHex, NotificationFile, UriAndHash};
 use unwrap::unwrap;
 use uuid::Uuid;
+use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
 use super::http::{DeltaTargets, HttpClient};
 use super::utils::create_unique_dir;
@@ -58,7 +59,7 @@ pub struct Server {
     ///
     /// Because the metrics are only used while updating (and after everything
     /// is done, anyway), we keep them inside the mutex.
-    mutex: Mutex<ServerMetrics>,
+    mutex: Mutex<RrdpServerMetrics>,
 }
 
 
@@ -70,7 +71,7 @@ impl Server {
         broken: bool
     ) -> Self {
         Server {
-            mutex: Mutex::new(ServerMetrics::new(notify_uri.clone())),
+            mutex: Mutex::new(RrdpServerMetrics::new(notify_uri.clone())),
             notify_uri,
             server_dir,
             updated: AtomicBool::new(broken),
@@ -136,7 +137,7 @@ impl Server {
     fn try_update(
         &self,
         http: &HttpClient,
-        metrics: &mut ServerMetrics
+        metrics: &mut RrdpServerMetrics
     ) -> Result<(), Error> {
         info!("RRDP {}: Updating server", self.notify_uri);
         metrics.serial = None;
@@ -155,7 +156,7 @@ impl Server {
         &self,
         notify: &NotificationFile,
         http: &HttpClient,
-        metrics: &mut ServerMetrics
+        metrics: &mut RrdpServerMetrics
     ) -> Result<(), Error> {
         let mut state = ServerState::load(self.server_dir.state_path())?;
         let deltas = match Self::calc_deltas(notify, &state)? {
@@ -269,7 +270,7 @@ impl Server {
         &self,
         notify: &NotificationFile,
         http: &HttpClient,
-        metrics: &mut ServerMetrics
+        metrics: &mut RrdpServerMetrics
     ) -> Result<(), Error> {
         info!("RRDP {}: updating from snapshot.", self.notify_uri);
         let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
@@ -391,6 +392,11 @@ impl Server {
         &self.notify_uri
     }
 
+    /// Returns whether the server is broken.
+    pub fn is_broken(&self) -> bool {
+        self.broken.load(Relaxed)
+    }
+
     /// Tries to load a file from this server.
     ///
     /// This assumes that the server is updated already. If there is no file
@@ -439,7 +445,7 @@ impl Server {
     }
 
     /// Return the server metrics if the server was ever updated.
-    pub fn metrics(&self) -> Option<ServerMetrics> {
+    pub fn metrics(&self) -> Option<RrdpServerMetrics> {
         if self.updated.load(Relaxed) {
             match self.mutex.try_lock() {
                 Ok(metrics) => Some(metrics.clone()),
@@ -680,28 +686,6 @@ fn process_line<B: io::BufRead, T: FromStr>(
     match T::from_str(value) {
         Ok(value) => Ok(value),
         Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "bad value"))
-    }
-}
-
-
-//------------ ServerMetrics -------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct ServerMetrics {
-    pub notify_uri: uri::Https,
-    pub notify_status: Option<reqwest::StatusCode>,
-    pub serial: Option<usize>,
-    pub duration: Result<Duration, SystemTimeError>,
-}
-
-impl ServerMetrics {
-    fn new(notify_uri: uri::Https) -> Self {
-        ServerMetrics {
-            notify_uri,
-            notify_status: None,
-            serial: None,
-            duration: Ok(Duration::from_secs(0))
-        }
     }
 }
 
