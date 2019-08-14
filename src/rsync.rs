@@ -376,7 +376,6 @@ impl Command {
         destination: &Path
     ) -> Result<process::Command, io::Error> {
         info!("rsyncing from {}.", source);
-        let destination = destination.as_ref();
         fs::create_dir_all(destination)?;
         let destination = match Self::format_destination(destination) {
             Ok(some) => some,
