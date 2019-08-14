@@ -512,7 +512,8 @@ the RTR protocol.
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
 and validating the local repository before starting to update again. The
-default value is 3600 seconds.
+next update will earlier if objects in the repository expire earlier. The
+default value is 600 seconds.
 .TP
 .BI \-\-retry= seconds
 The amount of seconds to suggest to an RTR client to wait before trying to
@@ -757,8 +758,8 @@ Routinator running as a regular user to bind to the default RTR port 323.
 .TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
-between consecutive validation runs in RTR server mode. The default is
-3600 seconds.
+between consecutive validation runs in server mode. The next validation run
+will happen earlier, if objects expire ealier. The default is 600 seconds.
 .TP
 .B retry
 An integer value specifying the number of seconds an RTR client is requested

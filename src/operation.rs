@@ -388,7 +388,7 @@ impl Server {
         };
         runtime.spawn(rtr).spawn(http);
 
-        while idle.wait(config.refresh) {
+        while idle.wait(history.refresh_wait(config.refresh)) {
             history.mark_update_start();
             let (report, metrics) = match repo.process() {
                 Ok(some) => some,

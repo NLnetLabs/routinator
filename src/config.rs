@@ -34,7 +34,7 @@ const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
 const DEFAULT_DIRTY_REPOSITORY: bool = false;
 
 /// The default refresh interval in seconds.
-const DEFAULT_REFRESH: u64 = 3600;
+const DEFAULT_REFRESH: u64 = 600;
 
 /// The default RTR retry interval in seconds.
 const DEFAULT_RETRY: u64 = 600;
