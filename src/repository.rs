@@ -17,7 +17,7 @@ use rpki::uri;
 use rpki::cert::{Cert, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
-use rpki::roa::Roa;
+use rpki::roa::{Roa, RoaStatus};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
 use unwrap::unwrap;
@@ -384,7 +384,7 @@ impl<'a> Run<'a> {
             }
         }
         let manifest = match self.get_manifest(
-            rrdp_server, &cert, uri, &mut store
+            rrdp_server, &cert, uri, &mut store, routes,
         ) {
             Some(some) => some,
             None => return,
@@ -414,6 +414,7 @@ impl<'a> Run<'a> {
         issuer: &ResourceCert,
         issuer_uri: &U,
         store: &mut CrlStore,
+        routes: &mut RouteOrigins
     ) -> Option<ManifestContent> {
         let uri = match issuer.rpki_manifest() {
             Some(uri) => uri,
@@ -451,10 +452,11 @@ impl<'a> Run<'a> {
         if manifest.len() > CRL_CACHE_LIMIT {
             store.enable_serial_caching();
         }
-        if self.check_crl(rrdp_server, cert, issuer, store).is_err() {
+        if self.check_crl(rrdp_server, &cert, issuer, store).is_err() {
             info!("{}: certificate has been revoked", uri);
             return None
         }
+        routes.update_refresh(&cert);
         Some(manifest)
     }
 
@@ -508,6 +510,7 @@ impl<'a> Run<'a> {
                 info!("{}: certificate has been revoked", uri);
                 return
             }
+            routes.update_refresh(&cert);
             self.process_ca(cert, &uri, routes)
         }
         else if uri.ends_with(".roa") {
@@ -536,7 +539,12 @@ impl<'a> Run<'a> {
                 Ok(())
             });
             match route {
-                Ok(route) => routes.push(route),
+                Ok(route) => {
+                    if let RoaStatus::Valid { ref cert } = *route.status() {
+                        routes.update_refresh(cert);
+                    }
+                    routes.push(route);
+                }
                 Err(_) => {
                     info!("{}: processing failed.", uri);
                 }
@@ -554,14 +562,13 @@ impl<'a> Run<'a> {
     }
 
     /// Checks wheter a certificate is listed on its CRL.
-    fn check_crl<C: AsRef<TbsCert>>(
+    fn check_crl(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
-        cert: C,
+        cert: &TbsCert,
         issuer: &ResourceCert,
         store: &mut CrlStore,
     ) -> Result<(), ValidationError> {
-        let cert = cert.as_ref();
         let uri = match cert.crl_uri() {
             Some(some) => some,
             None => return Ok(())

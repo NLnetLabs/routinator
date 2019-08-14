@@ -4,18 +4,20 @@
 /// the history of changes necessary for RTR.
 
 use std::{fmt, hash, ops, slice, vec};
+use std::cmp::min;
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use derive_more::Display;
 use log::{debug, info};
-use rpki::cert::ResourceCert;
+use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
+use rpki::x509::Time;
 use crate::metrics::{Metrics, TalMetrics};
 use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
@@ -118,6 +120,22 @@ impl OriginsHistory {
     /// Returns a reference to the current list of address origins.
     pub fn current(&self) -> Arc<AddressOrigins> {
         self.0.read().unwrap().current.clone()
+    }
+
+    /// Returns the refresh time, if one is available.
+    pub fn refresh(&self) -> Option<Time> {
+        self.current().refresh()
+    }
+
+    /// Returns the duration until the next refresh should start.
+    pub fn refresh_wait(&self, minimum: Duration) -> Duration {
+        min(
+            self.refresh().and_then(|refresh| {
+                SystemTime::from(refresh).duration_since(SystemTime::now())
+                .ok()
+            }).unwrap_or_else(|| minimum),
+            minimum
+        )
     }
 
     /// Returns a diff from the given serial number.
@@ -297,6 +315,9 @@ pub struct RouteOrigins {
     /// The list of route origin attestations.
     origins: Vec<RouteOriginAttestation>,
 
+    /// The time when this set needs to be refreshed at the latest.
+    refresh: Option<Time>,
+
     /// The TAL for this list.
     tal: Arc<TalInfo>,
 }
@@ -306,6 +327,7 @@ impl RouteOrigins {
     pub fn new(tal: Arc<TalInfo>) -> Self {
         RouteOrigins {
             origins: Vec::new(),
+            refresh: None,
             tal
         }
     }
@@ -314,8 +336,25 @@ impl RouteOrigins {
     ///
     /// The attestation will simply be added to the end of the list. No
     /// checking for duplicates is being done.
-    pub fn push(&mut self, attestation: RouteOriginAttestation) {
-        self.origins.push(attestation)
+    pub fn push(
+        &mut self,
+        attestation: RouteOriginAttestation,
+    ) {
+        self.origins.push(attestation);
+    }
+
+    /// Updates the refresh time.
+    ///
+    /// If the time given is earlier than our current refresh time, sets the
+    /// time given as the new refresh time.
+    pub fn update_refresh(&mut self, cert: &TbsCert) {
+        let refresh = cert.validity().not_after();
+        if let Some(time) = self.refresh {
+            if time < refresh {
+                return
+            }
+        }
+        self.refresh = Some(refresh)
     }
 
     /// Returns whether the list of attestations is empty.
@@ -371,6 +410,9 @@ impl<'a> IntoIterator for &'a RouteOrigins {
 pub struct AddressOrigins {
     /// A list of (unique) address origins.
     origins: Vec<AddressOrigin>,
+
+    /// The time when this set needs to be refreshed at the latest.
+    refresh: Option<Time>,
 }
 
 impl AddressOrigins {
@@ -391,7 +433,15 @@ impl AddressOrigins {
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
+        let mut refresh = None;
         for item in report.origins {
+            if let Some(time) = item.refresh {
+                match refresh {
+                    Some(current) if current > time => refresh = Some(time),
+                    Some(_) => { }
+                    None => refresh = Some(time)
+                }
+            }
             let mut tal_metrics = TalMetrics::new(item.tal.clone());
             for mut roa in item {
                 tal_metrics.roas += 1;
@@ -414,13 +464,19 @@ impl AddressOrigins {
             let _ = res.insert(addr.clone());
         }
         AddressOrigins {
-            origins: res.into_iter().collect()
+            origins: res.into_iter().collect(),
+            refresh
         }
     }
 
     /// Returns an iterator over the address orgins.
     pub fn iter(&self) -> slice::Iter<AddressOrigin> {
         self.origins.iter()
+    }
+
+    /// Returns the refresh time if available.
+    pub fn refresh(&self) -> Option<Time> {
+        self.refresh
     }
 }
 
@@ -430,7 +486,8 @@ impl AddressOrigins {
 impl From<HashSet<AddressOrigin>> for AddressOrigins {
     fn from(set: HashSet<AddressOrigin>) -> Self {
         AddressOrigins {
-            origins: set.into_iter().collect()
+            origins: set.into_iter().collect(),
+            refresh: None,
         }
     }
 }
