@@ -389,6 +389,7 @@ impl Server {
         runtime.spawn(rtr).spawn(http);
 
         while idle.wait(config.refresh) {
+            history.mark_update_start();
             let (report, metrics) = match repo.process() {
                 Ok(some) => some,
                 Err(_) => break
@@ -406,6 +407,7 @@ impl Server {
             let must_notify = history.update(
                 report, metrics, &exceptions, false
             );
+            history.mark_update_done();
             info!(
                 "Validation completed. New serial is {}.",
                 history.serial()
