@@ -8,7 +8,7 @@ Breaking Changes
   This option is now unused as modules are now rsync only when they are
   first used. [(#187)]
 * The default value for `refresh` has been lowered to 600 seconds.
-  [(#XXX)]
+  [(#191)]
 
 News
 
@@ -18,11 +18,12 @@ News
   sub-directory called `rsync`. The main repository directory will now be
   kept clean and all unexpected files removed. [(#187)]
 * In server mode, the repository will be refreshed and re-validated when
-  the first object expires. [(#XXX)] 
+  the first object expires. [(#191)] 
 
 Bug Fixes
 
 [(#187)]: https://github.com/NLnetLabs/routinator/pull/187
+[(#191)]: https://github.com/NLnetLabs/routinator/pull/191
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
