@@ -16,4 +16,4 @@ before_script:
 script:
   - cargo clippy -- -D warnings
   - cargo test --verbose
-cache: cargo
+#cache: cargo
