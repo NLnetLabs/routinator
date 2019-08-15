@@ -16,6 +16,7 @@ use log::{error, info, warn};
 use rpki::uri;
 use rpki::cert::{Cert, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
+use rpki::crypto::KeyIdentifier;
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::{Roa, RoaStatus};
 use rpki::tal::{Tal, TalInfo, TalUri};
@@ -312,7 +313,7 @@ impl<'a> Run<'a> {
                 }
             };
             info!("Found valid trust anchor {}. Processing.", uri);
-            self.process_ca(cert, &uri, &mut res);
+            self.process_ca(&cert, &CertLink::root(&cert), &uri, &mut res);
             // We stop once we have had the first working URI.
             return Ok(res)
         }
@@ -363,7 +364,8 @@ impl<'a> Run<'a> {
     /// to `routes`.
     fn process_ca<U: fmt::Display>(
         &self,
-        cert: ResourceCert,
+        cert: &ResourceCert,
+        link: &CertLink,
         uri: &U,
         routes: &mut RouteOrigins
     ) {
@@ -392,7 +394,7 @@ impl<'a> Run<'a> {
 
         for (uri, hash) in manifest.iter_uris(repo_uri) {
             self.process_object(
-                rrdp_server, uri, hash, &cert, &mut store, routes
+                rrdp_server, uri, hash, &cert, link, &mut store, routes
             );
         }
     }
@@ -471,12 +473,14 @@ impl<'a> Run<'a> {
     /// objects are added to `routes`.
     ///
     /// This method logs all its messages.
+    #[allow(clippy::too_many_arguments)]
     fn process_object(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &ResourceCert,
+        link: &CertLink,
         crl: &mut CrlStore,
         routes: &mut RouteOrigins,
     ) {
@@ -499,6 +503,13 @@ impl<'a> Run<'a> {
                     return
                 }
             };
+            if link.check_loop(&cert).is_err() {
+                warn!(
+                    "{}: certificate loop detected. Ignoring this CA.",
+                    uri
+                );
+                return
+            }
             let cert = match cert.validate_ca(issuer, self.repository.strict) {
                 Ok(cert) => cert,
                 Err(_) => {
@@ -511,7 +522,9 @@ impl<'a> Run<'a> {
                 return
             }
             routes.update_refresh(&cert);
-            self.process_ca(cert, &uri, routes)
+            self.process_ca(
+                &cert, &CertLink::chain(link, &cert), &uri, routes
+            )
         }
         else if uri.ends_with(".roa") {
             let bytes = match self.load_file(rrdp_server, &uri) {
@@ -676,6 +689,56 @@ impl<'a> Run<'a> {
             res.set_rsync(rsync.into_metrics());
         }
         res
+    }
+}
+
+
+//------------ CertLink ------------------------------------------------------
+
+/// An element in a linked list of known certificates.
+///
+/// We can do this because we do recursion down the CA tree so the elements
+/// can all happily live on the stack and are cleaned up neatly when we leave
+/// scope.
+#[derive(Clone, Debug)]
+struct CertLink<'a> {
+    /// A pointer to the certificate in this element.
+    cert: &'a TbsCert,
+
+    /// A pointer to the optional parent link.
+    link: Option<&'a CertLink<'a>>,
+}
+
+impl<'a> CertLink<'a> {
+    /// Create a link from a certificate only.
+    pub fn root(cert: &'a TbsCert) -> Self {
+        CertLink { cert, link: None }
+    }
+
+    /// Create a link from a previous link.
+    pub fn chain(parent: &'a CertLink<'a>, cert: &'a TbsCert) -> Self {
+        CertLink { cert, link: Some(parent) }
+    }
+
+    /// Checks whether this certificate has appeared in the validation chain.
+    pub fn check_loop(&self, cert: &TbsCert) -> Result<(), Error> {
+        self._check_loop(cert.subject_key_identifier())
+    }
+
+    /// The actual recursive loop test.
+    ///
+    /// We are comparing certificates by comparing their subject key
+    /// identifiers.
+    fn _check_loop(&self, key_id: KeyIdentifier) -> Result<(), Error> {
+        if self.cert.subject_key_identifier() == key_id {
+            Err(Error)
+        }
+        else if let Some(link) = self.link {
+            link._check_loop(key_id)
+        }
+        else {
+            Ok(())
+        }
     }
 }
 
