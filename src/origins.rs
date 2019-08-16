@@ -4,7 +4,6 @@
 /// the history of changes necessary for RTR.
 
 use std::{fmt, hash, ops, slice, vec};
-use std::cmp::min;
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -18,6 +17,7 @@ use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use rpki::x509::Time;
+use unwrap::unwrap;
 use crate::metrics::{Metrics, TalMetrics};
 use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
@@ -78,6 +78,9 @@ struct HistoryInner {
     /// The number of diffs to keep.
     keep: usize,
 
+    /// The time to wait between updates,
+    refresh: Duration,
+
     /// The instant when we started an update the last time.
     last_update_start: Instant,
 
@@ -86,6 +89,9 @@ struct HistoryInner {
 
     /// The duration of the last update run.
     last_update_duration: Option<Duration>,
+
+    /// The instant when we are scheduled to strat the next update.
+    next_update_start: SystemTime,
 }
 
 impl OriginsHistory {
@@ -99,17 +105,20 @@ impl OriginsHistory {
         mut metrics: Metrics,
         exceptions: &LocalExceptions,
         extra_info: bool,
-        keep: usize
+        keep: usize,
+        refresh: Duration,
     ) -> Self {
         let origins = AddressOrigins::from_report(
             report, exceptions, extra_info, &mut metrics
         );
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
+                next_update_start: origins.refresh_wait(refresh),
                 current: Arc::new(origins),
                 diffs: VecDeque::with_capacity(keep),
                 metrics: Arc::new(metrics),
                 keep,
+                refresh,
                 last_update_start: Instant::now(),
                 last_update_done: None,
                 last_update_duration: None,
@@ -122,20 +131,24 @@ impl OriginsHistory {
         self.0.read().unwrap().current.clone()
     }
 
-    /// Returns the refresh time, if one is available.
-    pub fn refresh(&self) -> Option<Time> {
-        self.current().refresh()
+    /// Returns the duration until the next refresh should start.
+    pub fn refresh_wait(&self) -> Duration {
+        unwrap!(self.0.read()).next_update_start
+        .duration_since(SystemTime::now())
+        .unwrap_or_else(|_| Duration::from_secs(0))
     }
 
-    /// Returns the duration until the next refresh should start.
-    pub fn refresh_wait(&self, minimum: Duration) -> Duration {
-        min(
-            self.refresh().and_then(|refresh| {
-                SystemTime::from(refresh).duration_since(SystemTime::now())
-                .ok()
-            }).unwrap_or_else(|| minimum),
-            minimum
-        )
+    /// Returns the duration until a new set of data is available.
+    pub fn update_wait(&self) -> Duration {
+        let (start, duration, refresh) = {
+            let l = unwrap!(self.0.read());
+            (l.next_update_start, l.last_update_duration, l.refresh)
+        };
+        let start = match duration {
+            Some(duration) => start + duration + duration,
+            None => start + refresh,
+        };
+        start.duration_since(SystemTime::now()).unwrap_or_else(|_| refresh)
     }
 
     /// Returns a diff from the given serial number.
@@ -272,10 +285,11 @@ impl OriginsHistory {
     }
 
     /// Marks the end of an update cycle.
-    pub fn mark_update_done(&self) {
+    pub fn mark_update_done(&self, minimum: Duration) {
         let mut locked = self.0.write().unwrap();
         locked.last_update_done = Some(Instant::now());
         locked.last_update_duration = Some(locked.last_update_start.elapsed());
+        locked.next_update_start = locked.current.refresh_wait(minimum);
     }
 }
 
@@ -475,8 +489,15 @@ impl AddressOrigins {
     }
 
     /// Returns the refresh time if available.
-    pub fn refresh(&self) -> Option<Time> {
-        self.refresh
+    pub fn refresh_wait(&self, minimum: Duration) -> SystemTime {
+        let res = SystemTime::now() + minimum;
+        if let Some(refresh) = self.refresh {
+            let refresh = SystemTime::from(refresh);
+            if refresh < res {
+                return refresh
+            }
+        }
+        res
     }
 }
 

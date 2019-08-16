@@ -374,7 +374,7 @@ impl Server {
         let history = OriginsHistory::new(
             report, metrics,
             &LocalExceptions::load(&config, false)?,
-            false, config.history_size
+            false, config.history_size, config.refresh,
         );
         warn!("Starting listeners...");
         let (mut notify, rtr) = rtr_listener(history.clone(), &config);
@@ -388,7 +388,7 @@ impl Server {
         };
         runtime.spawn(rtr).spawn(http);
 
-        while idle.wait(history.refresh_wait(config.refresh)) {
+        while idle.wait(history.refresh_wait()) {
             history.mark_update_start();
             let (report, metrics) = match repo.process() {
                 Ok(some) => some,
@@ -407,7 +407,7 @@ impl Server {
             let must_notify = history.update(
                 report, metrics, &exceptions, false
             );
-            history.mark_update_done();
+            history.mark_update_done(config.refresh);
             info!(
                 "Validation completed. New serial is {}.",
                 history.serial()
