@@ -2,13 +2,14 @@
 FROM rust:1.36.0-stretch as build
 
 RUN apt-get -yq update && \
-    apt-get -yq install musl-tools libssl-dev
+    apt-get -yq install musl-tools
 
 RUN rustup target add x86_64-unknown-linux-musl
 
 WORKDIR /tmp/routinator
 COPY . .
 
+ENV OPENSSL_STATIC=1 PKG_CONFIG_ALLOW_CROSS=1
 RUN cargo build --target=x86_64-unknown-linux-musl --release --locked
 
 # -- stage 2: create alpine-based container with the static routinator
