@@ -1,24 +1,21 @@
 # -- stage 1: build static routinator with musl libc for alpine
-FROM rust:1.36.0-stretch as build
+FROM alpine:3.10.1 as build
 
-RUN apt-get -yq update && \
-    apt-get -yq install musl-tools
-
-RUN rustup target add x86_64-unknown-linux-musl
+RUN apk add rust cargo openssl-dev
 
 WORKDIR /tmp/routinator
 COPY . .
 
-ENV OPENSSL_STATIC=1 PKG_CONFIG_ALLOW_CROSS=1
-RUN cargo build --target=x86_64-unknown-linux-musl --release --locked
+ENV OPENSSL_STATIC=1
+RUN cargo build  --release --locked
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
 FROM alpine:3.10.1
-COPY --from=build /tmp/routinator/target/x86_64-unknown-linux-musl/release/routinator /usr/local/bin/
+COPY --from=build /tmp/routinator/target/release/routinator /usr/local/bin/
 
 # Install rsync as routinator depends on it
-RUN apk add rsync
+RUN apk add rsync libgcc
 
 # Create the repository and TAL directories
 RUN mkdir -p /root/.rpki-cache/repository
