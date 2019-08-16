@@ -9,6 +9,9 @@ Breaking Changes
   first used. [(#187)]
 * The default value for `refresh` has been lowered to 600 seconds.
   [(#191)]
+* The refresh time placed in the RTR End-of-data PDU is now calculated
+  from the time until the next validation run is expected to finish.
+  [(#193)]
 
 News
 
@@ -28,6 +31,7 @@ Bug Fixes
 [(#187)]: https://github.com/NLnetLabs/routinator/pull/187
 [(#191)]: https://github.com/NLnetLabs/routinator/pull/191
 [(#192)]: https://github.com/NLnetLabs/routinator/pull/192
+[(#193)]: https://github.com/NLnetLabs/routinator/pull/193
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
