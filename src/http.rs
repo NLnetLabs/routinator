@@ -1,8 +1,9 @@
-//! The HTTP server
+//! The HTTP server.
 //!
-//! The module provides all functionality to expose HTTP endpoints to
+//! The module provides all functionality exposed by the HTTP server to
 //! those interested. The only public item, [`http_listener`] creates all
-//! necessary networking services based on the current configuration.
+//! necessary networking services based on the current configuration and
+//! returns a future that drives the server.
 //!
 //! [`http_listener`]: fn.http_listener.html
 
@@ -25,12 +26,13 @@ use crate::output::OutputFormat;
 use crate::utils::finish_all;
 use crate::validity::RouteValidity;
 
+
 //------------ http_listener -------------------------------------------------
 
 /// Returns a future for all HTTP server listeners.
 ///
 /// Which servers these are, if any, is determined by `config`. The data 
-/// taken from `history`. As a consequence, if you need new
+/// is taken from `history`. As a consequence, if you need new
 /// data to be exposed, add it to [`OriginsHistory`] somehow.
 ///
 /// [`OriginsHistory`]: ../origins/struct.OriginsHistory.html
@@ -49,8 +51,8 @@ pub fn http_listener(
 ///
 /// The future will never resolve unless an error happens that breaks the
 /// listener, in which case it will print an error and resolve the error case.
-/// It will listen on `addr` for incoming connection. Each new connection will
-/// be handled via a brand new `HttpConnection`.
+/// It will listen bind a Hyper server onto `addr` and produce any data
+/// served from `origins`.
 fn single_http_listener(
     addr: SocketAddr,
     origins: OriginsHistory,
@@ -65,10 +67,18 @@ fn single_http_listener(
 
 //------------ Service -------------------------------------------------------
 
+/// A Hyper service for our HTTP server.
+///
+/// The only state we need is the `origins` with our data. The `Service`
+/// impl dispatches incoming requests according to their path to dedicated
+/// methods.
 #[derive(Clone)]
 struct Service {
     origins: OriginsHistory,
 }
+
+
+//--- MakeService and Service
 
 impl<Ctx> hyper::service::MakeService<Ctx> for Service {
     type ReqBody = Body;
@@ -120,6 +130,9 @@ impl hyper::service::Service for Service {
     }
 }
 
+
+/// # Methods for Endpoints
+///
 impl Service {
     fn metrics(&self) -> Response<Body> {
         let mut res = String::new();

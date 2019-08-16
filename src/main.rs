@@ -1,3 +1,5 @@
+/// The Routinator binary.
+
 use std::env::current_dir;
 use std::process::exit;
 use clap::{App, crate_authors, crate_version};

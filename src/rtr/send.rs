@@ -1,7 +1,9 @@
 //! Sending messages to the RTR client.
 
 use std::io;
+use std::cmp::min;
 use std::sync::Arc;
+use std::time::Duration;
 use futures::{Async, Future, try_ready};
 use log::debug;
 use tokio::io::{AsyncWrite, WriteAll};
@@ -274,6 +276,11 @@ impl Timing {
             retry: config.retry.as_secs() as u32,
             expire: config.expire.as_secs() as u32
         }
+    }
+
+    pub fn with_refresh(self, refresh: Duration) -> Self {
+        let refresh = min(refresh.as_secs(), u64::from(u32::max_value()));
+        Timing { refresh: refresh as u32, .. self }
     }
 }
 

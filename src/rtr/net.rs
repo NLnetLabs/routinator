@@ -238,7 +238,7 @@ impl Connection {
                     Some(diff) => {
                         Sender::diff(
                             sock, self.input.version(), session, diff,
-                            self.timing
+                            self.timing()
                         ) 
                     }
                     None => {
@@ -250,7 +250,7 @@ impl Connection {
                 let (current, serial) = self.history.current_and_serial();
                 Sender::full(
                     sock, self.input.version(), self.session, serial, current,
-                    self.timing
+                    self.timing()
                 )
             }
             Input::Query(Query::Error(err)) => Sender::error(sock, err),
@@ -262,6 +262,10 @@ impl Connection {
             }
         };
         self.output = OutputState::Sending(send);
+    }
+
+    fn timing(&self) -> Timing {
+        self.timing.with_refresh(self.history.update_wait())
     }
 }
 
