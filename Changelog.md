@@ -25,6 +25,9 @@ News
 * Protection against loops in the CA structure: Routinator checks that any
   subject key identifier only appears once in the chain from a trust
   anchor to a CA certificate. [(#192)]
+* Routinator now explicitly skips .cer files that aren’t CA certificates
+  before even trying to validate them. This already happened before
+  because these files failed validation. [(#194)]
 
 Bug Fixes
 
@@ -32,6 +35,7 @@ Bug Fixes
 [(#191)]: https://github.com/NLnetLabs/routinator/pull/191
 [(#192)]: https://github.com/NLnetLabs/routinator/pull/192
 [(#193)]: https://github.com/NLnetLabs/routinator/pull/193
+[(#194)]: https://github.com/NLnetLabs/routinator/pull/194
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’

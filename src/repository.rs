@@ -14,7 +14,7 @@ use crossbeam_utils::thread;
 use crossbeam_queue::ArrayQueue;
 use log::{error, info, warn};
 use rpki::uri;
-use rpki::cert::{Cert, ResourceCert, TbsCert};
+use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
 use rpki::crypto::KeyIdentifier;
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
@@ -503,6 +503,13 @@ impl<'a> Run<'a> {
                     return
                 }
             };
+            if cert.key_usage() != KeyUsage::Ca {
+                info!(
+                    "{}: probably a router key. Ignoring.",
+                    uri
+                );
+                return
+            }
             if link.check_loop(&cert).is_err() {
                 warn!(
                     "{}: certificate loop detected. Ignoring this CA.",
