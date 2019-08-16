@@ -2,7 +2,7 @@
 FROM rust:1.36.0-stretch as build
 
 RUN apt-get -yq update && \
-    apt-get -yq install musl-tools
+    apt-get -yq install musl-tools libssl-dev
 
 RUN rustup target add x86_64-unknown-linux-musl
 
