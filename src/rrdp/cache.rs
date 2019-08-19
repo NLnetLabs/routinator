@@ -69,6 +69,7 @@ impl Cache {
             Ok(None)
         }
         else {
+            Self::init(config)?;
             Ok(Some(Cache {
                 cache_dir: Self::cache_dir(config),
                 ta_dir: Self::ta_dir(config),

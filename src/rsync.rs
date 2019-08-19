@@ -47,6 +47,7 @@ impl Cache {
             Ok(None)
         }
         else {
+            Self::init(config)?;
             Ok(Some(Cache {
                 cache_dir: CacheDir::new(Self::cache_dir(config)),
                 command: if update {
