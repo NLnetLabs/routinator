@@ -12,6 +12,8 @@ Breaking Changes
 * The refresh time placed in the RTR End-of-data PDU is now calculated
   from the time until the next validation run is expected to finish.
   [(#193)]
+* The listeners for RTR and HTTP in server mode are now started right away
+  and report an error until the first validation has finished. [(#203)]
 
 News
 
@@ -36,6 +38,7 @@ Bug Fixes
 [(#192)]: https://github.com/NLnetLabs/routinator/pull/192
 [(#193)]: https://github.com/NLnetLabs/routinator/pull/193
 [(#194)]: https://github.com/NLnetLabs/routinator/pull/194
+[(#203)]: https://github.com/NLnetLabs/routinator/pull/203
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
