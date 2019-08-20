@@ -20,7 +20,7 @@ pub enum Sender<A> {
     Reset(WriteAll<A, pdu::CacheReset>),
     Diff(Wrapped<A, SendDiff>),
     Full(Wrapped<A, SendFull>),
-    Error(WriteAll<A, pdu::BoxedError>),
+    Error(WriteAll<A, pdu::BoxedError>, bool), // close?
 }
 
 impl<A: AsyncWrite> Sender<A> {
@@ -63,8 +63,8 @@ impl<A: AsyncWrite> Sender<A> {
         ))
     }
 
-    pub fn error(sock: A, error: pdu::BoxedError) -> Self {
-        Sender::Error(error.write(sock))
+    pub fn error(sock: A, error: pdu::BoxedError, close: bool) -> Self {
+        Sender::Error(error.write(sock), close)
     }
 
     fn real_poll(&mut self) -> Result<Async<A>, io::Error> {
@@ -83,10 +83,15 @@ impl<A: AsyncWrite> Sender<A> {
             Sender::Full(ref mut fut) => {
                 Ok(Async::Ready(try_ready!(fut.poll())))
             }
-            Sender::Error(ref mut fut) => {
-                try_ready!(fut.poll());
-                // Force the connection to close.
-                Err(io::Error::new(io::ErrorKind::Other, ""))
+            Sender::Error(ref mut fut, close) => {
+                let (sock, _) = try_ready!(fut.poll());
+                if close {
+                    // Force the connection to close.
+                    Err(io::Error::new(io::ErrorKind::Other, ""))
+                }
+                else {
+                    Ok(Async::Ready(sock))
+                }
             }
         }
     }

@@ -567,7 +567,7 @@ common!(CacheReset);
 #[derive(Default)]
 #[repr(packed)]
 #[allow(dead_code)]
-pub struct Error<P: Default + Sized, T: Default + Sized> {
+pub struct Error<P: Sized, T: Sized> {
     header: Header,
     pdu_len: u32,
     pdu: P,
@@ -577,8 +577,8 @@ pub struct Error<P: Default + Sized, T: Default + Sized> {
 
 impl<P, T> Error<P, T> 
 where
-    P: Default + Sized + 'static + Send,
-    T: Default + Sized + 'static + Send
+    P: Sized + 'static + Send,
+    T: Sized + 'static + Send
 {
     pub fn new(
         version: u8,
@@ -610,7 +610,10 @@ impl<P: Default + Sized, T: Default + Sized> Error<P, T> {
     ) -> impl Future<Item=(A, Self), Error=io::Error> {
         read_exact(a, Self::default())
     }
+}
 
+#[allow(dead_code)] 
+impl<P: Sized, T: Sized> Error<P, T> {
     pub fn write<A: AsyncWrite>(
         self,
         a: A
@@ -619,7 +622,7 @@ impl<P: Default + Sized, T: Default + Sized> Error<P, T> {
     }
 }
 
-impl<P: Default + Sized, T: Default + Sized> AsRef<[u8]> for Error<P, T> {
+impl<P: Sized, T: Sized> AsRef<[u8]> for Error<P, T> {
     fn as_ref(&self) -> &[u8] {
         unsafe {
             slice::from_raw_parts(
@@ -630,7 +633,7 @@ impl<P: Default + Sized, T: Default + Sized> AsRef<[u8]> for Error<P, T> {
     }
 }
 
-impl<P: Default + Sized, T: Default + Sized> AsMut<[u8]> for Error<P, T> {
+impl<P: Sized, T: Sized> AsMut<[u8]> for Error<P, T> {
     fn as_mut(&mut self) -> &mut [u8] {
         unsafe {
             slice::from_raw_parts_mut(
