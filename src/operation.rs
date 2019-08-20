@@ -362,21 +362,7 @@ impl Server {
         let idle = IdleWait::new()?; // Create early to fail early.
         config.switch_logging(self.detach)?;
 
-        // Start out with validation so that we only fire up our sockets
-        // once we are actually ready.
-        let (report, metrics) = match repo.process() {
-            Ok(report) => report,
-            Err(_) => {
-                error!("Fatal: initial validation failed. Aborting.");
-                return Err(Error.into())
-            }
-        };
-        let history = OriginsHistory::new(
-            report, metrics,
-            &LocalExceptions::load(&config, false)?,
-            false, config.history_size, config.refresh,
-        );
-        warn!("Starting listeners...");
+        let history = OriginsHistory::new(config.history_size, config.refresh);
         let (mut notify, rtr) = rtr_listener(history.clone(), &config);
         let http = http_listener(&history, &config);
         let mut runtime = match tokio::runtime::Runtime::new() {
@@ -388,7 +374,7 @@ impl Server {
         };
         runtime.spawn(rtr).spawn(http);
 
-        while idle.wait(history.refresh_wait()) {
+        loop {
             history.mark_update_start();
             let (report, metrics) = match repo.process() {
                 Ok(some) => some,
@@ -407,7 +393,7 @@ impl Server {
             let must_notify = history.update(
                 report, metrics, &exceptions, false
             );
-            history.mark_update_done(config.refresh);
+            history.mark_update_done();
             info!(
                 "Validation completed. New serial is {}.",
                 history.serial()
@@ -415,6 +401,9 @@ impl Server {
             if must_notify {
                 info!("Sending out notifications.");
                 notify.notify();
+            }
+            if !idle.wait(history.refresh_wait()) {
+                break;
             }
         }
 

@@ -12,10 +12,12 @@ use log::{debug, error, info};
 use tokio;
 use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
+use unwrap::unwrap;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::origins::OriginsHistory;
 use crate::utils::finish_all;
+use super::pdu;
 use super::send::{Sender, Timing};
 use super::query::{Input, InputStream, Query};
 use super::notify::{Dispatch, NotifyReceiver, NotifySender};
@@ -228,38 +230,53 @@ impl Connection {
             OutputState::Idle(sock) => sock,
             _ => panic!("illegal output state"),
         };
-        let send = match input {
-            Input::Query(Query::Serial { session, serial }) => {
-                let diff = if session == self.session {
-                    self.history.get(serial)
-                }
-                else { None };
-                match diff {
-                    Some(diff) => {
-                        Sender::diff(
-                            sock, self.input.version(), session, diff,
-                            self.timing()
-                        ) 
+        let send = if self.history.is_active() {
+            match input {
+                Input::Query(Query::Serial { session, serial }) => {
+                    let diff = if session == self.session {
+                        self.history.get(serial)
                     }
-                    None => {
-                        Sender::reset(sock, self.input.version())
+                    else { None };
+                    match diff {
+                        Some(diff) => {
+                            Sender::diff(
+                                sock, self.input.version(), session, diff,
+                                self.timing()
+                            ) 
+                        }
+                        None => {
+                            Sender::reset(sock, self.input.version())
+                        }
                     }
                 }
+                Input::Query(Query::Reset) => {
+                    let (current, serial) =
+                        unwrap!(self.history.current_and_serial());
+                    Sender::full(
+                        sock, self.input.version(), self.session, serial,
+                        current, self.timing()
+                    )
+                }
+                Input::Query(Query::Error(err)) => {
+                    Sender::error(sock, err, true)
+                }
+                Input::Notify => {
+                    let serial = self.history.serial();
+                    Sender::notify(
+                        sock, self.input.version(),self.session, serial
+                    )
+                }
             }
-            Input::Query(Query::Reset) => {
-                let (current, serial) = self.history.current_and_serial();
-                Sender::full(
-                    sock, self.input.version(), self.session, serial, current,
-                    self.timing()
-                )
-            }
-            Input::Query(Query::Error(err)) => Sender::error(sock, err),
-            Input::Notify => {
-                let serial = self.history.serial();
-                Sender::notify(
-                    sock, self.input.version(),self.session, serial
-                )
-            }
+        }
+        else {
+            Sender::error(
+                sock,
+                pdu::Error::new(
+                    self.input.version(), 2,
+                    (), *b"Running initial validation"
+                ).boxed(),
+                false
+            )
         };
         self.output = OutputState::Sending(send);
     }

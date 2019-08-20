@@ -65,7 +65,7 @@ pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 #[derive(Clone, Debug)]
 struct HistoryInner {
     /// The current full set of adress origins.
-    current: Arc<AddressOrigins>,
+    current: Option<Arc<AddressOrigins>>,
 
     /// A queue with a number of diffs.
     ///
@@ -73,7 +73,7 @@ struct HistoryInner {
     diffs: VecDeque<Arc<OriginsDiff>>,
 
     /// The current metrics.
-    metrics: Arc<Metrics>,
+    metrics: Option<Arc<Metrics>>,
 
     /// The number of diffs to keep.
     keep: usize,
@@ -101,22 +101,15 @@ impl OriginsHistory {
     /// origins, an empty diff list, and a maximum length of the diff list
     /// of `keep`.
     pub fn new(
-        report: OriginsReport,
-        mut metrics: Metrics,
-        exceptions: &LocalExceptions,
-        extra_info: bool,
         keep: usize,
         refresh: Duration,
     ) -> Self {
-        let origins = AddressOrigins::from_report(
-            report, exceptions, extra_info, &mut metrics
-        );
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
-                next_update_start: origins.refresh_wait(refresh),
-                current: Arc::new(origins),
+                next_update_start: SystemTime::now() + refresh,
+                current: None,
                 diffs: VecDeque::with_capacity(keep),
-                metrics: Arc::new(metrics),
+                metrics: None,
                 keep,
                 refresh,
                 last_update_start: Instant::now(),
@@ -126,8 +119,13 @@ impl OriginsHistory {
         )))
     }
 
+    /// Returns whether the history is active already.
+    pub fn is_active(&self) -> bool {
+        unwrap!(self.0.read()).current.is_some()
+    }
+
     /// Returns a reference to the current list of address origins.
-    pub fn current(&self) -> Arc<AddressOrigins> {
+    pub fn current(&self) -> Option<Arc<AddressOrigins>> {
         self.0.read().unwrap().current.clone()
     }
 
@@ -214,12 +212,23 @@ impl OriginsHistory {
     }
 
     /// Returns the current list of address origins and its serial number.
-    pub fn current_and_serial(&self) -> (Arc<AddressOrigins>, Serial) {
+    pub fn current_and_serial(&self) -> Option<(Arc<AddressOrigins>, Serial)> {
         let history = self.0.read().unwrap();
-        (history.current.clone(), history.serial())
+        history.current.clone().map(|current| {
+            (current, history.serial())
+        })
+    }
+    
+    pub fn current_and_metrics(
+        &self
+    ) -> Option<(Arc<AddressOrigins>, Arc<Metrics>)> {
+        let history = self.0.read().unwrap();
+        let current = history.current.clone()?;
+        let metrics = history.metrics.clone()?;
+        Some((current, metrics))
     }
 
-    pub fn current_metrics(&self) -> Arc<Metrics> {
+    pub fn metrics(&self) -> Option<Arc<Metrics>> {
         self.0.read().unwrap().metrics.clone()
     }
 
@@ -251,32 +260,35 @@ impl OriginsHistory {
         exceptions: &LocalExceptions,
         extra_info: bool
     ) -> bool {
-        let (serial, current) = {
-            let history = self.0.read().unwrap();
-            let serial = history.serial().add(1);
-            let current = history.current.clone();
-            (serial, current)
-        };
-        let current: HashSet<_> = current.iter().map(Clone::clone).collect();
-        let (next, diff) = OriginsDiff::construct(
-            current, report.origins, exceptions, serial, extra_info,
-            &mut metrics,
-        );
-        let mut history = self.0.write().unwrap();
-        history.metrics = Arc::new(metrics);
-        if !diff.is_empty() {
-            history.current = Arc::new(next);
-            history.push_diff(diff);
-            true
+        match self.current_and_serial() {
+            Some((current, serial)) => {
+                let current: HashSet<_> =
+                    current.iter().map(Clone::clone).collect();
+                let (next, diff) = OriginsDiff::construct(
+                    current, report.origins, exceptions, serial, extra_info,
+                    &mut metrics,
+                );
+                let mut history = self.0.write().unwrap();
+                history.metrics = Some(Arc::new(metrics));
+                if !diff.is_empty() {
+                    history.current = Some(Arc::new(next));
+                    history.push_diff(diff);
+                    true
+                }
+                else {
+                    false
+                }
+            }
+            None => {
+                let origins = AddressOrigins::from_report(
+                    report, exceptions, extra_info, &mut metrics
+                );
+                let mut history = unwrap!(self.0.write());
+                history.metrics = Some(Arc::new(metrics));
+                history.current = Some(Arc::new(origins));
+                true
+            }
         }
-        else {
-            false
-        }
-    }
-
-    /// Adds a set of metrics to the history.
-    pub fn push_metrics(&self, metrics: Metrics) {
-        self.0.write().unwrap().metrics = Arc::new(metrics)
     }
 
     /// Marks the beginning of an update cycle.
@@ -285,11 +297,17 @@ impl OriginsHistory {
     }
 
     /// Marks the end of an update cycle.
-    pub fn mark_update_done(&self, minimum: Duration) {
+    pub fn mark_update_done(&self) {
         let mut locked = self.0.write().unwrap();
         locked.last_update_done = Some(Instant::now());
         locked.last_update_duration = Some(locked.last_update_start.elapsed());
-        locked.next_update_start = locked.current.refresh_wait(minimum);
+        locked.next_update_start = SystemTime::now() + locked.refresh;
+        if let Some(refresh) = locked.current.as_ref().and_then(|c| c.refresh) {
+            let refresh = SystemTime::from(refresh);
+            if refresh < locked.next_update_start {
+                locked.next_update_start = refresh;
+            }
+        }
     }
 }
 
@@ -486,18 +504,6 @@ impl AddressOrigins {
     /// Returns an iterator over the address orgins.
     pub fn iter(&self) -> slice::Iter<AddressOrigin> {
         self.origins.iter()
-    }
-
-    /// Returns the refresh time if available.
-    pub fn refresh_wait(&self, minimum: Duration) -> SystemTime {
-        let res = SystemTime::now() + minimum;
-        if let Some(refresh) = self.refresh {
-            let refresh = SystemTime::from(refresh);
-            if refresh < res {
-                return refresh
-            }
-        }
-        res
     }
 }
 

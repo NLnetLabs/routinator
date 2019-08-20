@@ -10,6 +10,7 @@
 use std::fmt::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 use chrono::{Duration, Utc};
 use clap::crate_version;
 use futures::{future, stream};
@@ -20,8 +21,9 @@ use rpki::resources::AsId;
 use unwrap::unwrap;
 use crate::output;
 use crate::config::Config;
+use crate::metrics::Metrics;
 use crate::operation::Error;
-use crate::origins::{AddressPrefix, OriginsHistory};
+use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::finish_all;
 use crate::validity::RouteValidity;
@@ -135,8 +137,21 @@ impl hyper::service::Service for Service {
 ///
 impl Service {
     fn metrics(&self) -> Response<Body> {
+        match self.origins.metrics() {
+            Some(metrics) => self.metrics_active(&metrics),
+            None => {
+                unwrap!(
+                    Response::builder()
+                    .status(503)
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                )
+            }
+        }
+    }
+
+    fn metrics_active(&self, metrics: &Metrics) -> Response<Body> {
         let mut res = String::new();
-        let metrics = self.origins.current_metrics();
 
         // valid_roas 
         writeln!(res,
@@ -163,7 +178,7 @@ impl Service {
             ).unwrap();
         }
 
-        // last_update_state, last_update_done, last_update_duration
+        // last_update_start, last_update_done, last_update_duration
         let (start, done, duration) = self.origins.update_times();
         unwrap!(write!(res,
             "\n\
@@ -284,6 +299,19 @@ impl Service {
     }
 
     fn status(&self) -> Response<Body> {
+        match self.origins.metrics() {
+            Some(metrics) => self.status_active(&metrics),
+            None => {
+                unwrap!(
+                    Response::builder()
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                )
+            }
+        }
+    }
+
+    fn status_active(&self, metrics: &Metrics) -> Response<Body> {
         let mut res = String::new();
         let (start, done, duration) = self.origins.update_times();
         let start = unwrap!(Duration::from_std(start.elapsed()));
@@ -320,7 +348,6 @@ impl Service {
             unwrap!(writeln!(res, "last-update-duration:  -"));
         }
 
-        let metrics = self.origins.current_metrics();
         // valid-roas
         unwrap!(writeln!(res, "valid-roas: {}",
             metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
@@ -378,6 +405,10 @@ impl Service {
     }
 
     fn validity_path(&self, path: &str) -> Response<Body> {
+        let current = match self.validity_check() {
+            Ok(current) => current,
+            Err(resp) => return resp
+        };
         let mut path = path.splitn(2, '/');
         let asn = match path.next() {
             Some(asn) => asn,
@@ -387,10 +418,14 @@ impl Service {
             Some(prefix) => prefix,
             None => return self.bad_request()
         };
-        self.validity(asn, prefix)
+        self.validity(asn, prefix, current)
     }
 
     fn validity_query(&self, query: Option<&str>) -> Response<Body> {
+        let current = match self.validity_check() {
+            Ok(current) => current,
+            Err(resp) => return resp
+        };
         let mut asn = None;
         let mut prefix = None;
         for (key, value) in query_iter(query) {
@@ -412,10 +447,26 @@ impl Service {
             Some(prefix) => prefix,
             None => return self.bad_request()
         };
-        self.validity(asn, prefix)
+        self.validity(asn, prefix, current)
     }
 
-    fn validity(&self, asn: &str, prefix: &str) -> Response<Body> {
+    fn validity_check(&self) -> Result<Arc<AddressOrigins>, Response<Body>> {
+        match self.origins.current() {
+            Some(origins) => Ok(origins),
+            None => {
+                Err(unwrap!(
+                    Response::builder()
+                    .status(503)
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                ))
+            }
+        }
+    }
+
+    fn validity(
+        &self, asn: &str, prefix: &str, current: Arc<AddressOrigins>
+    ) -> Response<Body> {
         let asn = match AsId::from_str(asn) {
             Ok(asn) => asn,
             Err(_) => return self.bad_request()
@@ -428,7 +479,7 @@ impl Service {
             Response::builder()
             .header("Content-Type", "application/json")
             .body(
-                RouteValidity::new(prefix, asn, &self.origins.current())
+                RouteValidity::new(prefix, asn, &current)
                 .into_json()
                 .into()
             )
@@ -448,12 +499,24 @@ impl Service {
         query: Option<&str>,
         format: OutputFormat
     ) -> Response<Body> {
+        let (current, metrics) = match self.origins.current_and_metrics() {
+            Some(some) => some, 
+            None => {
+                return unwrap!(
+                    Response::builder()
+                    .status(503)
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                )
+            }
+        };
+
         let filters = match Self::output_filters(query) {
             Ok(filters) => filters,
             Err(_) => return self.bad_request(),
         };
         let stream = format.stream(
-            self.origins.current(), filters, self.origins.current_metrics()
+            current, filters, metrics
         );
 
         unwrap!(
