@@ -213,7 +213,7 @@ impl HttpClient {
     ) -> Result<reqwest::Response, Error> {
         self.client.get(uri.as_str()).send().and_then(|res| {
             res.error_for_status()
-        }).map_err(|err| {;
+        }).map_err(|err| {
             info!("{}: {}", uri, err);
             Error
         })
