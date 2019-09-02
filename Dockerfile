@@ -13,12 +13,20 @@ RUN cargo build --target x86_64-alpine-linux-musl --release --locked
 FROM alpine:3.10.2
 COPY --from=build /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator /usr/local/bin/
 
+# Build variables for uid and guid of user to run container
+ARG RUN_USER=routinator
+ARG RUN_USER_UID=1012
+ARG RUN_USER_GID=1012
+
 # Install rsync as routinator depends on it
 RUN apk add rsync libgcc
 
+RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
+    adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
+
 # Create the repository and TAL directories
-RUN mkdir -p /root/.rpki-cache/repository
-RUN mkdir -p /root/.rpki-cache/tals
+RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-cache/tals && \
+    chown ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator
 
 # Due to ARIN TAL distribution terms, we can't do this here.
 # An individual user, however, might want to anyway - after reviewing
@@ -26,7 +34,10 @@ RUN mkdir -p /root/.rpki-cache/tals
 #
 #COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
 
+USER $RUN_USER_UID
+
 EXPOSE 3323/tcp
 EXPOSE 9556/tcp
+
 ENTRYPOINT ["routinator"]
 CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:9556"]
