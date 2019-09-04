@@ -18,8 +18,8 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have rsync and the C toolchain but not yet [Rust 1.34](#rust) 
-or newer, here’s how you get the Routinator to run as an RTR server listening 
+Assuming you have rsync and the C toolchain but not yet [Rust 1.34](#rust)
+or newer, here’s how you get the Routinator to run as an RTR server listening
 on 127.0.0.1 port 3323:
 
 ```bash
@@ -46,19 +46,27 @@ https://www.arin.net/resources/rpki/tal.html. If you agree to the terms,
 you can let the Routinator Docker image install the TALs into a mounted
 volume that is later reused for the server:
 
-
 ```bash
-# Create a local directory for the RPKI cache
+# Create a host directory to persist TALs in
 sudo mkdir -p /etc/routinator/tals
+# Chown the directory so that the routinator user within the container can
+# access it (rw). The default username inside the container is `routinator`,
+# and the default UID and GID are both 1012. This can be modified by setting
+# the environment variables RUN_USER, RUN_USER_UID, RUN_USER_GID respectively.
+sudo chown -R 1012:1012 /etc/routinator/tals
 # Review the ARIN terms.
 # Run a disposable container to install TALs.
-sudo docker run --rm -v /etc/routinator/tals:/root/.rpki-cache/tals \
+sudo docker run --rm -v /etc/routinator/tals:/home/routinator/.rpki-cache/tals \
     nlnetlabs/routinator init -f --accept-arin-rpa
 # Launch the final detached container named 'routinator' exposing RTR on
 # port 3323 and HTTP on port 9556
-sudo docker run -d --name routinator -p 3323:3323 -p 9556:9556 \
-    -v /etc/routinator/tals:/root/.rpki-cache/tals nlnetlabs/routinator
+sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
+     -p 9556:9556 -v /etc/routinator/tals:/home/routinator/.rpki-cache/tals \
+     nlnetlabs/routinator
 ```
+
+For additional isolation, the routinator container is known to successfully run
+under [gVisor](https://gvisor.dev/).
 
 ## RPKI
 
@@ -82,7 +90,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
   ([RFC 8416](https://tools.ietf.org/html/rfc8416))
 * [x] Implement the RPKI-RTR protocol for pushing RPKI data to
       supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810), [RFC 8210](https://tools.ietf.org/html/rfc8210))
-* [x] Monitoring endpoint (Prometheus)    
+* [x] Monitoring endpoint (Prometheus)
 * [ ] Exhaustive interoperability and compliance testing
 * [ ] Integration with alerting and monitoring services so that route
       hijacks, misconfigurations, connectivity and application problems
@@ -96,20 +104,20 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 ## System Requirements
 
 Routinator is designed to be lean and is capable of running on minimalist
-hardware, such as a Raspberry Pi. Running it on a system with 1GB of 
+hardware, such as a Raspberry Pi. Running it on a system with 1GB of
 available RAM and 1GB of available disk space will give the global RPKI
 data set enough room to grow for the forseeable future. A powerful CPU is
-not required, as cryptographic validation currently takes less than two 
+not required, as cryptographic validation currently takes less than two
 seconds on an average system.
 
 ## Getting Started
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
-There are three things you need for Routinator: rsync, a C toolchain and 
+There are three things you need for Routinator: rsync, a C toolchain and
 Rust. You need rsync because the RPKI repository currently uses rsync
-as its main means of distribution. Some of the cryptographic primitives 
-used by the Routinator require a C toolchain, so you need that, too. You 
-need Rust because that’s what Routinator has been written in. 
+as its main means of distribution. Some of the cryptographic primitives
+used by the Routinator require a C toolchain, so you need that, too. You
+need Rust because that’s what Routinator has been written in.
 
 Since this currently is an early version, we decided not to distribute
 binary packages just yet. But don’t worry, getting Rust and building
@@ -147,8 +155,8 @@ The Rust compiler runs on, and compiles to, a great number of platforms.
 The official [Rust Platform Support](https://forge.rust-lang.org/platform-support.html)
 page provides an overview of the various platforms and support levels.
 
-While some system distributions include Rust as system packages, 
-Routinator relies on a relatively new version of Rust, currently 1.34 or 
+While some system distributions include Rust as system packages,
+Routinator relies on a relatively new version of Rust, currently 1.34 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called ``rustup``.
 
@@ -191,7 +199,6 @@ The command will build Routinator and install it in the same directory
 that cargo itself lives in (likely `$HOME/.cargo/bin`).
 Which means Routinator will be in your path, too.
 
-
 ## Running
 
 All functions of Routinator are accessible on the command line via
@@ -224,7 +231,7 @@ To have Routinator print the list, you say
 routinator vrps
 ```
 
-When you first run this command, Routinator will rsync the entire RPKI 
+When you first run this command, Routinator will rsync the entire RPKI
 repository to your machine which will take a while. Later, rsync only needs
 to check for changes so subsequent runs will be quicker. Once it has
 gathered all data, it will validate it and produce
@@ -305,7 +312,6 @@ simply update the file whenever your exceptions change.
 
 [SLURM]: https://tools.ietf.org/html/rfc8416
 
-
 ## Monitoring
 
 Monitoring a Routinator instance is possible by enabling the integrated
@@ -319,4 +325,3 @@ port can be launched so:
 ```bash
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.2.13:9556
 ```
-

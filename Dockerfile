@@ -26,7 +26,7 @@ RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
 
 # Create the repository and TAL directories
 RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-cache/tals && \
-    chown ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator
+    chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache
 
 # Due to ARIN TAL distribution terms, we can't do this here.
 # An individual user, however, might want to anyway - after reviewing
