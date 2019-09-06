@@ -641,7 +641,7 @@ impl ServerState {
     pub fn save(&self, path: &Path) -> Result<(), Error> {
         self._save(path).map_err(|err| {
             info!(
-                "Failed to read state file '{}': {}",
+                "Failed to read write file '{}': {}",
                 path.display(), err
             );
             Error
