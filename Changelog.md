@@ -33,12 +33,16 @@ News
 
 Bug Fixes
 
+* Fixed crash if the TAL directory is empty. Routinator will complain but
+  run since there could be local exceptions. [(#212)]
+
 [(#187)]: https://github.com/NLnetLabs/routinator/pull/187
 [(#191)]: https://github.com/NLnetLabs/routinator/pull/191
 [(#192)]: https://github.com/NLnetLabs/routinator/pull/192
 [(#193)]: https://github.com/NLnetLabs/routinator/pull/193
 [(#194)]: https://github.com/NLnetLabs/routinator/pull/194
 [(#203)]: https://github.com/NLnetLabs/routinator/pull/203
+[(#212)]: https://github.com/NLnetLabs/routinator/pull/212
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’

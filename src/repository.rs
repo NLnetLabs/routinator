@@ -194,6 +194,11 @@ impl Repository {
             };
             res.push(tal);
         }
+        if res.is_empty() {
+            error!(
+                "No TALs found in TAL directory. Starting anyway."
+            );
+        }
         Ok(res)
     }
 
@@ -242,6 +247,11 @@ impl<'a> Run<'a> {
     pub fn process(
         &self,
     ) -> Result<OriginsReport, Error> {
+        // If we don’t have any TALs, we just return an empty report.
+        if self.repository.tals.is_empty() {
+            return Ok(OriginsReport::new())
+        }
+
         // Stick all TALs into a queue. The worker threads will take one after
         // out of the queue so that the thread first to finish gets a second
         // TAL if there is more TALs than threads.
