@@ -32,6 +32,12 @@ pub struct OriginsReport {
 }
 
 impl OriginsReport {
+    pub fn new() -> Self {
+        OriginsReport {
+            origins: Vec::new()
+        }
+    }
+
     pub fn with_capacity(capacity: usize) -> Self {
         OriginsReport {
             origins: Vec::with_capacity(capacity),
