@@ -83,8 +83,8 @@ dependencies = [
 
 [[package]]
 name = "bcder"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.4.1-pre"
+source = "git+https://github.com/NLnetLabs/bcder.git#878d2ff051720e2744a0bb493379d929b2022220"
 dependencies = [
  "backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1068,7 +1068,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.6.0"
+version = "0.6.1-pre"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1090,7 +1090,7 @@ dependencies = [
  "rand 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "rpki 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rpki 0.6.1-pre (git+https://github.com/NLnetLabs/rpki-rs.git)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1104,11 +1104,11 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.6.1-pre"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#1c9390af956f9972976ea88612b6f46785fb0ae7"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "bcder 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bcder 0.4.1-pre (git+https://github.com/NLnetLabs/bcder.git)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1755,7 +1755,7 @@ dependencies = [
 "checksum backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)" = "5180c5a20655b14a819b652fd2378fa5f1697b6c9ddad3e695c2f9cedf6df4e2"
 "checksum backtrace-sys 0.1.31 (registry+https://github.com/rust-lang/crates.io-index)" = "82a830b4ef2d1124a711c71d263c5abdc710ef8e907bd508c88be475cebc422b"
 "checksum base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
-"checksum bcder 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e1ab6e17cd9d6b12c18a3dc265374cce9b3c24c0293eeaeb3d05e9450aebab13"
+"checksum bcder 0.4.1-pre (git+https://github.com/NLnetLabs/bcder.git)" = "<none>"
 "checksum bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3d155346769a6855b86399e9bc3814ab343cd3d62c7e985113d46a0ec3c281fd"
 "checksum blake2b_simd 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)" = "5850aeee1552f495dd0250014cf64b82b7c8879a89d83b33bbdace2cc4f63182"
 "checksum boxfnonce 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5988cb1d626264ac94100be357308f29ff7cbdd3b36bda27f450a4ee3f713426"
@@ -1864,7 +1864,7 @@ dependencies = [
 "checksum remove_dir_all 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
 "checksum reqwest 0.9.19 (registry+https://github.com/rust-lang/crates.io-index)" = "1d0777154c2c3eb54f5c480db01de845652d941e47191277cc673634c3853939"
 "checksum ring 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)" = "426bc186e3e95cac1e4a4be125a4aca7e84c2d616ffc02244eef36e2a60a093c"
-"checksum rpki 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "61584a435a699a8efe668fbdc962960f7dc0869631508471809905b1e1754830"
+"checksum rpki 0.6.1-pre (git+https://github.com/NLnetLabs/rpki-rs.git)" = "<none>"
 "checksum rust-argon2 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4ca4eaef519b494d1f2848fc602d18816fed808a981aedf4f1f00ceb7c9d32cf"
 "checksum rustc-demangle 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "4c691c0e608126e00913e33f0ccf3727d5fc84573623b8d65b2df340b5201783"
 "checksum rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"

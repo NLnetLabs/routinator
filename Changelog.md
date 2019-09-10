@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased future version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.6.0 ‘Pink Sombrero’
 
 Breaking Changes
