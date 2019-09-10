@@ -30,6 +30,8 @@ News
 * Routinator now explicitly skips .cer files that aren’t CA certificates
   before even trying to validate them. This already happened before
   because these files failed validation. [(#194)]
+* New options `user` and `group` for setting the user and group names a
+  detached server process should be run as. [(#213)]
 
 Bug Fixes
 
@@ -43,6 +45,7 @@ Bug Fixes
 [(#194)]: https://github.com/NLnetLabs/routinator/pull/194
 [(#203)]: https://github.com/NLnetLabs/routinator/pull/203
 [(#212)]: https://github.com/NLnetLabs/routinator/pull/212
+[(#213)]: https://github.com/NLnetLabs/routinator/pull/213
 
 
 ## 0.5.0 ‘Why Not Try a Holiday in Sweden This Year?’
