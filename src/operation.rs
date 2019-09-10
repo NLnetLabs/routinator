@@ -356,15 +356,17 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
         let repo = Repository::new(&config, false, true)?;
-        if self.detach {
-            Self::daemonize(&mut config)?;
-        }
         let idle = IdleWait::new()?; // Create early to fail early.
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(config.history_size, config.refresh);
         let (mut notify, rtr) = rtr_listener(history.clone(), &config);
         let http = http_listener(&history, &config);
+
+        if self.detach {
+            Self::daemonize(&mut config)?;
+        }
+
         let mut runtime = match tokio::runtime::Runtime::new() {
             Ok(runtime) => runtime,
             Err(err) => {
