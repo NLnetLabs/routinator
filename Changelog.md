@@ -1,12 +1,12 @@
 # Change Log
 
-## Unreleased future version
+## 0.6.0 ‘Pink Sombrero’
 
 Breaking Changes
 
 * Removed the `rsync-count` command line and configuration file option.
-  This option is now unused as modules are now rsync only when they are
-  first used. [(#187)]
+  This option is now unused as modules are now rsynced only when they are
+  actually accessed. [(#187)]
 * The default value for `refresh` has been lowered to 600 seconds.
   [(#191)]
 * The refresh time placed in the RTR End-of-data PDU is now calculated
@@ -15,7 +15,7 @@ Breaking Changes
 * The listeners for RTR and HTTP in server mode are now started right away
   and report an error until the first validation has finished. [(#203)]
 
-News
+New
 
 * Routinator now supports RRDP for synchronizing repository content.
   [(#187)]
