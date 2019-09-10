@@ -182,6 +182,12 @@ pub struct Config {
 
     /// The optional directory to chroot to in daemon mode.
     pub chroot: Option<PathBuf>,
+
+    /// The name of the user to change to in daemon mode.
+    pub user: Option<String>,
+
+    /// The name of the group to change to in daemon mode.
+    pub group: Option<String>,
 }
 
 
@@ -392,6 +398,18 @@ impl Config {
             .long("chroot")
             .value_name("PATH")
             .help("Root directory for the daemon process")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("user")
+            .long("user")
+            .value_name("USER")
+            .help("User for the daemon process")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("group")
+            .long("group")
+            .value_name("GROUP")
+            .help("Group for the daemon process")
             .takes_value(true)
         )
     }
@@ -687,6 +705,16 @@ impl Config {
             self.chroot = Some(cur_dir.join(chroot))
         }
 
+        // user
+        if let Some(user) = matches.value_of("user") {
+            self.user = Some(user.into())
+        }
+
+        // group
+        if let Some(group) = matches.value_of("group") {
+            self.group = Some(group.into())
+        }
+
         Ok(())
     }
 
@@ -954,6 +982,8 @@ impl Config {
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
+            user: file.take_string("user")?,
+            group: file.take_string("group")?,
         };
         file.check_exhausted()?;
         Ok(res)
@@ -1078,7 +1108,9 @@ impl Config {
             log_target: LogTarget::default(),
             pid_file: None,
             working_dir: None,
-            chroot: None
+            chroot: None,
+            user: None,
+            group: None,
         }
     }
 
@@ -1158,6 +1190,12 @@ impl Config {
         }
         if let Some(ref chroot) = self.chroot {
             res = res.chroot(chroot)
+        }
+        if let Some(ref user) = self.user {
+            res = res.user(user.as_str())
+        }
+        if let Some(ref group) = self.group {
+            res = res.group(group.as_str())
         }
         Ok(res)
     }
@@ -1284,6 +1322,12 @@ impl Config {
         }
         if let Some(ref dir) = self.chroot {
             res.insert("chroot".into(), dir.display().to_string().into());
+        }
+        if let Some(ref user) = self.user {
+            res.insert("user".into(), user.clone().into());
+        }
+        if let Some(ref group) = self.group {
+            res.insert("group".into(), group.clone().into());
         }
         res.into()
     }

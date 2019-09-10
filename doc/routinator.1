@@ -468,10 +468,10 @@ below) and will stay attached to the terminal unless the
 .B -d
 option is given.
 .PP
-The server will periodically update the local repository, hourly by default,
-notify any clients of changes, and let them fetch validated data. It will not,
-however, reread the trust anchor locators. Thus, if you update them, you will
-have to restart Routinator.
+The server will periodically update the local repository, every ten minutes
+by default, notify any clients of changes, and let them fetch validated data.
+It will not, however, reread the trust anchor locators. Thus, if you update
+them, you will have to restart Routinator.
 .PP
 You can provide a number of addresses and ports to listen on for RTR and HTTP
 through command line options or their configuration file equivalent.
@@ -485,6 +485,9 @@ for use with
 mode with the
 .B -n
 option.
+.TP
+.B --detach
+If present, Routinator will detach from the terminal after a successful start.
 .TP
 .BI \-\-rtr=  addr:port
 Specifies a local address and port to listen on for incoming RTR connections.
@@ -554,6 +557,20 @@ The root directory for the daemon process. If this option is provided, the
 daemon process will change its root directory to the given directory. This
 will only work if all other paths provided via the configuration or command
 line options are under this directory.
+.TP
+.BI --user= user-name
+The name of the user to change to for the daemon process. It this option is
+provided, Routinator will run as that user after the listening sockets for
+HTTP and RTR have been created. The option has no effect unless
+.B --detach
+is also used.
+.TP
+.BI --group= group-name
+The name of the group to change to for the daemon process. It this option is
+provided, Routinator will run as that group after the listening sockets for
+HTTP and RTR have been created. The option has no effect unless
+.B --detach
+is also used.
 
 .SS update
 Updates the local repository by resyncing all known publication points. The
@@ -787,6 +804,12 @@ process.
 .B chroot
 A string value containing the path any daemon process should use as its
 root directory.
+.TP
+.B user
+A string value containing the user name a daemon process should run as.
+.TP
+.B group
+A string value containing the group name a daemon process should run as.
 
 .SH HTTP SERVICE
 Routinator can provide an HTTP service allowing to fetch the Validated ROA
