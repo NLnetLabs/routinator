@@ -176,6 +176,13 @@ You can update your Rust installation later by simply running
 rustup update
 ```
 
+To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH 
+environment variable. To configure your current shell, run 
+
+```bash
+source $HOME/.cargo/env
+```
+
 ## Building
 
 The easiest way to get Routinator is to leave it to cargo by saying
