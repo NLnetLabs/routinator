@@ -81,26 +81,6 @@ their signatures, and construct a list of associations between IP address
 prefixes and AS numbers. It provides this information to routers supporting
 the RPKI-RTR protocol or can output it in a number of useful formats.
 
-## Full Roadmap
-
-* [x] Fetch certificates and ROAs via rsync
-* [x] Perform cryptographic validation
-* [x] Export validated ROAs in CSV, JSON and RPSL format
-* [x] Add local white list exceptions and overrides
-  ([RFC 8416](https://tools.ietf.org/html/rfc8416))
-* [x] Implement the RPKI-RTR protocol for pushing RPKI data to
-      supported routers ([RFC 6810](https://tools.ietf.org/html/rfc6810), [RFC 8210](https://tools.ietf.org/html/rfc8210))
-* [x] Monitoring endpoint (Prometheus)
-* [ ] Exhaustive interoperability and compliance testing
-* [ ] Integration with alerting and monitoring services so that route
-      hijacks, misconfigurations, connectivity and application problems
-      can be flagged.
-* [ ] Implement the RRDP protocol for fetching
-      ([RFC 8182](https://tools.ietf.org/html/rfc8182))
-* [ ] Implement a basic web-based user interface and Command Line Interface
-* [ ] Expose an API
-* [ ] Add the ability to process Internet Routing Registry data
-
 ## System Requirements
 
 Routinator is designed to be lean and is capable of running on minimalist
