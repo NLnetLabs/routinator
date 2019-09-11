@@ -65,7 +65,7 @@ sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
      nlnetlabs/routinator
 ```
 
-For additional isolation, the routinator container is known to successfully run
+For additional isolation, Routinator container is known to successfully run
 under [gVisor](https://gvisor.dev/).
 
 ## RPKI
@@ -120,9 +120,11 @@ If you don’t have rsync, please head to http://rsync.samba.org/
 
 Some of the libraries Routinator depends on require a C toolchain to be
 present. Your system probably has some easy way to install the minimum
-set of packages to build from C sources. If you are unsure, try to run
-`cc` on a command line and if there’s a complaint about missing input
-files, you are probably good to go.
+set of packages to build from C sources. For example, `apt install 
+build-essential` will install everything you need on Debian/Ubuntu.
+
+If you are unsure, try to run `cc` on a command line and if there’s a 
+complaint about missing input files, you are probably good to go.
 
 On some older systems, the toolchain may not be up-to-date enough. We
 are collecting information as it comes up in a
