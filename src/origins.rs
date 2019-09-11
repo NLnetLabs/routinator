@@ -647,6 +647,7 @@ impl OriginsDiff {
             "Diff with {} announced and {} withdrawn.",
             announce.len(), withdraw.len()
         );
+        let serial = serial.add(1);
         (next.into(), OriginsDiff { serial, announce, withdraw })
     }
 
