@@ -823,6 +823,7 @@ impl Config {
         };
         let dispatch = dispatch
             .level(self.log_level)
+            .level_for("rustls", LevelFilter::Error)
             .chain(io::stderr())
             .into_log().1;
         Ok(dispatch)
