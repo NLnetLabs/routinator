@@ -352,8 +352,7 @@ impl Server {
             Ok(state) => state,
             Err(_) => {
                 info!(
-                    "Cannot read state file, marking RRPD server '{}' as \
-                    unusable",
+                    "Marking RRPD server '{}' as unusable",
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
