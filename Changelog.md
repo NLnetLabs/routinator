@@ -6,9 +6,25 @@ Breaking Changes
 
 New
 
+* RRDP access statistics are now also shown in the `/status` HTTP
+  endpoint. They were already part of the Prometheus metrics. [(#218)]
+
 Bug Fixes
 
+* The RTR serial number was not increased when new data became available.
+  [(#215)]
+
+Other changes
+
+* The RRDP client will not complain if it can’t read a non-existing state
+  file anymore as this is a completely normal situation. [(#217)]
+
+
 Dependencies
+
+[(#215)]: https://github.com/NLnetLabs/routinator/pull/215
+[(#217)]: https://github.com/NLnetLabs/routinator/pull/217
+[(#218)]: https://github.com/NLnetLabs/routinator/pull/218
 
 
 ## 0.6.0 ‘Pink Sombrero’
