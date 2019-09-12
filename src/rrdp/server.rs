@@ -352,8 +352,7 @@ impl Server {
             Ok(state) => state,
             Err(_) => {
                 info!(
-                    "Cannot read state file, marking RRPD server '{}' as \
-                    unusable",
+                    "Marking RRPD server '{}' as unusable",
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
@@ -613,10 +612,13 @@ pub struct ServerState {
 impl ServerState {
     pub fn load(path: &Path) -> Result<Self, Error> {
         Self::_load(path).map_err(|err| {
-            info!(
-                "Failed to read state file '{}': {}",
-                path.display(), err
-            );
+            // Not found is mostly normal, don’t complain about that.
+            if err.kind() != io::ErrorKind::NotFound {
+                info!(
+                    "Failed to read state file '{}': {}",
+                    path.display(), err
+                );
+            }
             Error
         })
     }
