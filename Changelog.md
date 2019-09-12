@@ -1,8 +1,6 @@
 # Change Log
 
-## Unreleased future version
-
-Breaking Changes
+## 0.6.1 ‘Philosophy Is Tricky’
 
 New
 
