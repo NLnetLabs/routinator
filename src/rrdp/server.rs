@@ -613,10 +613,13 @@ pub struct ServerState {
 impl ServerState {
     pub fn load(path: &Path) -> Result<Self, Error> {
         Self::_load(path).map_err(|err| {
-            info!(
-                "Failed to read state file '{}': {}",
-                path.display(), err
-            );
+            // Not found is mostly normal, don’t complain about that.
+            if err.kind() != io::ErrorKind::NotFound {
+                info!(
+                    "Failed to read state file '{}': {}",
+                    path.display(), err
+                );
+            }
             Error
         })
     }
