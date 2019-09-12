@@ -397,6 +397,31 @@ impl Service {
             }
         }
 
+        // rrdp_status
+        unwrap!(writeln!(res, "rrdp-durations:"));
+        for metrics in metrics.rrdp() {
+            unwrap!(write!(
+                res,
+                "   {}: status={}",
+                metrics.notify_uri,
+                metrics.notify_status.map(|code| {
+                    code.as_u16() as i16
+                }).unwrap_or(-1),
+            ));
+            if let Ok(duration) = metrics.duration {
+                unwrap!(writeln!(
+                    res,
+                    ", duration={:.3}s",
+                    duration.as_secs() as f64
+                    + f64::from(duration.subsec_millis()) / 1000.
+                ));
+            }
+            else {
+                unwrap!(writeln!(res, ""))
+            }
+        }
+
+
         unwrap!(
             Response::builder()
             .header("Content-Type", "text/plain")
