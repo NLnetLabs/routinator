@@ -194,17 +194,23 @@ All functions of Routinator are accessible on the command line via
 sub-commands.
 
 The first thing you need to do before running Routinator is
-prepare its working environment via the `init` command. This will prepare
+prepare its working environment via the
+
+```bash
+routinator init
+```
+
+command. This will prepare
 both the directory for the local RPKI cache as well as the TAL directory.
 By default both directories will be located under `$HOME/.rpki-cache`, but
 you can change their locations via command line options.
 
 TALs provide hints for the trust anchor certificates to be used both to
 discover and validate all RPKI content. The five TALs that are necessary
-for RPKI are bundled with Routinator and installed by the `init` command.
+for RPKI are bundled with Routinator and installed by the `routinator init` command.
 
 However, the one from the North American RIR ARIN requires you to agree to
-their Relying Party Agreement before you can use it. Running the `init`
+their Relying Party Agreement before you can use it. Running the `routinator init`
 command will provide you with instructions where to find the agreement and
 how to express your acceptance of its terms.
 
@@ -241,12 +247,12 @@ It is also available online on the
 
 Routinator supports RPKI-RTR as specified in RFC 8210 as well as the older
 version from RFC 6810. It will act as an RTR server if you start it with
-the `server` command.
+the `routinator server` command.
 
 You can specify the address(es) to listen on via the `--rtr`
 option. If you don’t, it will still start but not listen on anything. This
 may seem a bit odd, but this way, you can keep your local repository copy
-up-to-date for faster use of the `vrps` command.
+up-to-date for faster use of the `routinator vrps` command.
 
 So, in order to run Routinator as an RTR server listening on port 3323 on
 both 192.0.2.13 and 2001:0DB8::13, run
@@ -286,7 +292,7 @@ The configuration file is a TOML file. Its entries are named similarly to
 the command line options. Details about the available entries and there
 meaning can be found in the manual page. In addition, a complete sample
 configuration file showing all the default values can be found in the
-repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf).
+repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
 
 ## Local Exceptions
 
