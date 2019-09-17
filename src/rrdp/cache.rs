@@ -189,6 +189,9 @@ impl<'a> Run<'a> {
         let (id, server) = match res {
             Some(some) => some,
             None => {
+                if self.cache.http.is_none() {
+                    return None
+                }
                 unwrap!(self.servers.write()).insert(
                     Server::create(notify_uri.clone(), &self.cache.cache_dir)
                 )
