@@ -14,7 +14,7 @@ jobs:
     - name: Install Rust
       uses: hecrj/setup-rust-action@v1
       with:
-        reust-version: ${{ matrix.rust }}
+        rust-version: ${{ matrix.rust }}
     - if: matrix.rust != 'nightly'
       run: rustup component add clippy
     - if: matrix.rust != 'nightly'
