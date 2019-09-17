@@ -184,11 +184,15 @@ impl<'a> Run<'a> {
     ///
     /// Returns `None` if creating failed or if the server is unknown and
     /// updating is disabled
+    #[allow(clippy::question_mark)] // Explicit if: more understandable code
     pub fn load_server(&self, notify_uri: &uri::Https) -> Option<ServerId> {
         let res = unwrap!(self.servers.read()).find(notify_uri);
         let (id, server) = match res {
             Some(some) => some,
             None => {
+                if self.cache.http.is_none() {
+                    return None
+                }
                 unwrap!(self.servers.write()).insert(
                     Server::create(notify_uri.clone(), &self.cache.cache_dir)
                 )
