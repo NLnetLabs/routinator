@@ -1,0 +1,24 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    name: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        rust: [1.34.0, stable, beta, nightly]
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v1
+    - name: Install Rust
+      uses: hecrj/setup-rust-action@v1
+      with:
+        reust-version: ${{ matrix.rust }}
+    - if: matrix.rust != 'nightly'
+      run: rustup component add clippy
+    - if: matrix.rust != 'nightly'
+      run: cargo clippy -- -D warnings
+    - run: cargo build --verbose
+    - run: cargo test --verbose
+
