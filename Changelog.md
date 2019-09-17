@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.6.1 ‘Philosophy Is Tricky’
 
 New
