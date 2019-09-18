@@ -829,7 +829,7 @@ impl Config {
     /// Creates and returns a fern logger.
     fn fern_logger(&self, timestamp: bool) -> fern::Dispatch {
         let mut res = fern::Dispatch::new();
-        if true { //timestamp {
+        if timestamp {
             res = res.format(|out, message, _record| {
                 out.finish(format_args!(
                     "{} {} {}",
