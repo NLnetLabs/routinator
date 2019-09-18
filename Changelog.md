@@ -8,6 +8,10 @@ New
 
 Bug Fixes
 
+* Fall back to rsync data if RRDP data is missing in no-update mode.
+  (This only caused trouble if you are fabricating a repository cache
+  directory from rsync-only data.) [(#223)]
+
 Dependencies
 
 Other Changes
@@ -16,6 +20,7 @@ Other Changes
   logging. [(#224)]
 
 [(#224)]: https://github.com/NLnetLabs/routinator/pull/224
+[(#223)]: https://github.com/NLnetLabs/routinator/pull/223
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
