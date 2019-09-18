@@ -10,6 +10,13 @@ Bug Fixes
 
 Dependencies
 
+Other Changes
+
+* Suppressing debug log from some dependencies for stderr and file
+  logging. [(#224)]
+
+[(#224)]: https://github.com/NLnetLabs/routinator/pull/224
+
 
 ## 0.6.1 ‘Philosophy Is Tricky’
 
