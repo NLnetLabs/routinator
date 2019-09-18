@@ -808,25 +808,7 @@ impl Config {
     ///
     /// If we are in daemon mode, we add a timestamp to the output.
     fn stderr_logger(&self, daemon: bool) -> Result<Box<dyn Log>, Error> {
-        let dispatch = if daemon {
-            fern::Dispatch::new()
-            .format(|out, message, _record| {
-                out.finish(format_args!(
-                    "{} {}",
-                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
-                    message
-                ))
-            })
-        }
-        else {
-            fern::Dispatch::new()
-        };
-        let dispatch = dispatch
-            .level(self.log_level)
-            .level_for("rustls", LevelFilter::Error)
-            .chain(io::stderr())
-            .into_log().1;
-        Ok(dispatch)
+        Ok(self.fern_logger(daemon).chain(io::stderr()).into_log().1)
     }
 
     /// Creates a file logger using the file provided by `path`.
@@ -841,18 +823,33 @@ impl Config {
                 return Err(Error)
             }
         };
-        Ok(fern::Dispatch::new()
-            .format(|out, message, _record| {
+        Ok(self.fern_logger(true).chain(file).into_log().1)
+    }
+
+    /// Creates and returns a fern logger.
+    fn fern_logger(&self, timestamp: bool) -> fern::Dispatch {
+        let mut res = fern::Dispatch::new();
+        if true { //timestamp {
+            res = res.format(|out, message, _record| {
                 out.finish(format_args!(
-                    "{} {}",
+                    "{} {} {}",
                     chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+                    _record.module_path().unwrap_or(""),
                     message
                 ))
-            })
+            });
+        }
+        res = res
             .level(self.log_level)
-            .chain(file)
-            .into_log().1
-        )
+            .level_for("rustls", LevelFilter::Error);
+        if self.log_level == LevelFilter::Debug {
+            res = res
+                .level_for("tokio_reactor", LevelFilter::Info)
+                .level_for("hyper", LevelFilter::Info)
+                .level_for("reqwest", LevelFilter::Info)
+                .level_for("h2", LevelFilter::Info);
+        }
+        res
     }
 
     /// Returns a path value in arg matches.
