@@ -462,6 +462,7 @@ impl DeltaTargets {
             match entry {
                 DeltaEntry::Publish { source, target } => {
                     let _ = fs::remove_file(&target); // Just to make sure.
+                    let _ = target.parent().map(fs::create_dir_all);
                     if let Err(err) = fs::rename(&source, &target) {
                         info!(
                             "Failed to move delta source '{}' to \
