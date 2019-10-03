@@ -11,6 +11,9 @@ Bug Fixes
 * Fall back to rsync data if RRDP data is missing in no-update mode.
   (This only caused trouble if you are fabricating a repository cache
   directory from rsync-only data.) [(#223)]
+* Try creating the parent directories before moving a file published via
+  RRDP delta to its final location. This avoids regular fallback to
+  snapshots. [(#227)]
 
 Dependencies
 
@@ -19,8 +22,9 @@ Other Changes
 * Suppressing debug log from some dependencies for stderr and file
   logging. [(#224)]
 
-[(#224)]: https://github.com/NLnetLabs/routinator/pull/224
 [(#223)]: https://github.com/NLnetLabs/routinator/pull/223
+[(#224)]: https://github.com/NLnetLabs/routinator/pull/224
+[(#227)]: https://github.com/NLnetLabs/routinator/pull/227
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
