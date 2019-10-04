@@ -528,7 +528,11 @@ impl DeltaTargets {
                         return Some(source)
                     }
                 }
-                DeltaEntry::Withdraw { .. } => return None
+                DeltaEntry::Withdraw { ref target } => {
+                    if target == target_path {
+                        return None
+                    }
+                }
             }
         }
         Some(target_path)
