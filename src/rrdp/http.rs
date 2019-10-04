@@ -336,11 +336,22 @@ pub struct DeltaProcessor<'a, F> {
 
 impl<'a, F> DeltaProcessor<'a, F> {
     fn check_hash(
+        &self,
         uri: &uri::Rsync,
         path: &Path,
         hash: DigestHex
     ) -> Result<(), ProcessError> {
-        let file = match fs::File::open(&path) {
+        let path = match self.targets.target_path(path) {
+            Some(path) => path,
+            None => {
+                info!(
+                    "Failed to open file '{}': file has been withdrawn.",
+                    path.display()
+                );
+                return Err(ProcessError::Error)
+            }
+        };
+        let file = match fs::File::open(path) {
             Ok(file) => file,
             Err(err) => {
                 info!(
@@ -405,7 +416,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     ) -> Result<(), Self::Err> {
         let target = (self.path_op)(&uri);
         if let Some(hash) = hash {
-            Self::check_hash(&uri, &target, hash)?;
+            self.check_hash(&uri, &target, hash)?;
         }
         self.targets.publish(target, data)
     }
@@ -416,7 +427,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
         hash: DigestHex
     ) -> Result<(), Self::Err> {
         let target = (self.path_op)(&uri);
-        Self::check_hash(&uri, &target, hash)?;
+        self.check_hash(&uri, &target, hash)?;
         self.targets.withdraw(target);
         Ok(())
     }
@@ -507,6 +518,24 @@ impl DeltaTargets {
 
     fn withdraw(&mut self, target: PathBuf) {
         self.targets.push(DeltaEntry::Withdraw { target })
+    }
+
+    fn target_path<'s>(&'s self, target_path: &'s Path) -> Option<&'s Path> {
+        for entry in &self.targets {
+            match *entry {
+                DeltaEntry::Publish { ref source, ref target } => {
+                    if target == target_path {
+                        return Some(source)
+                    }
+                }
+                DeltaEntry::Withdraw { ref target } => {
+                    if target == target_path {
+                        return None
+                    }
+                }
+            }
+        }
+        Some(target_path)
     }
 }
     

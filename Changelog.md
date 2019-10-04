@@ -14,6 +14,9 @@ Bug Fixes
 * Try creating the parent directories before moving a file published via
   RRDP delta to its final location. This avoids regular fallback to
   snapshots. [(#227)]
+* Consider previously manipulated files when processing a sequence of
+  multiple RRDP deltas. This avoids occasional fallback to snapshots.
+  [(#228)]
 
 Dependencies
 
@@ -25,6 +28,7 @@ Other Changes
 [(#223)]: https://github.com/NLnetLabs/routinator/pull/223
 [(#224)]: https://github.com/NLnetLabs/routinator/pull/224
 [(#227)]: https://github.com/NLnetLabs/routinator/pull/227
+[(#228)]: https://github.com/NLnetLabs/routinator/pull/228
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
