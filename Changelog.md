@@ -6,6 +6,9 @@ Breaking Changes
 
 New
 
+* Added a `--disable-rsync` command line and `disable-rsync` configuration
+  file option to, well, disable rsync. [(#229)]
+
 Bug Fixes
 
 * Fall back to rsync data if RRDP data is missing in no-update mode.
@@ -33,6 +36,7 @@ Other Changes
 [(#227)]: https://github.com/NLnetLabs/routinator/pull/227
 [(#228)]: https://github.com/NLnetLabs/routinator/pull/228
 [(via rpki-rs #78)]: https://github.com/NLnetLabs/rpki-rs/pull/78
+[(#229)]: https://github.com/NLnetLabs/routinator/pull/229
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
