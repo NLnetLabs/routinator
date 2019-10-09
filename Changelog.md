@@ -17,6 +17,9 @@ Bug Fixes
 * Consider previously manipulated files when processing a sequence of
   multiple RRDP deltas. This avoids occasional fallback to snapshots.
   [(#228)]
+* Fixed a decoding error in manifests which caused certain manifests (which
+  don’t seem to be existing in the wild currently) to be rejected.
+  [(via rpki-rs #78)]
 
 Dependencies
 
@@ -29,6 +32,7 @@ Other Changes
 [(#224)]: https://github.com/NLnetLabs/routinator/pull/224
 [(#227)]: https://github.com/NLnetLabs/routinator/pull/227
 [(#228)]: https://github.com/NLnetLabs/routinator/pull/228
+[(via rpki-rs #78)]: https://github.com/NLnetLabs/rpki-rs/pull/78
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
