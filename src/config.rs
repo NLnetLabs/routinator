@@ -239,6 +239,10 @@ impl Config {
              .long("strict")
              .help("Parse RPKI data in strict mode")
         )
+        .arg(Arg::with_name("disable-rsync")
+            .long("disable-rsync")
+            .help("Disable rsync and only use RRDP")
+        )
         .arg(Arg::with_name("rsync-command")
              .long("rsync-command")
              .value_name("COMMAND")
@@ -493,6 +497,11 @@ impl Config {
         // strict
         if matches.is_present("strict") {
             self.strict = true
+        }
+
+        // disable_rsync
+        if matches.is_present("disable-rsync") {
+            self.disable_rsync = true
         }
 
         // rsync_command
@@ -903,7 +912,7 @@ impl Config {
                 file.take_path_array("exceptions")?.unwrap_or_else(Vec::new)
             },
             strict: file.take_bool("strict")?.unwrap_or(false),
-            disable_rsync: false,
+            disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
             rsync_command: {
                 file.take_string("rsync-command")?
                     .unwrap_or_else(|| "rsync".into())
@@ -1218,6 +1227,7 @@ impl Config {
             )
         );
         res.insert("strict".into(), self.strict.into());
+        res.insert("disable-rsync".into(), self.disable_rsync.into());
         res.insert("rsync-command".into(), self.rsync_command.clone().into());
         if let Some(ref args) = self.rsync_args {
             res.insert(
