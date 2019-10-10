@@ -30,7 +30,7 @@ num_cpus        = "^1.0"
 rand            = "^0.7"
 reqwest		= { version = "^0.9.19", default-features = false, features = [ "rustls-tls", "socks" ]}
 ring		= "^0.14"
-rpki            = "^0.6.1-pre"
+rpki            = "^0.7.1-pre"
 serde		= "^1.0"
 slab            = "^0.4"
 tempfile        = "^3.1"
