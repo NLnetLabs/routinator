@@ -19,15 +19,16 @@ ARG RUN_USER_UID=1012
 ARG RUN_USER_GID=1012
 
 # Install rsync as routinator depends on it
-RUN apk add rsync libgcc
+RUN apk add rsync libgcc bind-tools libcap
 
 RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
     adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
 
 # Create the repository and TAL directories
 RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-cache/tals && \
-    chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache
-
+    chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache && \
+    setcap 'cap_net_bind_service=+ep' /usr/local/bin/routinator
+    
 # Due to ARIN TAL distribution terms, we can't do this here.
 # An individual user, however, might want to anyway - after reviewing
 # https://www.arin.net/resources/rpki/tal.html.
