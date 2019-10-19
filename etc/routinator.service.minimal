@@ -2,11 +2,11 @@
 Description=Routinator 3000
 Documentation=man:routinator(1)
 After=network.target
+Require=syslog.socket
 
 [Service]
 ExecStart=/usr/bin/routinator --config=/etc/routinator/routinator.conf --syslog server
 
 [Install]
 WantedBy=multi-user.target
-
 
