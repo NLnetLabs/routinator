@@ -425,7 +425,7 @@ Only output VRPs for the given ASN. The option can be given multiple times,
 in which case VRPs for all provided ASNs are provided. ASNs can be given with
 or without the prefix
 .IR AS .
-.TP 
+.TP
 .BI \-p \ prefix\fR,\  \-\-filter\-prefix= prefix
 Only output VRPs with an address prefix that covers the given prefix, i.e.,
 whose prefix is equal to or less specific than the given prefix. This will
@@ -703,15 +703,18 @@ to 0 to turn the timeout off.
 An integer value that, if present, sets a separate timeout in seconds for
 RRDP connect requests only.
 
-.TP rrdp-local-addr
+.TP
+.B rrdp-local-addr
 A string value that provides the local address to be used by RRDP connections.
 
-.TP rrdp-root-certs
+.TP
+.B rrdp-root-certs
 A list of strings each providing a path to a file containing a trust anchor
 certificate for HTTPS authentication of RRDP connections. In addition to the
 certiciates provided via this option, the system's own trust store is used.
 
-.TP rrdp-proxies
+.TP
+.B rrdp-proxies
 A list of string each providing the URI for a proxy for outgoing RRDP
 connections. The proxies are tried in order for each request. HTTP and SOCKS5
 proxies are supported.
