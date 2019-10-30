@@ -1,8 +1,6 @@
 # Routinator
 
-[![Travis Build Status](https://travis-ci.com/NLnetLabs/routinator.svg?branch=master)](https://travis-ci.com/NLnetLabs/routinator)
-[![AppVeyor Build
-Status](https://ci.appveyor.com/api/projects/status/github/NLnetLabs/routinator?svg=true)](https://ci.appveyor.com/project/partim/routinator)
+[![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![](https://img.shields.io/docker/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
 [![](https://img.shields.io/crates/v/routinator.svg)](https://crates.io/crates/routinator)
 [![Documentation Status](https://readthedocs.org/projects/rpki/badge/?version=latest)](https://rpki.readthedocs.io/en/latest/?badge=latest)
