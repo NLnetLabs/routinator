@@ -32,7 +32,7 @@ RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-ca
 # An individual user, however, might want to anyway - after reviewing
 # https://www.arin.net/resources/rpki/tal.html.
 #
-#COPY --from=build /tmp/routinator/tals/*.tal /root/.rpki-cache/tals/
+#COPY --from=build /tmp/routinator/tals/*.tal /home/${RUN_USER}/.rpki-cache/tals/
 
 USER $RUN_USER_UID
 
