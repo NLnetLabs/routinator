@@ -117,7 +117,7 @@ impl hyper::service::Service for Service {
                         self.vrps(req.uri().query(), OutputFormat::Openbgpd)
                     }
                     "/rpsl" => {
-                        self.vrps(req.uri().query(), OutputFormat::Csv)
+                        self.vrps(req.uri().query(), OutputFormat::Rpsl)
                     }
                     "/status" => self.status(),
                     "/validity" => self.validity_query(req.uri().query()),
