@@ -23,6 +23,8 @@ Bug Fixes
 * Fixed a decoding error in manifests which caused certain manifests (which
   don’t seem to be existing in the wild currently) to be rejected.
   [(via rpki-rs #78)]
+* The `/rpsl` endpoint of the HTTP server accidentally produced CSV
+  output. [(#238)]
 
 Dependencies
 
@@ -37,6 +39,7 @@ Other Changes
 [(#228)]: https://github.com/NLnetLabs/routinator/pull/228
 [(via rpki-rs #78)]: https://github.com/NLnetLabs/rpki-rs/pull/78
 [(#229)]: https://github.com/NLnetLabs/routinator/pull/229
+[(#238)]: https://github.com/NLnetLabs/routinator/pull/238
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
