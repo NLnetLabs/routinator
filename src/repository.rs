@@ -169,9 +169,7 @@ impl Repository {
             }
 
             let mut file = match File::open(&path) {
-                Ok(file) => {
-                    file
-                }
+                Ok(file) => file,
                 Err(err) => {
                     error!(
                         "Failed to open TAL {}: {}. \n\

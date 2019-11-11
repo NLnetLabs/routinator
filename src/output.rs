@@ -382,14 +382,9 @@ fn ext_csv_origin<W: io::Write>(
 ) -> Result<(), io::Error> {
     match addr.cert() {
         Some(cert) => {
-            match cert.signed_object() {
-                Some(uri) => {
-                    write!(output, "{}", uri)?;
-                }
-                None => write!(output, "N/A")?
-            }
             let val = cert.validity();
-            writeln!(output, ",{},{}/{},{},{},{}",
+            writeln!(output, "{},{},{}/{},{},{},{}",
+                cert.signed_object().map(|x| x.to_string()).unwrap_or("N/A".to_string()),
                 addr.as_id(),
                 addr.address(), addr.address_length(),
                 addr.max_length(),
