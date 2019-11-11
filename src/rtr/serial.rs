@@ -109,31 +109,23 @@ impl Eq for Serial { }
 
 impl cmp::PartialOrd for Serial {
     fn partial_cmp(&self, other: &Serial) -> Option<cmp::Ordering> {
-        if self.0 == other.0 {
-            Some(cmp::Ordering::Equal)
-        }
-        else if self.0 < other.0 {
-            let sub = other.0 - self.0;
-            if sub < 0x8000_0000 {
-                Some(cmp::Ordering::Less)
-            }
-            else if sub > 0x8000_0000 {
-                Some(cmp::Ordering::Greater)
-            }
-            else {
-                None
-            }
-        }
-        else {
-            let sub = self.0 - other.0;
-            if sub < 0x8000_0000 {
-                Some(cmp::Ordering::Greater)
-            }
-            else if sub > 0x8000_0000 {
-                Some(cmp::Ordering::Less)
-            }
-            else {
-                None
+        match self.0.cmp(&other.0) {
+            cmp::Ordering::Equal => Some(cmp::Ordering::Equal),
+            cmp::Ordering::Less => {
+                let sub = other.0 - self.0;
+                match sub.cmp(&0x8000_0000) {
+                    cmp::Ordering::Less => Some(cmp::Ordering::Less),
+                    cmp::Ordering::Greater => Some(cmp::Ordering::Greater),
+                    _ => None
+                }
+            },
+            cmp::Ordering::Greater => {
+                let sub = self.0 - other.0;
+                match sub.cmp(&0x8000_0000) {
+                    cmp::Ordering::Less => Some(cmp::Ordering::Greater),
+                    cmp::Ordering::Greater => Some(cmp::Ordering::Less),
+                    _ => None
+                }
             }
         }
     }

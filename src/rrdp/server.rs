@@ -2,7 +2,7 @@
 //!
 //! This is a private module and exists only for organizational reasons.
 
-use std::{fs, io};
+use std::{cmp, fs, io};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -232,15 +232,13 @@ impl Server {
                     return Err(Error)
                 }
             };
-            if first.0 > serial {
-                info!("First delta is too new ({})", first.0);
-                return Err(Error)
-            }
-            else if first.0 == serial {
-                break
-            }
-            else {
-                deltas = &deltas[1..];
+            match first.0.cmp(&serial) {
+                cmp::Ordering::Greater => {
+                    info!("First delta is too new ({})", first.0);
+                    return Err(Error)
+                }
+                cmp::Ordering::Equal => break,
+                cmp::Ordering::Less => deltas = &deltas[1..]
             }
         }
         Ok(Some(deltas))
