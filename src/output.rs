@@ -384,7 +384,7 @@ fn ext_csv_origin<W: io::Write>(
         Some(cert) => {
             let val = cert.validity();
             writeln!(output, "{},{},{}/{},{},{},{}",
-                cert.signed_object().map(|x| x.to_string()).unwrap_or("N/A".to_string()),
+                cert.signed_object().map(std::string::ToString::to_string).unwrap_or_else(|| "N/A".to_string()),
                 addr.as_id(),
                 addr.address(), addr.address_length(),
                 addr.max_length(),
