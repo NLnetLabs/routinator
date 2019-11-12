@@ -7,12 +7,11 @@
 //!
 //! [`Operation`]: enum.Operation.html
 
-use std::{fs, io};
+use std::{fs, io, thread};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::time::Duration;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use derive_more::From;
 use futures::future::Future;
@@ -29,7 +28,6 @@ use crate::repository::Repository;
 use crate::rtr::rtr_listener;
 use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
-
 
 //------------ Operation -----------------------------------------------------
 
@@ -356,7 +354,7 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, false, true)?;
-        let idle = IdleWait::new()?; // Create early to fail early.
+        let signal = Self::create_signal_notifier(&[signal_hook::SIGHUP])?;
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(config.history_size, config.refresh);
@@ -404,13 +402,36 @@ impl Server {
                 info!("Sending out notifications.");
                 notify.notify();
             }
-            if !idle.wait(history.refresh_wait()) {
-                break;
+            select! {
+                recv(signal) -> _ => {
+                    repo = Repository::new(&config, false, true)?;
+                    info!("Reloaded TALs at user request.");
+                },
+                recv(crossbeam_channel::after(history.refresh_wait())) -> _ => {}
             }
         }
 
         unwrap!(runtime.shutdown_now().wait());
         Ok(())
+    }
+
+    fn create_signal_notifier(signals: &[i32]) -> Result<crossbeam_channel::Receiver<i32>, Error> {
+        let (s, r) = crossbeam_channel::bounded(100);
+        let signals = match signal_hook::iterator::Signals::new(signals) {
+            Ok(r) => r,
+            Err(err) => {
+                error!("Attaching signals failed: {}", err);
+                return Err(Error)
+            }
+        };
+        thread::spawn(move || {
+            for signal in signals.forever() {
+                if s.send(signal).is_err() {
+                    break;
+                }
+            }
+        });
+        Ok(r)
     }
 
     #[cfg(unix)]
@@ -947,28 +968,6 @@ impl Man {
                 Err(Error)
             }
         }).map_err(Into::into)
-    }
-}
-
-
-//------------ IdleWait ------------------------------------------------------
-
-/// Wait for the next validation run or a user telling us to quit.
-///
-/// This is going to receive a proper impl on Unix and possibly Windows.
-struct IdleWait;
-
-impl IdleWait {
-    pub fn new() -> Result<Self, Error> {
-        Ok(IdleWait)
-    }
-
-    /// Waits for the next thing to do.
-    ///
-    /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration) -> bool {
-        std::thread::sleep(timeout);
-        true
     }
 }
 

@@ -44,3 +44,5 @@ pub mod slurm;
 pub mod utils;
 pub mod validity;
 
+#[macro_use]
+extern crate crossbeam_channel;
