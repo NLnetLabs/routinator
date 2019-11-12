@@ -7,7 +7,7 @@
 //!
 //! [`Operation`]: enum.Operation.html
 
-use std::{fs, io, thread};
+use std::{fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -373,6 +373,7 @@ impl Server {
             }
         };
         runtime.spawn(rtr).spawn(http);
+        let signal = Self::create_signal_notifier(&[signal_hook::SIGHUP], &mut runtime)?;
 
         loop {
             history.mark_update_start();
@@ -415,7 +416,9 @@ impl Server {
         Ok(())
     }
 
-    fn create_signal_notifier(signals: &[i32]) -> Result<crossbeam_channel::Receiver<i32>, Error> {
+    fn create_signal_notifier(
+        signals: &[i32], runtime: &mut tokio::runtime::Runtime
+    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
         let (s, r) = crossbeam_channel::bounded(100);
         let signals = match signal_hook::iterator::Signals::new(signals) {
             Ok(r) => r,
@@ -424,13 +427,14 @@ impl Server {
                 return Err(Error)
             }
         };
-        thread::spawn(move || {
+        runtime.spawn(futures::future::lazy(move || {
             for signal in signals.forever() {
                 if s.send(signal).is_err() {
                     break;
                 }
             }
-        });
+            Ok(())
+        }));
         Ok(r)
     }
 
