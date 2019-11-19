@@ -3,7 +3,7 @@
 /// The types in this module store route origins, sets of route origins, and
 /// the history of changes necessary for RTR.
 
-use std::{fmt, hash, ops, slice, vec};
+use std::{cmp, fmt, hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -196,11 +196,10 @@ impl OriginsHistory {
         debug!("Merging diffs.");
         let mut iter = history.diffs.iter().rev();
         while let Some(diff) = iter.next() {
-            if serial < diff.serial() {
-                return None
-            }
-            else if diff.serial() == serial {
-                break
+            match diff.serial().partial_cmp(&serial) {
+                Some(cmp::Ordering::Greater) => return None,
+                Some(cmp::Ordering::Equal) => break,
+                _ => continue
             }
         }
         // We already know that the serial’s diff wasn’t last, so unwrap is
