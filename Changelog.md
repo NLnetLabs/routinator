@@ -25,6 +25,10 @@ Bug Fixes
   [(via rpki-rs #78)]
 * The `/rpsl` endpoint of the HTTP server accidentally produced CSV
   output. [(#238)]
+* Produce a formatting of the time elements of RPSL with a stable length.
+  This will result in the RPSL output via the HTTP server to be correct
+  and also decreases the size of the RPSL output by about twenty percent.
+  [(#243)]
 
 Dependencies
 
@@ -40,6 +44,7 @@ Other Changes
 [(via rpki-rs #78)]: https://github.com/NLnetLabs/rpki-rs/pull/78
 [(#229)]: https://github.com/NLnetLabs/routinator/pull/229
 [(#238)]: https://github.com/NLnetLabs/routinator/pull/238
+[(#243)]: https://github.com/NLnetLabs/routinator/pull/243
 
 
 ## 0.6.1 ‘Philosophy Is Tricky’
