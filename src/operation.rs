@@ -373,7 +373,7 @@ impl Server {
             }
         };
         runtime.spawn(rtr).spawn(http);
-        let signal = Self::create_signal_notifier(&[signal_hook::SIGHUP], &mut runtime)?;
+        let signal = Self::create_signal_notifier(&mut runtime)?;
 
         loop {
             history.mark_update_start();
@@ -416,11 +416,12 @@ impl Server {
         Ok(())
     }
 
+    #[cfg(not(windows))]
     fn create_signal_notifier(
-        signals: &[i32], runtime: &mut tokio::runtime::Runtime
+        runtime: &mut tokio::runtime::Runtime
     ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
         let (s, r) = crossbeam_channel::bounded(100);
-        let signals = match signal_hook::iterator::Signals::new(signals) {
+        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGHUP]) {
             Ok(r) => r,
             Err(err) => {
                 error!("Attaching signals failed: {}", err);
@@ -435,6 +436,15 @@ impl Server {
             }
             Ok(())
         }));
+        Ok(r)
+    }
+
+    #[cfg(windows)]
+    fn create_signal_notifier(
+        _runtime: &mut tokio::runtime::Runtime
+    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
+        let (_, r) = crossbeam_channel::bounded(1);
+        info!("Attaching signals is not supported on Windows, skipping...");
         Ok(r)
     }
 
