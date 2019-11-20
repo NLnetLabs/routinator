@@ -12,6 +12,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
+use std::time::Duration;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use derive_more::From;
 use futures::future::Future;
@@ -373,7 +374,7 @@ impl Server {
             }
         };
         runtime.spawn(rtr).spawn(http);
-        let signal = Self::create_signal_notifier(&mut runtime)?;
+        let signal = SignalWait::new(&mut runtime)?;
 
         loop {
             history.mark_update_start();
@@ -403,49 +404,13 @@ impl Server {
                 info!("Sending out notifications.");
                 notify.notify();
             }
-            select! {
-                recv(signal) -> _ => {
-                    repo = Repository::new(&config, false, true)?;
-                    info!("Reloaded TALs at user request.");
-                },
-                recv(crossbeam_channel::after(history.refresh_wait())) -> _ => {}
+            if !signal.wait(history.refresh_wait(), &mut repo, &config) {
+                break;
             }
         }
 
         unwrap!(runtime.shutdown_now().wait());
         Ok(())
-    }
-
-    #[cfg(not(windows))]
-    fn create_signal_notifier(
-        runtime: &mut tokio::runtime::Runtime
-    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
-        let (s, r) = crossbeam_channel::bounded(100);
-        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGHUP]) {
-            Ok(r) => r,
-            Err(err) => {
-                error!("Attaching signals failed: {}", err);
-                return Err(Error)
-            }
-        };
-        runtime.spawn(futures::future::lazy(move || {
-            for signal in signals.forever() {
-                if s.send(signal).is_err() {
-                    break;
-                }
-            }
-            Ok(())
-        }));
-        Ok(r)
-    }
-
-    #[cfg(windows)]
-    fn create_signal_notifier(
-        _runtime: &mut tokio::runtime::Runtime
-    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
-        let (_, r) = crossbeam_channel::bounded(1);
-        info!("Attaching signals is not supported on Windows, skipping...");
-        Ok(r)
     }
 
     #[cfg(unix)]
@@ -985,6 +950,86 @@ impl Man {
     }
 }
 
+
+//------------ SignalWait ------------------------------------------------------
+
+/// Wait for the next validation run or a user telling us to quit or reload.
+///
+/// This is going to receive a proper impl on Unix and possibly Windows.
+#[cfg(not(windows))]
+struct SignalWait {
+    chan: crossbeam_channel::Receiver<i32>
+}
+
+#[cfg(not(windows))]
+impl SignalWait {
+    pub fn new(mut runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+        let chan = Self::create_signal_notifier(&mut runtime)?;
+        Ok(SignalWait{chan})
+    }
+
+    fn create_signal_notifier(
+        runtime: &mut tokio::runtime::Runtime
+    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
+        let (s, r) = crossbeam_channel::bounded(100);
+        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGHUP]) {
+            Ok(r) => r,
+            Err(err) => {
+                error!("Attaching signals failed: {}", err);
+                return Err(Error)
+            }
+        };
+        runtime.spawn(futures::future::lazy(move || {
+            for signal in signals.forever() {
+                if s.send(signal).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }));
+        Ok(r)
+    }
+
+    /// Waits for the next thing to do.
+    ///
+    /// Returns whether to continue working.
+    pub fn wait(&self, timeout: Duration, repo: &mut Repository, config: &Config) -> bool {
+        select! {
+            recv(self.chan) -> _ => {
+                match Repository::new(&config, false, true) {
+                    Ok(r) => {
+                        *repo = r;
+                        info!("Reloaded TALs at user request.");
+                    },
+                    Err(_) => {
+                        error!("Reloading TALs failed, shutting down.");
+                        return false
+                    }
+                }
+            },
+            recv(crossbeam_channel::after(timeout)) -> _ => {}
+        };
+        true
+    }
+}
+
+#[cfg(windows)]
+struct SignalWait;
+
+#[cfg(windows)]
+impl SignalWait {
+    pub fn new(runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+        Ok(SignalWait)
+    }
+
+    /// Waits for the next thing to do.
+    ///
+    /// Returns whether to continue working.
+    pub fn wait(&self, timeout: Duration, repo: &mut Repository, config: &Config) -> bool {
+        std::thread::sleep(timeout);
+        true
+    }
+}
 
 //------------ Error ---------------------------------------------------------
 
