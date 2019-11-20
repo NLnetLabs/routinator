@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.6.2"
+version = "0.6.3-pre"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
