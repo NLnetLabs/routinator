@@ -1,8 +1,6 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking Changes
+## 0.6.2 ‘Distiller’s Edition’
 
 New
 
@@ -29,8 +27,6 @@ Bug Fixes
   This will result in the RPSL output via the HTTP server to be correct
   and also decreases the size of the RPSL output by about twenty percent.
   [(#243)]
-
-Dependencies
 
 Other Changes
 
