@@ -1018,14 +1018,14 @@ struct SignalWait;
 
 #[cfg(windows)]
 impl SignalWait {
-    pub fn new(runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+    pub fn new(_runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
         Ok(SignalWait)
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration, repo: &mut Repository, config: &Config) -> bool {
+    pub fn wait(&self, timeout: Duration, _repo: &mut Repository, _config: &Config) -> bool {
         std::thread::sleep(timeout);
         true
     }
