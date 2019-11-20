@@ -354,7 +354,7 @@ fn csv_footer<W: io::Write>(
 //------------ ext_csv -------------------------------------------------------
 
 // 2017-08-25 13:12:19
-const TIME_ITEMS: &[Item<'static>] = &[
+const EXT_CSV_TIME_ITEMS: &[Item<'static>] = &[
     Item::Numeric(Numeric::Year, Pad::Zero),
     Item::Literal("-"),
     Item::Numeric(Numeric::Month, Pad::Zero),
@@ -394,10 +394,10 @@ fn ext_csv_origin<W: io::Write>(
                 addr.address(), addr.address_length(),
                 addr.max_length(),
                 val.not_before().format_with_items(
-                    TIME_ITEMS.iter().cloned()
+                    EXT_CSV_TIME_ITEMS.iter().cloned()
                 ),
                 val.not_after().format_with_items(
-                    TIME_ITEMS.iter().cloned()
+                    EXT_CSV_TIME_ITEMS.iter().cloned()
                 ),
             )
         }
@@ -485,6 +485,22 @@ fn openbgpd_footer<W: io::Write>(
 
 //------------ rpsl ----------------------------------------------------------
 
+// 2017-08-25T13:12:19Z
+const RPSL_TIME_ITEMS: &[Item<'static>] = &[
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::Month, Pad::Zero),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal("T"),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Literal("Z"),
+];
+
 fn rpsl_header<W: io::Write>(
     _vrps: &AddressOrigins,
     _output: &mut W,
@@ -497,7 +513,7 @@ fn rpsl_origin<W: io::Write>(
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now().format_with_items(RPSL_TIME_ITEMS.iter().cloned());
     writeln!(output,
         "\n{}: {}/{}\norigin: {}\n\
         descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
