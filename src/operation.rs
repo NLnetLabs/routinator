@@ -404,8 +404,19 @@ impl Server {
                 info!("Sending out notifications.");
                 notify.notify();
             }
-            if !signal.wait(history.refresh_wait(), &mut repo, &config) {
-                break;
+            match signal.wait(history.refresh_wait()) {
+                UserSignal::NoSignal => {},
+                UserSignal::ReloadTALs => {
+                    match repo.reload_tals(&config) {
+                        Ok(_) => {
+                            info!("Reloaded TALs at user request.");
+                        },
+                        Err(_) => {
+                            error!("Reloading TALs failed, shutting down.");
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -953,6 +964,11 @@ impl Man {
 
 //------------ SignalWait ------------------------------------------------------
 
+enum UserSignal {
+    NoSignal,
+    ReloadTALs,
+}
+
 /// Wait for the next validation run or a user telling us to quit or reload.
 ///
 /// This is going to receive a proper impl on Unix and possibly Windows.
@@ -992,24 +1008,16 @@ impl SignalWait {
 
     /// Waits for the next thing to do.
     ///
-    /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration, repo: &mut Repository, config: &Config) -> bool {
+    /// Returns what to do.
+    // Clippy seems to have problems understanding the select! macro
+    #[allow(clippy::needless_return)]
+    pub fn wait(&self, timeout: Duration) -> UserSignal {
         select! {
             recv(self.chan) -> _ => {
-                match Repository::new(&config, false, true) {
-                    Ok(r) => {
-                        *repo = r;
-                        info!("Reloaded TALs at user request.");
-                    },
-                    Err(_) => {
-                        error!("Reloading TALs failed, shutting down.");
-                        return false
-                    }
-                }
+                return UserSignal::ReloadTALs;
             },
-            recv(crossbeam_channel::after(timeout)) -> _ => {}
+            recv(crossbeam_channel::after(timeout)) -> _ => { return UserSignal::NoSignal; }
         };
-        true
     }
 }
 
@@ -1025,9 +1033,9 @@ impl SignalWait {
     /// Waits for the next thing to do.
     ///
     /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration, _repo: &mut Repository, _config: &Config) -> bool {
+    pub fn wait(&self, timeout: Duration) -> UserSignal {
         std::thread::sleep(timeout);
-        true
+        UserSignal::NoSignal
     }
 }
 
