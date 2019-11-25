@@ -8,9 +8,14 @@ New
 
 Bug Fixes
 
+* Fix spelling of `routinator_rrdp_duration` metrics definition. [(#248)]
+
 Other Changes
 
 Dependencies
+
+
+[(#248)]: https://github.com/NLnetLabs/routinator/pull/248
 
 
 ## 0.6.2 ‘Distiller’s Edition’
