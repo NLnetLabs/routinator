@@ -355,7 +355,6 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, false, true)?;
-        let signal = Self::create_signal_notifier(&[signal_hook::SIGHUP])?;
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(config.history_size, config.refresh);
@@ -988,7 +987,7 @@ impl SignalWait {
         runtime: &mut tokio::runtime::Runtime
     ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
         let (s, r) = crossbeam_channel::bounded(100);
-        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGHUP]) {
+        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1]) {
             Ok(r) => r,
             Err(err) => {
                 error!("Attaching signals failed: {}", err);
