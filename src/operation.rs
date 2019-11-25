@@ -963,6 +963,7 @@ impl Man {
 
 //------------ SignalWait ------------------------------------------------------
 
+#[allow(dead_code)]
 enum UserSignal {
     NoSignal,
     ReloadTALs,
