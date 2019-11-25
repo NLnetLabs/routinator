@@ -127,6 +127,7 @@ impl Repository {
         })
     }
 
+    /// Reloads the TAL files based on the config object.
     pub fn reload_tals(&mut self, config: &Config) -> Result<(), Error> {
         self.tals = Self::load_tals(&config.tal_dir)?;
         Ok(())
