@@ -277,7 +277,7 @@ impl Service {
         unwrap!(writeln!(res, "
             \n\
             # HELP routinator_rrdp_duration duration of rsync in seconds\n\
-            # TYPE routinator_rrdo_duration gauge"
+            # TYPE routinator_rrdp_duration gauge"
         ));
         for metrics in metrics.rrdp() {
             if let Ok(duration) = metrics.duration {
