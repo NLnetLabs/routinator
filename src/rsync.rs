@@ -58,6 +58,10 @@ impl Cache {
         }
     }
 
+    pub fn ignite(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
     fn cache_dir(config: &Config) -> PathBuf {
         config.cache_dir.join("rsync")
     }
