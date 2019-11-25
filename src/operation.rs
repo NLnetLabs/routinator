@@ -355,7 +355,7 @@ impl Server {
     /// just runs the server forever.
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
-        let repo = Repository::new(&config, false, true)?;
+        let mut repo = Repository::new(&config, false, true)?;
         let idle = IdleWait::new()?; // Create early to fail early.
         config.switch_logging(self.detach)?;
 
@@ -571,7 +571,7 @@ impl Vrps {
     /// publication points.
     fn run(self, config: Config) -> Result<(), ExitError> {
         let extra_info = self.format.extra_output();
-        let repo = Repository::new(&config, extra_info, !self.noupdate)?;
+        let mut repo = Repository::new(&config, extra_info, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(
@@ -707,7 +707,7 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let repo = Repository::new(&config, false, !self.noupdate)?;
+        let mut repo = Repository::new(&config, false, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(

@@ -204,12 +204,22 @@ impl Repository {
 
     /// Performs a complete validation run on the repository.
     pub fn process(
-        &self,
+        &mut self,
     ) -> Result<(OriginsReport, Metrics), Error> {
+        self.ignite()?;
         let run = Run::new(self)?;
         let report = run.process()?;
         let metrics = run.into_metrics();
         Ok((report, metrics))
+    }
+
+    /// Starts the caches.
+    ///
+    /// This needs to be done after a possible fork as the caches may use
+    /// their own threads.
+    fn ignite(&mut self) -> Result<(), Error> {
+        self.rsync.as_mut().map_or(Ok(()), rsync::Cache::ignite)?;
+        self.rrdp.as_mut().map_or(Ok(()), rrdp::Cache::ignite)
     }
 }
 

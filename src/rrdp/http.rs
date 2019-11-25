@@ -24,9 +24,9 @@ use super::utils::create_unique_file;
 
 //------------ HttpClient ----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct HttpClient {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, Option<reqwest::ClientBuilder>>,
     tmp_dir: PathBuf,
 }
 
@@ -71,19 +71,36 @@ impl HttpClient {
             };
             builder = builder.proxy(proxy);
         }
+        Ok(HttpClient {
+            client: Err(Some(builder)),
+            tmp_dir: config.cache_dir.join("tmp"),
+        })
+    }
 
+    pub fn ignite(&mut self) -> Result<(), Error> {
+        let builder = match self.client.as_mut() {
+            Ok(_) => return Ok(()),
+            Err(builder) => match builder.take() {
+                Some(builder) => builder,
+                None => {
+                    error!("Previously gailed to initialize HTTP client.");
+                    return Err(Error)
+                }
+            }
+        };
         let client = match builder.build() {
             Ok(client) => client,
             Err(err) => {
                 error!("Failed to initialize HTTP client: {}.", err);
-                error!("No RRDP, using rsync only.");
                 return Err(Error)
             }
         };
-        Ok(HttpClient {
-            client,
-            tmp_dir: config.cache_dir.join("tmp"),
-        })
+        self.client = Ok(client);
+        Ok(())
+    }
+
+    fn client(&self) -> &reqwest::Client {
+        unwrap!(self.client.as_ref())
     }
 
     fn load_cert(path: &Path) -> Result<reqwest::Certificate, Error> {
@@ -211,7 +228,7 @@ impl HttpClient {
         &self,
         uri: &uri::Https
     ) -> Result<reqwest::Response, Error> {
-        self.client.get(uri.as_str()).send().and_then(|res| {
+        self.client().get(uri.as_str()).send().and_then(|res| {
             res.error_for_status()
         }).map_err(|err| {
             info!("{}: {}", uri, err);

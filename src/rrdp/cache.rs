@@ -79,6 +79,10 @@ impl Cache {
         }
     }
 
+    pub fn ignite(&mut self) -> Result<(), Error> {
+        self.http.as_mut().map_or(Ok(()), HttpClient::ignite)
+    }
+
     fn cache_dir(config: &Config) -> PathBuf {
         config.cache_dir.join("rrdp")
     }
