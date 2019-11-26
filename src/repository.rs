@@ -127,6 +127,12 @@ impl Repository {
         })
     }
 
+    /// Reloads the TAL files based on the config object.
+    pub fn reload_tals(&mut self, config: &Config) -> Result<(), Error> {
+        self.tals = Self::load_tals(&config.tal_dir)?;
+        Ok(())
+    }
+
     /// Loads the TAL files from the given directory.
     fn load_tals(tal_dir: &Path) -> Result<Vec<Tal>, Error> {
         let mut res = Vec::new();

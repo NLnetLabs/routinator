@@ -30,7 +30,6 @@ use crate::rtr::rtr_listener;
 use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
-
 //------------ Operation -----------------------------------------------------
 
 /// The command to execute.
@@ -356,7 +355,6 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, false, true)?;
-        let idle = IdleWait::new()?; // Create early to fail early.
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(config.history_size, config.refresh);
@@ -375,6 +373,7 @@ impl Server {
             }
         };
         runtime.spawn(rtr).spawn(http);
+        let signal = SignalWait::new(&mut runtime)?;
 
         loop {
             history.mark_update_start();
@@ -404,8 +403,19 @@ impl Server {
                 info!("Sending out notifications.");
                 notify.notify();
             }
-            if !idle.wait(history.refresh_wait()) {
-                break;
+            match signal.wait(history.refresh_wait()) {
+                UserSignal::NoSignal => {},
+                UserSignal::ReloadTALs => {
+                    match repo.reload_tals(&config) {
+                        Ok(_) => {
+                            info!("Reloaded TALs at user request.");
+                        },
+                        Err(_) => {
+                            error!("Reloading TALs failed, shutting down.");
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -951,27 +961,83 @@ impl Man {
 }
 
 
-//------------ IdleWait ------------------------------------------------------
+//------------ SignalWait ------------------------------------------------------
 
-/// Wait for the next validation run or a user telling us to quit.
+#[allow(dead_code)]
+enum UserSignal {
+    NoSignal,
+    ReloadTALs,
+}
+
+/// Wait for the next validation run or a user telling us to quit or reload.
 ///
 /// This is going to receive a proper impl on Unix and possibly Windows.
-struct IdleWait;
+#[cfg(not(windows))]
+struct SignalWait {
+    chan: crossbeam_channel::Receiver<i32>
+}
 
-impl IdleWait {
-    pub fn new() -> Result<Self, Error> {
-        Ok(IdleWait)
+#[cfg(not(windows))]
+impl SignalWait {
+    pub fn new(mut runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+        let chan = Self::create_signal_notifier(&mut runtime)?;
+        Ok(SignalWait{chan})
+    }
+
+    fn create_signal_notifier(
+        runtime: &mut tokio::runtime::Runtime
+    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
+        let (s, r) = crossbeam_channel::bounded(100);
+        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1]) {
+            Ok(r) => r,
+            Err(err) => {
+                error!("Attaching signals failed: {}", err);
+                return Err(Error)
+            }
+        };
+        runtime.spawn(futures::future::lazy(move || {
+            for signal in signals.forever() {
+                if s.send(signal).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }));
+        Ok(r)
+    }
+
+    /// Waits for the next thing to do.
+    ///
+    /// Returns what to do.
+    // Clippy seems to have problems understanding the select! macro
+    #[allow(clippy::needless_return)]
+    pub fn wait(&self, timeout: Duration) -> UserSignal {
+        select! {
+            recv(self.chan) -> _ => {
+                return UserSignal::ReloadTALs;
+            },
+            recv(crossbeam_channel::after(timeout)) -> _ => { return UserSignal::NoSignal; }
+        };
+    }
+}
+
+#[cfg(windows)]
+struct SignalWait;
+
+#[cfg(windows)]
+impl SignalWait {
+    pub fn new(_runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+        Ok(SignalWait)
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration) -> bool {
+    pub fn wait(&self, timeout: Duration) -> UserSignal {
         std::thread::sleep(timeout);
-        true
+        UserSignal::NoSignal
     }
 }
-
 
 //------------ Error ---------------------------------------------------------
 
