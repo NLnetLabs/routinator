@@ -15,7 +15,6 @@ use std::str::FromStr;
 use std::time::Duration;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use derive_more::From;
-use futures::future::Future;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
@@ -419,8 +418,12 @@ impl Server {
             }
         }
 
-        unwrap!(runtime.shutdown_now().wait());
-        Ok(())
+        // XXX This seems to hang indefinitely, with or without the shutdown.
+        //     Since we are terminating the process thereafter, anyway, this
+        //     may be fine for now.
+        // unwrap!(runtime.shutdown_now().wait());
+        // Ok(())
+        std::process::exit(0);
     }
 
     #[cfg(unix)]
