@@ -422,8 +422,8 @@ impl Server {
         //     Since we are terminating the process thereafter, anyway, this
         //     may be fine for now.
         // unwrap!(runtime.shutdown_now().wait());
+        // Ok(())
         std::process::exit(0);
-        Ok(())
     }
 
     #[cfg(unix)]
