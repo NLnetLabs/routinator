@@ -1,8 +1,6 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking
+## 0.6.3 ‘That Escalated Fast’
 
 New
 
@@ -14,11 +12,6 @@ Bug Fixes
 * RRDP requests failed with a timeout if Routinator was started in
   detached server mode (`server -d`). ([#250], discovered by [Will McLendon])
 * Fix spelling of `routinator_rrdp_duration` metrics definition. [(#248)]
-
-Other Changes
-
-Dependencies
-
 
 [#241]: https://github.com/NLnetLabs/routinator/pull/241
 [(#248)]: https://github.com/NLnetLabs/routinator/pull/248
