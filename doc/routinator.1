@@ -1,4 +1,4 @@
-.TH "routinator" "1" "November 20, 2019" "NLnet Labs" "routinator 0.6.2
+.TH "routinator" "1" "November 28, 2019" "NLnet Labs" "routinator 0.6.3
 .\"
 .\" routinator.1 -- RPKI Relying Party software
 .\"
@@ -938,6 +938,12 @@ be broken up into a sequence of sub-strings. Since those strings are in
 some places used to carry encoded content themselves, such an encoding
 does make parsing significantly more difficult. At least one CA does
 produce such broken-up strings.
+
+.SH SIGNALS
+.SS SIGUSR1: Reload TALs and restart validation
+When receiving SIGUSR1, Routinator will attempt to reload the TALs and, if
+that succeeds, restart validation. If loading the TALs fails, Routinator will
+exit.
 
 .SH EXIT STATUS
 Upon success, the exit status 0 is returned. If any fatal error happens,
