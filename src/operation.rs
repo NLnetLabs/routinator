@@ -12,12 +12,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use clap::{App, Arg, ArgMatches, SubCommand};
+use futures::{Future, Stream};
+use futures::future::Either;
 use derive_more::From;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
+use tokio::runtime::Runtime;
+use tokio::timer::Delay;
 use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
@@ -364,7 +368,7 @@ impl Server {
             Self::daemonize(&mut config)?;
         }
 
-        let mut runtime = match tokio::runtime::Runtime::new() {
+        let mut runtime = match Runtime::new() {
             Ok(runtime) => runtime,
             Err(err) => {
                 error!("Failed to create Tokio runtime: {}", err);
@@ -372,7 +376,7 @@ impl Server {
             }
         };
         runtime.spawn(rtr).spawn(http);
-        let signal = SignalWait::new(&mut runtime)?;
+        let mut signal = SignalWait::new()?;
 
         loop {
             history.mark_update_start();
@@ -402,7 +406,7 @@ impl Server {
                 info!("Sending out notifications.");
                 notify.notify();
             }
-            match signal.wait(history.refresh_wait()) {
+            match signal.wait(&mut runtime, history.refresh_wait()) {
                 UserSignal::NoSignal => {},
                 UserSignal::ReloadTALs => {
                     match repo.reload_tals(&config) {
@@ -418,12 +422,8 @@ impl Server {
             }
         }
 
-        // XXX This seems to hang indefinitely, with or without the shutdown.
-        //     Since we are terminating the process thereafter, anyway, this
-        //     may be fine for now.
-        // unwrap!(runtime.shutdown_now().wait());
-        // Ok(())
-        std::process::exit(0);
+        unwrap!(runtime.shutdown_now().wait());
+        Ok(())
     }
 
     #[cfg(unix)]
@@ -977,50 +977,63 @@ enum UserSignal {
 /// This is going to receive a proper impl on Unix and possibly Windows.
 #[cfg(not(windows))]
 struct SignalWait {
-    chan: crossbeam_channel::Receiver<i32>
+    //chan: crossbeam_channel::Receiver<i32>
+    signals: Option<signal_hook::iterator::Async>,
 }
 
 #[cfg(not(windows))]
 impl SignalWait {
-    pub fn new(mut runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
-        let chan = Self::create_signal_notifier(&mut runtime)?;
-        Ok(SignalWait{chan})
-    }
-
-    fn create_signal_notifier(
-        runtime: &mut tokio::runtime::Runtime
-    ) -> Result<crossbeam_channel::Receiver<i32>, Error> {
-        let (s, r) = crossbeam_channel::bounded(100);
-        let signals = match signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1]) {
-            Ok(r) => r,
+    pub fn new() -> Result<Self, Error> {
+        let signals = signal_hook::iterator::Signals::new(
+            &[signal_hook::SIGUSR1]
+        ).and_then(|signals| signals.into_async());
+        match signals {
+            Ok(signals) => Ok(SignalWait { signals: Some(signals) }),
             Err(err) => {
                 error!("Attaching signals failed: {}", err);
-                return Err(Error)
+                Err(Error)
             }
-        };
-        runtime.spawn(futures::future::lazy(move || {
-            for signal in signals.forever() {
-                if s.send(signal).is_err() {
-                    break;
-                }
-            }
-            Ok(())
-        }));
-        Ok(r)
+        }
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns what to do.
-    // Clippy seems to have problems understanding the select! macro
     #[allow(clippy::needless_return)]
-    pub fn wait(&self, timeout: Duration) -> UserSignal {
-        select! {
-            recv(self.chan) -> _ => {
-                return UserSignal::ReloadTALs;
-            },
-            recv(crossbeam_channel::after(timeout)) -> _ => { return UserSignal::NoSignal; }
+    pub fn wait(
+        &mut self, runtime: &mut Runtime, timeout: Duration
+    ) -> UserSignal {
+        // If we lost our signals, we just wait for the timeout.
+        let signals = match self.signals.take() {
+            Some(signals) => signals.into_future(),
+            None => {
+                std::thread::sleep(timeout);
+                return UserSignal::NoSignal
+            }
         };
+        match runtime.block_on(
+            signals.select2(Delay::new(Instant::now() + timeout))
+        ) {
+            Ok(Either::A(((_, signals), _))) => {
+                // Signal fired first.
+                self.signals = Some(signals);
+                return UserSignal::ReloadTALs;
+            }
+            Ok(Either::B((_, signals))) => {
+                // The delay fired first.
+                self.signals = signals.into_inner();
+                return UserSignal::NoSignal;
+            }
+            Err(Either::A((_, _))) =>  {
+                // The signals errored out. Nothing we can do.
+                return UserSignal::NoSignal;
+            }
+            Err(Either::B((_, signals))) => {
+                // The delay errored out. Let’s pretend it finished.
+                self.signals = signals.into_inner();
+                return UserSignal::NoSignal;
+            }
+        }
     }
 }
 
@@ -1029,14 +1042,16 @@ struct SignalWait;
 
 #[cfg(windows)]
 impl SignalWait {
-    pub fn new(_runtime: &mut tokio::runtime::Runtime) -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Error> {
         Ok(SignalWait)
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns whether to continue working.
-    pub fn wait(&self, timeout: Duration) -> UserSignal {
+    pub fn wait(
+        &self, _runtime: &mut Runtime, timeout: Duration
+    ) -> UserSignal {
         std::thread::sleep(timeout);
         UserSignal::NoSignal
     }
