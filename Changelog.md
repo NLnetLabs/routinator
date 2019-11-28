@@ -15,7 +15,7 @@ Bug Fixes
 
 [#241]: https://github.com/NLnetLabs/routinator/pull/241
 [(#248)]: https://github.com/NLnetLabs/routinator/pull/248
-[(#250)]: https://github.com/NLnetLabs/routinator/pull/250
+[#250]: https://github.com/NLnetLabs/routinator/pull/250
 [Will McLendon]: https://github.com/wmclendon
 [Veit Heller]: https://github.com/hellerve
 
