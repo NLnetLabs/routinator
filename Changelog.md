@@ -1,19 +1,11 @@
 # Change Log
 
-## Unreleased next version
-
-Breaking
-
-New
+## 0.6.4 ‘Jeepers’
 
 Bug Fixes
 
 * Fixes an issue where Routinator occasionally gets completely stuck.
   [(#255)]
-
-Other Changes
-
-Dependencies
 
 [(#255)]: https://github.com/NLnetLabs/routinator/pull/255
 
