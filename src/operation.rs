@@ -997,7 +997,6 @@ impl SignalWait {
     /// Waits for the next thing to do.
     ///
     /// Returns what to do.
-    #[allow(clippy::needless_return)]
     pub fn wait(
         &mut self, runtime: &mut Runtime, timeout: Duration
     ) -> UserSignal {
@@ -1052,7 +1051,7 @@ impl SignalWait {
     ///
     /// Returns whether to continue working.
     pub fn wait(
-        &self, _runtime: &mut Runtime, timeout: Duration
+        &mut self, _runtime: &mut Runtime, timeout: Duration
     ) -> UserSignal {
         std::thread::sleep(timeout);
         UserSignal::NoSignal
