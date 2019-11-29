@@ -986,7 +986,7 @@ impl SignalWait {
     pub fn new() -> Result<Self, Error> {
         let signals = signal_hook::iterator::Signals::new(
             &[signal_hook::SIGUSR1]
-        ).and_then(|signals| signals.into_async());
+        ).and_then(signal_hook::iterator::Signals::into_async);
         match signals {
             Ok(signals) => Ok(SignalWait { signals: Some(signals) }),
             Err(err) => {
