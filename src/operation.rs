@@ -12,16 +12,14 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use futures::{Future, Stream};
-use futures::future::Either;
+use futures::Future;
 use derive_more::From;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
 use tokio::runtime::Runtime;
-use tokio::timer::Delay;
 use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
@@ -1003,6 +1001,10 @@ impl SignalWait {
     pub fn wait(
         &mut self, runtime: &mut Runtime, timeout: Duration
     ) -> UserSignal {
+        use futures::Stream;
+        use futures::future::Either;
+        use tokio::timer::Delay;
+
         // If we lost our signals, we just wait for the timeout.
         let signals = match self.signals.take() {
             Some(signals) => signals.into_future(),
@@ -1012,7 +1014,7 @@ impl SignalWait {
             }
         };
         match runtime.block_on(
-            signals.select2(Delay::new(Instant::now() + timeout))
+            signals.select2(Delay::new(std::time::Instant::now() + timeout))
         ) {
             Ok(Either::A(((_, signals), _))) => {
                 // Signal fired first.
