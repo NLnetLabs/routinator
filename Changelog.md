@@ -8,9 +8,14 @@ New
 
 Bug Fixes
 
+* Fixes an issue where Routinator occasionally gets completely stuck.
+  [(#255)]
+
 Other Changes
 
 Dependencies
+
+[(#255)]: https://github.com/NLnetLabs/routinator/pull/255
 
 
 ## 0.6.3 ‘That Escalated Fast’
