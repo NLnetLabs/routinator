@@ -1018,21 +1018,21 @@ impl SignalWait {
             Ok(Either::A(((_, signals), _))) => {
                 // Signal fired first.
                 self.signals = Some(signals);
-                return UserSignal::ReloadTALs;
+                UserSignal::ReloadTALs
             }
             Ok(Either::B((_, signals))) => {
                 // The delay fired first.
                 self.signals = signals.into_inner();
-                return UserSignal::NoSignal;
+                UserSignal::NoSignal
             }
             Err(Either::A((_, _))) =>  {
                 // The signals errored out. Nothing we can do.
-                return UserSignal::NoSignal;
+                UserSignal::NoSignal
             }
             Err(Either::B((_, signals))) => {
                 // The delay errored out. Let’s pretend it finished.
                 self.signals = signals.into_inner();
-                return UserSignal::NoSignal;
+                UserSignal::NoSignal
             }
         }
     }
