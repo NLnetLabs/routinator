@@ -45,21 +45,16 @@ you can let the Routinator Docker image install the TALs into a mounted
 volume that is later reused for the server:
 
 ```bash
-# Create a host directory to persist TALs in
-sudo mkdir -p /etc/routinator/tals
-# Chown the directory so that the routinator user within the container can
-# access it (rw). The default username inside the container is `routinator`,
-# and the default UID and GID are both 1012. This can be modified by setting
-# the environment variables RUN_USER, RUN_USER_UID, RUN_USER_GID respectively.
-sudo chown -R 1012:1012 /etc/routinator/tals
+# Create a Docker volume to persist TALs in
+sudo docker volume create routinator-tals
 # Review the ARIN terms.
 # Run a disposable container to install TALs.
-sudo docker run --rm -v /etc/routinator/tals:/home/routinator/.rpki-cache/tals \
+sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
     nlnetlabs/routinator init -f --accept-arin-rpa
 # Launch the final detached container named 'routinator' exposing RTR on
 # port 3323 and HTTP on port 9556
 sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-     -p 9556:9556 -v /etc/routinator/tals:/home/routinator/.rpki-cache/tals \
+     -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
      nlnetlabs/routinator
 ```
 
