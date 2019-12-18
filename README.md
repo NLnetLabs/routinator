@@ -4,7 +4,7 @@
 [![](https://img.shields.io/docker/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
 [![](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![Documentation Status](https://readthedocs.org/projects/rpki/badge/?version=latest)](https://rpki.readthedocs.io/en/latest/?badge=latest)
-[![](https://img.shields.io/badge/Spotify-∞-green.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
+[![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
