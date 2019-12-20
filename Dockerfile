@@ -19,7 +19,7 @@ ARG RUN_USER_UID=1012
 ARG RUN_USER_GID=1012
 
 # Install rsync as routinator depends on it
-RUN apk add rsync libgcc
+RUN apk add --no-cache rsync libgcc
 
 RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
     adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
