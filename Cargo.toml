@@ -28,7 +28,7 @@ log             = "^0.4"
 log-reroute	= "^0.1.2"
 num_cpus        = "^1.0"
 rand            = "^0.7"
-reqwest		= { version = "^0.9.19", default-features = false, features = [ "rustls-tls", "socks" ]}
+reqwest		= { version = "^0.9.19", default-features = false }
 ring		= "^0.14"
 rpki            = "^0.8.0"
 serde		= "^1.0"
@@ -52,8 +52,13 @@ syslog		= "^4.0"
 rustc_version   = "^0.2.3"
 
 [features]
-default = []
+default = ["default-tls", "socks"]
 extra-debug = [ "rpki/extra-debug" ]
+socks = [ "reqwest/socks" ]
+default-tls = [ "reqwest/default-tls", "tls" ]
+default-tls-vendored = [ "reqwest/default-tls-vendored", "tls" ]
+rustls-tls = [ "reqwest/rustls-tls", "tls" ]
+tls = []
 
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"

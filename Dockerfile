@@ -1,7 +1,7 @@
 # -- stage 1: build static routinator with musl libc for alpine
 FROM alpine:3.10.3 as build
 
-RUN apk add rust cargo
+RUN apk add rust cargo openssl-dev
 
 WORKDIR /tmp/routinator
 COPY . .
