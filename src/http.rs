@@ -276,7 +276,7 @@ impl Service {
         // rrdp_duration
         unwrap!(writeln!(res, "
             \n\
-            # HELP routinator_rrdp_duration duration of rsync in seconds\n\
+            # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
             # TYPE routinator_rrdp_duration gauge"
         ));
         for metrics in metrics.rrdp() {
