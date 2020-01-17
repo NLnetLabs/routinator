@@ -56,6 +56,6 @@ jobs:
         # set is being used.
         FEATURE_EXT=""
         [[ "${{ matrix.tls }}" != "${DEFAULT_TLS}"]] && FEATURE_EXT="-${{ matrix.tls }}"
-        docker build -t ${DOCKER_HUB_REPO}:${TAG}${FEATURE_EXT} .
+        docker build -t ${DOCKER_HUB_REPO}:${TAG}${FEATURE_EXT} --build-arg 'TLS=${{ matrix.tls }}' .
 
         docker push ${DOCKER_HUB_REPO}:${TAG}${FEATURE_EXT}
