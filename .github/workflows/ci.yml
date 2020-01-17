@@ -26,8 +26,8 @@ jobs:
   dockerhub:
     name: build-and-push
     needs: test
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
-        (github.event.name == 'release' && startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || 
+        (github.event.name == 'release' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     strategy:
       matrix:
