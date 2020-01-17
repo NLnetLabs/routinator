@@ -52,7 +52,7 @@ syslog		= "^4.0"
 rustc_version   = "^0.2.3"
 
 [features]
-default = ["default-tls", "socks"]
+default = ["rustls-tls", "socks"]
 extra-debug = [ "rpki/extra-debug" ]
 socks = [ "reqwest/socks" ]
 default-tls = [ "reqwest/default-tls", "tls" ]
