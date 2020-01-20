@@ -30,9 +30,10 @@ routinator init
 routinator server --rtr 127.0.0.1:3323
 ```
 
-If you have an older version of the Routinator, you can update via
+If you have an older version of Rust and Routinator, you can update using
 
 ```bash
+rustup update
 cargo install -f routinator
 ```
 
