@@ -6,7 +6,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/routinator --config=/etc/routinator/routinator.conf --syslog server
 Type=exec
-RestartSec=0
+Restart=on-failure
 User=routinator
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
