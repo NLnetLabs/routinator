@@ -16,9 +16,10 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have a newly installed Debian or Ubuntu machine, you must first
-install rsync, the C toolchain and Rust. You then install Routinator and start
-it up as an RTR server listening on 127.0.0.1 port 3323:
+Assuming you have a newly installed Debian or Ubuntu machine, you will need to 
+install rsync, the C toolchain and Rust. You can then install Routinator and
+start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
+port 8323:
 
 ```bash
 apt install rsync build-essential
@@ -27,7 +28,7 @@ source ~/.cargo/env
 cargo install routinator
 routinator init
 # Follow instructions provided
-routinator server --rtr 127.0.0.1:3323
+routinator server --rtr 127.0.0.1:3323 --http 127.0.0.1:8323
 ```
 
 If you have an older version of Rust and Routinator, you can update using
