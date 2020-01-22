@@ -16,22 +16,25 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have rsync and the C toolchain but not yet [Rust 1.34](#rust)
-or newer, here’s how you get the Routinator to run as an RTR server listening
-on 127.0.0.1 port 3323:
+Assuming you have a newly installed Debian or Ubuntu machine, you will need to 
+install rsync, the C toolchain and Rust. You can then install Routinator and
+start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
+port 8323:
 
 ```bash
-curl https://sh.rustup.rs -sSf | sh
+apt install rsync build-essential
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 cargo install routinator
 routinator init
 # Follow instructions provided
-routinator server --rtr 127.0.0.1:3323
+routinator server --rtr 127.0.0.1:3323 --http 127.0.0.1:8323
 ```
 
-If you have an older version of the Routinator, you can update via
+If you have an older version of Rust and Routinator, you can update using
 
 ```bash
+rustup update
 cargo install -f routinator
 ```
 
@@ -79,7 +82,7 @@ the RPKI-RTR protocol or can output it in a number of useful formats.
 Routinator is designed to be lean and is capable of running on minimalist
 hardware, such as a Raspberry Pi. Running it on a system with 1GB of
 available RAM and 1GB of available disk space will give the global RPKI
-data set enough room to grow for the forseeable future. A powerful CPU is
+data set enough room to grow for the foreseeable future. A powerful CPU is
 not required, as cryptographic validation currently takes less than two
 seconds on an average system.
 
@@ -113,10 +116,10 @@ If you don’t have rsync, please head to http://rsync.samba.org/
 
 Some of the libraries Routinator depends on require a C toolchain to be
 present. Your system probably has some easy way to install the minimum
-set of packages to build from C sources. For example, `apt install 
+set of packages to build from C sources. For example, `apt install
 build-essential` will install everything you need on Debian/Ubuntu.
 
-If you are unsure, try to run `cc` on a command line and if there’s a 
+If you are unsure, try to run `cc` on a command line and if there’s a
 complaint about missing input files, you are probably good to go.
 
 On some older systems, the toolchain may not be up-to-date enough. We
@@ -138,7 +141,7 @@ tool called ``rustup``.
 To install ``rustup`` and Rust, simply do:
 
 ```bash
-curl https://sh.rustup.rs -sSf | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 or, alternatively, get the file, have a look and then run it manually.
@@ -151,8 +154,8 @@ You can update your Rust installation later by simply running
 rustup update
 ```
 
-To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH 
-environment variable. To configure your current shell, run 
+To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
+environment variable. To configure your current shell, run
 
 ```bash
 source $HOME/.cargo/env
