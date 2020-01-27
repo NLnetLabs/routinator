@@ -1,8 +1,7 @@
 name: ci
-on: [push, pull_request, release]
+on: [push, pull_request]
 jobs:
   test:
-    if: github.event_name != 'release'
     name: test
     runs-on: ${{ matrix.os }}
     strategy:
@@ -23,39 +22,3 @@ jobs:
     - run: cargo build --verbose
     - run: cargo test --verbose
 
-  dockerhub:
-    name: build-and-push
-    needs: test
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || 
-        (github.event.name == 'release' && startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        tls: [default-tls, default-tls-vendored, rustls-tls]
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v1
-
-    - name: Login to Docker Hub
-      run: |
-        echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-
-    - name: Build and push Docker image
-      run: |
-        set -eux
-        DOCKER_HUB_REPO="nlnetlabs/routinator"
-        DEFAULT_TLS="rustls-tls"
-
-        # Determine the base tag to use, is this a push to master or the release
-        # of a tag?
-        TAG="latest"
-        [[ "${{ github.event.name }}" == "release" ]] && TAG=${GITHUB_REF##refs/tags/}
-
-        # Determine the feature extension to add to the Docker image tag.
-        # No feature extension is applied to the tag if the default feature
-        # set is being used.
-        FEATURE_EXT=""
-        [[ "${{ matrix.tls }}" != "${DEFAULT_TLS}" ]] && FEATURE_EXT="-${{ matrix.tls }}"
-        docker build -t ${DOCKER_HUB_REPO}:${TAG}${FEATURE_EXT} --build-arg 'TLS=${{ matrix.tls }}' .
-
-        docker push ${DOCKER_HUB_REPO}:${TAG}${FEATURE_EXT}

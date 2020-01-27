@@ -181,6 +181,22 @@ The command will build Routinator and install it in the same directory
 that cargo itself lives in (likely `$HOME/.cargo/bin`).
 Which means Routinator will be in your path, too.
 
+## Using OpenSSL instead of Rustls
+
+Routinator by default uses [Rustls](https://github.com/ctz/rustls) which in 
+most cases is fine. However, if needed you can instead use your system OpenSSL
+with Routinator instead like so:
+
+```bash
+git clone --branch v0.6.4 --depth 1 https://github.com/NLnetLabs/routinator.git
+cd routinator
+cargo build --release --features socks,default-tls
+```
+
+If using Docker, to use the OpenSSL support you must explicitly request a
+different tag, namely: `nlnetlabs/routinator:default-tls`. To use a specific 
+version of Routinator the should be: `nlnetlabs/routinator:vX.Y.Z-default-tls`.
+
 ## Running
 
 All functions of Routinator are accessible on the command line via

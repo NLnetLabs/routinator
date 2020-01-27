@@ -1,8 +1,7 @@
 # -- stage 1: build static routinator with musl libc for alpine
 FROM alpine:3.10.3 as build
-ARG TLS=rustls-tls
 
-RUN apk add rust cargo openssl-dev
+RUN apk add rust cargo
 
 WORKDIR /tmp/routinator
 COPY . .
@@ -10,8 +9,7 @@ COPY . .
 RUN cargo build \
     --target x86_64-alpine-linux-musl \
     --release \
-    --locked \
-    --features socks,${TLS}
+    --locked
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
