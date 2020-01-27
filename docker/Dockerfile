@@ -13,7 +13,7 @@ RUN cargo build \
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
-FROM alpine:3.10.3
+FROM alpine:3.11.3
 COPY --from=build /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator /usr/local/bin/
 
 # Build variables for uid and guid of user to run container
@@ -22,7 +22,7 @@ ARG RUN_USER_UID=1012
 ARG RUN_USER_GID=1012
 
 # Install rsync as routinator depends on it
-RUN apk add rsync libgcc
+RUN apk add --no-cache rsync libgcc
 
 RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
     adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
