@@ -6,7 +6,10 @@ RUN apk add rust cargo
 WORKDIR /tmp/routinator
 COPY . .
 
-RUN cargo build --target x86_64-alpine-linux-musl --release --locked
+RUN cargo build \
+    --target x86_64-alpine-linux-musl \
+    --release \
+    --locked
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable

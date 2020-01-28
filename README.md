@@ -184,6 +184,32 @@ The command will build Routinator and install it in the same directory
 that cargo itself lives in (likely `$HOME/.cargo/bin`).
 Which means Routinator will be in your path, too.
 
+## Using native TLS instead of Rustls
+
+Routinator by default uses [Rustls](https://github.com/ctz/rustls) which in
+most cases is fine. However, if needed you can instead use your system native
+TLS implementation with Routinator like so:
+
+**Cargo:**
+
+Build Routinator with the `native-tls` feature enabled:
+
+```bash
+git clone --branch vX.Y.Z --depth 1 https://github.com/NLnetLabs/routinator.git
+cd routinator
+cargo build --release --features socks,native-tls
+```
+
+**Docker:**
+
+Specify a `native-tls` image tag when running the container:
+
+```bash
+sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
+     -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
+     nlnetlabs/routinator:native-tls
+```
+
 ## Running
 
 All functions of Routinator are accessible on the command line via
