@@ -1,3 +1,6 @@
+# This Dockerfile is a slightly modified copy of the main Dockerfile which
+# builds Routinator with support for native-tls instead of rustls-tls.
+
 # -- stage 1: build static routinator with musl libc for alpine
 FROM alpine:3.11.3 as build
 
@@ -10,7 +13,7 @@ RUN cargo build \
     --target x86_64-alpine-linux-musl \
     --release \
     --locked \
-    --features socks,default-tls
+    --features socks,native-tls
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
