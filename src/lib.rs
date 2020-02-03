@@ -26,6 +26,7 @@
 //! [origins]: origins/index.html
 //! [repository]: repository/index.html
 //!
+#![allow(clippy::unknown_clippy_lints)]
 
 pub use self::config::Config;
 pub use self::operation::{Error, ExitError, Operation};
