@@ -202,6 +202,7 @@ impl<'a> Run<'a> {
         }
     }
 
+    #[allow(clippy::mutable_key_type)] // XXX False positive, I think
     fn cleanup_host(entry: fs::DirEntry, modules: &HashSet<uri::RsyncModule>) {
         if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
             return
@@ -272,6 +273,7 @@ impl<'a> Run<'a> {
     }
 
     /// Return if module has been removed.
+    #[allow(clippy::mutable_key_type)] // XXX False positive, I think
     fn cleanup_module(
         module: uri::RsyncModule,
         path: PathBuf,
