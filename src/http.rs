@@ -116,6 +116,12 @@ impl hyper::service::Service for Service {
                     "/openbgpd" => {
                         self.vrps(req.uri().query(), OutputFormat::Openbgpd)
                     }
+                    "/bird" => {
+                        self.vrps(req.uri().query(), OutputFormat::Bird1)
+                    }
+                    "/bird2" => {
+                        self.vrps(req.uri().query(), OutputFormat::Bird2)
+                    }
                     "/rpsl" => {
                         self.vrps(req.uri().query(), OutputFormat::Rpsl)
                     }
