@@ -16,7 +16,7 @@ You can lean more about Routinator and RPKI technology by reading our documentat
 
 ## Quick Start
 
-Assuming you have a newly installed Debian or Ubuntu machine, you will need to 
+Assuming you have a newly installed Debian or Ubuntu machine, you will need to
 install rsync, the C toolchain and Rust. You can then install Routinator and
 start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
 port 8323:
@@ -25,7 +25,7 @@ port 8323:
 apt install rsync build-essential
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-cargo install routinator
+cargo install --locked routinator
 routinator init
 # Follow instructions provided
 routinator server --rtr 127.0.0.1:3323 --http 127.0.0.1:8323
@@ -35,7 +35,7 @@ If you have an older version of Rust and Routinator, you can update using
 
 ```bash
 rustup update
-cargo install -f routinator
+cargo install --locked --force routinator
 ```
 
 ## Quick Start with Docker
@@ -166,7 +166,7 @@ source $HOME/.cargo/env
 The easiest way to get Routinator is to leave it to cargo by saying
 
 ```bash
-cargo install routinator
+cargo install --locked routinator
 ```
 
 If you want to try the master branch from the repository instead of a
