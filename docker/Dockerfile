@@ -14,6 +14,7 @@ RUN cargo build \
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
 FROM alpine:3.11.3
+
 COPY --from=build /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator /usr/local/bin/
 
 # Build variables for uid and guid of user to run container
@@ -42,5 +43,11 @@ USER $RUN_USER_UID
 EXPOSE 3323/tcp
 EXPOSE 9556/tcp
 
-ENTRYPOINT ["routinator"]
+# Use Tini to ensure that Routinator responds to CTRL-C when run in the
+# foreground without the Docker argument "--init" (which is actually another
+# way of activating Tini, but cannot be enabled from inside the Docker image).
+ADD https://github.com/krallin/tini/releases/download/v0.18.0/tini /tini
+RUN chmod +x /tini
+
+ENTRYPOINT ["/tini", "--", "routinator"]
 CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:9556"]
