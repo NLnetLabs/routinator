@@ -342,3 +342,6 @@ port can be launched so:
 ```bash
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.2.13:9556
 ```
+
+A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is 
+available to get started.
