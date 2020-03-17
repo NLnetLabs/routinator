@@ -45,8 +45,8 @@ EXPOSE 9556/tcp
 # Use Tini to ensure that Routinator responds to CTRL-C when run in the
 # foreground without the Docker argument "--init" (which is actually another
 # way of activating Tini, but cannot be enabled from inside the Docker image).
-ADD https://github.com/krallin/tini/releases/download/v0.18.0/tini /tini
-RUN chmod +x /tini
+RUN apk add --no-cache tini
+# Tini is now available at /sbin/tini
 
-ENTRYPOINT ["/tini", "--", "routinator"]
+ENTRYPOINT ["/sbin/tini", "--", "routinator"]
 CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:9556"]
