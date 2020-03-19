@@ -312,9 +312,9 @@ are used.
 
 The configuration file is a TOML file. Its entries are named similarly to
 the command line options. Details about the available entries and there
-meaning can be found in the manual page. In addition, a complete sample
-configuration file showing all the default values can be found in the
-repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
+meaning can be found in the [manual page](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
+In addition, a complete sample configuration file showing all the default
+values can be found in the repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
 
 ## Local Exceptions
 
