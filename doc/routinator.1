@@ -228,8 +228,8 @@ doing outgoing requests.
 .TP
 .BI --rrdp-root-cert= path
 This option provides a path to a file that contains a certificate in PEM
-encoding that should be used as a trusted certificate for HTTPS server 
-authentication. The option can be given more then once.
+encoding that should be used as a trusted certificate for HTTPS server
+authentication. The option can be given more than once.
 .IP
 Providing this option does
 .I not
@@ -271,9 +271,9 @@ A single
 .B -q
 will drop the log level to
 .I error\fR.
-Repeating 
+Repeating
 .B -q
-more than once turns logging off completely. 
+more than once turns logging off completely.
 .TP
 .BR \-\-syslog
 Redirect logging output to syslog.
@@ -316,7 +316,7 @@ Forces installation of the TALs even if the TAL directory already exists.
 Before you can use the ARIN TAL, you need to agree to the ARIN Relying Party
 Agreement (RPA). You can find it at
 .I https://www.arin.net/resources/manage/rpki/rpa.pdf
-and explicitely agree to it via this option. This explicit agreement is
+and explicitly agree to it via this option. This explicit agreement is
 necessary in order to install the ARIN TAL.
 .TP
 .B --decline-arin-rpa
@@ -328,7 +328,7 @@ published for resources assigned under ARIN.
 .SS vrps
 This command requests that Routinator update the local repository and then
 validate the Route Origin Attestations in the repository and output the
-valid route origins, which are also known as Validated ROA Payload or VRPs, 
+valid route origins, which are also known as Validated ROA Payload or VRPs,
 as a list.
 .TP
 .BI -o\  file \fR,\ \fB\-\-output= file
@@ -482,9 +482,9 @@ them, you will have to restart Routinator.
 You can provide a number of addresses and ports to listen on for RTR and HTTP
 through command line options or their configuration file equivalent.
 Currently, Routinator will only start listening on these ports after an
-intitial validation run has finished.
+initial validation run has finished.
 .PP
-It will not listen on any sockets unless explicitely specified. It
+It will not listen on any sockets unless explicitly specified. It
 will still run and periodically update the repository. This might be useful
 for use with
 .B vrps
@@ -515,7 +515,7 @@ The RTR listening socket will be acquired from systemd via socket
 activation. Use this option together with systemd’s socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
 .IP
-Currently, all TCP listener sockets handed over by systemd will be used for 
+Currently, all TCP listener sockets handed over by systemd will be used for
 the RTR protocol.
 .TP
 .BI \-\-refresh= seconds
@@ -617,7 +617,7 @@ no options are used at all is
 This directory can be created and populated with the TALs of the five
 Regional Internet Registries (RIRs) via the
 .B init
-command. 
+command.
 .P
 If the directory does exist, Routinator will use all files with an extension
 of
@@ -683,7 +683,7 @@ out after ten seconds. If your rsync is too old to support this option, no
 arguments are used.
 .TP
 .B rsync-timeout
-An integer value specifying th number seconds an rsync command is allowed to
+An integer value specifying the number of seconds an rsync command is allowed to
 run before it is being terminated. The default if the value is missing is
 300 seconds.
 
@@ -711,7 +711,7 @@ A string value that provides the local address to be used by RRDP connections.
 .B rrdp-root-certs
 A list of strings each providing a path to a file containing a trust anchor
 certificate for HTTPS authentication of RRDP connections. In addition to the
-certiciates provided via this option, the system's own trust store is used.
+certificates provided via this option, the system's own trust store is used.
 
 .TP
 .B rrdp-proxies
@@ -721,7 +721,7 @@ proxies are supported.
 
 .TP
 .B dirty
-A boolean value which, if true, specififies that unused files and directories
+A boolean value which, if true, specifies that unused files and directories
 should not be deleted from the repository directory after each validation run.
 If left out, its value will be false and unused files will be deleted.
 .TP
@@ -775,12 +775,12 @@ The default value if this entry is missing is
 .B rtr-listen
 An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square braces.
+a colon. IPv6 address should be enclosed in square brackets.
 .TP
 .B http-listen
 An array of string values each providing the address and port which the HTTP
 service should listen on. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square braces.
+a colon. IPv6 address should be enclosed in square brackets.
 .TP
 .B listen-systemd
 The RTR TCP listening socket will be acquired from systemd via socket
@@ -790,7 +790,7 @@ Routinator running as a regular user to bind to the default RTR port 323.
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in server mode. The next validation run
-will happen earlier, if objects expire ealier. The default is 600 seconds.
+will happen earlier, if objects expire earlier. The default is 600 seconds.
 .TP
 .B retry
 An integer value specifying the number of seconds an RTR client is requested
@@ -827,7 +827,7 @@ A string value containing the group name a daemon process should run as.
 
 .SH HTTP SERVICE
 Routinator can provide an HTTP service allowing to fetch the Validated ROA
-Payload in various formats. The service does not support HTTPS and should 
+Payload in various formats. The service does not support HTTPS and should
 only be used within the local network.
 .P
 The service only supports GET requests with the following
@@ -868,7 +868,7 @@ Returns the version of the Routinator instance.
 .TP
 .B /api/v1/validity/\fIas-number\fB/\fIprefix
 Returns a JSON object describing whether the route announcement given by
-its origin AS number and address preifx is RPKI valid, invalid, or not found.
+its origin AS number and address prefix is RPKI valid, invalid, or not found.
 The returned object is compatible with that provided by the RIPE NCC RPKI
 Validator. For more information, see
 .I https://www.ripe.net/support/documentation/developer-documentation/rpki-validator-api
