@@ -17,9 +17,13 @@ use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use rpki::x509::Time;
+use rpki_rtr::payload::{Action, Payload, Ipv4Prefix, Ipv6Prefix};
+use rpki_rtr::pdu::Timing;
+use rpki_rtr::serial::Serial;
+use rpki_rtr::server::VrpStore;
 use unwrap::unwrap;
+use crate::config::Config;
 use crate::metrics::{Metrics, TalMetrics};
-use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
 
 
@@ -81,6 +85,9 @@ struct HistoryInner {
     /// The current metrics.
     metrics: Option<Arc<Metrics>>,
 
+    /// The session ID.
+    session: u16,
+
     /// The number of diffs to keep.
     keep: usize,
 
@@ -96,31 +103,39 @@ struct HistoryInner {
     /// The duration of the last update run.
     last_update_duration: Option<Duration>,
 
-    /// The instant when we are scheduled to strat the next update.
+    /// The instant when we are scheduled to start the next update.
     next_update_start: SystemTime,
+
+    /// Default RTR timing.
+    timing: Timing,
 }
 
 impl OriginsHistory {
     /// Creates a new history from the given initial data.
-    ///
-    /// The history will start out with `current` as its initial address
-    /// origins, an empty diff list, and a maximum length of the diff list
-    /// of `keep`.
     pub fn new(
-        keep: usize,
-        refresh: Duration,
+        config: &Config,
     ) -> Self {
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
-                next_update_start: SystemTime::now() + refresh,
+                next_update_start: SystemTime::now() + config.refresh,
                 current: None,
-                diffs: VecDeque::with_capacity(keep),
+                diffs: VecDeque::with_capacity(config.history_size),
                 metrics: None,
-                keep,
-                refresh,
+                session: {
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+                        .as_secs() as u16
+                },
+                keep: config.history_size,
+                refresh: config.refresh,
                 last_update_start: Instant::now(),
                 last_update_done: None,
                 last_update_duration: None,
+                timing: Timing {
+                    refresh: config.refresh.as_secs() as u32,
+                    retry: config.retry.as_secs() as u32,
+                    expire: config.expire.as_secs() as u32,
+                }
             }
         )))
     }
@@ -162,53 +177,7 @@ impl OriginsHistory {
     /// can’t, either because it doesn’t have enough history data or because
     /// the serial is actually in the future.
     pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
-        debug!("Fetching diff for serial {}", serial);
-        let history = self.0.read().unwrap();
-        if let Some(diff) = history.diffs.front() {
-            debug!("Our current serial is {}", diff.serial);
-            if diff.serial() < serial {
-                // If they give us a future serial, we reset.
-                debug!("Future, forcing reset.");
-                return None
-            }
-            else if diff.serial() == serial {
-                debug!("Same, producing empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else if diff.serial() == serial.add(1) {
-                // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
-                return Some(diff.clone())
-            }
-        }
-        else {
-            debug!("We are at serial 0.");
-            if serial == 0 {
-                debug!("Same, returning empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else {
-                // That pesky future serial again.
-                debug!("Future, forcing reset.");
-                return None
-            }
-        }
-        debug!("Merging diffs.");
-        let mut iter = history.diffs.iter().rev();
-        while let Some(diff) = iter.next() {
-            match diff.serial().partial_cmp(&serial) {
-                Some(cmp::Ordering::Greater) => return None,
-                Some(cmp::Ordering::Equal) => break,
-                _ => continue
-            }
-        }
-        // We already know that the serial’s diff wasn’t last, so unwrap is
-        // fine.
-        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
-        for diff in iter {
-            res.merge(diff.as_ref())
-        }
-        Some(res.into_diff())
+        self.0.read().unwrap().get(serial)
     }
 
     /// Returns the serial number of the current version of the origin list.
@@ -316,6 +285,54 @@ impl OriginsHistory {
     }
 }
 
+impl VrpStore for OriginsHistory {
+    type FullIter = AddressOriginsIter;
+    type DiffIter = DiffIter;
+
+    fn ready(&self) -> bool {
+        self.is_active()
+    }
+
+    fn notify(&self) -> (u16, Serial) {
+        let history = self.0.read().unwrap();
+        (history.session, history.serial())
+    }
+
+    fn full(&self) -> (u16, Serial, Self::FullIter) {
+        let history = self.0.read().unwrap();
+        (
+            history.session,
+            history.serial(),
+            AddressOriginsIter::new(
+                history.current.clone().unwrap_or_default()
+            )
+        )
+    }
+
+    fn diff(
+        &self, session: u16, serial: Serial
+    ) -> Option<(u16, Serial, Self::DiffIter)> {
+        let history = self.0.read().unwrap();
+        if history.session != session {
+            return None
+        }
+        history.get(serial).map(|diff| {
+            (
+                history.session,
+                history.serial(),
+                DiffIter::new(diff)
+            )
+        })
+    }
+
+    fn timing(&self) -> Timing {
+        let this = self.0.read().unwrap();
+        let mut res = this.timing;
+        res.refresh = this.next_refresh().as_secs() as u32;
+        res
+    }
+}
+
 impl HistoryInner {
     /// Returns the current serial.
     ///
@@ -334,6 +351,77 @@ impl HistoryInner {
             let _ = self.diffs.pop_back();
         }
         self.diffs.push_front(Arc::new(diff))
+    }
+
+    /// Returns a diff from the given serial number.
+    ///
+    /// The serial is what the requestor has last seen. The method produces
+    /// a diff from that version to the current version if it can. If it
+    /// can’t, either because it doesn’t have enough history data or because
+    /// the serial is actually in the future.
+    pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
+        debug!("Fetching diff for serial {}", serial);
+        if let Some(diff) = self.diffs.front() {
+            debug!("Our current serial is {}", diff.serial);
+            if diff.serial() < serial {
+                // If they give us a future serial, we reset.
+                debug!("Future, forcing reset.");
+                return None
+            }
+            else if diff.serial() == serial {
+                debug!("Same, producing empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else if diff.serial() == serial.add(1) {
+                // This relies on serials increasing by one always.
+                debug!("One behind, just clone.");
+                return Some(diff.clone())
+            }
+        }
+        else {
+            debug!("We are at serial 0.");
+            if serial == 0 {
+                debug!("Same, returning empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else {
+                // That pesky future serial again.
+                debug!("Future, forcing reset.");
+                return None
+            }
+        }
+        debug!("Merging diffs.");
+        let mut iter = self.diffs.iter().rev();
+        while let Some(diff) = iter.next() {
+            match diff.serial().partial_cmp(&serial) {
+                Some(cmp::Ordering::Greater) => return None,
+                Some(cmp::Ordering::Equal) => break,
+                _ => continue
+            }
+        }
+        // We already know that the serial’s diff wasn’t last, so unwrap is
+        // fine.
+        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
+        for diff in iter {
+            res.merge(diff.as_ref())
+        }
+        Some(res.into_diff())
+    }
+
+    /// Returns the time a client should wait for its next refresh.
+    fn next_refresh(&self) -> Duration {
+        // Next update starts at last_update_done + refresh. It should finish
+        // about last_update_duration later. Let’s double that to be safe. If
+        // we don’t have a last_update_duration, we just use two minute as a
+        // guess.
+        let duration = self.last_update_duration.map(|some| 2 * some)
+                           .unwrap_or(Duration::from_secs(120));
+        let from = self.last_update_done.unwrap_or_else(|| {
+            self.last_update_start + duration
+        });
+        self.refresh.checked_sub(
+            Instant::now().saturating_duration_since(from)
+        ).unwrap_or(Duration::new(0, 0)) + duration
     }
 }
 
@@ -471,6 +559,7 @@ impl AddressOrigins {
     ) -> Self {
         let mut res = HashSet::new();
         let mut refresh = None;
+
         for item in report.origins {
             if let Some(time) = item.refresh {
                 match refresh {
@@ -544,6 +633,31 @@ impl AsRef<Self> for AddressOrigins {
 impl AsRef<[AddressOrigin]> for AddressOrigins {
     fn as_ref(&self) -> &[AddressOrigin] {
         self.origins.as_ref()
+    }
+}
+
+
+//------------ AddressOriginsIter --------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct AddressOriginsIter {
+    origins: Arc<AddressOrigins>,
+    pos: usize
+}
+
+impl AddressOriginsIter {
+    fn new(origins: Arc<AddressOrigins>) -> Self {
+        AddressOriginsIter { origins, pos: 0 }
+    }
+}
+
+impl Iterator for AddressOriginsIter {
+    type Item = Payload;
+
+    fn next(&mut self) -> Option<Payload> {
+        let res = self.origins.origins.get(self.pos)?;
+        self.pos += 1;
+        Some(res.payload())
     }
 }
 
@@ -674,6 +788,57 @@ impl OriginsDiff {
 }
 
 
+//------------ DiffIter ------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct DiffIter {
+    /// The diff we are iterating over.
+    diff: Arc<OriginsDiff>,
+    
+    /// The position of the iterator.
+    ///
+    /// If it is `Ok(some)` we are in announcements, if it is `Err(some)` we
+    /// are in withdrawals.
+    pos: Result<usize, usize>,
+}
+
+impl DiffIter {
+    fn new(diff: Arc<OriginsDiff>) -> Self {
+        DiffIter { diff, pos: Ok(0) }
+    }
+}
+
+impl Iterator for DiffIter {
+    type Item = (Action, Payload);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.pos {
+            Ok(pos) => {
+                match self.diff.announce.get(pos) {
+                    Some(res) => {
+                        self.pos = Ok(pos + 1);
+                        Some((Action::Announce, res.payload()))
+                    }
+                    None => {
+                        self.pos = Err(0);
+                        self.next()
+                    }
+                }
+            }
+            Err(pos) => {
+                match self.diff.withdraw.get(pos) {
+                    Some(res) => {
+                        self.pos = Err(pos + 1);
+                        Some((Action::Withdraw, res.payload()))
+                    }
+                    None => None
+                }
+            }
+        }
+    }
+}
+
+
 //------------ DiffMerger ----------------------------------------------------
 
 /// A helper struct that allows merging two diffs into a combined diff.
@@ -783,6 +948,28 @@ impl AddressOrigin {
             prefix: AddressPrefix::from(&addr),
             max_length: addr.max_length(),
             info
+        }
+    }
+
+    /// Returns the RTR payload for the origin.
+    pub fn payload(&self) -> Payload {
+        match self.address() {
+            IpAddr::V4(addr) => {
+                Payload::V4(Ipv4Prefix {
+                    prefix: addr,
+                    prefix_len: self.address_length(),
+                    max_len: self.max_length(),
+                    asn: self.as_id().into(),
+                })
+            }
+            IpAddr::V6(addr) => {
+                Payload::V6(Ipv6Prefix {
+                    prefix: addr,
+                    prefix_len: self.address_length(),
+                    max_len: self.max_length(),
+                    asn: self.as_id().into(),
+                })
+            }
         }
     }
 

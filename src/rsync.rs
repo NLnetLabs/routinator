@@ -545,7 +545,7 @@ fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<Bytes> {
     let name = entry.file_name();
     name.to_str().and_then(|name| {
         if uri::is_uri_ascii(name) {
-            Some(Bytes::from(name.as_bytes()))
+            Some(Bytes::copy_from_slice(name.as_bytes()))
         }
         else {
             None

@@ -5,8 +5,12 @@
 use std::{fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+use clap::crate_version;
 use derive_more::{Display, From};
 use log::{error, info};
+use reqwest::{Certificate, Proxy, StatusCode};
+use reqwest::blocking::{Client, ClientBuilder, Response};
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
@@ -22,11 +26,19 @@ use crate::operation::Error;
 use super::utils::create_unique_file;
 
 
+//------------ Configuration Constants ---------------------------------------
+
+/// The default timeout for RRDP requests.
+///
+/// This is mentioned in the man page. If you change it, also change it there.
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+
 //------------ HttpClient ----------------------------------------------------
 
 #[derive(Debug)]
 pub struct HttpClient {
-    client: Result<reqwest::Client, Option<reqwest::ClientBuilder>>,
+    client: Result<Client, Option<ClientBuilder>>,
     tmp_dir: PathBuf,
 }
 
@@ -44,12 +56,19 @@ impl HttpClient {
     }
 
     pub fn new(config: &Config) -> Result<Self, Error> {
-        let mut builder = reqwest::Client::builder();
-        if let Some(timeout) = config.rrdp_timeout {
-            builder = builder.timeout(timeout);
+        let mut builder = Client::builder();
+        builder = builder.user_agent(concat!("Routinator ", crate_version!()));
+        match config.rrdp_timeout {
+            Some(Some(timeout)) => {
+                builder = builder.timeout(timeout);
+            }
+            Some(None) => { /* keep no timeout */ }
+            None => {
+                builder = builder.timeout(DEFAULT_TIMEOUT);
+            }
         }
         if let Some(timeout) = config.rrdp_connect_timeout {
-            builder = builder.connect_timeout(Some(timeout));
+            builder = builder.connect_timeout(timeout);
         }
         if let Some(addr) = config.rrdp_local_addr {
             builder = builder.local_address(addr)
@@ -60,7 +79,7 @@ impl HttpClient {
             );
         }
         for proxy in &config.rrdp_proxies {
-            let proxy = match reqwest::Proxy::all(proxy) {
+            let proxy = match Proxy::all(proxy) {
                 Ok(proxy) => proxy,
                 Err(err) => {
                     error!(
@@ -99,11 +118,11 @@ impl HttpClient {
         Ok(())
     }
 
-    fn client(&self) -> &reqwest::Client {
+    fn client(&self) -> &Client {
         unwrap!(self.client.as_ref())
     }
 
-    fn load_cert(path: &Path) -> Result<reqwest::Certificate, Error> {
+    fn load_cert(path: &Path) -> Result<Certificate, Error> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
             Err(err) => {
@@ -122,7 +141,7 @@ impl HttpClient {
             );
             return Err(Error);
         }
-        reqwest::Certificate::from_pem(&data).map_err(|err| {
+        Certificate::from_pem(&data).map_err(|err| {
             error!(
                 "Cannot decode rrdp-root-cert file '{}': {}'",
                 path.display(), err
@@ -138,7 +157,7 @@ impl HttpClient {
     pub fn notification_file(
         &self,
         uri: &uri::Https,
-        status: &mut Option<reqwest::StatusCode>,
+        status: &mut Option<StatusCode>,
     ) -> Result<NotificationFile, Error> {
         let response = match self.response(uri) {
             Ok(response) => {
@@ -227,7 +246,7 @@ impl HttpClient {
     pub fn response(
         &self,
         uri: &uri::Https
-    ) -> Result<reqwest::Response, Error> {
+    ) -> Result<Response, Error> {
         self.client().get(uri.as_str()).send().and_then(|res| {
             res.error_for_status()
         }).map_err(|err| {

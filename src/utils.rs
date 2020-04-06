@@ -1,5 +1,7 @@
 //! Various useful things.
 
+/*
+
 use futures::Async;
 use futures::future::{Future, IntoFuture};
 
@@ -53,4 +55,6 @@ impl<A: Future> Future for FinishAll<A> {
         }
     }
 }
+
+*/
 
