@@ -6,13 +6,14 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fmt, fs, io};
+use std::{fmt, fs, io, ops};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use bytes::Bytes;
 use crossbeam_utils::thread;
-use crossbeam_queue::ArrayQueue;
-use log::{error, info, warn};
+use crossbeam_queue::{ArrayQueue, SegQueue};
+use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
@@ -21,7 +22,6 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::{Roa, RoaStatus};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
-use unwrap::unwrap;
 use crate::{rrdp, rsync};
 use crate::config::Config;
 use crate::metrics::Metrics;
@@ -271,21 +271,34 @@ impl<'a> Run<'a> {
         // Stick all TALs into a queue. The worker threads will take one after
         // out of the queue so that the thread first to finish gets a second
         // TAL if there is more TALs than threads.
-        let tals = ArrayQueue::new(self.repository.tals.len());
-        for tal in &self.repository.tals {
-            unwrap!(tals.push(tal));
+        let tasks = SegQueue::new();
+        for (index, tal) in self.repository.tals.iter().enumerate() {
+            tasks.push(ValidationTask::Tal { tal, index });
         }
 
         // Prepare another queue for the threads to put the results in.
-        let origins = ArrayQueue::new(self.repository.tals.len());
+        let origins_queue = ArrayQueue::new(self.repository.validation_threads);
 
         // Now work.
         let res = thread::scope(|scope| {
             for _ in 0..self.repository.validation_threads {
                 scope.spawn(|_| {
-                    while let Ok(tal) = tals.pop() {
-                        unwrap!(origins.push(self.process_tal(tal)));
+                    let mut origins = RouteOrigins::new();
+                    while let Ok(task) = tasks.pop() {
+                        match task {
+                            ValidationTask::Tal { tal, index } => {
+                                self.process_tal(
+                                    tal, index, &mut origins, &tasks
+                                );
+                            }
+                            ValidationTask::Ca { cert, uri } => {
+                                self.process_ca(
+                                    cert, &uri, &mut origins, &tasks
+                                )
+                            }
+                        }
                     }
+                    origins_queue.push(origins).unwrap();
                 });
             }
         });
@@ -298,11 +311,16 @@ impl<'a> Run<'a> {
             return Err(Error);
         }
 
-        let mut res = OriginsReport::with_capacity(self.repository.tals.len());
-        while let Ok(item) = origins.pop() {
+        let mut res = OriginsReport::with_capacity(
+            self.repository.validation_threads,
+            self.repository.tals.iter().map(|tal| {
+                tal.info().clone()
+            }).collect()
+        );
+        while let Ok(item) = origins_queue.pop() {
             // If item is an Err, something went wrong fatally in the worker
             // and we should bail instead.
-            res.push_origins(item?);
+            res.push_origins(item);
         }
         Ok(res)
     }
@@ -313,8 +331,13 @@ impl<'a> Run<'a> {
     /// locator but fails to parse. If the next `entry` isn’t a trust anchor
     /// at all or if none of the URIs in the TAL file lead to anything,
     /// Ok-returns an empty list of route origins.
-    fn process_tal(&self, tal: &Tal) -> Result<RouteOrigins, Error> {
-        let mut res = RouteOrigins::new(tal.info().clone());
+    fn process_tal(
+        &self,
+        tal: &Tal,
+        index: usize,
+        origins: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
+    ) {
         for uri in tal.uris() {
             let cert = match self.load_ta(&uri, tal.info()) {
                 Some(cert) => cert,
@@ -339,12 +362,10 @@ impl<'a> Run<'a> {
                 }
             };
             info!("Found valid trust anchor {}. Processing.", uri);
-            self.process_ca(&cert, &CertLink::root(&cert), &uri, &mut res);
-            // We stop once we have had the first working URI.
-            return Ok(res)
+            self.process_ca(CaCert::root(cert, index), &uri, origins, tasks);
+            return
         }
         warn!("No valid trust anchor for TAL {}", tal.info().name());
-        Ok(res)
     }
 
     /// Loads a trust anchor certificate from the given URI.
@@ -390,10 +411,10 @@ impl<'a> Run<'a> {
     /// to `routes`.
     fn process_ca<U: fmt::Display>(
         &self,
-        cert: &ResourceCert,
-        link: &CertLink,
+        cert: Arc<CaCert>,
         uri: &U,
-        routes: &mut RouteOrigins
+        routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
     ) {
         let mut store = CrlStore::new();
         let repo_uri = match cert.ca_repository() {
@@ -420,7 +441,7 @@ impl<'a> Run<'a> {
 
         for (uri, hash) in manifest.iter_uris(repo_uri) {
             self.process_object(
-                rrdp_server, uri, hash, &cert, link, &mut store, routes
+                rrdp_server, uri, hash, &cert, &mut store, routes, tasks
             );
         }
     }
@@ -505,10 +526,10 @@ impl<'a> Run<'a> {
         rrdp_server: Option<rrdp::ServerId>,
         uri: uri::Rsync,
         hash: ManifestHash,
-        issuer: &ResourceCert,
-        link: &CertLink,
+        issuer: &Arc<CaCert>,
         crl: &mut CrlStore,
         routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
     ) {
         if uri.ends_with(".cer") {
             let bytes = match self.load_file(rrdp_server, &uri) {
@@ -536,7 +557,7 @@ impl<'a> Run<'a> {
                 );
                 return
             }
-            if link.check_loop(&cert).is_err() {
+            if issuer.check_loop(&cert).is_err() {
                 warn!(
                     "{}: certificate loop detected. Ignoring this CA.",
                     uri
@@ -555,9 +576,34 @@ impl<'a> Run<'a> {
                 return
             }
             routes.update_refresh(&cert);
-            self.process_ca(
-                &cert, &CertLink::chain(link, &cert), &uri, routes
-            )
+
+            let repo_uri = match cert.ca_repository() {
+                Some(uri) => uri,
+                None => {
+                    info!("CA cert {} has no repository URI. Ignoring.", uri);
+                    return
+                }
+            };
+
+            // Defer operation if we need to update the repository part where
+            // the CA lives.
+            let defer = match (self.rrdp.as_ref(), cert.rpki_notify()) {
+                (Some(rrdp), Some(rrdp_uri)) => !rrdp.is_current(rrdp_uri),
+                _ => match self.rsync.as_ref() {
+                    Some(rsync) => !rsync.is_current(repo_uri),
+                    None => false
+                }
+            };
+
+            let cert = CaCert::chain(issuer, cert);
+
+            if defer {
+                debug!("Queueing CA {} for later processing.", uri);
+                tasks.push(ValidationTask::Ca { cert, uri });
+            }
+            else {
+                self.process_ca( cert, &uri, routes, tasks)
+            }
         }
         else if uri.ends_with(".roa") {
             let bytes = match self.load_file(rrdp_server, &uri) {
@@ -589,7 +635,7 @@ impl<'a> Run<'a> {
                     if let RoaStatus::Valid { ref cert } = *route.status() {
                         routes.update_refresh(cert);
                     }
-                    routes.push(route);
+                    routes.push(route, issuer.tal);
                 }
                 Err(_) => {
                     info!("{}: processing failed.", uri);
@@ -726,35 +772,42 @@ impl<'a> Run<'a> {
 }
 
 
-//------------ CertLink ------------------------------------------------------
+//------------ CaCert --------------------------------------------------------
 
-/// An element in a linked list of known certificates.
-///
-/// We can do this because we do recursion down the CA tree so the elements
-/// can all happily live on the stack and are cleaned up neatly when we leave
-/// scope.
-#[derive(Clone, Debug)]
-struct CertLink<'a> {
-    /// A pointer to the certificate in this element.
-    cert: &'a TbsCert,
+/// A CA certificate plus references to all its parents.
+struct CaCert {
+    /// The CA certificate of this CA.
+    cert: ResourceCert,
 
-    /// A pointer to the optional parent link.
-    link: Option<&'a CertLink<'a>>,
+    /// The parent CA.
+    /// 
+    /// This will be none for a trust anchor.
+    parent: Option<Arc<CaCert>>,
+
+    /// The index of the TAL.
+    tal: usize,
 }
 
-impl<'a> CertLink<'a> {
-    /// Create a link from a certificate only.
-    pub fn root(cert: &'a TbsCert) -> Self {
-        CertLink { cert, link: None }
+impl CaCert {
+    /// Creates a new CA cert for a trust anchor.
+    pub fn root(cert: ResourceCert, tal: usize) -> Arc<Self> {
+        Arc::new(CaCert {
+            cert,
+            parent: None,
+            tal
+        })
     }
 
-    /// Create a link from a previous link.
-    pub fn chain(parent: &'a CertLink<'a>, cert: &'a TbsCert) -> Self {
-        CertLink { cert, link: Some(parent) }
+    pub fn chain(this: &Arc<Self>, cert: ResourceCert) -> Arc<Self> {
+        Arc::new(CaCert {
+            cert,
+            parent: Some(this.clone()),
+            tal: this.tal
+        })
     }
 
-    /// Checks whether this certificate has appeared in the validation chain.
-    pub fn check_loop(&self, cert: &TbsCert) -> Result<(), Error> {
+    /// Checks whether a child cert has appeared in chain already.
+    pub fn check_loop(&self, cert: &Cert) -> Result<(), Error> {
         self._check_loop(cert.subject_key_identifier())
     }
 
@@ -766,12 +819,32 @@ impl<'a> CertLink<'a> {
         if self.cert.subject_key_identifier() == key_id {
             Err(Error)
         }
-        else if let Some(link) = self.link {
-            link._check_loop(key_id)
+        else if let Some(ref parent) = self.parent {
+            parent._check_loop(key_id)
         }
         else {
             Ok(())
         }
     }
+} 
+
+impl ops::Deref for CaCert {
+    type Target = ResourceCert;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cert
+    }
+}
+
+
+//------------ ValidationTask ------------------------------------------------
+
+/// A task for a validation worker thread.
+enum ValidationTask<'a> {
+    /// Process the given TAL.
+    Tal { tal: &'a Tal, index: usize },
+
+    /// Process the given CA.
+    Ca { cert: Arc<CaCert>, uri: uri::Rsync },
 }
 

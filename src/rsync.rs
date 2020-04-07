@@ -98,6 +98,10 @@ impl<'a> Run<'a> {
         })
     }
 
+    pub fn is_current(&self, uri: &uri::Rsync) -> bool {
+        self.updated.read().unwrap().contains(uri.module())
+    }
+
     pub fn load_module(&self, uri: &uri::Rsync) {
         let command = match self.cache.command.as_ref() {
             Some(command) => command,
@@ -105,7 +109,7 @@ impl<'a> Run<'a> {
         };
         let module = uri.module();
 
-        // If is already up-to-date, return.
+        // If it is already up-to-date, return.
         if unwrap!(self.updated.read()).contains(module) {
             return
         }

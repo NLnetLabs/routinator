@@ -108,6 +108,11 @@ impl Server {
         &self.server_dir.base
     }
 
+    /// Returns whether the server has been updated.
+    pub fn is_current(&self) -> bool {
+        self.updated.load(Relaxed)
+    }
+
     /// Makes sure the server is up-to-date.
     ///
     /// If the server already has been updated, does nothing. Otherwise starts
