@@ -40,7 +40,7 @@ toml            = "^0.5"
 unwrap          = "^1.2.1"
 uuid            = "^0.8.1"
 
-# Enforce these version to still build on Rust 1.34.0
+# Enforce these version to still build on Rust 1.44.0
 backtrace = "=0.3.40"
 unicode-normalization = "=0.1.9"
 
