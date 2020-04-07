@@ -134,7 +134,7 @@ The official [Rust Platform Support](https://forge.rust-lang.org/platform-suppor
 page provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.40 or
+Routinator relies on a relatively new version of Rust, currently 1.39 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called ``rustup``.
 
