@@ -7,6 +7,7 @@
 //! [`Config`]: struct.Config.html
 
 use std::{env, fmt, fs, io};
+use std::future::Future;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -15,10 +16,9 @@ use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
 #[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
-use fern;
 use log::{LevelFilter, Log, error};
 #[cfg(unix)] use syslog::Facility;
-use toml;
+use tokio::runtime::Runtime;
 use crate::operation::Error;
 
 
@@ -90,7 +90,7 @@ pub struct Config {
 
     /// Should we do strict validation?
     ///
-    /// See [the relevant RPKI crate documentattion](https://github.com/NLnetLabs/rpki-rs/blob/master/doc/relaxed-validation.md)
+    /// See [the relevant RPKI crate documentation](https://github.com/NLnetLabs/rpki-rs/blob/master/doc/relaxed-validation.md)
     /// for more information.
     pub strict: bool,
 
@@ -1121,6 +1121,19 @@ impl Config {
         }
     }
 
+    /// Returns a Tokio runtime based on the configuration.
+    pub fn runtime(&self) -> Result<Runtime, Error> {
+        Runtime::new().map_err(|err| {
+            error!("Failed to create runtime: {}", err);
+            Error
+        })
+    }
+
+    /// Runs a future to completion atop a Tokio runtime.
+    pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Error> {
+        Ok(self.runtime()?.block_on(future))
+    }
+
     /// Returns a daemonizer based on the configuration.
     ///
     /// This also changes the paths in the configuration if `chroot` is set.
@@ -1467,6 +1480,7 @@ impl ConfigFile {
     ///
     /// If there is no such file, returns `None`. If there is a file but it
     /// is broken, aborts.
+    #[allow(clippy::verbose_file_reads)]
     fn read(path: &Path) -> Result<Option<Self>, Error> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,

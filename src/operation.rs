@@ -7,19 +7,19 @@
 //!
 //! [`Operation`]: enum.Operation.html
 
-use std::{fs, io};
+use std::{fs, io, thread};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::time::Duration;
+use std::sync::mpsc;
+use std::sync::mpsc::RecvTimeoutError;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use futures::Future;
 use derive_more::From;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
-use tokio::runtime::Runtime;
+use tokio::sync::oneshot;
 use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
@@ -30,6 +30,11 @@ use crate::repository::Repository;
 use crate::rtr::rtr_listener;
 use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
+
+#[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
+#[cfg(unix)] use tokio::stream::StreamExt;
+#[cfg(not(unix))] use futures::future::pending;
+
 
 //------------ Operation -----------------------------------------------------
 
@@ -358,7 +363,7 @@ impl Server {
         let mut repo = Repository::new(&config, false, true)?;
         config.switch_logging(self.detach)?;
 
-        let history = OriginsHistory::new(config.history_size, config.refresh);
+        let history = OriginsHistory::new(&config);
         let (mut notify, rtr) = rtr_listener(history.clone(), &config);
         let http = http_listener(&history, &config);
 
@@ -366,61 +371,89 @@ impl Server {
             Self::daemonize(&mut config)?;
         }
 
-        let mut runtime = match Runtime::new() {
-            Ok(runtime) => runtime,
-            Err(err) => {
-                error!("Failed to create Tokio runtime: {}", err);
-                return Err(Error.into())
-            }
-        };
-        runtime.spawn(rtr).spawn(http);
-        let mut signal = SignalWait::new()?;
+        let mut runtime = config.runtime()?;
+        let mut rtr = runtime.spawn(rtr);
+        let mut http = runtime.spawn(http);
+        let (sig_tx, sig_rx) = mpsc::channel();
+        let (err_tx, mut err_rx) = oneshot::channel();
 
-        loop {
-            history.mark_update_start();
-            let (report, metrics) = match repo.process() {
-                Ok(some) => some,
-                Err(_) => break
-            };
-            let exceptions = match LocalExceptions::load(&config, false) {
-                Ok(exceptions) => exceptions,
-                Err(_) => {
-                    warn!(
-                        "Failed to load exceptions. Discarding this \
-                        validation run but continuing."
-                    );
-                    continue
+        let join = thread::spawn(move || {
+            loop {
+                history.mark_update_start();
+                let (report, metrics) = match repo.process() {
+                    Ok(some) => some,
+                    Err(_) => break
+                };
+                let exceptions = match LocalExceptions::load(&config, false) {
+                    Ok(exceptions) => exceptions,
+                    Err(_) => {
+                        warn!(
+                            "Failed to load exceptions. Discarding this \
+                            validation run but continuing."
+                        );
+                        continue
+                    }
+                };
+                let must_notify = history.update(
+                    report, metrics, &exceptions, false
+                );
+                history.mark_update_done();
+                info!(
+                    "Validation completed. New serial is {}.",
+                    history.serial()
+                );
+                if must_notify {
+                    info!("Sending out notifications.");
+                    notify.notify();
                 }
-            };
-            let must_notify = history.update(
-                report, metrics, &exceptions, false
-            );
-            history.mark_update_done();
-            info!(
-                "Validation completed. New serial is {}.",
-                history.serial()
-            );
-            if must_notify {
-                info!("Sending out notifications.");
-                notify.notify();
-            }
-            match signal.wait(&mut runtime, history.refresh_wait()) {
-                UserSignal::NoSignal => {},
-                UserSignal::ReloadTALs => {
-                    match repo.reload_tals(&config) {
-                        Ok(_) => {
-                            info!("Reloaded TALs at user request.");
-                        },
-                        Err(_) => {
-                            error!("Reloading TALs failed, shutting down.");
-                            break;
+                match sig_rx.recv_timeout(history.refresh_wait()) {
+                    Ok(UserSignal::ReloadTals) => {
+                        match repo.reload_tals(&config) {
+                            Ok(_) => {
+                                info!("Reloaded TALs at user request.");
+                            },
+                            Err(_) => {
+                                error!(
+                                    "Reloading TALs failed, \
+                                     shutting down."
+                                );
+                                break;
+                            }
                         }
+                    }
+                    Err(RecvTimeoutError::Timeout) => { }
+                    Err(RecvTimeoutError::Disconnected) => {
+                        break;
                     }
                 }
             }
-        }
+            // An error here means the receiver is gone which is fine.
+            let _ = err_tx.send(());
+        });
 
-        unwrap!(runtime.shutdown_now().wait());
+        let _: Result<(), Error> = runtime.block_on(async move {
+            let mut signal = SignalListener::new()?;
+            loop {
+                tokio::select! {
+                    sig = signal.next() => {
+                        if sig_tx.send(sig).is_err() {
+                            break;
+                        }
+                    }
+                    _  = &mut err_rx => break,
+                    _ = &mut rtr => break,
+                    _ = &mut http => break,
+                }
+            }
+            // Dropping sig_tx will lead to sig_rx failing and the thread
+            // ending. The drop is actually not necessary because sig_tx was
+            // moved here, but just in case a ref sneaks in later, let’s keep
+            // it.
+            drop(sig_tx);
+            Ok(())
+        });
+
+        let _ = join.join();
         Ok(())
     }
 
@@ -787,7 +820,8 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let (_, metrics) = Repository::new(&config, false, true)?.process()?;
+        let mut repo = Repository::new(&config, false, true)?;
+        let (_, metrics) = repo.process()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
@@ -962,99 +996,58 @@ impl Man {
 }
 
 
-//------------ SignalWait ------------------------------------------------------
+//------------ SignalListener --------------------------------------------------
 
 #[allow(dead_code)]
 enum UserSignal {
-    NoSignal,
-    ReloadTALs,
+    ReloadTals,
 }
 
 /// Wait for the next validation run or a user telling us to quit or reload.
 ///
 /// This is going to receive a proper impl on Unix and possibly Windows.
-#[cfg(not(windows))]
-struct SignalWait {
-    //chan: crossbeam_channel::Receiver<i32>
-    signals: Option<signal_hook::iterator::Async>,
+#[cfg(unix)]
+struct SignalListener {
+    usr1: Signal,
 }
 
-#[cfg(not(windows))]
-impl SignalWait {
+#[cfg(unix)]
+impl SignalListener {
     pub fn new() -> Result<Self, Error> {
-        let signals = signal_hook::iterator::Signals::new(
-            &[signal_hook::SIGUSR1]
-        ).and_then(signal_hook::iterator::Signals::into_async);
-        match signals {
-            Ok(signals) => Ok(SignalWait { signals: Some(signals) }),
-            Err(err) => {
-                error!("Attaching signals failed: {}", err);
-                Err(Error)
+        Ok(SignalListener {
+            usr1: match signal(SignalKind::user_defined1()) {
+                Ok(usr1) => usr1,
+                Err(err) => {
+                    error!("Attaching to signal USR1 failed: {}", err);
+                    return Err(Error)
+                }
             }
-        }
+        })
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns what to do.
-    pub fn wait(
-        &mut self, runtime: &mut Runtime, timeout: Duration
-    ) -> UserSignal {
-        use futures::Stream;
-        use futures::future::Either;
-        use tokio::timer::Delay;
-
-        // If we lost our signals, we just wait for the timeout.
-        let signals = match self.signals.take() {
-            Some(signals) => signals.into_future(),
-            None => {
-                std::thread::sleep(timeout);
-                return UserSignal::NoSignal
-            }
-        };
-        match runtime.block_on(
-            signals.select2(Delay::new(std::time::Instant::now() + timeout))
-        ) {
-            Ok(Either::A(((_, signals), _))) => {
-                // Signal fired first.
-                self.signals = Some(signals);
-                UserSignal::ReloadTALs
-            }
-            Ok(Either::B((_, signals))) => {
-                // The delay fired first.
-                self.signals = signals.into_inner();
-                UserSignal::NoSignal
-            }
-            Err(Either::A((_, _))) =>  {
-                // The signals errored out. Nothing we can do.
-                UserSignal::NoSignal
-            }
-            Err(Either::B((_, signals))) => {
-                // The delay errored out. Let’s pretend it finished.
-                self.signals = signals.into_inner();
-                UserSignal::NoSignal
-            }
-        }
+    pub async fn next(&mut self) -> UserSignal {
+        self.usr1.next().await;
+        UserSignal::ReloadTals
     }
 }
 
-#[cfg(windows)]
-struct SignalWait;
+#[cfg(not(unix))]
+struct SignalListener;
 
-#[cfg(windows)]
-impl SignalWait {
+#[cfg(not(unix))]
+impl SignalListener {
     pub fn new() -> Result<Self, Error> {
-        Ok(SignalWait)
+        Ok(SignalListener)
     }
 
     /// Waits for the next thing to do.
     ///
     /// Returns whether to continue working.
-    pub fn wait(
-        &mut self, _runtime: &mut Runtime, timeout: Duration
-    ) -> UserSignal {
-        std::thread::sleep(timeout);
-        UserSignal::NoSignal
+    pub async fn next(&mut self) -> UserSignal {
+        pending().await
     }
 }
 

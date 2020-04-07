@@ -1,8 +1,6 @@
 //! Local exceptions per RFC 8416 aka SLURM.
 
-use std::io;
-use std::fs::File;
-use std::io::Read;
+use std::{fs, io};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -56,9 +54,7 @@ impl LocalExceptions {
         path: P,
         extra_info: bool
     ) -> Result<Self, LoadError> {
-        let mut file = File::open(path.as_ref())?;
-        let mut buf = String::new();
-        file.read_to_string(&mut buf)?;
+        let buf = fs::read_to_string(&path)?;
         Ok(Self::from_json(
             json::parse(&buf)?,
             &Self::info_from_path(path, extra_info)
@@ -79,9 +75,7 @@ impl LocalExceptions {
         path: P,
         extra_info: bool
     ) -> Result<(), LoadError> {
-        let mut file = File::open(path.as_ref())?;
-        let mut buf = String::new();
-        file.read_to_string(&mut buf)?;
+        let buf = fs::read_to_string(&path)?;
         self.extend_from_json(
             json::parse(&buf)?,
             &Self::info_from_path(path, extra_info)

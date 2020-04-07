@@ -4,6 +4,11 @@
 
 Breaking Changes
 
+* Update to Rust’s new asynchronous IO framework for the RTR and HTTP
+  servers. Repository synchronization and validation remain synchronous
+  atop a thread pool. ([#282])
+* The minimal supported Rust version is now 1.40.0.
+
 New
 
 Bug Fixes
@@ -11,6 +16,9 @@ Bug Fixes
 Other Changes
 
 Dependencies
+
+
+[(#282)]: https://github.com/NLnetLabs/routinator/pull/282
 
 
 ## 0.6.4 ‘Jeepers’
