@@ -32,7 +32,7 @@ async fn _rtr_listener(
                 *addr, origins.clone(), dispatch.clone()
             ))
         })
-    );
+    ).await;
 }
 
 async fn single_rtr_listener(

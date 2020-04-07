@@ -374,7 +374,6 @@ impl Server {
         let mut runtime = config.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
-        let mut signal = SignalListener::new()?;
         let (sig_tx, sig_rx) = mpsc::channel();
         let (err_tx, mut err_rx) = oneshot::channel();
 
@@ -432,7 +431,8 @@ impl Server {
             let _ = err_tx.send(());
         });
 
-        runtime.block_on(async move {
+        let _: Result<(), Error> = runtime.block_on(async move {
+            let mut signal = SignalListener::new()?;
             loop {
                 tokio::select! {
                     sig = signal.next() => {
@@ -450,6 +450,7 @@ impl Server {
             // moved here, but just in case a ref sneaks in later, let’s keep
             // it.
             drop(sig_tx);
+            Ok(())
         });
 
         let _ = join.join();

@@ -53,7 +53,7 @@ async fn _http_listener(origins: OriginsHistory, addrs: Vec<SocketAddr>) {
         addrs.iter().map(|addr| {
             tokio::spawn(single_http_listener(*addr, origins.clone()))
         })
-    );
+    ).await;
 }
 
 /// Returns a future for a single HTTP listener.
