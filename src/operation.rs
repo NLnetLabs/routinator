@@ -19,7 +19,6 @@ use derive_more::From;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
-use tokio::stream::StreamExt;
 use tokio::sync::oneshot;
 use unwrap::unwrap;
 use crate::config::Config;
@@ -33,6 +32,7 @@ use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
+#[cfg(unix)] use tokio::stream::StreamExt;
 #[cfg(not(unix))] use futures::future::pending;
 
 
