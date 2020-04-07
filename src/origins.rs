@@ -421,7 +421,7 @@ impl HistoryInner {
         });
         self.refresh.checked_sub(
             Instant::now().saturating_duration_since(from)
-        ).unwrap_or(Duration::new(0, 0)) + duration
+        ).unwrap_or(Duration::from_secs(0)) + duration
     }
 }
 

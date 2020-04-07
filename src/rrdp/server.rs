@@ -398,6 +398,7 @@ impl Server {
     ///
     /// This assumes that the server is updated already. If there is no file
     /// corresponding to the URI, returns `None`.
+    #[allow(clippy::verbose_file_reads)]
     pub fn load_file(&self, uri: &uri::Rsync) -> Result<Option<Bytes>, Error> {
         if self.broken.load(Relaxed) {
             return Err(Error)

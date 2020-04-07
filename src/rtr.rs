@@ -10,7 +10,7 @@ use crate::config::Config;
 use crate::origins::OriginsHistory;
 
 
-pub fn rtr_listener<'a>(
+pub fn rtr_listener(
     history: OriginsHistory,
     config: &Config
 ) -> (NotifySender, impl Future<Output = ()>) {

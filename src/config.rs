@@ -16,11 +16,9 @@ use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
 #[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
-use fern;
 use log::{LevelFilter, Log, error};
 #[cfg(unix)] use syslog::Facility;
 use tokio::runtime::Runtime;
-use toml;
 use crate::operation::Error;
 
 
@@ -1482,6 +1480,7 @@ impl ConfigFile {
     ///
     /// If there is no such file, returns `None`. If there is a file but it
     /// is broken, aborts.
+    #[allow(clippy::verbose_file_reads)]
     fn read(path: &Path) -> Result<Option<Self>, Error> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,

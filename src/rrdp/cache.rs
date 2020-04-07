@@ -282,6 +282,7 @@ impl<'a> Run<'a> {
         }
     }
 
+    #[allow(clippy::verbose_file_reads)]
     fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
         let path = self.ta_path(info);
         let mut file = match fs::File::open(&path) {
