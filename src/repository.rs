@@ -532,115 +532,14 @@ impl<'a> Run<'a> {
         tasks: &SegQueue<ValidationTask>,
     ) {
         if uri.ends_with(".cer") {
-            let bytes = match self.load_file(rrdp_server, &uri) {
-                Some(bytes) => bytes,
-                None => {
-                    info!("{}: failed to load.", uri);
-                    return
-                }
-            };
-            if hash.verify(&bytes).is_err() {
-                info!("{}: file has wrong hash.", uri);
-                return
-            }
-            let cert = match Cert::decode(bytes) {
-                Ok(cert) => cert,
-                Err(_) => {
-                    info!("{}: failed to decode.", uri);
-                    return
-                }
-            };
-            if cert.key_usage() != KeyUsage::Ca {
-                info!(
-                    "{}: probably a router key. Ignoring.",
-                    uri
-                );
-                return
-            }
-            if issuer.check_loop(&cert).is_err() {
-                warn!(
-                    "{}: certificate loop detected. Ignoring this CA.",
-                    uri
-                );
-                return
-            }
-            let cert = match cert.validate_ca(issuer, self.repository.strict) {
-                Ok(cert) => cert,
-                Err(_) => {
-                    info!("{}: failed to validate.", uri);
-                    return
-                }
-            };
-            if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
-                info!("{}: certificate has been revoked", uri);
-                return
-            }
-            routes.update_refresh(&cert);
-
-            let repo_uri = match cert.ca_repository() {
-                Some(uri) => uri,
-                None => {
-                    info!("CA cert {} has no repository URI. Ignoring.", uri);
-                    return
-                }
-            };
-
-            // Defer operation if we need to update the repository part where
-            // the CA lives.
-            let defer = match (self.rrdp.as_ref(), cert.rpki_notify()) {
-                (Some(rrdp), Some(rrdp_uri)) => !rrdp.is_current(rrdp_uri),
-                _ => match self.rsync.as_ref() {
-                    Some(rsync) => !rsync.is_current(repo_uri),
-                    None => false
-                }
-            };
-
-            let cert = CaCert::chain(issuer, cert);
-
-            if defer {
-                debug!("Queueing CA {} for later processing.", uri);
-                tasks.push(ValidationTask::Ca { cert, uri });
-            }
-            else {
-                self.process_ca( cert, &uri, routes, tasks)
-            }
+            self.process_cer(
+                rrdp_server, uri, hash, issuer, crl, routes, tasks
+            )
         }
         else if uri.ends_with(".roa") {
-            let bytes = match self.load_file(rrdp_server, &uri) {
-                Some(bytes) => bytes,
-                None => {
-                    info!("{}: failed to load.", uri);
-                    return
-                }
-            };
-            if hash.verify(&bytes).is_err() {
-                info!("{}: file has wrong hash.", uri);
-                return
-            }
-            let roa = match Roa::decode(bytes, self.repository.strict) {
-                Ok(roa) => roa,
-                Err(_) => {
-                    info!("{}: decoding failed.", uri);
-                    return
-                }
-            };
-            let mut extra = None;
-            let route = roa.process(issuer, self.repository.strict, |cert| {
-                self.check_crl(rrdp_server, cert, issuer, crl)?;
-                extra = Some(8u8);
-                Ok(())
-            });
-            match route {
-                Ok(route) => {
-                    if let RoaStatus::Valid { ref cert } = *route.status() {
-                        routes.update_refresh(cert);
-                    }
-                    routes.push(route, issuer.tal);
-                }
-                Err(_) => {
-                    info!("{}: processing failed.", uri);
-                }
-            }
+            self.process_roa(
+                rrdp_server, uri, hash, issuer, crl, routes,
+            )
         }
         else if uri.ends_with(".crl") {
             // CRLs are read on demand.
@@ -650,6 +549,138 @@ impl<'a> Run<'a> {
         }
         else {
             info!("{}: Unknown file type.", uri);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_cer(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        uri: uri::Rsync,
+        hash: ManifestHash,
+        issuer: &Arc<CaCert>,
+        crl: &mut CrlStore,
+        routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
+    ) {
+        let bytes = match self.load_file(rrdp_server, &uri) {
+            Some(bytes) => bytes,
+            None => {
+                info!("{}: failed to load.", uri);
+                return
+            }
+        };
+        if hash.verify(&bytes).is_err() {
+            info!("{}: file has wrong hash.", uri);
+            return
+        }
+        let cert = match Cert::decode(bytes) {
+            Ok(cert) => cert,
+            Err(_) => {
+                info!("{}: failed to decode.", uri);
+                return
+            }
+        };
+        if cert.key_usage() != KeyUsage::Ca {
+            info!(
+                "{}: probably a router key. Ignoring.",
+                uri
+            );
+            return
+        }
+        if issuer.check_loop(&cert).is_err() {
+            warn!(
+                "{}: certificate loop detected. Ignoring this CA.",
+                uri
+            );
+            return
+        }
+        let cert = match cert.validate_ca(issuer, self.repository.strict) {
+            Ok(cert) => cert,
+            Err(_) => {
+                info!("{}: failed to validate.", uri);
+                return
+            }
+        };
+        if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
+            info!("{}: certificate has been revoked", uri);
+            return
+        }
+        routes.update_refresh(&cert);
+
+        let repo_uri = match cert.ca_repository() {
+            Some(uri) => uri,
+            None => {
+                info!("CA cert {} has no repository URI. Ignoring.", uri);
+                return
+            }
+        };
+
+        // Defer operation if we need to update the repository part where
+        // the CA lives.
+        let defer = match (self.rrdp.as_ref(), cert.rpki_notify()) {
+            (Some(rrdp), Some(rrdp_uri)) => !rrdp.is_current(rrdp_uri),
+            _ => match self.rsync.as_ref() {
+                Some(rsync) => !rsync.is_current(repo_uri),
+                None => false
+            }
+        };
+
+        let cert = CaCert::chain(issuer, cert);
+
+        if defer {
+            debug!("Queueing CA {} for later processing.", uri);
+            tasks.push(ValidationTask::Ca { cert, uri });
+        }
+        else {
+            self.process_ca( cert, &uri, routes, tasks)
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_roa(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        uri: uri::Rsync,
+        hash: ManifestHash,
+        issuer: &Arc<CaCert>,
+        crl: &mut CrlStore,
+        routes: &mut RouteOrigins,
+    ) {
+        let bytes = match self.load_file(rrdp_server, &uri) {
+            Some(bytes) => bytes,
+            None => {
+                info!("{}: failed to load.", uri);
+                return
+            }
+        };
+        if hash.verify(&bytes).is_err() {
+            info!("{}: file has wrong hash.", uri);
+            return
+        }
+        let roa = match Roa::decode(bytes, self.repository.strict) {
+            Ok(roa) => roa,
+            Err(_) => {
+                info!("{}: decoding failed.", uri);
+                return
+            }
+        };
+        let mut extra = None;
+        let route = roa.process(issuer, self.repository.strict, |cert| {
+            self.check_crl(rrdp_server, cert, issuer, crl)?;
+            extra = Some(8u8);
+            Ok(())
+        });
+        match route {
+            Ok(route) => {
+                if let RoaStatus::Valid { ref cert } = *route.status() {
+                    routes.update_refresh(cert);
+                }
+                routes.push(route, issuer.tal);
+            }
+            Err(_) => {
+                info!("{}: processing failed.", uri);
+            }
         }
     }
 

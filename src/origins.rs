@@ -438,7 +438,7 @@ impl HistoryInner {
 /// for generating the real origins kept in [`AddressOrigins`].
 ///
 /// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
     /// The list of route origin attestations.
     ///
@@ -452,10 +452,7 @@ pub struct RouteOrigins {
 impl RouteOrigins {
     /// Creates a new, empty list of route origins.
     pub fn new() -> Self {
-        RouteOrigins {
-            origins: Vec::new(),
-            refresh: None,
-        }
+        Default::default()
     }
 
     /// Appends the given attestation to the set.
