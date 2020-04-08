@@ -33,18 +33,21 @@ use crate::slurm::LocalExceptions;
 #[derive(Debug, Default)]
 pub struct OriginsReport {
     origins: Vec<RouteOrigins>,
+    tals: Vec<Arc<TalInfo>>,
 }
 
 impl OriginsReport {
     pub fn new() -> Self {
         OriginsReport {
-            origins: Vec::new()
+            origins: Vec::new(),
+            tals: Vec::new(),
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, tals: Vec<Arc<TalInfo>>) -> Self {
         OriginsReport {
             origins: Vec::with_capacity(capacity),
+            tals
         }
     }
 
@@ -239,7 +242,7 @@ impl OriginsHistory {
                 let current: HashSet<_> =
                     current.iter().map(Clone::clone).collect();
                 let (next, diff) = OriginsDiff::construct(
-                    current, report.origins, exceptions, serial, extra_info,
+                    current, report, exceptions, serial, extra_info,
                     &mut metrics,
                 );
                 let mut history = self.0.write().unwrap();
@@ -435,26 +438,21 @@ impl HistoryInner {
 /// for generating the real origins kept in [`AddressOrigins`].
 ///
 /// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
     /// The list of route origin attestations.
-    origins: Vec<RouteOriginAttestation>,
+    ///
+    /// XXX The second item is the TAL index. This needs to be cleaned up.
+    origins: Vec<(RouteOriginAttestation, usize)>,
 
     /// The time when this set needs to be refreshed at the latest.
     refresh: Option<Time>,
-
-    /// The TAL for this list.
-    tal: Arc<TalInfo>,
 }
 
 impl RouteOrigins {
     /// Creates a new, empty list of route origins.
-    pub fn new(tal: Arc<TalInfo>) -> Self {
-        RouteOrigins {
-            origins: Vec::new(),
-            refresh: None,
-            tal
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
     /// Appends the given attestation to the set.
@@ -464,8 +462,9 @@ impl RouteOrigins {
     pub fn push(
         &mut self,
         attestation: RouteOriginAttestation,
+        tal_index: usize,
     ) {
-        self.origins.push(attestation);
+        self.origins.push((attestation, tal_index));
     }
 
     /// Updates the refresh time.
@@ -493,7 +492,7 @@ impl RouteOrigins {
     }
 
     /// Returns an iterator over the attestations in the list.
-    pub fn iter(&self) -> slice::Iter<RouteOriginAttestation> {
+    pub fn iter(&self) -> slice::Iter<(RouteOriginAttestation, usize)> {
         self.origins.iter()
     }
 }
@@ -502,8 +501,8 @@ impl RouteOrigins {
 //--- IntoIterator
 
 impl IntoIterator for RouteOrigins {
-    type Item = RouteOriginAttestation;
-    type IntoIter = vec::IntoIter<RouteOriginAttestation>;
+    type Item = (RouteOriginAttestation, usize);
+    type IntoIter = vec::IntoIter<(RouteOriginAttestation, usize)>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.origins.into_iter()
@@ -511,8 +510,8 @@ impl IntoIterator for RouteOrigins {
 }
 
 impl<'a> IntoIterator for &'a RouteOrigins {
-    type Item = &'a RouteOriginAttestation;
-    type IntoIter = slice::Iter<'a, RouteOriginAttestation>;
+    type Item = &'a (RouteOriginAttestation, usize);
+    type IntoIter = slice::Iter<'a, (RouteOriginAttestation, usize)>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -560,6 +559,10 @@ impl AddressOrigins {
         let mut res = HashSet::new();
         let mut refresh = None;
 
+        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+            TalMetrics::new(tal.clone())
+        }).collect();
+
         for item in report.origins {
             if let Some(time) = item.refresh {
                 match refresh {
@@ -568,8 +571,8 @@ impl AddressOrigins {
                     None => refresh = Some(time)
                 }
             }
-            let mut tal_metrics = TalMetrics::new(item.tal.clone());
-            for mut roa in item {
+            for (mut roa, tal_index) in item {
+                let tal_metrics = &mut tal_metrics_vec[tal_index];
                 tal_metrics.roas += 1;
                 let info = OriginInfo::from_roa(&mut roa, extra_info);
                 for addr in roa.iter() {
@@ -584,11 +587,11 @@ impl AddressOrigins {
                     }
                 }
             }
-            metrics.push_tal(tal_metrics);
         }
         for addr in exceptions.assertions() {
             let _ = res.insert(addr.clone());
         }
+        metrics.set_tals(tal_metrics_vec);
         AddressOrigins {
             origins: res.into_iter().collect(),
             refresh
@@ -719,7 +722,7 @@ impl OriginsDiff {
     /// origins with the serial number of `serial` plus one.
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
-        origins: Vec<RouteOrigins>,
+        report: OriginsReport,
         exceptions: &LocalExceptions,
         serial: Serial,
         extra_info: bool,
@@ -728,9 +731,13 @@ impl OriginsDiff {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
 
-        for item in origins {
-            let mut tal_metrics = TalMetrics::new(item.tal.clone());
-            for mut roa in item {
+        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+            TalMetrics::new(tal.clone())
+        }).collect();
+
+        for item in report.origins {
+            for (mut roa, tal_index) in item {
+                let tal_metrics = &mut tal_metrics_vec[tal_index];
                 tal_metrics.roas += 1;
                 let info = OriginInfo::from_roa(&mut roa, extra_info);
                 for addr in roa.iter() {
@@ -746,8 +753,8 @@ impl OriginsDiff {
                     }
                 }
             }
-            metrics.push_tal(tal_metrics);
         }
+        metrics.set_tals(tal_metrics_vec);
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
             if next.insert(addr.clone()) && !current.remove(addr)  {

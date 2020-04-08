@@ -180,6 +180,17 @@ impl<'a> Run<'a> {
         }
     }
 
+    pub fn is_current(&self, notify_uri: &uri::Https) -> bool {
+        // If updating is disabled, everything is already current.
+        if self.cache.http.is_none() {
+            return true
+        }
+        match self.servers.read().unwrap().find(notify_uri) {
+            Some((_, server)) => server.is_current(),
+            None => false
+        }
+    }
+
     /// Loads an RRDP server.
     ///
     /// If the server has already been used during this validation run,
