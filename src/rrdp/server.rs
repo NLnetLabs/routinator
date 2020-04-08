@@ -16,7 +16,6 @@ use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
 use rpki::rrdp::{DigestHex, NotificationFile, UriAndHash};
-use unwrap::unwrap;
 use uuid::Uuid;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
@@ -123,7 +122,7 @@ impl Server {
         if self.updated.load(Relaxed) {
             return
         }
-        let mut metrics = unwrap!(self.mutex.lock());
+        let mut metrics = self.mutex.lock().unwrap();
         if self.updated.load(Relaxed) {
             return
         }

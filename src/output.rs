@@ -6,7 +6,6 @@ use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
 use rpki::resources::AsId;
-use unwrap::unwrap;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
@@ -188,7 +187,7 @@ where
     }
 
     pub fn output_len(&self) -> usize {
-        GetLength::get(|w| unwrap!(self.output(w)))
+        GetLength::get(|w| self.output(w).unwrap())
     }
 
     pub fn output_start<W: io::Write>(
@@ -306,7 +305,7 @@ where
     fn next(&mut self) -> Option<Vec<u8>> {
         if self.next_id == 0 {
             let mut target = Vec::new();
-            unwrap!(self.output_start(&mut target));
+            self.output_start(&mut target).unwrap();
             Some(target)
         }
         else if !self.has_next_batch() {
@@ -314,7 +313,7 @@ where
         }
         else {
             let mut target = Vec::new();
-            unwrap!(self.next_batch(false, &mut target));
+            self.next_batch(false, &mut target).unwrap();
             Some(target)
         }
     }
