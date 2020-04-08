@@ -11,7 +11,6 @@ use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
 use rpki::tal::TalInfo;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
@@ -201,14 +200,14 @@ impl<'a> Run<'a> {
     /// updating is disabled
     #[allow(clippy::question_mark)] // Explicit if: more understandable code
     pub fn load_server(&self, notify_uri: &uri::Https) -> Option<ServerId> {
-        let res = unwrap!(self.servers.read()).find(notify_uri);
+        let res = self.servers.read().unwrap().find(notify_uri);
         let (id, server) = match res {
             Some(some) => some,
             None => {
                 if self.cache.http.is_none() {
                     return None
                 }
-                unwrap!(self.servers.write()).insert(
+                self.servers.write().unwrap().insert(
                     Server::create(notify_uri.clone(), &self.cache.cache_dir)
                 )
             }
@@ -229,15 +228,15 @@ impl<'a> Run<'a> {
         server_id: ServerId,
         uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Error> {
-        unwrap!(self.servers.read()).get(server_id).load_file(uri)
+        self.servers.read().unwrap().get(server_id).load_file(uri)
     }
 
     pub fn cleanup(&self) {
-        unwrap!(self.servers.write()).cleanup(&self.cache.cache_dir);
+        self.servers.write().unwrap().cleanup(&self.cache.cache_dir);
     }
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
-        unwrap!(self.servers.into_inner()).into_metrics()
+        self.servers.into_inner().unwrap().into_metrics()
     }
 }
 

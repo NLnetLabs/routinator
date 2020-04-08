@@ -2,12 +2,11 @@
 //!
 //! This is an internal module for organizational purposes.
 
-use std::{fs, io};
+use std::{error, fmt, fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use clap::crate_version;
-use derive_more::{Display, From};
 use log::{error, info};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, Response};
@@ -19,7 +18,6 @@ use rpki::rrdp::{
 };
 use rpki::xml::decode as xml;
 use tempfile::TempDir;
-use unwrap::unwrap;
 use uuid::Uuid;
 use crate::config::Config;
 use crate::operation::Error;
@@ -119,7 +117,7 @@ impl HttpClient {
     }
 
     fn client(&self) -> &Client {
-        unwrap!(self.client.as_ref())
+        self.client.as_ref().unwrap()
     }
 
     fn load_cert(path: &Path) -> Result<Certificate, Error> {
@@ -332,9 +330,9 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     ) -> Result<(), Self::Err> {
         let path = (self.path_op)(&uri);
 
-        if let Err(err) = fs::create_dir_all(unwrap!(path.parent())) {
+        if let Err(err) = fs::create_dir_all(path.parent().unwrap()) {
             return Err(SnapshotError::Io(
-                unwrap!(path.parent()).to_string_lossy().into(),
+                path.parent().unwrap().to_string_lossy().into(),
                 err
             ))
         }
@@ -578,40 +576,66 @@ impl DeltaTargets {
 
 //============ Errors ========================================================
 
-#[derive(Debug, Display, From)]
+#[derive(Debug)]
 pub enum SnapshotError {
-    #[display(fmt="{}", _0)]
     Xml(xml::Error),
-
-    #[display(
-        fmt="session ID mismatch (notification_file: {}, \
-             snapshot file: {}",
-        expected, received
-    )]
     SessionMismatch {
         expected: Uuid,
         received: Uuid
     },
-
-    #[display(
-        fmt="serial number mismatch (notification_file: {}, \
-             snapshot file: {}",
-        expected, received
-    )]
     SerialMismatch {
         expected: usize,
         received: usize 
     },
-
-    #[display(fmt="{}: {}", _0, _1)]
     Io(String, io::Error),
 }
 
+impl From<xml::Error> for SnapshotError {
+    fn from(err: xml::Error) -> Self {
+        SnapshotError::Xml(err)
+    }
+}
 
-#[derive(Debug, From)]
+impl fmt::Display for SnapshotError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SnapshotError::Xml(ref err) => err.fmt(f),
+            SnapshotError::SessionMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "session ID mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            SnapshotError::SerialMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "serial number mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            SnapshotError::Io(ref s, ref err) => {
+                write!(f, "{}: {}", s, err)
+            }
+        }
+    }
+}
+
+impl error::Error for SnapshotError { }
+
+
+#[derive(Debug)]
 pub enum ProcessError {
     Xml(xml::Error),
     Error,
+}
+
+impl From<xml::Error> for ProcessError {
+    fn from(err: xml::Error) ->  Self {
+        ProcessError::Xml(err)
+    }
 }
 
 impl From<Error> for ProcessError {
@@ -632,7 +656,7 @@ mod test {
     fn digest_read_read_all() {
         let test = b"sdafkljfasdkjlfashjklfasdklhjfasdklhjfasd";
         assert_eq!(
-            unwrap!(DigestRead::sha256(test.as_ref()).read_all()).as_ref(),
+            DigestRead::sha256(test.as_ref()).read_all().unwrap().as_ref(),
             digest::digest(&digest::SHA256, test).as_ref()
         );
     }

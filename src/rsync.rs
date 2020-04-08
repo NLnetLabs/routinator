@@ -8,7 +8,6 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::RsyncModuleMetrics;
 use crate::operation::Error;
@@ -110,22 +109,22 @@ impl<'a> Run<'a> {
         let module = uri.module();
 
         // If it is already up-to-date, return.
-        if unwrap!(self.updated.read()).contains(module) {
+        if self.updated.read().unwrap().contains(module) {
             return
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
         // yet.
         let mutex = {
-            unwrap!(self.running.write())
+            self.running.write().unwrap()
             .entry(module.clone()).or_default()
             .clone()
         };
         
         // Acquire the mutex. Once we have it, see if the module is up-to-date
         // which happens if someone else had it first.
-        let _lock = unwrap!(mutex.lock());
-        if unwrap!(self.updated.read()).contains(module) {
+        let _lock = mutex.lock().unwrap();
+        if self.updated.read().unwrap().contains(module) {
             return
         }
         
@@ -135,11 +134,11 @@ impl<'a> Run<'a> {
         );
 
         // Insert into updated map and metrics.
-        unwrap!(self.updated.write()).insert(module.clone());
-        unwrap!(self.metrics.lock()).push(metrics);
+        self.updated.write().unwrap().insert(module.clone());
+        self.metrics.lock().unwrap().push(metrics);
 
         // Remove from running.
-        unwrap!(self.running.write()).remove(module);
+        self.running.write().unwrap().remove(module);
     }
 
     pub fn load_file(
@@ -180,7 +179,7 @@ impl<'a> Run<'a> {
         if self.cache.command.is_none() {
             return
         }
-        let modules = unwrap!(self.updated.read());
+        let modules = self.updated.read().unwrap();
         let dir = match fs::read_dir(&self.cache.cache_dir.base) {
             Ok(dir) => dir,
             Err(err) => {
@@ -299,7 +298,7 @@ impl<'a> Run<'a> {
     }
 
     pub fn into_metrics(self) -> Vec<RsyncModuleMetrics> {
-        unwrap!(self.metrics.into_inner())
+        self.metrics.into_inner().unwrap()
     }
 }
 

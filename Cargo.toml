@@ -17,7 +17,6 @@ chrono          = "0.4.11"
 clap            = "2.33.0"
 crossbeam-queue = "0.2.1"
 crossbeam-utils = "0.7.2"
-derive_more     = "^0.15"
 dirs            = "2.0.2"
 fern		= "0.6.0"
 futures         = "0.3.4"
@@ -30,14 +29,13 @@ num_cpus        = "1.12.0"
 rand            = "0.7.3"
 reqwest		= { version = "0.10.4", default-features = false, features = ["blocking"] }
 ring		= "0.16.12"
-rpki            = "0.9.0"
+rpki    	= { git = "https://github.com/nlnetlabs/rpki-rs" }
 rpki-rtr	= { git = "https://github.com/nlnetlabs/rpki-rtr" }
 serde		= "1.0.106"
 slab            = "0.4.2"
 tempfile        = "3.1.0"
 tokio           = { version = "0.2.16", features = [ "io-util", "macros", "signal", "sync" ] }
 toml            = "0.5.6"
-unwrap          = "^1.2.1"
 uuid            = "0.8.1"
 
 

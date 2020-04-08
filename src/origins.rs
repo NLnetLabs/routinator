@@ -3,14 +3,13 @@
 /// The types in this module store route origins, sets of route origins, and
 /// the history of changes necessary for RTR.
 
-use std::{cmp, fmt, hash, ops, slice, vec};
+use std::{cmp, error, fmt, hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use derive_more::Display;
 use log::{debug, info};
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
@@ -21,7 +20,6 @@ use rpki_rtr::payload::{Action, Payload, Ipv4Prefix, Ipv6Prefix};
 use rpki_rtr::pdu::Timing;
 use rpki_rtr::serial::Serial;
 use rpki_rtr::server::VrpStore;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::{Metrics, TalMetrics};
 use crate::slurm::LocalExceptions;
@@ -145,7 +143,7 @@ impl OriginsHistory {
 
     /// Returns whether the history is active already.
     pub fn is_active(&self) -> bool {
-        unwrap!(self.0.read()).current.is_some()
+        self.0.read().unwrap().current.is_some()
     }
 
     /// Returns a reference to the current list of address origins.
@@ -155,7 +153,7 @@ impl OriginsHistory {
 
     /// Returns the duration until the next refresh should start.
     pub fn refresh_wait(&self) -> Duration {
-        unwrap!(self.0.read()).next_update_start
+        self.0.read().unwrap().next_update_start
         .duration_since(SystemTime::now())
         .unwrap_or_else(|_| Duration::from_secs(0))
     }
@@ -163,7 +161,7 @@ impl OriginsHistory {
     /// Returns the duration until a new set of data is available.
     pub fn update_wait(&self) -> Duration {
         let (start, duration, refresh) = {
-            let l = unwrap!(self.0.read());
+            let l = self.0.read().unwrap();
             (l.next_update_start, l.last_update_duration, l.refresh)
         };
         let start = match duration {
@@ -260,7 +258,7 @@ impl OriginsHistory {
                 let origins = AddressOrigins::from_report(
                     report, exceptions, extra_info, &mut metrics
                 );
-                let mut history = unwrap!(self.0.write());
+                let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
                 history.current = Some(Arc::new(origins));
                 true
@@ -1190,9 +1188,16 @@ impl OriginInfo {
 //------------ FromStrError --------------------------------------------------
 
 /// Creating an IP address prefix from a string has failed.
-#[derive(Clone, Debug, Display)]
-#[display(fmt="bad prefix {}", _0)]
+#[derive(Clone, Debug)]
 pub struct FromStrError(String);
+
+impl fmt::Display for FromStrError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bad prefix {}", self.0)
+    }
+}
+
+impl error::Error for FromStrError { }
 
 
 //------------ Tests ---------------------------------------------------------

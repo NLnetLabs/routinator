@@ -1,10 +1,9 @@
 //! Local exceptions per RFC 8416 aka SLURM.
 
-use std::{fs, io};
+use std::{error, fmt, fs, io};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use derive_more::Display;
 use json::JsonValue;
 use json::object::Object as JsonObject;
 use log::error;
@@ -393,21 +392,14 @@ impl JsonValueExt for JsonValue {
 
 //------------ ParseError ----------------------------------------------------
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum ParseError {
-    #[display(fmt="expected {} for '{}'", expected, element)]
     TypeError {
         element: &'static str,
         expected: &'static str,
     },
-
-    #[display(fmt="missing field {}", _0)]
     MissingElement(&'static str),
-
-    #[display(fmt="{}", _0)]
     BadPrefix(FromStrError),
-
-    #[display(fmt="{}", _0)]
     BadVersion(u8),
 }
 
@@ -427,18 +419,32 @@ impl From<FromStrError> for ParseError {
     }
 }
 
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ParseError::TypeError { element, expected } => {
+                write!(f, "expected {} for '{}'", expected, element)
+            }
+            ParseError::MissingElement(name) => {
+                write!(f, "missing field {}", name)
+            }
+            ParseError::BadPrefix(ref err) => err.fmt(f),
+            ParseError::BadVersion(ver) => {
+                write!(f, "bad version {}", ver)
+            }
+        }
+    }
+}
+
+impl error::Error for ParseError  { }
+
 
 //------------ LoadError ----------------------------------------------------
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum LoadError {
-    #[display(fmt="{}", _0)]
     Io(io::Error),
-
-    #[display(fmt="{}", _0)]
     Json(json::Error),
-
-    #[display(fmt="{}", _0)]
     Parse(ParseError),
 }
 
@@ -459,6 +465,18 @@ impl From<ParseError> for LoadError {
         LoadError::Parse(err)
     }
 }
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LoadError::Io(ref err) => err.fmt(f),
+            LoadError::Json(ref err) => err.fmt(f),
+            LoadError::Parse(ref err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for LoadError { }
 
 
 //------------ Tests ---------------------------------------------------------

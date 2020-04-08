@@ -15,12 +15,10 @@ use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use derive_more::From;
 use log::{error, info, warn};
 use rpki::resources::AsId;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
@@ -52,7 +50,6 @@ use crate::validity::RouteValidity;
 /// [`config_args`]: #method.config_args
 /// [`from_arg_matches`]: #method.from_arg_matches
 /// [`run`]: #method.run
-#[derive(From)]
 pub enum Operation {
     Init(Init),
     Server(Server),
@@ -90,25 +87,29 @@ impl Operation {
     ) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
             ("init", Some(matches)) => {
-                Init::from_arg_matches(matches)?.into()
+                Operation::Init(Init::from_arg_matches(matches)?)
             }
             ("server", Some(matches)) => {
-                Server::from_arg_matches(matches, cur_dir, config)?.into()
+                Operation::Server(
+                    Server::from_arg_matches(matches, cur_dir, config)?
+                )
             }
             ("vrps", Some(matches)) => {
-                Vrps::from_arg_matches(matches)?.into()
+                Operation::Vrps(Vrps::from_arg_matches(matches)?)
             }
             ("validate", Some(matches)) => {
-                Validate::from_arg_matches(matches)?.into()
+                Operation::Validate(Validate::from_arg_matches(matches)?)
             },
             ("update", Some(matches)) => {
-                Update::from_arg_matches(matches)?.into()
+                Operation::Update(Update::from_arg_matches(matches)?)
             }
             ("config", Some(matches)) => {
-                PrintConfig::from_arg_matches(matches, cur_dir, config)?.into()
+                Operation::PrintConfig(
+                    PrintConfig::from_arg_matches(matches, cur_dir, config)?
+                )
             }
             ("man", Some(matches)) => {
-                Man::from_arg_matches(matches)?.into()
+                Operation::Man(Man::from_arg_matches(matches)?)
             }
             ("", _) => {
                 error!(
@@ -723,7 +724,7 @@ impl Validate {
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         Ok(Validate {
             prefix: {
-                let prefix = unwrap!(matches.value_of("prefix"));
+                let prefix = matches.value_of("prefix").unwrap();
                 match AddressPrefix::from_str(prefix) {
                     Ok(prefix) => prefix,
                     Err(err) => {
@@ -733,7 +734,7 @@ impl Validate {
                 }
             },
             asn: {
-                let asn = unwrap!(matches.value_of("asn"));
+                let asn = matches.value_of("asn").unwrap();
                 match AsId::from_str(asn) {
                     Ok(asn) => asn,
                     Err(_) => {

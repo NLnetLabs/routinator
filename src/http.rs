@@ -21,7 +21,6 @@ use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use rpki::resources::AsId;
-use unwrap::unwrap;
 use crate::output;
 use crate::config::Config;
 use crate::metrics::Metrics;
@@ -112,12 +111,11 @@ fn metrics(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
         Some(metrics) => metrics_active(origins, &metrics),
         None => {
-            unwrap!(
-                Response::builder()
-                .status(503)
-                .header("Content-Type", "text/plain")
-                .body("Initial validation ongoing. Please wait.".into())
-            )
+            Response::builder()
+            .status(503)
+            .header("Content-Type", "text/plain")
+            .body("Initial validation ongoing. Please wait.".into())
+            .unwrap()
         }
     }
 }
@@ -155,7 +153,7 @@ fn metrics_active(
 
     // last_update_start, last_update_done, last_update_duration
     let (start, done, duration) = origins.update_times();
-    unwrap!(write!(res,
+    write!(res,
         "\n\
         # HELP routinator_last_update_start seconds since last update \
             started\n\
@@ -174,34 +172,34 @@ fn metrics_active(
 
         start.elapsed().as_secs(),
         duration.map(|duration| duration.as_secs()).unwrap_or(0),
-    ));
+    ).unwrap();
     match done {
         Some(instant) => {
-            unwrap!(writeln!(res, "{}", instant.elapsed().as_secs()));
+            writeln!(res, "{}", instant.elapsed().as_secs()).unwrap();
         }
         None => {
-            unwrap!(writeln!(res, "Nan"));
+            writeln!(res, "Nan").unwrap();
         }
     }
 
     // serial
-    unwrap!(writeln!(res,
+    writeln!(res,
         "\n\
         # HELP routinator_serial current RTR serial number\n\
         # TYPE routinator_serial gauge\n\
         routinator_serial {}",
 
         origins.serial()
-    ));
+    ).unwrap();
 
     // rsync_status
-    unwrap!(writeln!(res, "
+    writeln!(res, "
         \n\
         # HELP routinator_rsync_status exit status of rsync command\n\
         # TYPE routinator_rsync_status gauge"
-    ));
+    ).unwrap();
     for metrics in metrics.rsync() {
-        unwrap!(writeln!(
+        writeln!(
             res,
             "routinator_rsync_status{{uri=\"{}\"}} {}",
             metrics.module,
@@ -209,79 +207,77 @@ fn metrics_active(
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(_) => -1
             }
-        ));
+        ).unwrap();
     }
 
     // rsync_duration
-    unwrap!(writeln!(res, "
+    writeln!(res, "
         \n\
         # HELP routinator_rsync_duration duration of rsync in seconds\n\
         # TYPE routinator_rsync_duration gauge"
-    ));
+    ).unwrap();
     for metrics in metrics.rsync() {
         if let Ok(duration) = metrics.duration {
-            unwrap!(writeln!(
+            writeln!(
                 res,
                 "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
                 metrics.module,
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
-            ));
+            ).unwrap();
         }
     }
 
     // rrdp_status
-    unwrap!(writeln!(res, "
+    writeln!(res, "
         \n\
         # HELP routinator_rrdp_status status code for getting \
             notification file\n\
         # TYPE routinator_rrdp_status gauge"
-    ));
+    ).unwrap();
     for metrics in metrics.rrdp() {
-        unwrap!(writeln!(
+        writeln!(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
             metrics.notify_status.map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
-        ));
+        ).unwrap();
     }
 
     // rrdp_duration
-    unwrap!(writeln!(res, "
+    writeln!(res, "
         \n\
         # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
         # TYPE routinator_rrdp_duration gauge"
-    ));
+    ).unwrap();
     for metrics in metrics.rrdp() {
         if let Ok(duration) = metrics.duration {
-            unwrap!(writeln!(
+            writeln!(
                 res,
                 "routinator_rrdp_duration{{uri=\"{}\"}} {:.3}",
                 metrics.notify_uri,
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
-            ));
+            ).unwrap();
         }
     }
 
-    unwrap!(
-        Response::builder()
+    Response::builder()
         .header("Content-Type", "text/plain; version=0.0.4")
         .body(res.into())
-    )
+        .unwrap()
 }
 
 fn status(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
         Some(metrics) => status_active(origins, &metrics),
         None => {
-            unwrap!(
-                Response::builder()
-                .header("Content-Type", "text/plain")
-                .body("Initial validation ongoing. Please wait.".into())
-            )
+            Response::builder()
+            .header("Content-Type", "text/plain")
+            .body("Initial validation ongoing. Please wait.".into())
+            .unwrap()
         }
     }
 }
@@ -292,68 +288,68 @@ fn status_active(
 ) -> Response<Body> {
     let mut res = String::new();
     let (start, done, duration) = origins.update_times();
-    let start = unwrap!(Duration::from_std(start.elapsed()));
+    let start = Duration::from_std(start.elapsed()).unwrap();
     let done = done.map(|done|
-        unwrap!(Duration::from_std(done.elapsed()))
+        Duration::from_std(done.elapsed()).unwrap()
     );
     let duration = duration.map(|duration| 
-        unwrap!(Duration::from_std(duration))
+        Duration::from_std(duration).unwrap()
     );
     let now = Utc::now();
 
     // serial
-    unwrap!(writeln!(res, "serial: {}", origins.serial()));
+    writeln!(res, "serial: {}", origins.serial()).unwrap();
 
     // last-update-start-at and -ago
-    unwrap!(writeln!(res, "last-update-start-at:  {}", now - start));
-    unwrap!(writeln!(res, "last-update-start-ago: {}", start));
+    writeln!(res, "last-update-start-at:  {}", now - start).unwrap();
+    writeln!(res, "last-update-start-ago: {}", start).unwrap();
 
     // last-update-dona-at and -ago
     if let Some(done) = done {
-        unwrap!(writeln!(res, "last-update-done-at:   {}", now - done));
-        unwrap!(writeln!(res, "last-update-done-ago:  {}", done));
+        writeln!(res, "last-update-done-at:   {}", now - done).unwrap();
+        writeln!(res, "last-update-done-ago:  {}", done).unwrap();
     }
     else {
-        unwrap!(writeln!(res, "last-update-done-at:   -"));
-        unwrap!(writeln!(res, "last-update-done-ago:  -"));
+        writeln!(res, "last-update-done-at:   -").unwrap();
+        writeln!(res, "last-update-done-ago:  -").unwrap();
     }
 
     // last-update-duration
     if let Some(duration) = duration {
-        unwrap!(writeln!(res, "last-update-duration:  {}", duration));
+        writeln!(res, "last-update-duration:  {}", duration).unwrap();
     }
     else {
-        unwrap!(writeln!(res, "last-update-duration:  -"));
+        writeln!(res, "last-update-duration:  -").unwrap();
     }
 
     // valid-roas
-    unwrap!(writeln!(res, "valid-roas: {}",
+    writeln!(res, "valid-roas: {}",
         metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
-    ));
+    ).unwrap();
 
     // valid-roas-per-tal
-    unwrap!(write!(res, "valid-roas-per-tal: "));
+    write!(res, "valid-roas-per-tal: ").unwrap();
     for tal in metrics.tals() {
-        unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.roas));
+        write!(res, "{}={} ", tal.tal.name(), tal.roas).unwrap();
     }
-    unwrap!(writeln!(res, ""));
+    writeln!(res).unwrap();
 
     // vrps
-    unwrap!(writeln!(res, "vrps: {}",
+    writeln!(res, "vrps: {}",
         metrics.tals().iter().map(|tal| tal.vrps).sum::<u32>()
-    ));
+    ).unwrap();
 
     // vrps-per-tal
-    unwrap!(write!(res, "vrps-per-tal: "));
+    write!(res, "vrps-per-tal: ").unwrap();
     for tal in metrics.tals() {
-        unwrap!(write!(res, "{}={} ", tal.tal.name(), tal.vrps));
+        write!(res, "{}={} ", tal.tal.name(), tal.vrps).unwrap();
     }
-    unwrap!(writeln!(res, ""));
+    writeln!(res).unwrap();
 
     // rsync_status
-    unwrap!(writeln!(res, "rsync-durations:"));
+    writeln!(res, "rsync-durations:").unwrap();
     for metrics in metrics.rsync() {
-        unwrap!(write!(
+        write!(
             res,
             "   {}: status={}",
             metrics.module,
@@ -361,50 +357,49 @@ fn status_active(
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(_) => -1
             }
-        ));
+        ).unwrap();
         if let Ok(duration) = metrics.duration {
-            unwrap!(writeln!(
+            writeln!(
                 res,
                 ", duration={:.3}s",
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
-            ));
+            ).unwrap();
         }
         else {
-            unwrap!(writeln!(res, ""))
+            writeln!(res).unwrap()
         }
     }
 
     // rrdp_status
-    unwrap!(writeln!(res, "rrdp-durations:"));
+    writeln!(res, "rrdp-durations:").unwrap();
     for metrics in metrics.rrdp() {
-        unwrap!(write!(
+        write!(
             res,
             "   {}: status={}",
             metrics.notify_uri,
             metrics.notify_status.map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
-        ));
+        ).unwrap();
         if let Ok(duration) = metrics.duration {
-            unwrap!(writeln!(
+            writeln!(
                 res,
                 ", duration={:.3}s",
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
-            ));
+            ).unwrap();
         }
         else {
-            unwrap!(writeln!(res, ""))
+            writeln!(res).unwrap()
         }
     }
 
 
-    unwrap!(
-        Response::builder()
-        .header("Content-Type", "text/plain")
-        .body(res.into())
-    )
+    Response::builder()
+    .header("Content-Type", "text/plain")
+    .body(res.into())
+    .unwrap()
 }
 
 fn validity_path(origins: &OriginsHistory, path: &str) -> Response<Body> {
@@ -462,12 +457,13 @@ fn validity_check(
     match origins.current() {
         Some(origins) => Ok(origins),
         None => {
-            Err(unwrap!(
+            Err(
                 Response::builder()
                 .status(503)
                 .header("Content-Type", "text/plain")
                 .body("Initial validation ongoing. Please wait.".into())
-            ))
+                .unwrap()
+            )
         }
     }
 }
@@ -483,23 +479,20 @@ fn validity(
         Ok(prefix) => prefix,
         Err(_) => return bad_request()
     };
-    unwrap!(
-        Response::builder()
-        .header("Content-Type", "application/json")
-        .body(
-            RouteValidity::new(prefix, asn, &current)
-            .into_json()
-            .into()
-        )
-    )
+    Response::builder()
+    .header("Content-Type", "application/json")
+    .body(
+        RouteValidity::new(prefix, asn, &current)
+        .into_json()
+        .into()
+    ).unwrap()
 }
 
 fn version() -> Response<Body> {
-    unwrap!(
-        Response::builder()
-        .header("Content-Type", "text/plain")
-        .body(crate_version!().into())
-    )
+    Response::builder()
+    .header("Content-Type", "text/plain")
+    .body(crate_version!().into())
+    .unwrap()
 }
 
 fn vrps(
@@ -510,12 +503,11 @@ fn vrps(
     let (current, metrics) = match origins.current_and_metrics() {
         Some(some) => some, 
         None => {
-            return unwrap!(
-                Response::builder()
+            return Response::builder()
                 .status(503)
                 .header("Content-Type", "text/plain")
                 .body("Initial validation ongoing. Please wait.".into())
-            )
+                .unwrap()
         }
     };
 
@@ -527,41 +519,37 @@ fn vrps(
         current, filters, metrics
     );
 
-    unwrap!(
-        Response::builder()
-        .header("Content-Type", format.content_type())
-        .header("content-length", stream.output_len())
-        .body(Body::wrap_stream(stream::iter(
-            stream.map(Result::<_, Infallible>::Ok)
-        )))
-    )
+    Response::builder()
+    .header("Content-Type", format.content_type())
+    .header("content-length", stream.output_len())
+    .body(Body::wrap_stream(stream::iter(
+        stream.map(Result::<_, Infallible>::Ok)
+    )))
+    .unwrap()
 }
 
 fn bad_request() -> Response<Body> {
-    unwrap!(
-        Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .header("Content-Type", "text/plain")
-        .body("Bad Request".into())
-    )
+    Response::builder()
+    .status(StatusCode::BAD_REQUEST)
+    .header("Content-Type", "text/plain")
+    .body("Bad Request".into())
+    .unwrap()
 }
 
 fn method_not_allowed() -> Response<Body> {
-    unwrap!(
-        Response::builder()
-        .status(StatusCode::METHOD_NOT_ALLOWED)
-        .header("Content-Type", "text/plain")
-        .body("Method Not Allowed".into())
-    )
+    Response::builder()
+    .status(StatusCode::METHOD_NOT_ALLOWED)
+    .header("Content-Type", "text/plain")
+    .body("Method Not Allowed".into())
+    .unwrap()
 }
 
 fn not_found() -> Response<Body> {
-    unwrap!(
-        Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .header("Content-Type", "text/plain")
-        .body("Not Found".into())
-    )
+    Response::builder()
+    .status(StatusCode::NOT_FOUND)
+    .header("Content-Type", "text/plain")
+    .body("Not Found".into())
+    .unwrap()
 }
 
 /// Produces the output filters from a query string.
@@ -624,7 +612,7 @@ fn query_iter<'a>(
     let query = query.unwrap_or("");
     query.split('&').map(|item| {
         let mut item = item.splitn(2, '=');
-        let key = unwrap!(item.next());
+        let key = item.next().unwrap();
         let value = item.next();
         (key, value)
     })
