@@ -15,10 +15,18 @@ Bug Fixes
 
 Other Changes
 
+* Changed concurrency strategy for repository update and validation.
+  Previously, each trust anchor was updated and validated synchronously.
+  Now processing of a CA is deferred if its repository publication point
+  hasn’t been updated yet. Processing is then picked up by the next
+  available worker thread. This should guarantee that all worker threads
+  are busy all the time. ([#284)]
+
 Dependencies
 
 
-[(#282)]: https://github.com/NLnetLabs/routinator/pull/282
+[#282]: https://github.com/NLnetLabs/routinator/pull/282
+[#284]: https://github.com/NLnetLabs/routinator/pull/284
 
 
 ## 0.6.4 ‘Jeepers’
