@@ -31,7 +31,6 @@ reqwest		= { version = "0.10.4", default-features = false, features = ["blocking
 ring		= "0.16.12"
 rpki    	= { git = "https://github.com/nlnetlabs/rpki-rs" }
 rpki-rtr	= { git = "https://github.com/nlnetlabs/rpki-rtr" }
-serde		= "1.0.106"
 slab            = "0.4.2"
 tempfile        = "3.1.0"
 tokio           = { version = "0.2.16", features = [ "io-util", "macros", "signal", "sync" ] }
