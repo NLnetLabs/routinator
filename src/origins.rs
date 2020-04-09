@@ -19,7 +19,7 @@ use rpki::x509::Time;
 use rpki_rtr::payload::{Action, Payload, Ipv4Prefix, Ipv6Prefix};
 use rpki_rtr::pdu::Timing;
 use rpki_rtr::serial::Serial;
-use rpki_rtr::server::VrpStore;
+use rpki_rtr::server::VrpSource;
 use crate::config::Config;
 use crate::metrics::{Metrics, TalMetrics};
 use crate::slurm::LocalExceptions;
@@ -286,7 +286,7 @@ impl OriginsHistory {
     }
 }
 
-impl VrpStore for OriginsHistory {
+impl VrpSource for OriginsHistory {
     type FullIter = AddressOriginsIter;
     type DiffIter = DiffIter;
 
