@@ -4,7 +4,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use futures::future::select_all;
 use log::error;
-use rpki_rtr::server::{Dispatch, DispatchRunner, NotifySender, Server};
+use rpki_rtr::server::{NotifySender, Server};
 use tokio::net::TcpListener;
 use crate::config::Config;
 use crate::origins::OriginsHistory;
@@ -14,22 +14,20 @@ pub fn rtr_listener(
     history: OriginsHistory,
     config: &Config
 ) -> (NotifySender, impl Future<Output = ()>) {
-    let dispatch_rnr = DispatchRunner::new();
-    let dispatch = dispatch_rnr.dispatch();
-    let sender = dispatch.get_sender();
+    let sender = NotifySender::new();
     let addrs = config.rtr_listen.clone();
-    (sender, _rtr_listener(history, dispatch, addrs))
+    (sender.clone(), _rtr_listener(history, sender, addrs))
 }
 
 async fn _rtr_listener(
     origins: OriginsHistory,
-    dispatch: Dispatch,
+    sender: NotifySender,
     addrs: Vec<SocketAddr>,
 ) {
     let _ = select_all(
         addrs.iter().map(|addr| {
             tokio::spawn(single_rtr_listener(
-                *addr, origins.clone(), dispatch.clone()
+                *addr, origins.clone(), sender.clone()
             ))
         })
     ).await;
@@ -38,7 +36,7 @@ async fn _rtr_listener(
 async fn single_rtr_listener(
     addr: SocketAddr,
     origins: OriginsHistory,
-    dispatch: Dispatch,
+    sender: NotifySender,
 ) {
     let mut listener = match TcpListener::bind(addr).await {
         Ok(listener) => listener,
@@ -48,7 +46,7 @@ async fn single_rtr_listener(
         }
     };
     let listener = listener.incoming();
-    if Server::new(listener, dispatch, origins.clone()).run().await.is_err() {
+    if Server::new(listener, sender, origins.clone()).run().await.is_err() {
         error!("Fatal error listening on {}.", addr);
     }
 }
