@@ -16,10 +16,9 @@ use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
 use rpki::x509::Time;
-use rpki_rtr::payload::{Action, Payload, Ipv4Prefix, Ipv6Prefix};
-use rpki_rtr::pdu::Timing;
-use rpki_rtr::serial::Serial;
+use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
+use rpki_rtr::state::{Serial, State};
 use crate::config::Config;
 use crate::metrics::{Metrics, TalMetrics};
 use crate::slurm::LocalExceptions;
@@ -294,16 +293,15 @@ impl VrpSource for OriginsHistory {
         self.is_active()
     }
 
-    fn notify(&self) -> (u16, Serial) {
+    fn notify(&self) -> State {
         let history = self.0.read().unwrap();
-        (history.session, history.serial())
+        State::from_parts(history.session, history.serial())
     }
 
-    fn full(&self) -> (u16, Serial, Self::FullIter) {
+    fn full(&self) -> (State, Self::FullIter) {
         let history = self.0.read().unwrap();
         (
-            history.session,
-            history.serial(),
+            State::from_parts(history.session, history.serial()),
             AddressOriginsIter::new(
                 history.current.clone().unwrap_or_default()
             )
@@ -311,16 +309,15 @@ impl VrpSource for OriginsHistory {
     }
 
     fn diff(
-        &self, session: u16, serial: Serial
-    ) -> Option<(u16, Serial, Self::DiffIter)> {
+        &self, state: State
+    ) -> Option<(State, Self::DiffIter)> {
         let history = self.0.read().unwrap();
-        if history.session != session {
+        if history.session != state.session() {
             return None
         }
-        history.get(serial).map(|diff| {
+        history.get(state.serial()).map(|diff| {
             (
-                history.session,
-                history.serial(),
+                State::from_parts(history.session, history.serial()),
                 DiffIter::new(diff)
             )
         })
