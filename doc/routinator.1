@@ -12,62 +12,23 @@
 \- RPKI relying party software
 .SH "SYNOPSIS"
 .B routinator
-.RB [ \-b
-.IR base-dir ]
-.RB [ \-r
-.IR repository-dir ]
-.RB [ \-t
-.IR tal-dir ]
-.RB [ \-x
-.IR exceptions-file
-.RB [ \-x
-.IR exceptions-file
-[...]]]
-.RB [ \-\-strict ]
-.RB [ --disable-rsync ]
-.RB [ \-\-rsync\-command=\fIcommand\fR]
-.RB [ \-\-rsync\-args=\fIargs\fR]
-.RB [ \-\-rsync-timeout=\fIseconds\fR]
-.RB [ --disable-rrdp ]
-.RB [ --rrdp-timeout=\fIseconds\fR]
-.RB [ --rrdp-connect-timeout=\fIseconds\fR]
-.RB [ --rrdp-local-addr=\fIaddr\fR]
-.RB [ --rrdp-root-cert=\fIpath\fR\ [...]]
-.RB [ --rrdp-proxy=\fIuri\fR\ [...]]
-.RB [ --dirty ]
-.RB [ \-\-validation-threads=\fIcount\fR]
-.RB [ \-v | \c
-.BR \-vv | \c
-.BR \-q  | \c
-.BR \-qq ]
-.RB [ \-h ]
-.RB [ \-V ]
-command
-[args]
-.PP
-.B routinator
 [options]
 .B init
-.RB [ \-f ]
+.RB [ init-options ]
 .PP
 .B routinator
 [options]
 .B vrps
+[vrps-options]
 .RB [ \-o
 .IR output-file ]
 .RB [ \-f
 .IR format ]
-.RB [ \-n ]
-.RB [ \-a
-.IR asn ]
-.RB [ \-p
-.IR prefix ]
 .PP
 .B routinator
 [options]
 .B validate
-.RB [ \-n ]
-.RB [ \-j ]
+[ validate-options ]
 .RB [ \-a
 .IR asn ]
 .RB [ \-p
@@ -76,30 +37,23 @@ command
 .B routinator
 [options]
 .B server
-.RB [ \-\-rtr
-.I addr:port
-[...]]
-.RB [ \-\-http
-.I addr:port
-[...]]
-.RB [ \-\-listen\-systemd ]
-.RB [ \-\-refresh
-.IR seconds ]
-.RB [ \-\-retry
-.IR seconds ]
-.RB [ \-\-expire
-.IR seconds ]
-.RB [ \-\-history
-.IR count ]
+[ server-options ]
 .PP
 .B routinator
 [options]
 .B update
+[update-options]
 .PP
 .B routinator
 .B man
 .RB [ \-o
 .IR file ]
+.PP
+.B routinator
+.B -h
+.PP
+.B routinator
+.B -V
 
 
 .SH "DESCRIPTION"
