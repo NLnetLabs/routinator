@@ -89,6 +89,8 @@ async fn handle_request(
         return Ok(method_not_allowed())
     }
     Ok(match req.uri().path() {
+        "/bird" => vrps(origins, req.uri().query(), OutputFormat::Bird1),
+        "/bird2" => vrps(origins, req.uri().query(), OutputFormat::Bird2),
         "/csv" => vrps(origins, req.uri().query(), OutputFormat::Csv),
         "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
         "/metrics" => metrics(origins),
