@@ -11,6 +11,12 @@ Breaking Changes
 
 New
 
+* The new option `--stale` allows selecting a policy for dealing with
+  stale objects – i.e., manifests and CRLs that are past their
+  *next-update* date. The policies are `refuse`, `warn`, and `accept`. The
+  previous hard-coded policy of `warn`, i.e., accept but log a warning, is
+  the default. ([#288])
+
 Bug Fixes
 
 Other Changes
@@ -27,6 +33,7 @@ Dependencies
 
 [#282]: https://github.com/NLnetLabs/routinator/pull/282
 [#284]: https://github.com/NLnetLabs/routinator/pull/284
+[#288]: https://github.com/NLnetLabs/routinator/pull/288
 
 
 ## 0.6.4 ‘Jeepers’

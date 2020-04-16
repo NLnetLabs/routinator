@@ -184,6 +184,34 @@ See
 below for more information.
 
 .TP
+.BI --stale= policy
+This option defines how deal with stale objects. In RPKI, manifests and
+CRLs can be stale if the time given in their
+.I next-update
+field is in the past, indicating that an update to the object was
+scheduled but didn't happen. This can be because of an operational issue
+at the issuer or an attacker trying to replay old objects.
+.IP
+There are three possible policies that define how Routinator should treat
+stale objects.
+.IP
+A policy of
+.I refuse
+instructs Routinator to consider all stale objects invalid. This will
+result in all material published by the CA issuing this manifest and CRL
+to be invalid including all material of any child CA.
+.IP
+The
+.I warn
+policy will allow Routinator to consider any stale object to be valid. It
+will, however, print a warning in the log allowing an operator to follow
+up on the issue. This is the default policy if the option is not provided.
+.IP
+Finally, the
+.I accept
+policy will cause Routinator to quietly accept any stale object as valid.
+
+.TP
 .B --disable-rsync
 If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -659,6 +687,22 @@ If missing, no local exception files are used.
 .B strict
 A boolean specifying whether strict validation should be employed. If missing,
 strict validation will not be used.
+
+.TP
+.B stale
+A string specifying the policy for dealing with stale objects.
+.RS
+.TP
+.I refuse
+Consider all stale objects invalid rendering all material published by the CA
+issuing the stale object to be invalid including all material of any child CA.
+.TP
+.I warn
+Consider stale objects to be valid but print a warning to the log.
+.TP
+.I accept
+Quietly consider stale objects valid.
+.RE
 
 .TP
 .B disable-rsync
