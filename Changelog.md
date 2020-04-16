@@ -16,6 +16,10 @@ New
   *next-update* date. The policies are `refuse`, `warn`, and `accept`. The
   previous hard-coded policy of `warn`, i.e., accept but log a warning, is
   the default. ([#288])
+* New output formats `bird` and `bird2` which produce a `roa table` for
+  Bird 1 and a `route table` for Bird 2, respectively. ([#290], by
+  [netravnen])
+  
 
 Bug Fixes
 
@@ -34,6 +38,8 @@ Dependencies
 [#282]: https://github.com/NLnetLabs/routinator/pull/282
 [#284]: https://github.com/NLnetLabs/routinator/pull/284
 [#288]: https://github.com/NLnetLabs/routinator/pull/288
+[#290]: https://github.com/NLnetLabs/routinator/pull/290
+[netravnen]: https://github.com/netravnen
 
 
 ## 0.6.4 ‘Jeepers’

@@ -369,6 +369,16 @@ Choosing this format causes Routinator to produce a
 .I "roa-set"
 configuration item for the OpenBGPD configuration.
 .TP
+.B bird
+Choosing this format causes Routinator to produce a
+.I "roa table"
+configuration item for the BIRD configuration.
+.TP
+.B bird2
+Choosing this format causes Routinator to produce a
+.I "route table"
+configuration item for the BIRD2 configuration.
+.TP
 .B rpsl
 This format produces a list of RPSL objects with the authorization in the
 fields
@@ -848,6 +858,16 @@ Returns a set of monitoring metrics in the format used by Prometheus.
 .B /openbgpd
 Returns the current set of VRPs in
 .B openbgpd
+output format.
+.TP
+.B /bird
+Returns the current set of VRPs in
+.B bird
+output format.
+.TP
+.B /bird2
+Returns the current set of VRPs in
+.B bird2
 output format.
 .TP
 .B /rpsl

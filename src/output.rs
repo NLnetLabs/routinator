@@ -38,6 +38,16 @@ pub enum OutputFormat {
     /// Specifically, this produces as `roa-set`.
     Openbgpd,
 
+    /// BIRD configuration format.
+    ///
+    /// Specifically, this produces as `roa table`.
+    Bird1,
+
+    /// BIRD2 configuration format.
+    ///
+    /// Specifically, this produces as `route table`.
+    Bird2,
+
     /// RPSL output.
     ///
     /// This produces a sequence of RPSL objects with various fields.
@@ -57,7 +67,7 @@ pub enum OutputFormat {
 impl OutputFormat {
     /// A list of the known output formats.
     pub const VALUES: &'static [&'static str] = &[
-        "csv", "csvext", "json", "openbgpd", "rpsl", "summary", "none"
+        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl", "summary", "none"
     ];
 
     /// The default output format.
@@ -73,6 +83,8 @@ impl FromStr for OutputFormat {
             "csvext" => Ok(OutputFormat::ExtendedCsv),
             "json" => Ok(OutputFormat::Json),
             "openbgpd" => Ok(OutputFormat::Openbgpd),
+            "bird1" => Ok(OutputFormat::Bird1),
+            "bird2" => Ok(OutputFormat::Bird2),
             "rpsl" => Ok(OutputFormat::Rpsl),
             "summary" => Ok(OutputFormat::Summary),
             "none" => Ok(OutputFormat::None),
@@ -234,6 +246,8 @@ where
             OutputFormat::ExtendedCsv => ext_csv_header(vrps, target),
             OutputFormat::Json => json_header(vrps, target),
             OutputFormat::Openbgpd => openbgpd_header(vrps, target),
+            OutputFormat::Bird1 => bird1_header(vrps, target),
+            OutputFormat::Bird2 => bird2_header(vrps, target),
             OutputFormat::Rpsl => rpsl_header(vrps, target),
             OutputFormat::Summary => summary_header(&self.metrics, target),
             OutputFormat::None => Ok(())
@@ -254,6 +268,8 @@ where
             OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
             OutputFormat::Json => json_origin(vrp, first, target)?,
             OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
+            OutputFormat::Bird1 => bird1_origin(vrp, first, target)?,
+            OutputFormat::Bird2 => bird2_origin(vrp, first, target)?,
             OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
             _ => { }
         }
@@ -287,6 +303,8 @@ where
             OutputFormat::ExtendedCsv => ext_csv_footer(vrps, target),
             OutputFormat::Json => json_footer(vrps, target),
             OutputFormat::Openbgpd => openbgpd_footer(vrps, target),
+            OutputFormat::Bird1 => bird1_footer(vrps, target),
+            OutputFormat::Bird2 => bird2_footer(vrps, target),
             OutputFormat::Rpsl => rpsl_footer(vrps, target),
             _ => Ok(())
         }
@@ -479,6 +497,62 @@ fn openbgpd_footer<W: io::Write>(
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "}}")
+}
+
+
+//------------ bird1 ------------------------------------------------------
+
+fn bird1_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+fn bird1_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "roa {}/{} max {} as {};",
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        u32::from(addr.as_id()))
+}
+
+fn bird1_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+
+//------------ bird2 ------------------------------------------------------
+
+fn bird2_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+fn bird2_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "route {}/{} max {} as {};",
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        u32::from(addr.as_id()))
+}
+
+fn bird2_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
 }
 
 
