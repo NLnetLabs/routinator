@@ -94,9 +94,15 @@ pub struct Config {
     /// for more information.
     pub strict: bool,
 
-    /// Wether to disable rsync.
+    /// How should we deal with stale objects?
     ///
-    /// This is not currently changeable.
+    /// See the [`StalePolicy`] type for a description of the available
+    /// options.
+    ///
+    /// [`StalePolicy`]: enum.StalePolicy.html
+    pub stale: StalePolicy,
+
+    /// Whether to disable rsync.
     pub disable_rsync: bool,
 
     /// The command to run for rsync.
@@ -238,6 +244,12 @@ impl Config {
         .arg(Arg::with_name("strict")
              .long("strict")
              .help("Parse RPKI data in strict mode")
+        )
+        .arg(Arg::with_name("stale")
+             .long("stale")
+             .value_name("POLICY")
+             .help("The policy for handling stale objects")
+             .takes_value(true)
         )
         .arg(Arg::with_name("disable-rsync")
             .long("disable-rsync")
@@ -497,6 +509,11 @@ impl Config {
         // strict
         if matches.is_present("strict") {
             self.strict = true
+        }
+
+        // stale
+        if let Some(value) = from_str_value_of(matches, "stale")? {
+            self.stale = value
         }
 
         // disable_rsync
@@ -912,6 +929,7 @@ impl Config {
                 file.take_path_array("exceptions")?.unwrap_or_else(Vec::new)
             },
             strict: file.take_bool("strict")?.unwrap_or(false),
+            stale: file.take_from_str("stale")?.unwrap_or_default(),
             disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
             rsync_command: {
                 file.take_string("rsync-command")?
@@ -1092,6 +1110,7 @@ impl Config {
             tal_dir,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
+            stale: Default::default(),
             disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
@@ -1240,6 +1259,7 @@ impl Config {
             )
         );
         res.insert("strict".into(), self.strict.into());
+        res.insert("stale".into(), format!("{}", self.stale).into());
         res.insert("disable-rsync".into(), self.disable_rsync.into());
         res.insert("rsync-command".into(), self.rsync_command.clone().into());
         if let Some(ref args) = self.rsync_args {
@@ -1453,6 +1473,68 @@ impl PartialEq for LogTarget {
 }
 
 impl Eq for LogTarget { }
+
+
+//------------ StalePolicy ---------------------------------------------------
+
+/// The local policy for handling of stale objects.
+///
+/// Stale objects are manifests and CRLs that have a `next_update` field in
+/// the past. The protocol leaves the decision how to interpret stale
+/// objects to local policy. This type defines the options for this local
+/// policy.
+#[derive(Clone, Copy, Debug)]
+pub enum StalePolicy {
+    /// Refuse to accept a stale objects.
+    ///
+    /// A stale objects and, transitively, all objects that depend on the
+    /// stale objects are considered invalid.
+    Refuse,
+
+    /// Accept the stale object but log a warning.
+    ///
+    /// A stale object and, transitively, all objects that depend on the
+    /// stale object are considered valid. A warning is logged about the
+    /// fact that the object is stale.
+    ///
+    /// This is the default policy.
+    Warn,
+
+    /// Quietly accept the stale object.
+    ///
+    /// A stale object and, transitively, all objects that depend on the
+    /// stale object are considered valid.
+    Accept
+}
+
+impl Default for StalePolicy {
+    fn default() -> Self {
+        StalePolicy::Warn
+    }
+}
+
+impl FromStr for StalePolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "refuse" => Ok(StalePolicy::Refuse),
+            "warn" => Ok(StalePolicy::Warn),
+            "accept" => Ok(StalePolicy::Accept),
+            _ => Err(format!("invalid policy '{}'", s))
+        }
+    }
+}
+
+impl fmt::Display for StalePolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            StalePolicy::Refuse => "refuse",
+            StalePolicy::Warn => "warn",
+            StalePolicy::Accept => "accept",
+        })
+    }
+}
 
 
 //------------ ConfigFile ----------------------------------------------------

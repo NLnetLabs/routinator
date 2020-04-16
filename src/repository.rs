@@ -23,7 +23,7 @@ use rpki::roa::{Roa, RoaStatus};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
 use crate::{rrdp, rsync};
-use crate::config::Config;
+use crate::config::{Config, StalePolicy};
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{OriginsReport, RouteOrigins};
@@ -51,6 +51,9 @@ pub struct Repository {
 
     /// Should we be strict when decoding data?
     strict: bool,
+
+    /// How do we deal with stale objects?
+    stale: StalePolicy,
 
     /// Should we keep extended information about ROAs?
     extra_output: bool,
@@ -119,6 +122,7 @@ impl Repository {
             cache_dir: config.cache_dir.clone(),
             tals: Self::load_tals(&config.tal_dir)?,
             strict: config.strict,
+            stale: config.stale,
             extra_output,
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(config, update)?,
@@ -453,10 +457,6 @@ impl<'a> Run<'a> {
     /// the certificate and that turns out to be valid is returned.
     ///
     /// If no manifest can be found, `None` is returned.
-    ///
-    /// Note that currently we happily accept stale manifests, i.e., manifests
-    /// whose certificate is still valid but the next_update time has passed.
-    /// The RFC says we need to decide what to do, so this is fine.
     fn get_manifest<U: fmt::Display>(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
@@ -496,7 +496,16 @@ impl<'a> Run<'a> {
             }
         };
         if manifest.is_stale() {
-            warn!("{}: stale manifest", uri);
+            match self.repository.stale {
+                StalePolicy::Refuse => {
+                    info!("{}: stale manifest", uri);
+                    return None;
+                }
+                StalePolicy::Warn => {
+                    warn!("{}: stale manifest", uri);
+                }
+                StalePolicy::Accept => { }
+            }
         }
         if manifest.len() > CRL_CACHE_LIMIT {
             store.enable_serial_caching();
@@ -720,9 +729,17 @@ impl<'a> Run<'a> {
             return Err(ValidationError)
         }
         if crl.is_stale() {
-            warn!("{}: stale CRL.", uri);
+            match self.repository.stale {
+                StalePolicy::Refuse => {
+                    info!("{}: stale CRL.", uri);
+                    return Err(ValidationError)
+                }
+                StalePolicy::Warn => {
+                    warn!("{}: stale CRL.", uri);
+                }
+                StalePolicy::Accept => { }
+            }
         }
-
         let revoked = crl.contains(cert.serial_number());
         store.push(uri.clone(), crl);
         if revoked {
