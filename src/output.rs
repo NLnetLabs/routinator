@@ -504,7 +504,7 @@ fn openbgpd_footer<W: io::Write>(
 
 fn bird1_header<W: io::Write>(
     _vrps: &AddressOrigins,
-    output: &mut W,
+    _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
@@ -522,7 +522,7 @@ fn bird1_origin<W: io::Write>(
 
 fn bird1_footer<W: io::Write>(
     _vrps: &AddressOrigins,
-    output: &mut W,
+    _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
@@ -532,7 +532,7 @@ fn bird1_footer<W: io::Write>(
 
 fn bird2_header<W: io::Write>(
     _vrps: &AddressOrigins,
-    output: &mut W,
+    _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
@@ -550,7 +550,7 @@ fn bird2_origin<W: io::Write>(
 
 fn bird2_footer<W: io::Write>(
     _vrps: &AddressOrigins,
-    output: &mut W,
+    _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
