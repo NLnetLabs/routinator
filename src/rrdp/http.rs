@@ -55,7 +55,7 @@ impl HttpClient {
 
     pub fn new(config: &Config) -> Result<Self, Error> {
         let mut builder = Client::builder();
-        builder = builder.user_agent(concat!("Routinator ", crate_version!()));
+        builder = builder.user_agent(concat!("Routinator/", crate_version!()));
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
