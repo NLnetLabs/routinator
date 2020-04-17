@@ -85,7 +85,7 @@ impl FromStr for OutputFormat {
     fn from_str(value: &str) -> Result<Self, Error> {
         match value {
             "csv" => Ok(OutputFormat::Csv),
-            "csvcomp" => Ok(OutputFormat::CompatCsv),
+            "csvcompat" => Ok(OutputFormat::CompatCsv),
             "csvext" => Ok(OutputFormat::ExtendedCsv),
             "json" => Ok(OutputFormat::Json),
             "openbgpd" => Ok(OutputFormat::Openbgpd),

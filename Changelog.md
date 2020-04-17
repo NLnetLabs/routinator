@@ -19,7 +19,7 @@ New
 * New output formats `bird` and `bird2` which produce a `roa table` for
   Bird 1 and a `route table` for Bird 2, respectively. ([#290], by
   [netravnen])
-* New output format `compatcsv` which produces CSV output as similar to
+* New output format `csvcompat` which produces CSV output as similar to
   that of the RIPE NCC Validator as possible. ([#292])
 * The new config file option `tal-labels` allows defining explicit names
   to be used when TALs are referenced in output. This way, the output can

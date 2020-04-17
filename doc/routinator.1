@@ -324,15 +324,29 @@ The output format to use. Routinator currently supports the following formats:
 .RS
 .TP
 .B csv
-The list is formatted as lines of comma-separated values of the prefix in
-slash notation, the maximum prefix length, the autonomous system number, and
+The list is formatted as lines of comma-separated values of the autonomous
+system number, the prefix in slash notation, the maximum prefix length, and
 an abbreviation for the trust anchor the entry is derived from. The latter is
 the name of the TAL file without the extension
 .IR ".tal" .
+This can be overwritten with the
+.I tal-labels
+config file option.
 .IP
 This is the default format used if the
 .B -f
 option is missing.
+
+.TP
+.B csvcompat
+The same as
+.I csv
+except that all fields are embedded in double quotes and the autonomous system
+number is given without the prefix
+.IR AS .
+This format is pretty much identical to the CSV produced by the RIPE NCC
+Validator.
+
 .TP
 .B csvext
 An extended version of

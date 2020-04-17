@@ -92,7 +92,7 @@ async fn handle_request(
         "/bird" => vrps(origins, req.uri().query(), OutputFormat::Bird1),
         "/bird2" => vrps(origins, req.uri().query(), OutputFormat::Bird2),
         "/csv" => vrps(origins, req.uri().query(), OutputFormat::Csv),
-        "/compatcsv"
+        "/csvcompat"
             => vrps(origins, req.uri().query(), OutputFormat::CompatCsv),
         "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
         "/metrics" => metrics(origins),
