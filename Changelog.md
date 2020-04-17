@@ -16,13 +16,15 @@ New
   *next-update* date. The policies are `refuse`, `warn`, and `accept`. The
   previous hard-coded policy of `warn`, i.e., accept but log a warning, is
   the default. ([#288])
-* The new config file option `tal-labels` allows defining explicit names
-  to be used when TALs are referenced in output. This way, the output can
-  be made to be fully identical to that produced by the RIPE NCC
-  Validator. ([#291])
 * New output formats `bird` and `bird2` which produce a `roa table` for
   Bird 1 and a `route table` for Bird 2, respectively. ([#290], by
   [netravnen])
+* New output format `compatcsv` which produces CSV output as similar to
+  that of the RIPE NCC Validator as possible. ([#292])
+* The new config file option `tal-labels` allows defining explicit names
+  to be used when TALs are referenced in output. This way, the output can
+  be made to be even more similar to that produced by the RIPE NCC
+  Validator. ([#291])
 
 
 Bug Fixes
@@ -44,6 +46,7 @@ Dependencies
 [#288]: https://github.com/NLnetLabs/routinator/pull/288
 [#290]: https://github.com/NLnetLabs/routinator/pull/290
 [#291]: https://github.com/NLnetLabs/routinator/pull/291
+[#292]: https://github.com/NLnetLabs/routinator/pull/292
 [netravnen]: https://github.com/netravnen
 
 
