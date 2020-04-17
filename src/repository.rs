@@ -120,7 +120,7 @@ impl Repository {
 
         Ok(Repository {
             cache_dir: config.cache_dir.clone(),
-            tals: Self::load_tals(&config.tal_dir)?,
+            tals: Self::load_tals(config)?,
             strict: config.strict,
             stale: config.stale,
             extra_output,
@@ -133,14 +133,14 @@ impl Repository {
 
     /// Reloads the TAL files based on the config object.
     pub fn reload_tals(&mut self, config: &Config) -> Result<(), Error> {
-        self.tals = Self::load_tals(&config.tal_dir)?;
+        self.tals = Self::load_tals(config)?;
         Ok(())
     }
 
     /// Loads the TAL files from the given directory.
-    fn load_tals(tal_dir: &Path) -> Result<Vec<Tal>, Error> {
+    fn load_tals(config: &Config) -> Result<Vec<Tal>, Error> {
         let mut res = Vec::new();
-        let dir = match fs::read_dir(tal_dir) {
+        let dir = match fs::read_dir(&config.tal_dir) {
             Ok(dir) => dir,
             Err(err) => {
                 if err.kind() == io::ErrorKind::NotFound {
@@ -148,7 +148,7 @@ impl Repository {
                         "Missing TAL directory {}.\n\
                          You may have to initialize it via \
                          \'routinator init\'.",
-                         tal_dir.display()
+                         config.tal_dir.display()
                     );
                 }
                 else {
@@ -191,7 +191,10 @@ impl Repository {
                     return Err(Error)
                 }
             };
-            let tal = match Tal::read(&path, &mut file) {
+            let tal = match Tal::read_named(
+                Self::path_to_label(&path, config),
+                &mut file
+            ) {
                 Ok(tal) => tal,
                 Err(err) => {
                     error!(
@@ -210,6 +213,16 @@ impl Repository {
             );
         }
         Ok(res)
+    }
+
+    /// Converts a path into a TAL label.
+    fn path_to_label(path: &Path, config: &Config) -> String {
+        if let Some(name) = path.file_name().unwrap().to_str() {
+            if let Some(label) = config.tal_labels.get(name) {
+                return label.clone()
+            }
+        }
+        path.file_stem().unwrap().to_string_lossy().into_owned()
     }
 
     /// Performs a complete validation run on the repository.
