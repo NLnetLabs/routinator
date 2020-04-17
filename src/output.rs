@@ -21,6 +21,11 @@ pub enum OutputFormat {
     /// Each row has the AS number, prefix, max-length, and TA.
     Csv,
 
+    /// RIPE NCC Validator compatible CSV format.
+    ///
+    /// This quotes all values and prints the AS number as just the number.
+    CompatCsv,
+
     /// Extended CSV format.
     ///
     /// Each row has URI, ASN, prefix, max-length, not before, not after.
@@ -80,6 +85,7 @@ impl FromStr for OutputFormat {
     fn from_str(value: &str) -> Result<Self, Error> {
         match value {
             "csv" => Ok(OutputFormat::Csv),
+            "csvcomp" => Ok(OutputFormat::CompatCsv),
             "csvext" => Ok(OutputFormat::ExtendedCsv),
             "json" => Ok(OutputFormat::Json),
             "openbgpd" => Ok(OutputFormat::Openbgpd),
@@ -142,7 +148,8 @@ impl OutputFormat {
 
     pub fn content_type(self) -> &'static str {
         match self {
-            OutputFormat::Csv | OutputFormat::ExtendedCsv
+            OutputFormat::Csv | OutputFormat::CompatCsv |
+            OutputFormat::ExtendedCsv
                 => "text/csv;charset=utf-8;header=present",
             OutputFormat::Json => "application/json",
             _ => "text/plain;charset=utf-8",
@@ -243,6 +250,7 @@ where
         let vrps = self.origins.as_ref();
         match self.format {
             OutputFormat::Csv => csv_header(vrps, target),
+            OutputFormat::CompatCsv => compat_csv_header(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_header(vrps, target),
             OutputFormat::Json => json_header(vrps, target),
             OutputFormat::Openbgpd => openbgpd_header(vrps, target),
@@ -265,6 +273,7 @@ where
         }
         match self.format {
             OutputFormat::Csv => csv_origin(vrp, first, target)?,
+            OutputFormat::CompatCsv => compat_csv_origin(vrp, first, target)?,
             OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
             OutputFormat::Json => json_origin(vrp, first, target)?,
             OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
@@ -300,6 +309,7 @@ where
         let vrps = self.origins.as_ref();
         match self.format {
             OutputFormat::Csv => csv_footer(vrps, target),
+            OutputFormat::CompatCsv => compat_csv_footer(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_footer(vrps, target),
             OutputFormat::Json => json_footer(vrps, target),
             OutputFormat::Openbgpd => openbgpd_footer(vrps, target),
@@ -361,6 +371,36 @@ fn csv_origin<W: io::Write>(
 }
 
 fn csv_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+
+//------------ csv -----------------------------------------------------------
+
+fn compat_csv_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\"")
+}
+
+fn compat_csv_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
+        u32::from(addr.as_id()),
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        addr.tal_name(),
+    )
+}
+
+fn compat_csv_footer<W: io::Write>(
     _vrps: &AddressOrigins,
     _output: &mut W,
 ) -> Result<(), io::Error> {
