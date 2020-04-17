@@ -7,6 +7,7 @@
 //! [`Config`]: struct.Config.html
 
 use std::{env, fmt, fs, io};
+use std::collections::HashMap;
 use std::future::Future;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
@@ -194,6 +195,9 @@ pub struct Config {
 
     /// The name of the group to change to in daemon mode.
     pub group: Option<String>,
+
+    /// A mapping of TAL file names to TAL labels.
+    pub tal_labels: HashMap<String, String>,
 }
 
 
@@ -1009,6 +1013,7 @@ impl Config {
             chroot: file.take_path("chroot")?,
             user: file.take_string("user")?,
             group: file.take_string("group")?,
+            tal_labels: file.take_string_map("tal-labels")?.unwrap_or_default(),
         };
         file.check_exhausted()?;
         Ok(res)
@@ -1137,6 +1142,7 @@ impl Config {
             chroot: None,
             user: None,
             group: None,
+            tal_labels: HashMap::new(),
         }
     }
 
@@ -1369,6 +1375,18 @@ impl Config {
         }
         if let Some(ref group) = self.group {
             res.insert("group".into(), group.clone().into());
+        }
+        if !self.tal_labels.is_empty() {
+            res.insert(
+                "tal-labels".into(),
+                toml::Value::Array(
+                    self.tal_labels.iter().map(|(left, right)| {
+                        toml::Value::Array(vec![
+                            left.clone().into(), right.clone().into()
+                        ])
+                    }).collect()
+                )
+            );
         }
         res.into()
     }
@@ -1938,6 +1956,84 @@ impl ConfigFile {
                 error!(
                     "Error in config file {}: \
                      '{}' expected to be a array of paths.",
+                    self.path.display(), key
+                );
+                Err(Error)
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Takes a string-to-string hashmap from the config file.
+    fn take_string_map(
+        &mut self,
+        key: &str
+    ) -> Result<Option<HashMap<String, String>>, Error> {
+        match self.content.remove(key) {
+            Some(::toml::Value::Array(vec)) => {
+                let mut res = HashMap::new();
+                for value in vec.into_iter() {
+                    let mut pair = match value {
+                        ::toml::Value::Array(pair) => pair.into_iter(),
+                        _ => {
+                            error!(
+                                "Error in config file {}: \
+                                '{}' expected to be a array of string pairs.",
+                                self.path.display(),
+                                key
+                            );
+                            return Err(Error);
+                        }
+                    };
+                    let left = match pair.next() {
+                        Some(::toml::Value::String(value)) => value,
+                        _ => {
+                            error!(
+                                "Error in config file {}: \
+                                '{}' expected to be a array of string pairs.",
+                                self.path.display(),
+                                key
+                            );
+                            return Err(Error);
+                        }
+                    };
+                    let right = match pair.next() {
+                        Some(::toml::Value::String(value)) => value,
+                        _ => {
+                            error!(
+                                "Error in config file {}: \
+                                '{}' expected to be a array of string pairs.",
+                                self.path.display(),
+                                key
+                            );
+                            return Err(Error);
+                        }
+                    };
+                    if pair.next().is_some() {
+                        error!(
+                            "Error in config file {}: \
+                            '{}' expected to be a array of string pairs.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error);
+                    }
+                    if res.insert(left, right).is_some() {
+                        error!(
+                            "Error in config file {}: \
+                            'duplicate item in '{}'.",
+                            self.path.display(),
+                            key
+                        );
+                        return Err(Error);
+                    }
+                }
+                Ok(Some(res))
+            }
+            Some(_) => {
+                error!(
+                    "Error in config file {}: \
+                     '{}' expected to be a array of string pairs.",
                     self.path.display(), key
                 );
                 Err(Error)

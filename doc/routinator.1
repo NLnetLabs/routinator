@@ -504,7 +504,7 @@ below for more information on the HTTP service provided by Routinator.
 .TP
 .BI \-\-listen\-systemd
 The RTR listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd’s socket units to allow a
+activation. Use this option together with systemd's socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
 .IP
 Currently, all TCP listener sockets handed over by systemd will be used for
@@ -792,7 +792,7 @@ a colon. IPv6 address should be enclosed in square brackets.
 .TP
 .B listen-systemd
 The RTR TCP listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd’s socket units to allow a
+activation. Use this option together with systemd's socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
 .TP
 .B refresh
@@ -829,9 +829,22 @@ root directory.
 .TP
 .B user
 A string value containing the user name a daemon process should run as.
+
 .TP
 .B group
 A string value containing the group name a daemon process should run as.
+
+.TP
+.B tal-label
+An array containing arrays of two string values mapping the name of a TAL
+file (without the path but including the extension) as given by the first
+string to the name of the TAL to be included where the TAL is referenced in
+output as given by the second string.
+
+If the options missing or if a TAL isn't mentioned in the optio, Routinator
+will construct a name for the TAL by using its file name (without the path)
+and dropping the extension.
+
 
 .SH HTTP SERVICE
 Routinator can provide an HTTP service allowing to fetch the Validated ROA

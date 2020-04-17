@@ -47,6 +47,27 @@ tal-dir = "..."
 # for information on what is allowed when strict mode is off.
 #strict = false
 
+# Policy for stale objects
+#
+# Manifests and CRLs have a field called next-update which states the time
+# when a new object should be published. If an object remains past that time,
+# it is considered stale.
+#
+# This options defines how to deal with such stale objects. It can be one of
+# three values: "reject" means all stale objects are rejected as invalid,
+# "warn" means that they are accepted but a warning is logged, and "accept"
+# means the are just accepted.
+#
+# Note that rejecting stale manifests and CRLs results on all objects of the
+# issuing CA to be rejected, too, including all child CAs.
+#stale = "warn"
+
+# Disable rsync
+#
+# If you don’t want to use rsync -- which is not advices as there are rsync
+# only repositories -- you can set this to true.
+#disable-rsync = false
+
 # Rsync command
 #
 # This is the command to run as rsync. This is only command, no options.
@@ -162,3 +183,25 @@ tal-dir = "..."
 # this directory. Startup will fail if any of the other directories given is
 # not within this directory.
 #chroot = ...
+
+# TAL Labels
+#
+# In some output formats, such as CSV, the trust anchor a statement is derived
+# from is included for each statement. Normally, it is represented by the
+# name of its TAL file sans the exctension (i.e., "foo.tal" will be
+# represented by "foo").
+#
+# In order to allow full compatibility with the RIPE NCC Validator’s output,
+# you can use this options to provide alternative labels. The value maps the
+# file name (this time including the extension) to its label.
+#
+# The following will result in the same TAL labels as used by default by the
+# RIPE NCC Validator for the TALs included with Routinator.
+tal-labels = [
+    ["afrinic.tal", "AfriNIC RPKI Root"],
+    ["apnic.tal", "APNIC RPKI Root"],
+    ["arin.tal", "ARIN"],
+    ["lacnic.tal", "LACNIC RPKI Root"],
+    ["ripe.tal", "RIPE NCC RPKI Root"],
+]
+
