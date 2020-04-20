@@ -30,6 +30,9 @@ New
   Validator. ([#291])
 * The _csvext_ output format is now also available via the HTTP server at
   the `/csvext` path. ([#294])
+* On Unix, Routinator in server mode now also catches SIGINT and
+  immediately quits. This is useful if it is run inside a container for
+  ^C otherwise won’t work. ([#297])
 
 Bug Fixes
 
@@ -58,6 +61,7 @@ Dependencies
 [#292]: https://github.com/NLnetLabs/routinator/pull/292
 [#293]: https://github.com/NLnetLabs/routinator/pull/293
 [#294]: https://github.com/NLnetLabs/routinator/pull/294
+[#297]: https://github.com/NLnetLabs/routinator/pull/297
 [@netravnen]: https://github.com/netravnen
 
 
