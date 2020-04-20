@@ -3,23 +3,25 @@
 /// The types in this module store route origins, sets of route origins, and
 /// the history of changes necessary for RTR.
 
-use std::{cmp, fmt, hash, ops, slice, vec};
+use std::{cmp, error, fmt, hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use derive_more::Display;
 use log::{debug, info};
+use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
-use rpki::x509::Time;
-use unwrap::unwrap;
+use rpki::x509::{Time, Validity};
+use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
+use rpki_rtr::server::VrpSource;
+use rpki_rtr::state::{Serial, State};
+use crate::config::Config;
 use crate::metrics::{Metrics, TalMetrics};
-use crate::rtr::Serial;
 use crate::slurm::LocalExceptions;
 
 
@@ -29,18 +31,21 @@ use crate::slurm::LocalExceptions;
 #[derive(Debug, Default)]
 pub struct OriginsReport {
     origins: Vec<RouteOrigins>,
+    tals: Vec<Arc<TalInfo>>,
 }
 
 impl OriginsReport {
     pub fn new() -> Self {
         OriginsReport {
-            origins: Vec::new()
+            origins: Vec::new(),
+            tals: Vec::new(),
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, tals: Vec<Arc<TalInfo>>) -> Self {
         OriginsReport {
             origins: Vec::with_capacity(capacity),
+            tals
         }
     }
 
@@ -81,6 +86,9 @@ struct HistoryInner {
     /// The current metrics.
     metrics: Option<Arc<Metrics>>,
 
+    /// The session ID.
+    session: u16,
+
     /// The number of diffs to keep.
     keep: usize,
 
@@ -96,38 +104,46 @@ struct HistoryInner {
     /// The duration of the last update run.
     last_update_duration: Option<Duration>,
 
-    /// The instant when we are scheduled to strat the next update.
+    /// The instant when we are scheduled to start the next update.
     next_update_start: SystemTime,
+
+    /// Default RTR timing.
+    timing: Timing,
 }
 
 impl OriginsHistory {
     /// Creates a new history from the given initial data.
-    ///
-    /// The history will start out with `current` as its initial address
-    /// origins, an empty diff list, and a maximum length of the diff list
-    /// of `keep`.
     pub fn new(
-        keep: usize,
-        refresh: Duration,
+        config: &Config,
     ) -> Self {
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
-                next_update_start: SystemTime::now() + refresh,
+                next_update_start: SystemTime::now() + config.refresh,
                 current: None,
-                diffs: VecDeque::with_capacity(keep),
+                diffs: VecDeque::with_capacity(config.history_size),
                 metrics: None,
-                keep,
-                refresh,
+                session: {
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+                        .as_secs() as u16
+                },
+                keep: config.history_size,
+                refresh: config.refresh,
                 last_update_start: Instant::now(),
                 last_update_done: None,
                 last_update_duration: None,
+                timing: Timing {
+                    refresh: config.refresh.as_secs() as u32,
+                    retry: config.retry.as_secs() as u32,
+                    expire: config.expire.as_secs() as u32,
+                }
             }
         )))
     }
 
     /// Returns whether the history is active already.
     pub fn is_active(&self) -> bool {
-        unwrap!(self.0.read()).current.is_some()
+        self.0.read().unwrap().current.is_some()
     }
 
     /// Returns a reference to the current list of address origins.
@@ -137,7 +153,7 @@ impl OriginsHistory {
 
     /// Returns the duration until the next refresh should start.
     pub fn refresh_wait(&self) -> Duration {
-        unwrap!(self.0.read()).next_update_start
+        self.0.read().unwrap().next_update_start
         .duration_since(SystemTime::now())
         .unwrap_or_else(|_| Duration::from_secs(0))
     }
@@ -145,7 +161,7 @@ impl OriginsHistory {
     /// Returns the duration until a new set of data is available.
     pub fn update_wait(&self) -> Duration {
         let (start, duration, refresh) = {
-            let l = unwrap!(self.0.read());
+            let l = self.0.read().unwrap();
             (l.next_update_start, l.last_update_duration, l.refresh)
         };
         let start = match duration {
@@ -162,53 +178,7 @@ impl OriginsHistory {
     /// can’t, either because it doesn’t have enough history data or because
     /// the serial is actually in the future.
     pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
-        debug!("Fetching diff for serial {}", serial);
-        let history = self.0.read().unwrap();
-        if let Some(diff) = history.diffs.front() {
-            debug!("Our current serial is {}", diff.serial);
-            if diff.serial() < serial {
-                // If they give us a future serial, we reset.
-                debug!("Future, forcing reset.");
-                return None
-            }
-            else if diff.serial() == serial {
-                debug!("Same, producing empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else if diff.serial() == serial.add(1) {
-                // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
-                return Some(diff.clone())
-            }
-        }
-        else {
-            debug!("We are at serial 0.");
-            if serial == 0 {
-                debug!("Same, returning empty diff.");
-                return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else {
-                // That pesky future serial again.
-                debug!("Future, forcing reset.");
-                return None
-            }
-        }
-        debug!("Merging diffs.");
-        let mut iter = history.diffs.iter().rev();
-        while let Some(diff) = iter.next() {
-            match diff.serial().partial_cmp(&serial) {
-                Some(cmp::Ordering::Greater) => return None,
-                Some(cmp::Ordering::Equal) => break,
-                _ => continue
-            }
-        }
-        // We already know that the serial’s diff wasn’t last, so unwrap is
-        // fine.
-        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
-        for diff in iter {
-            res.merge(diff.as_ref())
-        }
-        Some(res.into_diff())
+        self.0.read().unwrap().get(serial)
     }
 
     /// Returns the serial number of the current version of the origin list.
@@ -263,15 +233,13 @@ impl OriginsHistory {
         report: OriginsReport,
         mut metrics: Metrics,
         exceptions: &LocalExceptions,
-        extra_info: bool
     ) -> bool {
         match self.current_and_serial() {
             Some((current, serial)) => {
                 let current: HashSet<_> =
                     current.iter().map(Clone::clone).collect();
                 let (next, diff) = OriginsDiff::construct(
-                    current, report.origins, exceptions, serial, extra_info,
-                    &mut metrics,
+                    current, report, exceptions, serial, &mut metrics,
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -286,9 +254,9 @@ impl OriginsHistory {
             }
             None => {
                 let origins = AddressOrigins::from_report(
-                    report, exceptions, extra_info, &mut metrics
+                    report, exceptions, &mut metrics
                 );
-                let mut history = unwrap!(self.0.write());
+                let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
                 history.current = Some(Arc::new(origins));
                 true
@@ -316,6 +284,52 @@ impl OriginsHistory {
     }
 }
 
+impl VrpSource for OriginsHistory {
+    type FullIter = AddressOriginsIter;
+    type DiffIter = DiffIter;
+
+    fn ready(&self) -> bool {
+        self.is_active()
+    }
+
+    fn notify(&self) -> State {
+        let history = self.0.read().unwrap();
+        State::from_parts(history.session, history.serial())
+    }
+
+    fn full(&self) -> (State, Self::FullIter) {
+        let history = self.0.read().unwrap();
+        (
+            State::from_parts(history.session, history.serial()),
+            AddressOriginsIter::new(
+                history.current.clone().unwrap_or_default()
+            )
+        )
+    }
+
+    fn diff(
+        &self, state: State
+    ) -> Option<(State, Self::DiffIter)> {
+        let history = self.0.read().unwrap();
+        if history.session != state.session() {
+            return None
+        }
+        history.get(state.serial()).map(|diff| {
+            (
+                State::from_parts(history.session, history.serial()),
+                DiffIter::new(diff)
+            )
+        })
+    }
+
+    fn timing(&self) -> Timing {
+        let this = self.0.read().unwrap();
+        let mut res = this.timing;
+        res.refresh = this.next_refresh().as_secs() as u32;
+        res
+    }
+}
+
 impl HistoryInner {
     /// Returns the current serial.
     ///
@@ -335,6 +349,77 @@ impl HistoryInner {
         }
         self.diffs.push_front(Arc::new(diff))
     }
+
+    /// Returns a diff from the given serial number.
+    ///
+    /// The serial is what the requestor has last seen. The method produces
+    /// a diff from that version to the current version if it can. If it
+    /// can’t, either because it doesn’t have enough history data or because
+    /// the serial is actually in the future.
+    pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
+        debug!("Fetching diff for serial {}", serial);
+        if let Some(diff) = self.diffs.front() {
+            debug!("Our current serial is {}", diff.serial);
+            if diff.serial() < serial {
+                // If they give us a future serial, we reset.
+                debug!("Future, forcing reset.");
+                return None
+            }
+            else if diff.serial() == serial {
+                debug!("Same, producing empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else if diff.serial() == serial.add(1) {
+                // This relies on serials increasing by one always.
+                debug!("One behind, just clone.");
+                return Some(diff.clone())
+            }
+        }
+        else {
+            debug!("We are at serial 0.");
+            if serial == 0 {
+                debug!("Same, returning empty diff.");
+                return Some(Arc::new(OriginsDiff::empty(serial)))
+            }
+            else {
+                // That pesky future serial again.
+                debug!("Future, forcing reset.");
+                return None
+            }
+        }
+        debug!("Merging diffs.");
+        let mut iter = self.diffs.iter().rev();
+        while let Some(diff) = iter.next() {
+            match diff.serial().partial_cmp(&serial) {
+                Some(cmp::Ordering::Greater) => return None,
+                Some(cmp::Ordering::Equal) => break,
+                _ => continue
+            }
+        }
+        // We already know that the serial’s diff wasn’t last, so unwrap is
+        // fine.
+        let mut res = DiffMerger::new(iter.next().unwrap().as_ref());
+        for diff in iter {
+            res.merge(diff.as_ref())
+        }
+        Some(res.into_diff())
+    }
+
+    /// Returns the time a client should wait for its next refresh.
+    fn next_refresh(&self) -> Duration {
+        // Next update starts at last_update_done + refresh. It should finish
+        // about last_update_duration later. Let’s double that to be safe. If
+        // we don’t have a last_update_duration, we just use two minute as a
+        // guess.
+        let duration = self.last_update_duration.map(|some| 2 * some)
+                           .unwrap_or(Duration::from_secs(120));
+        let from = self.last_update_done.unwrap_or_else(|| {
+            self.last_update_start + duration
+        });
+        self.refresh.checked_sub(
+            Instant::now().saturating_duration_since(from)
+        ).unwrap_or(Duration::from_secs(0)) + duration
+    }
 }
 
 
@@ -347,26 +432,19 @@ impl HistoryInner {
 /// for generating the real origins kept in [`AddressOrigins`].
 ///
 /// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
-    /// The list of route origin attestations.
-    origins: Vec<RouteOriginAttestation>,
+    /// The list of valid ROAs.
+    origins: Vec<RouteOrigin>,
 
     /// The time when this set needs to be refreshed at the latest.
     refresh: Option<Time>,
-
-    /// The TAL for this list.
-    tal: Arc<TalInfo>,
 }
 
 impl RouteOrigins {
     /// Creates a new, empty list of route origins.
-    pub fn new(tal: Arc<TalInfo>) -> Self {
-        RouteOrigins {
-            origins: Vec::new(),
-            refresh: None,
-            tal
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
     /// Appends the given attestation to the set.
@@ -376,8 +454,9 @@ impl RouteOrigins {
     pub fn push(
         &mut self,
         attestation: RouteOriginAttestation,
+        tal_index: usize,
     ) {
-        self.origins.push(attestation);
+        self.origins.push(RouteOrigin::new(attestation, tal_index));
     }
 
     /// Updates the refresh time.
@@ -405,7 +484,7 @@ impl RouteOrigins {
     }
 
     /// Returns an iterator over the attestations in the list.
-    pub fn iter(&self) -> slice::Iter<RouteOriginAttestation> {
+    pub fn iter(&self) -> slice::Iter<RouteOrigin> {
         self.origins.iter()
     }
 }
@@ -414,8 +493,8 @@ impl RouteOrigins {
 //--- IntoIterator
 
 impl IntoIterator for RouteOrigins {
-    type Item = RouteOriginAttestation;
-    type IntoIter = vec::IntoIter<RouteOriginAttestation>;
+    type Item = RouteOrigin;
+    type IntoIter = vec::IntoIter<RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.origins.into_iter()
@@ -423,11 +502,59 @@ impl IntoIterator for RouteOrigins {
 }
 
 impl<'a> IntoIterator for &'a RouteOrigins {
-    type Item = &'a RouteOriginAttestation;
-    type IntoIter = slice::Iter<'a, RouteOriginAttestation>;
+    type Item = &'a RouteOrigin;
+    type IntoIter = slice::Iter<'a, RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+
+//------------ RouteOrigin ---------------------------------------------------
+
+/// A single route origin attestation.
+///
+/// We don’t really need to keep the whole RPKI object around, so we don’t.
+/// This type collects all the information we do need later.
+#[derive(Clone, Debug)]
+pub struct RouteOrigin {
+    /// The ASN of the ROA.
+    as_id: AsId,
+
+    /// The addresses of the ROA.
+    addrs: Vec<FriendlyRoaIpAddress>,
+
+    /// The ROA information for the ROA.
+    info: OriginInfo,
+
+    /// The index of the TAL the ROA is derived from.
+    ///
+    /// We keep this for quicker calculations of TAL metrics.
+    tal_index: usize,
+}
+
+impl RouteOrigin {
+    /// Creates a new value from the ROA itself and the TAL index.
+    pub fn new(mut roa: RouteOriginAttestation, tal_index: usize) -> Self {
+        RouteOrigin {
+            as_id: roa.as_id(),
+            addrs: roa.iter().collect(),
+            info: OriginInfo::from_roa(&mut roa),
+            tal_index
+        }
+    }
+
+    pub fn as_id(&self) -> AsId {
+        self.as_id
+    }
+
+    pub fn addrs(&self) -> &[FriendlyRoaIpAddress] {
+        &self.addrs
+    }
+
+    pub fn info(&self) -> &OriginInfo {
+        &self.info
     }
 }
 
@@ -466,11 +593,15 @@ impl AddressOrigins {
     pub fn from_report(
         report: OriginsReport,
         exceptions: &LocalExceptions,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
         let mut refresh = None;
+
+        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+            TalMetrics::new(tal.clone())
+        }).collect();
+
         for item in report.origins {
             if let Some(time) = item.refresh {
                 match refresh {
@@ -479,27 +610,26 @@ impl AddressOrigins {
                     None => refresh = Some(time)
                 }
             }
-            let mut tal_metrics = TalMetrics::new(item.tal.clone());
-            for mut roa in item {
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(),
+                        origin.as_id,
                         addr,
-                        info.clone()
+                        origin.info.clone()
                     );
                     if exceptions.keep_origin(&addr) {
                         let _ = res.insert(addr);
                     }
                 }
             }
-            metrics.push_tal(tal_metrics);
         }
         for addr in exceptions.assertions() {
             let _ = res.insert(addr.clone());
         }
+        metrics.set_tals(tal_metrics_vec);
         AddressOrigins {
             origins: res.into_iter().collect(),
             refresh
@@ -544,6 +674,31 @@ impl AsRef<Self> for AddressOrigins {
 impl AsRef<[AddressOrigin]> for AddressOrigins {
     fn as_ref(&self) -> &[AddressOrigin] {
         self.origins.as_ref()
+    }
+}
+
+
+//------------ AddressOriginsIter --------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct AddressOriginsIter {
+    origins: Arc<AddressOrigins>,
+    pos: usize
+}
+
+impl AddressOriginsIter {
+    fn new(origins: Arc<AddressOrigins>) -> Self {
+        AddressOriginsIter { origins, pos: 0 }
+    }
+}
+
+impl Iterator for AddressOriginsIter {
+    type Item = Payload;
+
+    fn next(&mut self) -> Option<Payload> {
+        let res = self.origins.origins.get(self.pos)?;
+        self.pos += 1;
+        Some(res.payload())
     }
 }
 
@@ -605,24 +760,26 @@ impl OriginsDiff {
     /// origins with the serial number of `serial` plus one.
     pub fn construct(
         mut current: HashSet<AddressOrigin>,
-        origins: Vec<RouteOrigins>,
+        report: OriginsReport,
         exceptions: &LocalExceptions,
         serial: Serial,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> (AddressOrigins, Self) {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
 
-        for item in origins {
-            let mut tal_metrics = TalMetrics::new(item.tal.clone());
-            for mut roa in item {
+        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+            TalMetrics::new(tal.clone())
+        }).collect();
+
+        for item in report.origins {
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(), addr, info.clone()
+                        origin.as_id, addr, origin.info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
                         continue
@@ -632,8 +789,8 @@ impl OriginsDiff {
                     }
                 }
             }
-            metrics.push_tal(tal_metrics);
         }
+        metrics.set_tals(tal_metrics_vec);
         for addr in exceptions.assertions() {
             // Exceptions could have changed, so let’s be thorough here.
             if next.insert(addr.clone()) && !current.remove(addr)  {
@@ -670,6 +827,57 @@ impl OriginsDiff {
         self
     ) -> (Serial, Vec<AddressOrigin>, Vec<AddressOrigin>) {
         (self.serial, self.announce, self.withdraw)
+    }
+}
+
+
+//------------ DiffIter ------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct DiffIter {
+    /// The diff we are iterating over.
+    diff: Arc<OriginsDiff>,
+    
+    /// The position of the iterator.
+    ///
+    /// If it is `Ok(some)` we are in announcements, if it is `Err(some)` we
+    /// are in withdrawals.
+    pos: Result<usize, usize>,
+}
+
+impl DiffIter {
+    fn new(diff: Arc<OriginsDiff>) -> Self {
+        DiffIter { diff, pos: Ok(0) }
+    }
+}
+
+impl Iterator for DiffIter {
+    type Item = (Action, Payload);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.pos {
+            Ok(pos) => {
+                match self.diff.announce.get(pos) {
+                    Some(res) => {
+                        self.pos = Ok(pos + 1);
+                        Some((Action::Announce, res.payload()))
+                    }
+                    None => {
+                        self.pos = Err(0);
+                        self.next()
+                    }
+                }
+            }
+            Err(pos) => {
+                match self.diff.withdraw.get(pos) {
+                    Some(res) => {
+                        self.pos = Err(pos + 1);
+                        Some((Action::Withdraw, res.payload()))
+                    }
+                    None => None
+                }
+            }
+        }
     }
 }
 
@@ -786,6 +994,28 @@ impl AddressOrigin {
         }
     }
 
+    /// Returns the RTR payload for the origin.
+    pub fn payload(&self) -> Payload {
+        match self.address() {
+            IpAddr::V4(addr) => {
+                Payload::V4(Ipv4Prefix {
+                    prefix: addr,
+                    prefix_len: self.address_length(),
+                    max_len: self.max_length(),
+                    asn: self.as_id().into(),
+                })
+            }
+            IpAddr::V6(addr) => {
+                Payload::V6(Ipv6Prefix {
+                    prefix: addr,
+                    prefix_len: self.address_length(),
+                    max_len: self.max_length(),
+                    asn: self.as_id().into(),
+                })
+            }
+        }
+    }
+
     /// Returns the origin AS number.
     pub fn as_id(&self) -> AsId {
         self.as_id
@@ -811,9 +1041,9 @@ impl AddressOrigin {
         self.max_length
     }
 
-    /// Returns a reference to the resource certificate if available.
-    pub fn cert(&self) -> Option<&ResourceCert> {
-        self.info.cert()
+    /// Returns a ROA information if available.
+    pub fn roa_info(&self) -> Option<&RoaInfo> {
+        self.info.roa_info()
     }
 
     /// Returns the name of the TAL that this origin as based on.
@@ -952,42 +1182,64 @@ pub enum OriginInfo {
     None,
 
     /// The resource certificate of a ROA.
-    RoaCert(Arc<ResourceCert>),
-
-    /// The trust anchor info of a ROA.
-    RoaTal(Arc<TalInfo>),
+    RoaInfo(Arc<RoaInfo>),
 
     /// The path of a local exceptions file.
     Exception(Arc<PathBuf>),
 }
 
 impl OriginInfo {
-    fn from_roa(roa: &mut RouteOriginAttestation, extra_info: bool) -> Self {
+    fn from_roa(roa: &mut RouteOriginAttestation) -> Self {
         if let Some(cert) = roa.take_cert() {
-            if extra_info {
-                OriginInfo::RoaCert(Arc::new(cert))
-            }
-            else {
-                OriginInfo::RoaTal(cert.into_tal())
-            }
+            OriginInfo::RoaInfo(Arc::new(RoaInfo::from_ee_cert(cert)))
         }
         else {
             OriginInfo::None
         }
     }
 
-    fn cert(&self) -> Option<&ResourceCert> {
+    fn roa_info(&self) -> Option<&RoaInfo> {
         match *self {
-            OriginInfo::RoaCert(ref cert) => Some(cert),
+            OriginInfo::RoaInfo(ref info) => Some(info),
             _ => None
         }
     }
 
     fn tal_name(&self) -> &str {
         match *self {
-            OriginInfo::RoaCert(ref cert) => cert.tal().name(),
-            OriginInfo::RoaTal(ref tal) => tal.name(),
+            OriginInfo::RoaInfo(ref info) => info.tal.name(),
             _ => "N/A"
+        }
+    }
+}
+
+
+//------------ RoaInfo -------------------------------------------------------
+
+/// Information about a ROA.
+#[derive(Clone, Debug)]
+pub struct RoaInfo {
+    /// The TAL the ROA is derived from.
+    pub tal: Arc<TalInfo>,
+
+    /// The rsync URI identifying the ROA.
+    pub uri: Option<uri::Rsync>,
+
+    /// The validity of the ROA.
+    ///
+    /// This isn’t being trimmed via the CA certificate or anything so the
+    /// actual validity may be shorter.
+    pub validity: Validity,
+}
+
+impl RoaInfo {
+    fn from_ee_cert(cert: ResourceCert) -> Self {
+        RoaInfo {
+            uri: cert.signed_object().cloned().map(|mut uri| {
+                uri.unshare(); uri
+            }),
+            validity: cert.validity(),
+            tal: cert.into_tal(),
         }
     }
 }
@@ -996,9 +1248,16 @@ impl OriginInfo {
 //------------ FromStrError --------------------------------------------------
 
 /// Creating an IP address prefix from a string has failed.
-#[derive(Clone, Debug, Display)]
-#[display(fmt="bad prefix {}", _0)]
+#[derive(Clone, Debug)]
 pub struct FromStrError(String);
+
+impl fmt::Display for FromStrError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bad prefix {}", self.0)
+    }
+}
+
+impl error::Error for FromStrError { }
 
 
 //------------ Tests ---------------------------------------------------------

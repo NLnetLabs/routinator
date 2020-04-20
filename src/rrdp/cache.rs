@@ -11,10 +11,10 @@ use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
 use rpki::tal::TalInfo;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
+use crate::utils::UriExt;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
 
@@ -40,6 +40,9 @@ pub struct Cache {
     ///
     /// If this is `None`, we don’t actually do updates.
     http: Option<HttpClient>,
+
+    /// Whether to filter dubious authorities in notify URIs.
+    filter_dubious: bool,
 }
 
 impl Cache {
@@ -74,7 +77,8 @@ impl Cache {
                 cache_dir: Self::cache_dir(config),
                 ta_dir: Self::ta_dir(config),
                 http: if update { Some(HttpClient::new(config)?) }
-                      else { None }
+                      else { None },
+                filter_dubious: !config.allow_dubious_hosts
             }))
         }
     }
@@ -180,6 +184,17 @@ impl<'a> Run<'a> {
         }
     }
 
+    pub fn is_current(&self, notify_uri: &uri::Https) -> bool {
+        // If updating is disabled, everything is already current.
+        if self.cache.http.is_none() {
+            return true
+        }
+        match self.servers.read().unwrap().find(notify_uri) {
+            Some((_, server)) => server.is_current(),
+            None => false
+        }
+    }
+
     /// Loads an RRDP server.
     ///
     /// If the server has already been used during this validation run,
@@ -190,16 +205,23 @@ impl<'a> Run<'a> {
     /// updating is disabled
     #[allow(clippy::question_mark)] // Explicit if: more understandable code
     pub fn load_server(&self, notify_uri: &uri::Https) -> Option<ServerId> {
-        let res = unwrap!(self.servers.read()).find(notify_uri);
+        let res = self.servers.read().unwrap().find(notify_uri);
         let (id, server) = match res {
             Some(some) => some,
             None => {
                 if self.cache.http.is_none() {
                     return None
                 }
-                unwrap!(self.servers.write()).insert(
+                let server = if
+                    self.cache.filter_dubious
+                    && notify_uri.has_dubious_authority()
+                {
+                    Server::create_broken(notify_uri.clone())
+                }
+                else {
                     Server::create(notify_uri.clone(), &self.cache.cache_dir)
-                )
+                };
+                self.servers.write().unwrap().insert(server)
             }
         };
         if let Some(ref http) = self.cache.http {
@@ -218,15 +240,15 @@ impl<'a> Run<'a> {
         server_id: ServerId,
         uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Error> {
-        unwrap!(self.servers.read()).get(server_id).load_file(uri)
+        self.servers.read().unwrap().get(server_id).load_file(uri)
     }
 
     pub fn cleanup(&self) {
-        unwrap!(self.servers.write()).cleanup(&self.cache.cache_dir);
+        self.servers.write().unwrap().cleanup(&self.cache.cache_dir);
     }
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
-        unwrap!(self.servers.into_inner()).into_metrics()
+        self.servers.into_inner().unwrap().into_metrics()
     }
 }
 
@@ -282,6 +304,7 @@ impl<'a> Run<'a> {
         }
     }
 
+    #[allow(clippy::verbose_file_reads)]
     fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
         let path = self.ta_path(info);
         let mut file = match fs::File::open(&path) {

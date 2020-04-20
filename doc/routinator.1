@@ -12,62 +12,23 @@
 \- RPKI relying party software
 .SH "SYNOPSIS"
 .B routinator
-.RB [ \-b
-.IR base-dir ]
-.RB [ \-r
-.IR repository-dir ]
-.RB [ \-t
-.IR tal-dir ]
-.RB [ \-x
-.IR exceptions-file
-.RB [ \-x
-.IR exceptions-file
-[...]]]
-.RB [ \-\-strict ]
-.RB [ --disable-rsync ]
-.RB [ \-\-rsync\-command=\fIcommand\fR]
-.RB [ \-\-rsync\-args=\fIargs\fR]
-.RB [ \-\-rsync-timeout=\fIseconds\fR]
-.RB [ --disable-rrdp ]
-.RB [ --rrdp-timeout=\fIseconds\fR]
-.RB [ --rrdp-connect-timeout=\fIseconds\fR]
-.RB [ --rrdp-local-addr=\fIaddr\fR]
-.RB [ --rrdp-root-cert=\fIpath\fR\ [...]]
-.RB [ --rrdp-proxy=\fIuri\fR\ [...]]
-.RB [ --dirty ]
-.RB [ \-\-validation-threads=\fIcount\fR]
-.RB [ \-v | \c
-.BR \-vv | \c
-.BR \-q  | \c
-.BR \-qq ]
-.RB [ \-h ]
-.RB [ \-V ]
-command
-[args]
-.PP
-.B routinator
 [options]
 .B init
-.RB [ \-f ]
+.RB [ init-options ]
 .PP
 .B routinator
 [options]
 .B vrps
+[vrps-options]
 .RB [ \-o
 .IR output-file ]
 .RB [ \-f
 .IR format ]
-.RB [ \-n ]
-.RB [ \-a
-.IR asn ]
-.RB [ \-p
-.IR prefix ]
 .PP
 .B routinator
 [options]
 .B validate
-.RB [ \-n ]
-.RB [ \-j ]
+[ validate-options ]
 .RB [ \-a
 .IR asn ]
 .RB [ \-p
@@ -76,30 +37,23 @@ command
 .B routinator
 [options]
 .B server
-.RB [ \-\-rtr
-.I addr:port
-[...]]
-.RB [ \-\-http
-.I addr:port
-[...]]
-.RB [ \-\-listen\-systemd ]
-.RB [ \-\-refresh
-.IR seconds ]
-.RB [ \-\-retry
-.IR seconds ]
-.RB [ \-\-expire
-.IR seconds ]
-.RB [ \-\-history
-.IR count ]
+[ server-options ]
 .PP
 .B routinator
 [options]
 .B update
+[update-options]
 .PP
 .B routinator
 .B man
 .RB [ \-o
 .IR file ]
+.PP
+.B routinator
+.B -h
+.PP
+.B routinator
+.B -V
 
 
 .SH "DESCRIPTION"
@@ -184,6 +138,44 @@ See
 below for more information.
 
 .TP
+.BI --stale= policy
+This option defines how deal with stale objects. In RPKI, manifests and
+CRLs can be stale if the time given in their
+.I next-update
+field is in the past, indicating that an update to the object was
+scheduled but didn't happen. This can be because of an operational issue
+at the issuer or an attacker trying to replay old objects.
+.IP
+There are three possible policies that define how Routinator should treat
+stale objects.
+.IP
+A policy of
+.I refuse
+instructs Routinator to consider all stale objects invalid. This will
+result in all material published by the CA issuing this manifest and CRL
+to be invalid including all material of any child CA.
+.IP
+The
+.I warn
+policy will allow Routinator to consider any stale object to be valid. It
+will, however, print a warning in the log allowing an operator to follow
+up on the issue. This is the default policy if the option is not provided.
+.IP
+Finally, the
+.I accept
+policy will cause Routinator to quietly accept any stale object as valid.
+
+.TP
+.B --allow-dubious-hosts
+As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI data
+with dubious host names. In particular, it will reject the name
+.IR localhost,
+host names that consist of IP addresses, and a host name that contains an
+explicit port.
+.IP
+This option allows to disable this filtering.
+
+.TP
 .B --disable-rsync
 If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -228,8 +220,8 @@ doing outgoing requests.
 .TP
 .BI --rrdp-root-cert= path
 This option provides a path to a file that contains a certificate in PEM
-encoding that should be used as a trusted certificate for HTTPS server 
-authentication. The option can be given more then once.
+encoding that should be used as a trusted certificate for HTTPS server
+authentication. The option can be given more than once.
 .IP
 Providing this option does
 .I not
@@ -271,9 +263,9 @@ A single
 .B -q
 will drop the log level to
 .I error\fR.
-Repeating 
+Repeating
 .B -q
-more than once turns logging off completely. 
+more than once turns logging off completely.
 .TP
 .BR \-\-syslog
 Redirect logging output to syslog.
@@ -316,7 +308,7 @@ Forces installation of the TALs even if the TAL directory already exists.
 Before you can use the ARIN TAL, you need to agree to the ARIN Relying Party
 Agreement (RPA). You can find it at
 .I https://www.arin.net/resources/manage/rpki/rpa.pdf
-and explicitely agree to it via this option. This explicit agreement is
+and explicitly agree to it via this option. This explicit agreement is
 necessary in order to install the ARIN TAL.
 .TP
 .B --decline-arin-rpa
@@ -328,7 +320,7 @@ published for resources assigned under ARIN.
 .SS vrps
 This command requests that Routinator update the local repository and then
 validate the Route Origin Attestations in the repository and output the
-valid route origins, which are also known as Validated ROA Payload or VRPs, 
+valid route origins, which are also known as Validated ROA Payload or VRPs,
 as a list.
 .TP
 .BI -o\  file \fR,\ \fB\-\-output= file
@@ -342,15 +334,29 @@ The output format to use. Routinator currently supports the following formats:
 .RS
 .TP
 .B csv
-The list is formatted as lines of comma-separated values of the prefix in
-slash notation, the maximum prefix length, the autonomous system number, and
+The list is formatted as lines of comma-separated values of the autonomous
+system number, the prefix in slash notation, the maximum prefix length, and
 an abbreviation for the trust anchor the entry is derived from. The latter is
 the name of the TAL file without the extension
 .IR ".tal" .
+This can be overwritten with the
+.I tal-labels
+config file option.
 .IP
 This is the default format used if the
 .B -f
 option is missing.
+
+.TP
+.B csvcompat
+The same as
+.I csv
+except that all fields are embedded in double quotes and the autonomous system
+number is given without the prefix
+.IR AS .
+This format is pretty much identical to the CSV produced by the RIPE NCC
+Validator.
+
 .TP
 .B csvext
 An extended version of
@@ -386,6 +392,16 @@ whereas the RIPE NCC Validator has a dedicated name for each.
 Choosing this format causes Routinator to produce a
 .I "roa-set"
 configuration item for the OpenBGPD configuration.
+.TP
+.B bird
+Choosing this format causes Routinator to produce a
+.I "roa table"
+configuration item for the BIRD configuration.
+.TP
+.B bird2
+Choosing this format causes Routinator to produce a
+.I "route table"
+configuration item for the BIRD2 configuration.
 .TP
 .B rpsl
 This format produces a list of RPSL objects with the authorization in the
@@ -482,9 +498,9 @@ them, you will have to restart Routinator.
 You can provide a number of addresses and ports to listen on for RTR and HTTP
 through command line options or their configuration file equivalent.
 Currently, Routinator will only start listening on these ports after an
-intitial validation run has finished.
+initial validation run has finished.
 .PP
-It will not listen on any sockets unless explicitely specified. It
+It will not listen on any sockets unless explicitly specified. It
 will still run and periodically update the repository. This might be useful
 for use with
 .B vrps
@@ -512,10 +528,10 @@ below for more information on the HTTP service provided by Routinator.
 .TP
 .BI \-\-listen\-systemd
 The RTR listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd’s socket units to allow a
+activation. Use this option together with systemd's socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
 .IP
-Currently, all TCP listener sockets handed over by systemd will be used for 
+Currently, all TCP listener sockets handed over by systemd will be used for
 the RTR protocol.
 .TP
 .BI \-\-refresh= seconds
@@ -617,7 +633,7 @@ no options are used at all is
 This directory can be created and populated with the TALs of the five
 Regional Internet Registries (RIRs) via the
 .B init
-command. 
+command.
 .P
 If the directory does exist, Routinator will use all files with an extension
 of
@@ -661,6 +677,27 @@ A boolean specifying whether strict validation should be employed. If missing,
 strict validation will not be used.
 
 .TP
+.B stale
+A string specifying the policy for dealing with stale objects.
+.RS
+.TP
+.I refuse
+Consider all stale objects invalid rendering all material published by the CA
+issuing the stale object to be invalid including all material of any child CA.
+.TP
+.I warn
+Consider stale objects to be valid but print a warning to the log.
+.TP
+.I accept
+Quietly consider stale objects valid.
+.RE
+
+.TP
+.B allow-dubious-hosts
+A boolean value that, if present and true, disables Routinator's filtering of
+dubious host names in rsync and HTTPS URIs from RPKI data.
+
+.TP
 .B disable-rsync
 A boolean value that, if present and true, turns off the use of rsync.
 
@@ -683,7 +720,7 @@ out after ten seconds. If your rsync is too old to support this option, no
 arguments are used.
 .TP
 .B rsync-timeout
-An integer value specifying th number seconds an rsync command is allowed to
+An integer value specifying the number of seconds an rsync command is allowed to
 run before it is being terminated. The default if the value is missing is
 300 seconds.
 
@@ -711,7 +748,7 @@ A string value that provides the local address to be used by RRDP connections.
 .B rrdp-root-certs
 A list of strings each providing a path to a file containing a trust anchor
 certificate for HTTPS authentication of RRDP connections. In addition to the
-certiciates provided via this option, the system's own trust store is used.
+certificates provided via this option, the system's own trust store is used.
 
 .TP
 .B rrdp-proxies
@@ -721,7 +758,7 @@ proxies are supported.
 
 .TP
 .B dirty
-A boolean value which, if true, specififies that unused files and directories
+A boolean value which, if true, specifies that unused files and directories
 should not be deleted from the repository directory after each validation run.
 If left out, its value will be false and unused files will be deleted.
 .TP
@@ -775,22 +812,22 @@ The default value if this entry is missing is
 .B rtr-listen
 An array of string values each providing the address and port which the RTR
 daemon should listen on in TCP mode. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square braces.
+a colon. IPv6 address should be enclosed in square brackets.
 .TP
 .B http-listen
 An array of string values each providing the address and port which the HTTP
 service should listen on. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square braces.
+a colon. IPv6 address should be enclosed in square brackets.
 .TP
 .B listen-systemd
 The RTR TCP listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd’s socket units to allow a
+activation. Use this option together with systemd's socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
 .TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
 between consecutive validation runs in server mode. The next validation run
-will happen earlier, if objects expire ealier. The default is 600 seconds.
+will happen earlier, if objects expire earlier. The default is 600 seconds.
 .TP
 .B retry
 An integer value specifying the number of seconds an RTR client is requested
@@ -821,13 +858,26 @@ root directory.
 .TP
 .B user
 A string value containing the user name a daemon process should run as.
+
 .TP
 .B group
 A string value containing the group name a daemon process should run as.
 
+.TP
+.B tal-label
+An array containing arrays of two string values mapping the name of a TAL
+file (without the path but including the extension) as given by the first
+string to the name of the TAL to be included where the TAL is referenced in
+output as given by the second string.
+
+If the options missing or if a TAL isn't mentioned in the optio, Routinator
+will construct a name for the TAL by using its file name (without the path)
+and dropping the extension.
+
+
 .SH HTTP SERVICE
 Routinator can provide an HTTP service allowing to fetch the Validated ROA
-Payload in various formats. The service does not support HTTPS and should 
+Payload in various formats. The service does not support HTTPS and should
 only be used within the local network.
 .P
 The service only supports GET requests with the following
@@ -852,6 +902,16 @@ Returns the current set of VRPs in
 .B openbgpd
 output format.
 .TP
+.B /bird
+Returns the current set of VRPs in
+.B bird
+output format.
+.TP
+.B /bird2
+Returns the current set of VRPs in
+.B bird2
+output format.
+.TP
 .B /rpsl
 Returns the current set of VRPs in
 .B rpsl
@@ -868,7 +928,7 @@ Returns the version of the Routinator instance.
 .TP
 .B /api/v1/validity/\fIas-number\fB/\fIprefix
 Returns a JSON object describing whether the route announcement given by
-its origin AS number and address preifx is RPKI valid, invalid, or not found.
+its origin AS number and address prefix is RPKI valid, invalid, or not found.
 The returned object is compatible with that provided by the RIPE NCC RPKI
 Validator. For more information, see
 .I https://www.ripe.net/support/documentation/developer-documentation/rpki-validator-api

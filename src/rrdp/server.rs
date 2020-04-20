@@ -16,7 +16,6 @@ use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
 use rpki::rrdp::{DigestHex, NotificationFile, UriAndHash};
-use unwrap::unwrap;
 use uuid::Uuid;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
@@ -103,9 +102,19 @@ impl Server {
         Self::new(notify_uri, server_dir, broken)
     }
 
+    /// Create a new server that is considered broken.
+    pub fn create_broken(notify_uri: uri::Https) -> Self {
+        Self::new(notify_uri, ServerDir::broken(), true)
+    }
+
     /// Returns a reference to the server directory.
     pub fn server_dir(&self) -> &Path {
         &self.server_dir.base
+    }
+
+    /// Returns whether the server has been updated.
+    pub fn is_current(&self) -> bool {
+        self.updated.load(Relaxed)
     }
 
     /// Makes sure the server is up-to-date.
@@ -118,7 +127,7 @@ impl Server {
         if self.updated.load(Relaxed) {
             return
         }
-        let mut metrics = unwrap!(self.mutex.lock());
+        let mut metrics = self.mutex.lock().unwrap();
         if self.updated.load(Relaxed) {
             return
         }
@@ -398,6 +407,7 @@ impl Server {
     ///
     /// This assumes that the server is updated already. If there is no file
     /// corresponding to the URI, returns `None`.
+    #[allow(clippy::verbose_file_reads)]
     pub fn load_file(&self, uri: &uri::Rsync) -> Result<Option<Bytes>, Error> {
         if self.broken.load(Relaxed) {
             return Err(Error)

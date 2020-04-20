@@ -6,7 +6,6 @@ use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
 use rpki::resources::AsId;
-use unwrap::unwrap;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
@@ -21,6 +20,11 @@ pub enum OutputFormat {
     ///
     /// Each row has the AS number, prefix, max-length, and TA.
     Csv,
+
+    /// RIPE NCC Validator compatible CSV format.
+    ///
+    /// This quotes all values and prints the AS number as just the number.
+    CompatCsv,
 
     /// Extended CSV format.
     ///
@@ -38,6 +42,16 @@ pub enum OutputFormat {
     ///
     /// Specifically, this produces as `roa-set`.
     Openbgpd,
+
+    /// BIRD configuration format.
+    ///
+    /// Specifically, this produces as `roa table`.
+    Bird1,
+
+    /// BIRD2 configuration format.
+    ///
+    /// Specifically, this produces as `route table`.
+    Bird2,
 
     /// RPSL output.
     ///
@@ -58,7 +72,7 @@ pub enum OutputFormat {
 impl OutputFormat {
     /// A list of the known output formats.
     pub const VALUES: &'static [&'static str] = &[
-        "csv", "csvext", "json", "openbgpd", "rpsl", "summary", "none"
+        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl", "summary", "none"
     ];
 
     /// The default output format.
@@ -71,9 +85,12 @@ impl FromStr for OutputFormat {
     fn from_str(value: &str) -> Result<Self, Error> {
         match value {
             "csv" => Ok(OutputFormat::Csv),
+            "csvcompat" => Ok(OutputFormat::CompatCsv),
             "csvext" => Ok(OutputFormat::ExtendedCsv),
             "json" => Ok(OutputFormat::Json),
             "openbgpd" => Ok(OutputFormat::Openbgpd),
+            "bird1" => Ok(OutputFormat::Bird1),
+            "bird2" => Ok(OutputFormat::Bird2),
             "rpsl" => Ok(OutputFormat::Rpsl),
             "summary" => Ok(OutputFormat::Summary),
             "none" => Ok(OutputFormat::None),
@@ -131,7 +148,8 @@ impl OutputFormat {
 
     pub fn content_type(self) -> &'static str {
         match self {
-            OutputFormat::Csv | OutputFormat::ExtendedCsv
+            OutputFormat::Csv | OutputFormat::CompatCsv |
+            OutputFormat::ExtendedCsv
                 => "text/csv;charset=utf-8;header=present",
             OutputFormat::Json => "application/json",
             _ => "text/plain;charset=utf-8",
@@ -188,7 +206,7 @@ where
     }
 
     pub fn output_len(&self) -> usize {
-        GetLength::get(|w| unwrap!(self.output(w)))
+        GetLength::get(|w| self.output(w).unwrap())
     }
 
     pub fn output_start<W: io::Write>(
@@ -232,9 +250,12 @@ where
         let vrps = self.origins.as_ref();
         match self.format {
             OutputFormat::Csv => csv_header(vrps, target),
+            OutputFormat::CompatCsv => compat_csv_header(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_header(vrps, target),
             OutputFormat::Json => json_header(vrps, target),
             OutputFormat::Openbgpd => openbgpd_header(vrps, target),
+            OutputFormat::Bird1 => bird1_header(vrps, target),
+            OutputFormat::Bird2 => bird2_header(vrps, target),
             OutputFormat::Rpsl => rpsl_header(vrps, target),
             OutputFormat::Summary => summary_header(&self.metrics, target),
             OutputFormat::None => Ok(())
@@ -252,9 +273,12 @@ where
         }
         match self.format {
             OutputFormat::Csv => csv_origin(vrp, first, target)?,
+            OutputFormat::CompatCsv => compat_csv_origin(vrp, first, target)?,
             OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
             OutputFormat::Json => json_origin(vrp, first, target)?,
             OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
+            OutputFormat::Bird1 => bird1_origin(vrp, first, target)?,
+            OutputFormat::Bird2 => bird2_origin(vrp, first, target)?,
             OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
             _ => { }
         }
@@ -285,9 +309,12 @@ where
         let vrps = self.origins.as_ref();
         match self.format {
             OutputFormat::Csv => csv_footer(vrps, target),
+            OutputFormat::CompatCsv => compat_csv_footer(vrps, target),
             OutputFormat::ExtendedCsv => ext_csv_footer(vrps, target),
             OutputFormat::Json => json_footer(vrps, target),
             OutputFormat::Openbgpd => openbgpd_footer(vrps, target),
+            OutputFormat::Bird1 => bird1_footer(vrps, target),
+            OutputFormat::Bird2 => bird2_footer(vrps, target),
             OutputFormat::Rpsl => rpsl_footer(vrps, target),
             _ => Ok(())
         }
@@ -306,7 +333,7 @@ where
     fn next(&mut self) -> Option<Vec<u8>> {
         if self.next_id == 0 {
             let mut target = Vec::new();
-            unwrap!(self.output_start(&mut target));
+            self.output_start(&mut target).unwrap();
             Some(target)
         }
         else if !self.has_next_batch() {
@@ -314,7 +341,7 @@ where
         }
         else {
             let mut target = Vec::new();
-            unwrap!(self.next_batch(false, &mut target));
+            self.next_batch(false, &mut target).unwrap();
             Some(target)
         }
     }
@@ -351,6 +378,36 @@ fn csv_footer<W: io::Write>(
 }
 
 
+//------------ compat_csv ----------------------------------------------------
+
+fn compat_csv_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\"")
+}
+
+fn compat_csv_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
+        u32::from(addr.as_id()),
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        addr.tal_name(),
+    )
+}
+
+fn compat_csv_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+
 //------------ ext_csv -------------------------------------------------------
 
 // 2017-08-25 13:12:19
@@ -380,15 +437,15 @@ fn ext_csv_origin<W: io::Write>(
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
-    match addr.cert() {
-        Some(cert) => {
-            match cert.signed_object() {
+    match addr.roa_info() {
+        Some(info) => {
+            match info.uri.as_ref() {
                 Some(uri) => {
                     write!(output, "{}", uri)?;
                 }
                 None => write!(output, "N/A")?
             }
-            let val = cert.validity();
+            let val = info.validity;
             writeln!(output, ",{},{}/{},{},{},{}",
                 addr.as_id(),
                 addr.address(), addr.address_length(),
@@ -480,6 +537,62 @@ fn openbgpd_footer<W: io::Write>(
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "}}")
+}
+
+
+//------------ bird1 ------------------------------------------------------
+
+fn bird1_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+fn bird1_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "roa {}/{} max {} as {};",
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        u32::from(addr.as_id()))
+}
+
+fn bird1_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+
+//------------ bird2 ------------------------------------------------------
+
+fn bird2_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
+}
+
+fn bird2_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    writeln!(output, "route {}/{} max {} as {};",
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+        u32::from(addr.as_id()))
+}
+
+fn bird2_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    _output: &mut W,
+) -> Result<(), io::Error> {
+    Ok(())
 }
 
 

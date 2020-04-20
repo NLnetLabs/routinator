@@ -6,13 +6,14 @@
 //!
 //! [`Repository`]: struct.Repository.html
 
-use std::{fmt, fs, io};
+use std::{fmt, fs, io, ops};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use bytes::Bytes;
 use crossbeam_utils::thread;
-use crossbeam_queue::ArrayQueue;
-use log::{error, info, warn};
+use crossbeam_queue::{ArrayQueue, SegQueue};
+use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
@@ -21,9 +22,8 @@ use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::{Roa, RoaStatus};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::ValidationError;
-use unwrap::unwrap;
 use crate::{rrdp, rsync};
-use crate::config::Config;
+use crate::config::{Config, StalePolicy};
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{OriginsReport, RouteOrigins};
@@ -52,8 +52,8 @@ pub struct Repository {
     /// Should we be strict when decoding data?
     strict: bool,
 
-    /// Should we keep extended information about ROAs?
-    extra_output: bool,
+    /// How do we deal with stale objects?
+    stale: StalePolicy,
 
     /// Number of validation threads.
     validation_threads: usize,
@@ -94,7 +94,6 @@ impl Repository {
     /// updating the local cache will not be updated from upstream.
     pub fn new(
         config: &Config,
-        extra_output: bool,
         update: bool
     ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
@@ -117,9 +116,9 @@ impl Repository {
 
         Ok(Repository {
             cache_dir: config.cache_dir.clone(),
-            tals: Self::load_tals(&config.tal_dir)?,
+            tals: Self::load_tals(config)?,
             strict: config.strict,
-            extra_output,
+            stale: config.stale,
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(config, update)?,
             rsync: rsync::Cache::new( config, update)?,
@@ -129,14 +128,14 @@ impl Repository {
 
     /// Reloads the TAL files based on the config object.
     pub fn reload_tals(&mut self, config: &Config) -> Result<(), Error> {
-        self.tals = Self::load_tals(&config.tal_dir)?;
+        self.tals = Self::load_tals(config)?;
         Ok(())
     }
 
     /// Loads the TAL files from the given directory.
-    fn load_tals(tal_dir: &Path) -> Result<Vec<Tal>, Error> {
+    fn load_tals(config: &Config) -> Result<Vec<Tal>, Error> {
         let mut res = Vec::new();
-        let dir = match fs::read_dir(tal_dir) {
+        let dir = match fs::read_dir(&config.tal_dir) {
             Ok(dir) => dir,
             Err(err) => {
                 if err.kind() == io::ErrorKind::NotFound {
@@ -144,7 +143,7 @@ impl Repository {
                         "Missing TAL directory {}.\n\
                          You may have to initialize it via \
                          \'routinator init\'.",
-                         tal_dir.display()
+                         config.tal_dir.display()
                     );
                 }
                 else {
@@ -187,7 +186,10 @@ impl Repository {
                     return Err(Error)
                 }
             };
-            let tal = match Tal::read(&path, &mut file) {
+            let tal = match Tal::read_named(
+                Self::path_to_label(&path, config),
+                &mut file
+            ) {
                 Ok(tal) => tal,
                 Err(err) => {
                     error!(
@@ -206,6 +208,16 @@ impl Repository {
             );
         }
         Ok(res)
+    }
+
+    /// Converts a path into a TAL label.
+    fn path_to_label(path: &Path, config: &Config) -> String {
+        if let Some(name) = path.file_name().unwrap().to_str() {
+            if let Some(label) = config.tal_labels.get(name) {
+                return label.clone()
+            }
+        }
+        path.file_stem().unwrap().to_string_lossy().into_owned()
     }
 
     /// Performs a complete validation run on the repository.
@@ -271,21 +283,34 @@ impl<'a> Run<'a> {
         // Stick all TALs into a queue. The worker threads will take one after
         // out of the queue so that the thread first to finish gets a second
         // TAL if there is more TALs than threads.
-        let tals = ArrayQueue::new(self.repository.tals.len());
-        for tal in &self.repository.tals {
-            unwrap!(tals.push(tal));
+        let tasks = SegQueue::new();
+        for (index, tal) in self.repository.tals.iter().enumerate() {
+            tasks.push(ValidationTask::Tal { tal, index });
         }
 
         // Prepare another queue for the threads to put the results in.
-        let origins = ArrayQueue::new(self.repository.tals.len());
+        let origins_queue = ArrayQueue::new(self.repository.validation_threads);
 
         // Now work.
         let res = thread::scope(|scope| {
             for _ in 0..self.repository.validation_threads {
                 scope.spawn(|_| {
-                    while let Ok(tal) = tals.pop() {
-                        unwrap!(origins.push(self.process_tal(tal)));
+                    let mut origins = RouteOrigins::new();
+                    while let Ok(task) = tasks.pop() {
+                        match task {
+                            ValidationTask::Tal { tal, index } => {
+                                self.process_tal(
+                                    tal, index, &mut origins, &tasks
+                                );
+                            }
+                            ValidationTask::Ca { cert, uri } => {
+                                self.process_ca(
+                                    cert, &uri, &mut origins, &tasks
+                                )
+                            }
+                        }
                     }
+                    origins_queue.push(origins).unwrap();
                 });
             }
         });
@@ -298,11 +323,16 @@ impl<'a> Run<'a> {
             return Err(Error);
         }
 
-        let mut res = OriginsReport::with_capacity(self.repository.tals.len());
-        while let Ok(item) = origins.pop() {
+        let mut res = OriginsReport::with_capacity(
+            self.repository.validation_threads,
+            self.repository.tals.iter().map(|tal| {
+                tal.info().clone()
+            }).collect()
+        );
+        while let Ok(item) = origins_queue.pop() {
             // If item is an Err, something went wrong fatally in the worker
             // and we should bail instead.
-            res.push_origins(item?);
+            res.push_origins(item);
         }
         Ok(res)
     }
@@ -313,8 +343,13 @@ impl<'a> Run<'a> {
     /// locator but fails to parse. If the next `entry` isn’t a trust anchor
     /// at all or if none of the URIs in the TAL file lead to anything,
     /// Ok-returns an empty list of route origins.
-    fn process_tal(&self, tal: &Tal) -> Result<RouteOrigins, Error> {
-        let mut res = RouteOrigins::new(tal.info().clone());
+    fn process_tal(
+        &self,
+        tal: &Tal,
+        index: usize,
+        origins: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
+    ) {
         for uri in tal.uris() {
             let cert = match self.load_ta(&uri, tal.info()) {
                 Some(cert) => cert,
@@ -339,12 +374,10 @@ impl<'a> Run<'a> {
                 }
             };
             info!("Found valid trust anchor {}. Processing.", uri);
-            self.process_ca(&cert, &CertLink::root(&cert), &uri, &mut res);
-            // We stop once we have had the first working URI.
-            return Ok(res)
+            self.process_ca(CaCert::root(cert, index), &uri, origins, tasks);
+            return
         }
         warn!("No valid trust anchor for TAL {}", tal.info().name());
-        Ok(res)
     }
 
     /// Loads a trust anchor certificate from the given URI.
@@ -390,10 +423,10 @@ impl<'a> Run<'a> {
     /// to `routes`.
     fn process_ca<U: fmt::Display>(
         &self,
-        cert: &ResourceCert,
-        link: &CertLink,
+        cert: Arc<CaCert>,
         uri: &U,
-        routes: &mut RouteOrigins
+        routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
     ) {
         let mut store = CrlStore::new();
         let repo_uri = match cert.ca_repository() {
@@ -420,7 +453,7 @@ impl<'a> Run<'a> {
 
         for (uri, hash) in manifest.iter_uris(repo_uri) {
             self.process_object(
-                rrdp_server, uri, hash, &cert, link, &mut store, routes
+                rrdp_server, uri, hash, &cert, &mut store, routes, tasks
             );
         }
     }
@@ -432,10 +465,6 @@ impl<'a> Run<'a> {
     /// the certificate and that turns out to be valid is returned.
     ///
     /// If no manifest can be found, `None` is returned.
-    ///
-    /// Note that currently we happily accept stale manifests, i.e., manifests
-    /// whose certificate is still valid but the next_update time has passed.
-    /// The RFC says we need to decide what to do, so this is fine.
     fn get_manifest<U: fmt::Display>(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
@@ -475,7 +504,16 @@ impl<'a> Run<'a> {
             }
         };
         if manifest.is_stale() {
-            warn!("{}: stale manifest", uri);
+            match self.repository.stale {
+                StalePolicy::Refuse => {
+                    info!("{}: stale manifest", uri);
+                    return None;
+                }
+                StalePolicy::Warn => {
+                    warn!("{}: stale manifest", uri);
+                }
+                StalePolicy::Accept => { }
+            }
         }
         if manifest.len() > CRL_CACHE_LIMIT {
             store.enable_serial_caching();
@@ -505,96 +543,20 @@ impl<'a> Run<'a> {
         rrdp_server: Option<rrdp::ServerId>,
         uri: uri::Rsync,
         hash: ManifestHash,
-        issuer: &ResourceCert,
-        link: &CertLink,
+        issuer: &Arc<CaCert>,
         crl: &mut CrlStore,
         routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
     ) {
         if uri.ends_with(".cer") {
-            let bytes = match self.load_file(rrdp_server, &uri) {
-                Some(bytes) => bytes,
-                None => {
-                    info!("{}: failed to load.", uri);
-                    return
-                }
-            };
-            if hash.verify(&bytes).is_err() {
-                info!("{}: file has wrong hash.", uri);
-                return
-            }
-            let cert = match Cert::decode(bytes) {
-                Ok(cert) => cert,
-                Err(_) => {
-                    info!("{}: failed to decode.", uri);
-                    return
-                }
-            };
-            if cert.key_usage() != KeyUsage::Ca {
-                info!(
-                    "{}: probably a router key. Ignoring.",
-                    uri
-                );
-                return
-            }
-            if link.check_loop(&cert).is_err() {
-                warn!(
-                    "{}: certificate loop detected. Ignoring this CA.",
-                    uri
-                );
-                return
-            }
-            let cert = match cert.validate_ca(issuer, self.repository.strict) {
-                Ok(cert) => cert,
-                Err(_) => {
-                    info!("{}: failed to validate.", uri);
-                    return
-                }
-            };
-            if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
-                info!("{}: certificate has been revoked", uri);
-                return
-            }
-            routes.update_refresh(&cert);
-            self.process_ca(
-                &cert, &CertLink::chain(link, &cert), &uri, routes
+            self.process_cer(
+                rrdp_server, uri, hash, issuer, crl, routes, tasks
             )
         }
         else if uri.ends_with(".roa") {
-            let bytes = match self.load_file(rrdp_server, &uri) {
-                Some(bytes) => bytes,
-                None => {
-                    info!("{}: failed to load.", uri);
-                    return
-                }
-            };
-            if hash.verify(&bytes).is_err() {
-                info!("{}: file has wrong hash.", uri);
-                return
-            }
-            let roa = match Roa::decode(bytes, self.repository.strict) {
-                Ok(roa) => roa,
-                Err(_) => {
-                    info!("{}: decoding failed.", uri);
-                    return
-                }
-            };
-            let mut extra = None;
-            let route = roa.process(issuer, self.repository.strict, |cert| {
-                self.check_crl(rrdp_server, cert, issuer, crl)?;
-                extra = Some(8u8);
-                Ok(())
-            });
-            match route {
-                Ok(route) => {
-                    if let RoaStatus::Valid { ref cert } = *route.status() {
-                        routes.update_refresh(cert);
-                    }
-                    routes.push(route);
-                }
-                Err(_) => {
-                    info!("{}: processing failed.", uri);
-                }
-            }
+            self.process_roa(
+                rrdp_server, uri, hash, issuer, crl, routes,
+            )
         }
         else if uri.ends_with(".crl") {
             // CRLs are read on demand.
@@ -604,6 +566,138 @@ impl<'a> Run<'a> {
         }
         else {
             info!("{}: Unknown file type.", uri);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_cer(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        uri: uri::Rsync,
+        hash: ManifestHash,
+        issuer: &Arc<CaCert>,
+        crl: &mut CrlStore,
+        routes: &mut RouteOrigins,
+        tasks: &SegQueue<ValidationTask>,
+    ) {
+        let bytes = match self.load_file(rrdp_server, &uri) {
+            Some(bytes) => bytes,
+            None => {
+                info!("{}: failed to load.", uri);
+                return
+            }
+        };
+        if hash.verify(&bytes).is_err() {
+            info!("{}: file has wrong hash.", uri);
+            return
+        }
+        let cert = match Cert::decode(bytes) {
+            Ok(cert) => cert,
+            Err(_) => {
+                info!("{}: failed to decode.", uri);
+                return
+            }
+        };
+        if cert.key_usage() != KeyUsage::Ca {
+            info!(
+                "{}: probably a router key. Ignoring.",
+                uri
+            );
+            return
+        }
+        if issuer.check_loop(&cert).is_err() {
+            warn!(
+                "{}: certificate loop detected. Ignoring this CA.",
+                uri
+            );
+            return
+        }
+        let cert = match cert.validate_ca(issuer, self.repository.strict) {
+            Ok(cert) => cert,
+            Err(_) => {
+                info!("{}: failed to validate.", uri);
+                return
+            }
+        };
+        if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
+            info!("{}: certificate has been revoked", uri);
+            return
+        }
+        routes.update_refresh(&cert);
+
+        let repo_uri = match cert.ca_repository() {
+            Some(uri) => uri,
+            None => {
+                info!("CA cert {} has no repository URI. Ignoring.", uri);
+                return
+            }
+        };
+
+        // Defer operation if we need to update the repository part where
+        // the CA lives.
+        let defer = match (self.rrdp.as_ref(), cert.rpki_notify()) {
+            (Some(rrdp), Some(rrdp_uri)) => !rrdp.is_current(rrdp_uri),
+            _ => match self.rsync.as_ref() {
+                Some(rsync) => !rsync.is_current(repo_uri),
+                None => false
+            }
+        };
+
+        let cert = CaCert::chain(issuer, cert);
+
+        if defer {
+            debug!("Queueing CA {} for later processing.", uri);
+            tasks.push(ValidationTask::Ca { cert, uri });
+        }
+        else {
+            self.process_ca( cert, &uri, routes, tasks)
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_roa(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        uri: uri::Rsync,
+        hash: ManifestHash,
+        issuer: &Arc<CaCert>,
+        crl: &mut CrlStore,
+        routes: &mut RouteOrigins,
+    ) {
+        let bytes = match self.load_file(rrdp_server, &uri) {
+            Some(bytes) => bytes,
+            None => {
+                info!("{}: failed to load.", uri);
+                return
+            }
+        };
+        if hash.verify(&bytes).is_err() {
+            info!("{}: file has wrong hash.", uri);
+            return
+        }
+        let roa = match Roa::decode(bytes, self.repository.strict) {
+            Ok(roa) => roa,
+            Err(_) => {
+                info!("{}: decoding failed.", uri);
+                return
+            }
+        };
+        let mut extra = None;
+        let route = roa.process(issuer, self.repository.strict, |cert| {
+            self.check_crl(rrdp_server, cert, issuer, crl)?;
+            extra = Some(8u8);
+            Ok(())
+        });
+        match route {
+            Ok(route) => {
+                if let RoaStatus::Valid { ref cert } = *route.status() {
+                    routes.update_refresh(cert);
+                }
+                routes.push(route, issuer.tal);
+            }
+            Err(_) => {
+                info!("{}: processing failed.", uri);
+            }
         }
     }
 
@@ -643,9 +737,17 @@ impl<'a> Run<'a> {
             return Err(ValidationError)
         }
         if crl.is_stale() {
-            warn!("{}: stale CRL.", uri);
+            match self.repository.stale {
+                StalePolicy::Refuse => {
+                    info!("{}: stale CRL.", uri);
+                    return Err(ValidationError)
+                }
+                StalePolicy::Warn => {
+                    warn!("{}: stale CRL.", uri);
+                }
+                StalePolicy::Accept => { }
+            }
         }
-
         let revoked = crl.contains(cert.serial_number());
         store.push(uri.clone(), crl);
         if revoked {
@@ -726,35 +828,42 @@ impl<'a> Run<'a> {
 }
 
 
-//------------ CertLink ------------------------------------------------------
+//------------ CaCert --------------------------------------------------------
 
-/// An element in a linked list of known certificates.
-///
-/// We can do this because we do recursion down the CA tree so the elements
-/// can all happily live on the stack and are cleaned up neatly when we leave
-/// scope.
-#[derive(Clone, Debug)]
-struct CertLink<'a> {
-    /// A pointer to the certificate in this element.
-    cert: &'a TbsCert,
+/// A CA certificate plus references to all its parents.
+struct CaCert {
+    /// The CA certificate of this CA.
+    cert: ResourceCert,
 
-    /// A pointer to the optional parent link.
-    link: Option<&'a CertLink<'a>>,
+    /// The parent CA.
+    /// 
+    /// This will be none for a trust anchor.
+    parent: Option<Arc<CaCert>>,
+
+    /// The index of the TAL.
+    tal: usize,
 }
 
-impl<'a> CertLink<'a> {
-    /// Create a link from a certificate only.
-    pub fn root(cert: &'a TbsCert) -> Self {
-        CertLink { cert, link: None }
+impl CaCert {
+    /// Creates a new CA cert for a trust anchor.
+    pub fn root(cert: ResourceCert, tal: usize) -> Arc<Self> {
+        Arc::new(CaCert {
+            cert,
+            parent: None,
+            tal
+        })
     }
 
-    /// Create a link from a previous link.
-    pub fn chain(parent: &'a CertLink<'a>, cert: &'a TbsCert) -> Self {
-        CertLink { cert, link: Some(parent) }
+    pub fn chain(this: &Arc<Self>, cert: ResourceCert) -> Arc<Self> {
+        Arc::new(CaCert {
+            cert,
+            parent: Some(this.clone()),
+            tal: this.tal
+        })
     }
 
-    /// Checks whether this certificate has appeared in the validation chain.
-    pub fn check_loop(&self, cert: &TbsCert) -> Result<(), Error> {
+    /// Checks whether a child cert has appeared in chain already.
+    pub fn check_loop(&self, cert: &Cert) -> Result<(), Error> {
         self._check_loop(cert.subject_key_identifier())
     }
 
@@ -766,12 +875,32 @@ impl<'a> CertLink<'a> {
         if self.cert.subject_key_identifier() == key_id {
             Err(Error)
         }
-        else if let Some(link) = self.link {
-            link._check_loop(key_id)
+        else if let Some(ref parent) = self.parent {
+            parent._check_loop(key_id)
         }
         else {
             Ok(())
         }
     }
+} 
+
+impl ops::Deref for CaCert {
+    type Target = ResourceCert;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cert
+    }
+}
+
+
+//------------ ValidationTask ------------------------------------------------
+
+/// A task for a validation worker thread.
+enum ValidationTask<'a> {
+    /// Process the given TAL.
+    Tal { tal: &'a Tal, index: usize },
+
+    /// Process the given CA.
+    Ca { cert: Arc<CaCert>, uri: uri::Rsync },
 }
 
