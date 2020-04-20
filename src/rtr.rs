@@ -2,7 +2,7 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
-use futures::future::select_all;
+use futures::future::{pending, select_all};
 use log::error;
 use rpki_rtr::server::{NotifySender, Server};
 use tokio::net::TcpListener;
@@ -24,13 +24,18 @@ async fn _rtr_listener(
     sender: NotifySender,
     addrs: Vec<SocketAddr>,
 ) {
-    let _ = select_all(
-        addrs.iter().map(|addr| {
-            tokio::spawn(single_rtr_listener(
-                *addr, origins.clone(), sender.clone()
-            ))
-        })
-    ).await;
+    if addrs.is_empty() {
+        pending::<()>().await;
+    }
+    else {
+        let _ = select_all(
+            addrs.iter().map(|addr| {
+                tokio::spawn(single_rtr_listener(
+                    *addr, origins.clone(), sender.clone()
+                ))
+            })
+        ).await;
+    }
 }
 
 async fn single_rtr_listener(
