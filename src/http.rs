@@ -94,6 +94,8 @@ async fn handle_request(
         "/csv" => vrps(origins, req.uri().query(), OutputFormat::Csv),
         "/csvcompat"
             => vrps(origins, req.uri().query(), OutputFormat::CompatCsv),
+        "/csvext"
+            => vrps(origins, req.uri().query(), OutputFormat::ExtendedCsv),
         "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
         "/metrics" => metrics(origins),
         "/openbgpd" => {
