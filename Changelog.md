@@ -4,6 +4,12 @@
 
 Breaking Changes
 
+* Routinator now filters out rsync URIs and RRDP URIs that contain dubious
+  host names that should not be present in the public RPKI. In this
+  version they are ‘localhost,’ any IP address, and any URI with the port
+  explicitly specified. This filter can be disabled via the
+  `--allow-dubious-hosts` command line and config option for test
+  deployments. ([#293])
 * Update to Rust’s new asynchronous IO framework for the RTR and HTTP
   servers. Repository synchronization and validation remain synchronous
   atop a thread pool. ([#282])
@@ -18,7 +24,7 @@ New
   the default. ([#288])
 * New output formats `bird` and `bird2` which produce a `roa table` for
   Bird 1 and a `route table` for Bird 2, respectively. ([#290], by
-  [netravnen])
+  [@netravnen])
 * New output format `csvcompat` which produces CSV output as similar to
   that of the RIPE NCC Validator as possible. ([#292])
 * The new config file option `tal-labels` allows defining explicit names
@@ -47,7 +53,8 @@ Dependencies
 [#290]: https://github.com/NLnetLabs/routinator/pull/290
 [#291]: https://github.com/NLnetLabs/routinator/pull/291
 [#292]: https://github.com/NLnetLabs/routinator/pull/292
-[netravnen]: https://github.com/netravnen
+[#293]: https://github.com/NLnetLabs/routinator/pull/293
+[@netravnen]: https://github.com/netravnen
 
 
 ## 0.6.4 ‘Jeepers’

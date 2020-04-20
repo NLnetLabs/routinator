@@ -103,6 +103,9 @@ pub struct Config {
     /// [`StalePolicy`]: enum.StalePolicy.html
     pub stale: StalePolicy,
 
+    /// Allow dubious host names.
+    pub allow_dubious_hosts: bool,
+
     /// Whether to disable rsync.
     pub disable_rsync: bool,
 
@@ -254,6 +257,10 @@ impl Config {
              .value_name("POLICY")
              .help("The policy for handling stale objects")
              .takes_value(true)
+        )
+        .arg(Arg::with_name("allow-dubious-hosts")
+             .long("allow-dubios-hosts")
+             .help("Allow dubious host names in rsycn and HTTPS URIs")
         )
         .arg(Arg::with_name("disable-rsync")
             .long("disable-rsync")
@@ -468,6 +475,7 @@ impl Config {
     ///
     /// The path arguments in `matches` will be interpreted relative to
     /// `cur_dir`.
+    #[allow(clippy::cognitive_complexity)]
     fn apply_arg_matches(
         &mut self,
         matches: &ArgMatches,
@@ -518,6 +526,11 @@ impl Config {
         // stale
         if let Some(value) = from_str_value_of(matches, "stale")? {
             self.stale = value
+        }
+
+        // allow_dubious_hosts
+        if matches.is_present("allow-dubious-hosts") {
+            self.allow_dubious_hosts = true
         }
 
         // disable_rsync
@@ -934,6 +947,8 @@ impl Config {
             },
             strict: file.take_bool("strict")?.unwrap_or(false),
             stale: file.take_from_str("stale")?.unwrap_or_default(),
+            allow_dubious_hosts:
+                file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
             disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
             rsync_command: {
                 file.take_string("rsync-command")?
@@ -1116,6 +1131,7 @@ impl Config {
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
             stale: Default::default(),
+            allow_dubious_hosts: false,
             disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
@@ -1266,6 +1282,9 @@ impl Config {
         );
         res.insert("strict".into(), self.strict.into());
         res.insert("stale".into(), format!("{}", self.stale).into());
+        res.insert(
+            "allow-dubious-hosts".into(), self.allow_dubious_hosts.into()
+        );
         res.insert("disable-rsync".into(), self.disable_rsync.into());
         res.insert("rsync-command".into(), self.rsync_command.clone().into());
         if let Some(ref args) = self.rsync_args {

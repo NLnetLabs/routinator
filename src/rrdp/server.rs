@@ -102,6 +102,11 @@ impl Server {
         Self::new(notify_uri, server_dir, broken)
     }
 
+    /// Create a new server that is considered broken.
+    pub fn create_broken(notify_uri: uri::Https) -> Self {
+        Self::new(notify_uri, ServerDir::broken(), true)
+    }
+
     /// Returns a reference to the server directory.
     pub fn server_dir(&self) -> &Path {
         &self.server_dir.base

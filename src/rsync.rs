@@ -11,6 +11,7 @@ use rpki::uri;
 use crate::config::Config;
 use crate::metrics::RsyncModuleMetrics;
 use crate::operation::Error;
+use crate::utils::UriExt;
 
 
 //------------ Cache ---------------------------------------------------------
@@ -25,6 +26,9 @@ pub struct Cache {
     ///
     /// If this is `None` actual rsyncing has been disabled.
     command: Option<Command>,
+
+    /// Whether to filter dubious authorities in rsync URIs.
+    filter_dubious: bool,
 }
  
 
@@ -52,7 +56,8 @@ impl Cache {
                 command: if update {
                     Some(Command::new(config)?)
                 }
-                else { None }
+                else { None },
+                filter_dubious: !config.allow_dubious_hosts
             }))
         }
     }
@@ -127,15 +132,26 @@ impl<'a> Run<'a> {
         if self.updated.read().unwrap().contains(module) {
             return
         }
-        
-        // Run the actual update.
-        let metrics = command.update(
-            module, &self.cache.cache_dir.module_path(module)
-        );
 
-        // Insert into updated map and metrics.
+        // Check if the module name is dubious. If so, skip updating.
+        if self.cache.filter_dubious && module.has_dubious_authority() {
+            info!(
+                "{}: Dubious host name. Skipping update.",
+                module
+            )
+        }
+        else {
+            // Run the actual update.
+            let metrics = command.update(
+                module, &self.cache.cache_dir.module_path(module)
+            );
+
+            // Insert into updated map and metrics.
+            self.metrics.lock().unwrap().push(metrics);
+        }
+
+        // Insert into updated map no matter what.
         self.updated.write().unwrap().insert(module.clone());
-        self.metrics.lock().unwrap().push(metrics);
 
         // Remove from running.
         self.running.write().unwrap().remove(module);
