@@ -46,10 +46,13 @@ Other Changes
   are busy all the time. ([#284)]
 * Optimized what information to keep for each ROA, bringing maximum memory 
   consumption down to about a quarter. ([#293])
+* The Docker image now wraps Routinator into [tini] for properly dealing
+  with signals and child processes. ([#277])
 
 Dependencies
 
 
+[#277]: https://github.com/NLnetLabs/routinator/pull/277
 [#282]: https://github.com/NLnetLabs/routinator/pull/282
 [#284]: https://github.com/NLnetLabs/routinator/pull/284
 [#288]: https://github.com/NLnetLabs/routinator/pull/288
@@ -59,6 +62,7 @@ Dependencies
 [#293]: https://github.com/NLnetLabs/routinator/pull/293
 [#294]: https://github.com/NLnetLabs/routinator/pull/294
 [@netravnen]: https://github.com/netravnen
+[tini]: https://github.com/krallin/tini
 
 
 ## 0.6.4 ‘Jeepers’
