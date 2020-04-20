@@ -11,11 +11,12 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use log::{debug, info};
+use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
-use rpki::x509::Time;
+use rpki::x509::{Time, Validity};
 use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
@@ -232,15 +233,13 @@ impl OriginsHistory {
         report: OriginsReport,
         mut metrics: Metrics,
         exceptions: &LocalExceptions,
-        extra_info: bool
     ) -> bool {
         match self.current_and_serial() {
             Some((current, serial)) => {
                 let current: HashSet<_> =
                     current.iter().map(Clone::clone).collect();
                 let (next, diff) = OriginsDiff::construct(
-                    current, report, exceptions, serial, extra_info,
-                    &mut metrics,
+                    current, report, exceptions, serial, &mut metrics,
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -255,7 +254,7 @@ impl OriginsHistory {
             }
             None => {
                 let origins = AddressOrigins::from_report(
-                    report, exceptions, extra_info, &mut metrics
+                    report, exceptions, &mut metrics
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -437,7 +436,7 @@ impl HistoryInner {
 pub struct RouteOrigins {
     /// The list of route origin attestations.
     ///
-    /// XXX The second item is the TAL index. This needs to be cleaned up.
+    /// XXX The third item is the TAL index. This needs to be cleaned up.
     origins: Vec<(RouteOriginAttestation, usize)>,
 
     /// The time when this set needs to be refreshed at the latest.
@@ -548,7 +547,6 @@ impl AddressOrigins {
     pub fn from_report(
         report: OriginsReport,
         exceptions: &LocalExceptions,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
@@ -569,7 +567,7 @@ impl AddressOrigins {
             for (mut roa, tal_index) in item {
                 let tal_metrics = &mut tal_metrics_vec[tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
+                let info = OriginInfo::from_roa(&mut roa);
                 for addr in roa.iter() {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
@@ -720,7 +718,6 @@ impl OriginsDiff {
         report: OriginsReport,
         exceptions: &LocalExceptions,
         serial: Serial,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> (AddressOrigins, Self) {
         let mut next = HashSet::new();
@@ -734,7 +731,7 @@ impl OriginsDiff {
             for (mut roa, tal_index) in item {
                 let tal_metrics = &mut tal_metrics_vec[tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
+                let info = OriginInfo::from_roa(&mut roa);
                 for addr in roa.iter() {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
@@ -1000,9 +997,9 @@ impl AddressOrigin {
         self.max_length
     }
 
-    /// Returns a reference to the resource certificate if available.
-    pub fn cert(&self) -> Option<&ResourceCert> {
-        self.info.cert()
+    /// Returns a ROA information if available.
+    pub fn roa_info(&self) -> Option<&RoaInfo> {
+        self.info.roa_info()
     }
 
     /// Returns the name of the TAL that this origin as based on.
@@ -1141,42 +1138,64 @@ pub enum OriginInfo {
     None,
 
     /// The resource certificate of a ROA.
-    RoaCert(Arc<ResourceCert>),
-
-    /// The trust anchor info of a ROA.
-    RoaTal(Arc<TalInfo>),
+    RoaInfo(Arc<RoaInfo>),
 
     /// The path of a local exceptions file.
     Exception(Arc<PathBuf>),
 }
 
 impl OriginInfo {
-    fn from_roa(roa: &mut RouteOriginAttestation, extra_info: bool) -> Self {
+    fn from_roa(roa: &mut RouteOriginAttestation) -> Self {
         if let Some(cert) = roa.take_cert() {
-            if extra_info {
-                OriginInfo::RoaCert(Arc::new(cert))
-            }
-            else {
-                OriginInfo::RoaTal(cert.into_tal())
-            }
+            OriginInfo::RoaInfo(Arc::new(RoaInfo::from_ee_cert(cert)))
         }
         else {
             OriginInfo::None
         }
     }
 
-    fn cert(&self) -> Option<&ResourceCert> {
+    fn roa_info(&self) -> Option<&RoaInfo> {
         match *self {
-            OriginInfo::RoaCert(ref cert) => Some(cert),
+            OriginInfo::RoaInfo(ref info) => Some(info),
             _ => None
         }
     }
 
     fn tal_name(&self) -> &str {
         match *self {
-            OriginInfo::RoaCert(ref cert) => cert.tal().name(),
-            OriginInfo::RoaTal(ref tal) => tal.name(),
+            OriginInfo::RoaInfo(ref info) => info.tal.name(),
             _ => "N/A"
+        }
+    }
+}
+
+
+//------------ RoaInfo -------------------------------------------------------
+
+/// Information about a ROA.
+#[derive(Clone, Debug)]
+pub struct RoaInfo {
+    /// The TAL the ROA is derived from.
+    pub tal: Arc<TalInfo>,
+
+    /// The rsync URI identifying the ROA.
+    pub uri: Option<uri::Rsync>,
+
+    /// The validity of the ROA.
+    ///
+    /// This isn’t being trimmed via the CA certificate or anything so the
+    /// actual validity may be shorter.
+    pub validity: Validity,
+}
+
+impl RoaInfo {
+    fn from_ee_cert(cert: ResourceCert) -> Self {
+        RoaInfo {
+            uri: cert.signed_object().cloned().map(|mut uri| {
+                uri.unshare(); uri
+            }),
+            validity: cert.validity(),
+            tal: cert.into_tal(),
         }
     }
 }

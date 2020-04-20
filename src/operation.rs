@@ -361,7 +361,7 @@ impl Server {
     /// just runs the server forever.
     /// Runs the command.
     pub fn run(self, mut config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, false, true)?;
+        let mut repo = Repository::new(&config, true)?;
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(&config);
@@ -396,7 +396,7 @@ impl Server {
                     }
                 };
                 let must_notify = history.update(
-                    report, metrics, &exceptions, false
+                    report, metrics, &exceptions
                 );
                 history.mark_update_done();
                 info!(
@@ -615,14 +615,12 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let extra_info = self.format.extra_output();
-        let mut repo = Repository::new(&config, extra_info, !self.noupdate)?;
+        let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(
             report,
-            &LocalExceptions::load(&config, extra_info)?,
-            extra_info,
+            &LocalExceptions::load(&config, true)?,
             &mut metrics
         );
         let filters = self.filters.as_ref().map(AsRef::as_ref);
@@ -752,13 +750,12 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, false, !self.noupdate)?;
+        let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
         let (report, mut metrics) = repo.process()?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(&config, false)?,
-            false,
             &mut metrics
         );
         let validity = RouteValidity::new(self.prefix, self.asn, &vrps);
@@ -821,7 +818,7 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, false, true)?;
+        let mut repo = Repository::new(&config, true)?;
         let (_, metrics) = repo.process()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
