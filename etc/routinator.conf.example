@@ -62,6 +62,12 @@ tal-dir = "..."
 # issuing CA to be rejected, too, including all child CAs.
 #stale = "warn"
 
+# Allow dubious host names in rsync and RRDP URIs.
+#
+# By default, Routinator will filter out URIs with host names that shouldn’t
+# appear in public URIs. This option can be used to disable this filtering.
+#allow-dubious-hosts = false
+
 # Disable rsync
 #
 # If you don’t want to use rsync -- which is not advices as there are rsync

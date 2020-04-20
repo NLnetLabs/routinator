@@ -14,6 +14,7 @@ use rpki::tal::TalInfo;
 use crate::config::Config;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;
+use crate::utils::UriExt;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
 
@@ -39,6 +40,9 @@ pub struct Cache {
     ///
     /// If this is `None`, we don’t actually do updates.
     http: Option<HttpClient>,
+
+    /// Whether to filter dubious authorities in notify URIs.
+    filter_dubious: bool,
 }
 
 impl Cache {
@@ -73,7 +77,8 @@ impl Cache {
                 cache_dir: Self::cache_dir(config),
                 ta_dir: Self::ta_dir(config),
                 http: if update { Some(HttpClient::new(config)?) }
-                      else { None }
+                      else { None },
+                filter_dubious: !config.allow_dubious_hosts
             }))
         }
     }
@@ -207,9 +212,16 @@ impl<'a> Run<'a> {
                 if self.cache.http.is_none() {
                     return None
                 }
-                self.servers.write().unwrap().insert(
+                let server = if
+                    self.cache.filter_dubious
+                    && notify_uri.has_dubious_authority()
+                {
+                    Server::create_broken(notify_uri.clone())
+                }
+                else {
                     Server::create(notify_uri.clone(), &self.cache.cache_dir)
-                )
+                };
+                self.servers.write().unwrap().insert(server)
             }
         };
         if let Some(ref http) = self.cache.http {

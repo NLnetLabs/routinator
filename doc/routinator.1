@@ -166,6 +166,16 @@ Finally, the
 policy will cause Routinator to quietly accept any stale object as valid.
 
 .TP
+.B --allow-dubious-hosts
+As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI data
+with dubious host names. In particular, it will reject the name
+.IR localhost,
+host names that consist of IP addresses, and a host name that contains an
+explicit port.
+.IP
+This option allows to disable this filtering.
+
+.TP
 .B --disable-rsync
 If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -681,6 +691,11 @@ Consider stale objects to be valid but print a warning to the log.
 .I accept
 Quietly consider stale objects valid.
 .RE
+
+.TP
+.B allow-dubious-hosts
+A boolean value that, if present and true, disables Routinator's filtering of
+dubious host names in rsync and HTTPS URIs from RPKI data.
 
 .TP
 .B disable-rsync
