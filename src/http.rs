@@ -16,7 +16,7 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use clap::crate_version;
 use futures::stream;
-use futures::future::select_all;
+use futures::future::{pending, select_all};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
@@ -48,11 +48,16 @@ pub fn http_listener(
 }
 
 async fn _http_listener(origins: OriginsHistory, addrs: Vec<SocketAddr>) {
-    let _ = select_all(
-        addrs.iter().map(|addr| {
-            tokio::spawn(single_http_listener(*addr, origins.clone()))
-        })
-    ).await;
+    if addrs.is_empty() {
+        pending::<()>().await;
+    }
+    else {
+        let _ = select_all(
+            addrs.iter().map(|addr| {
+                tokio::spawn(single_http_listener(*addr, origins.clone()))
+            })
+        ).await;
+    }
 }
 
 /// Returns a future for a single HTTP listener.
