@@ -10,9 +10,6 @@ Breaking Changes
   explicitly specified. This filter can be disabled via the
   `--allow-dubious-hosts` command line and config option for test
   deployments. ([#293])
-* Update to Rust’s new asynchronous IO framework for the RTR and HTTP
-  servers. Repository synchronization and validation remain synchronous
-  atop a thread pool. ([#282])
 * The minimal supported Rust version is now 1.39.0.
 
 New
@@ -31,18 +28,24 @@ New
   to be used when TALs are referenced in output. This way, the output can
   be made to be even more similar to that produced by the RIPE NCC
   Validator. ([#291])
-
+* The _csvext_ output format is now also available via the HTTP server at
+  the `/csvext` path. ([#294])
 
 Bug Fixes
 
 Other Changes
 
+* Update to Rust’s new asynchronous IO framework for the RTR and HTTP
+  servers. Repository synchronization and validation remain synchronous
+  atop a thread pool. ([#282])
 * Changed concurrency strategy for repository update and validation.
   Previously, each trust anchor was updated and validated synchronously.
   Now processing of a CA is deferred if its repository publication point
   hasn’t been updated yet. Processing is then picked up by the next
   available worker thread. This should guarantee that all worker threads
   are busy all the time. ([#284)]
+* Optimized what information to keep for each ROA, bringing maximum memory 
+  consumption down to about a quarter. ([#293])
 
 Dependencies
 
@@ -54,6 +57,7 @@ Dependencies
 [#291]: https://github.com/NLnetLabs/routinator/pull/291
 [#292]: https://github.com/NLnetLabs/routinator/pull/292
 [#293]: https://github.com/NLnetLabs/routinator/pull/293
+[#294]: https://github.com/NLnetLabs/routinator/pull/294
 [@netravnen]: https://github.com/netravnen
 
 
