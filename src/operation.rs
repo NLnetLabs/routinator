@@ -422,10 +422,11 @@ impl Server {
                             }
                         }
                     }
-                    Err(RecvTimeoutError::Timeout) => { }
-                    Err(RecvTimeoutError::Disconnected) => {
+                    Ok(UserSignal::ShutDown)
+                    | Err(RecvTimeoutError::Disconnected) => {
                         break;
                     }
+                    Err(RecvTimeoutError::Timeout) => { }
                 }
             }
             // An error here means the receiver is gone which is fine.
@@ -437,6 +438,10 @@ impl Server {
             loop {
                 tokio::select! {
                     sig = signal.next() => {
+                        if sig == UserSignal::ShutDown {
+                            // Let’s just exit.
+                            std::process::exit(0);
+                        }
                         if sig_tx.send(sig).is_err() {
                             break;
                         }
@@ -740,7 +745,7 @@ impl Validate {
                         return Err(Error);
                     }
                 }
-            }, 
+            },
             json: matches.is_present("json"),
             noupdate: matches.is_present("noupdate"),
             complete: matches.is_present("complete"),
@@ -997,8 +1002,10 @@ impl Man {
 //------------ SignalListener --------------------------------------------------
 
 #[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum UserSignal {
     ReloadTals,
+    ShutDown,
 }
 
 /// Wait for the next validation run or a user telling us to quit or reload.
@@ -1007,6 +1014,7 @@ enum UserSignal {
 #[cfg(unix)]
 struct SignalListener {
     usr1: Signal,
+    int: Signal,
 }
 
 #[cfg(unix)]
@@ -1019,7 +1027,14 @@ impl SignalListener {
                     error!("Attaching to signal USR1 failed: {}", err);
                     return Err(Error)
                 }
-            }
+            },
+            int: match signal(SignalKind::interrupt()) {
+                Ok(term) => term,
+                Err(err) => {
+                    error!("Attaching to signal TERM failed: {}", err);
+                    return Err(Error)
+                }
+            },
         })
     }
 
@@ -1027,8 +1042,10 @@ impl SignalListener {
     ///
     /// Returns what to do.
     pub async fn next(&mut self) -> UserSignal {
-        self.usr1.next().await;
-        UserSignal::ReloadTals
+        tokio::select! {
+            _ = self.usr1.next() => UserSignal::ReloadTals,
+            _ = self.int.next() => UserSignal::ShutDown,
+        }
     }
 }
 
