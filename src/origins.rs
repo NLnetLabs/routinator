@@ -434,10 +434,8 @@ impl HistoryInner {
 /// [`AddressOrigins`]: struct.AddressOrigins.html
 #[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
-    /// The list of route origin attestations.
-    ///
-    /// XXX The third item is the TAL index. This needs to be cleaned up.
-    origins: Vec<(RouteOriginAttestation, usize)>,
+    /// The list of valid ROAs.
+    origins: Vec<RouteOrigin>,
 
     /// The time when this set needs to be refreshed at the latest.
     refresh: Option<Time>,
@@ -458,7 +456,7 @@ impl RouteOrigins {
         attestation: RouteOriginAttestation,
         tal_index: usize,
     ) {
-        self.origins.push((attestation, tal_index));
+        self.origins.push(RouteOrigin::new(attestation, tal_index));
     }
 
     /// Updates the refresh time.
@@ -486,7 +484,7 @@ impl RouteOrigins {
     }
 
     /// Returns an iterator over the attestations in the list.
-    pub fn iter(&self) -> slice::Iter<(RouteOriginAttestation, usize)> {
+    pub fn iter(&self) -> slice::Iter<RouteOrigin> {
         self.origins.iter()
     }
 }
@@ -495,8 +493,8 @@ impl RouteOrigins {
 //--- IntoIterator
 
 impl IntoIterator for RouteOrigins {
-    type Item = (RouteOriginAttestation, usize);
-    type IntoIter = vec::IntoIter<(RouteOriginAttestation, usize)>;
+    type Item = RouteOrigin;
+    type IntoIter = vec::IntoIter<RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.origins.into_iter()
@@ -504,11 +502,59 @@ impl IntoIterator for RouteOrigins {
 }
 
 impl<'a> IntoIterator for &'a RouteOrigins {
-    type Item = &'a (RouteOriginAttestation, usize);
-    type IntoIter = slice::Iter<'a, (RouteOriginAttestation, usize)>;
+    type Item = &'a RouteOrigin;
+    type IntoIter = slice::Iter<'a, RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+
+//------------ RouteOrigin ---------------------------------------------------
+
+/// A single route origin attestation.
+///
+/// We don’t really need to keep the whole RPKI object around, so we don’t.
+/// This type collects all the information we do need later.
+#[derive(Clone, Debug)]
+pub struct RouteOrigin {
+    /// The ASN of the ROA.
+    as_id: AsId,
+
+    /// The addresses of the ROA.
+    addrs: Vec<FriendlyRoaIpAddress>,
+
+    /// The ROA information for the ROA.
+    info: OriginInfo,
+
+    /// The index of the TAL the ROA is derived from.
+    ///
+    /// We keep this for quicker calculations of TAL metrics.
+    tal_index: usize,
+}
+
+impl RouteOrigin {
+    /// Creates a new value from the ROA itself and the TAL index.
+    pub fn new(mut roa: RouteOriginAttestation, tal_index: usize) -> Self {
+        RouteOrigin {
+            as_id: roa.as_id(),
+            addrs: roa.iter().collect(),
+            info: OriginInfo::from_roa(&mut roa),
+            tal_index
+        }
+    }
+
+    pub fn as_id(&self) -> AsId {
+        self.as_id
+    }
+
+    pub fn addrs(&self) -> &[FriendlyRoaIpAddress] {
+        &self.addrs
+    }
+
+    pub fn info(&self) -> &OriginInfo {
+        &self.info
     }
 }
 
@@ -564,16 +610,15 @@ impl AddressOrigins {
                     None => refresh = Some(time)
                 }
             }
-            for (mut roa, tal_index) in item {
-                let tal_metrics = &mut tal_metrics_vec[tal_index];
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(),
+                        origin.as_id,
                         addr,
-                        info.clone()
+                        origin.info.clone()
                     );
                     if exceptions.keep_origin(&addr) {
                         let _ = res.insert(addr);
@@ -728,14 +773,13 @@ impl OriginsDiff {
         }).collect();
 
         for item in report.origins {
-            for (mut roa, tal_index) in item {
-                let tal_metrics = &mut tal_metrics_vec[tal_index];
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(), addr, info.clone()
+                        origin.as_id, addr, origin.info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
                         continue
