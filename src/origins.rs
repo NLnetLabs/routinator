@@ -11,11 +11,12 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use log::{debug, info};
+use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
 use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
 use rpki::tal::TalInfo;
-use rpki::x509::Time;
+use rpki::x509::{Time, Validity};
 use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
@@ -232,15 +233,13 @@ impl OriginsHistory {
         report: OriginsReport,
         mut metrics: Metrics,
         exceptions: &LocalExceptions,
-        extra_info: bool
     ) -> bool {
         match self.current_and_serial() {
             Some((current, serial)) => {
                 let current: HashSet<_> =
                     current.iter().map(Clone::clone).collect();
                 let (next, diff) = OriginsDiff::construct(
-                    current, report, exceptions, serial, extra_info,
-                    &mut metrics,
+                    current, report, exceptions, serial, &mut metrics,
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -255,7 +254,7 @@ impl OriginsHistory {
             }
             None => {
                 let origins = AddressOrigins::from_report(
-                    report, exceptions, extra_info, &mut metrics
+                    report, exceptions, &mut metrics
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -435,10 +434,8 @@ impl HistoryInner {
 /// [`AddressOrigins`]: struct.AddressOrigins.html
 #[derive(Clone, Debug, Default)]
 pub struct RouteOrigins {
-    /// The list of route origin attestations.
-    ///
-    /// XXX The second item is the TAL index. This needs to be cleaned up.
-    origins: Vec<(RouteOriginAttestation, usize)>,
+    /// The list of valid ROAs.
+    origins: Vec<RouteOrigin>,
 
     /// The time when this set needs to be refreshed at the latest.
     refresh: Option<Time>,
@@ -459,7 +456,7 @@ impl RouteOrigins {
         attestation: RouteOriginAttestation,
         tal_index: usize,
     ) {
-        self.origins.push((attestation, tal_index));
+        self.origins.push(RouteOrigin::new(attestation, tal_index));
     }
 
     /// Updates the refresh time.
@@ -487,7 +484,7 @@ impl RouteOrigins {
     }
 
     /// Returns an iterator over the attestations in the list.
-    pub fn iter(&self) -> slice::Iter<(RouteOriginAttestation, usize)> {
+    pub fn iter(&self) -> slice::Iter<RouteOrigin> {
         self.origins.iter()
     }
 }
@@ -496,8 +493,8 @@ impl RouteOrigins {
 //--- IntoIterator
 
 impl IntoIterator for RouteOrigins {
-    type Item = (RouteOriginAttestation, usize);
-    type IntoIter = vec::IntoIter<(RouteOriginAttestation, usize)>;
+    type Item = RouteOrigin;
+    type IntoIter = vec::IntoIter<RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.origins.into_iter()
@@ -505,11 +502,59 @@ impl IntoIterator for RouteOrigins {
 }
 
 impl<'a> IntoIterator for &'a RouteOrigins {
-    type Item = &'a (RouteOriginAttestation, usize);
-    type IntoIter = slice::Iter<'a, (RouteOriginAttestation, usize)>;
+    type Item = &'a RouteOrigin;
+    type IntoIter = slice::Iter<'a, RouteOrigin>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+
+//------------ RouteOrigin ---------------------------------------------------
+
+/// A single route origin attestation.
+///
+/// We don’t really need to keep the whole RPKI object around, so we don’t.
+/// This type collects all the information we do need later.
+#[derive(Clone, Debug)]
+pub struct RouteOrigin {
+    /// The ASN of the ROA.
+    as_id: AsId,
+
+    /// The addresses of the ROA.
+    addrs: Vec<FriendlyRoaIpAddress>,
+
+    /// The ROA information for the ROA.
+    info: OriginInfo,
+
+    /// The index of the TAL the ROA is derived from.
+    ///
+    /// We keep this for quicker calculations of TAL metrics.
+    tal_index: usize,
+}
+
+impl RouteOrigin {
+    /// Creates a new value from the ROA itself and the TAL index.
+    pub fn new(mut roa: RouteOriginAttestation, tal_index: usize) -> Self {
+        RouteOrigin {
+            as_id: roa.as_id(),
+            addrs: roa.iter().collect(),
+            info: OriginInfo::from_roa(&mut roa),
+            tal_index
+        }
+    }
+
+    pub fn as_id(&self) -> AsId {
+        self.as_id
+    }
+
+    pub fn addrs(&self) -> &[FriendlyRoaIpAddress] {
+        &self.addrs
+    }
+
+    pub fn info(&self) -> &OriginInfo {
+        &self.info
     }
 }
 
@@ -548,7 +593,6 @@ impl AddressOrigins {
     pub fn from_report(
         report: OriginsReport,
         exceptions: &LocalExceptions,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> Self {
         let mut res = HashSet::new();
@@ -566,16 +610,15 @@ impl AddressOrigins {
                     None => refresh = Some(time)
                 }
             }
-            for (mut roa, tal_index) in item {
-                let tal_metrics = &mut tal_metrics_vec[tal_index];
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(),
+                        origin.as_id,
                         addr,
-                        info.clone()
+                        origin.info.clone()
                     );
                     if exceptions.keep_origin(&addr) {
                         let _ = res.insert(addr);
@@ -720,7 +763,6 @@ impl OriginsDiff {
         report: OriginsReport,
         exceptions: &LocalExceptions,
         serial: Serial,
-        extra_info: bool,
         metrics: &mut Metrics,
     ) -> (AddressOrigins, Self) {
         let mut next = HashSet::new();
@@ -731,14 +773,13 @@ impl OriginsDiff {
         }).collect();
 
         for item in report.origins {
-            for (mut roa, tal_index) in item {
-                let tal_metrics = &mut tal_metrics_vec[tal_index];
+            for origin in item {
+                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
-                let info = OriginInfo::from_roa(&mut roa, extra_info);
-                for addr in roa.iter() {
+                for addr in origin.addrs {
                     tal_metrics.vrps += 1;
                     let addr = AddressOrigin::from_roa(
-                        roa.as_id(), addr, info.clone()
+                        origin.as_id, addr, origin.info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
                         continue
@@ -1000,9 +1041,9 @@ impl AddressOrigin {
         self.max_length
     }
 
-    /// Returns a reference to the resource certificate if available.
-    pub fn cert(&self) -> Option<&ResourceCert> {
-        self.info.cert()
+    /// Returns a ROA information if available.
+    pub fn roa_info(&self) -> Option<&RoaInfo> {
+        self.info.roa_info()
     }
 
     /// Returns the name of the TAL that this origin as based on.
@@ -1141,42 +1182,64 @@ pub enum OriginInfo {
     None,
 
     /// The resource certificate of a ROA.
-    RoaCert(Arc<ResourceCert>),
-
-    /// The trust anchor info of a ROA.
-    RoaTal(Arc<TalInfo>),
+    RoaInfo(Arc<RoaInfo>),
 
     /// The path of a local exceptions file.
     Exception(Arc<PathBuf>),
 }
 
 impl OriginInfo {
-    fn from_roa(roa: &mut RouteOriginAttestation, extra_info: bool) -> Self {
+    fn from_roa(roa: &mut RouteOriginAttestation) -> Self {
         if let Some(cert) = roa.take_cert() {
-            if extra_info {
-                OriginInfo::RoaCert(Arc::new(cert))
-            }
-            else {
-                OriginInfo::RoaTal(cert.into_tal())
-            }
+            OriginInfo::RoaInfo(Arc::new(RoaInfo::from_ee_cert(cert)))
         }
         else {
             OriginInfo::None
         }
     }
 
-    fn cert(&self) -> Option<&ResourceCert> {
+    fn roa_info(&self) -> Option<&RoaInfo> {
         match *self {
-            OriginInfo::RoaCert(ref cert) => Some(cert),
+            OriginInfo::RoaInfo(ref info) => Some(info),
             _ => None
         }
     }
 
     fn tal_name(&self) -> &str {
         match *self {
-            OriginInfo::RoaCert(ref cert) => cert.tal().name(),
-            OriginInfo::RoaTal(ref tal) => tal.name(),
+            OriginInfo::RoaInfo(ref info) => info.tal.name(),
             _ => "N/A"
+        }
+    }
+}
+
+
+//------------ RoaInfo -------------------------------------------------------
+
+/// Information about a ROA.
+#[derive(Clone, Debug)]
+pub struct RoaInfo {
+    /// The TAL the ROA is derived from.
+    pub tal: Arc<TalInfo>,
+
+    /// The rsync URI identifying the ROA.
+    pub uri: Option<uri::Rsync>,
+
+    /// The validity of the ROA.
+    ///
+    /// This isn’t being trimmed via the CA certificate or anything so the
+    /// actual validity may be shorter.
+    pub validity: Validity,
+}
+
+impl RoaInfo {
+    fn from_ee_cert(cert: ResourceCert) -> Self {
+        RoaInfo {
+            uri: cert.signed_object().cloned().map(|mut uri| {
+                uri.unshare(); uri
+            }),
+            validity: cert.validity(),
+            tal: cert.into_tal(),
         }
     }
 }

@@ -55,9 +55,6 @@ pub struct Repository {
     /// How do we deal with stale objects?
     stale: StalePolicy,
 
-    /// Should we keep extended information about ROAs?
-    extra_output: bool,
-
     /// Number of validation threads.
     validation_threads: usize,
 
@@ -97,7 +94,6 @@ impl Repository {
     /// updating the local cache will not be updated from upstream.
     pub fn new(
         config: &Config,
-        extra_output: bool,
         update: bool
     ) -> Result<Self, Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
@@ -123,7 +119,6 @@ impl Repository {
             tals: Self::load_tals(config)?,
             strict: config.strict,
             stale: config.stale,
-            extra_output,
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(config, update)?,
             rsync: rsync::Cache::new( config, update)?,

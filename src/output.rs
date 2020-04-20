@@ -378,7 +378,7 @@ fn csv_footer<W: io::Write>(
 }
 
 
-//------------ csv -----------------------------------------------------------
+//------------ compat_csv ----------------------------------------------------
 
 fn compat_csv_header<W: io::Write>(
     _vrps: &AddressOrigins,
@@ -437,15 +437,15 @@ fn ext_csv_origin<W: io::Write>(
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
-    match addr.cert() {
-        Some(cert) => {
-            match cert.signed_object() {
+    match addr.roa_info() {
+        Some(info) => {
+            match info.uri.as_ref() {
                 Some(uri) => {
                     write!(output, "{}", uri)?;
                 }
                 None => write!(output, "N/A")?
             }
-            let val = cert.validity();
+            let val = info.validity;
             writeln!(output, ",{},{}/{},{},{},{}",
                 addr.as_id(),
                 addr.address(), addr.address_length(),
