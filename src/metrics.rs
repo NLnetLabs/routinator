@@ -62,6 +62,10 @@ impl Metrics {
         self.time.timestamp()
     }
 
+    pub fn set_tals(&mut self, tals: Vec<TalMetrics>) {
+        self.tals = tals
+    }
+
     pub fn tals(&self) -> &[TalMetrics] {
         &self.tals
     }

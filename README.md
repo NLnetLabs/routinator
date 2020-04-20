@@ -134,7 +134,7 @@ The official [Rust Platform Support](https://forge.rust-lang.org/platform-suppor
 page provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.34 or
+Routinator relies on a relatively new version of Rust, currently 1.39 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called ``rustup``.
 
@@ -312,9 +312,9 @@ are used.
 
 The configuration file is a TOML file. Its entries are named similarly to
 the command line options. Details about the available entries and there
-meaning can be found in the manual page. In addition, a complete sample
-configuration file showing all the default values can be found in the
-repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
+meaning can be found in the [manual page](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
+In addition, a complete sample configuration file showing all the default
+values can be found in the repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
 
 ## Local Exceptions
 
@@ -342,3 +342,6 @@ port can be launched so:
 ```bash
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.2.13:9556
 ```
+
+A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is 
+available to get started.

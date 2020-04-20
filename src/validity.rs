@@ -1,9 +1,7 @@
 //! Checking for validity of route announcements.
 
-use std::io;
-use derive_more::Display;
+use std::{fmt, io};
 use rpki::resources::AsId;
-use unwrap::unwrap;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
@@ -122,7 +120,7 @@ impl<'a> RouteValidity<'a> {
 
     pub fn into_json(self) -> Vec<u8> {
         let mut res = Vec::new();
-        unwrap!(self.write_json(&mut res));
+        self.write_json(&mut res).unwrap();
         res
     }
 
@@ -220,7 +218,7 @@ impl<'a> RouteValidity<'a> {
 /// three variants of this enum.
 ///
 /// [RFC 6811]: https://tools.ietf.org/html/rfc6811
-#[derive(Clone, Copy, Debug, Display)]
+#[derive(Clone, Copy, Debug)]
 pub enum RouteState {
     /// RPKI Valid.
     ///
@@ -236,6 +234,16 @@ pub enum RouteState {
     ///
     /// No VRP covers the announcement.
     NotFound
+}
+
+impl fmt::Display for RouteState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            RouteState::Valid => "valid",
+            RouteState::Invalid => "invalid",
+            RouteState::NotFound => "not-found",
+        })
+    }
 }
 
 

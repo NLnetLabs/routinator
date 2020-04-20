@@ -8,10 +8,10 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use log::{error, info, warn};
 use rpki::uri;
-use unwrap::unwrap;
 use crate::config::Config;
 use crate::metrics::RsyncModuleMetrics;
 use crate::operation::Error;
+use crate::utils::UriExt;
 
 
 //------------ Cache ---------------------------------------------------------
@@ -26,6 +26,9 @@ pub struct Cache {
     ///
     /// If this is `None` actual rsyncing has been disabled.
     command: Option<Command>,
+
+    /// Whether to filter dubious authorities in rsync URIs.
+    filter_dubious: bool,
 }
  
 
@@ -53,7 +56,8 @@ impl Cache {
                 command: if update {
                     Some(Command::new(config)?)
                 }
-                else { None }
+                else { None },
+                filter_dubious: !config.allow_dubious_hosts
             }))
         }
     }
@@ -98,6 +102,10 @@ impl<'a> Run<'a> {
         })
     }
 
+    pub fn is_current(&self, uri: &uri::Rsync) -> bool {
+        self.updated.read().unwrap().contains(uri.module())
+    }
+
     pub fn load_module(&self, uri: &uri::Rsync) {
         let command = match self.cache.command.as_ref() {
             Some(command) => command,
@@ -105,37 +113,48 @@ impl<'a> Run<'a> {
         };
         let module = uri.module();
 
-        // If is already up-to-date, return.
-        if unwrap!(self.updated.read()).contains(module) {
+        // If it is already up-to-date, return.
+        if self.updated.read().unwrap().contains(module) {
             return
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
         // yet.
         let mutex = {
-            unwrap!(self.running.write())
+            self.running.write().unwrap()
             .entry(module.clone()).or_default()
             .clone()
         };
         
         // Acquire the mutex. Once we have it, see if the module is up-to-date
         // which happens if someone else had it first.
-        let _lock = unwrap!(mutex.lock());
-        if unwrap!(self.updated.read()).contains(module) {
+        let _lock = mutex.lock().unwrap();
+        if self.updated.read().unwrap().contains(module) {
             return
         }
-        
-        // Run the actual update.
-        let metrics = command.update(
-            module, &self.cache.cache_dir.module_path(module)
-        );
 
-        // Insert into updated map and metrics.
-        unwrap!(self.updated.write()).insert(module.clone());
-        unwrap!(self.metrics.lock()).push(metrics);
+        // Check if the module name is dubious. If so, skip updating.
+        if self.cache.filter_dubious && module.has_dubious_authority() {
+            info!(
+                "{}: Dubious host name. Skipping update.",
+                module
+            )
+        }
+        else {
+            // Run the actual update.
+            let metrics = command.update(
+                module, &self.cache.cache_dir.module_path(module)
+            );
+
+            // Insert into updated map and metrics.
+            self.metrics.lock().unwrap().push(metrics);
+        }
+
+        // Insert into updated map no matter what.
+        self.updated.write().unwrap().insert(module.clone());
 
         // Remove from running.
-        unwrap!(self.running.write()).remove(module);
+        self.running.write().unwrap().remove(module);
     }
 
     pub fn load_file(
@@ -176,7 +195,7 @@ impl<'a> Run<'a> {
         if self.cache.command.is_none() {
             return
         }
-        let modules = unwrap!(self.updated.read());
+        let modules = self.updated.read().unwrap();
         let dir = match fs::read_dir(&self.cache.cache_dir.base) {
             Ok(dir) => dir,
             Err(err) => {
@@ -295,7 +314,7 @@ impl<'a> Run<'a> {
     }
 
     pub fn into_metrics(self) -> Vec<RsyncModuleMetrics> {
-        unwrap!(self.metrics.into_inner())
+        self.metrics.into_inner().unwrap()
     }
 }
 
@@ -545,7 +564,7 @@ fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<Bytes> {
     let name = entry.file_name();
     name.to_str().and_then(|name| {
         if uri::is_uri_ascii(name) {
-            Some(Bytes::from(name.as_bytes()))
+            Some(Bytes::copy_from_slice(name.as_bytes()))
         }
         else {
             None

@@ -4,13 +4,57 @@
 
 Breaking Changes
 
+* Routinator now filters out rsync URIs and RRDP URIs that contain dubious
+  host names that should not be present in the public RPKI. In this
+  version they are ‘localhost,’ any IP address, and any URI with the port
+  explicitly specified. This filter can be disabled via the
+  `--allow-dubious-hosts` command line and config option for test
+  deployments. ([#293])
+* Update to Rust’s new asynchronous IO framework for the RTR and HTTP
+  servers. Repository synchronization and validation remain synchronous
+  atop a thread pool. ([#282])
+* The minimal supported Rust version is now 1.39.0.
+
 New
+
+* The new option `--stale` allows selecting a policy for dealing with
+  stale objects – i.e., manifests and CRLs that are past their
+  *next-update* date. The policies are `refuse`, `warn`, and `accept`. The
+  previous hard-coded policy of `warn`, i.e., accept but log a warning, is
+  the default. ([#288])
+* New output formats `bird` and `bird2` which produce a `roa table` for
+  Bird 1 and a `route table` for Bird 2, respectively. ([#290], by
+  [@netravnen])
+* New output format `csvcompat` which produces CSV output as similar to
+  that of the RIPE NCC Validator as possible. ([#292])
+* The new config file option `tal-labels` allows defining explicit names
+  to be used when TALs are referenced in output. This way, the output can
+  be made to be even more similar to that produced by the RIPE NCC
+  Validator. ([#291])
+
 
 Bug Fixes
 
 Other Changes
 
+* Changed concurrency strategy for repository update and validation.
+  Previously, each trust anchor was updated and validated synchronously.
+  Now processing of a CA is deferred if its repository publication point
+  hasn’t been updated yet. Processing is then picked up by the next
+  available worker thread. This should guarantee that all worker threads
+  are busy all the time. ([#284)]
+
 Dependencies
+
+
+[#282]: https://github.com/NLnetLabs/routinator/pull/282
+[#284]: https://github.com/NLnetLabs/routinator/pull/284
+[#288]: https://github.com/NLnetLabs/routinator/pull/288
+[#290]: https://github.com/NLnetLabs/routinator/pull/290
+[#291]: https://github.com/NLnetLabs/routinator/pull/291
+[#292]: https://github.com/NLnetLabs/routinator/pull/292
+[#293]: https://github.com/NLnetLabs/routinator/pull/293
+[@netravnen]: https://github.com/netravnen
 
 
 ## 0.6.4 ‘Jeepers’
