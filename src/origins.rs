@@ -21,7 +21,7 @@ use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
 use crate::config::Config;
-use crate::metrics::{Metrics, TalMetrics};
+use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::slurm::LocalExceptions;
 
 
@@ -86,6 +86,9 @@ struct HistoryInner {
     /// The current metrics.
     metrics: Option<Arc<Metrics>>,
 
+    /// The server metrics.
+    server_metrics: Arc<ServerMetrics>,
+
     /// The session ID.
     session: u16,
 
@@ -122,6 +125,7 @@ impl OriginsHistory {
                 current: None,
                 diffs: VecDeque::with_capacity(config.history_size),
                 metrics: None,
+                server_metrics: Arc::new(Default::default()),
                 session: {
                     SystemTime::now()
                         .duration_since(SystemTime::UNIX_EPOCH).unwrap()
@@ -205,6 +209,10 @@ impl OriginsHistory {
 
     pub fn metrics(&self) -> Option<Arc<Metrics>> {
         self.0.read().unwrap().metrics.clone()
+    }
+
+    pub fn server_metrics(&self) -> Arc<ServerMetrics> {
+        self.0.read().unwrap().server_metrics.clone()
     }
 
     pub fn update_times(

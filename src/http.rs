@@ -7,23 +7,31 @@
 //!
 //! [`http_listener`]: fn.http_listener.html
 
+use std::io;
 use std::convert::Infallible;
 use std::fmt::Write;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use chrono::{Duration, Utc};
 use clap::crate_version;
 use futures::stream;
+use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use rpki::resources::AsId;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::stream::Stream;
 use crate::output;
 use crate::config::Config;
-use crate::metrics::Metrics;
+use crate::metrics::{Metrics, ServerMetrics};
 use crate::operation::Error;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
@@ -80,7 +88,19 @@ async fn single_http_listener(
         }
     });
 
-    if let Err(err) = Server::bind(&addr).serve(make_service).await {
+    let listener = match TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            error!("Fatal error listening on {}: {}", addr, err);
+            return 
+        }
+    };
+    let listener = HttpAccept {
+        sock: listener,
+        metrics: origins.server_metrics()
+    };
+
+    if let Err(err) = Server::builder(listener).serve(make_service).await {
         error!("HTTP server error: {}", err);
     }
 }
@@ -90,6 +110,7 @@ async fn handle_request(
     req: Request<Body>,
     origins: &OriginsHistory,
 ) -> Result<Response<Body>, Infallible> {
+    origins.server_metrics().inc_http_requests();
     if *req.method() != Method::GET {
         return Ok(method_not_allowed())
     }
@@ -136,6 +157,7 @@ fn metrics_active(
     metrics: &Metrics
 ) -> Response<Body> {
     let mut res = String::new();
+    let server_metrics = origins.server_metrics();
 
     // valid_roas 
     writeln!(res,
@@ -161,6 +183,15 @@ fn metrics_active(
             tal.tal.name(), tal.vrps
         ).unwrap();
     }
+
+    // stale_objects
+    writeln!(res,
+        "\n\
+        # HELP routinator_stale_count number of stale manifests and CRLs\n\
+        # TYPE routinator_stale_count gauge\n\
+        routinator_stale_count {}",
+        metrics.stale_count(),
+    ).unwrap();
 
     // last_update_start, last_update_done, last_update_duration
     let (start, done, duration) = origins.update_times();
@@ -275,6 +306,101 @@ fn metrics_active(
         }
     }
 
+    // rtr_connections
+    writeln!(res, "
+        \n\
+        # HELP routinator_rtr_connections total number of RTR connections\n\
+        # TYPE routinator_rtr_connections counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_rtr_connections {}", server_metrics.rtr_conn_open()
+    ).unwrap();
+
+    // rtr_current_connections
+    writeln!(res, "
+        \n\
+        # HELP routinator_rtr_current_connections currently open RTR \
+                                                  connections\n\
+        # TYPE routinator_rtr_current_connections gauge"
+    ).unwrap();
+    writeln!(res,
+        "routinator_rtr_current_connections {}",
+        server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close()
+    ).unwrap();
+
+    // rtr_bytes_read
+    writeln!(res, "
+        \n\
+        # HELP routinator_rtr_bytes_read number of bytes read via RTR\n\
+        # TYPE routinator_rtr_bytes_read counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_rtr_bytes_read {}", server_metrics.rtr_bytes_read()
+    ).unwrap();
+
+    // rtr_bytes_written
+    writeln!(res, "
+        \n\
+        # HELP routinator_rtr_bytes_written number of bytes written via RTR\n\
+        # TYPE routinator_rtr_bytes_written counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_rtr_bytes_written {}", server_metrics.rtr_bytes_written()
+    ).unwrap();
+
+    // http_connections
+    writeln!(res, "
+        \n\
+        # HELP routinator_http_connections total number of RTR connections\n\
+        # TYPE routinator_http_connections counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_http_connections {}", server_metrics.http_conn_open()
+    ).unwrap();
+
+    // http_current_connections
+    writeln!(res, "
+        \n\
+        # HELP routinator_http_current_connections currently open RTR \
+                                                  connections\n\
+        # TYPE routinator_http_current_connections gauge"
+    ).unwrap();
+    writeln!(res,
+        "routinator_http_current_connections {}",
+        server_metrics.http_conn_open() - server_metrics.http_conn_close()
+    ).unwrap();
+
+    // http_bytes_read
+    writeln!(res, "
+        \n\
+        # HELP routinator_http_bytes_read number of bytes read via RTR\n\
+        # TYPE routinator_http_bytes_read counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_http_bytes_read {}", server_metrics.http_bytes_read()
+    ).unwrap();
+
+    // http_bytes_written
+    writeln!(res, "
+        \n\
+        # HELP routinator_http_bytes_written number of bytes written via RTR\n\
+        # TYPE routinator_http_bytes_written counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_http_bytes_written {}", server_metrics.http_bytes_written()
+    ).unwrap();
+
+    // http_requests
+    writeln!(res, "
+        \n\
+        # HELP routinator_http_requests number of bytes written via RTR\n\
+        # TYPE routinator_http_requests counter"
+    ).unwrap();
+    writeln!(res,
+        "routinator_http_requests {}", server_metrics.http_requests()
+    ).unwrap();
+
+
     Response::builder()
         .header("Content-Type", "text/plain; version=0.0.4")
         .body(res.into())
@@ -297,6 +423,7 @@ fn status_active(
     origins: &OriginsHistory,
     metrics: &Metrics
 ) -> Response<Body> {
+    let server_metrics = origins.server_metrics();
     let mut res = String::new();
     let (start, done, duration) = origins.update_times();
     let start = Duration::from_std(start.elapsed()).unwrap();
@@ -357,6 +484,11 @@ fn status_active(
     }
     writeln!(res).unwrap();
 
+    // stale-count
+    writeln!(res,
+        "stale-count: {}", metrics.stale_count()
+    ).unwrap();
+
     // rsync_status
     writeln!(res, "rsync-durations:").unwrap();
     for metrics in metrics.rsync() {
@@ -406,6 +538,33 @@ fn status_active(
         }
     }
 
+    // rtr
+    writeln!(res,
+        "rtr-connections: {} current, {} total",
+        server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close(),
+        server_metrics.rtr_conn_open()
+    ).unwrap();
+    writeln!(res,
+        "rtr-data: {} bytes sent, {} bytes received",
+        server_metrics.rtr_bytes_written(),
+        server_metrics.rtr_bytes_read()
+    ).unwrap();
+
+    // http
+    writeln!(res,
+        "http-connections: {} current, {} total",
+        server_metrics.http_conn_open() - server_metrics.http_conn_close(),
+        server_metrics.http_conn_open()
+    ).unwrap();
+    writeln!(res,
+        "http-data: {} bytes sent, {} bytes received",
+        server_metrics.http_bytes_written(),
+        server_metrics.http_bytes_read()
+    ).unwrap();
+    writeln!(res,
+        "http-requests: {} ",
+        server_metrics.http_requests()
+    ).unwrap();
 
     Response::builder()
     .header("Content-Type", "text/plain")
@@ -628,3 +787,89 @@ fn query_iter<'a>(
         (key, value)
     })
 }
+
+
+//------------ Wrapped sockets for metrics -----------------------------------
+
+struct HttpAccept {
+    sock: TcpListener,
+    metrics: Arc<ServerMetrics>,
+}
+
+impl Accept for HttpAccept {
+    type Conn = HttpStream;
+    type Error = io::Error;
+
+    fn poll_accept(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context
+    ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
+        let sock = &mut self.sock;
+        pin_mut!(sock);
+        sock.poll_next(cx).map(|sock| sock.map(|sock| sock.map(|sock| {
+            self.metrics.inc_http_conn_open();
+            HttpStream {
+                sock,
+                metrics: self.metrics.clone()
+            }
+        })))
+    }
+}
+
+
+struct HttpStream {
+    sock: TcpStream,
+    metrics: Arc<ServerMetrics>,
+}
+
+impl AsyncRead for HttpStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]
+    ) -> Poll<Result<usize, io::Error>> {
+        let sock = &mut self.sock;
+        pin_mut!(sock);
+        let res = sock.poll_read(cx, buf);
+        if let Poll::Ready(Ok(n)) = res {
+            self.metrics.inc_http_bytes_read(n as u64)
+        }
+        res
+    }
+}
+
+impl AsyncWrite for HttpStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]
+    ) -> Poll<Result<usize, io::Error>> {
+        let sock = &mut self.sock;
+        pin_mut!(sock);
+        let res = sock.poll_write(cx, buf);
+        if let Poll::Ready(Ok(n)) = res {
+            self.metrics.inc_http_bytes_written(n as u64)
+        }
+        res
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>, cx: &mut Context
+    ) -> Poll<Result<(), io::Error>> {
+        let sock = &mut self.sock;
+        pin_mut!(sock);
+        sock.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>, cx: &mut Context
+    ) -> Poll<Result<(), io::Error>> {
+        let sock = &mut self.sock;
+        pin_mut!(sock);
+        sock.poll_shutdown(cx)
+    }
+}
+
+impl Drop for HttpStream {
+    fn drop(&mut self) {
+        self.metrics.inc_http_conn_close()
+    }
+}
+
+
