@@ -507,7 +507,7 @@ impl<'a> Run<'a> {
         if manifest.is_stale() {
             self.metrics.inc_stale_count();
             match self.repository.stale {
-                StalePolicy::Refuse => {
+                StalePolicy::Reject => {
                     info!("{}: stale manifest", uri);
                     return None;
                 }
@@ -828,7 +828,7 @@ impl<'a> Run<'a> {
         if crl.is_stale() {
             self.metrics.inc_stale_count();
             match self.repository.stale {
-                StalePolicy::Refuse => {
+                StalePolicy::Reject => {
                     info!("{}: stale CRL.", uri);
                     return Err(ValidationError)
                 }

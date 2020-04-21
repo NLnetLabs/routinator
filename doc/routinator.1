@@ -150,7 +150,7 @@ There are three possible policies that define how Routinator should treat
 stale objects.
 .IP
 A policy of
-.I refuse
+.I reject
 instructs Routinator to consider all stale objects invalid. This will
 result in all material published by the CA issuing this manifest and CRL
 to be invalid including all material of any child CA.
@@ -681,7 +681,7 @@ strict validation will not be used.
 A string specifying the policy for dealing with stale objects.
 .RS
 .TP
-.I refuse
+.I reject
 Consider all stale objects invalid rendering all material published by the CA
 issuing the stale object to be invalid including all material of any child CA.
 .TP
