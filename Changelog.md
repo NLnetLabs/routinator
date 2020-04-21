@@ -30,6 +30,9 @@ New
   Validator. ([#291])
 * The _csvext_ output format is now also available via the HTTP server at
   the `/csvext` path. ([#294])
+* New metrics for the status of the RTR and HTTP servers. ([#298])
+* New metric of the number of stale objects encountered in the last
+  validation run. ([#298])
 
 Bug Fixes
 
@@ -61,6 +64,7 @@ Dependencies
 [#292]: https://github.com/NLnetLabs/routinator/pull/292
 [#293]: https://github.com/NLnetLabs/routinator/pull/293
 [#294]: https://github.com/NLnetLabs/routinator/pull/294
+[#298]: https://github.com/NLnetLabs/routinator/pull/298
 [@netravnen]: https://github.com/netravnen
 [tini]: https://github.com/krallin/tini
 
