@@ -724,10 +724,10 @@ impl<'a> Run<'a> {
         match store.get(&uri) {
             Some(crl) => {
                 if crl.contains(cert.serial_number()) {
-                    return Err(ValidationError)
+                    Err(ValidationError)
                 }
                 else {
-                    return Ok(())
+                    Ok(())
                 }
             },
             None => {
