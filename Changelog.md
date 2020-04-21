@@ -10,6 +10,11 @@ Breaking Changes
   explicitly specified. This filter can be disabled via the
   `--allow-dubious-hosts` command line and config option for test
   deployments. ([#293])
+* Only CRLs mentioned on the manifest are now considered when checking any
+  published objects except for the manifest itself. If the hash of the CRL
+  on the manifest does not match the CRL, it is rejected. Objects
+  referencing a CRL that is not on a manifest or has a hash mismatch are
+  rejected. [(#299)]
 * The minimal supported Rust version is now 1.39.0.
 
 New
@@ -65,6 +70,7 @@ Dependencies
 [#293]: https://github.com/NLnetLabs/routinator/pull/293
 [#294]: https://github.com/NLnetLabs/routinator/pull/294
 [#298]: https://github.com/NLnetLabs/routinator/pull/298
+[#299]: https://github.com/NLnetLabs/routinator/pull/299
 [@netravnen]: https://github.com/netravnen
 [tini]: https://github.com/krallin/tini
 
