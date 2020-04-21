@@ -250,6 +250,7 @@ pub struct Run<'a> {
     repository: &'a Repository,
     rsync: Option<rsync::Run<'a>>,
     rrdp: Option<rrdp::Run<'a>>,
+    metrics: Metrics,
 }
 
 impl<'a> Run<'a> {
@@ -268,6 +269,7 @@ impl<'a> Run<'a> {
             else {
                 None
             },
+            metrics: Metrics::new(),
         })
     }
 
@@ -504,6 +506,7 @@ impl<'a> Run<'a> {
             }
         };
         if manifest.is_stale() {
+            self.metrics.inc_stale_count();
             match self.repository.stale {
                 StalePolicy::Refuse => {
                     info!("{}: stale manifest", uri);
@@ -737,6 +740,7 @@ impl<'a> Run<'a> {
             return Err(ValidationError)
         }
         if crl.is_stale() {
+            self.metrics.inc_stale_count();
             match self.repository.stale {
                 StalePolicy::Refuse => {
                     info!("{}: stale CRL.", uri);
@@ -816,7 +820,7 @@ impl<'a> Run<'a> {
     }
 
     pub fn into_metrics(self) -> Metrics {
-        let mut res = Metrics::new();
+        let mut res = self.metrics;
         if let Some(rrdp) = self.rrdp {
             res.set_rrdp(rrdp.into_metrics());
         }

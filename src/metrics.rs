@@ -2,6 +2,7 @@
 
 use std::{io, process};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, Utc};
 use log::info;
@@ -24,6 +25,9 @@ pub struct Metrics {
 
     /// RRDP metrics.
     rrdp: Vec<RrdpServerMetrics>,
+
+    /// Number of stale objects.
+    stale_count: AtomicU64,
 }
 
 impl Metrics {
@@ -33,7 +37,16 @@ impl Metrics {
             tals: Vec::new(),
             rsync: Vec::new(),
             rrdp: Vec::new(),
+            stale_count: AtomicU64::new(0),
         }
+    }
+
+    pub fn stale_count(&self) -> u64 {
+        self.stale_count.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_stale_count(&self) {
+        self.stale_count.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn push_tal(&mut self, tal: TalMetrics) {
@@ -169,3 +182,93 @@ pub struct RsyncModuleMetrics {
     pub duration: Result<Duration, SystemTimeError>,
 }
 
+
+//------------ ServerMetrics -------------------------------------------------
+
+#[derive(Debug, Default)]
+pub struct ServerMetrics {
+    rtr_conn_open: AtomicU64,
+    rtr_conn_close: AtomicU64,
+    rtr_bytes_read: AtomicU64,
+    rtr_bytes_written: AtomicU64,
+
+    http_conn_open: AtomicU64,
+    http_conn_close: AtomicU64,
+    http_bytes_read: AtomicU64,
+    http_bytes_written: AtomicU64,
+    http_requests: AtomicU64,
+}
+
+impl ServerMetrics {
+    pub fn rtr_conn_open(&self) -> u64 {
+        self.rtr_conn_open.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_rtr_conn_open(&self) {
+        self.rtr_conn_open.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn rtr_conn_close(&self) -> u64 {
+        self.rtr_conn_close.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_rtr_conn_close(&self) {
+        self.rtr_conn_close.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn rtr_bytes_read(&self) -> u64 {
+        self.rtr_bytes_read.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_rtr_bytes_read(&self, count: u64) {
+        self.rtr_bytes_read.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn rtr_bytes_written(&self) -> u64 {
+        self.rtr_bytes_written.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_rtr_bytes_written(&self, count: u64) {
+        self.rtr_bytes_written.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn http_conn_open(&self) -> u64 {
+        self.http_conn_open.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_http_conn_open(&self) {
+        self.http_conn_open.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn http_conn_close(&self) -> u64 {
+        self.http_conn_close.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_http_conn_close(&self) {
+        self.http_conn_close.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn http_bytes_read(&self) -> u64 {
+        self.http_bytes_read.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_http_bytes_read(&self, count: u64) {
+        self.http_bytes_read.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn http_bytes_written(&self) -> u64 {
+        self.http_bytes_written.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_http_bytes_written(&self, count: u64) {
+        self.http_bytes_written.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn http_requests(&self) -> u64 {
+        self.http_requests.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_http_requests(&self) {
+        self.http_requests.fetch_add(1, Ordering::Relaxed);
+    }
+}
