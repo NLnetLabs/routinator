@@ -1522,11 +1522,11 @@ impl Eq for LogTarget { }
 /// policy.
 #[derive(Clone, Copy, Debug)]
 pub enum StalePolicy {
-    /// Refuse to accept a stale objects.
+    /// Reject to accept a stale objects.
     ///
     /// A stale objects and, transitively, all objects that depend on the
     /// stale objects are considered invalid.
-    Refuse,
+    Reject,
 
     /// Accept the stale object but log a warning.
     ///
@@ -1555,7 +1555,7 @@ impl FromStr for StalePolicy {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "refuse" => Ok(StalePolicy::Refuse),
+            "reject" => Ok(StalePolicy::Reject),
             "warn" => Ok(StalePolicy::Warn),
             "accept" => Ok(StalePolicy::Accept),
             _ => Err(format!("invalid policy '{}'", s))
@@ -1566,7 +1566,7 @@ impl FromStr for StalePolicy {
 impl fmt::Display for StalePolicy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
-            StalePolicy::Refuse => "refuse",
+            StalePolicy::Reject => "reject",
             StalePolicy::Warn => "warn",
             StalePolicy::Accept => "accept",
         })

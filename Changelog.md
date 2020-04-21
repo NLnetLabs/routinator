@@ -21,7 +21,7 @@ New
 
 * The new option `--stale` allows selecting a policy for dealing with
   stale objects – i.e., manifests and CRLs that are past their
-  *next-update* date. The policies are `refuse`, `warn`, and `accept`. The
+  *next-update* date. The policies are `reject`, `warn`, and `accept`. The
   previous hard-coded policy of `warn`, i.e., accept but log a warning, is
   the default. ([#288])
 * New output formats `bird` and `bird2` which produce a `roa table` for
