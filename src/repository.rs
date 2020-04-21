@@ -430,7 +430,6 @@ impl<'a> Run<'a> {
         routes: &mut RouteOrigins,
         tasks: &SegQueue<ValidationTask>,
     ) {
-        let mut store = CrlStore::new();
         let repo_uri = match cert.ca_repository() {
             Some(uri) => uri,
             None => {
@@ -446,8 +445,8 @@ impl<'a> Run<'a> {
                 rsync.load_module(repo_uri)
             }
         }
-        let manifest = match self.get_manifest(
-            rrdp_server, &cert, uri, &mut store, routes,
+        let (store, manifest) = match self.get_manifest(
+            rrdp_server, &cert, uri, &repo_uri, routes,
         ) {
             Some(some) => some,
             None => return,
@@ -455,7 +454,7 @@ impl<'a> Run<'a> {
 
         for (uri, hash) in manifest.iter_uris(repo_uri) {
             self.process_object(
-                rrdp_server, uri, hash, &cert, &mut store, routes, tasks
+                rrdp_server, uri, hash, &cert, &store, routes, tasks
             );
         }
     }
@@ -472,9 +471,9 @@ impl<'a> Run<'a> {
         rrdp_server: Option<rrdp::ServerId>,
         issuer: &ResourceCert,
         issuer_uri: &U,
-        store: &mut CrlStore,
+        repo_uri: &uri::Rsync,
         routes: &mut RouteOrigins
-    ) -> Option<ManifestContent> {
+    ) -> Option<(CrlStore, ManifestContent)> {
         let uri = match issuer.rpki_manifest() {
             Some(uri) => uri,
             None => {
@@ -518,15 +517,22 @@ impl<'a> Run<'a> {
                 StalePolicy::Accept => { }
             }
         }
-        if manifest.len() > CRL_CACHE_LIMIT {
-            store.enable_serial_caching();
-        }
-        if self.check_crl(rrdp_server, &cert, issuer, store).is_err() {
-            info!("{}: certificate has been revoked", uri);
-            return None
-        }
+        let mft_crl = match self.check_manifest_crl(
+            rrdp_server, &cert, issuer
+        ) {
+            Ok(some) => some,
+            Err(_) => {
+                info!("{}: certificate has been revoked", uri);
+                return None
+            }
+        };
+
+        let store = self.store_manifest_crls(
+            rrdp_server, issuer, &manifest, repo_uri, mft_crl
+        );
+
         routes.update_refresh(&cert);
-        Some(manifest)
+        Some((store, manifest))
     }
 
     /// Processes an RPKI object and, if necessary, all its dependent objects.
@@ -547,7 +553,7 @@ impl<'a> Run<'a> {
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &Arc<CaCert>,
-        crl: &mut CrlStore,
+        crl: &CrlStore,
         routes: &mut RouteOrigins,
         tasks: &SegQueue<ValidationTask>,
     ) {
@@ -579,7 +585,7 @@ impl<'a> Run<'a> {
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &Arc<CaCert>,
-        crl: &mut CrlStore,
+        crl_store: &CrlStore,
         routes: &mut RouteOrigins,
         tasks: &SegQueue<ValidationTask>,
     ) {
@@ -622,7 +628,7 @@ impl<'a> Run<'a> {
                 return
             }
         };
-        if self.check_crl(rrdp_server, &cert, issuer, crl).is_err() {
+        if self.check_crl(&cert, crl_store).is_err() {
             info!("{}: certificate has been revoked", uri);
             return
         }
@@ -664,7 +670,7 @@ impl<'a> Run<'a> {
         uri: uri::Rsync,
         hash: ManifestHash,
         issuer: &Arc<CaCert>,
-        crl: &mut CrlStore,
+        crl: &CrlStore,
         routes: &mut RouteOrigins,
     ) {
         let bytes = match self.load_file(rrdp_server, &uri) {
@@ -687,7 +693,7 @@ impl<'a> Run<'a> {
         };
         let mut extra = None;
         let route = roa.process(issuer, self.repository.strict, |cert| {
-            self.check_crl(rrdp_server, cert, issuer, crl)?;
+            self.check_crl(&cert, crl)?;
             extra = Some(8u8);
             Ok(())
         });
@@ -707,32 +713,112 @@ impl<'a> Run<'a> {
     /// Checks wheter a certificate is listed on its CRL.
     fn check_crl(
         &self,
-        rrdp_server: Option<rrdp::ServerId>,
         cert: &TbsCert,
-        issuer: &ResourceCert,
-        store: &mut CrlStore,
+        store: &CrlStore,
     ) -> Result<(), ValidationError> {
         let uri = match cert.crl_uri() {
             Some(some) => some,
             None => return Ok(())
         };
 
-        // If we already have that CRL, use it.
-        if let Some(crl) = store.get(&uri) {
-            if crl.contains(cert.serial_number()) {
-                return Err(ValidationError)
-            }
-            else {
-                return Ok(())
+        match store.get(&uri) {
+            Some(crl) => {
+                if crl.contains(cert.serial_number()) {
+                    return Err(ValidationError)
+                }
+                else {
+                    return Ok(())
+                }
+            },
+            None => {
+                Err(ValidationError)
             }
         }
+    }
 
-        // Otherwise, try to load it, use it, and then store it.
+    /// Check the manifest CRL.
+    ///
+    /// Checks whether the manifest hasn’t been revoked. If it hasn’t been,
+    /// returns the rsync URL of the CRL and the CRL itself since it is likely
+    /// also used with other objects mentioned by the manifest.
+    fn check_manifest_crl(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        cert: &TbsCert,
+        issuer: &ResourceCert,
+    ) -> Result<(uri::Rsync, Bytes, Crl), ValidationError> {
+        // Let’s be strict here: If there is no CRL URI, the certificate is
+        // broken.
+        let uri = match cert.crl_uri() {
+            Some(some) => some.clone(),
+            None => return Err(ValidationError)
+        };
+        let (bytes, crl) = self.load_crl(rrdp_server, &uri, issuer)?;
+        if crl.contains(cert.serial_number()) {
+            Err(ValidationError)
+        }
+        else {
+            Ok((uri, bytes, crl))
+        }
+    }
+
+    /// Loads all CRLs mentioned on the manifest and puts them into the store.
+    ///
+    /// Invalid manifests are discarded.
+    fn store_manifest_crls(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        issuer: &ResourceCert,
+        manifest: &ManifestContent,
+        repo_uri: &uri::Rsync,
+        mft_crl: (uri::Rsync, Bytes, Crl),
+    ) -> CrlStore {
+        let mut store = CrlStore::new();
+        if manifest.len() > CRL_CACHE_LIMIT {
+            store.enable_serial_caching();
+        }
+        let mut mft_crl = Some(mft_crl);
+        for item in manifest.iter() {
+            let (file, hash) = item.into_pair();
+            if !file.ends_with(b".crl") {
+                continue
+            }
+            let uri = repo_uri.join(&file);
+
+            let (bytes, crl) = if
+                mft_crl.as_ref().map(|x| x.0 == uri).unwrap_or(false)
+            {
+                let mft_crl = mft_crl.take().unwrap();
+                (mft_crl.1, mft_crl.2)
+            }
+            else {
+                match self.load_crl(rrdp_server, &uri, issuer) {
+                    Ok(some) => some,
+                    Err(_) => continue
+                }
+            };
+            let hash = ManifestHash::new(hash, manifest.file_hash_alg());
+            if hash.verify(&bytes).is_err() {
+                info!("{}: file has wrong hash.", uri);
+                continue
+            }
+            store.push(uri, crl)
+        }
+        store
+    }
+
+    /// Loads and validates the given CRL.
+    fn load_crl(
+        &self,
+        rrdp_server: Option<rrdp::ServerId>,
+        uri: &uri::Rsync,
+        issuer: &ResourceCert,
+    ) -> Result<(Bytes, Crl), ValidationError> {
         let bytes = match self.load_file(rrdp_server, &uri) {
             Some(bytes) => bytes,
             _ => return Err(ValidationError),
         };
-        let crl = match Crl::decode(bytes) {
+        let crl = match Crl::decode(bytes.clone()) {
             Ok(crl) => crl,
             Err(_) => return Err(ValidationError)
         };
@@ -752,14 +838,7 @@ impl<'a> Run<'a> {
                 StalePolicy::Accept => { }
             }
         }
-        let revoked = crl.contains(cert.serial_number());
-        store.push(uri.clone(), crl);
-        if revoked {
-            Err(ValidationError)
-        }
-        else {
-            Ok(())
-        }
+        Ok((bytes, crl))
     }
 
     pub fn cleanup(&self) {
