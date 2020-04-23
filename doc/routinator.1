@@ -1,4 +1,4 @@
-.TH "routinator" "1" "November 29, 2019" "NLnet Labs" "routinator 0.6.4
+.TH "routinator" "1" "April 34, 2020" "NLnet Labs" "routinator 0.7.0-rc1
 .\"
 .\" routinator.1 -- RPKI Relying Party software
 .\"
@@ -301,7 +301,7 @@ For more information about TALs, see
 .B TRUST ANCHOR LOCATORS
 below.
 .TP
-.B -f
+.BR -f ,\ \fB --force
 Forces installation of the TALs even if the TAL directory already exists.
 .TP
 .B --accept-arin-rpa
@@ -508,7 +508,7 @@ mode with the
 .B -n
 option.
 .TP
-.B --detach
+.BR -d ,\ \fB --detach
 If present, Routinator will detach from the terminal after a successful start.
 .TP
 .BI \-\-rtr=  addr:port
@@ -870,9 +870,9 @@ file (without the path but including the extension) as given by the first
 string to the name of the TAL to be included where the TAL is referenced in
 output as given by the second string.
 
-If the options missing or if a TAL isn't mentioned in the optio, Routinator
-will construct a name for the TAL by using its file name (without the path)
-and dropping the extension.
+If the option is missing or if a TAL isn't mentioned in the option,
+Routinator will construct a name for the TAL by using its file name (without
+the path) and dropping the extension.
 
 
 .SH HTTP SERVICE
@@ -884,38 +884,8 @@ The service only supports GET requests with the following
 paths:
 
 .TP
-.B /csv
-Returns the current set of VRPs in
-.B csv
-output format.
-.TP
-.B /json
-Returns the current set of VRPs in
-.B json
-output format.
-.TP
 .B /metrics
 Returns a set of monitoring metrics in the format used by Prometheus.
-.TP
-.B /openbgpd
-Returns the current set of VRPs in
-.B openbgpd
-output format.
-.TP
-.B /bird
-Returns the current set of VRPs in
-.B bird
-output format.
-.TP
-.B /bird2
-Returns the current set of VRPs in
-.B bird2
-output format.
-.TP
-.B /rpsl
-Returns the current set of VRPs in
-.B rpsl
-output format.
 .TP
 .B /status
 Returns the current status of the Routinator instance. This is similar to
@@ -937,7 +907,12 @@ Validator. For more information, see
 Same as above but with a more form-friendly calling convention.
 
 .P
-The paths that output the current set of VRPs accept filter expressions to
+In addition, the current set of VRPs is available for each output format
+at a path with the same name as the output format. E.g., the CSV output is
+available at
+.BR /csv .
+.P
+These paths accept filter expressions to
 limit the VRPs returned in the form of a query string. The field
 .B filter-asn
 can be used to filter for ASNs and the field

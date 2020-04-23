@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased next version
+## 0.7.0-rc1
 
 Breaking Changes
 
@@ -39,8 +39,6 @@ New
 * New metric of the number of stale objects encountered in the last
   validation run. ([#298])
 
-Bug Fixes
-
 Other Changes
 
 * Update to Rust’s new asynchronous IO framework for the RTR and HTTP
@@ -56,9 +54,6 @@ Other Changes
   consumption down to about a quarter. ([#293])
 * The Docker image now wraps Routinator into [tini] for properly dealing
   with signals and child processes. ([#277])
-
-Dependencies
-
 
 [#277]: https://github.com/NLnetLabs/routinator/pull/277
 [#282]: https://github.com/NLnetLabs/routinator/pull/282
