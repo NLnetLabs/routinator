@@ -4,6 +4,11 @@
 
 Bug Fixes
 
+* Bind listening sockets before possibly dropping privileges while
+  detaching. ([#313], discovered by [@alarig]).
+
+[#313]: https://github.com/NLnetLabs/routinator/pull/313
+[@alarig]: https://github.com/alarig
 
 ## 0.7.0-rc1
 

@@ -2,7 +2,7 @@
 
 use std::io;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::TcpListener as StdListener;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -15,31 +15,44 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
 use crate::metrics::ServerMetrics;
+use crate::operation::ExitError;
 use crate::origins::OriginsHistory;
 
 
 pub fn rtr_listener(
     history: OriginsHistory,
     config: &Config
-) -> (NotifySender, impl Future<Output = ()>) {
+) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
     let sender = NotifySender::new();
-    let addrs = config.rtr_listen.clone();
-    (sender.clone(), _rtr_listener(history, sender, addrs))
+
+    let mut listeners = Vec::new();
+    for addr in &config.rtr_listen {
+        // Binding needs to have happened before dropping privileges
+        // during detach. So we do this here synchronously.
+        match StdListener::bind(addr) {
+            Ok(listener) => listeners.push(listener),
+            Err(err) => {
+                error!("Fatal error listening on {}: {}", addr, err);
+                return Err(ExitError::Generic);
+            }
+        };
+    }
+    Ok((sender.clone(), _rtr_listener(history, sender, listeners)))
 }
 
 async fn _rtr_listener(
     origins: OriginsHistory,
     sender: NotifySender,
-    addrs: Vec<SocketAddr>,
+    listeners: Vec<StdListener>,
 ) {
-    if addrs.is_empty() {
+    if listeners.is_empty() {
         pending::<()>().await;
     }
     else {
         let _ = select_all(
-            addrs.iter().map(|addr| {
+            listeners.into_iter().map(|listener| {
                 tokio::spawn(single_rtr_listener(
-                    *addr, origins.clone(), sender.clone()
+                    listener, origins.clone(), sender.clone()
                 ))
             })
         ).await;
@@ -47,23 +60,22 @@ async fn _rtr_listener(
 }
 
 async fn single_rtr_listener(
-    addr: SocketAddr,
+    listener: StdListener,
     origins: OriginsHistory,
     sender: NotifySender,
 ) {
-    let listener = match TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(err) => {
-            error!("Fatal error listening on {}: {}", addr, err);
-            return 
-        }
-    };
     let listener = RtrListener {
-        sock: listener,
+        sock: match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(err) => {
+                error!("Fatal error on RTR listener: {}", err);
+                return;
+            }
+        },
         metrics: origins.server_metrics()
     };
     if Server::new(listener, sender, origins.clone()).run().await.is_err() {
-        error!("Fatal error listening on {}.", addr);
+        error!("Fatal error listening for RTR connections.");
     }
 }
 
