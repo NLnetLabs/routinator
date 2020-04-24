@@ -365,8 +365,8 @@ impl Server {
         config.switch_logging(self.detach)?;
 
         let history = OriginsHistory::new(&config);
-        let (mut notify, rtr) = rtr_listener(history.clone(), &config);
-        let http = http_listener(&history, &config);
+        let (mut notify, rtr) = rtr_listener(history.clone(), &config)?;
+        let http = http_listener(&history, &config)?;
 
         if self.detach {
             Self::daemonize(&mut config)?;

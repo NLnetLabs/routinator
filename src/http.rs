@@ -11,7 +11,7 @@ use std::io;
 use std::convert::Infallible;
 use std::fmt::Write;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::TcpListener as StdListener;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -32,10 +32,9 @@ use tokio::stream::Stream;
 use crate::output;
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics};
-use crate::operation::Error;
+use crate::operation::{Error, ExitError};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
-//use crate::utils::finish_all;
 use crate::validity::RouteValidity;
 
 
@@ -51,18 +50,30 @@ use crate::validity::RouteValidity;
 pub fn http_listener(
     origins: &OriginsHistory,
     config: &Config,
-) -> impl Future<Output = ()> {
-    _http_listener(origins.clone(), config.http_listen.clone())
+) -> Result<impl Future<Output = ()>, ExitError> {
+    let mut listeners = Vec::new();
+    for addr in &config.http_listen {
+        // Binding needs to have happened before dropping privileges
+        // during detach. So we do this here synchronously.
+        match StdListener::bind(addr) {
+            Ok(listener) => listeners.push(listener),
+            Err(err) => {
+                error!("Fatal error listening on {}: {}", addr, err);
+                return Err(ExitError::Generic);
+            }
+        };
+    }
+    Ok(_http_listener(origins.clone(), listeners))
 }
 
-async fn _http_listener(origins: OriginsHistory, addrs: Vec<SocketAddr>) {
-    if addrs.is_empty() {
+async fn _http_listener(origins: OriginsHistory, listeners: Vec<StdListener>) {
+    if listeners.is_empty() {
         pending::<()>().await;
     }
     else {
         let _ = select_all(
-            addrs.iter().map(|addr| {
-                tokio::spawn(single_http_listener(*addr, origins.clone()))
+            listeners.into_iter().map(|listener| {
+                tokio::spawn(single_http_listener(listener, origins.clone()))
             })
         ).await;
     }
@@ -75,7 +86,7 @@ async fn _http_listener(origins: OriginsHistory, addrs: Vec<SocketAddr>) {
 /// It will listen bind a Hyper server onto `addr` and produce any data
 /// served from `origins`.
 async fn single_http_listener(
-    addr: SocketAddr,
+    listener: StdListener,
     origins: OriginsHistory,
 ) {
     let make_service = make_service_fn(|_conn| {
@@ -87,19 +98,16 @@ async fn single_http_listener(
             }))
         }
     });
-
-    let listener = match TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(err) => {
-            error!("Fatal error listening on {}: {}", addr, err);
-            return 
-        }
-    };
     let listener = HttpAccept {
-        sock: listener,
+        sock: match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(err) => {
+                error!("Fatal error on HTTP listener: {}", err);
+                return
+            }
+        },
         metrics: origins.server_metrics()
     };
-
     if let Err(err) = Server::builder(listener).serve(make_service).await {
         error!("HTTP server error: {}", err);
     }
