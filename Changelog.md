@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased 0.7.0-rc2
+## 0.7.0-rc2
 
 Bug Fixes
 
@@ -11,6 +11,7 @@ Bug Fixes
 [#313]: https://github.com/NLnetLabs/routinator/pull/313
 [#315]: https://github.com/NLnetLabs/routinator/pull/315
 [@alarig]: https://github.com/alarig
+
 
 ## 0.7.0-rc1
 
