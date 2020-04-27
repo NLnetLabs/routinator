@@ -6,8 +6,10 @@ Bug Fixes
 
 * Bind listening sockets before possibly dropping privileges while
   detaching. ([#313], discovered by [@alarig]).
+* Re-enable Tokio’s threaded runtime. ([#315])
 
 [#313]: https://github.com/NLnetLabs/routinator/pull/313
+[#315]: https://github.com/NLnetLabs/routinator/pull/315
 [@alarig]: https://github.com/alarig
 
 ## 0.7.0-rc1
