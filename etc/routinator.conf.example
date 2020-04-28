@@ -64,13 +64,13 @@ tal-dir = "..."
 
 # Allow dubious host names in rsync and RRDP URIs.
 #
-# By default, Routinator will filter out URIs with host names that shouldn’t
+# By default, Routinator will filter out URIs with host names that shouldn't
 # appear in public URIs. This option can be used to disable this filtering.
 #allow-dubious-hosts = false
 
 # Disable rsync
 #
-# If you don’t want to use rsync -- which is not advices as there are rsync
+# If you don't want to use rsync -- which is not advices as there are rsync
 # only repositories -- you can set this to true.
 #disable-rsync = false
 
@@ -101,7 +101,7 @@ tal-dir = "..."
 
 # Refresh interval
 #
-# How often the repository should be updated and validated in RTR mode. 
+# How often the repository should be updated and validated in RTR mode.
 # Specifically, this is the number of seconds the process will wait after
 # having finished validation before starting the next update.
 #
@@ -197,7 +197,7 @@ tal-dir = "..."
 # name of its TAL file sans the exctension (i.e., "foo.tal" will be
 # represented by "foo").
 #
-# In order to allow full compatibility with the RIPE NCC Validator’s output,
+# In order to allow full compatibility with the RIPE NCC Validator's output,
 # you can use this options to provide alternative labels. The value maps the
 # file name (this time including the extension) to its label.
 #
