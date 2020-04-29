@@ -30,10 +30,10 @@ rand            = "0.7.3"
 reqwest         = { version = "0.10.4", default-features = false, features = ["blocking"] }
 ring            = "0.16.12"
 rpki            = "0.9.1"
-rpki-rtr        = "0.1.0"
+rpki-rtr        = "0.1.1"
 slab            = "0.4.2"
 tempfile        = "3.1.0"
-tokio           = { version = "0.2.16", features = [ "io-util", "macros", "rt-threaded", "signal", "sync" ] }
+tokio           = { version = "=0.2.13", features = [ "io-util", "macros", "rt-threaded", "signal", "sync" ] }
 toml            = "0.5.6"
 uuid            = "0.8.1"
 
