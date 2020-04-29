@@ -1,9 +1,14 @@
 # Change Log
 
-## Unrelease 0.7.0-rc3
+## Unreleased 0.7.0-rc3
 
-Bug Fixes
+Dependencies
 
+* Pinned Tokio to 0.2.13. There have been reports of issues with automatic
+  cooperative task yielding introduced in 0.2.14, so we will stick with
+  0.2.13 for this release. ([#321])
+
+[#321]: https://github.com/NLnetLabs/routinator/pull/321
 
 
 ## 0.7.0-rc2
