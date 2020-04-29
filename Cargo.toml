@@ -1,6 +1,6 @@
 [package]
 name = "routinator"
-version = "0.7.0-rc3"
+version = "0.7.0-rc3-bis"
 edition = "2018"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
