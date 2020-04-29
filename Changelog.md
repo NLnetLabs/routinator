@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased 0.7.0-rc3
+## 0.7.0-rc3
 
 Dependencies
 
