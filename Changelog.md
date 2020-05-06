@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased Future Version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+
 ## 0.7.0 ‘Your Time Starts … Now’
 
 Released 2020-05-06.
