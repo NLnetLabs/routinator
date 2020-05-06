@@ -1,10 +1,10 @@
 # Change Log
 
-## Unreleased next RC
+## 0.7.0 ‘Your Time Starts … Now’
 
-Bug Fixes
+Released 2020-05-06.
 
-Dependencies
+There have been no changes since RC3.
 
 
 ## 0.7.0-rc3
