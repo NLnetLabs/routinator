@@ -359,7 +359,7 @@ impl Server {
             Ok(state) => state,
             Err(_) => {
                 info!(
-                    "Marking RRPD server '{}' as unusable",
+                    "Marking RRDP server '{}' as unusable",
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
@@ -370,7 +370,7 @@ impl Server {
             Ok(digest) => digest,
             Err(_) => {
                 info!(
-                    "Cannot digest RRPD server directory for '{}'. \
+                    "Cannot digest RRDP server directory for '{}'. \
                     Marking as unsable.",
                     self.notify_uri
                 );
