@@ -1,5 +1,5 @@
 # -- stage 1: build static routinator with musl libc for alpine
-FROM alpine:3.11.3 as build
+FROM alpine:3.11.6 as build
 
 RUN apk add rust cargo
 
@@ -13,7 +13,7 @@ RUN cargo build \
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
-FROM alpine:3.11.3
+FROM alpine:3.11.6
 COPY --from=build /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator /usr/local/bin/
 
 # Build variables for uid and guid of user to run container
