@@ -10,11 +10,14 @@ Bug Fixes
 
 Dependencies
 
+* Remove the pin on Tokio and set the minimum version to 0.2.21. ([#340])
+
 Other Changes
 
 * Update the AFRINIC TAL to include the HTTPS URI. ([#331])
 
 [#331]: https://github.com/NLnetLabs/routinator/pull/331
+[#340]: https://github.com/NLnetLabs/routinator/pull/340
 
 
 ## 0.7.0 ‘Your Time Starts … Now’
