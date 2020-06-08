@@ -8,6 +8,10 @@ New
 
 Bug Fixes
 
+* Fix a typo in the `--allow-dubious-hosts` option which was actually
+  expected to be spelled as `--allow-dubios-hosts`. This dubious spelling
+  is kept as an alias until the next breaking release. ([#339])
+
 Dependencies
 
 * Remove the pin on Tokio and set the minimum version to 0.2.21. ([#340])
@@ -17,6 +21,7 @@ Other Changes
 * Update the AFRINIC TAL to include the HTTPS URI. ([#331])
 
 [#331]: https://github.com/NLnetLabs/routinator/pull/331
+[#339]: https://github.com/NLnetLabs/routinator/pull/339
 [#340]: https://github.com/NLnetLabs/routinator/pull/340
 
 
