@@ -6,6 +6,9 @@ Breaking Changes
 
 New
 
+* The HTTP `/status` command now contains a `version` field showing the
+  Routinator version running. [(#342)]
+
 Bug Fixes
 
 * Fix a typo in the `--allow-dubious-hosts` option which was actually
@@ -23,6 +26,7 @@ Other Changes
 [#331]: https://github.com/NLnetLabs/routinator/pull/331
 [#339]: https://github.com/NLnetLabs/routinator/pull/339
 [#340]: https://github.com/NLnetLabs/routinator/pull/340
+[#342]: https://github.com/NLnetLabs/routinator/pull/342
 
 
 ## 0.7.0 ‘Your Time Starts … Now’

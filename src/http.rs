@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use chrono::{Duration, Utc};
-use clap::crate_version;
+use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
@@ -442,6 +442,11 @@ fn status_active(
         Duration::from_std(duration).unwrap()
     );
     let now = Utc::now();
+
+    // version
+    writeln!(res,
+        concat!("version: ", crate_name!(), "/", crate_version!())
+    ).unwrap();
 
     // serial
     writeln!(res, "serial: {}", origins.serial()).unwrap();
