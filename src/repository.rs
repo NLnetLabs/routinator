@@ -186,7 +186,7 @@ impl Repository {
                     return Err(Error)
                 }
             };
-            let tal = match Tal::read_named(
+            let mut tal = match Tal::read_named(
                 Self::path_to_label(&path, config),
                 &mut file
             ) {
@@ -200,6 +200,7 @@ impl Repository {
                     return Err(Error)
                 }
             };
+            tal.prefer_https();
             res.push(tal);
         }
         if res.is_empty() {
