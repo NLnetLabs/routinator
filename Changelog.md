@@ -23,8 +23,8 @@ Dependencies
 
 Other Changes
 
-* Update the AFRINIC and RIPE NCC TALs to include the HTTPS URI.
-  ([#331], [#344])
+* Update the AFRINIC, APNIC and RIPE NCC TALs to include HTTPS URIs for
+  their trust anchor certificates. ([#331], [#344], [#345])
 
 [#331]: https://github.com/NLnetLabs/routinator/pull/331
 [#339]: https://github.com/NLnetLabs/routinator/pull/339
@@ -32,6 +32,7 @@ Other Changes
 [#342]: https://github.com/NLnetLabs/routinator/pull/342
 [#343]: https://github.com/NLnetLabs/routinator/pull/343
 [#344]: https://github.com/NLnetLabs/routinator/pull/344
+[#345]: https://github.com/NLnetLabs/routinator/pull/345
 
 
 ## 0.7.0 ‘Your Time Starts … Now’
