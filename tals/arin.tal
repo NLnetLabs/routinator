@@ -1,4 +1,5 @@
 rsync://rpki.arin.net/repository/arin-rpki-ta.cer
+https://rrdp.arin.net/arin-rpki-ta.cer
 
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3lZPjbHvMRV5sDDqfLc/685th5FnreHMJjg8
 pEZUbG8Y8TQxSBsDebbsDpl3Ov3Cj1WtdrJ3CIfQODCPrrJdOBSrMATeUbPC+JlNf2SRP3UB+VJFgtTj
