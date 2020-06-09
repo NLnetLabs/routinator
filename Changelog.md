@@ -11,6 +11,8 @@ New
 
 Bug Fixes
 
+* Prefer HTTPS URIs in TALs if RRDP is enabled. The order of URIs with the
+  same scheme is maintained. ([#343])
 * Fix a typo in the `--allow-dubious-hosts` option which was actually
   expected to be spelled as `--allow-dubios-hosts`. This dubious spelling
   is kept as an alias until the next breaking release. ([#339])
@@ -27,6 +29,7 @@ Other Changes
 [#339]: https://github.com/NLnetLabs/routinator/pull/339
 [#340]: https://github.com/NLnetLabs/routinator/pull/340
 [#342]: https://github.com/NLnetLabs/routinator/pull/342
+[#343]: https://github.com/NLnetLabs/routinator/pull/343
 
 
 ## 0.7.0 ‘Your Time Starts … Now’
