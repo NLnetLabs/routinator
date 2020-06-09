@@ -1,8 +1,6 @@
 # Change Log
 
-## Unreleased Future Version
-
-Breaking Changes
+## 0.7.1-rc1
 
 New
 
