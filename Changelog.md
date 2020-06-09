@@ -23,13 +23,15 @@ Dependencies
 
 Other Changes
 
-* Update the AFRINIC TAL to include the HTTPS URI. ([#331])
+* Update the AFRINIC and RIPE NCC TALs to include the HTTPS URI.
+  ([#331], [#344])
 
 [#331]: https://github.com/NLnetLabs/routinator/pull/331
 [#339]: https://github.com/NLnetLabs/routinator/pull/339
 [#340]: https://github.com/NLnetLabs/routinator/pull/340
 [#342]: https://github.com/NLnetLabs/routinator/pull/342
 [#343]: https://github.com/NLnetLabs/routinator/pull/343
+[#344]: https://github.com/NLnetLabs/routinator/pull/344
 
 
 ## 0.7.0 ‘Your Time Starts … Now’
