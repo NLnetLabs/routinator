@@ -1,6 +1,8 @@
 # Change Log
 
-# Unreleased future version
+# 0.7.2-rc2
+
+Released 2020-06-10.
 
 Other Changes
 
