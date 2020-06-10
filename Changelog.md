@@ -1,6 +1,18 @@
 # Change Log
 
+# Unreleased future version
+
+Other Changes
+
+* Update the ARIN TAL to include the HTTPS URIs of their trust anchor
+  certificate. ([#347])
+
+[#347]: https://github.com/NLnetLabs/routinator/pull/347
+
+
 ## 0.7.1-rc1
+
+Released 2020-06-09.
 
 New
 
