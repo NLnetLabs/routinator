@@ -56,7 +56,6 @@ tls = []
 
 [package.metadata.deb]
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
-license-file = ["LICENSE", "0"]
 extended-description = """\
 The Resource Public Key Infrastructure provides cryptographically signed \
 statements about the association of Internet routing resources. \
@@ -64,8 +63,8 @@ In particular, it allows the holder of an IP address prefix to publish which \
 AS number will be the origin of BGP route announcements for it. \
 Routinator is a RPKI relying party software written in Rust. """
 depends = "$auto, rsync"
-section = "rust"
-priority = "optional"
+section = "net"
+priority = "extra"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/routinator/", "644"],
@@ -75,6 +74,9 @@ assets = [
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
 maintainer-scripts = "debian"
+conf-files = [
+    "etc/routinator/routinator.conf"
+]
 
 [package.metadata.deb.variants.minimal]
 assets = [
@@ -84,5 +86,8 @@ assets = [
     ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
     ["etc/routinator.service.minimal", "lib/systemd/system/routinator.service", "644"],
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
+]
+conf-files = [
+    "etc/routinator/routinator.conf"
 ]
 
