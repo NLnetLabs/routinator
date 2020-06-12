@@ -90,8 +90,8 @@ seconds on an average system.
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
 There are three things you need for Routinator: rsync, a C toolchain and
-Rust. You need rsync because the RPKI repository currently uses rsync
-as its main means of distribution. Some of the cryptographic primitives
+Rust. You need rsync because some RPKI repositories currently use this
+as its means of distribution. Some of the cryptographic primitives
 used by the Routinator require a C toolchain, so you need that, too. You
 need Rust because that’s what Routinator has been written in.
 
@@ -248,11 +248,11 @@ To have Routinator print the list, you say
 routinator vrps
 ```
 
-When you first run this command, Routinator will rsync the entire RPKI
-repository to your machine which will take a while. Later, rsync only needs
-to check for changes so subsequent runs will be quicker. Once it has
-gathered all data, it will validate it and produce
-a long list of AS numbers and prefixes.
+When you first run this command, Routinator will download the entire RPKI
+repository to your machine which will take a while. Later, Routinator only needs
+to check for changes so subsequent runs will be quicker. Once it has gathered
+all data, it will validate it and produce a long list of AS numbers and
+prefixes.
 
 Information about additional command line arguments is available via the
 `-h` option or you can look at the more detailed man page via the `man`
