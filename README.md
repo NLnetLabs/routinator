@@ -262,8 +262,8 @@ sub-command:
 routinator man
 ```
 
-It is also available online on the
-[NLnetLabs documentation site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
+It is also available online in the
+[documentation](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
 
 ## Feeding a Router with RPKI-RTR
 
