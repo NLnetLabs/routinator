@@ -1,18 +1,13 @@
 # Change Log
 
-# Unreleased future version
+# 0.7.1 ‘Moonlight and Love Songs’
 
-New
+Release 2020-06-15.
 
-Bug Fixes
-
-Dependencies
-
-Other Changes
+There have been no changes since RC2.
 
 
-
-# 0.7.2-rc2
+# 0.7.1-rc2
 
 Released 2020-06-10.
 
