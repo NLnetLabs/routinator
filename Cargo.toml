@@ -64,7 +64,7 @@ AS number will be the origin of BGP route announcements for it. \
 Routinator is a RPKI relying party software written in Rust. """
 depends = "$auto, rsync"
 section = "net"
-priority = "extra"
+priority = "optional"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/routinator/", "644"],
