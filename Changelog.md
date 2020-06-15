@@ -1,5 +1,19 @@
 # Change Log
 
+# Unreleased Next Version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Dependencies
+
+Other Changes
+
+
+
 # 0.7.1 ‘Moonlight and Love Songs’
 
 Release 2020-06-15.
