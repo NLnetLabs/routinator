@@ -38,6 +38,14 @@ rustup update
 cargo install --locked --force routinator
 ```
 
+Routinator 0.7.1 and newer are shipped with updated Trust Anchor Locators
+(TALs). Once you have upgraded from an older version of Routinator, make 
+sure to install the new TALs using
+
+```
+routinator init --force
+```
+
 ## Quick Start with Docker
 
 Due to the impracticality of complying with the ARIN TAL distribution terms
