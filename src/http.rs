@@ -359,7 +359,7 @@ fn metrics_active(
     // http_connections
     writeln!(res, "
         \n\
-        # HELP routinator_http_connections total number of RTR connections\n\
+        # HELP routinator_http_connections total number of HTTP connections\n\
         # TYPE routinator_http_connections counter"
     ).unwrap();
     writeln!(res,
@@ -369,7 +369,7 @@ fn metrics_active(
     // http_current_connections
     writeln!(res, "
         \n\
-        # HELP routinator_http_current_connections currently open RTR \
+        # HELP routinator_http_current_connections currently open HTTP \
                                                   connections\n\
         # TYPE routinator_http_current_connections gauge"
     ).unwrap();
@@ -381,7 +381,7 @@ fn metrics_active(
     // http_bytes_read
     writeln!(res, "
         \n\
-        # HELP routinator_http_bytes_read number of bytes read via RTR\n\
+        # HELP routinator_http_bytes_read number of bytes read via HTTP\n\
         # TYPE routinator_http_bytes_read counter"
     ).unwrap();
     writeln!(res,
@@ -391,7 +391,7 @@ fn metrics_active(
     // http_bytes_written
     writeln!(res, "
         \n\
-        # HELP routinator_http_bytes_written number of bytes written via RTR\n\
+        # HELP routinator_http_bytes_written number of bytes written via HTTP\n\
         # TYPE routinator_http_bytes_written counter"
     ).unwrap();
     writeln!(res,
@@ -401,7 +401,7 @@ fn metrics_active(
     // http_requests
     writeln!(res, "
         \n\
-        # HELP routinator_http_requests number of bytes written via RTR\n\
+        # HELP routinator_http_requests number of bytes written via HTTP\n\
         # TYPE routinator_http_requests counter"
     ).unwrap();
     writeln!(res,
