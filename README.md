@@ -38,6 +38,14 @@ rustup update
 cargo install --locked --force routinator
 ```
 
+Routinator 0.7.1 and newer are shipped with updated Trust Anchor Locators
+(TALs). Once you have upgraded from an older version of Routinator, make 
+sure to install the new TALs using
+
+```
+routinator init --force
+```
+
 ## Quick Start with Docker
 
 Due to the impracticality of complying with the ARIN TAL distribution terms
@@ -90,8 +98,8 @@ seconds on an average system.
 
 There’s two things you need for Routinator: rsync and Rust and a C toolc…
 There are three things you need for Routinator: rsync, a C toolchain and
-Rust. You need rsync because the RPKI repository currently uses rsync
-as its main means of distribution. Some of the cryptographic primitives
+Rust. You need rsync because some RPKI repositories currently use this
+as its means of distribution. Some of the cryptographic primitives
 used by the Routinator require a C toolchain, so you need that, too. You
 need Rust because that’s what Routinator has been written in.
 
@@ -134,7 +142,7 @@ The official [Rust Platform Support](https://forge.rust-lang.org/platform-suppor
 page provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.39 or
+Routinator relies on a relatively new version of Rust, currently 1.42 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called ``rustup``.
 
@@ -248,11 +256,11 @@ To have Routinator print the list, you say
 routinator vrps
 ```
 
-When you first run this command, Routinator will rsync the entire RPKI
-repository to your machine which will take a while. Later, rsync only needs
-to check for changes so subsequent runs will be quicker. Once it has
-gathered all data, it will validate it and produce
-a long list of AS numbers and prefixes.
+When you first run this command, Routinator will download the entire RPKI
+repository to your machine which will take a while. Later, Routinator only needs
+to check for changes so subsequent runs will be quicker. Once it has gathered
+all data, it will validate it and produce a long list of AS numbers and
+prefixes.
 
 Information about additional command line arguments is available via the
 `-h` option or you can look at the more detailed man page via the `man`
@@ -262,8 +270,8 @@ sub-command:
 routinator man
 ```
 
-It is also available online on the
-[NLnetLabs documentation site](https://www.nlnetlabs.nl/documentation/rpki/routinator/).
+It is also available online in the
+[documentation](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
 
 ## Feeding a Router with RPKI-RTR
 
@@ -283,11 +291,10 @@ both 192.0.2.13 and 2001:0DB8::13, run
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323
 ```
 
-By default, the repository will be updated and re-validated every hour as
-per the recommendation in the RFC. You can change this via the
-`--refresh` option and specify the interval between re-validations in
-seconds. That is, if you rather have Routinator validate every fifteen
-minutes, the above command becomes
+By default, the repository will be updated and re-validated every ten minutes.
+You can change this via the `--refresh` option and specify the interval between
+re-validations in seconds. That is, if you rather have Routinator validate every
+fifteen minutes, the above command becomes
 
 ```bash
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --refresh=900

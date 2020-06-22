@@ -1,6 +1,10 @@
 # Change Log
 
-# Unreleased future version
+# Unreleased Next Version
+
+Breaking Changes
+
+* The minimal supported Rust version is now 1.42.0.
 
 New
 
@@ -10,9 +14,17 @@ Dependencies
 
 Other Changes
 
+[#357]: https://github.com/NLnetLabs/routinator/pull/357
 
 
-# 0.7.2-rc2
+# 0.7.1 ‘Moonlight and Love Songs’
+
+Release 2020-06-15.
+
+There have been no changes since RC2.
+
+
+# 0.7.1-rc2
 
 Released 2020-06-10.
 
