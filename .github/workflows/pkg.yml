@@ -25,7 +25,10 @@ jobs:
       matrix:
         image: [
           "ubuntu:16.04",
+          "ubuntu:18.04",
           "ubuntu:20.04",
+          "debian:9",
+          "debian:10",
         ]
     env:
       CARGO_DEB_VER: 1.23.1
@@ -36,6 +39,14 @@ jobs:
     # causes all of the steps in this job to run inside a Docker container.
     container: ${{ matrix.image }}
     steps:
+    - name: Set vars
+      id: setvars
+      shell: bash
+      run: |
+        echo ::set-output name=pkgname::$(echo $MATRIX_IMAGE | tr -d ':.')
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+
     # Git clone the Krill code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -116,10 +127,6 @@ jobs:
             exit 1
             ;;
         esac
-
-        # Store the determined variant name for use later when
-        # naming the output package
-        echo ::set-output name=pkgname::${VARIANT_NAME}
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -132,7 +139,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ steps.createdeb.outputs.pkgname }}
+        name: ${{ steps.setvars.outputs.pkgname }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
@@ -168,12 +175,8 @@ jobs:
         else
           echo ::set-env name=LXC_IMAGE::$(echo $MATRIX_IMAGE)
         fi
-        case ${MATRIX_IMAGE} in
-          ubuntu:16.04|ubuntu:18.04|debian:9) VARIANT_NAME=minimal ;;
-          ubuntu:20.04|debian:10)             VARIANT_NAME=modern ;;
-          *) echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
-        esac
-        echo ::set-output name=pkgname::$VARIANT_NAME
+        echo ::set-env name=DEB_NAME::$(echo $MATRIX_IMAGE | tr -d ':.')
+        echo ::set-output name=pkgname::$(echo $MATRIX_IMAGE | tr -d ':.')
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
