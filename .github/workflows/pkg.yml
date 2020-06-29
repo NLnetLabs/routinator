@@ -86,6 +86,7 @@ jobs:
     # Instruct cargo-deb to build the Debian package using the config section
     # in Cargo.toml for the specified "variant".
     - name: Create the DEB package
+      id: createdeb
       run: |
         # Packages for different distributions (e.g. Stretch, Buster) of the same
         # O/S (e.g. Debian) when served from a single package repository MUST have
@@ -131,7 +132,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ steps.setvars.outputs.pkgname }}
+        name: ${{ steps.createdeb.outputs.pkgname }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
