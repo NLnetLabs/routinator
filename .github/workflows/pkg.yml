@@ -114,19 +114,15 @@ jobs:
         # Therefore we generate the version ourselves.
         ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
         case ${MATRIX_IMAGE} in
-          ubuntu:16.04|ubuntu:18.04|debian:9)
-            VARIANT_NAME=minimal
-            cargo deb --variant ${VARIANT_NAME} --deb-version "${ROUTINATOR_VER}-1${VARIANT_NAME}"
-            ;;
-          ubuntu:20.04|debian:10)
-            VARIANT_NAME=modern
-            cargo deb
-            ;;
-          *)
-            echo 2>&1 "ERROR: Unexpected matrix image"
-            exit 1
-            ;;
+          ubuntu:16.04) OS_REL=xenial ;;
+          ubuntu:18.04) OS_REL=bionic ;;
+          ubuntu:20.04) OS_REL=focal ;;
+          debian:9)     OS_REL=stretch ;;
+          debian:10)    OS_REL=buster ;;
+          *)            echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
         esac
+        DEB_VER="${ROUTINATOR_VER}-1${OS_REL}"
+        cargo deb --variant $DEB_NAME --deb-version $DEB_VER
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
