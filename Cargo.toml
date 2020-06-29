@@ -64,7 +64,7 @@ In particular, it allows the holder of an IP address prefix to publish which \
 AS number will be the origin of BGP route announcements for it. \
 Routinator is a RPKI relying party software written in Rust. """
 depends = "$auto, rsync"
-section = "rust"
+section = "net"
 priority = "optional"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
@@ -75,6 +75,9 @@ assets = [
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
 maintainer-scripts = "debian"
+conf-files = [
+    "etc/routinator/routinator.conf"
+]
 
 [package.metadata.deb.variants.minimal]
 assets = [
@@ -85,4 +88,3 @@ assets = [
     ["etc/routinator.service.minimal", "lib/systemd/system/routinator.service", "644"],
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
-
