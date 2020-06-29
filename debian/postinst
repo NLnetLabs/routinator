@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+ROUTINATOR_HOME="/var/lib/routinator/"
+ROUTINATOR_USER="routinator"
+
+create_user() {
+    if id ${ROUTINATOR_USER} > /dev/null 2>&1; then return; fi
+    adduser --system --home "${ROUTINATOR_HOME}" --group ${ROUTINATOR_USER}
+}
+
+case "$1" in
+configure)
+    create_user
+    ;;
+esac
