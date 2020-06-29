@@ -98,6 +98,7 @@ jobs:
     # in Cargo.toml for the specified "variant".
     - name: Create the DEB package
       id: createdeb
+      shell: bash
       run: |
         # Packages for different distributions (e.g. Stretch, Buster) of the same
         # O/S (e.g. Debian) when served from a single package repository MUST have
