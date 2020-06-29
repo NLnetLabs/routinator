@@ -1,0 +1,17 @@
+#!/bin/sh -e
+
+# lintian warns maintainer-script-calls-systemctl.
+# at https://lintian.debian.org/tags/maintainer-script-calls-systemctl.html it
+# explains that deb-systemd-helper should be used instead, but we are not using 
+# debhelper, we are using cargo-deb, so we have to manage systemd ourselves.
+uninstall_service_unit() {
+    if systemctl is-enabled routinator.service >/dev/null; then
+        systemctl disable --now routinator.service
+    fi
+}
+
+case "$1" in
+remove|purge)
+  uninstall_service_unit
+  ;;
+esac

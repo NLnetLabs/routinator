@@ -1,0 +1,273 @@
+# GitHub Actions workflow for building and testing Routinator O/S packages.
+# Uses GitHub Actions caching to avoid rebuilding Rust cargo-deb and
+# Routinator dependencies on every run.
+#
+# Note: at the time of writing the GH cache contents expire after a
+# week if not used so the next build may be much slower as it will
+# have to re-download/build/install lots of Rust crates.
+#
+# Packages are built inside Docker containers as GH Runners have extra libraries
+# and packages installed which can cause package building to succeed but package
+# installation on a real target O/S to fail, due to being built against too
+# recent version of a package such as libssl or glibc.
+#
+# Packages are tested inside LXC/LXD containers because Docker containers don't
+# by default support init managers such as systemd but we want to test systemd
+# service unit installation and activation.
+
+name: Packaging
+on: [push, pull_request]
+jobs:
+  # Use the cargo-deb Rust create to build a Debian package for installing
+  # Routinator. See: https://github.com/mmstick/cargo-deb
+  deb-pkg:
+    strategy:
+      matrix:
+        image: [
+          "ubuntu:16.04",
+          "ubuntu:20.04",
+        ]
+    env:
+      CARGO_DEB_VER: 1.23.1
+    name: deb-pkg
+    runs-on: ubuntu-latest
+    # Build on the oldest platform we are targeting in order to avoid
+    # https://github.com/rust-lang/rust/issues/57497. Specifying container
+    # causes all of the steps in this job to run inside a Docker container.
+    container: ${{ matrix.image }}
+    steps:
+    # Git clone the Krill code in the branch we were invoked on.
+    - name: Checkout repository
+      uses: actions/checkout@v1
+
+    # Install Rust the hard way rather than using a GH Action because the action
+    # doesn't work inside a Docker container.
+    - name: Install Rust
+      run: |
+        apt-get update
+        apt-get install -y curl
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal -y
+        echo "::add-path::$HOME/.cargo/bin"
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Install compilation dependencies
+      run: |
+          apt-get install -y build-essential jq pkg-config
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    # Speed up Krill Rust builds by caching unchanged built dependencies.
+    # See: https://github.com/actions/cache/blob/master/examples.md#rust---cargo
+    - name: Cache Dot Cargo
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ job.container.image }}-${{ matrix.image }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    # Speed up cargo-deb installation by only re-downloading and re-building its
+    # dependent crates if we change the version of cargo-deb that we are using.
+    - name: Cache Cargo Deb binary
+      id: cache-cargo-deb
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/bin/cargo-deb
+        key: ${{ job.container.image }}-${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
+
+    # Only install cargo-deb if not already fetched from the cache.
+    - name: Install Cargo Deb
+      if: steps.cache-cargo-deb.outputs.cache-hit != 'true'
+      run: |
+        cargo install cargo-deb --version=$CARGO_DEB_VER
+
+    # Instruct cargo-deb to build the Debian package using the config section
+    # in Cargo.toml for the specified "variant".
+    - name: Create the DEB package
+      run: |
+        # Packages for different distributions (e.g. Stretch, Buster) of the same
+        # O/S (e.g. Debian) when served from a single package repository MUST have
+        # unique package_ver_architecture triples. Cargo deb can vary the name based
+        # on the 'variant' config section in use, but doesn't do so according to
+        # Debian policy (as it modifies the package name, not the package version).
+        #   Format: package_ver_architecture
+        #   Where ver has format: [epoch:]upstream_version[-debian_revision]
+        #   And debian_version should be of the form: 1<xxx>
+        #   Where it is common to set <xxx> to the O/S name.
+        # See:
+        #   - https://unix.stackexchange.com/a/190899
+        #   - https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
+        # Therefore we generate the version ourselves.
+        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
+        case ${MATRIX_IMAGE} in
+          ubuntu:16.04|ubuntu:18.04|debian:9)
+            VARIANT_NAME=minimal
+            cargo deb --variant ${VARIANT_NAME} --deb-version "${ROUTINATOR_VER}-1${VARIANT_NAME}"
+            ;;
+          ubuntu:20.04|debian:10)
+            VARIANT_NAME=modern
+            cargo deb
+            ;;
+          *)
+            echo 2>&1 "ERROR: Unexpected matrix image"
+            exit 1
+            ;;
+        esac
+
+        # Store the determined variant name for use later when
+        # naming the output package
+        echo ::set-output name=pkgname::${VARIANT_NAME}
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+
+    # Upload the produced DEB package. The artifact will be available
+    # via the GH Actions job summary and build log pages, but only to
+    # users logged in to GH with sufficient rights in this project. The
+    # uploaded artifact is also downloaded by the next job (see below)
+    # to sanity check that it can be installed and results in a working
+    # Routinator installation.
+    - name: Upload DEB package
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ steps.setvars.outputs.pkgname }}
+        path: target/debian/*.deb
+
+  # Download and sanity check on target operating systems the packages created
+  # by previous jobs (see above). Don't test on GH runners as they come with
+  # lots of software and libraries pre-installed and thus are not representative
+  # of the actual deployment targets, nor do GH runners support all targets that
+  # we want to test. Don't test in Docker containers as they do not support
+  # systemd.
+  deb-pkg-test:
+    name: deb-pkg-test
+    needs: deb-pkg
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - 'ubuntu:16.04'
+          - 'ubuntu:18.04'
+          - 'ubuntu:20.04'
+          - 'debian:9'
+          - 'debian:10'
+    steps:
+    # Set some environment variables that will be available to "run" steps below
+    # in this job, and some output variables that will be available in GH Action
+    # step definitions below.
+    - name: Set vars
+      id: setvars
+      shell: bash
+      run: |
+        if [[ $MATRIX_IMAGE == *debian* ]]; then
+          SLASHED=$(echo $MATRIX_IMAGE | tr ':' '/')
+          echo ::set-env name=LXC_IMAGE::$(echo "images:${SLASHED}/cloud")
+        else
+          echo ::set-env name=LXC_IMAGE::$(echo $MATRIX_IMAGE)
+        fi
+        case ${MATRIX_IMAGE} in
+          ubuntu:16.04|ubuntu:18.04|debian:9) VARIANT_NAME=minimal ;;
+          ubuntu:20.04|debian:10)             VARIANT_NAME=modern ;;
+          *) echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
+        esac
+        echo ::set-output name=pkgname::$VARIANT_NAME
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+
+    - name: Download DEB package
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ steps.setvars.outputs.pkgname }}
+
+    - name: Add current user to LXD group
+      run: |
+        sudo usermod --append --groups lxd $(whoami)
+
+    - name: Initialize LXD
+      run: |
+        sudo lxd init --auto
+
+    - name: Check LXD configuration
+      run: |
+        sg lxd -c "lxc info"
+
+    - name: Launch LXC container
+      run: |
+        # security.nesting=true is needed to avoid error "Failed to set up mount
+        # namespacing: Permission denied" in a Debian 10 container.
+        sg lxd -c "lxc launch $LXC_IMAGE -c security.nesting=true testcon"
+
+    # Run apt-get update and install man support (missing in some LXC/LXD O/S
+    # images) but first wait for cloud-init to finish otherwise the network
+    # isn't yet ready.
+    - name: Prepare container
+      shell: bash
+      run: |
+        while true; do
+          case ${LXC_IMAGE} in
+            ubuntu:16.04|ubuntu:18.04|ubuntu:20.04|images)
+            OUTPUT=$(sg lxd -c "lxc exec testcon -- cloud-init status")
+              [[ "$OUTPUT" == "status: done" ]] && break
+              ;;
+
+            images:debian/9/cloud|images:debian/10/cloud)
+              # Not sure why the above don't work for Debian 9 and 10. Just
+              # sleep for now instead to avoid the name resolution failures that
+              # otherwise happen during apt-get update below.
+              sleep 60s && break
+              ;;
+
+            *)
+              echo >&2 "ERROR: Unknown LXC image $LXC_IMAGE"
+              ;;
+          esac
+          echo "Waiting for cloud-init.."
+          sleep 1s
+        done
+        sg lxd -c "lxc exec testcon -- apt-get update"
+        sg lxd -c "lxc exec testcon -- apt-get install -y man"
+
+    - name: Copy DEB into LXC container
+      run: |
+        DEB_FILE=$(ls -1 *.deb)
+        echo ::set-env name=DEB_FILE::$DEB_FILE
+        sg lxd -c "lxc file push ${DEB_FILE} testcon/tmp/"
+
+    - name: Install DEB package
+      run: |
+        sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/$DEB_FILE"
+
+    - name: Test installed packages
+      run: |
+        echo -e "\nROUTINATOR VERSION:"
+        sg lxd -c "lxc exec testcon -- routinator --version"
+
+        echo -e "\nROUTINATOR CONF:"
+        sg lxd -c "lxc exec testcon -- cat /etc/routinator/routinator.conf"
+
+        echo -e "\nROUTINATOR DATA DIR:"
+        sg lxd -c "lxc exec testcon -- ls -la /var/lib/routinator"
+
+        echo -e "\nROUTINATOR SERVICE STATUS BEFORE ENABLE:"
+        sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
+
+        echo -e "\nENABLE ROUTINATOR SERVICE:"
+        sg lxd -c "lxc exec testcon -- systemctl enable routinator"
+
+        echo -e "\nINIT ROUTINATOR:"
+        sg lxd -c "lxc exec testcon -- routinator --tal-dir=/etc/routinator/tals init --accept-arin-rpa"
+
+        echo -e "\nROUTINATOR SERVICE STATUS AFTER ENABLE:"
+        sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
+
+        echo -e "\nSTART ROUTINATOR SERVICE:"
+        sg lxd -c "lxc exec testcon -- systemctl start routinator"
+        
+        echo -e "\nROUTINATOR SERVICE STATUS AFTER START:"
+        sleep 1s
+        sg lxd -c "lxc exec testcon -- systemctl status routinator"
+
+        echo -e "\nROUTINATOR MAN PAGE:"
+        sg lxd -c "lxc exec testcon -- man -P cat routinator"
