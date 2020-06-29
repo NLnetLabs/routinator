@@ -88,7 +88,3 @@ assets = [
     ["etc/routinator.service.minimal", "lib/systemd/system/routinator.service", "644"],
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"]
 ]
-conf-files = [
-    "etc/routinator/routinator.conf"
-]
-
