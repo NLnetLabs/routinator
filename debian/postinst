@@ -13,3 +13,5 @@ configure)
     create_user
     ;;
 esac
+
+#DEBHELPER#

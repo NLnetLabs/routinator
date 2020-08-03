@@ -17,8 +17,14 @@
 
 name: Packaging
 on: [push, pull_request]
+
+defaults:
+  run:
+    # see: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#using-a-specific-shell
+    shell: bash --noprofile --norc -eo pipefail -x {0}
+
 jobs:
-  # Use the cargo-deb Rust create to build a Debian package for installing
+  # Use the cargo-deb Rust crate to build a Debian package for installing
   # Routinator. See: https://github.com/mmstick/cargo-deb
   deb-pkg:
     strategy:
@@ -31,7 +37,10 @@ jobs:
           "debian:10",
         ]
     env:
-      CARGO_DEB_VER: 1.23.1
+      CARGO_DEB_VER: 51b7259
+      # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
+      # newer than the released x.y.z version but is not yet a new release.
+      NEXT_VER_LABEL: bis
     name: deb-pkg
     runs-on: ubuntu-latest
     # Build on the oldest platform we are targeting in order to avoid
@@ -47,7 +56,7 @@ jobs:
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
-    # Git clone the Krill code in the branch we were invoked on.
+    # Git clone the Routinator code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v1
 
@@ -62,13 +71,13 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
 
-    - name: Install compilation dependencies
+    - name: Install compilation and other dependencies
       run: |
-          apt-get install -y build-essential jq pkg-config
+          apt-get install -y build-essential jq lintian pkg-config
       env:
         DEBIAN_FRONTEND: noninteractive
 
-    # Speed up Krill Rust builds by caching unchanged built dependencies.
+    # Speed up Routinator Rust builds by caching unchanged built dependencies.
     # See: https://github.com/actions/cache/blob/master/examples.md#rust---cargo
     - name: Cache Dot Cargo
       uses: actions/cache@v2
@@ -92,13 +101,11 @@ jobs:
     - name: Install Cargo Deb
       if: steps.cache-cargo-deb.outputs.cache-hit != 'true'
       run: |
-        cargo install cargo-deb --version=$CARGO_DEB_VER
+        cargo install --git https://github.com/mmstick/cargo-deb.git --rev $CARGO_DEB_VER cargo-deb
 
     # Instruct cargo-deb to build the Debian package using the config section
     # in Cargo.toml for the specified "variant".
     - name: Create the DEB package
-      id: createdeb
-      shell: bash
       run: |
         # Packages for different distributions (e.g. Stretch, Buster) of the same
         # O/S (e.g. Debian) when served from a single package repository MUST have
@@ -113,7 +120,20 @@ jobs:
         #   - https://unix.stackexchange.com/a/190899
         #   - https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
         # Therefore we generate the version ourselves.
-        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
+        #
+        # In addition, Semantic Versioning and Debian version policy cannot
+        # express a pre-release label in the same way. For example 0.8.0-rc.1
+        # is a valid Cargo.toml [package].version value but when used as a
+        # Debian package version 0.8.0-rc.1 would be considered _NEWER_ than
+        # the final 0.8.0 release. To express this in a Debian compatible way we
+        # must replace the dash '-' with a tilda '~'.
+        #
+        # Finally, sometimes we want a version to be NEWER than the latest
+        # release but without having to decide what higher semver number to bump
+        # to. In this case we do NOT want dash '-' to become '~' because `-`
+        # is treated as higher and tilda is treated as lower.
+        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
+        DEB_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
         case ${MATRIX_IMAGE} in
           ubuntu:16.04) OS_REL=xenial;  VARIANT_NAME="minimal" ;;
           ubuntu:18.04) OS_REL=bionic;  VARIANT_NAME="minimal" ;;
@@ -122,14 +142,32 @@ jobs:
           debian:10)    OS_REL=buster;  VARIANT_NAME="" ;;
           *)            echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
         esac
-        DEB_VER="${ROUTINATOR_VER}-1${OS_REL}"
+
+        case ${{ github.event_name }} in
+          pull_request) MAINTAINER="${{ github.actor }} <unknown@email.address>" ;;
+          push)         MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>" ;;
+          *)            echo 2>&1 "ERROR: Unexpected GitHub Actions event"; exit 1 ;;
+        esac
+
+        # Generate the changelog file that Debian packages are required to have.
+        # See: https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#changelog
+        echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >debian/changelog
+        echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>debian/changelog
+        echo " -- maintainer ${MAINTAINER}  $(date --rfc-email)" >>debian/changelog
+        DEB_VER="${DEB_ROUTINATOR_VER}-1${OS_REL}"
+
         if [[ "${VARIANT_NAME}" == "" ]]; then
-          cargo deb --deb-version ${DEB_VER}
+          cargo deb --deb-version ${DEB_VER} -v
         else
-          cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME}
+          cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v
         fi
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
+
+    # See what Lintian thinks of our package.
+    - name: Verify the DEB package
+      run: |
+        lintian -v target/debian/*.deb
 
     # Upload the produced DEB package. The artifact will be available
     # via the GH Actions job summary and build log pages, but only to
@@ -162,6 +200,9 @@ jobs:
           - 'ubuntu:20.04'
           - 'debian:9'
           - 'debian:10'
+        mode:
+          - 'fresh-install'
+          - 'upgrade-from-published'
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -240,7 +281,28 @@ jobs:
         echo ::set-env name=DEB_FILE::$DEB_FILE
         sg lxd -c "lxc file push ${DEB_FILE} testcon/tmp/"
 
-    - name: Install DEB package
+    - name: Install published DEB package
+      if: ${{ matrix.mode == 'upgrade-from-published' }}
+      run: |
+        case ${MATRIX_IMAGE} in
+          ubuntu:16.04) OS=ubuntu; OS_REL=xenial ;;
+          ubuntu:18.04) OS=ubuntu; OS_REL=bionic ;;
+          ubuntu:20.04) OS=ubuntu; OS_REL=focal ;;
+          debian:9)     OS=debian; OS_REL=stretch ;;
+          debian:10)    OS=debian; OS_REL=buster ;;
+          *)            echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
+        esac
+        echo "deb [arch=amd64] https://packages.nlnetlabs.nl/linux/${OS}/ ${OS_REL} main" >$HOME/nlnetlabs.list
+        sg lxd -c "lxc file push $HOME/nlnetlabs.list testcon/etc/apt/sources.list.d/"
+        sg lxd -c "lxc exec testcon -- wget -q https://packages.nlnetlabs.nl/aptkey.asc"
+        sg lxd -c "lxc exec testcon -- apt-key add ./aptkey.asc"
+        sg lxd -c "lxc exec testcon -- apt update"
+        sg lxd -c "lxc exec testcon -- apt install -y routinator"
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+
+    - name: Install new DEB package
+      if: ${{ matrix.mode == 'fresh-install' }}
       run: |
         sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/$DEB_FILE"
 
@@ -273,6 +335,28 @@ jobs:
         echo -e "\nROUTINATOR SERVICE STATUS AFTER START:"
         sleep 1s
         sg lxd -c "lxc exec testcon -- systemctl status routinator"
+
+        echo -e "\nROUTINATOR MAN PAGE:"
+        sg lxd -c "lxc exec testcon -- man -P cat routinator"
+
+    - name: Install new DEB package
+      if: ${{ matrix.mode == 'upgrade-from-published' }}
+      run: |
+        sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/$DEB_FILE"
+  
+    - name: Test installed packages
+      run: |
+        echo -e "\nROUTINATOR VERSION:"
+        sg lxd -c "lxc exec testcon -- routinator --version"
+
+        echo -e "\nROUTINATOR CONF:"
+        sg lxd -c "lxc exec testcon -- cat /etc/routinator/routinator.conf"
+
+        echo -e "\nROUTINATOR DATA DIR:"
+        sg lxd -c "lxc exec testcon -- ls -la /var/lib/routinator"
+
+        echo -e "\nROUTINATOR SERVICE STATUS:"
+        sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
 
         echo -e "\nROUTINATOR MAN PAGE:"
         sg lxd -c "lxc exec testcon -- man -P cat routinator"
