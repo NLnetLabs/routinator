@@ -37,7 +37,7 @@ jobs:
           "debian:10",
         ]
     env:
-      CARGO_DEB_VER: 51b7259
+      CARGO_DEB_VER: 94ba8f3
       # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: bis
