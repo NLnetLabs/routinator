@@ -314,3 +314,9 @@ jobs:
 
         echo -e "\nROUTINATOR MAN PAGE:"
         sg lxd -c "lxc exec testcon -- man -P cat routinator"
+
+        echo -e "\nROUTINATOR TALS DIR:"
+        sg lxd -c "lxc exec testcon -- ls -la /var/lib/routinator/tals/"
+
+        echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
+        sg lxd -c "lxc exec testcon -- ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20"
