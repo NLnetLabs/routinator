@@ -300,7 +300,7 @@ jobs:
         sg lxd -c "lxc exec testcon -- systemctl enable routinator"
 
         echo -e "\nINIT ROUTINATOR:"
-        sg lxd -c "lxc exec testcon -- routinator --tal-dir=/etc/routinator/tals init --accept-arin-rpa"
+        sg lxd -c "lxc exec testcon -- sudo -u routinator routinator --config /etc/routinator/routinator.conf init --accept-arin-rpa"
 
         echo -e "\nROUTINATOR SERVICE STATUS AFTER ENABLE:"
         sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
