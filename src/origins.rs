@@ -8,20 +8,23 @@ use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
+use crossbeam_queue::SegQueue;
 use log::{debug, info};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::AsId;
-use rpki::roa::{FriendlyRoaIpAddress, RouteOriginAttestation};
-use rpki::tal::TalInfo;
+use rpki::roa::{FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation};
+use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::{Time, Validity};
 use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
+use crate::operation::Error;
+use crate::repository::{ProcessCa, ProcessRun};
 use crate::slurm::LocalExceptions;
 
 
@@ -30,27 +33,182 @@ use crate::slurm::LocalExceptions;
 /// The output of a validation run.
 #[derive(Debug, Default)]
 pub struct OriginsReport {
-    origins: Vec<RouteOrigins>,
-    tals: Vec<Arc<TalInfo>>,
+    origins: SegQueue<RouteOrigins>,
+    tals: Mutex<Vec<Arc<TalInfo>>>,
 }
 
 impl OriginsReport {
     pub fn new() -> Self {
         OriginsReport {
-            origins: Vec::new(),
-            tals: Vec::new(),
+            origins: SegQueue::new(),
+            tals: Mutex::new(Vec::new()),
         }
     }
 
-    pub fn with_capacity(capacity: usize, tals: Vec<Arc<TalInfo>>) -> Self {
-        OriginsReport {
-            origins: Vec::with_capacity(capacity),
-            tals
-        }
+    #[deprecated]
+    pub fn with_capacity(_capacity: usize, _tals: Vec<Arc<TalInfo>>) -> Self {
+        Self::new()
     }
 
-    pub fn push_origins(&mut self, origins: RouteOrigins) {
+    pub fn push_origins(&self, origins: RouteOrigins) {
         self.origins.push(origins)
+    }
+}
+
+impl<'a> ProcessRun for &'a OriginsReport {
+    type ProcessCa = ProcessRouteOrigins<'a>;
+
+    fn process_ta(
+        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
+    ) -> Result<Option<Self::ProcessCa>, Error> {
+        let tal = {
+            let mut tals = self.tals.lock().unwrap();
+            let len = tals.len();
+            tals.push(tal.info().clone());
+            len
+        };
+        Ok(Some(ProcessRouteOrigins {
+            report: self,
+            origins: RouteOrigins::new(),
+            tal
+        }))
+    }
+}
+
+
+//------------ RouteOrigins --------------------------------------------------
+
+/// The raw list of route origin attestations from RPKI.
+///
+/// This type is used to collect all the valid route origins as they fall out
+/// of RPKI repository validation. It is an intermediary type used as input
+/// for generating the real origins kept in [`AddressOrigins`].
+///
+/// [`AddressOrigins`]: struct.AddressOrigins.html
+#[derive(Clone, Debug, Default)]
+pub struct RouteOrigins {
+    /// The list of valid ROAs.
+    origins: Vec<RouteOrigin>,
+
+    /// The time when this set needs to be refreshed at the latest.
+    refresh: Option<Time>,
+}
+
+impl RouteOrigins {
+    /// Creates a new, empty list of route origins.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Appends the given attestation to the set.
+    ///
+    /// The attestation will simply be added to the end of the list. No
+    /// checking for duplicates is being done.
+    pub fn push(
+        &mut self,
+        attestation: RouteOriginAttestation,
+        tal_index: usize,
+    ) {
+        self.origins.push(RouteOrigin::new(attestation, tal_index));
+    }
+
+    /// Updates the refresh time.
+    ///
+    /// If the time given is earlier than our current refresh time, sets the
+    /// time given as the new refresh time.
+    pub fn update_refresh(&mut self, cert: &TbsCert) {
+        let refresh = cert.validity().not_after();
+        if let Some(time) = self.refresh {
+            if time < refresh {
+                return
+            }
+        }
+        self.refresh = Some(refresh)
+    }
+
+    /// Returns whether the list of attestations is empty.
+    pub fn is_empty(&self) -> bool {
+        self.origins.is_empty()
+    }
+
+    /// Returns the number of attestations in the list.
+    pub fn len(&self) -> usize {
+        self.origins.len()
+    }
+
+    /// Returns an iterator over the attestations in the list.
+    pub fn iter(&self) -> slice::Iter<RouteOrigin> {
+        self.origins.iter()
+    }
+}
+
+
+//--- IntoIterator
+
+impl IntoIterator for RouteOrigins {
+    type Item = RouteOrigin;
+    type IntoIter = vec::IntoIter<RouteOrigin>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.origins.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a RouteOrigins {
+    type Item = &'a RouteOrigin;
+    type IntoIter = slice::Iter<'a, RouteOrigin>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+
+//------------ ProcessRouteOrigins -------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct ProcessRouteOrigins<'a> {
+    report: &'a OriginsReport,
+    origins: RouteOrigins,
+    tal: usize,
+}
+
+impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
+    fn update_refresh(&mut self, not_after: Time) {
+        match self.origins.refresh {
+            Some(current) => {
+                self.origins.refresh = Some(cmp::min(current, not_after))
+            }
+            None => self.origins.refresh = Some(not_after),
+        }
+    }
+
+    fn want(&self, uri: &uri::Rsync) -> Result<bool, Error> {
+        Ok(uri.ends_with(".cer") || uri.ends_with(".roa"))
+    }
+
+    fn process_ca(
+        &mut self, _uri: &uri::Rsync, _cert: &ResourceCert
+    ) -> Result<Option<Self>, Error> {
+        Ok(Some(ProcessRouteOrigins {
+            report: self.report,
+            origins: RouteOrigins::new(),
+            tal: self.tal,
+        }))
+    }
+
+    fn process_roa(
+        &mut self, _uri: &uri::Rsync, route: RouteOriginAttestation
+    ) -> Result<(), Error> {
+        if let RoaStatus::Valid { ref cert } = *route.status() {
+            self.update_refresh(cert.validity().not_after());
+        }
+        self.origins.push(route, self.tal);
+        Ok(())
+    }
+
+    fn commit(self) {
+        self.report.origins.push(self.origins);
     }
 }
 
@@ -431,94 +589,6 @@ impl HistoryInner {
 }
 
 
-//------------ RouteOrigins --------------------------------------------------
-
-/// The raw list of route origin attestations from RPKI.
-///
-/// This type is used to collect all the valid route origins as they fall out
-/// of RPKI repository validation. It is an intermediary type used as input
-/// for generating the real origins kept in [`AddressOrigins`].
-///
-/// [`AddressOrigins`]: struct.AddressOrigins.html
-#[derive(Clone, Debug, Default)]
-pub struct RouteOrigins {
-    /// The list of valid ROAs.
-    origins: Vec<RouteOrigin>,
-
-    /// The time when this set needs to be refreshed at the latest.
-    refresh: Option<Time>,
-}
-
-impl RouteOrigins {
-    /// Creates a new, empty list of route origins.
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Appends the given attestation to the set.
-    ///
-    /// The attestation will simply be added to the end of the list. No
-    /// checking for duplicates is being done.
-    pub fn push(
-        &mut self,
-        attestation: RouteOriginAttestation,
-        tal_index: usize,
-    ) {
-        self.origins.push(RouteOrigin::new(attestation, tal_index));
-    }
-
-    /// Updates the refresh time.
-    ///
-    /// If the time given is earlier than our current refresh time, sets the
-    /// time given as the new refresh time.
-    pub fn update_refresh(&mut self, cert: &TbsCert) {
-        let refresh = cert.validity().not_after();
-        if let Some(time) = self.refresh {
-            if time < refresh {
-                return
-            }
-        }
-        self.refresh = Some(refresh)
-    }
-
-    /// Returns whether the list of attestations is empty.
-    pub fn is_empty(&self) -> bool {
-        self.origins.is_empty()
-    }
-
-    /// Returns the number of attestations in the list.
-    pub fn len(&self) -> usize {
-        self.origins.len()
-    }
-
-    /// Returns an iterator over the attestations in the list.
-    pub fn iter(&self) -> slice::Iter<RouteOrigin> {
-        self.origins.iter()
-    }
-}
-
-
-//--- IntoIterator
-
-impl IntoIterator for RouteOrigins {
-    type Item = RouteOrigin;
-    type IntoIter = vec::IntoIter<RouteOrigin>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.origins.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a RouteOrigins {
-    type Item = &'a RouteOrigin;
-    type IntoIter = slice::Iter<'a, RouteOrigin>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-
 //------------ RouteOrigin ---------------------------------------------------
 
 /// A single route origin attestation.
@@ -606,11 +676,12 @@ impl AddressOrigins {
         let mut res = HashSet::new();
         let mut refresh = None;
 
-        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+        let tals = report.tals.into_inner().unwrap();
+        let mut tal_metrics_vec: Vec<_> = tals.iter().map(|tal| {
             TalMetrics::new(tal.clone())
         }).collect();
 
-        for item in report.origins {
+        while let Ok(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
                 match refresh {
                     Some(current) if current > time => refresh = Some(time),
@@ -776,11 +847,12 @@ impl OriginsDiff {
         let mut next = HashSet::new();
         let mut announce = HashSet::new();
 
-        let mut tal_metrics_vec: Vec<_> = report.tals.iter().map(|tal| {
+        let tals = report.tals.into_inner().unwrap();
+        let mut tal_metrics_vec: Vec<_> = tals.iter().map(|tal| {
             TalMetrics::new(tal.clone())
         }).collect();
 
-        for item in report.origins {
+        while let Ok(item) = report.origins.pop() {
             for origin in item {
                 let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
