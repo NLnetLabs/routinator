@@ -4,9 +4,18 @@
 
 Breaking Changes
 
+* Validation now follows the rules suggested by
+  [draft-ietf-sidrops-6486bis]\: Any invalid object mentioned on the
+  manifest will lead to all objects of the CA being rejected. However,
+  unlike suggested by the draft, Routinator currently will not fall back
+  to cached older versions of the CA’s objects that may still be valid.
+  ([#371])
 * The minimal supported Rust version is now 1.42.0.
 
 New
+
+* New command `rta` for validating Resource Tagged Assertions as described
+  in [draft-michaelson-rpki-rta].
 
 Bug Fixes
 
@@ -15,7 +24,8 @@ Dependencies
 Other Changes
 
 [#357]: https://github.com/NLnetLabs/routinator/pull/357
-
+[draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
+[draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
 
 # 0.7.1 ‘Moonlight and Love Songs’
 
