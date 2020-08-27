@@ -897,7 +897,7 @@ impl ValidateDocument {
             }
         };
 
-        if let Err(_) = validation.process(&mut repo) {
+        if validation.process(&mut repo).is_err() {
             error!("RTA did not validate.");
             return Err(ExitError::Invalid);
         }

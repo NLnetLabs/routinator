@@ -578,13 +578,13 @@ impl HistoryInner {
         // we don’t have a last_update_duration, we just use two minute as a
         // guess.
         let duration = self.last_update_duration.map(|some| 2 * some)
-                           .unwrap_or(Duration::from_secs(120));
+                           .unwrap_or_else(|| Duration::from_secs(120));
         let from = self.last_update_done.unwrap_or_else(|| {
             self.last_update_start + duration
         });
         self.refresh.checked_sub(
             Instant::now().saturating_duration_since(from)
-        ).unwrap_or(Duration::from_secs(0)) + duration
+        ).unwrap_or_else(|| Duration::from_secs(0)) + duration
     }
 }
 
