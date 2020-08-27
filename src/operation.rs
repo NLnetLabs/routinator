@@ -17,11 +17,11 @@ use std::sync::mpsc::RecvTimeoutError;
 use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info, warn};
-use rpki::rta;
 use rpki::resources::AsId;
 use rpki::rta::Rta;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
+use crate::rta;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
@@ -846,7 +846,7 @@ impl ValidateDocument {
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
     fn run(self, config: Config) -> Result<(), ExitError> {
-        let repo = Repository::new(&config, !self.noupdate)?;
+        let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
 
         // Load and decode the signature.
@@ -889,7 +889,7 @@ impl ValidateDocument {
             return Err(ExitError::Invalid)
         }
 
-        let validation = match rta::Validation::new( &rta, config.strict) {
+        let validation = match rta::ValidationReport::new(&rta, &config) {
             Ok(validation) => validation,
             Err(_) => {
                 error!("RTA did not validate.");
@@ -897,10 +897,29 @@ impl ValidateDocument {
             }
         };
 
-        let _ = (repo, validation);
+        if let Err(_) = validation.process(&mut repo) {
+            error!("RTA did not validate.");
+            return Err(ExitError::Invalid);
+        }
 
-        // Walk the repository validating these certificates.
-        Ok(())
+        match validation.finalize() {
+            Ok(rta) => {
+                for block in rta.as_resources().iter() {
+                    println!("{}", block);
+                }
+                for block in rta.v4_resources().iter() {
+                    println!("{}", block.display_v4());
+                }
+                for block in rta.v6_resources().iter() {
+                    println!("{}", block.display_v6());
+                }
+                Ok(())
+            }
+            Err(_) => {
+                error!("RTA did not validate.");
+                Err(ExitError::Invalid)
+            }
+        }
     }
 }
 

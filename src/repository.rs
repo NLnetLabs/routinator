@@ -398,7 +398,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             }
         }
         warn!("No valid trust anchor for TAL {}", tal.info().name());
-        return Ok(())
+        Ok(())
     }
 
     /// Processes all data for the given trust CA.
