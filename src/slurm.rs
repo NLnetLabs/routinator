@@ -85,6 +85,7 @@ impl LocalExceptions {
         }
     }
 
+    #[allow(clippy::option_option)]
     pub fn extend_from_json(
         &mut self,
         json: &str,
