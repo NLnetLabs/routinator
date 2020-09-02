@@ -73,6 +73,7 @@ impl LocalExceptions {
         Ok(())
     }
 
+    #[allow(clippy::option_option)]
     fn info_from_path<P: AsRef<Path>>(
         path: P, extra: bool
     ) -> Option<Option<Arc<PathBuf>>> {
