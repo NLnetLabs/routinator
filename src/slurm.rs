@@ -1,6 +1,7 @@
 //! Local exceptions per RFC 8416 aka SLURM.
 
 use std::{cmp, error, fmt, fs, io};
+use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -181,7 +182,7 @@ pub struct ExceptionInfo {
 #[serde(deny_unknown_fields)]
 struct SlurmFile {
     #[serde(rename = "slurmVersion")]
-    version: u8,
+    version: SlurmVersion,
 
     #[serde(rename = "validationOutputFilters")]
     filters: ValidationOutputFilters,
@@ -195,6 +196,29 @@ impl FromStr for SlurmFile {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(s)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(try_from = "u8")]
+struct SlurmVersion;
+
+impl Default for SlurmVersion {
+    fn default() -> SlurmVersion {
+        SlurmVersion
+    }
+}
+
+impl TryFrom<u8> for SlurmVersion {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value == 1 {
+            Ok(Self)
+        }
+        else {
+            Err("slurmVersion must be 1")
+        }
     }
 }
 
