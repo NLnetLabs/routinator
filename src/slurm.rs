@@ -1,16 +1,15 @@
 //! Local exceptions per RFC 8416 aka SLURM.
 
-use std::{error, fmt, fs, io};
-use std::path::Path;
+use std::{cmp, error, fmt, fs, io};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use json::JsonValue;
-use json::object::Object as JsonObject;
 use log::error;
 use rpki::resources::AsId;
+use serde::Deserialize;
 use crate::config::Config;
 use crate::operation::Error;
-use crate::origins::{AddressOrigin, AddressPrefix, FromStrError, OriginInfo};
+use crate::origins::{AddressOrigin, AddressPrefix, OriginInfo};
 
 
 //------------ LocalExceptions -----------------------------------------------
@@ -49,23 +48,18 @@ impl LocalExceptions {
         }
     }
 
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        let mut res = LocalExceptions::empty();
+        res.extend_from_json(json, None)?;
+        Ok(res)
+    }
+
     pub fn from_file<P: AsRef<Path>>(
         path: P,
         extra_info: bool
     ) -> Result<Self, LoadError> {
-        let buf = fs::read_to_string(&path)?;
-        Ok(Self::from_json(
-            json::parse(&buf)?,
-            &Self::info_from_path(path, extra_info)
-        )?)
-    }
-
-    pub fn from_json(
-        json: JsonValue,
-        info: &OriginInfo
-    ) -> Result<Self, ParseError> {
         let mut res = Self::empty();
-        res.extend_from_json(json, info)?;
+        res.extend_from_file(path, extra_info)?;
         Ok(res)
     }
 
@@ -75,76 +69,45 @@ impl LocalExceptions {
         extra_info: bool
     ) -> Result<(), LoadError> {
         let buf = fs::read_to_string(&path)?;
-        self.extend_from_json(
-            json::parse(&buf)?,
-            &Self::info_from_path(path, extra_info)
-        )?;
+        self.extend_from_json(&buf, Self::info_from_path(path, extra_info))?;
         Ok(())
     }
 
-    fn info_from_path<P: AsRef<Path>>(path: P, extra: bool) -> OriginInfo {
+    fn info_from_path<P: AsRef<Path>>(
+        path: P, extra: bool
+    ) -> Option<Option<Arc<PathBuf>>> {
         if extra {
-            OriginInfo::Exception(Arc::new(path.as_ref().into()))
+            Some(Some(Arc::new(path.as_ref().into())))
         }
         else {
-            OriginInfo::None
+            None
         }
     }
 
     pub fn extend_from_json(
         &mut self,
-        json: JsonValue,
-        info: &OriginInfo,
-    ) -> Result<(), ParseError> {
-        let mut json = match json {
-            JsonValue::Object(json) => json,
-            _ => {
-                return Err(ParseError::type_error("", "object"))
-            }
-        };
-        let version = json.remove("slurmVersion")
-            .ok_or_else(|| ParseError::missing("slurmVersion"))?
-            .as_u8()
-            .ok_or_else(|| ParseError::type_error("slurmVersion", "u8"))?;
-        if version != 1 {
-            return Err(ParseError::BadVersion(version))
-        }
-
-        let mut filters = json.remove("validationOutputFilters")
-            .ok_or_else(
-                || ParseError::missing("validationOutputFilters")
-            )?
-            .into_object()
-            .ok_or_else(
-                || ParseError::type_error("validationOutputFilters", "object")
-            )?;
-        let mut assertions = json.remove("locallyAddedAssertions")
-            .ok_or_else(
-                || ParseError::missing("locallyAddedAssertions")
-            )?
-            .into_object()
-            .ok_or_else(
-                || ParseError::type_error("locallyAddedAssertions", "object")
-            )?;
-
-        // We just ignore the bgpsecFilters for now.
-
-        let filters = filters.remove("prefixFilters")
-            .ok_or_else(
-                || ParseError::missing(
-                    "validationOutputFilters.prefixFilters"
-                )
-            )?;
-        let assertions = assertions.remove("prefixAssertions")
-            .ok_or_else(
-                || ParseError::missing(
-                    "locallyAddedAssertions.prefixAssertions"
-                )
-            )?;
-        PrefixFilter::extend_from_json(filters, &mut self.filters)?;
-        AddressOrigin::extend_from_json(
-            assertions, info, &mut self.assertions
-        )?;
+        json: &str,
+        info: Option<Option<Arc<PathBuf>>>,
+    ) -> Result<(), serde_json::Error> {
+        let json = SlurmFile::from_str(json)?;
+        self.filters.extend(json.filters.prefix.into_iter().map(Into::into));
+        self.assertions.extend(json.assertions.prefix.into_iter().map(|item| {
+            AddressOrigin::new(
+                item.asn.into(), item.prefix,
+                item.max_prefix_len.map(|len| {
+                    cmp::min(len, if item.prefix.is_v4() { 32 } else { 128 })
+                }).unwrap_or_else(|| item.prefix.address_length()),
+                match info.as_ref() {
+                    Some(path) => {
+                        OriginInfo::Exception(ExceptionInfo {
+                            path: path.clone(),
+                            comment: item.comment,
+                        })
+                    }
+                    None => OriginInfo::None,
+                }
+            )
+        }));
         Ok(())
     }
 
@@ -172,79 +135,6 @@ pub struct PrefixFilter {
 }
 
 impl PrefixFilter {
-    fn extend_from_json(
-        json: JsonValue,
-        vec: &mut Vec<Self>
-    ) -> Result<(), ParseError> {
-        let json = match json {
-            JsonValue::Array(json) => json,
-            _ => {
-                return Err(ParseError::type_error(
-                    "validationOutputFilters.prefixFilters",
-                    "list"
-                ))
-            }
-        };
-        vec.reserve(json.len());
-        for item in json {
-            vec.push(Self::from_json(item)?);
-        }
-        Ok(())
-    }
-
-    fn from_json(json: JsonValue) -> Result<Self, ParseError> {
-        match json {
-            JsonValue::Object(mut value) => {
-                Ok(PrefixFilter {
-                    prefix: Self::prefix_from_json(&mut value)?,
-                    asn: Self::asn_from_json(&mut value)?,
-                })
-            }
-            _ => {
-                Err(ParseError::type_error(
-                    "validationOutputFilters.prefixFilters.[]",
-                    "object"
-                ))
-            }
-        }
-    }
-
-    fn prefix_from_json(
-        json: &mut JsonObject,
-    ) -> Result<Option<AddressPrefix>, ParseError> {
-        match json.remove("prefix") {
-            Some(mut json) => match json.take_string() {
-                Some(value) => {
-                    Ok(Some(AddressPrefix::from_str(&value)?))
-                }
-                None => {
-                    Err(ParseError::type_error(
-                        "validationOutputFilters.prefixFilters.[].prefix",
-                        "string"
-                    ))
-                }
-            }
-            None => Ok(None)
-        }
-    }
-
-    fn asn_from_json(
-        json: &mut JsonObject
-    ) -> Result<Option<AsId>, ParseError> {
-        match json.remove("asn") {
-            Some(json) => match json.as_u32() {
-                Some(value) => Ok(Some(AsId::from(value))),
-                None => {
-                    Err(ParseError::type_error(
-                        "validationOutputFilters.prefixFilters.[].prefix",
-                        "u32"
-                    ))
-                }
-            }
-            None => Ok(None)
-        }
-    }
-
     fn filter_origin(&self, addr: &AddressOrigin) -> bool {
         match (self.prefix, self.asn) {
             (Some(prefix), Some(asn)) => {
@@ -261,182 +151,121 @@ impl PrefixFilter {
     }
 }
 
+impl From<RawPrefixFilter> for PrefixFilter {
+    fn from(raw: RawPrefixFilter) -> Self {
+        PrefixFilter {
+            prefix: raw.prefix,
+            asn: raw.asn.map(Into::into)
+        }
+    }
+}
 
-//------------ AddressOrigin -------------------------------------------------
+
+//------------ ExceptionInfo -------------------------------------------------
+
+#[derive(Clone, Debug, Default)]
+pub struct ExceptionInfo {
+    path: Option<Arc<PathBuf>>,
+    comment: Option<String>,
+}
+
+
+//============ Deserialization -----------------------------------------------
 //
-// see super::origins.
+// We use serde because it provides for better error reporting. The following
+// represent the raw SLURM JSON structure.
 
-impl AddressOrigin {
-    fn extend_from_json(
-        json: JsonValue,
-        info: &OriginInfo,
-        vec: &mut Vec<Self>
-    ) -> Result<(), ParseError> {
-        let json = match json {
-            JsonValue::Array(json) => json,
-            _ => {
-                return Err(ParseError::type_error(
-                    "locallyAddedAssertions.prefixFilters",
-                    "list"
-                ))
-            }
-        };
-        vec.reserve(json.len());
-        for item in json {
-            vec.push(Self::from_json(item, info)?);
-        }
-        Ok(())
-    }
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SlurmFile {
+    #[serde(rename = "slurmVersion")]
+    version: u8,
 
-    fn from_json(
-        json: JsonValue,
-        info: &OriginInfo,
-    ) -> Result<Self, ParseError> {
-        match json {
-            JsonValue::Object(mut value) => {
-                let prefix = Self::prefix_from_json(&mut value)?;
-                let asn = Self::asn_from_json(&mut value)?;
-                let max_len = Self::max_len_from_json(&mut value, &prefix)?;
-                Ok(AddressOrigin::new(asn, prefix, max_len, info.clone()))
-            }
-            _ => {
-                Err(ParseError::type_error(
-                    "locallyAddedAssertions.prefixFilters.[]",
-                    "object"
-                ))
-            }
-        }
-    }
+    #[serde(rename = "validationOutputFilters")]
+    filters: ValidationOutputFilters,
 
-    fn prefix_from_json(
-        json: &mut JsonObject
-    ) -> Result<AddressPrefix, ParseError> {
-        match json.remove("prefix") {
-            Some(mut json) => match json.take_string() {
-                Some(value) => {
-                    Ok(AddressPrefix::from_str(&value)?)
-                }
-                None => {
-                    Err(ParseError::type_error(
-                        "locallyAddedAssertions.prefixFilters.[].prefix",
-                        "string"
-                    ))
-                }
-            }
-            None => {
-                Err(ParseError::missing(
-                    "locallyAddedAssertions.prefixFilters.[].prefix",
-                ))
-            }
-        }
-    }
-
-    fn asn_from_json(
-        json: &mut JsonObject
-    ) -> Result<AsId, ParseError> {
-        match json.remove("asn") {
-            Some(json) => match json.as_u32() {
-                Some(value) => Ok(AsId::from(value)),
-                None => {
-                    Err(ParseError::type_error(
-                        "locallyAddedAssertions.prefixFilters.[].asn",
-                        "u32"
-                    ))
-                }
-            }
-            None => {
-                Err(ParseError::missing(
-                    "locallyAddedAssertions.prefixFilters.[].asn",
-                ))
-            }
-        }
-    }
-
-    fn max_len_from_json(
-        json: &mut JsonObject,
-        addr: &AddressPrefix
-    ) -> Result<u8, ParseError> {
-        match json.remove("maxPrefixLength") {
-            Some(json) => match json.as_u8() {
-                Some(value) => Ok(value),
-                None => {
-                    Err(ParseError::type_error(
-                        "locallyAddedAssertions.prefixFilters.[].\
-                        maxPrefxiLength",
-                        "u8"
-                    ))
-                }
-            }
-            None => Ok(addr.address_length())
-        }
-    }
-
+    #[serde(rename = "locallyAddedAssertions")]
+    assertions: LocallyAddedAssertions,
 }
 
+impl FromStr for SlurmFile {
+    type Err = serde_json::Error;
 
-//------------ Helpers -------------------------------------------------------
-
-trait JsonValueExt {
-    fn into_object(self) -> Option<JsonObject>;
-}
-
-impl JsonValueExt for JsonValue {
-    fn into_object(self) -> Option<JsonObject> {
-        match self {
-            JsonValue::Object(json) => Some(json),
-            _ => None
-        }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
     }
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ValidationOutputFilters {
+    #[serde(rename = "prefixFilters")]
+    prefix: Vec<RawPrefixFilter>,
 
-//------------ ParseError ----------------------------------------------------
-
-#[derive(Debug)]
-pub enum ParseError {
-    TypeError {
-        element: &'static str,
-        expected: &'static str,
-    },
-    MissingElement(&'static str),
-    BadPrefix(FromStrError),
-    BadVersion(u8),
+    #[serde(rename = "bgpsecFilters")]
+    bgpsec: Vec<BgpsecFilter>,
 }
 
-impl ParseError {
-    fn type_error(element: &'static str, expected: &'static str) -> Self {
-        ParseError::TypeError { element, expected }
-    }
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocallyAddedAssertions {
+    #[serde(rename = "prefixAssertions")]
+    prefix: Vec<PrefixAssertion>,
 
-    fn missing(element: &'static str) -> Self {
-        ParseError::MissingElement(element)
-    }
+    #[serde(rename = "bgpsecAssertions")]
+    bgpsec: Vec<BgpsecAssertion>,
 }
 
-impl From<FromStrError> for ParseError {
-    fn from(err: FromStrError) -> ParseError {
-        ParseError::BadPrefix(err)
-    }
+// serde doesn’t allow enums to be flattened. So we will have to allow empty
+// filters unless we want to do our own Deserialize impl. Which we don’t.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawPrefixFilter {
+    prefix: Option<AddressPrefix>,
+
+    asn: Option<u32>,
+
+    comment: Option<String>,
 }
 
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ParseError::TypeError { element, expected } => {
-                write!(f, "expected {} for '{}'", expected, element)
-            }
-            ParseError::MissingElement(name) => {
-                write!(f, "missing field {}", name)
-            }
-            ParseError::BadPrefix(ref err) => err.fmt(f),
-            ParseError::BadVersion(ver) => {
-                write!(f, "bad version {}", ver)
-            }
-        }
-    }
+// serde doesn’t allow enums to be flattened. So we will have to allow empty
+// filters unless we want to do our own Deserialize impl. Which we don’t.
+#[derive(Clone, Debug, Deserialize)]
+struct BgpsecFilter {
+    #[serde(rename = "SKI")]
+    ski: Option<String>,
+
+    asn: Option<u32>,
+
+    comment: Option<String>,
 }
 
-impl error::Error for ParseError  { }
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PrefixAssertion {
+    prefix: AddressPrefix,
+
+    asn: u32,
+
+    #[serde(rename = "maxPrefixLength")]
+    max_prefix_len: Option<u8>,
+
+    comment: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BgpsecAssertion {
+    asn: u32,
+
+    #[serde(rename = "SKI")]
+    ski: String,
+
+    #[serde(rename = "routerPublicKey")]
+    router_public_key: String,
+
+    comment: Option<String>,
+}
 
 
 //------------ LoadError ----------------------------------------------------
@@ -444,8 +273,7 @@ impl error::Error for ParseError  { }
 #[derive(Debug)]
 pub enum LoadError {
     Io(io::Error),
-    Json(json::Error),
-    Parse(ParseError),
+    Json(serde_json::Error),
 }
 
 impl From<io::Error> for LoadError {
@@ -454,15 +282,9 @@ impl From<io::Error> for LoadError {
     }
 }
 
-impl From<json::Error> for LoadError {
-    fn from(err: json::Error) -> LoadError {
+impl From<serde_json::Error> for LoadError {
+    fn from(err: serde_json::Error) -> LoadError {
         LoadError::Json(err)
-    }
-}
-
-impl From<ParseError> for LoadError {
-    fn from(err: ParseError) -> LoadError {
-        LoadError::Parse(err)
     }
 }
 
@@ -471,7 +293,6 @@ impl fmt::Display for LoadError {
         match *self {
             LoadError::Io(ref err) => err.fmt(f),
             LoadError::Json(ref err) => err.fmt(f),
-            LoadError::Parse(ref err) => err.fmt(f),
         }
     }
 }
@@ -522,11 +343,8 @@ pub mod tests {
 
     #[test]
     fn should_parse_empty_slurm_file() {
-        let empty = include_str!("../test/slurm/empty.json");
-        let json = json::parse(empty).unwrap();
-        let exceptions = LocalExceptions::from_json(
-            json, &OriginInfo::None
-        ).unwrap();
+        let json = include_str!("../test/slurm/empty.json");
+        let exceptions = LocalExceptions::from_json(json).unwrap();
 
         assert_eq!(0, exceptions.assertions.len());
         assert_eq!(0, exceptions.filters.len());
@@ -534,11 +352,8 @@ pub mod tests {
 
     #[test]
     fn should_parse_full_slurm_file() {
-        let empty = include_str!("../test/slurm/full.json");
-        let json = json::parse(empty).unwrap();
-        let exceptions = LocalExceptions::from_json(
-            json, &OriginInfo::None
-        ).unwrap();
+        let json = include_str!("../test/slurm/full.json");
+        let exceptions = LocalExceptions::from_json(json).unwrap();
 
         assert_eq!(2, exceptions.assertions.len());
         assert!(
