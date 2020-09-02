@@ -4,6 +4,10 @@
 
 Breaking Changes
 
+* Parsing of local exception files is now more strict in accordance with
+  [RFC 8416]. Any additional member in the JSON objects will lead to an
+  error. However, error reporting has been greatly improved and now the
+  line and column of an error will be indicated. ([#372])
 * The minimal supported Rust version is now 1.42.0.
 
 New
@@ -15,6 +19,8 @@ Dependencies
 Other Changes
 
 [#357]: https://github.com/NLnetLabs/routinator/pull/357
+[#372]: https://github.com/NLnetLabs/routinator/pull/372
+[RFC 8416]: https://tools.ietf.org/html/rfc8416
 
 
 # 0.7.1 ‘Moonlight and Love Songs’
