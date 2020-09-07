@@ -259,20 +259,17 @@ jobs:
       run: |
         while true; do
           case ${LXC_IMAGE} in
-            ubuntu:16.04|ubuntu:18.04|ubuntu:20.04|images)
-            OUTPUT=$(sg lxd -c "lxc exec testcon -- cloud-init status")
-              [[ "$OUTPUT" == "status: done" ]] && break
-              ;;
-
             images:debian/9/cloud|images:debian/10/cloud)
-              # Not sure why the above don't work for Debian 9 and 10. Just
-              # sleep for now instead to avoid the name resolution failures that
-              # otherwise happen during apt-get update below.
+              # Not sure why the method below doesn't work for Debian 9 and 10.
+              # Just sleep for now instead to avoid the name resolution failures
+              # that otherwise happen during apt-get update below.
               sleep 60s && break
               ;;
 
             *)
-              echo >&2 "ERROR: Unknown LXC image $LXC_IMAGE"
+              # For all other images wait until cloud-init says it is finished
+              OUTPUT=$(sg lxd -c "lxc exec testcon -- cloud-init status")
+              [[ "$OUTPUT" == "status: done" ]] && break
               ;;
           esac
           echo "Waiting for cloud-init.."
