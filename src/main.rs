@@ -39,6 +39,7 @@ fn main() {
         Ok(_) => exit(0),
         Err(ExitError::Generic) => exit(1),
         Err(ExitError::IncompleteUpdate) => exit(2),
+        Err(ExitError::Invalid) => exit(3),
     }
 }
 

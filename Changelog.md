@@ -4,6 +4,12 @@
 
 Breaking Changes
 
+* Validation now follows the rules suggested by
+  [draft-ietf-sidrops-6486bis]\: Any invalid object mentioned on the
+  manifest will lead to all objects of the CA being rejected. However,
+  unlike suggested by the draft, Routinator currently will not fall back
+  to cached older versions of the CA’s objects that may still be valid.
+  ([#371])
 * Parsing of local exception files is now more strict in accordance with
   [RFC 8416]. Any additional member in the JSON objects will lead to an
   error. However, error reporting has been greatly improved and now the
@@ -12,15 +18,22 @@ Breaking Changes
 
 New
 
+* The feature `rta` enables the new command `rta` for validating Resource
+  Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
+  feature is not enabled by default and needs to be activated by adding
+  the option `--features rta` to the Cargo build command.
+
 Bug Fixes
 
 Dependencies
 
 Other Changes
 
-[#357]: https://github.com/NLnetLabs/routinator/pull/357
 [#372]: https://github.com/NLnetLabs/routinator/pull/372
+[#357]: https://github.com/NLnetLabs/routinator/pull/357
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
+[draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
+[draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
 
 
 # 0.7.1 ‘Moonlight and Love Songs’
