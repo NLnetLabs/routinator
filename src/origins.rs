@@ -6,7 +6,6 @@
 use std::{cmp, error, fmt, hash, ops, slice, vec};
 use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
@@ -21,11 +20,12 @@ use rpki::x509::{Time, Validity};
 use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
+use serde::{Deserialize, Deserializer};
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::operation::Error;
 use crate::repository::{ProcessCa, ProcessRun};
-use crate::slurm::LocalExceptions;
+use crate::slurm::{ExceptionInfo, LocalExceptions};
 
 
 //------------ OriginsReport -------------------------------------------------
@@ -1174,6 +1174,16 @@ impl AddressPrefix {
         AddressPrefix{addr, len}
     }
 
+    /// Returns whether the prefix is for an IPv4 address.
+    pub fn is_v4(self) -> bool {
+        self.addr.is_ipv4()
+    }
+
+    /// Returns whether the prefix is for an IPv6 address.
+    pub fn is_v6(self) -> bool {
+        self.addr.is_ipv6()
+    }
+
     /// Returns the IP address part of a prefix.
     pub fn address(self) -> IpAddr {
         self.addr
@@ -1246,6 +1256,32 @@ impl FromStr for AddressPrefix {
     }
 }
 
+impl<'de> Deserialize<'de> for AddressPrefix {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D
+    ) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = AddressPrefix;
+
+            fn expecting(
+                &self, formatter: &mut fmt::Formatter
+            ) -> fmt::Result {
+                write!(formatter, "a string with a IPv4 or IPv6 prefix")
+            }
+
+            fn visit_str<E: serde::de::Error>(
+                self, v: &str
+            ) -> Result<Self::Value, E> {
+                AddressPrefix::from_str(v).map_err(E::custom)
+            }
+        }
+
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
 impl fmt::Display for AddressPrefix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/{}", self.addr, self.len)
@@ -1265,7 +1301,7 @@ pub enum OriginInfo {
     RoaInfo(Arc<RoaInfo>),
 
     /// The path of a local exceptions file.
-    Exception(Arc<PathBuf>),
+    Exception(ExceptionInfo),
 }
 
 impl OriginInfo {
