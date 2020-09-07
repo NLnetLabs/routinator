@@ -54,11 +54,12 @@ jobs:
       shell: bash
       run: |
         if [ "$MATRIX_IMAGE" == "debian:bullseye" ]; then
-          FIXED_MATRIX_IMAGE="debian11"
+          FIXED_MATRIX_IMAGE="debian:11"
         else
-          FIXED_MATRIX_IMAGE=$(echo $MATRIX_IMAGE | tr -d ':.')
+          FIXED_MATRIX_IMAGE="$MATRIX_IMAGE"
         fi
         echo ::set-output name=fixedmatriximage::$FIXED_MATRIX_IMAGE
+        echo ::set-output name=pkgname::(echo $FIXED_MATRIX_IMAGE | tr -d ':.')
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -185,7 +186,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ steps.setvars.outputs.fixedmatriximage }}
+        name: ${{ steps.setvars.outputs.pkgname }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
