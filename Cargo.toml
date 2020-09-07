@@ -50,6 +50,7 @@ rustc_version   = "0.2.3"
 default = ["rustls-tls", "socks"]
 extra-debug = [ "rpki/extra-debug" ]
 socks = [ "reqwest/socks" ]
+rta = []
 native-tls = [ "reqwest/default-tls", "tls" ]
 rustls-tls = [ "reqwest/rustls-tls", "tls" ]
 tls = []

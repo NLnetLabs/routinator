@@ -14,14 +14,14 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
-use bytes::Bytes;
+#[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info, warn};
 use rpki::resources::AsId;
-use rpki::rta::Rta;
+#[cfg(feature = "rta")] use rpki::rta::Rta;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
-use crate::rta;
+#[cfg(feature = "rta")] use crate::rta;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
@@ -58,6 +58,7 @@ pub enum Operation {
     Server(Server),
     Vrps(Vrps),
     Validate(Validate),
+    #[cfg(feature = "rta")]
     ValidateDocument(ValidateDocument),
     Update(Update),
     PrintConfig(PrintConfig),
@@ -78,7 +79,10 @@ impl Operation {
         let app = Server::config_args(app);
         let app = Vrps::config_args(app);
         let app = Validate::config_args(app);
+
+        #[cfg(feature = "rta")]
         let app = ValidateDocument::config_args(app);
+
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
         Man::config_args(app)
@@ -105,6 +109,7 @@ impl Operation {
             ("validate", Some(matches)) => {
                 Operation::Validate(Validate::from_arg_matches(matches)?)
             },
+            #[cfg(feature = "rta")]
             ("rta", Some(matches)) => {
                 Operation::ValidateDocument(
                     ValidateDocument::from_arg_matches(matches)?
@@ -150,6 +155,7 @@ impl Operation {
             Operation::Server(cmd) => cmd.run(config),
             Operation::Vrps(cmd) => cmd.run(config),
             Operation::Validate(cmd) => cmd.run(config),
+            #[cfg(feature = "rta")]
             Operation::ValidateDocument(cmd) => cmd.run(config),
             Operation::Update(cmd) => cmd.run(config),
             Operation::PrintConfig(cmd) => cmd.run(config),
@@ -796,6 +802,7 @@ impl Validate {
 /// Validates an RTA-signed document.
 ///
 /// Performs a validation run in order to find the necessary certificates.
+#[cfg(feature = "rta")]
 pub struct ValidateDocument {
     /// Path to the signed document.
     document: PathBuf,
@@ -807,6 +814,7 @@ pub struct ValidateDocument {
     noupdate: bool,
 }
 
+#[cfg(feature = "rta")]
 impl ValidateDocument {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
@@ -836,7 +844,7 @@ impl ValidateDocument {
     ) -> Result<Self, Error> {
         Ok(ValidateDocument {
             document: matches.value_of("document").unwrap().into(),
-            signature: matches.value_of("siganture").unwrap().into(),
+            signature: matches.value_of("signature").unwrap().into(),
             noupdate: matches.is_present("noupdate"),
         })
     }
@@ -892,13 +900,13 @@ impl ValidateDocument {
         let validation = match rta::ValidationReport::new(&rta, &config) {
             Ok(validation) => validation,
             Err(_) => {
-                error!("RTA did not validate.");
+                error!("RTA did not validate. (new)");
                 return Err(ExitError::Invalid);
             }
         };
 
         if validation.process(&mut repo).is_err() {
-            error!("RTA did not validate.");
+            error!("RTA did not validate. (process)");
             return Err(ExitError::Invalid);
         }
 
@@ -916,7 +924,7 @@ impl ValidateDocument {
                 Ok(())
             }
             Err(_) => {
-                error!("RTA did not validate.");
+                error!("RTA did not validate. (finalize)");
                 Err(ExitError::Invalid)
             }
         }
