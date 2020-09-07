@@ -105,18 +105,12 @@ impl FromStr for OutputFormat {
 impl OutputFormat {
     /// Returns whether this output format requires extra output.
     pub fn extra_output(self) -> bool {
-        match self {
-            OutputFormat::ExtendedCsv => true,
-            _ => false
-        }
+        matches!(self, OutputFormat::ExtendedCsv)
     }
 
     /// Returns whether this output format requires metrics.
     pub fn needs_metrics(self) -> bool {
-        match self {
-            OutputFormat::Summary => true,
-            _ => false,
-        }
+        matches!(self, OutputFormat::Summary)
     }
 
     /// Creates an output stream for this format.

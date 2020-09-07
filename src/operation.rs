@@ -14,11 +14,14 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
+#[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info, warn};
 use rpki::resources::AsId;
+#[cfg(feature = "rta")] use rpki::rta::Rta;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
+#[cfg(feature = "rta")] use crate::rta;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
@@ -55,6 +58,8 @@ pub enum Operation {
     Server(Server),
     Vrps(Vrps),
     Validate(Validate),
+    #[cfg(feature = "rta")]
+    ValidateDocument(ValidateDocument),
     Update(Update),
     PrintConfig(PrintConfig),
     Man(Man),
@@ -74,6 +79,10 @@ impl Operation {
         let app = Server::config_args(app);
         let app = Vrps::config_args(app);
         let app = Validate::config_args(app);
+
+        #[cfg(feature = "rta")]
+        let app = ValidateDocument::config_args(app);
+
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
         Man::config_args(app)
@@ -100,6 +109,12 @@ impl Operation {
             ("validate", Some(matches)) => {
                 Operation::Validate(Validate::from_arg_matches(matches)?)
             },
+            #[cfg(feature = "rta")]
+            ("rta", Some(matches)) => {
+                Operation::ValidateDocument(
+                    ValidateDocument::from_arg_matches(matches)?
+                )
+            }
             ("update", Some(matches)) => {
                 Operation::Update(Update::from_arg_matches(matches)?)
             }
@@ -140,6 +155,8 @@ impl Operation {
             Operation::Server(cmd) => cmd.run(config),
             Operation::Vrps(cmd) => cmd.run(config),
             Operation::Validate(cmd) => cmd.run(config),
+            #[cfg(feature = "rta")]
+            Operation::ValidateDocument(cmd) => cmd.run(config),
             Operation::Update(cmd) => cmd.run(config),
             Operation::PrintConfig(cmd) => cmd.run(config),
             Operation::Man(cmd) => cmd.run(config),
@@ -381,7 +398,7 @@ impl Server {
         let join = thread::spawn(move || {
             loop {
                 history.mark_update_start();
-                let (report, metrics) = match repo.process() {
+                let (report, metrics) = match repo.process_origins() {
                     Ok(some) => some,
                     Err(_) => break
                 };
@@ -617,7 +634,7 @@ impl Vrps {
     fn run(self, config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
-        let (report, mut metrics) = repo.process()?;
+        let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(&config, true)?,
@@ -752,7 +769,7 @@ impl Validate {
     fn run(self, config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
-        let (report, mut metrics) = repo.process()?;
+        let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(&config, false)?,
@@ -775,6 +792,141 @@ impl Validate {
         }
         else {
             Ok(())
+        }
+    }
+}
+
+
+//------------ ValidateDocument ----------------------------------------------
+
+/// Validates an RTA-signed document.
+///
+/// Performs a validation run in order to find the necessary certificates.
+#[cfg(feature = "rta")]
+pub struct ValidateDocument {
+    /// Path to the signed document.
+    document: PathBuf,
+
+    /// Path to the signature.
+    signature: PathBuf,
+
+    /// Don’t update the repository.
+    noupdate: bool,
+}
+
+#[cfg(feature = "rta")]
+impl ValidateDocument {
+    /// Adds the command configuration to a clap app.
+    pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+        app.subcommand(SubCommand::with_name("rta")
+            .about("Validates an RTA-signed document")
+            .arg(Arg::with_name("noupdate")
+                .short("n")
+                .long("noupdate")
+                .help("Don't update the local cache")
+            )
+            .arg(Arg::with_name("document")
+                .value_name("DOCUMENT")
+                .required(true)
+                .help("Path to the signed document")
+            )
+            .arg(Arg::with_name("signature")
+                .value_name("SIGNATURE")
+                .required(true)
+                .help("Path to the signature")
+            )
+        )
+    }
+
+    /// Creates a command from clap matches.
+    pub fn from_arg_matches(
+        matches: &ArgMatches,
+    ) -> Result<Self, Error> {
+        Ok(ValidateDocument {
+            document: matches.value_of("document").unwrap().into(),
+            signature: matches.value_of("signature").unwrap().into(),
+            noupdate: matches.is_present("noupdate"),
+        })
+    }
+
+    /// Tries to validate a document through RTA signatures.
+    ///
+    /// Returns successfully if validation is successful or with an
+    /// appropriate error otherwise.
+    fn run(self, config: Config) -> Result<(), ExitError> {
+        let mut repo = Repository::new(&config, !self.noupdate)?;
+        config.switch_logging(false)?;
+
+        // Load and decode the signature.
+        let data = match fs::read(&self.signature) {
+            Ok(data) => Bytes::from(data),
+            Err(err) => {
+                error!(
+                    "Failed to read signature '{}': {}",
+                    self.signature.display(), err
+                );
+                return Err(ExitError::Generic)
+            }
+        };
+        let rta = match Rta::decode(data, config.strict) {
+            Ok(rta) => rta,
+            Err(err) => {
+                error!(
+                    "Failed to decode signature '{}': {}",
+                    self.signature.display(), err
+                );
+                return Err(ExitError::Invalid)
+            }
+        };
+
+        // Load and digest the document.
+        let digest = match rta.digest_algorithm().digest_file(&self.document) {
+            Ok(digest) => digest,
+            Err(err) => {
+                error!(
+                    "Failed to read document '{}': {}",
+                    self.document.display(), err
+                );
+                return Err(ExitError::Generic)
+            }
+        };
+
+        // Check that the digests matches.
+        if digest.as_ref() != rta.message_digest().as_ref() {
+            error!("RTA signature invalid.");
+            return Err(ExitError::Invalid)
+        }
+
+        let validation = match rta::ValidationReport::new(&rta, &config) {
+            Ok(validation) => validation,
+            Err(_) => {
+                error!("RTA did not validate. (new)");
+                return Err(ExitError::Invalid);
+            }
+        };
+
+        if validation.process(&mut repo).is_err() {
+            error!("RTA did not validate. (process)");
+            return Err(ExitError::Invalid);
+        }
+
+        match validation.finalize() {
+            Ok(rta) => {
+                for block in rta.as_resources().iter() {
+                    println!("{}", block);
+                }
+                for block in rta.v4_resources().iter() {
+                    println!("{}", block.display_v4());
+                }
+                for block in rta.v6_resources().iter() {
+                    println!("{}", block.display_v6());
+                }
+                Ok(())
+            }
+            Err(_) => {
+                error!("RTA did not validate. (finalize)");
+                Err(ExitError::Invalid)
+            }
         }
     }
 }
@@ -819,7 +971,7 @@ impl Update {
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, true)?;
-        let (_, metrics) = repo.process()?;
+        let (_, metrics) = repo.process_origins()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
@@ -1076,7 +1228,12 @@ pub enum ExitError {
     /// Incomplete update.
     ///
     /// This should be exit status 2.
-    IncompleteUpdate
+    IncompleteUpdate,
+
+    /// An object could not be validated.
+    ///
+    /// This should be exit status 3.
+    Invalid,
 }
 
 impl From<Error> for ExitError {
