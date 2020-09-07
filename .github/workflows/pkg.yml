@@ -35,6 +35,7 @@ jobs:
           "ubuntu:20.04",
           "debian:9",
           "debian:10",
+          "debian:11",
         ]
     env:
       CARGO_DEB_VER: 94ba8f3
@@ -135,11 +136,12 @@ jobs:
         ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
         DEB_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
         case ${MATRIX_IMAGE} in
-          ubuntu:16.04) OS_REL=xenial;  VARIANT_NAME="minimal" ;;
-          ubuntu:18.04) OS_REL=bionic;  VARIANT_NAME="minimal" ;;
-          ubuntu:20.04) OS_REL=focal;   VARIANT_NAME="" ;;
-          debian:9)     OS_REL=stretch; VARIANT_NAME="minimal" ;;
-          debian:10)    OS_REL=buster;  VARIANT_NAME="" ;;
+          ubuntu:16.04) OS_REL=xenial;   VARIANT_NAME="minimal" ;;
+          ubuntu:18.04) OS_REL=bionic;   VARIANT_NAME="minimal" ;;
+          ubuntu:20.04) OS_REL=focal;    VARIANT_NAME="" ;;
+          debian:9)     OS_REL=stretch;  VARIANT_NAME="minimal" ;;
+          debian:10)    OS_REL=buster;   VARIANT_NAME="" ;;
+          debian:11)    OS_REL=bullseye; VARIANT_NAME="" ;;
           *)            echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
         esac
 
@@ -200,6 +202,7 @@ jobs:
           - 'ubuntu:20.04'
           - 'debian:9'
           - 'debian:10'
+          - 'debian:11'
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
