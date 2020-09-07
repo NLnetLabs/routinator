@@ -35,7 +35,7 @@ jobs:
           "ubuntu:20.04",
           "debian:9",
           "debian:10",
-          "debian:11",
+          "debian:bullseye", # there is no debian:11 Docker Hub image tag yet
         ]
     env:
       CARGO_DEB_VER: 94ba8f3
@@ -53,7 +53,12 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        echo ::set-output name=pkgname::$(echo $MATRIX_IMAGE | tr -d ':.')
+        if [ "$MATRIX_IMAGE" == "debian:bullseye" ]; then
+          FIXED_MATRIX_IMAGE="debian11"
+        else
+          FIXED_MATRIX_IMAGE=$(echo $MATRIX_IMAGE | tr -d ':.')
+        fi
+        echo ::set-output name=fixedmatriximage::$FIXED_MATRIX_IMAGE
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -164,7 +169,7 @@ jobs:
           cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v
         fi
       env:
-        MATRIX_IMAGE: ${{ matrix.image }}
+        MATRIX_IMAGE: ${{ steps.setvars.outputs.fixedmatriximage }}
 
     # See what Lintian thinks of our package.
     - name: Verify the DEB package
@@ -180,7 +185,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ steps.setvars.outputs.pkgname }}
+        name: ${{ steps.setvars.outputs.fixedmatriximage }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
