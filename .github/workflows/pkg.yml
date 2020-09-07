@@ -59,7 +59,7 @@ jobs:
           FIXED_MATRIX_IMAGE="$MATRIX_IMAGE"
         fi
         echo ::set-output name=fixedmatriximage::$FIXED_MATRIX_IMAGE
-        echo ::set-output name=pkgname::(echo $FIXED_MATRIX_IMAGE | tr -d ':.')
+        echo ::set-output name=pkgname::$(echo $FIXED_MATRIX_IMAGE | tr -d ':.')
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
