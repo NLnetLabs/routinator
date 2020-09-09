@@ -30,12 +30,12 @@ jobs:
     strategy:
       matrix:
         image: # can't use complex values here, only primitive values are allowed
-          - "xenial"   # ubuntu/16.04
-          - "bionic"   # ubuntu/18.04
-          - "focal"    # ubuntu/20.04
-          - "stretch"  # debian/9
-          - "buster"   # debian/10
-          - "bullseye" # debian/11
+          - "ubuntu/xenial"   # ubuntu/16.04
+          - "ubuntu/bionic"   # ubuntu/18.04
+          - "ubuntu/focal"    # ubuntu/20.04
+          - "debian/stretch"  # debian/9
+          - "debian/buster"   # debian/10
+          - "debian/bullseye" # debian/11
     env:
       CARGO_DEB_VER: 94ba8f3
       # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
@@ -49,6 +49,17 @@ jobs:
     container: ${{ matrix.image }}
 
     steps:
+    - name: Set vars
+      id: setvars
+      shell: bash
+      run: |
+        # Get the operating system release name (e.g. xenial) from the image name
+        # (e.g. ubuntu/xenial) by extracting only the part after but not including
+        # the first forward slash:
+        echo ::set-env name=OS_REL::${MATRIX_IMAGE#*/}
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+
     # Git clone the Routinator code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -127,7 +138,8 @@ jobs:
         # is treated as higher and tilda is treated as lower.
         ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
         DEB_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
-        case ${MATRIX_IMAGE} in
+
+        case ${OS_REL} in
           xenial|bionic|stretch) VARIANT_NAME="minimal" ;;
           *)                     VARIANT_NAME="" ;;
         esac
@@ -147,15 +159,13 @@ jobs:
         echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >debian/changelog
         echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>debian/changelog
         echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>debian/changelog
-        DEB_VER="${DEB_ROUTINATOR_VER}-1${MATRIX_IMAGE}"
+        DEB_VER="${DEB_ROUTINATOR_VER}-1${OS_REL}"
 
         if [[ "${VARIANT_NAME}" == "" ]]; then
           cargo deb --deb-version ${DEB_VER} -v
         else
           cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v
         fi
-      env:
-        MATRIX_IMAGE: ${{ matrix.image }}
 
     # See what Lintian thinks of our package.
     - name: Verify the DEB package
@@ -171,7 +181,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ matrix.image }}
+        name: ${{ env.OS_REL }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
@@ -188,12 +198,12 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - "xenial"   # ubuntu/16.04
-          - "bionic"   # ubuntu/18.04
-          - "focal"    # ubuntu/20.04
-          - "stretch"  # debian/9
-          - "buster"   # debian/10
-          - "bullseye" # debian/11
+          - "ubuntu/xenial"   # ubuntu/16.04
+          - "ubuntu/bionic"   # ubuntu/18.04
+          - "ubuntu/focal"    # ubuntu/20.04
+          - "debian/stretch"  # debian/9
+          - "debian/buster"   # debian/10
+          - "debian/bullseye" # debian/11
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -202,12 +212,12 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        case ${MATRIX_IMAGE} in
-          stretch|buster|bullseye) LXC_IMAGE=images:debian/${MATRIX_IMAGE}/cloud ;;
-          *)                       LXC_IMAGE=images:ubuntu/${MATRIX_IMAGE} ;;
+        case ${MATRIX_IMAGE%/*} in
+          debian) LXC_IMAGE=images:${MATRIX_IMAGE}/cloud ;;
+          *)      LXC_IMAGE=images:${MATRIX_IMAGE} ;;
         esac
 
-        echo ::set-env name=LXC_IMAGE::$(echo "images:${SLASHED}/cloud")
+        echo ::set-env name=LXC_IMAGE::${LXC_IMAGE}
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -232,7 +242,7 @@ jobs:
       run: |
         # security.nesting=true is needed to avoid error "Failed to set up mount
         # namespacing: Permission denied" in a Debian 10 container.
-        sg lxd -c "lxc launch $LXC_IMAGE -c security.nesting=true testcon"
+        sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
 
     # Run apt-get update and install man and sudo support (missing in some LXC/LXD
     # O/S images) but first wait for cloud-init to finish otherwise the network
@@ -253,12 +263,12 @@ jobs:
     - name: Copy DEB into LXC container
       run: |
         DEB_FILE=$(ls -1 *.deb)
-        echo ::set-env name=DEB_FILE::$DEB_FILE
+        echo ::set-env name=DEB_FILE::${DEB_FILE}
         sg lxd -c "lxc file push ${DEB_FILE} testcon/tmp/"
 
     - name: Install new DEB package
       run: |
-        sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/$DEB_FILE"
+        sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/${DEB_FILE}"
 
     - name: Test installed packages
       run: |
