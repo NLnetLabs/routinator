@@ -216,16 +216,12 @@ jobs:
         # Get the operating system and release name (e.g. ubuntu and xenial) from
         # the image name (e.g. ubuntu:xenial) by extracting only the parts before
         # and after but not including the colon:
-        OS_REL=${MATRIX_IMAGE#*:}
         OS_NAME=${MATRIX_IMAGE%:*}
+        OS_REL=${MATRIX_IMAGE#*:}
 
-        case ${OS_NAME} in
-          debian) LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud ;;
-          *)      LXC_IMAGE=images:${OS_NAME}/${OS_REL} ;;
-        esac
-
+        echo ::set-env name=OS_NAME::${OS_NAME}
         echo ::set-env name=OS_REL::${OS_REL}
-        echo ::set-env name=LXC_IMAGE::${LXC_IMAGE}
+        echo ::set-env name=LXC_IMAGE::images:${OS_NAME}/${OS_REL}/cloud
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
