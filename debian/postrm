@@ -1,0 +1,16 @@
+#!/bin/sh -e
+
+ROUTINATOR_ETC="/etc/routinator"
+
+case "$1" in
+purge)
+    # Per https://www.debian.org/doc/debian-policy/ch-files.html#behavior
+    # "configuration files must be preserved when the package is removed, and
+    #  only deleted when the package is purged."
+    if [ -d ${ROUTINATOR_ETC} ]; then
+        rm -R ${ROUTINATOR_ETC}
+    fi
+    ;;
+esac
+
+#DEBHELPER#
