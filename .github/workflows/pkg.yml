@@ -29,14 +29,13 @@ jobs:
   deb-pkg:
     strategy:
       matrix:
-        image: [
-          "ubuntu:16.04",
-          "ubuntu:18.04",
-          "ubuntu:20.04",
-          "debian:9",
-          "debian:10",
-          "debian:bullseye", # there is no debian:11 Docker Hub image tag yet
-        ]
+        image: # can't use complex values here, only primitive values are allowed
+          - "xenial"   # ubuntu/16.04
+          - "bionic"   # ubuntu/18.04
+          - "focal"    # ubuntu/20.04
+          - "stretch"  # debian/9
+          - "buster"   # debian/10
+          - "bullseye" # debian/11
     env:
       CARGO_DEB_VER: 94ba8f3
       # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
@@ -48,21 +47,8 @@ jobs:
     # https://github.com/rust-lang/rust/issues/57497. Specifying container
     # causes all of the steps in this job to run inside a Docker container.
     container: ${{ matrix.image }}
-    steps:
-    - name: Set vars
-      id: setvars
-      shell: bash
-      run: |
-        if [ "$MATRIX_IMAGE" == "debian:bullseye" ]; then
-          FIXED_MATRIX_IMAGE="debian:11"
-        else
-          FIXED_MATRIX_IMAGE="$MATRIX_IMAGE"
-        fi
-        echo ::set-output name=fixedmatriximage::$FIXED_MATRIX_IMAGE
-        echo ::set-output name=pkgname::$(echo $FIXED_MATRIX_IMAGE | tr -d ':.')
-      env:
-        MATRIX_IMAGE: ${{ matrix.image }}
 
+    steps:
     # Git clone the Routinator code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -93,7 +79,7 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ job.container.image }}-${{ matrix.image }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ job.container.image }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     # Speed up cargo-deb installation by only re-downloading and re-building its
     # dependent crates if we change the version of cargo-deb that we are using.
@@ -102,7 +88,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-deb
-        key: ${{ job.container.image }}-${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
+        key: ${{ job.container.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
 
     # Only install cargo-deb if not already fetched from the cache.
     - name: Install Cargo Deb
@@ -142,13 +128,8 @@ jobs:
         ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
         DEB_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
         case ${MATRIX_IMAGE} in
-          ubuntu:16.04) OS_REL=xenial;   VARIANT_NAME="minimal" ;;
-          ubuntu:18.04) OS_REL=bionic;   VARIANT_NAME="minimal" ;;
-          ubuntu:20.04) OS_REL=focal;    VARIANT_NAME="" ;;
-          debian:9)     OS_REL=stretch;  VARIANT_NAME="minimal" ;;
-          debian:10)    OS_REL=buster;   VARIANT_NAME="" ;;
-          debian:11)    OS_REL=bullseye; VARIANT_NAME="" ;;
-          *)            echo 2>&1 "ERROR: Unexpected matrix image"; exit 1 ;;
+          xenial|bionic|stretch) VARIANT_NAME="minimal" ;;
+          *)                     VARIANT_NAME="" ;;
         esac
 
         case ${{ github.event_name }} in
@@ -166,7 +147,7 @@ jobs:
         echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >debian/changelog
         echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>debian/changelog
         echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>debian/changelog
-        DEB_VER="${DEB_ROUTINATOR_VER}-1${OS_REL}"
+        DEB_VER="${DEB_ROUTINATOR_VER}-1${MATRIX_IMAGE}"
 
         if [[ "${VARIANT_NAME}" == "" ]]; then
           cargo deb --deb-version ${DEB_VER} -v
@@ -174,7 +155,7 @@ jobs:
           cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v
         fi
       env:
-        MATRIX_IMAGE: ${{ steps.setvars.outputs.fixedmatriximage }}
+        MATRIX_IMAGE: ${{ matrix.image }}
 
     # See what Lintian thinks of our package.
     - name: Verify the DEB package
@@ -190,7 +171,7 @@ jobs:
     - name: Upload DEB package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ steps.setvars.outputs.pkgname }}
+        name: ${{ matrix.image }}
         path: target/debian/*.deb
 
   # Download and sanity check on target operating systems the packages created
@@ -207,12 +188,12 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - 'ubuntu:16.04'
-          - 'ubuntu:18.04'
-          - 'ubuntu:20.04'
-          - 'debian:9'
-          - 'debian:10'
-          - 'debian:11'
+          - "xenial"   # ubuntu/16.04
+          - "bionic"   # ubuntu/18.04
+          - "focal"    # ubuntu/20.04
+          - "stretch"  # debian/9
+          - "buster"   # debian/10
+          - "bullseye" # debian/11
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -221,21 +202,19 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        if [[ $MATRIX_IMAGE == *debian* ]]; then
-          SLASHED=$(echo $MATRIX_IMAGE | tr ':' '/')
-          echo ::set-env name=LXC_IMAGE::$(echo "images:${SLASHED}/cloud")
-        else
-          echo ::set-env name=LXC_IMAGE::$(echo $MATRIX_IMAGE)
-        fi
-        echo ::set-env name=DEB_NAME::$(echo $MATRIX_IMAGE | tr -d ':.')
-        echo ::set-output name=pkgname::$(echo $MATRIX_IMAGE | tr -d ':.')
+        case ${MATRIX_IMAGE} in
+          stretch|buster|bullseye) LXC_IMAGE=images:debian/${MATRIX_IMAGE}/cloud ;;
+          *)                       LXC_IMAGE=images:ubuntu/${MATRIX_IMAGE} ;;
+        esac
+
+        echo ::set-env name=LXC_IMAGE::$(echo "images:${SLASHED}/cloud")
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
     - name: Download DEB package
       uses: actions/download-artifact@v2
       with:
-        name: ${{ steps.setvars.outputs.pkgname }}
+        name: ${{ matrix.image }}
 
     - name: Add current user to LXD group
       run: |
