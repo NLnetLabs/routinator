@@ -37,7 +37,7 @@ jobs:
           - "debian:buster"   # debian/10
           - "debian:bullseye" # debian/11
     env:
-      CARGO_DEB_VER: v1.28.0
+      CARGO_DEB_VER: 1.28.0
       # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: bis
