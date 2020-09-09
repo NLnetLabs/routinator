@@ -30,12 +30,12 @@ jobs:
     strategy:
       matrix:
         image: # can't use complex values here, only primitive values are allowed
-          - "ubuntu/xenial"   # ubuntu/16.04
-          - "ubuntu/bionic"   # ubuntu/18.04
-          - "ubuntu/focal"    # ubuntu/20.04
-          - "debian/stretch"  # debian/9
-          - "debian/buster"   # debian/10
-          - "debian/bullseye" # debian/11
+          - "ubuntu:xenial"   # ubuntu/16.04
+          - "ubuntu:bionic"   # ubuntu/18.04
+          - "ubuntu:focal"    # ubuntu/20.04
+          - "debian:stretch"  # debian/9
+          - "debian:buster"   # debian/10
+          - "debian:bullseye" # debian/11
     env:
       CARGO_DEB_VER: 94ba8f3
       # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
@@ -54,9 +54,9 @@ jobs:
       shell: bash
       run: |
         # Get the operating system release name (e.g. xenial) from the image name
-        # (e.g. ubuntu/xenial) by extracting only the part after but not including
-        # the first forward slash:
-        echo ::set-env name=OS_REL::${MATRIX_IMAGE#*/}
+        # (e.g. ubuntu:xenial) by extracting only the part after but not including
+        # the colon:
+        echo ::set-env name=OS_REL::${MATRIX_IMAGE#*:}
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -197,13 +197,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - "ubuntu/xenial"   # ubuntu/16.04
-          - "ubuntu/bionic"   # ubuntu/18.04
-          - "ubuntu/focal"    # ubuntu/20.04
-          - "debian/stretch"  # debian/9
-          - "debian/buster"   # debian/10
-          - "debian/bullseye" # debian/11
+        image: # can't use complex values here, only primitive values are allowed
+          - "ubuntu:xenial"   # ubuntu/16.04
+          - "ubuntu:bionic"   # ubuntu/18.04
+          - "ubuntu:focal"    # ubuntu/20.04
+          - "debian:stretch"  # debian/9
+          - "debian:buster"   # debian/10
+          - "debian:bullseye" # debian/11
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -212,9 +212,11 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        case ${MATRIX_IMAGE%/*} in
-          debian) LXC_IMAGE=images:${MATRIX_IMAGE}/cloud ;;
-          *)      LXC_IMAGE=images:${MATRIX_IMAGE} ;;
+        OS_NAME=${MATRIX_IMAGE%:*}
+        SLASHED_IMAGE=$(echo ${MATRIX_IMAGE} | tr ':' '/')
+        case ${OS_NAME} in
+          debian) LXC_IMAGE=images:${SLASHED_IMAGE}/cloud ;;
+          *)      LXC_IMAGE=images:${SLASHED_IMAGE} ;;
         esac
 
         echo ::set-env name=LXC_IMAGE::${LXC_IMAGE}
