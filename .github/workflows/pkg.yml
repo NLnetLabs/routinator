@@ -257,26 +257,13 @@ jobs:
 
     # Run apt-get update and install man support (missing in some LXC/LXD O/S
     # images) but first wait for cloud-init to finish otherwise the network
-    # isn't yet ready.
+    # isn't yet ready. Don't use cloud-init status --wait as that isn't
+    # supported on older O/S's like Ubuntu 16.04 and Debian 9.
     - name: Prepare container
       shell: bash
       run: |
-        while true; do
-          case ${LXC_IMAGE} in
-            images:debian/9/cloud|images:debian/10/cloud)
-              # Not sure why the method below doesn't work for Debian 9 and 10.
-              # Just sleep for now instead to avoid the name resolution failures
-              # that otherwise happen during apt-get update below.
-              sleep 60s && break
-              ;;
-
-            *)
-              # For all other images wait until cloud-init says it is finished
-              OUTPUT=$(sg lxd -c "lxc exec testcon -- cloud-init status")
-              [[ "$OUTPUT" == "status: done" ]] && break
-              ;;
-          esac
-          echo "Waiting for cloud-init.."
+        echo "Waiting for cloud-init.."
+        while ! sudo lxc exec testcon -- ls -la /var/lib/cloud/data/result.json; do
           sleep 1s
         done
         sg lxd -c "lxc exec testcon -- apt-get update"
