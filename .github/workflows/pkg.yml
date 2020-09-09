@@ -255,10 +255,12 @@ jobs:
         # namespacing: Permission denied" in a Debian 10 container.
         sg lxd -c "lxc launch $LXC_IMAGE -c security.nesting=true testcon"
 
-    # Run apt-get update and install man support (missing in some LXC/LXD O/S
-    # images) but first wait for cloud-init to finish otherwise the network
-    # isn't yet ready. Don't use cloud-init status --wait as that isn't
-    # supported on older O/S's like Ubuntu 16.04 and Debian 9.
+    # Run apt-get update and install man and sudo support (missing in some LXC/LXD
+    # O/S images) but first wait for cloud-init to finish otherwise the network
+    # isn't yet ready. Don't use cloud-init status --wait as that isn't supported
+    # on older O/S's like Ubuntu 16.04 and Debian 9. Use the sudo package provided
+    # configuration files otherwise when using sudo we get an error that the root
+    # user isn't allowed to use sudo.
     - name: Prepare container
       shell: bash
       run: |
@@ -267,7 +269,7 @@ jobs:
           sleep 1s
         done
         sg lxd -c "lxc exec testcon -- apt-get update"
-        sg lxd -c "lxc exec testcon -- apt-get install -y man"
+        sg lxd -c "lxc exec testcon -- apt-get install -y -o Dpkg::Options::=\"--force-confnew\" man sudo"
 
     - name: Copy DEB into LXC container
       run: |
