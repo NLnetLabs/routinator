@@ -295,11 +295,11 @@ jobs:
         echo -e "\nROUTINATOR SERVICE STATUS BEFORE ENABLE:"
         sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
 
-        echo -e "\nENABLE ROUTINATOR SERVICE:"
-        sg lxd -c "lxc exec testcon -- systemctl enable routinator"
-
         echo -e "\nINIT ROUTINATOR:"
         sg lxd -c "lxc exec testcon -- sudo -u routinator routinator --config /etc/routinator/routinator.conf init --accept-arin-rpa"
+
+        echo -e "\nENABLE ROUTINATOR SERVICE:"
+        sg lxd -c "lxc exec testcon -- systemctl enable routinator"
 
         echo -e "\nROUTINATOR SERVICE STATUS AFTER ENABLE:"
         sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
