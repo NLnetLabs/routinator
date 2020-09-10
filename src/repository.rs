@@ -428,7 +428,10 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             rrdp_server, &cert, uri, &repo_uri, &mut process,
         ) {
             Some(some) => some,
-            None => return Ok(()),
+            None => {
+                process.cancel(&cert.cert);
+                return Ok(())
+            }
         };
 
         let mut child_cas = Vec::new();
@@ -437,6 +440,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 rrdp_server, uri, hash, &cert, &store, &mut process,
                 &mut child_cas
             )? {
+                process.cancel(&cert.cert);
                 return Ok(())
             }
         }
@@ -1102,5 +1106,14 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// The method is called when all objects of the CA have been processed
     /// successfully or have been actively ignored and no error has happend.
     fn commit(self);
+
+    /// Completes processing of an invalid CA.
+    ///
+    /// The method is called when at least one of the objects published by the
+    /// CA is invalid.
+    ///
+    /// The default implementation does nothing at all.
+    fn cancel(self, _cert: &ResourceCert) {
+    }
 }
 

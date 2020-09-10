@@ -13,7 +13,9 @@ use crossbeam_queue::SegQueue;
 use log::{debug, info};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
-use rpki::resources::AsId;
+use rpki::resources::{
+    AsBlocks, AsBlocksBuilder, AsId, IpBlocks, IpBlocksBuilder
+};
 use rpki::roa::{FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::{Time, Validity};
@@ -35,6 +37,7 @@ use crate::slurm::{ExceptionInfo, LocalExceptions};
 pub struct OriginsReport {
     origins: SegQueue<RouteOrigins>,
     tals: Mutex<Vec<Arc<TalInfo>>>,
+    filter: Mutex<InvalidResourcesBuilder>,
 }
 
 impl OriginsReport {
@@ -42,6 +45,7 @@ impl OriginsReport {
         OriginsReport {
             origins: SegQueue::new(),
             tals: Mutex::new(Vec::new()),
+            filter: Mutex::new(Default::default()),
         }
     }
 
@@ -209,6 +213,80 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
 
     fn commit(self) {
         self.report.origins.push(self.origins);
+    }
+
+    fn cancel(self, cert: &ResourceCert) {
+        self.report.filter.lock().unwrap().extend_from_cert(cert);
+    }
+}
+
+
+//------------ InvalidResources ----------------------------------------------
+
+/// Collects the invalid resources encountered during validation.
+#[derive(Clone, Debug, Default)]
+struct InvalidResources {
+    v4: IpBlocks,
+    v6: IpBlocks,
+    asn: AsBlocks
+}
+
+impl InvalidResources {
+    fn keep_address(&self, addr: &FriendlyRoaIpAddress) -> bool {
+        if addr.is_v4() {
+            !self.v4.intersects_block(addr.prefix())
+        }
+        else {
+            !self.v6.intersects_block(addr.prefix())
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.v4.is_empty() && self.v6.is_empty() && self.asn.is_empty()
+    }
+
+    fn log(&self) {
+        if self.is_empty() {
+            return
+        }
+
+        info!("Unusable resources:");
+        for block in self.v4.iter() {
+            info!("   {}", block.display_v4());
+        }
+        for block in self.v6.iter() {
+            info!("   {}", block.display_v4());
+        }
+        for block in self.asn.iter() {
+            info!("   {}", block);
+        }
+    }
+}
+
+
+//------------ InvalidResourcesBuilder ---------------------------------------
+
+/// Collects the invalid resources encountered during validation.
+#[derive(Clone, Debug, Default)]
+struct InvalidResourcesBuilder {
+    v4: IpBlocksBuilder,
+    v6: IpBlocksBuilder,
+    asn: AsBlocksBuilder
+}
+
+impl InvalidResourcesBuilder {
+    fn extend_from_cert(&mut self, cert: &ResourceCert) {
+        self.v4.extend(cert.v4_resources().iter());
+        self.v6.extend(cert.v6_resources().iter());
+        self.asn.extend(cert.as_resources().iter());
+    }
+
+    fn finalize(self) -> InvalidResources {
+        InvalidResources {
+            v4: self.v4.finalize(),
+            v6: self.v6.finalize(),
+            asn: self.asn.finalize(),
+        }
     }
 }
 
@@ -681,6 +759,9 @@ impl AddressOrigins {
             TalMetrics::new(tal.clone())
         }).collect();
 
+        let filter = report.filter.into_inner().unwrap().finalize();
+        filter.log();
+
         while let Ok(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
                 match refresh {
@@ -693,14 +774,24 @@ impl AddressOrigins {
                 let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
                 for addr in origin.addrs {
-                    tal_metrics.vrps += 1;
+                    tal_metrics.total_valid_vrps += 1;
+
+                    if !filter.keep_address(&addr) {
+                        tal_metrics.unsafe_filtered_vrps += 1;
+                        continue;
+                    }
+
                     let addr = AddressOrigin::from_roa(
                         origin.as_id,
                         addr,
                         origin.info.clone()
                     );
-                    if exceptions.keep_origin(&addr) {
-                        let _ = res.insert(addr);
+                    if !exceptions.keep_origin(&addr) {
+                        tal_metrics.locally_filtered_vrps += 1;
+                    }
+
+                    if res.insert(addr) {
+                        tal_metrics.final_vrps += 1;
                     }
                 }
             }
@@ -857,7 +948,7 @@ impl OriginsDiff {
                 let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
                 for addr in origin.addrs {
-                    tal_metrics.vrps += 1;
+                    tal_metrics.total_valid_vrps += 1;
                     let addr = AddressOrigin::from_roa(
                         origin.as_id, addr, origin.info.clone()
                     );

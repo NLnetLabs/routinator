@@ -106,8 +106,8 @@ impl Metrics {
         info!("Summary:");
         for tal in &self.tals {
             info!(
-                "{}: {} valid ROAs, {} VRPs.",
-                tal.tal.name(), tal.roas, tal.vrps
+                "{}: {} valid ROAs, {} valid VRPs, {} final VRPs.",
+                tal.tal.name(), tal.roas, tal.total_valid_vrps, tal.final_vrps
             )
         }
     }
@@ -133,11 +133,26 @@ pub struct TalMetrics {
     /// The TAL.
     pub tal: Arc<TalInfo>,
 
-    /// Number of ROAs.
+    /// Number of valid ROAs.
     pub roas: u32,
 
-    /// Number of VRPs.
-    pub vrps: u32,
+    /// Total number of valid VRPs.
+    ///
+    /// This is the total number of VRPs resulting from the validation run
+    /// before any filtering is done. In particular, this number includes
+    /// duplicate VRPs.
+    pub total_valid_vrps: u32,
+
+    /// Number of VRPs filtered due to invalid CAs.
+    pub unsafe_filtered_vrps: u32,
+
+    /// Number of VRPs filtered due to local exceptions.
+    pub locally_filtered_vrps: u32,
+
+    /// Total number of VRPs in the final set.
+    ///
+    /// This is the number of unique valid VRPs minus filtered VRPs.
+    pub final_vrps: u32,
 }
 
 impl TalMetrics {
@@ -145,7 +160,10 @@ impl TalMetrics {
         TalMetrics {
             tal,
             roas: 0,
-            vrps: 0
+            total_valid_vrps: 0,
+            unsafe_filtered_vrps: 0,
+            locally_filtered_vrps: 0,
+            final_vrps: 0,
         }
     }
 }
