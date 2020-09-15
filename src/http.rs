@@ -192,28 +192,30 @@ fn metrics_active(
         ).unwrap();
     }
 
-    // vrps_unsafe
+    // vrps_filtered_unsafe
     writeln!(res,
         "\n\
-         # HELP routinator_vrps_unsafe filtered VRPs related to invalid data\n\
-         # TYPE routinator_vrps_unsafe gauge"
+         # HELP routinator_vrps_filtered_unsafe \
+                VRPs filtered overlapping with invalid address space\n\
+         # TYPE routinator_vrps_filtered_unsafe gauge"
     ).unwrap();
     for tal in metrics.tals() {
         writeln!(res,
-            "routinator_vrps_total{{tal=\"{}\"}} {}",
+            "routinator_vrps_filtered_unsafe{{tal=\"{}\"}} {}",
             tal.tal.name(), tal.unsafe_filtered_vrps
         ).unwrap();
     }
 
-    // vrps_slurm
+    // vrps_filtered_locally
     writeln!(res,
         "\n\
-         # HELP routinator_vrps_slurm filtered VRPs due to local exceptions\n\
-         # TYPE routinator_vrps_slurm gauge"
+         # HELP routinator_vrps_filtered_locally \
+                VRPs filtered based on local exceptions\n\
+         # TYPE routinator_vrps_filtered_locally gauge"
     ).unwrap();
     for tal in metrics.tals() {
         writeln!(res,
-            "routinator_vrps_total{{tal=\"{}\"}} {}",
+            "routinator_vrps_filtered_locally{{tal=\"{}\"}} {}",
             tal.tal.name(), tal.locally_filtered_vrps
         ).unwrap();
     }
@@ -536,13 +538,13 @@ fn status_active(
     }
     writeln!(res).unwrap();
 
-    // unsafe-vrps
-    writeln!(res, "unsafe-vrps: {}",
+    // unsafe-filtered-vrps
+    writeln!(res, "unsafe-filtered-vrps: {}",
         metrics.tals().iter().map(|tal| tal.unsafe_filtered_vrps).sum::<u32>()
     ).unwrap();
 
-    // unsafe-vrps-per-tal
-    write!(res, "unsafe-vrps-per-tal: ").unwrap();
+    // unsafe-filtered-vrps-per-tal
+    write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
     for tal in metrics.tals() {
         write!(res, "{}={} ",
             tal.tal.name(), tal.unsafe_filtered_vrps
@@ -550,13 +552,13 @@ fn status_active(
     }
     writeln!(res).unwrap();
 
-    // slurm-vrps
-    writeln!(res, "slurm-vrps: {}",
+    // locally-filtered-vrps
+    writeln!(res, "locally-filtered-vrps: {}",
         metrics.tals().iter().map(|tal| tal.locally_filtered_vrps).sum::<u32>()
     ).unwrap();
 
-    // sulrm-vrps-per-tal
-    write!(res, "slurm-vrps-per-tal: ").unwrap();
+    // locally-filtered-vrps-per-tal
+    write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
     for tal in metrics.tals() {
         write!(res, "{}={} ",
             tal.tal.name(), tal.locally_filtered_vrps
