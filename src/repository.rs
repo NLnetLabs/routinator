@@ -368,7 +368,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 _ => continue,
             };
             if cert.subject_public_key_info() != tal.key_info() {
-                info!(
+                warn!(
                     "Trust anchor {}: key doesn’t match TAL.",
                     uri
                 );
@@ -378,7 +378,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                                               self.repository.strict) {
                 Ok(cert) => CaCert::root(cert, index),
                 Err(_) => {
-                    info!(
+                    warn!(
                         "Trust anchor {}: doesn’t validate.",
                         uri
                     );
@@ -470,21 +470,21 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let uri = match issuer.rpki_manifest() {
             Some(uri) => uri,
             None => {
-                info!("{}: No valid manifest found. Ignoring.", issuer_uri);
+                warn!("{}: No valid manifest found.", issuer_uri);
                 return None
             }
         };
         let bytes = match self.load_file(rrdp_server, &uri) {
             Some(bytes) => bytes,
             None => {
-                info!("{}: failed to load.", uri);
+                warn!("{}: failed to load.", uri);
                 return None;
             }
         };
         let manifest = match Manifest::decode(bytes, self.repository.strict) {
             Ok(manifest) => manifest,
             Err(_) => {
-                info!("{}: failed to decode", uri);
+                warn!("{}: failed to decode", uri);
                 return None;
             }
         };
@@ -493,7 +493,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         ) {
             Ok(manifest) => manifest,
             Err(_) => {
-                info!("{}: failed to validate", uri);
+                warn!("{}: failed to validate", uri);
                 return None;
             }
         };
@@ -501,7 +501,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             self.metrics.inc_stale_count();
             match self.repository.stale {
                 StalePolicy::Reject => {
-                    info!("{}: stale manifest", uri);
+                    warn!("{}: stale manifest", uri);
                     return None;
                 }
                 StalePolicy::Warn => {
@@ -515,7 +515,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         ) {
             Ok(some) => some,
             Err(_) => {
-                info!("{}: certificate has been revoked", uri);
+                warn!("{}: certificate has been revoked", uri);
                 return None
             }
         };
@@ -549,12 +549,12 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let bytes = match self.load_file(rrdp_server, &uri) {
             Some(bytes) => bytes,
             None => {
-                info!("{}: failed to load.", uri);
+                warn!("{}: failed to load.", uri);
                 return Ok(false)
             }
         };
         if hash.verify(&bytes).is_err() {
-            info!("{}: file has wrong hash.", uri);
+            warn!("{}: file has wrong manifest hash.", uri);
             return Ok(false)
         }
         // XXX We may want to move this all the way to the top to avoid
@@ -593,7 +593,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let cert = match Cert::decode(bytes) {
             Ok(cert) => cert,
             Err(_) => {
-                info!("{}: failed to decode.", uri);
+                warn!("{}: failed to decode.", uri);
                 return Ok(false)
             }
         };
@@ -625,27 +625,26 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     ) -> Result<bool, Error> {
         if issuer.check_loop(&cert).is_err() {
             warn!(
-                "{}: certificate loop detected. Ignoring this CA.",
+                "{}: certificate loop detected.",
                 uri
             );
-            return Ok(true) // XXX I think we can keep going?
+            return Ok(true)
         }
         let cert = match cert.validate_ca(issuer, self.repository.strict) {
             Ok(cert) => cert,
             Err(_) => {
-                info!("{}: failed to validate.", uri);
-                return Ok(false) // XXX Or is this just fine?
+                warn!("{}: failed to validate.", uri);
+                return Ok(false)
             }
         };
         if self.check_crl(&cert, crl_store).is_err() {
-            info!("{}: certificate has been revoked", uri);
-            return Ok(false) // XXX Or is this just fine?
+            warn!("{}: certificate has been revoked", uri);
+            return Ok(false)
         }
         let repo_uri = match cert.ca_repository() {
             Some(uri) => uri,
             None => {
-                // XXX Or should we fail the CA here?
-                info!("CA cert {} has no repository URI. Ignoring.", uri);
+                warn!("CA cert {} has no repository URI. Ignoring.", uri);
                 return Ok(true)
             }
         };
@@ -692,13 +691,13 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let cert = match cert.validate_ee(issuer, self.repository.strict) {
             Ok(cert) => cert,
             Err(_) => {
-                info!("{}: failed to validate.", uri);
-                return Ok(false) // XXX Or is this just fine?
+                warn!("{}: failed to validate.", uri);
+                return Ok(false)
             }
         };
         if self.check_crl(&cert, crl_store).is_err() {
-            info!("{}: certificate has been revoked", uri);
-            return Ok(false) // XXX Or is this just fine?
+            warn!("{}: certificate has been revoked", uri);
+            return Ok(false)
         }
 
         process.process_ee_cert(&uri, cert)?;
@@ -720,7 +719,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let roa = match Roa::decode(bytes, self.repository.strict) {
             Ok(roa) => roa,
             Err(_) => {
-                info!("{}: decoding failed.", uri);
+                warn!("{}: decoding failed.", uri);
                 return Ok(false)
             }
         };
@@ -733,7 +732,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 Ok(true)
             }
             Err(_) => {
-                info!("{}: processing failed.", uri);
+                warn!("{}: processing failed.", uri);
                 Ok(false)
             }
         }
@@ -753,7 +752,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let obj = match SignedObject::decode(bytes, self.repository.strict) {
             Ok(obj) => obj,
             Err(_) => {
-                info!("{}: decoding failed.", uri);
+                warn!("{}: decoding failed.", uri);
                 return Ok(false)
             }
         };
@@ -765,7 +764,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 Ok(true)
             }
             Err(_) => {
-                info!("{}: processing failed.", uri);
+                warn!("{}: processing failed.", uri);
                 Ok(false)
             }
         }

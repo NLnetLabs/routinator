@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use crossbeam_queue::SegQueue;
-use log::{debug, info};
+use log::{debug, info, warn};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::{
@@ -216,6 +216,18 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
     }
 
     fn cancel(self, cert: &ResourceCert) {
+        if let Some(uri) = cert.ca_repository() {
+            warn!("CA for {} rejected, resources to be filtered:", uri);
+            for block in cert.v4_resources().iter() {
+                warn!("   {}", block.display_v4());
+            }
+            for block in cert.v6_resources().iter() {
+                warn!("   {}", block.display_v4());
+            }
+            for block in cert.as_resources().iter() {
+                warn!("   {}", block);
+            }
+        }
         self.report.filter.lock().unwrap().extend_from_cert(cert);
     }
 }
@@ -240,27 +252,6 @@ impl InvalidResources {
             !self.v6.intersects_block(addr.prefix())
         }
     }
-
-    fn is_empty(&self) -> bool {
-        self.v4.is_empty() && self.v6.is_empty() && self.asn.is_empty()
-    }
-
-    fn log(&self) {
-        if self.is_empty() {
-            return
-        }
-
-        info!("Unusable resources:");
-        for block in self.v4.iter() {
-            info!("   {}", block.display_v4());
-        }
-        for block in self.v6.iter() {
-            info!("   {}", block.display_v4());
-        }
-        for block in self.asn.iter() {
-            info!("   {}", block);
-        }
-    }
 }
 
 
@@ -276,9 +267,15 @@ struct InvalidResourcesBuilder {
 
 impl InvalidResourcesBuilder {
     fn extend_from_cert(&mut self, cert: &ResourceCert) {
-        self.v4.extend(cert.v4_resources().iter());
-        self.v6.extend(cert.v6_resources().iter());
-        self.asn.extend(cert.as_resources().iter());
+        self.v4.extend(
+            cert.v4_resources().iter().filter(|block| !block.is_slash_zero())
+        );
+        self.v6.extend(
+            cert.v6_resources().iter().filter(|block| !block.is_slash_zero())
+        );
+        self.asn.extend(
+            cert.as_resources().iter().filter(|block| !block.is_whole_range())
+        );
     }
 
     fn finalize(self) -> InvalidResources {
@@ -760,7 +757,7 @@ impl AddressOrigins {
         }).collect();
 
         let filter = report.filter.into_inner().unwrap().finalize();
-        filter.log();
+        println!("{:?}", filter);
 
         while let Ok(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
