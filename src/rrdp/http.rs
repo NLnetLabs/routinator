@@ -100,7 +100,7 @@ impl HttpClient {
             Err(builder) => match builder.take() {
                 Some(builder) => builder,
                 None => {
-                    error!("Previously gailed to initialize HTTP client.");
+                    error!("Previously failed to initialize HTTP client.");
                     return Err(Error)
                 }
             }
