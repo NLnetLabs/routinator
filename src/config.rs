@@ -122,7 +122,7 @@ pub struct Config {
     /// Timeout for rsync commands.
     pub rsync_timeout: Duration,
 
-    /// Wether to disable RRDP.
+    /// Whether to disable RRDP.
     pub disable_rrdp: bool,
 
     /// Optional RRDP timeout in seconds.
