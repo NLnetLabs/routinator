@@ -272,7 +272,7 @@ impl Server {
         Ok(targets)
     }
 
-    /// Try updating via the deltas.
+    /// Try updating via the snapshot.
     fn snapshot_update(
         &self,
         notify: &NotificationFile,
