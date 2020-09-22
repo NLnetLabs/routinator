@@ -6,7 +6,6 @@ use std::{error, fmt, fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use clap::crate_version;
 use log::{error, info};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, Response};
@@ -55,7 +54,7 @@ impl HttpClient {
 
     pub fn new(config: &Config) -> Result<Self, Error> {
         let mut builder = Client::builder();
-        builder = builder.user_agent(concat!("Routinator/", crate_version!()));
+        builder = builder.user_agent(&config.rrdp_user_agent);
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
