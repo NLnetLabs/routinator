@@ -6,7 +6,6 @@ use std::{error, fmt, fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use clap::crate_version;
 use log::{error, info};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, Response};
@@ -55,7 +54,7 @@ impl HttpClient {
 
     pub fn new(config: &Config) -> Result<Self, Error> {
         let mut builder = Client::builder();
-        builder = builder.user_agent(concat!("Routinator/", crate_version!()));
+        builder = builder.user_agent(config.rrdp_user_agent.clone());
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
@@ -92,25 +91,6 @@ impl HttpClient {
             client: Err(Some(builder)),
             tmp_dir: config.cache_dir.join("tmp"),
         })
-    }
-
-    pub fn set_user_agent(&mut self, user_agent: &str) -> Result<(), Error> {
-        match self.client.as_mut() {
-            Ok(_) => {
-                error!("HTTP client is already initialized.");
-                Err(Error)
-            },
-            Err(builder) => match builder.take() {
-                Some(builder) => {
-                    self.client = Err(Some(builder.user_agent(user_agent)));
-                    Ok(())
-                },
-                None => {
-                    error!("Previously failed to initialize HTTP client.");
-                    Err(Error)
-                }
-            }
-        }
     }
 
     pub fn ignite(&mut self) -> Result<(), Error> {

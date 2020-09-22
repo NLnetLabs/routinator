@@ -14,7 +14,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
-use clap::{App, Arg, ArgMatches};
+use clap::{App, Arg, ArgMatches, crate_version};
 #[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
 use log::{LevelFilter, Log, error};
@@ -45,6 +45,9 @@ const DEFAULT_EXPIRE: u64 = 7200;
 
 /// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
+
+/// The default RRDP HTTP User Agent header value to send.
+const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 
 
 //------------ Config --------------------------------------------------------  
@@ -145,6 +148,9 @@ pub struct Config {
 
     /// RRDP HTTP proxies.
     pub rrdp_proxies: Vec<String>,
+
+    /// RRDP HTTP User Agent.
+    pub rrdp_user_agent: String,
 
     /// Wether to not cleanup the repository directory after a validation run.
     ///
@@ -987,6 +993,7 @@ impl Config {
                     Vec::new
                 )
             },
+            rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1143,6 +1150,7 @@ impl Config {
             rrdp_local_addr: None,
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
+            rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
