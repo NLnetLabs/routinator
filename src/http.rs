@@ -233,6 +233,18 @@ fn metrics_active(
         ).unwrap();
     }
 
+    // vrps_added_locally
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_added_locally \
+                VRPs added from local exceptions\n\
+         # TYPE routinator_vrps_added_locally gauge"
+    ).unwrap();
+    writeln!(res,
+        "routinator_vrps_added_locally {}",
+        metrics.local_vrps()
+    ).unwrap();
+
     // stale_objects
     writeln!(res,
         "\n\
@@ -565,6 +577,9 @@ fn status_active(
         ).unwrap();
     }
     writeln!(res).unwrap();
+
+    // locally-added-vrps
+    writeln!(res, "locally-added-vrps: {}", metrics.local_vrps()).unwrap();
 
     // final-vrps
     writeln!(res, "final-vrps: {}",

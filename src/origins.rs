@@ -13,9 +13,7 @@ use crossbeam_queue::SegQueue;
 use log::{debug, info, warn};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
-use rpki::resources::{
-    AsBlocks, AsBlocksBuilder, AsId, IpBlocks, IpBlocksBuilder
-};
+use rpki::resources::{AsId, IpBlocks, IpBlocksBuilder};
 use rpki::roa::{FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::{Time, Validity};
@@ -222,7 +220,7 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
                 warn!("   {}", block.display_v4());
             }
             for block in cert.v6_resources().iter() {
-                warn!("   {}", block.display_v4());
+                warn!("   {}", block.display_v6());
             }
             for block in cert.as_resources().iter() {
                 warn!("   {}", block);
@@ -236,11 +234,13 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
 //------------ InvalidResources ----------------------------------------------
 
 /// Collects the invalid resources encountered during validation.
+///
+/// Currently, we only collect address blocks that need to be filtered. We
+/// will also start collecting AS blocks once that becomes actually necessary.
 #[derive(Clone, Debug, Default)]
 struct InvalidResources {
     v4: IpBlocks,
     v6: IpBlocks,
-    asn: AsBlocks
 }
 
 impl InvalidResources {
@@ -257,12 +257,14 @@ impl InvalidResources {
 
 //------------ InvalidResourcesBuilder ---------------------------------------
 
-/// Collects the invalid resources encountered during validation.
+/// A builder for invalid resources encountered during validation.
 #[derive(Clone, Debug, Default)]
 struct InvalidResourcesBuilder {
+    /// The IPv4 blocks to filter.
     v4: IpBlocksBuilder,
+
+    /// The IPv6 blocks to filter.
     v6: IpBlocksBuilder,
-    asn: AsBlocksBuilder
 }
 
 impl InvalidResourcesBuilder {
@@ -273,16 +275,12 @@ impl InvalidResourcesBuilder {
         self.v6.extend(
             cert.v6_resources().iter().filter(|block| !block.is_slash_zero())
         );
-        self.asn.extend(
-            cert.as_resources().iter().filter(|block| !block.is_whole_range())
-        );
     }
 
     fn finalize(self) -> InvalidResources {
         InvalidResources {
             v4: self.v4.finalize(),
             v6: self.v6.finalize(),
-            asn: self.asn.finalize(),
         }
     }
 }
@@ -757,7 +755,6 @@ impl AddressOrigins {
         }).collect();
 
         let filter = report.filter.into_inner().unwrap().finalize();
-        println!("{:?}", filter);
 
         while let Ok(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
@@ -774,6 +771,12 @@ impl AddressOrigins {
                     tal_metrics.total_valid_vrps += 1;
 
                     if !filter.keep_address(&addr) {
+                        warn!(
+                            "Filtering potentially unsafe VRP \
+                             ({}/{},max {},AS{})",
+                            addr.address(), addr.address_length(),
+                            addr.max_length(), origin.as_id
+                        );
                         tal_metrics.unsafe_filtered_vrps += 1;
                         continue;
                     }
@@ -795,6 +798,7 @@ impl AddressOrigins {
         }
         for addr in exceptions.assertions() {
             let _ = res.insert(addr.clone());
+            metrics.inc_local_vrps();
         }
         metrics.set_tals(tal_metrics_vec);
         AddressOrigins {

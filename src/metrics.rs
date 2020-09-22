@@ -28,6 +28,9 @@ pub struct Metrics {
 
     /// Number of stale objects.
     stale_count: AtomicU64,
+
+    /// Number of VRPs added from local exceptions.
+    local_vrps: u32,
 }
 
 impl Metrics {
@@ -38,6 +41,7 @@ impl Metrics {
             rsync: Vec::new(),
             rrdp: Vec::new(),
             stale_count: AtomicU64::new(0),
+            local_vrps: 0,
         }
     }
 
@@ -100,6 +104,14 @@ impl Metrics {
             }
         }
         true
+    }
+
+    pub fn local_vrps(&self) -> u32 {
+        self.local_vrps
+    }
+
+    pub fn inc_local_vrps(&mut self) {
+        self.local_vrps += 1
     }
 
     pub fn log(&self) {
