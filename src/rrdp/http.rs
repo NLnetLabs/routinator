@@ -94,23 +94,23 @@ impl HttpClient {
         })
     }
 
-    pub fn set_user_agent(&mut self, user_agent: &str) -> Result<Self, Error> {
+    pub fn set_user_agent(&mut self, user_agent: &str) -> Result<(), Error> {
         match self.client.as_mut() {
             Ok(_) => {
                 error!("HTTP client is already initialized.");
-                return Err(Error)
+                Err(Error)
             },
             Err(builder) => match builder.take() {
                 Some(builder) => {
-                    builder.user_agent(user_agent);
-                    self
+                    self.client = Err(Some(builder.user_agent(user_agent)));
+                    Ok(())
                 },
                 None => {
                     error!("Previously failed to initialize HTTP client.");
-                    return Err(Error)
+                    Err(Error)
                 }
             }
-        };
+        }
     }
 
     pub fn ignite(&mut self) -> Result<(), Error> {
