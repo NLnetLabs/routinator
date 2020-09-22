@@ -54,7 +54,7 @@ impl HttpClient {
 
     pub fn new(config: &Config) -> Result<Self, Error> {
         let mut builder = Client::builder();
-        builder = builder.user_agent(config.rrdp_user_agent.clone());
+        builder = builder.user_agent(&config.rrdp_user_agent);
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
