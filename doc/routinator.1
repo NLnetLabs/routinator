@@ -953,6 +953,12 @@ In order to avoid these situations and instead fall back to an RPKI unknown
 state for such routes, Routinator filters out all VRPs that have prefixes
 overlapping with any of the resources delegated to rejected CAs.
 .P
+One exception from this rule are CAs that have the full address space
+assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out
+all VRPs. These prefixes are used by the RIR trust anchors to avoid having to
+update these often. However, each RIR has its own address space so loosing all
+VRPs should something happen to a trust anchor is unnecessary.
+.P
 We call VRPs filtered because they touch rejected address space
 .IR unsafe .
 Both the resources from rejected CAs and VRPs filtered are being logged at
