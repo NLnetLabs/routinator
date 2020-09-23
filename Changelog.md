@@ -30,7 +30,11 @@ New
   feature is not enabled by default and needs to be activated by adding
   the option `--features rta` to the Cargo build command.
 
+* Irrelevant log messages from libraries are now also filtered when using
+  syslog logging. ([#385])
+
 Bug Fixes
+
 
 Dependencies
 
@@ -41,6 +45,7 @@ Other Changes
 [#372]: https://github.com/NLnetLabs/routinator/pull/372
 [#377]: https://github.com/NLnetLabs/routinator/pull/377
 [#384]: https://github.com/NLnetLabs/routinator/pull/384
+[#385]: https://github.com/NLnetLabs/routinator/pull/385
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
