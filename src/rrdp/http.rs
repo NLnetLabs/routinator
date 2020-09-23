@@ -213,7 +213,7 @@ impl HttpClient {
         &self,
         server_uri: &uri::Https,
         notify: &NotificationFile,
-        delta: &(usize, UriAndHash),
+        delta: &(u64, UriAndHash),
         targets: &mut DeltaTargets,
         path_op: F
     ) -> Result<(), Error> {
@@ -305,7 +305,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     fn meta(
         &mut self,
         session_id: Uuid,
-        serial: usize
+        serial: u64,
     ) -> Result<(), Self::Err> {
         if session_id != self.notify.session_id {
             return Err(SnapshotError::SessionMismatch {
@@ -362,7 +362,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
 pub struct DeltaProcessor<'a, F> {
     server_uri: &'a uri::Https,
     notify: &'a NotificationFile,
-    delta: &'a (usize, UriAndHash),
+    delta: &'a (u64, UriAndHash),
     path_op: F,
     targets: &'a mut DeltaTargets,
 }
@@ -420,7 +420,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
     fn meta(
         &mut self,
         session_id: Uuid,
-        serial: usize
+        serial: u64,
     ) -> Result<(), Self::Err> {
         if session_id != self.notify.session_id {
             info!(
@@ -583,8 +583,8 @@ pub enum SnapshotError {
         received: Uuid
     },
     SerialMismatch {
-        expected: usize,
-        received: usize 
+        expected: u64,
+        received: u64,
     },
     Io(String, io::Error),
 }

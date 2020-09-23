@@ -187,7 +187,7 @@ impl TalMetrics {
 pub struct RrdpServerMetrics {
     pub notify_uri: uri::Https,
     pub notify_status: Option<reqwest::StatusCode>,
-    pub serial: Option<usize>,
+    pub serial: Option<u64>,
     pub duration: Result<Duration, SystemTimeError>,
 }
 
