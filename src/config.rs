@@ -266,7 +266,6 @@ impl Config {
         )
         .arg(Arg::with_name("allow-dubious-hosts")
              .long("allow-dubious-hosts")
-             .aliases(&["allow-dubios-hosts"])
              .help("Allow dubious host names in rsync and HTTPS URIs")
         )
         .arg(Arg::with_name("disable-rsync")

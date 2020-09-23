@@ -17,6 +17,8 @@ Breaking Changes
   [RFC 8416]. Any additional member in the JSON objects will lead to an
   error. However, error reporting has been greatly improved and now the
   line and column of an error will be indicated. ([#372])
+* The alias `--allow-dubios-hosts` for the correctly spelled option has
+  been removed. ([#384])
 * The minimal supported Rust version is now 1.42.0.
 
 New
@@ -38,6 +40,7 @@ Other Changes
 [#371]: https://github.com/NLnetLabs/routinator/pull/371
 [#372]: https://github.com/NLnetLabs/routinator/pull/372
 [#377]: https://github.com/NLnetLabs/routinator/pull/377
+[#384]: https://github.com/NLnetLabs/routinator/pull/384
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
