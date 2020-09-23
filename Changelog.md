@@ -10,6 +10,8 @@ Breaking Changes
   However, unlike suggested by the draft, Routinator currently will not fall
   back to cached older versions of the CA’s objects that may still be valid.
   ([#371])
+* The default for dealing with stale objects has been changed to `reject`
+  in accordance with the same draft. ([#387])
 * All VRPs overlapping with resources from rejected CAs are filtered. This
   will avoid situations were routes become RPKI invalid if their VRPs are
   split over multiple CAs or there are less specific ROAs. ([#377])
@@ -46,6 +48,7 @@ Other Changes
 [#377]: https://github.com/NLnetLabs/routinator/pull/377
 [#384]: https://github.com/NLnetLabs/routinator/pull/384
 [#385]: https://github.com/NLnetLabs/routinator/pull/385
+[#387]: https://github.com/NLnetLabs/routinator/pull/387
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
