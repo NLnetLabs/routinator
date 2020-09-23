@@ -924,20 +924,60 @@ This works in the same way as the options of the same name to the
 .B vrps
 command.
 
-.SH RELAXED VALIDATION
+.SH VALIDATION
+In
+.B vrps
+and
+.B server
+mode, Routinator will produce a set of VRPs from the data published in the
+RPKI repository. It will walk over all certfication authorities (CAs)
+starting with those referred to in the configured TALs.
+.P
+Each CA is checked whether all its published objects are present, correctly
+encoded, and have been signed by the CA. If any of the objects fails this
+check, the entire CA will be rejected. This means that none of its ROAs will
+be added to the VRP set but also that none of its child CAs will be considered
+at all; their published will not be fetched or validated.
+.P
+If a prefix has its ROAs published by different CAs, this will lead to some
+of its VRPs being dropped while others are still added. If the VRP for the
+legitimately announced route is among those having been dropped, the route
+becomes RPKI invalid. This can happen both by operator error or through an
+active attack.
+.P
+In addition, if a VRP for a less specific prefix exists that covers the
+prefix of the dropped VRP, the route will be invalidated by the less specific
+VRP.
+.P
+In order to avoid these situations and instead fall back to an RPKI unknown
+state for such routes, Routinator filters out all VRPs that have prefixes
+overlapping with any of the resources delegated to rejected CAs.
+.P
+We call VRPs filtered because they touch rejected address space
+.IR unsafe .
+Both the resources from rejected CAs and VRPs filtered are being logged at
+log level
+.BR warn .
+In addition, the number of filtered unsafe VRPs are provided in the metrics.
+
+.SH RELAXED DECODING
 The documents defining RPKI include a number of very strict rules
 regarding the formatting of the objects published in the RPKI repository.
 However, because PRKI reuses existing technology, real-world applications
 produce objects that do not follow these strict requirements.
 .PP
 As a consequence, a significant portion of the RPKI repository is actually
-invalid if the rules are followed. We therefore introduce two validation
+invalid if the rules are followed. We therefore introduce two decoding
 modes: strict and relaxed. Strict mode rejects any object that does not
 pass all checks laid out by the relevant RFCs. Relaxed mode ignores a
 number of these checks.
 .PP
-This memo documents the violations we encountered and are dealing with in
-relaxed validation mode.
+Note that none of the violations accepted in relaxed mode endanger the
+integrity or security of the objects. All signatures are always validated
+as strictly as necessary.
+.PP
+This section documents the violations we encountered and are dealing with in
+relaxed decoding mode.
 
 .SS Resource Certificates (RFC 6487)
 
@@ -994,3 +1034,4 @@ Martin Hoffmann extended it for later versions.
 
 .SH BUGS
 Sure.
+

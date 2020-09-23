@@ -6,10 +6,13 @@ Breaking Changes
 
 * Validation now follows the rules suggested by
   [draft-ietf-sidrops-6486bis]\: Any invalid object mentioned on the
-  manifest will lead to all objects of the CA being rejected. However,
-  unlike suggested by the draft, Routinator currently will not fall back
-  to cached older versions of the CA’s objects that may still be valid.
+  manifest will lead to the issuing CA and all its objects being rejected.
+  However, unlike suggested by the draft, Routinator currently will not fall
+  back to cached older versions of the CA’s objects that may still be valid.
   ([#371])
+* All VRPs overlapping with resources from rejected CAs are filtered. This
+  will avoid situations were routes become RPKI invalid if their VRPs are
+  split over multiple CAs or there are less specific ROAs. ([#377])
 * Parsing of local exception files is now more strict in accordance with
   [RFC 8416]. Any additional member in the JSON objects will lead to an
   error. However, error reporting has been greatly improved and now the
@@ -18,6 +21,8 @@ Breaking Changes
 
 New
 
+* New metrics for the VRPs produced and filtered on the various TALs.
+  ([#377])
 * The feature `rta` enables the new command `rta` for validating Resource
   Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
   feature is not enabled by default and needs to be activated by adding
@@ -29,8 +34,10 @@ Dependencies
 
 Other Changes
 
-[#372]: https://github.com/NLnetLabs/routinator/pull/372
 [#357]: https://github.com/NLnetLabs/routinator/pull/357
+[#371]: https://github.com/NLnetLabs/routinator/pull/371
+[#372]: https://github.com/NLnetLabs/routinator/pull/372
+[#377]: https://github.com/NLnetLabs/routinator/pull/377
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
