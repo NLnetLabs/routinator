@@ -10,10 +10,10 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use crossbeam_queue::SegQueue;
-use log::{debug, info};
+use log::{debug, info, warn};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
-use rpki::resources::AsId;
+use rpki::resources::{AsId, IpBlocks, IpBlocksBuilder};
 use rpki::roa::{FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation};
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::{Time, Validity};
@@ -35,6 +35,7 @@ use crate::slurm::{ExceptionInfo, LocalExceptions};
 pub struct OriginsReport {
     origins: SegQueue<RouteOrigins>,
     tals: Mutex<Vec<Arc<TalInfo>>>,
+    filter: Mutex<InvalidResourcesBuilder>,
 }
 
 impl OriginsReport {
@@ -42,6 +43,7 @@ impl OriginsReport {
         OriginsReport {
             origins: SegQueue::new(),
             tals: Mutex::new(Vec::new()),
+            filter: Mutex::new(Default::default()),
         }
     }
 
@@ -209,6 +211,77 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
 
     fn commit(self) {
         self.report.origins.push(self.origins);
+    }
+
+    fn cancel(self, cert: &ResourceCert) {
+        if let Some(uri) = cert.ca_repository() {
+            warn!("CA for {} rejected, resources to be filtered:", uri);
+            for block in cert.v4_resources().iter() {
+                warn!("   {}", block.display_v4());
+            }
+            for block in cert.v6_resources().iter() {
+                warn!("   {}", block.display_v6());
+            }
+            for block in cert.as_resources().iter() {
+                warn!("   {}", block);
+            }
+        }
+        self.report.filter.lock().unwrap().extend_from_cert(cert);
+    }
+}
+
+
+//------------ InvalidResources ----------------------------------------------
+
+/// Collects the invalid resources encountered during validation.
+///
+/// Currently, we only collect address blocks that need to be filtered. We
+/// will also start collecting AS blocks once that becomes actually necessary.
+#[derive(Clone, Debug, Default)]
+struct InvalidResources {
+    v4: IpBlocks,
+    v6: IpBlocks,
+}
+
+impl InvalidResources {
+    fn keep_address(&self, addr: &FriendlyRoaIpAddress) -> bool {
+        if addr.is_v4() {
+            !self.v4.intersects_block(addr.prefix())
+        }
+        else {
+            !self.v6.intersects_block(addr.prefix())
+        }
+    }
+}
+
+
+//------------ InvalidResourcesBuilder ---------------------------------------
+
+/// A builder for invalid resources encountered during validation.
+#[derive(Clone, Debug, Default)]
+struct InvalidResourcesBuilder {
+    /// The IPv4 blocks to filter.
+    v4: IpBlocksBuilder,
+
+    /// The IPv6 blocks to filter.
+    v6: IpBlocksBuilder,
+}
+
+impl InvalidResourcesBuilder {
+    fn extend_from_cert(&mut self, cert: &ResourceCert) {
+        self.v4.extend(
+            cert.v4_resources().iter().filter(|block| !block.is_slash_zero())
+        );
+        self.v6.extend(
+            cert.v6_resources().iter().filter(|block| !block.is_slash_zero())
+        );
+    }
+
+    fn finalize(self) -> InvalidResources {
+        InvalidResources {
+            v4: self.v4.finalize(),
+            v6: self.v6.finalize(),
+        }
     }
 }
 
@@ -681,6 +754,8 @@ impl AddressOrigins {
             TalMetrics::new(tal.clone())
         }).collect();
 
+        let filter = report.filter.into_inner().unwrap().finalize();
+
         while let Ok(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
                 match refresh {
@@ -693,20 +768,37 @@ impl AddressOrigins {
                 let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
                 for addr in origin.addrs {
-                    tal_metrics.vrps += 1;
+                    tal_metrics.total_valid_vrps += 1;
+
+                    if !filter.keep_address(&addr) {
+                        warn!(
+                            "Filtering potentially unsafe VRP \
+                             ({}/{},max {},AS{})",
+                            addr.address(), addr.address_length(),
+                            addr.max_length(), origin.as_id
+                        );
+                        tal_metrics.unsafe_filtered_vrps += 1;
+                        continue;
+                    }
+
                     let addr = AddressOrigin::from_roa(
                         origin.as_id,
                         addr,
                         origin.info.clone()
                     );
-                    if exceptions.keep_origin(&addr) {
-                        let _ = res.insert(addr);
+                    if !exceptions.keep_origin(&addr) {
+                        tal_metrics.locally_filtered_vrps += 1;
+                    }
+
+                    if res.insert(addr) {
+                        tal_metrics.final_vrps += 1;
                     }
                 }
             }
         }
         for addr in exceptions.assertions() {
             let _ = res.insert(addr.clone());
+            metrics.inc_local_vrps();
         }
         metrics.set_tals(tal_metrics_vec);
         AddressOrigins {
@@ -857,7 +949,7 @@ impl OriginsDiff {
                 let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
                 tal_metrics.roas += 1;
                 for addr in origin.addrs {
-                    tal_metrics.vrps += 1;
+                    tal_metrics.total_valid_vrps += 1;
                     let addr = AddressOrigin::from_roa(
                         origin.as_id, addr, origin.info.clone()
                     );

@@ -188,9 +188,62 @@ fn metrics_active(
     for tal in metrics.tals() {
         writeln!(res,
             "routinator_vrps_total{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.vrps
+            tal.tal.name(), tal.total_valid_vrps
         ).unwrap();
     }
+
+    // vrps_filtered_unsafe
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_filtered_unsafe \
+                VRPs filtered overlapping with invalid address space\n\
+         # TYPE routinator_vrps_filtered_unsafe gauge"
+    ).unwrap();
+    for tal in metrics.tals() {
+        writeln!(res,
+            "routinator_vrps_filtered_unsafe{{tal=\"{}\"}} {}",
+            tal.tal.name(), tal.unsafe_filtered_vrps
+        ).unwrap();
+    }
+
+    // vrps_filtered_locally
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_filtered_locally \
+                VRPs filtered based on local exceptions\n\
+         # TYPE routinator_vrps_filtered_locally gauge"
+    ).unwrap();
+    for tal in metrics.tals() {
+        writeln!(res,
+            "routinator_vrps_filtered_locally{{tal=\"{}\"}} {}",
+            tal.tal.name(), tal.locally_filtered_vrps
+        ).unwrap();
+    }
+
+    // vrps_final
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_final final number of  VRPs\n\
+         # TYPE routinator_vrps_final gauge"
+    ).unwrap();
+    for tal in metrics.tals() {
+        writeln!(res,
+            "routinator_vrps_total{{tal=\"{}\"}} {}",
+            tal.tal.name(), tal.final_vrps
+        ).unwrap();
+    }
+
+    // vrps_added_locally
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_added_locally \
+                VRPs added from local exceptions\n\
+         # TYPE routinator_vrps_added_locally gauge"
+    ).unwrap();
+    writeln!(res,
+        "routinator_vrps_added_locally {}",
+        metrics.local_vrps()
+    ).unwrap();
 
     // stale_objects
     writeln!(res,
@@ -487,13 +540,56 @@ fn status_active(
 
     // vrps
     writeln!(res, "vrps: {}",
-        metrics.tals().iter().map(|tal| tal.vrps).sum::<u32>()
+        metrics.tals().iter().map(|tal| tal.total_valid_vrps).sum::<u32>()
     ).unwrap();
 
     // vrps-per-tal
     write!(res, "vrps-per-tal: ").unwrap();
     for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.vrps).unwrap();
+        write!(res, "{}={} ", tal.tal.name(), tal.total_valid_vrps).unwrap();
+    }
+    writeln!(res).unwrap();
+
+    // unsafe-filtered-vrps
+    writeln!(res, "unsafe-filtered-vrps: {}",
+        metrics.tals().iter().map(|tal| tal.unsafe_filtered_vrps).sum::<u32>()
+    ).unwrap();
+
+    // unsafe-filtered-vrps-per-tal
+    write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
+    for tal in metrics.tals() {
+        write!(res, "{}={} ",
+            tal.tal.name(), tal.unsafe_filtered_vrps
+        ).unwrap();
+    }
+    writeln!(res).unwrap();
+
+    // locally-filtered-vrps
+    writeln!(res, "locally-filtered-vrps: {}",
+        metrics.tals().iter().map(|tal| tal.locally_filtered_vrps).sum::<u32>()
+    ).unwrap();
+
+    // locally-filtered-vrps-per-tal
+    write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
+    for tal in metrics.tals() {
+        write!(res, "{}={} ",
+            tal.tal.name(), tal.locally_filtered_vrps
+        ).unwrap();
+    }
+    writeln!(res).unwrap();
+
+    // locally-added-vrps
+    writeln!(res, "locally-added-vrps: {}", metrics.local_vrps()).unwrap();
+
+    // final-vrps
+    writeln!(res, "final-vrps: {}",
+        metrics.tals().iter().map(|tal| tal.final_vrps).sum::<u32>()
+    ).unwrap();
+
+    // final-vrps-per-tal
+    write!(res, "final-vrps-per-tal: ").unwrap();
+    for tal in metrics.tals() {
+        write!(res, "{}={} ", tal.tal.name(), tal.final_vrps).unwrap();
     }
     writeln!(res).unwrap();
 
