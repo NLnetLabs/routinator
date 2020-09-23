@@ -209,7 +209,7 @@ impl Server {
     fn calc_deltas<'a>(
         notify: &'a NotificationFile,
         state: &ServerState
-    ) -> Result<Option<&'a [(usize, UriAndHash)]>, Error> {
+    ) -> Result<Option<&'a [(u64, UriAndHash)]>, Error> {
         if notify.session_id != state.session {
             info!("New session. Need to get snapshot.");
             return Err(Error);
@@ -258,7 +258,7 @@ impl Server {
         &self,
         state: &ServerState,
         notify: &NotificationFile,
-        deltas: &[(usize, UriAndHash)],
+        deltas: &[(u64, UriAndHash)],
         http: &HttpClient
     ) -> Result<DeltaTargets, Error> {
         self.server_dir.check_digest(&state.hash)?;
@@ -611,7 +611,7 @@ pub struct ServerState {
     pub session: Uuid,
 
     /// The serial number representing the current state of the server.
-    pub serial: usize,
+    pub serial: u64,
 
     /// A hash over the expected local state of the server.
     pub hash: DigestHex,
