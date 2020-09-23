@@ -845,7 +845,12 @@ impl Config {
             syslog::udp(formatter, ("127.0.0.1", 0), ("127.0.0.1", 514))
         });
         match logger {
-            Ok(logger) => Ok(Box::new(syslog::BasicLogger::new(logger))),
+            Ok(logger) => {
+                Ok(self.fern_logger(false).chain(
+                    Box::new(syslog::BasicLogger::new(logger))
+                    as Box::<dyn log::Log>
+                ).into_log().1)
+            }
             Err(err) => {
                 error!("Cannot connect to syslog: {}", err);
                 Err(Error)
