@@ -1559,7 +1559,7 @@ pub enum StalePolicy {
 
 impl Default for StalePolicy {
     fn default() -> Self {
-        StalePolicy::Warn
+        StalePolicy::Reject
     }
 }
 
