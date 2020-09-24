@@ -8,7 +8,8 @@ use std::collections::{HashSet, VecDeque};
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
+use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
 use log::{debug, info, warn};
 use rpki::uri;
@@ -303,7 +304,7 @@ pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 ///
 /// Various things are kept behind an arc in here so we can hand out copies
 /// to long-running tasks (like producing the CSV in the HTTP server) without
-/// instead of holding the lock.
+/// holding the lock.
 #[derive(Clone, Debug)]
 struct HistoryInner {
     /// The current full set of adress origins.
@@ -330,10 +331,10 @@ struct HistoryInner {
     refresh: Duration,
 
     /// The instant when we started an update the last time.
-    last_update_start: Instant,
+    last_update_start: DateTime<Utc>,
 
     /// The instant we successfully (!) finished an update the last time.
-    last_update_done: Option<Instant>,
+    last_update_done: Option<DateTime<Utc>>,
 
     /// The duration of the last update run.
     last_update_duration: Option<Duration>,
@@ -364,7 +365,7 @@ impl OriginsHistory {
                 },
                 keep: config.history_size,
                 refresh: config.refresh,
-                last_update_start: Instant::now(),
+                last_update_start: Utc::now(),
                 last_update_done: None,
                 last_update_duration: None,
                 timing: Timing {
@@ -448,7 +449,7 @@ impl OriginsHistory {
 
     pub fn update_times(
         &self
-    ) -> (Instant, Option<Instant>, Option<Duration>) {
+    ) -> (DateTime<Utc>, Option<DateTime<Utc>>, Option<Duration>) {
         let locked = self.0.read().unwrap();
         (
             locked.last_update_start,
@@ -505,14 +506,18 @@ impl OriginsHistory {
 
     /// Marks the beginning of an update cycle.
     pub fn mark_update_start(&self) {
-        self.0.write().unwrap().last_update_start = Instant::now();
+        self.0.write().unwrap().last_update_start = Utc::now();
     }
 
     /// Marks the end of an update cycle.
     pub fn mark_update_done(&self) {
         let mut locked = self.0.write().unwrap();
-        locked.last_update_done = Some(Instant::now());
-        locked.last_update_duration = Some(locked.last_update_start.elapsed());
+        let now = Utc::now();
+        locked.last_update_done = Some(now);
+        locked.last_update_duration = Some(
+            now.signed_duration_since(locked.last_update_start)
+                .to_std().unwrap_or_else(|_| Duration::from_secs(0))
+        );
         locked.next_update_start = SystemTime::now() + locked.refresh;
         if let Some(refresh) = locked.current.as_ref().and_then(|c| c.refresh) {
             let refresh = SystemTime::from(refresh);
@@ -646,18 +651,15 @@ impl HistoryInner {
 
     /// Returns the time a client should wait for its next refresh.
     fn next_refresh(&self) -> Duration {
-        // Next update starts at last_update_done + refresh. It should finish
-        // about last_update_duration later. Let’s double that to be safe. If
-        // we don’t have a last_update_duration, we just use two minute as a
-        // guess.
+        // Next update should finish about last_update_duration after
+        // next_update_start. Let’s double that to be safe. If we don’t have
+        // a last_update_duration, we just use two minute as a guess.
+        let start_in = self.next_update_start
+                           .duration_since(SystemTime::now())
+                           .unwrap_or_else(|_| Duration::from_secs(0));
         let duration = self.last_update_duration.map(|some| 2 * some)
                            .unwrap_or_else(|| Duration::from_secs(120));
-        let from = self.last_update_done.unwrap_or_else(|| {
-            self.last_update_start + duration
-        });
-        self.refresh.checked_sub(
-            Instant::now().saturating_duration_since(from)
-        ).unwrap_or_else(|| Duration::from_secs(0)) + duration
+        start_in + duration
     }
 }
 

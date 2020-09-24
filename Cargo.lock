@@ -1099,7 +1099,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.9.2-bis"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=u64-for-rrdp-serial#c6d0e32e7d713cc2bef895d17b4753e6bfd3cd45"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#535c1a28f341960ab742861f6f4d9f1d05f607dc"
 dependencies = [
  "base64",
  "bcder",
