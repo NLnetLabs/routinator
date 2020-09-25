@@ -37,6 +37,8 @@ New
 
 Bug Fixes
 
+* Update start and end times will not change between consecutive metrics
+  reports any more. ([#389])
 
 Dependencies
 
@@ -49,6 +51,7 @@ Other Changes
 [#384]: https://github.com/NLnetLabs/routinator/pull/384
 [#385]: https://github.com/NLnetLabs/routinator/pull/385
 [#387]: https://github.com/NLnetLabs/routinator/pull/387
+[#389]: https://github.com/NLnetLabs/routinator/pull/389
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
