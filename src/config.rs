@@ -49,6 +49,10 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 
+/// The default RTR TCP keepalive.
+const DEFAULT_RTR_TCP_KEEPALIVE: Option<Duration>
+    = Some(Duration::from_secs(60));
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -183,6 +187,11 @@ pub struct Config {
 
     /// Whether to get the listening sockets from systemd.
     pub systemd_listen: bool,
+
+    /// The length of the TCP keep-alive timeout for RTR TCP sockets.
+    ///
+    /// If this is `None`, TCP keep-alive will not be enabled.
+    pub rtr_tcp_keepalive: Option<Duration>,
 
     /// The log levels to be logged.
     pub log_level: LevelFilter,
@@ -414,6 +423,12 @@ impl Config {
         .arg(Arg::with_name("systemd-listen")
             .long("systemd-listen")
             .help("Acquire listening sockets from systemd")
+        )
+        .arg(Arg::with_name("rtr-tcp-keepalive")
+            .long("rtr-tcp-keepalive")
+            .value_name("SECONDS")
+            .help("The TCP keep-alive timeout on RTR. [default 60, 0 for off]")
+            .takes_value(true)
         )
         .arg(Arg::with_name("pid-file")
             .long("pid-file")
@@ -739,6 +754,16 @@ impl Config {
             self.systemd_listen = true
         }
 
+        // rtr_tcp_keepalive
+        if let Some(keep) = from_str_value_of(matches, "rtr-tcp-keepalive")? {
+            self.rtr_tcp_keepalive = if keep == 0 {
+                None
+            }
+            else {
+                Some(Duration::from_secs(keep))
+            }
+        }
+
         // pid_file
         if let Some(pid_file) = matches.value_of("pid-file") {
             self.pid_file = Some(cur_dir.join(pid_file))
@@ -1031,6 +1056,13 @@ impl Config {
                     .unwrap_or_else(Vec::new)
             },
             systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
+            rtr_tcp_keepalive: {
+                match file.take_from_str("rtr-tcp-keepalive")? {
+                    Some(0) => None,
+                    Some(keep) => Some(Duration::from_secs(keep)),
+                    None => DEFAULT_RTR_TCP_KEEPALIVE,
+                }
+            },
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -1164,6 +1196,7 @@ impl Config {
             rtr_listen: Vec::new(),
             http_listen: Vec::new(),
             systemd_listen: false,
+            rtr_tcp_keepalive: DEFAULT_RTR_TCP_KEEPALIVE,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             pid_file: None,
@@ -1364,6 +1397,12 @@ impl Config {
             )
         );
         res.insert("systemd-listen".into(), self.systemd_listen.into());
+        res.insert("rtr-tcp-keepalive".into(),
+            match self.rtr_tcp_keepalive {
+                Some(keep) => (keep.as_secs() as i64).into(),
+                None => 0.into(),
+            }
+        );
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
             #[cfg(unix)]

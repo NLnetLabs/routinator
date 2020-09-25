@@ -27,6 +27,10 @@ New
 
 * New metrics for the VRPs produced and filtered on the various TALs.
   ([#377])
+* TCP keep-alive is now supported and enabled by default on RTR
+  connections as suggested by [RFC 8210]. It can be disabled and its idle
+  time changed from the default 60 seconds via the new `rtr-tcp-keepalive`
+  command line and config file option. ([#390])
 * The feature `rta` enables the new command `rta` for validating Resource
   Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
   feature is not enabled by default and needs to be activated by adding
@@ -52,6 +56,8 @@ Other Changes
 [#385]: https://github.com/NLnetLabs/routinator/pull/385
 [#387]: https://github.com/NLnetLabs/routinator/pull/387
 [#389]: https://github.com/NLnetLabs/routinator/pull/389
+[#390]: https://github.com/NLnetLabs/routinator/pull/390
+[RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
