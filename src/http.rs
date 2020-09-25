@@ -256,6 +256,7 @@ fn metrics_active(
 
     // last_update_start, last_update_done, last_update_duration
     let (start, done, duration) = origins.update_times();
+    let now = Utc::now();
     write!(res,
         "\n\
         # HELP routinator_last_update_start seconds since last update \
@@ -273,12 +274,14 @@ fn metrics_active(
         # TYPE routinator_last_update_done gauge\n\
         routinator_last_update_done ",
 
-        start.elapsed().as_secs(),
+        now.signed_duration_since(start).num_seconds(),
         duration.map(|duration| duration.as_secs()).unwrap_or(0),
     ).unwrap();
     match done {
         Some(instant) => {
-            writeln!(res, "{}", instant.elapsed().as_secs()).unwrap();
+            writeln!(res, "{}",
+                now.signed_duration_since(instant).num_seconds()
+            ).unwrap();
         }
         None => {
             writeln!(res, "Nan").unwrap();
@@ -487,9 +490,10 @@ fn status_active(
     let server_metrics = origins.server_metrics();
     let mut res = String::new();
     let (start, done, duration) = origins.update_times();
-    let start = Duration::from_std(start.elapsed()).unwrap();
+    let now = Utc::now();
+    let start = now.signed_duration_since(start);
     let done = done.map(|done|
-        Duration::from_std(done.elapsed()).unwrap()
+        now.signed_duration_since(done)
     );
     let duration = duration.map(|duration| 
         Duration::from_std(duration).unwrap()
