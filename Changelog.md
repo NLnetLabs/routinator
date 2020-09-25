@@ -47,7 +47,7 @@ Bug Fixes
   both in vrps and server mode instead of discarding the run after it
   finished when loading fails. In server mode, we now wait 10 seconds
   after loading local exceptions fails and try again instead of repeatedly
-  starting validation runs and discarding them. ([#392])
+  starting validation runs and discarding them. ([594186c])
 
 Dependencies
 
@@ -63,6 +63,7 @@ Other Changes
 [#389]: https://github.com/NLnetLabs/routinator/pull/389
 [#390]: https://github.com/NLnetLabs/routinator/pull/390
 [#392]: https://github.com/NLnetLabs/routinator/pull/392
+[594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
