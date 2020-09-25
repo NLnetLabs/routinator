@@ -535,6 +535,12 @@ Routinator running as a regular user to bind to the default RTR port 323.
 Currently, all TCP listener sockets handed over by systemd will be used for
 the RTR protocol.
 .TP
+.BI \-\-rtr\-tcp\-keepalive= seconds
+The number of seconds to wait before sending a TCP keepalive on an
+established RTR connection. By default, TCP keepalive is enable on all RTR
+connections with an idle time of 60 seconds. Set this option to 0 to disable
+keepalives.
+.TP
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
 and validating the local repository before starting to update again. The
@@ -824,6 +830,13 @@ a colon. IPv6 address should be enclosed in square brackets.
 The RTR TCP listening socket will be acquired from systemd via socket
 activation. Use this option together with systemd's socket units to allow a
 Routinator running as a regular user to bind to the default RTR port 323.
+.TP
+.B rtr-tcp-keepalive
+An integer value specifying the number of seconds to wait before sending a
+TCP keepalive on an established RTR connection. If this option is missing,
+TCP keepalive will be enabled on all RTR connections with an idle time of 60
+seconds. If this option is present and set to zero, TCP keepalives are
+disabled.
 .TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait

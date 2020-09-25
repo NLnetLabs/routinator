@@ -6,6 +6,7 @@ use std::net::TcpListener as StdListener;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use tokio::stream::Stream;
@@ -37,13 +38,16 @@ pub fn rtr_listener(
             }
         };
     }
-    Ok((sender.clone(), _rtr_listener(history, sender, listeners)))
+    Ok((sender.clone(), _rtr_listener(
+        history, sender, listeners, config.rtr_tcp_keepalive,
+    )))
 }
 
 async fn _rtr_listener(
     origins: OriginsHistory,
     sender: NotifySender,
     listeners: Vec<StdListener>,
+    keepalive: Option<Duration>,
 ) {
     if listeners.is_empty() {
         pending::<()>().await;
@@ -52,7 +56,7 @@ async fn _rtr_listener(
         let _ = select_all(
             listeners.into_iter().map(|listener| {
                 tokio::spawn(single_rtr_listener(
-                    listener, origins.clone(), sender.clone()
+                    listener, origins.clone(), sender.clone(), keepalive,
                 ))
             })
         ).await;
@@ -63,6 +67,7 @@ async fn single_rtr_listener(
     listener: StdListener,
     origins: OriginsHistory,
     sender: NotifySender,
+    keepalive: Option<Duration>,
 ) {
     let listener = RtrListener {
         sock: match TcpListener::from_std(listener) {
@@ -72,7 +77,8 @@ async fn single_rtr_listener(
                 return;
             }
         },
-        metrics: origins.server_metrics()
+        metrics: origins.server_metrics(),
+        keepalive,
     };
     if Server::new(listener, sender, origins.clone()).run().await.is_err() {
         error!("Fatal error listening for RTR connections.");
@@ -83,6 +89,7 @@ async fn single_rtr_listener(
 struct RtrListener {
     sock: TcpListener,
     metrics: Arc<ServerMetrics>,
+    keepalive: Option<Duration>,
 }
 
 impl Stream for RtrListener {
@@ -95,6 +102,9 @@ impl Stream for RtrListener {
         pin_mut!(sock);
         sock.poll_next(cx).map(|sock| sock.map(|sock| sock.map(|sock| {
             self.metrics.inc_rtr_conn_open();
+            if let Err(err) = sock.set_keepalive(self.keepalive) {
+                error!("Failed to set keepalive on RTR connection: {}", err);
+            }
             RtrStream {
                 sock,
                 metrics: self.metrics.clone()
