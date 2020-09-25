@@ -30,6 +30,8 @@
 
 pub use self::config::Config;
 pub use self::operation::{Error, ExitError, Operation};
+pub use rpki;
+pub use reqwest;
 
 pub mod config;
 pub mod http;
