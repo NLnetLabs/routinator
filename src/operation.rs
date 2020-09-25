@@ -14,11 +14,13 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info, warn};
 use rpki::resources::AsId;
 #[cfg(feature = "rta")] use rpki::rta::Rta;
+use rpki_rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
@@ -28,7 +30,7 @@ use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::repository::Repository;
-use crate::rtr::rtr_listener;
+use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
@@ -397,34 +399,24 @@ impl Server {
 
         let join = thread::spawn(move || {
             loop {
-                history.mark_update_start();
-                let (report, metrics) = match repo.process_origins() {
-                    Ok(some) => some,
-                    Err(_) => break
-                };
-                let exceptions = match LocalExceptions::load(&config, false) {
-                    Ok(exceptions) => exceptions,
+                let timeout = match LocalExceptions::load(&config, false) {
+                    Ok(exceptions) => {
+                        if Self::process_once(
+                            &mut repo, &history, &mut notify, exceptions
+                        ).is_err() {
+                            break;
+                        }
+                        history.refresh_wait()
+                    }
                     Err(_) => {
                         warn!(
-                            "Failed to load exceptions. Discarding this \
-                            validation run but continuing."
+                            "Failed to load exceptions. \
+                            Trying again in 10 seconds."
                         );
-                        continue
+                        Duration::from_secs(10)
                     }
                 };
-                let must_notify = history.update(
-                    report, metrics, &exceptions
-                );
-                history.mark_update_done();
-                info!(
-                    "Validation completed. New serial is {}.",
-                    history.serial()
-                );
-                if must_notify {
-                    info!("Sending out notifications.");
-                    notify.notify();
-                }
-                match sig_rx.recv_timeout(history.refresh_wait()) {
+                match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
                         match repo.reload_tals(&config) {
                             Ok(_) => {
@@ -472,6 +464,29 @@ impl Server {
         });
 
         let _ = join.join();
+        Ok(())
+    }
+
+    fn process_once(
+        repo: &mut Repository,
+        history: &OriginsHistory,
+        notify: &mut NotifySender,
+        exceptions: LocalExceptions,
+    ) -> Result<(), Error> {
+        history.mark_update_start();
+        let (report, metrics) = repo.process_origins()?;
+        let must_notify = history.update(
+            report, metrics, &exceptions
+        );
+        history.mark_update_done();
+        info!(
+            "Validation completed. New serial is {}.",
+            history.serial()
+        );
+        if must_notify {
+            info!("Sending out notifications.");
+            notify.notify();
+        }
         Ok(())
     }
 
@@ -634,10 +649,11 @@ impl Vrps {
     fn run(self, config: Config) -> Result<(), ExitError> {
         let mut repo = Repository::new(&config, !self.noupdate)?;
         config.switch_logging(false)?;
+        let exceptions = LocalExceptions::load(&config, true)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
-            &LocalExceptions::load(&config, true)?,
+            &exceptions,
             &mut metrics
         );
         let filters = self.filters.as_ref().map(AsRef::as_ref);

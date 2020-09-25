@@ -43,6 +43,11 @@ Bug Fixes
 
 * Update start and end times will not change between consecutive metrics
   reports any more. ([#389])
+* Local exceptions will now be loaded before starting a validation run
+  both in vrps and server mode instead of discarding the run after it
+  finished when loading fails. In server mode, we now wait 10 seconds
+  after loading local exceptions fails and try again instead of repeatedly
+  starting validation runs and discarding them. ([#392])
 
 Dependencies
 
@@ -57,6 +62,7 @@ Other Changes
 [#387]: https://github.com/NLnetLabs/routinator/pull/387
 [#389]: https://github.com/NLnetLabs/routinator/pull/389
 [#390]: https://github.com/NLnetLabs/routinator/pull/390
+[#392]: https://github.com/NLnetLabs/routinator/pull/392
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
