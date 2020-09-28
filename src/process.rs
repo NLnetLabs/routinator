@@ -469,7 +469,7 @@ mod noop {
         }
 
         pub fn setup_service(
-            &mut self, config: &Config, detach: bool
+            &mut self, _config: &Config, _detach: bool
         ) -> Result<(), Error> {
             Ok(())
         }
