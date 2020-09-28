@@ -1115,9 +1115,8 @@ dependencies = [
 
 [[package]]
 name = "rpki-rtr"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f064fe1f98b6759c667e342adfccdc9e1ca1d8b4d139039c80a4906786ad2be"
+version = "0.1.1-bis"
+source = "git+https://github.com/NLnetLabs/rpki-rtr.git#7f9c7b04ed2e5bdcb11d4b7d8f3fc5fb4386167d"
 dependencies = [
  "futures-util",
  "log",
