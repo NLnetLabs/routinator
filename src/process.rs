@@ -1,6 +1,6 @@
 //! Managing the process Routinator runs in.
 
-use std::{env, io};
+use std::io;
 use std::future::Future;
 use std::path::Path;
 use log::{error, LevelFilter, Log};
@@ -110,7 +110,7 @@ impl Process {
         &self,
         facility: syslog::Facility
     ) -> Result<Box<dyn Log>, Error> {
-        let process = env::current_exe().ok().and_then(|path|
+        let process = std::env::current_exe().ok().and_then(|path|
             path.file_name()
                 .and_then(std::ffi::OsStr::to_str)
                 .map(ToString::to_string)
