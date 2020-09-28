@@ -41,8 +41,7 @@ uuid            = "0.8.1"
 
 
 [target.'cfg(unix)'.dependencies]
-daemonize       = "0.4.1"
-libc            = "0.2.68"
+nix		= "0.18"
 syslog          = "5.0.0"
 
 [build-dependencies]

@@ -109,12 +109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boxfnonce"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5988cb1d626264ac94100be357308f29ff7cbdd3b36bda27f450a4ee3f713426"
-
-[[package]]
 name = "bumpalo"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -223,16 +217,6 @@ dependencies = [
  "autocfg",
  "cfg-if",
  "lazy_static",
-]
-
-[[package]]
-name = "daemonize"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70c24513e34f53b640819f0ac9f705b673fcf4006d7aab8778bee72ebfc89815"
-dependencies = [
- "boxfnonce",
- "libc",
 ]
 
 [[package]]
@@ -777,6 +761,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1070,15 +1066,14 @@ dependencies = [
  "clap",
  "crossbeam-queue",
  "crossbeam-utils",
- "daemonize",
  "dirs",
  "fern",
  "futures",
  "hyper",
- "libc",
  "listenfd",
  "log",
  "log-reroute",
+ "nix",
  "num_cpus",
  "rand",
  "reqwest",

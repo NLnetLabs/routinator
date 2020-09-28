@@ -39,6 +39,7 @@ pub mod metrics;
 pub mod operation;
 pub mod origins;
 pub mod output;
+pub mod process;
 pub mod repository;
 pub mod rrdp;
 pub mod rtr;
