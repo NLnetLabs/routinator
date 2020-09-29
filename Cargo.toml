@@ -53,7 +53,7 @@ default = ["rustls-tls", "socks"]
 extra-debug = ["rpki/extra-debug"]
 socks = [ "reqwest/socks" ]
 rta = []
-native-tls = [ "reqwest/default-tls", "tls" ]
+native-tls = [ "reqwest/native-tls", "tls" ]
 rustls-tls = [ "reqwest/rustls-tls", "tls" ]
 tls = []
 
