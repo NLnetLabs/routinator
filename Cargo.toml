@@ -56,6 +56,9 @@ native-tls = [ "reqwest/native-tls", "tls" ]
 rustls-tls = [ "reqwest/rustls-tls", "tls" ]
 tls = []
 
+[profile.release]
+panic = "abort"
+
 [package.metadata.deb]
 name = "routinator"
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
