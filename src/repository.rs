@@ -77,16 +77,23 @@ pub struct Repository {
 impl Repository {
     /// Initializes the repository.
     pub fn init(config: &Config) -> Result<(), Error> {
-        let rsync_dir = config.cache_dir.join("rsync");
-        if let Err(err) = fs::create_dir_all(&rsync_dir) {
-            error!(
-                "Failed to create rsync cache directory {}: {}.",
-                rsync_dir.display(), err
-            );
-            return Err(Error);
+        if let Err(err) = fs::read_dir(&config.cache_dir) {
+            if err.kind() == io::ErrorKind::NotFound {
+                error!(
+                    "Missing repository directory {}.\n\
+                     You may have to initialize it via \
+                     \'routinator init\'.",
+                     config.cache_dir.display()
+                );
+            }
+            else {
+                error!(
+                    "Failed to open repository directory {}: {}",
+                    config.cache_dir.display(), err
+                );
+            }
+            return Err(Error)
         }
-        rsync::Cache::init(config)?;
-        rrdp::Cache::init(config)?;
         Ok(())
     }
 

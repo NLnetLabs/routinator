@@ -382,7 +382,7 @@ impl Server {
     /// just runs the server forever.
     /// Runs the command.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
-        let mut repo = Repository::new(process.config(), true)?;
+        Repository::init(process.config())?;
         process.switch_logging(self.detach)?;
         process.setup_service(self.detach)?;
 
@@ -394,6 +394,7 @@ impl Server {
 
         process.drop_privileges()?;
 
+        let mut repo = Repository::new(process.config(), true)?;
         let mut runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
