@@ -289,7 +289,7 @@ jobs:
         sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
 
         echo -e "\nINIT ROUTINATOR:"
-        sg lxd -c "lxc exec testcon -- sudo routinator --config /etc/routinator/routinator.conf init --accept-arin-rpa"
+        sg lxd -c "lxc exec testcon -- sudo routinator-init --accept-arin-rpa"
 
         echo -e "\nROUTINATOR DATA DIR AFTER INIT:"
         sg lxd -c "lxc exec testcon -- ls -la /var/lib/routinator"
