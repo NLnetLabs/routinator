@@ -301,7 +301,7 @@ jobs:
         sg lxd -c "lxc exec testcon -- systemctl start routinator"
         
         echo -e "\nROUTINATOR SERVICE STATUS AFTER START:"
-        sleep 1s
+        sleep 15s
         sg lxd -c "lxc exec testcon -- systemctl status routinator"
 
         echo -e "\nROUTINATOR MAN PAGE:"
