@@ -41,9 +41,11 @@ New
 * The `init` command will now change ownership of the cache directory if
   the `user` and `group` options are set via config file or command line
   options. ([#392])
-
 * Irrelevant log messages from libraries are now also filtered when using
   syslog logging. ([#385])
+* Release builds will now abort on panic, i.e., when an unexpected
+  internal condition is detected. This ensures that there won’t be a
+  Routinator process in a coma. ([#394])
 
 Bug Fixes
 
@@ -69,6 +71,7 @@ Other Changes
 [#389]: https://github.com/NLnetLabs/routinator/pull/389
 [#390]: https://github.com/NLnetLabs/routinator/pull/390
 [#392]: https://github.com/NLnetLabs/routinator/pull/392
+[#394]: https://github.com/NLnetLabs/routinator/pull/394
 [594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
