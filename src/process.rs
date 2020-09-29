@@ -424,7 +424,7 @@ mod unix {
                 Some(name) => name,
                 None => return Ok(None)
             };
-            let name = match CString::new(name.clone()) {
+            let cname = match CString::new(name.clone()) {
                 Ok(name) => name,
                 Err(_) => {
                     error!("Fatal: invalid user ID '{}'", name);
@@ -433,7 +433,7 @@ mod unix {
             };
 
             let uid = unsafe {
-                let ptr = libc::getpwnam(name.as_ptr() as *const libc::c_char);
+                let ptr = libc::getpwnam(cname.as_ptr() as *const libc::c_char);
                 if ptr.is_null() {
                     None
                 }
@@ -442,8 +442,13 @@ mod unix {
                     Some(s.pw_uid)
                 }
             };
-
-            Ok(uid.map(Uid::from_raw))
+            match uid {
+                Some(uid) => Ok(Some(Uid::from_raw(uid))),
+                None => {
+                    error!("Fatal: unknown user ID '{}'", name);
+                    Err(Error)
+                }
+            }
         }
 
         fn get_group(config: &Config) -> Result<Option<Gid>, Error> {
@@ -451,7 +456,7 @@ mod unix {
                 Some(name) => name,
                 None => return Ok(None)
             };
-            let name = match CString::new(name.clone()) {
+            let cname = match CString::new(name.clone()) {
                 Ok(name) => name,
                 Err(_) => {
                     error!("Fatal: invalid user ID '{}'", name);
@@ -459,8 +464,8 @@ mod unix {
                 }
             };
 
-            let uid = unsafe {
-                let ptr = libc::getgrnam(name.as_ptr() as *const libc::c_char);
+            let gid = unsafe {
+                let ptr = libc::getgrnam(cname.as_ptr() as *const libc::c_char);
                 if ptr.is_null() {
                     None
                 }
@@ -469,14 +474,20 @@ mod unix {
                     Some(s.gr_gid)
                 }
             };
-
-            Ok(uid.map(Gid::from_raw))
+            match gid {
+                Some(gid) => Ok(Some(Gid::from_raw(gid))),
+                None => {
+                    error!("Fatal: unknown group ID '{}'", name);
+                    Err(Error)
+                }
+            }
         }
      
         pub fn prepare_cache_dir(config: &Config) -> Result<(), Error> {
             let uid = Self::get_user(config)?;
             let gid = Self::get_group(config)?;
             if uid.is_some() || gid.is_some() {
+                println!("chown now");
                 if let Err(err) = chown(&config.cache_dir, uid, gid) {
                     error!(
                         "Fatal: failed to change ownership of cache dir \
