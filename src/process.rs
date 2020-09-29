@@ -1,6 +1,6 @@
 //! Managing the process Routinator runs in.
 
-use std::io;
+use std::{fs, io};
 use std::future::Future;
 use std::path::Path;
 use log::{error, LevelFilter, Log};
@@ -220,6 +220,24 @@ impl Process {
 }
 
 
+/// # Directory Management
+///
+impl Process {
+    /// Creates the cache directory.
+    ///
+    /// This will also change ownership of the directory if necessary.
+    pub fn create_cache_dir(&self) -> Result<(), Error> {
+        if let Err(err) = fs::create_dir_all(&self.config.cache_dir) {
+            error!("Fatal: failed to create cache directory {}: {}",
+                self.config.cache_dir.display(), err
+            );
+            return Err(Error)
+        }
+        ServiceImpl::prepare_cache_dir(&self.config)
+    }
+}
+
+
 /// # Tokio Runtime
 ///
 impl Process {
@@ -261,7 +279,9 @@ mod unix {
     use log::error;
     use nix::libc;
     use nix::fcntl::{flock, open, FlockArg, OFlag};
-    use nix::unistd::{chroot, fork, getpid, setgid, setuid, write, Gid, Uid};
+    use nix::unistd::{
+        chown, chroot, fork, getpid, setgid, setuid, write, Gid, Uid
+    };
     use nix::sys::stat::Mode;
     use crate::operation::Error;
     use crate::config::Config;
@@ -452,8 +472,24 @@ mod unix {
 
             Ok(uid.map(Gid::from_raw))
         }
+     
+        pub fn prepare_cache_dir(config: &Config) -> Result<(), Error> {
+            let uid = Self::get_user(config)?;
+            let gid = Self::get_group(config)?;
+            if uid.is_some() || gid.is_some() {
+                if let Err(err) = chown(&config.cache_dir, uid, gid) {
+                    error!(
+                        "Fatal: failed to change ownership of cache dir \
+                         {}: {}",
+                        config.cache_dir.display(),
+                        err
+                    );
+                    return Err(Error)
+                }
+            }
+            Ok(())
+        }
     }
- 
 }
 
 #[cfg(not(unix))]
@@ -477,6 +513,10 @@ mod noop {
         pub fn drop_privileges(
             self, _config: &mut Config
         ) -> Result<(), Error> {
+            Ok(())
+        }
+ 
+        pub fn prepare_cache_dir(_config: &Config) -> Result<(), Error> {
             Ok(())
         }
     }

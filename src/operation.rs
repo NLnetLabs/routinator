@@ -234,7 +234,7 @@ impl Init {
     /// We will, however, refuse to install any TALs until `accept_arin_rpa`
     /// is `true`. If it isn’t we just print a friendly reminder instead.
     pub fn run(self, process: Process) -> Result<(), ExitError> {
-        Repository::init(process.config())?;
+        process.create_cache_dir()?;
 
         // Check if TAL directory exists and error out if needed.
         if let Ok(metadata) = fs::metadata(&process.config().tal_dir) {

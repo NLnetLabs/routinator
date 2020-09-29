@@ -38,6 +38,9 @@ New
 * The `pid-file`, `working-dir`, `chroot`, `user`, and `group` config file
   and server command options now also work without the `--detach` command
   line option. ([#392])
+* The `init` command will now change ownership of the cache directory if
+  the `user` and `group` options are set via config file or command line
+  options. ([#392])
 
 * Irrelevant log messages from libraries are now also filtered when using
   syslog logging. ([#385])
