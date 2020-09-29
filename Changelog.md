@@ -35,6 +35,12 @@ New
   Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
   feature is not enabled by default and needs to be activated by adding
   the option `--features rta` to the Cargo build command.
+* The `pid-file`, `working-dir`, `chroot`, `user`, and `group` config file
+  and server command options now also work without the `--detach` command
+  line option. ([#392])
+* The `init` command will now change ownership of the cache directory if
+  the `user` and `group` options are set via config file or command line
+  options. ([#392])
 
 * Irrelevant log messages from libraries are now also filtered when using
   syslog logging. ([#385])

@@ -6,20 +6,17 @@
 //!
 //! [`Config`]: struct.Config.html
 
-use std::{env, fmt, fs, io};
+use std::{env, fmt, fs};
 use std::collections::HashMap;
-use std::future::Future;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use clap::{App, Arg, ArgMatches, crate_version};
-#[cfg(unix)] use daemonize::Daemonize;
 use dirs::home_dir;
-use log::{LevelFilter, Log, error};
+use log::{LevelFilter, error};
 #[cfg(unix)] use syslog::Facility;
-use tokio::runtime::Runtime;
 use crate::operation::Error;
 
 
@@ -199,19 +196,19 @@ pub struct Config {
     /// The target to log to.
     pub log_target: LogTarget,
 
-    /// The optional PID file for daemon mode.
+    /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
 
-    /// The optional working directory for daemon mode.
+    /// The optional working directory for server mode.
     pub working_dir: Option<PathBuf>,
 
-    /// The optional directory to chroot to in daemon mode.
+    /// The optional directory to chroot to in server mode.
     pub chroot: Option<PathBuf>,
 
-    /// The name of the user to change to in daemon mode.
+    /// The name of the user to change to in server mode.
     pub user: Option<String>,
 
-    /// The name of the group to change to in daemon mode.
+    /// The name of the group to change to in server mode.
     pub group: Option<String>,
 
     /// A mapping of TAL file names to TAL labels.
@@ -792,145 +789,6 @@ impl Config {
         Ok(())
     }
 
-    /// Initialize logging.
-    ///
-    /// All diagnostic output of Routinator is done via logging, never to
-    /// stderr directly. Thus, it is important to initalize logging before
-    /// doing anything else that may result in such output. This function
-    /// does exactly that. It sets a maximum log level of `warn`, leading
-    /// only printing important information, and directs all logging to
-    /// stderr.
-    pub fn init_logging() -> Result<(), Error> {
-        log::set_max_level(LevelFilter::Warn);
-        if let Err(err) = log_reroute::init() {
-            eprintln!("Failed to initialize logger: {}.\nAborting.", err);
-            return Err(Error)
-        };
-        let dispatch = fern::Dispatch::new()
-            .level(LevelFilter::Error)
-            .chain(io::stderr())
-            .into_log().1;
-        log_reroute::reroute_boxed(dispatch);
-        Ok(())
-    }
-
-    /// Switches logging to the configured target.
-    ///
-    /// Once the configuration has been successfully loaded, logging should
-    /// be switched to whatever the user asked for via this method.
-    #[allow(unused_variables)] // for cfg(not(unix))
-    pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
-        let logger = match self.log_target {
-            #[cfg(unix)]
-            LogTarget::Default(fac) => {
-                if daemon {
-                    self.syslog_logger(fac)?
-                }
-                else {
-                    self.stderr_logger(false)?
-                }
-            }
-            #[cfg(unix)]
-            LogTarget::Syslog(fac) => {
-                self.syslog_logger(fac)?
-            }
-            LogTarget::Stderr => {
-                self.stderr_logger(daemon)?
-            }
-            LogTarget::File(ref path) => {
-                self.file_logger(path)?
-            }
-        };
-        log_reroute::reroute_boxed(logger);
-        log::set_max_level(self.log_level);
-        Ok(())
-    }
-
-    /// Creates a syslog logger and configures correctly.
-    #[cfg(unix)]
-    fn syslog_logger(
-        &self,
-        facility: syslog::Facility
-    ) -> Result<Box<dyn Log>, Error> {
-        let process = env::current_exe().ok().and_then(|path|
-            path.file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(ToString::to_string)
-        ).unwrap_or_else(|| String::from("routinator"));
-        let pid = unsafe { libc::getpid() };
-        let formatter = syslog::Formatter3164 {
-            facility,
-            hostname: None,
-            process,
-            pid
-        };
-        let logger = syslog::unix(formatter.clone()).or_else(|_| {
-            syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
-        }).or_else(|_| {
-            syslog::udp(formatter, ("127.0.0.1", 0), ("127.0.0.1", 514))
-        });
-        match logger {
-            Ok(logger) => {
-                Ok(self.fern_logger(false).chain(
-                    Box::new(syslog::BasicLogger::new(logger))
-                    as Box::<dyn log::Log>
-                ).into_log().1)
-            }
-            Err(err) => {
-                error!("Cannot connect to syslog: {}", err);
-                Err(Error)
-            }
-        }
-    }
-
-    /// Creates a stderr logger.
-    ///
-    /// If we are in daemon mode, we add a timestamp to the output.
-    fn stderr_logger(&self, daemon: bool) -> Result<Box<dyn Log>, Error> {
-        Ok(self.fern_logger(daemon).chain(io::stderr()).into_log().1)
-    }
-
-    /// Creates a file logger using the file provided by `path`.
-    fn file_logger(&self, path: &Path) -> Result<Box<dyn Log>, Error> {
-        let file = match fern::log_file(path) {
-            Ok(file) => file,
-            Err(err) => {
-                error!(
-                    "Failed to open log file '{}': {}",
-                    path.display(), err
-                );
-                return Err(Error)
-            }
-        };
-        Ok(self.fern_logger(true).chain(file).into_log().1)
-    }
-
-    /// Creates and returns a fern logger.
-    fn fern_logger(&self, timestamp: bool) -> fern::Dispatch {
-        let mut res = fern::Dispatch::new();
-        if timestamp {
-            res = res.format(|out, message, _record| {
-                out.finish(format_args!(
-                    "{} {} {}",
-                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
-                    _record.module_path().unwrap_or(""),
-                    message
-                ))
-            });
-        }
-        res = res
-            .level(self.log_level)
-            .level_for("rustls", LevelFilter::Error);
-        if self.log_level == LevelFilter::Debug {
-            res = res
-                .level_for("tokio_reactor", LevelFilter::Info)
-                .level_for("hyper", LevelFilter::Info)
-                .level_for("reqwest", LevelFilter::Info)
-                .level_for("h2", LevelFilter::Info);
-        }
-        res
-    }
-
     /// Returns a path value in arg matches.
     ///
     /// This expands a relative path based on the given directory.
@@ -1208,25 +1066,8 @@ impl Config {
         }
     }
 
-    /// Returns a Tokio runtime based on the configuration.
-    pub fn runtime(&self) -> Result<Runtime, Error> {
-        Runtime::new().map_err(|err| {
-            error!("Failed to create runtime: {}", err);
-            Error
-        })
-    }
-
-    /// Runs a future to completion atop a Tokio runtime.
-    pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Error> {
-        Ok(self.runtime()?.block_on(future))
-    }
-
-    /// Returns a daemonizer based on the configuration.
-    ///
-    /// This also changes the paths in the configuration if `chroot` is set.
-    /// As this may fail, this whole method may fail.
-    #[cfg(unix)]
-    pub fn daemonize(&mut self) -> Result<Daemonize<()>, Error> {
+    /// Alters paths so that they are relative to a possible chroot.
+    pub fn adjust_chroot_paths(&mut self) -> Result<(), Error> {
         if let Some(ref chroot) = self.chroot {
             self.cache_dir = match self.cache_dir.strip_prefix(chroot) {
                 Ok(dir) => dir.into(),
@@ -1273,8 +1114,6 @@ impl Config {
                     }
                 };
             }
-            // XXX I _think_ the pid_file remains where it is outside the
-            //     chroot?
             if let Some(ref mut dir) = self.working_dir {
                 *dir = match dir.strip_prefix(chroot) {
                     Ok(path) => path.into(),
@@ -1288,23 +1127,7 @@ impl Config {
                 }
             }
         }
-        let mut res = Daemonize::new();
-        if let Some(ref pid_file) = self.pid_file {
-            res = res.pid_file(pid_file)
-        }
-        if let Some(ref dir) = self.working_dir {
-            res = res.working_directory(dir)
-        }
-        if let Some(ref chroot) = self.chroot {
-            res = res.chroot(chroot)
-        }
-        if let Some(ref user) = self.user {
-            res = res.user(user.as_str())
-        }
-        if let Some(ref group) = self.group {
-            res = res.group(group.as_str())
-        }
-        Ok(res)
+        Ok(())
     }
 
     /// Returns a TOML representation of the config.

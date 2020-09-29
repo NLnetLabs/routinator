@@ -29,6 +29,7 @@ use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
 use crate::output::OutputFormat;
+use crate::process::Process;
 use crate::repository::Repository;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
@@ -72,7 +73,7 @@ impl Operation {
     ///
     /// Call this before doing anything else.
     pub fn prepare() -> Result<(), Error> {
-        Config::init_logging()
+        Process::init()
     }
 
     /// Adds the command configuration to a clap app.
@@ -152,16 +153,17 @@ impl Operation {
     /// Depending on the command, this method may switch to logging at some
     /// point.
     pub fn run(self, config: Config) -> Result<(), ExitError> {
+        let process = Process::new(config);
         match self {
-            Operation::Init(cmd) => cmd.run(config),
-            Operation::Server(cmd) => cmd.run(config),
-            Operation::Vrps(cmd) => cmd.run(config),
-            Operation::Validate(cmd) => cmd.run(config),
+            Operation::Init(cmd) => cmd.run(process),
+            Operation::Server(cmd) => cmd.run(process),
+            Operation::Vrps(cmd) => cmd.run(process),
+            Operation::Validate(cmd) => cmd.run(process),
             #[cfg(feature = "rta")]
-            Operation::ValidateDocument(cmd) => cmd.run(config),
-            Operation::Update(cmd) => cmd.run(config),
-            Operation::PrintConfig(cmd) => cmd.run(config),
-            Operation::Man(cmd) => cmd.run(config),
+            Operation::ValidateDocument(cmd) => cmd.run(process),
+            Operation::Update(cmd) => cmd.run(process),
+            Operation::PrintConfig(cmd) => cmd.run(process),
+            Operation::Man(cmd) => cmd.run(process),
         }
     }
 }
@@ -231,17 +233,17 @@ impl Init {
     ///
     /// We will, however, refuse to install any TALs until `accept_arin_rpa`
     /// is `true`. If it isn’t we just print a friendly reminder instead.
-    pub fn run(self, config: Config) -> Result<(), ExitError> {
-        Repository::init(&config)?;
+    pub fn run(self, process: Process) -> Result<(), ExitError> {
+        process.create_cache_dir()?;
 
         // Check if TAL directory exists and error out if needed.
-        if let Ok(metadata) = fs::metadata(&config.tal_dir) {
+        if let Ok(metadata) = fs::metadata(&process.config().tal_dir) {
             if metadata.is_dir() {
                 if !self.force {
                     error!(
                         "TAL directory {} exists.\n\
                         Use -f to force installation of TALs.",
-                        config.tal_dir.display()
+                        process.config().tal_dir.display()
                     );
                     return Err(Error.into());
                 }
@@ -249,7 +251,7 @@ impl Init {
             else {
                 error!(
                     "TAL directory {} exists and is not a directory.",
-                    config.tal_dir.display()
+                    process.config().tal_dir.display()
                 );
                 return Err(Error.into())
             }
@@ -273,26 +275,26 @@ impl Init {
         }
 
         // Try to create the TAL directory and error out if that fails.
-        if let Err(err) = fs::create_dir_all(&config.tal_dir) {
+        if let Err(err) = fs::create_dir_all(&process.config().tal_dir) {
             error!(
                 "Cannot create TAL directory {}: {}",
-                config.tal_dir.display(), err
+                process.config().tal_dir.display(), err
             );
             return Err(Error.into())
         }
 
         // Now write all the TALs. Overwrite existing ones.
         for (name, content) in &DEFAULT_TALS {
-            Self::write_tal(&config, name, content)?;
+            Self::write_tal(&process.config().tal_dir, name, content)?;
         }
         if self.accept_arin_rpa {
-            Self::write_tal(&config, ARIN_TAL.0, ARIN_TAL.1)?;
+            Self::write_tal(&process.config().tal_dir, ARIN_TAL.0, ARIN_TAL.1)?;
         }
 
         // Not really an error, but that’s our log level right now.
         error!(
             "Created local repository directory {}",
-            config.cache_dir.display()
+            process.config().cache_dir.display()
         );
         error!(
             "Installed {} TALs in {}",
@@ -302,7 +304,7 @@ impl Init {
             else {
                 DEFAULT_TALS.as_ref().len()
             },
-            config.tal_dir.display()
+            process.config().tal_dir.display()
         );
 
         Ok(())
@@ -310,16 +312,16 @@ impl Init {
 
     /// Writes the given tal.
     fn write_tal(
-        config: &Config,
+        tal_dir: &Path,
         name: &str,
         content: &[u8]
     ) -> Result<(), Error> {
-        let mut file = match fs::File::create(config.tal_dir.join(name)) {
+        let mut file = match fs::File::create(tal_dir.join(name)) {
             Ok(file) => file,
             Err(err) => {
                 error!(
                     "Can't create TAL file {}: {}.\n Aborting.",
-                    config.tal_dir.join(name).display(), err
+                    tal_dir.join(name).display(), err
                 );
                 return Err(Error);
             }
@@ -327,7 +329,7 @@ impl Init {
         if let Err(err) = file.write_all(content) {
             error!(
                 "Can't create TAL file {}: {}.\n Aborting.",
-                config.tal_dir.join(name).display(), err
+                tal_dir.join(name).display(), err
             );
             return Err(Error);
         }
@@ -379,19 +381,21 @@ impl Server {
     /// If `detach` is `true`, will fork the server and exit. Otherwise
     /// just runs the server forever.
     /// Runs the command.
-    pub fn run(self, mut config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, true)?;
-        config.switch_logging(self.detach)?;
+    pub fn run(self, mut process: Process) -> Result<(), ExitError> {
+        Repository::init(process.config())?;
+        process.switch_logging(self.detach)?;
+        process.setup_service(self.detach)?;
 
-        let history = OriginsHistory::new(&config);
-        let (mut notify, rtr) = rtr_listener(history.clone(), &config)?;
-        let http = http_listener(&history, &config)?;
+        let history = OriginsHistory::new(process.config());
+        let (mut notify, rtr) = rtr_listener(
+            history.clone(), process.config()
+        )?;
+        let http = http_listener(&history, process.config())?;
 
-        if self.detach {
-            Self::daemonize(&mut config)?;
-        }
+        process.drop_privileges()?;
 
-        let mut runtime = config.runtime()?;
+        let mut repo = Repository::new(process.config(), true)?;
+        let mut runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
         let (sig_tx, sig_rx) = mpsc::channel();
@@ -399,7 +403,9 @@ impl Server {
 
         let join = thread::spawn(move || {
             loop {
-                let timeout = match LocalExceptions::load(&config, false) {
+                let timeout = match LocalExceptions::load(
+                    process.config(), false
+                ) {
                     Ok(exceptions) => {
                         if Self::process_once(
                             &mut repo, &history, &mut notify, exceptions
@@ -418,7 +424,7 @@ impl Server {
                 };
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
-                        match repo.reload_tals(&config) {
+                        match repo.reload_tals(process.config()) {
                             Ok(_) => {
                                 info!("Reloaded TALs at user request.");
                             },
@@ -487,20 +493,6 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
-        Ok(())
-    }
-
-    #[cfg(unix)]
-    fn daemonize(config: &mut Config) -> Result<(), Error> {
-        if let Err(err) = config.daemonize()?.start() {
-            error!("Detaching failed: {}", err);
-            return Err(Error)
-        }
-        Ok(())
-    }
-
-    #[cfg(not(unix))]
-    fn daemonize(_config: &mut Config) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -646,10 +638,10 @@ impl Vrps {
     /// If `noupdate` is `false`, the local repository will be updated first
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
-    fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, !self.noupdate)?;
-        config.switch_logging(false)?;
-        let exceptions = LocalExceptions::load(&config, true)?;
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        process.switch_logging(false)?;
+        let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
@@ -782,13 +774,13 @@ impl Validate {
 
 
     /// Outputs whether the given route announcement is valid.
-    fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, !self.noupdate)?;
-        config.switch_logging(false)?;
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        process.switch_logging(false)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
-            &LocalExceptions::load(&config, false)?,
+            &LocalExceptions::load(process.config(), false)?,
             &mut metrics
         );
         let validity = RouteValidity::new(self.prefix, self.asn, &vrps);
@@ -869,9 +861,9 @@ impl ValidateDocument {
     ///
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
-    fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, !self.noupdate)?;
-        config.switch_logging(false)?;
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        process.switch_logging(false)?;
 
         // Load and decode the signature.
         let data = match fs::read(&self.signature) {
@@ -884,7 +876,7 @@ impl ValidateDocument {
                 return Err(ExitError::Generic)
             }
         };
-        let rta = match Rta::decode(data, config.strict) {
+        let rta = match Rta::decode(data, process.config().strict) {
             Ok(rta) => rta,
             Err(err) => {
                 error!(
@@ -913,7 +905,9 @@ impl ValidateDocument {
             return Err(ExitError::Invalid)
         }
 
-        let validation = match rta::ValidationReport::new(&rta, &config) {
+        let validation = match rta::ValidationReport::new(
+            &rta, process.config()
+        ) {
             Ok(validation) => validation,
             Err(_) => {
                 error!("RTA did not validate. (new)");
@@ -985,8 +979,8 @@ impl Update {
     /// also does validation in order to discover new points.
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
-    fn run(self, config: Config) -> Result<(), ExitError> {
-        let mut repo = Repository::new(&config, true)?;
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        let mut repo = Repository::new(process.config(), true)?;
         let (_, metrics) = repo.process_origins()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
@@ -1024,19 +1018,8 @@ impl PrintConfig {
     }
 
     /// Prints the current configuration to stdout and exits.
-    #[cfg(unix)]
-    fn run(self, mut config: Config) -> Result<(), ExitError> {
-        if config.chroot.is_some() {
-            config.daemonize()?;
-        }
-        println!("{}", config);
-        Ok(())
-    }
-
-    /// Prints the current configuration to stdout and exits.
-    #[cfg(not(unix))]
-    fn run(self, config: Config) -> Result<(), ExitError> {
-        println!("{}", config);
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        println!("{}", process.config());
         Ok(())
     }
 }
@@ -1082,7 +1065,7 @@ impl Man {
         })
     }
 
-    fn run(self, _config: Config) -> Result<(), ExitError> {
+    fn run(self, _process: Process) -> Result<(), ExitError> {
         match self.output {
             Some(path) => Self::output_man(path),
             None => Self::display_man(),
