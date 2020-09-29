@@ -5,7 +5,6 @@ After=network.target
 
 [Service]
 ExecStart=/usr/bin/routinator --config=/etc/routinator/routinator.conf --syslog server
-User=routinator
 
 [Install]
 WantedBy=multi-user.target
