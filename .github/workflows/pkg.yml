@@ -303,13 +303,13 @@ jobs:
         echo -e "\nSTART ROUTINATOR SERVICE:"
         sg lxd -c "lxc exec testcon -- systemctl start routinator"
         
-        echo -e "\nROUTINATOR SERVICE STATUS AFTER START:"
         sleep 15s
-        sg lxd -c "lxc exec testcon -- systemctl status routinator"
-        
         echo -e "\nROUTINATOR LOGS AFTER START:"
         sg lxd -c "lxc exec testcon -- journalctl --unit=routinator"
 
+        echo -e "\nROUTINATOR SERVICE STATUS AFTER START:"
+        sg lxd -c "lxc exec testcon -- systemctl status routinator"
+        
         echo -e "\nROUTINATOR MAN PAGE:"
         sg lxd -c "lxc exec testcon -- man -P cat routinator"
 
