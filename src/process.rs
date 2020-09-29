@@ -487,7 +487,6 @@ mod unix {
             let uid = Self::get_user(config)?;
             let gid = Self::get_group(config)?;
             if uid.is_some() || gid.is_some() {
-                println!("chown now");
                 if let Err(err) = chown(&config.cache_dir, uid, gid) {
                     error!(
                         "Fatal: failed to change ownership of cache dir \
