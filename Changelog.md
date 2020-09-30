@@ -47,7 +47,7 @@ New
   syslog logging. ([#385])
 * Release builds will now abort on panic, i.e., when an unexpected
   internal condition is detected. This ensures that there won’t be a
-  Routinator process in a coma. ([#394])
+  Routinator in a coma. ([#394])
 * The feature `rta` enables the new command `rta` for validating Resource
   Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
   feature is not enabled by default and needs to be activated by adding
