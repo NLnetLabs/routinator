@@ -914,6 +914,13 @@ the output of the
 .B /metrics
 endpoint but in a more human friendly format.
 .TP
+.B /log
+Returns the logging output of the last validation run. The log level matches
+that set upon start.
+.IP
+Note that the output is collected after each validation run and is therefore
+only available after the initial run has concluded.
+.TP
 .B /version
 Returns the version of the Routinator instance.
 .TP
