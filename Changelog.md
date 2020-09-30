@@ -10,6 +10,10 @@ Breaking Changes
   However, unlike suggested by the draft, Routinator currently will not fall
   back to cached older versions of the CA’s objects that may still be valid.
   ([#371])
+* Similarly, CRL handling has been tightened significantly. Each CA must
+  now have exactly one CRL which must be the one stated in the manifest’s
+  EE certificate. Any violation will lead to the whole CA being rejected
+  with the same consequences as above. ([#397])
 * The default for dealing with stale objects has been changed to `reject`
   in accordance with the same draft. ([#387])
 * All VRPs overlapping with resources from rejected CAs are filtered. This
@@ -78,6 +82,7 @@ Other Changes
 [#392]: https://github.com/NLnetLabs/routinator/pull/392
 [#394]: https://github.com/NLnetLabs/routinator/pull/394
 [#396]: https://github.com/NLnetLabs/routinator/pull/396
+[#397]: https://github.com/NLnetLabs/routinator/pull/397
 [594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
