@@ -17,7 +17,7 @@ use crossbeam_queue::SegQueue;
 use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
-use rpki::crl::{Crl, CrlStore};
+use rpki::crl::Crl;
 use rpki::crypto::KeyIdentifier;
 use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::roa::{Roa, RouteOriginAttestation};
@@ -523,19 +523,14 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 StalePolicy::Accept => { }
             }
         }
-        let mft_crl = match self.check_manifest_crl(
-            rrdp_server, &cert, issuer
+        let store = match self.check_manifest_crl(
+            rrdp_server, issuer, &uri, &cert, &manifest, repo_uri
         ) {
             Ok(some) => some,
             Err(_) => {
-                warn!("{}: certificate has been revoked", uri);
                 return None
             }
         };
-
-        let store = self.store_manifest_crls(
-            rrdp_server, issuer, &manifest, repo_uri, mft_crl
-        );
 
         process.update_refresh(cert.validity().not_after());
         process.update_refresh(manifest.next_update());
@@ -833,90 +828,97 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             None => return Ok(())
         };
 
-        match store.get(&uri) {
-            Some(crl) => {
-                if crl.contains(cert.serial_number()) {
-                    Err(ValidationError)
-                }
-                else {
-                    Ok(())
-                }
-            },
-            None => {
-                Err(ValidationError)
-            }
+        if store.uri != *uri || store.crl.contains(cert.serial_number()) {
+            Err(ValidationError)
+        }
+        else {
+            Ok(())
         }
     }
 
     /// Check the manifest CRL.
     ///
-    /// Checks whether the manifest hasn’t been revoked. If it hasn’t been,
-    /// returns the rsync URL of the CRL and the CRL itself since it is likely
-    /// also used with other objects mentioned by the manifest.
+    /// Checks that there is exactly one CRL on the manifest, that it matches
+    /// the CRL mentioned in the manifest’s EE certificate, that it matches
+    /// its manifest hash, that it is a valid CRL for the CA, and that it does
+    /// not revoke the manifest’s EE certificate.
+    ///
+    /// If all that is true, returns a `CrlStore` containing that CRL so other
+    /// objects can be checked.
     fn check_manifest_crl(
         &self,
         rrdp_server: Option<rrdp::ServerId>,
-        cert: &TbsCert,
         issuer: &ResourceCert,
-    ) -> Result<(uri::Rsync, Bytes, Crl), ValidationError> {
-        // Let’s be strict here: If there is no CRL URI, the certificate is
-        // broken.
-        let uri = match cert.crl_uri() {
-            Some(some) => some.clone(),
-            None => return Err(ValidationError)
-        };
-        let (bytes, crl) = self.load_crl(rrdp_server, &uri, issuer)?;
-        if crl.contains(cert.serial_number()) {
-            Err(ValidationError)
-        }
-        else {
-            Ok((uri, bytes, crl))
-        }
-    }
-
-    /// Loads all CRLs mentioned on the manifest and puts them into the store.
-    ///
-    /// Invalid manifests are discarded.
-    fn store_manifest_crls(
-        &self,
-        rrdp_server: Option<rrdp::ServerId>,
-        issuer: &ResourceCert,
+        manifest_uri: &uri::Rsync,
+        manifest_cert: &TbsCert,
         manifest: &ManifestContent,
         repo_uri: &uri::Rsync,
-        mft_crl: (uri::Rsync, Bytes, Crl),
-    ) -> CrlStore {
-        let mut store = CrlStore::new();
-        if manifest.len() > CRL_CACHE_LIMIT {
-            store.enable_serial_caching();
-        }
-        let mut mft_crl = Some(mft_crl);
+    ) -> Result<CrlStore, ValidationError> {
+        // Let’s first get the manifest CRL’s name relative to repo_uri. If
+        // it ain’t relative at all, this is already invalid.
+        let crl_uri = match manifest_cert.crl_uri() {
+            // RFC 6481: MUST end in .crl.
+            Some(some) if some.ends_with(".crl") => some.clone(),
+            _ => {
+                warn!("{}: invalid CRL URI.", manifest_uri);
+                return Err(ValidationError)
+            }
+        };
+        let crl_name = match crl_uri.relative_to(repo_uri) {
+            Some(name) => name,
+            None => {
+                warn!(
+                    "{}: CRL URI outside repository directory.",
+                    manifest_uri
+                );
+                return Err(ValidationError)
+            }
+        };
+
+        // Now we go over the manifest and try to find an entry matching
+        // crl_name.
+        let mut res = None;
         for item in manifest.iter() {
             let (file, hash) = item.into_pair();
-            if !file.ends_with(b".crl") {
-                continue
-            }
-            let uri = repo_uri.join(&file);
-
-            let (bytes, crl) = if
-                mft_crl.as_ref().map(|x| x.0 == uri).unwrap_or(false)
-            {
-                let mft_crl = mft_crl.take().unwrap();
-                (mft_crl.1, mft_crl.2)
-            }
-            else {
-                match self.load_crl(rrdp_server, &uri, issuer) {
-                    Ok(some) => some,
-                    Err(_) => continue
+            if file == crl_name {
+                let (bytes, crl) = self.load_crl(
+                    rrdp_server, &crl_uri, issuer
+                )?;
+                let hash = ManifestHash::new(hash, manifest.file_hash_alg());
+                if hash.verify(&bytes).is_err() {
+                    warn!("{}: file has wrong hash.", crl_uri);
+                    return Err(ValidationError)
                 }
-            };
-            let hash = ManifestHash::new(hash, manifest.file_hash_alg());
-            if hash.verify(&bytes).is_err() {
-                info!("{}: file has wrong hash.", uri);
-                continue
+                res = Some(crl);
             }
-            store.push(uri, crl)
+            else if file.ends_with(b".crl") {
+                warn!("{}: manifest contains multiple CRLs.", manifest_uri);
+                return Err(ValidationError)
+            }
         }
-        store
+        
+        // Now we should have our CRL in res or it wasn’t on the manifest.
+        let mut res = match res {
+            Some(res) => CrlStore::new(crl_uri, res),
+            None => {
+                warn!("{}: manifest contains no CRLs.", manifest_uri);
+                return Err(ValidationError)
+            }
+        };
+
+        // Turn on serial caching before looking for the first serial.
+        if manifest.len() > CRL_CACHE_LIMIT {
+            res.crl.cache_serials()
+        }
+
+        // Finally: has the manifest’s cert been revoked?
+        if res.crl.contains(manifest_cert.serial_number()) {
+            warn!("{}: certificate has been revoked.", manifest_uri);
+            return Err(ValidationError)
+        }
+
+        // Phew: All good.
+        Ok(res)
     }
 
     /// Loads and validates the given CRL.
@@ -1015,6 +1017,21 @@ impl ops::Deref for CaCert {
 
     fn deref(&self) -> &Self::Target {
         &self.cert
+    }
+}
+
+
+//------------ CrlStore ------------------------------------------------------
+
+/// The CRL of a CA.
+struct CrlStore {
+    uri: uri::Rsync,
+    crl: Crl,
+}
+
+impl CrlStore {
+    fn new(uri: uri::Rsync, crl: Crl) -> Self {
+        CrlStore { uri, crl }
     }
 }
 
