@@ -2,7 +2,7 @@
 
 use std::{cmp, error, fmt, fs, io};
 use std::convert::TryFrom;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
@@ -77,9 +77,9 @@ impl LocalExceptions {
     #[allow(clippy::option_option)]
     fn info_from_path<P: AsRef<Path>>(
         path: P, extra: bool
-    ) -> Option<Option<Arc<PathBuf>>> {
+    ) -> Option<Option<Arc<Path>>> {
         if extra {
-            Some(Some(Arc::new(path.as_ref().into())))
+            Some(Some(path.as_ref().to_path_buf().into()))
         }
         else {
             None
@@ -90,7 +90,7 @@ impl LocalExceptions {
     pub fn extend_from_json(
         &mut self,
         json: &str,
-        info: Option<Option<Arc<PathBuf>>>,
+        info: Option<Option<Arc<Path>>>,
     ) -> Result<(), serde_json::Error> {
         let json = SlurmFile::from_str(json)?;
         self.filters.extend(json.filters.prefix.into_iter().map(Into::into));
@@ -168,7 +168,7 @@ impl From<RawPrefixFilter> for PrefixFilter {
 
 #[derive(Clone, Debug, Default)]
 pub struct ExceptionInfo {
-    path: Option<Arc<PathBuf>>,
+    path: Option<Arc<Path>>,
     comment: Option<String>,
 }
 

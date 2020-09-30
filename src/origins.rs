@@ -411,7 +411,7 @@ impl OriginsHistory {
             Some(duration) => start + duration + duration,
             None => start + refresh,
         };
-        start.duration_since(SystemTime::now()).unwrap_or_else(|_| refresh)
+        start.duration_since(SystemTime::now()).unwrap_or(refresh)
     }
 
     /// Returns a diff from the given serial number.
@@ -467,7 +467,7 @@ impl OriginsHistory {
 
     pub fn log(&self) -> Bytes {
         match self.0.read().unwrap().log {
-            Some(ref log) => log.get_output().clone(),
+            Some(ref log) => log.get_output(),
             None => Bytes::new(),
         }
     }
@@ -631,14 +631,12 @@ impl HistoryInner {
                 return Some(diff.clone())
             }
         }
-        else {
-            if serial == 0 {
+        else if serial == 0 {
                 return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else {
-                // That pesky future serial again.
-                return None
-            }
+        }
+        else {
+            // That pesky future serial again.
+            return None
         }
         let mut iter = self.diffs.iter().rev();
         while let Some(diff) = iter.next() {
