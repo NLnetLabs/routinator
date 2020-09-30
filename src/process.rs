@@ -3,7 +3,10 @@
 use std::{fs, io};
 use std::future::Future;
 use std::path::Path;
-use log::{error, LevelFilter, Log};
+use std::sync::mpsc;
+use std::sync::Mutex;
+use bytes::Bytes;
+use log::{error, LevelFilter};
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::operation::Error;
@@ -77,7 +80,11 @@ impl Process {
     /// Once the configuration has been successfully loaded, logging should
     /// be switched to whatever the user asked for via this method.
     #[allow(unused_variables)] // for cfg(not(unix))
-    pub fn switch_logging(&self, daemon: bool) -> Result<(), Error> {
+    pub fn switch_logging(
+        &self,
+        daemon: bool,
+        with_output: bool
+    ) -> Result<Option<LogOutput>, Error> {
         let logger = match self.config.log_target {
             #[cfg(unix)]
             LogTarget::Default(fac) => {
@@ -99,9 +106,18 @@ impl Process {
                 self.file_logger(path)?
             }
         };
-        log_reroute::reroute_boxed(logger);
+        let (logger, res) = if with_output {
+            let (tx, res) = LogOutput::new();
+            let logger = logger.chain(tx);
+            (logger, Some(res))
+        }
+        else {
+            (logger, None)
+        };
+
+        log_reroute::reroute_boxed(logger.into_log().1);
         log::set_max_level(self.config.log_level);
-        Ok(())
+        Ok(res)
     }
 
     /// Creates a syslog logger and configures correctly.
@@ -109,7 +125,7 @@ impl Process {
     fn syslog_logger(
         &self,
         facility: syslog::Facility
-    ) -> Result<Box<dyn Log>, Error> {
+    ) -> Result<fern::Dispatch, Error> {
         let process = std::env::current_exe().ok().and_then(|path|
             path.file_name()
                 .and_then(std::ffi::OsStr::to_str)
@@ -131,7 +147,7 @@ impl Process {
                 Ok(self.fern_logger(false).chain(
                     Box::new(syslog::BasicLogger::new(logger))
                     as Box::<dyn log::Log>
-                ).into_log().1)
+                ))
             }
             Err(err) => {
                 error!("Cannot connect to syslog: {}", err);
@@ -143,12 +159,12 @@ impl Process {
     /// Creates a stderr logger.
     ///
     /// If we are in daemon mode, we add a timestamp to the output.
-    fn stderr_logger(&self, daemon: bool) -> Result<Box<dyn Log>, Error> {
-        Ok(self.fern_logger(daemon).chain(io::stderr()).into_log().1)
+    fn stderr_logger(&self, daemon: bool) -> Result<fern::Dispatch, Error> {
+        Ok(self.fern_logger(daemon).chain(io::stderr()))
     }
 
     /// Creates a file logger using the file provided by `path`.
-    fn file_logger(&self, path: &Path) -> Result<Box<dyn Log>, Error> {
+    fn file_logger(&self, path: &Path) -> Result<fern::Dispatch, Error> {
         let file = match fern::log_file(path) {
             Ok(file) => file,
             Err(err) => {
@@ -159,7 +175,7 @@ impl Process {
                 return Err(Error)
             }
         };
-        Ok(self.fern_logger(true).chain(file).into_log().1)
+        Ok(self.fern_logger(true).chain(file))
     }
 
     /// Creates and returns a fern logger.
@@ -252,6 +268,35 @@ impl Process {
     /// Runs a future to completion atop a Tokio runtime.
     pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Error> {
         Ok(self.runtime()?.block_on(future))
+    }
+}
+
+
+//------------ LogOutput -----------------------------------------------------
+
+#[derive(Debug)]
+pub struct LogOutput {
+    queue: Mutex<mpsc::Receiver<String>>,
+    current: Bytes,
+}
+
+impl LogOutput {
+    fn new() -> (mpsc::Sender<String>, Self) {
+        let (tx, rx) = mpsc::channel();
+        let res = LogOutput {
+            queue: Mutex::new(rx),
+            current: Bytes::new(),
+        };
+        (tx, res)
+    }
+
+    pub fn flush(&mut self) {
+        let queue = self.queue.lock().unwrap();
+        self.current = queue.try_iter().collect::<String>().into();
+    }
+
+    pub fn get_output(&self) -> Bytes {
+        self.current.clone()
     }
 }
 

@@ -383,10 +383,13 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
         Repository::init(process.config())?;
-        process.switch_logging(self.detach)?;
+        let log = process.switch_logging(
+            self.detach,
+            !process.config().http_listen.is_empty()
+        )?;
         process.setup_service(self.detach)?;
 
-        let history = OriginsHistory::new(process.config());
+        let history = OriginsHistory::new(process.config(), log);
         let (mut notify, rtr) = rtr_listener(
             history.clone(), process.config()
         )?;
@@ -484,11 +487,11 @@ impl Server {
         let must_notify = history.update(
             report, metrics, &exceptions
         );
-        history.mark_update_done();
         info!(
             "Validation completed. New serial is {}.",
             history.serial()
         );
+        history.mark_update_done();
         if must_notify {
             info!("Sending out notifications.");
             notify.notify();
@@ -640,7 +643,7 @@ impl Vrps {
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
@@ -776,7 +779,7 @@ impl Validate {
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
@@ -863,7 +866,7 @@ impl ValidateDocument {
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
 
         // Load and decode the signature.
         let data = match fs::read(&self.signature) {

@@ -131,6 +131,7 @@ async fn handle_request(
         "/csvext"
             => vrps(origins, req.uri().query(), OutputFormat::ExtendedCsv),
         "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
+        "/log" => log(origins),
         "/metrics" => metrics(origins),
         "/openbgpd" => {
             vrps(origins, req.uri().query(), OutputFormat::Openbgpd)
@@ -682,6 +683,13 @@ fn status_active(
     Response::builder()
     .header("Content-Type", "text/plain")
     .body(res.into())
+    .unwrap()
+}
+
+fn log(origins: &OriginsHistory) -> Response<Body> {
+    Response::builder()
+    .header("Content-Type", "text/plain;charset=UTF-8")
+    .body(origins.log().into())
     .unwrap()
 }
 

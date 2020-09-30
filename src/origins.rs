@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
 use log::{debug, info, warn};
@@ -25,6 +26,7 @@ use serde::{Deserialize, Deserializer};
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::operation::Error;
+use crate::process::LogOutput;
 use crate::repository::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
 
@@ -305,7 +307,7 @@ pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 /// Various things are kept behind an arc in here so we can hand out copies
 /// to long-running tasks (like producing the CSV in the HTTP server) without
 /// holding the lock.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct HistoryInner {
     /// The current full set of adress origins.
     current: Option<Arc<AddressOrigins>>,
@@ -344,12 +346,16 @@ struct HistoryInner {
 
     /// Default RTR timing.
     timing: Timing,
+
+    /// Optional logging output.
+    log: Option<LogOutput>,
 }
 
 impl OriginsHistory {
     /// Creates a new history from the given initial data.
     pub fn new(
         config: &Config,
+        log: Option<LogOutput>,
     ) -> Self {
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
@@ -372,7 +378,8 @@ impl OriginsHistory {
                     refresh: config.refresh.as_secs() as u32,
                     retry: config.retry.as_secs() as u32,
                     expire: config.expire.as_secs() as u32,
-                }
+                },
+                log
             }
         )))
     }
@@ -458,6 +465,13 @@ impl OriginsHistory {
         )
     }
 
+    pub fn log(&self) -> Bytes {
+        match self.0.read().unwrap().log {
+            Some(ref log) => log.get_output().clone(),
+            None => Bytes::new(),
+        }
+    }
+
     /// Updates the history.
     ///
     /// Produces a new list of address origins based on the route origins
@@ -524,6 +538,9 @@ impl OriginsHistory {
             if refresh < locked.next_update_start {
                 locked.next_update_start = refresh;
             }
+        }
+        if let Some(log) = locked.log.as_mut() {
+            log.flush();
         }
     }
 }
