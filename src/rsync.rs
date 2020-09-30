@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 use bytes::Bytes;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rpki::uri;
 use crate::config::Config;
 use crate::metrics::RsyncModuleMetrics;
@@ -135,7 +135,7 @@ impl<'a> Run<'a> {
 
         // Check if the module name is dubious. If so, skip updating.
         if self.cache.filter_dubious && module.has_dubious_authority() {
-            info!(
+            warn!(
                 "{}: Dubious host name. Skipping update.",
                 module
             )
@@ -166,7 +166,7 @@ impl<'a> Run<'a> {
             Ok(mut file) => {
                 let mut data = Vec::new();
                 if let Err(err) = io::Read::read_to_end(&mut file, &mut data) {
-                    warn!(
+                    error!(
                         "Failed to read file '{}': {}",
                         path.display(),
                         err
@@ -181,7 +181,7 @@ impl<'a> Run<'a> {
                 if err.kind() == io::ErrorKind::NotFound {
                     info!("{}: not found in local repository", uri);
                 } else {
-                    warn!(
+                    error!(
                         "Failed to open file '{}': {}",
                         path.display(), err
                     );
@@ -199,7 +199,7 @@ impl<'a> Run<'a> {
         let dir = match fs::read_dir(&self.cache.cache_dir.base) {
             Ok(dir) => dir,
             Err(err) => {
-                warn!(
+                error!(
                     "Failed to read rsync cache directory: {}",
                     err
                 );
@@ -210,7 +210,7 @@ impl<'a> Run<'a> {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
-                    warn!(
+                    error!(
                         "Failed to iterate over rsync cache directory: {}",
                         err
                     );
@@ -230,7 +230,7 @@ impl<'a> Run<'a> {
         let host = match entry_to_uri_component(&entry) {
             Some(host) => host,
             None => {
-                warn!(
+                info!(
                     "{}: illegal rsync host directory. Skipping.",
                     path.display()
                 );
@@ -240,7 +240,7 @@ impl<'a> Run<'a> {
         let dir = match fs::read_dir(&path) {
             Ok(dir) => dir,
             Err(err) => {
-                warn!(
+                info!(
                     "Failed to read directory {}: {}. Skipping.",
                     path.display(), err
                 );
@@ -252,7 +252,7 @@ impl<'a> Run<'a> {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
-                    warn!(
+                    info!(
                         "Failed to iterate over directory {}: {}",
                         path.display(), err
                     );
@@ -424,7 +424,7 @@ impl Command {
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
-        info!(
+        debug!(
             "rsync://{}/{}: Running command {:?}",
             source.authority(), source.module(), cmd
         );

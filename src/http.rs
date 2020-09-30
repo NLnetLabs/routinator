@@ -58,7 +58,7 @@ pub fn http_listener(
         match StdListener::bind(addr) {
             Ok(listener) => listeners.push(listener),
             Err(err) => {
-                error!("Fatal error listening on {}: {}", addr, err);
+                error!("Fatal: error listening on {}: {}", addr, err);
                 return Err(ExitError::Generic);
             }
         };
@@ -102,7 +102,7 @@ async fn single_http_listener(
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Fatal error on HTTP listener: {}", err);
+                error!("Error on HTTP listener: {}", err);
                 return
             }
         },

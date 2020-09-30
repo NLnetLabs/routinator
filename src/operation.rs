@@ -17,7 +17,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use log::{error, info, warn};
+use log::{error, info};
 use rpki::resources::AsId;
 #[cfg(feature = "rta")] use rpki::rta::Rta;
 use rpki_rtr::server::NotifySender;
@@ -418,7 +418,7 @@ impl Server {
                         history.refresh_wait()
                     }
                     Err(_) => {
-                        warn!(
+                        error!(
                             "Failed to load exceptions. \
                             Trying again in 10 seconds."
                         );
@@ -433,7 +433,7 @@ impl Server {
                             },
                             Err(_) => {
                                 error!(
-                                    "Reloading TALs failed, \
+                                    "Fatal: Reloading TALs failed, \
                                      shutting down."
                                 );
                                 break;
@@ -491,11 +491,11 @@ impl Server {
             "Validation completed. New serial is {}.",
             history.serial()
         );
-        history.mark_update_done();
         if must_notify {
             info!("Sending out notifications.");
             notify.notify();
         }
+        history.mark_update_done();
         Ok(())
     }
 }

@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
-use log::{debug, info, warn};
+use log::{info, warn};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::{AsId, IpBlocks, IpBlocksBuilder};
@@ -618,37 +618,28 @@ impl HistoryInner {
     /// can’t, either because it doesn’t have enough history data or because
     /// the serial is actually in the future.
     pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
-        debug!("Fetching diff for serial {}", serial);
         if let Some(diff) = self.diffs.front() {
-            debug!("Our current serial is {}", diff.serial);
             if diff.serial() < serial {
                 // If they give us a future serial, we reset.
-                debug!("Future, forcing reset.");
                 return None
             }
             else if diff.serial() == serial {
-                debug!("Same, producing empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else if diff.serial() == serial.add(1) {
                 // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
                 return Some(diff.clone())
             }
         }
         else {
-            debug!("We are at serial 0.");
             if serial == 0 {
-                debug!("Same, returning empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else {
                 // That pesky future serial again.
-                debug!("Future, forcing reset.");
                 return None
             }
         }
-        debug!("Merging diffs.");
         let mut iter = self.diffs.iter().rev();
         while let Some(diff) = iter.next() {
             match diff.serial().partial_cmp(&serial) {

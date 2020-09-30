@@ -256,6 +256,11 @@ to
 .I info\fR,
 specifying it more than once increases it to
 .I debug\fR.
+.IP
+See
+.B LOGGING
+below for more information on what information is logged at the different
+levels.
 .TP
 .BR \-q ,\  \fB\-\-quiet
 Print less information. Given twice, print nothing at all.
@@ -470,7 +475,7 @@ The address prefix the route announcement is for.
 .TP
 .BR \-j ,\  \-\-json
 A detailed analysis on the reasoning behind the validation is printed in
-JSON format including lists of the VPRs that caused the particular result.
+JSON format including lists of the VRPs that caused the particular result.
 If this option is omitted, Routinator will only print the determined
 state.
 .TP
@@ -776,6 +781,11 @@ in the system is used.
 A string value specifying the maximum log level for which log messages should
 be emitted. The default is
 .IR warn .
+.IP
+See
+.B LOGGING
+below for more information on what information is logged at the different
+levels.
 .TP
 .B log
 A string specifying where to send log messages to. This can be one of the
@@ -934,6 +944,33 @@ times.
 This works in the same way as the options of the same name to the
 .B vrps
 command.
+
+.SH LOGGING
+In order to allow diagnosis of the VRP data set as well as its overall health,
+Routinator logs an extensive amount of information. The log levels used by
+syslog are utilized to allow filtering this information for particular use
+cases.
+.P
+The log levels represent the following information:
+.TP
+.I error
+Information related to events that prevent Routinator from continuing to
+operate at all as well as all issues related to local configuration even
+if Routinator will continue to run.
+.TP
+.I warn
+Information about events and data that influences the set of VRPs produced
+by Routinator. This includes failures to communicate with repository servers,
+or encountering invalid objects.
+.TP
+.I info
+Information about events and data that could be considered abnormal but do
+not influence the set of VRPs produced. For example, when filtering of unsafe
+VRPs is disabled, the unsafe VRPs are logged with this level.
+.TP
+.I debug
+Information about the internal state of Routinator that may be useful for,
+well, debugging.
 
 .SH VALIDATION
 In

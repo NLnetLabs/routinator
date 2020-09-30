@@ -6,7 +6,7 @@ use std::{error, fmt, fs, io};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use log::{error, info};
+use log::{error, warn};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, Response};
 use ring::digest;
@@ -167,7 +167,7 @@ impl HttpClient {
             }
         };
         if !response.status().is_success() {
-            info!(
+            warn!(
                 "RRDP {}: Getting notification file failed with status {}",
                 uri, response.status()
             );
@@ -179,7 +179,7 @@ impl HttpClient {
                 Ok(res)
             }
             Err(err) => {
-                error!("{}: {}", uri, err);
+                warn!("RRDP {}: {}", uri, err);
                 Err(Error)
             }
         }
@@ -195,7 +195,7 @@ impl HttpClient {
                 self.response(notify.snapshot.uri())?
         ));
         if let Err(err) = processor.process(&mut reader) {
-            error!("{}: {}", notify.snapshot.uri(), err);
+            warn!("RRDP {}: {}", notify.snapshot.uri(), err);
             return Err(Error)
         }
         let digest = reader.into_inner().into_digest();
@@ -203,7 +203,7 @@ impl HttpClient {
             digest.as_ref(),
             notify.snapshot.hash().as_ref()
         ).is_err() {
-            info!("{}: hash value mismatch.", notify.snapshot.uri());
+            warn!("RRDP {}: hash value mismatch.", notify.snapshot.uri());
             return Err(Error)
         }
         Ok(())
@@ -225,7 +225,7 @@ impl HttpClient {
         ));
         if let Err(err) = processor.process(&mut reader) {
             if let ProcessError::Xml(err) = err {
-                info!("Bad content in {}: {}", delta.1.uri(), err);
+                warn!("RRDP {}: {}", delta.1.uri(), err);
             }
             return Err(Error)
         }
@@ -234,7 +234,7 @@ impl HttpClient {
             digest.as_ref(),
             delta.1.hash().as_ref()
         ).is_err() {
-            error!("{}: hash value mismatch.", delta.1.uri());
+            warn!("RRDP {}: hash value mismatch.", delta.1.uri());
             return Err(Error)
         }
         Ok(())
@@ -247,7 +247,7 @@ impl HttpClient {
         self.client().get(uri.as_str()).send().and_then(|res| {
             res.error_for_status()
         }).map_err(|err| {
-            info!("{}: {}", uri, err);
+            warn!("RRDP {}: {}", uri, err);
             Error
         })
     }
@@ -377,7 +377,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
         let path = match self.targets.target_path(path) {
             Some(path) => path,
             None => {
-                info!(
+                warn!(
                     "Failed to open file '{}': file has been withdrawn.",
                     path.display()
                 );
@@ -387,7 +387,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
         let file = match fs::File::open(path) {
             Ok(file) => file,
             Err(err) => {
-                info!(
+                warn!(
                     "Failed to open file '{}': {}",
                     path.display(), err
                 );
@@ -397,7 +397,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
         let digest = match DigestRead::sha256(file).read_all() {
             Ok(digest) => digest,
             Err(err) => {
-                info!(
+                warn!(
                     "Failed to read file '{}': {}",
                     path.display(), err
                 );
@@ -405,7 +405,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
             }
         };
         verify_slices_are_equal(hash.as_ref(), digest.as_ref()).map_err(|_| {
-            info!(
+            warn!(
                 "RRDP hash mismatch in local file {}.", uri
             );
             ProcessError::Error
@@ -423,7 +423,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
         serial: u64,
     ) -> Result<(), Self::Err> {
         if session_id != self.notify.session_id {
-            info!(
+            warn!(
                 "RRDP server {}: \
                 Mismatch between notification session and delta session",
                 self.server_uri
@@ -431,7 +431,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
             return Err(ProcessError::Error)
         }
         if serial != self.delta.0 {
-            info!(
+            warn!(
                 "RRDP server {}: \
                 Mismatch between announced and actual serial in delta.",
                 self.server_uri
@@ -490,7 +490,7 @@ impl DeltaTargets {
             tmp_dir: match TempDir::new_in(cache_dir) {
                 Ok(tmp_dir) => tmp_dir,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Unable to create temporary directory under {}: {}",
                         cache_dir.display(), err
                     );
@@ -508,7 +508,7 @@ impl DeltaTargets {
                     let _ = fs::remove_file(&target); // Just to make sure.
                     let _ = target.parent().map(fs::create_dir_all);
                     if let Err(err) = fs::rename(&source, &target) {
-                        info!(
+                        error!(
                             "Failed to move delta source '{}' to \
                             target '{}': {}",
                             source.display(),
@@ -520,7 +520,7 @@ impl DeltaTargets {
                 }
                 DeltaEntry::Withdraw { target } => {
                     if let Err(err) = fs::remove_file(&target) {
-                        info!(
+                        error!(
                             "Failed to delete file '{}': {}",
                             target.display(), err
                         );
@@ -539,8 +539,8 @@ impl DeltaTargets {
     ) -> Result<(), ProcessError> {
         let (mut file, source) = create_unique_file(self.tmp_dir.path())?;
         if let Err(err) = file.write_all(data.as_ref()) {
-            info!(
-                "Failed to temporary file '{}': {}",
+            error!(
+                "Failed to write temporary file '{}': {}",
                 source.display(), err
             );
             return Err(ProcessError::Error)

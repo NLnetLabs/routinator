@@ -5,7 +5,7 @@
 use std::io;
 use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf};
-use log::info;
+use log::error;
 use rand::random;
 use crate::operation::Error;
 
@@ -18,7 +18,7 @@ pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
             Ok(()) => return Ok(target),
             Err(err) => {
                 if err.kind() != io::ErrorKind::AlreadyExists {
-                    info!(
+                    error!(
                         "Failed to create unique directory under {}: {}",
                         path.display(), err
                     );
@@ -27,7 +27,7 @@ pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
             }
         }
     }
-    info!(
+    error!(
         "Failed to create unique directory under {}: tried a hundred times.",
         path.display()
     );
@@ -42,7 +42,7 @@ pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Error> {
             Ok(file) => return Ok((file, target)),
             Err(err) => {
                 if err.kind() != io::ErrorKind::AlreadyExists {
-                    info!(
+                    error!(
                         "Failed to create unique directory under {}: {}",
                         path.display(), err
                     );
@@ -51,7 +51,7 @@ pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Error> {
             }
         }
     }
-    info!(
+    error!(
         "Failed to create unique directory under {}: tried a hundred times.",
         path.display()
     );
