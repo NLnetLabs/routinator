@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, Utc};
-use log::info;
 use rpki::uri;
 use rpki::tal::TalInfo;
 
@@ -112,16 +111,6 @@ impl Metrics {
 
     pub fn inc_local_vrps(&mut self) {
         self.local_vrps += 1
-    }
-
-    pub fn log(&self) {
-        info!("Summary:");
-        for tal in &self.tals {
-            info!(
-                "{}: {} valid ROAs, {} valid VRPs, {} final VRPs.",
-                tal.tal.name(), tal.roas, tal.total_valid_vrps, tal.final_vrps
-            )
-        }
     }
 }
 

@@ -27,14 +27,12 @@ New
 
 * New metrics for the VRPs produced and filtered on the various TALs.
   ([#377])
+* The logging output of the latest validation run is now available via the
+  HTTP service’s `/log` endpoint. ([#396])
 * TCP keep-alive is now supported and enabled by default on RTR
   connections as suggested by [RFC 8210]. It can be disabled and its idle
   time changed from the default 60 seconds via the new `rtr-tcp-keepalive`
   command line and config file option. ([#390])
-* The feature `rta` enables the new command `rta` for validating Resource
-  Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
-  feature is not enabled by default and needs to be activated by adding
-  the option `--features rta` to the Cargo build command.
 * The `pid-file`, `working-dir`, `chroot`, `user`, and `group` config file
   and server command options now also work without the `--detach` command
   line option. ([#392])
@@ -46,6 +44,10 @@ New
 * Release builds will now abort on panic, i.e., when an unexpected
   internal condition is detected. This ensures that there won’t be a
   Routinator process in a coma. ([#394])
+* The feature `rta` enables the new command `rta` for validating Resource
+  Tagged Assertions as described in [draft-michaelson-rpki-rta]. This
+  feature is not enabled by default and needs to be activated by adding
+  the option `--features rta` to the Cargo build command.
 
 Bug Fixes
 
@@ -57,9 +59,12 @@ Bug Fixes
   after loading local exceptions fails and try again instead of repeatedly
   starting validation runs and discarding them. ([594186c])
 
-Dependencies
-
 Other Changes
+
+* Logging has been cleaned up. The meaning of the four log levels is now
+  better defined – see the man page – and all log output has been
+  reassigned accordingly. ([#396])
+
 
 [#357]: https://github.com/NLnetLabs/routinator/pull/357
 [#371]: https://github.com/NLnetLabs/routinator/pull/371
@@ -72,6 +77,7 @@ Other Changes
 [#390]: https://github.com/NLnetLabs/routinator/pull/390
 [#392]: https://github.com/NLnetLabs/routinator/pull/392
 [#394]: https://github.com/NLnetLabs/routinator/pull/394
+[#396]: https://github.com/NLnetLabs/routinator/pull/396
 [594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416

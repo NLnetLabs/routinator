@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
 use crossbeam_utils::thread;
 use crossbeam_queue::SegQueue;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
 use rpki::crl::{Crl, CrlStore};
@@ -392,14 +392,14 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                     continue;
                 }
             };
-            info!("Found valid trust anchor {}. Processing.", uri);
+            debug!("Found valid trust anchor {}. Processing.", uri);
 
             match self.processor.process_ta(tal, uri, &cert.cert)? {
                 Some(processor) => {
                     return self.process_ca(cert, uri, processor, tasks)
                 }
                 None => {
-                    info!("Skipping trust anchor {}.", uri);
+                    debug!("Skipping trust anchor {}.", uri);
                     return Ok(())
                 }
             }
@@ -419,7 +419,13 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let repo_uri = match cert.ca_repository() {
             Some(uri) => uri,
             None => {
-                info!("CA cert {} has no repository URI. Ignoring.", uri);
+                // This is actually checked during certificate validation,
+                // so this should never happen.
+                error!(
+                    "CA cert {} has no repository URI. \
+                     Why has it not been rejected yet?",
+                    uri
+                );
                 return Ok(())
             }
         };
@@ -564,8 +570,6 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             warn!("{}: file has wrong manifest hash.", uri);
             return Ok(false)
         }
-        // XXX We may want to move this all the way to the top to avoid
-        //     reading unused objects.
         if !process.want(&uri)? {
             return Ok(true)
         }

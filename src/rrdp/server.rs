@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::time::SystemTime;
 use bytes::Bytes;
-use log::{info, warn};
+use log::{debug, error, info};
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
@@ -148,13 +148,13 @@ impl Server {
         http: &HttpClient,
         metrics: &mut RrdpServerMetrics
     ) -> Result<(), Error> {
-        info!("RRDP {}: Updating server", self.notify_uri);
+        debug!("RRDP {}: Updating server", self.notify_uri);
         metrics.serial = None;
         let notify = http.notification_file(
             &self.notify_uri, &mut metrics.notify_status
         )?;
         if self.delta_update(&notify, http, metrics).is_ok() {
-            info!("RRDP {}: Delta update succeeded.", self.notify_uri);
+            debug!("RRDP {}: Delta update succeeded.", self.notify_uri);
             return Ok(())
         }
         self.snapshot_update(&notify, http, metrics)
@@ -211,10 +211,10 @@ impl Server {
         state: &ServerState
     ) -> Result<Option<&'a [(u64, UriAndHash)]>, Error> {
         if notify.session_id != state.session {
-            info!("New session. Need to get snapshot.");
+            debug!("New session. Need to get snapshot.");
             return Err(Error);
         }
-        info!("Serials: us {}, them {}", state.serial, notify.serial);
+        debug!("Serials: us {}, them {}", state.serial, notify.serial);
         if notify.serial == state.serial {
             return Ok(None);
         }
@@ -224,7 +224,7 @@ impl Server {
         // serial differs from that noted in the notification file,
         // bail out.
         if notify.deltas.last().map(|delta| delta.0) != Some(notify.serial) {
-            info!("Last delta serial differs from current serial.");
+            debug!("Last delta serial differs from current serial.");
             return Err(Error)
         }
 
@@ -237,13 +237,13 @@ impl Server {
             let first = match deltas.first() {
                 Some(first) => first,
                 None => {
-                    info!("Ran out of deltas.");
+                    debug!("Ran out of deltas.");
                     return Err(Error)
                 }
             };
             match first.0.cmp(&serial) {
                 cmp::Ordering::Greater => {
-                    info!("First delta is too new ({})", first.0);
+                    debug!("First delta is too new ({})", first.0);
                     return Err(Error)
                 }
                 cmp::Ordering::Equal => break,
@@ -279,7 +279,7 @@ impl Server {
         http: &HttpClient,
         metrics: &mut RrdpServerMetrics
     ) -> Result<(), Error> {
-        info!("RRDP {}: updating from snapshot.", self.notify_uri);
+        debug!("RRDP {}: updating from snapshot.", self.notify_uri);
         let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
         let state =  match self.snapshot_into_tmp(notify, http, &tmp_dir) {
             Ok(state) => state,
@@ -316,7 +316,7 @@ impl Server {
         let state_res = fs::rename(
             tmp_dir.state_path(), self.server_dir.state_path()
         ).map_err(|err| {
-            info!(
+            error!(
                 "Failed to move RRDP state file '{}' from temporary location \
                 '{}': {}.",
                 self.server_dir.state_path().display(),
@@ -329,7 +329,7 @@ impl Server {
         let data_res = fs::rename(
             tmp_dir.data_path(), self.server_dir.data_path()
         ).map_err(|err| {
-            info!(
+            error!(
                 "Failed to move RRDP data directory '{}' from temporary \
                  location '{}': {}.",
                 self.server_dir.data_path().display(),
@@ -358,7 +358,7 @@ impl Server {
         let state = match ServerState::load(self.server_dir.state_path()) {
             Ok(state) => state,
             Err(_) => {
-                info!(
+                debug!(
                     "Marking RRDP server '{}' as unusable",
                     self.notify_uri
                 );
@@ -369,7 +369,7 @@ impl Server {
         let digest = match self.server_dir.digest() {
             Ok(digest) => digest,
             Err(_) => {
-                info!(
+                debug!(
                     "Cannot digest RRDP server directory for '{}'. \
                     Marking as unsable.",
                     self.notify_uri
@@ -380,7 +380,7 @@ impl Server {
         };
         if verify_slices_are_equal(digest.as_ref(), state.hash.as_ref())
                                                                    .is_err() {
-            info!(
+            debug!(
                 "Hash for RRDP server directory for '{}' doesn’t match. \
                 Marking as unusable.",
                 self.notify_uri
@@ -421,7 +421,7 @@ impl Server {
                     info!("{} not found in its RRDP repository.", uri);
                 }
                 else {
-                    warn!(
+                    error!(
                         "Failed to open file '{}': {}.",
                         path.display(), err
                     );
@@ -431,7 +431,7 @@ impl Server {
         };
         let mut data = Vec::new();
         if let Err(err) = file.read_to_end(&mut data) {
-            warn!(
+            error!(
                 "Failed to read file '{}': {}",
                 path.display(), err
             );
@@ -526,7 +526,7 @@ impl ServerDir {
     /// Determines the digest of a data directory.
     pub fn digest(&self) -> Result<digest::Digest, Error> {
         self._digest().map_err(|err| {
-            info!(
+            debug!(
                 "Failed to caculate digest for '{}': {}",
                 self.data_path().display(), err
             );
@@ -590,7 +590,7 @@ impl ServerDir {
     pub fn check_digest(&self, hash: &DigestHex) -> Result<(), Error> {
         let digest = self.digest()?;
         verify_slices_are_equal(digest.as_ref(), hash.as_ref()).map_err(|_| {
-            info!(
+            debug!(
                 "Mismatch of digest for '{}'. Content must have changed.",
                 self.data_path().display()
             );
@@ -622,7 +622,7 @@ impl ServerState {
         Self::_load(path).map_err(|err| {
             // Not found is mostly normal, don’t complain about that.
             if err.kind() != io::ErrorKind::NotFound {
-                info!(
+                error!(
                     "Failed to read state file '{}': {}",
                     path.display(), err
                 );
@@ -650,8 +650,8 @@ impl ServerState {
 
     pub fn save(&self, path: &Path) -> Result<(), Error> {
         self._save(path).map_err(|err| {
-            info!(
-                "Failed to read write file '{}': {}",
+            error!(
+                "Failed to write state file '{}': {}",
                 path.display(), err
             );
             Error

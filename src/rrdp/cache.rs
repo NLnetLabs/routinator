@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::tal::TalInfo;
 use crate::config::Config;
@@ -138,7 +138,7 @@ impl<'a> Run<'a> {
                 }
             };
             if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                info!(
+                debug!(
                     "{}: unexpected file. Skipping.",
                     entry.path().display()
                 );
@@ -147,7 +147,7 @@ impl<'a> Run<'a> {
             let path = entry.path();
             match ServerState::load(&path.join("state.txt")) {
                 Ok(state) => {
-                    info!(
+                    debug!(
                         "RRDP: Known server {} at {}",
                         state.notify_uri,
                         path.display()
@@ -157,7 +157,7 @@ impl<'a> Run<'a> {
                     );
                 }
                 Err(_) => {
-                    info!(
+                    debug!(
                         "{}: bad RRDP server directory. Skipping.",
                         entry.path().display()
                     );
@@ -288,19 +288,19 @@ impl<'a> Run<'a> {
         let mut file = match fs::File::create(&path) {
             Ok(file) => file,
             Err(err) => {
-                warn!("Failed to create TA file {}: {}", path.display(), err);
+                error!("Failed to create TA file {}: {}", path.display(), err);
                 return
             }
         };
         if let Err(err) = file.write_all(
                                  &(uri.as_str().len() as u64).to_be_bytes()) {
-            warn!("Failed to write to TA file {}: {}", path.display(), err);
+            info!("Failed to write to TA file {}: {}", path.display(), err);
         }
         if let Err(err) = file.write_all(uri.as_str().as_ref()) {
-            warn!("Failed to write to TA file {}: {}", path.display(), err);
+            info!("Failed to write to TA file {}: {}", path.display(), err);
         }
         if let Err(err) = file.write_all(bytes.as_ref()) {
-            warn!("Failed to write to TA file {}: {}", path.display(), err);
+            info!("Failed to write to TA file {}: {}", path.display(), err);
         }
     }
 

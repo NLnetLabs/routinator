@@ -17,7 +17,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use log::{error, info, warn};
+use log::{error, info};
 use rpki::resources::AsId;
 #[cfg(feature = "rta")] use rpki::rta::Rta;
 use rpki_rtr::server::NotifySender;
@@ -383,10 +383,13 @@ impl Server {
     /// Runs the command.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
         Repository::init(process.config())?;
-        process.switch_logging(self.detach)?;
+        let log = process.switch_logging(
+            self.detach,
+            !process.config().http_listen.is_empty()
+        )?;
         process.setup_service(self.detach)?;
 
-        let history = OriginsHistory::new(process.config());
+        let history = OriginsHistory::new(process.config(), log);
         let (mut notify, rtr) = rtr_listener(
             history.clone(), process.config()
         )?;
@@ -415,7 +418,7 @@ impl Server {
                         history.refresh_wait()
                     }
                     Err(_) => {
-                        warn!(
+                        error!(
                             "Failed to load exceptions. \
                             Trying again in 10 seconds."
                         );
@@ -430,7 +433,7 @@ impl Server {
                             },
                             Err(_) => {
                                 error!(
-                                    "Reloading TALs failed, \
+                                    "Fatal: Reloading TALs failed, \
                                      shutting down."
                                 );
                                 break;
@@ -484,7 +487,6 @@ impl Server {
         let must_notify = history.update(
             report, metrics, &exceptions
         );
-        history.mark_update_done();
         info!(
             "Validation completed. New serial is {}.",
             history.serial()
@@ -493,6 +495,7 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
+        history.mark_update_done();
         Ok(())
     }
 }
@@ -640,7 +643,7 @@ impl Vrps {
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
@@ -776,7 +779,7 @@ impl Validate {
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
         let (report, mut metrics) = repo.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
@@ -863,7 +866,7 @@ impl ValidateDocument {
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), !self.noupdate)?;
-        process.switch_logging(false)?;
+        process.switch_logging(false, false)?;
 
         // Load and decode the signature.
         let data = match fs::read(&self.signature) {

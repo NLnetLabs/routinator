@@ -9,9 +9,10 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
-use log::{debug, info, warn};
+use log::{info, warn};
 use rpki::uri;
 use rpki::cert::{ResourceCert, TbsCert};
 use rpki::resources::{AsId, IpBlocks, IpBlocksBuilder};
@@ -25,6 +26,7 @@ use serde::{Deserialize, Deserializer};
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::operation::Error;
+use crate::process::LogOutput;
 use crate::repository::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
 
@@ -305,7 +307,7 @@ pub struct OriginsHistory(Arc<RwLock<HistoryInner>>);
 /// Various things are kept behind an arc in here so we can hand out copies
 /// to long-running tasks (like producing the CSV in the HTTP server) without
 /// holding the lock.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct HistoryInner {
     /// The current full set of adress origins.
     current: Option<Arc<AddressOrigins>>,
@@ -344,12 +346,16 @@ struct HistoryInner {
 
     /// Default RTR timing.
     timing: Timing,
+
+    /// Optional logging output.
+    log: Option<LogOutput>,
 }
 
 impl OriginsHistory {
     /// Creates a new history from the given initial data.
     pub fn new(
         config: &Config,
+        log: Option<LogOutput>,
     ) -> Self {
         OriginsHistory(Arc::new(RwLock::new(
             HistoryInner {
@@ -372,7 +378,8 @@ impl OriginsHistory {
                     refresh: config.refresh.as_secs() as u32,
                     retry: config.retry.as_secs() as u32,
                     expire: config.expire.as_secs() as u32,
-                }
+                },
+                log
             }
         )))
     }
@@ -404,7 +411,7 @@ impl OriginsHistory {
             Some(duration) => start + duration + duration,
             None => start + refresh,
         };
-        start.duration_since(SystemTime::now()).unwrap_or_else(|_| refresh)
+        start.duration_since(SystemTime::now()).unwrap_or(refresh)
     }
 
     /// Returns a diff from the given serial number.
@@ -456,6 +463,13 @@ impl OriginsHistory {
             locked.last_update_done,
             locked.last_update_duration,
         )
+    }
+
+    pub fn log(&self) -> Bytes {
+        match self.0.read().unwrap().log {
+            Some(ref log) => log.get_output(),
+            None => Bytes::new(),
+        }
     }
 
     /// Updates the history.
@@ -524,6 +538,9 @@ impl OriginsHistory {
             if refresh < locked.next_update_start {
                 locked.next_update_start = refresh;
             }
+        }
+        if let Some(log) = locked.log.as_mut() {
+            log.flush();
         }
     }
 }
@@ -601,37 +618,26 @@ impl HistoryInner {
     /// can’t, either because it doesn’t have enough history data or because
     /// the serial is actually in the future.
     pub fn get(&self, serial: Serial) -> Option<Arc<OriginsDiff>> {
-        debug!("Fetching diff for serial {}", serial);
         if let Some(diff) = self.diffs.front() {
-            debug!("Our current serial is {}", diff.serial);
             if diff.serial() < serial {
                 // If they give us a future serial, we reset.
-                debug!("Future, forcing reset.");
                 return None
             }
             else if diff.serial() == serial {
-                debug!("Same, producing empty diff.");
                 return Some(Arc::new(OriginsDiff::empty(serial)))
             }
             else if diff.serial() == serial.add(1) {
                 // This relies on serials increasing by one always.
-                debug!("One behind, just clone.");
                 return Some(diff.clone())
             }
         }
-        else {
-            debug!("We are at serial 0.");
-            if serial == 0 {
-                debug!("Same, returning empty diff.");
+        else if serial == 0 {
                 return Some(Arc::new(OriginsDiff::empty(serial)))
-            }
-            else {
-                // That pesky future serial again.
-                debug!("Future, forcing reset.");
-                return None
-            }
         }
-        debug!("Merging diffs.");
+        else {
+            // That pesky future serial again.
+            return None
+        }
         let mut iter = self.diffs.iter().rev();
         while let Some(diff) = iter.next() {
             match diff.serial().partial_cmp(&serial) {
