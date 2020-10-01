@@ -892,7 +892,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 res = Some(crl);
             }
             else if file.ends_with(b".crl") {
-                warn!("{}: manifest contains multiple CRLs.", manifest_uri);
+                warn!("{}: manifest contains unexpected CRLs.", manifest_uri);
                 return Err(ValidationError)
             }
         }
