@@ -639,7 +639,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let cert = match cert.validate_ca(issuer, self.repository.strict) {
             Ok(cert) => cert,
             Err(_) => {
-                warn!("{}: failed to validate.", uri);
+                warn!("{}: CA certificate failed to validate.", uri);
                 return Ok(false)
             }
         };
@@ -694,12 +694,9 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         crl_store: &CrlStore,
         process: &mut P::ProcessCa,
     ) -> Result<bool, Error> {
-        let cert = match cert.validate_ee(issuer, self.repository.strict) {
-            Ok(cert) => cert,
-            Err(_) => {
-                warn!("{}: failed to validate.", uri);
-                return Ok(false)
-            }
+        if cert.validate_router(issuer, self.repository.strict).is_err() {
+            warn!("{}: router certificate failed to validate.", uri);
+            return Ok(false)
         };
         if self.check_crl(&cert, crl_store).is_err() {
             warn!("{}: certificate has been revoked", uri);
@@ -1100,7 +1097,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// The method is given both the URI and the certificate. If it
     /// returns an error, the entire processing run will be aborted.
     fn process_ee_cert(
-        &mut self, uri: &uri::Rsync, cert: ResourceCert
+        &mut self, uri: &uri::Rsync, cert: Cert
     ) -> Result<(), Error> {
         let _ = (uri, cert);
         Ok(())

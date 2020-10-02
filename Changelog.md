@@ -62,6 +62,8 @@ Bug Fixes
   finished when loading fails. In server mode, we now wait 10 seconds
   after loading local exceptions fails and try again instead of repeatedly
   starting validation runs and discarding them. ([594186c])
+* EE certificates encountered in the repository are now validated as
+  router certificates rather than regular RPKI EE certificates. ([#398])
 
 Other Changes
 
@@ -83,6 +85,7 @@ Other Changes
 [#394]: https://github.com/NLnetLabs/routinator/pull/394
 [#396]: https://github.com/NLnetLabs/routinator/pull/396
 [#397]: https://github.com/NLnetLabs/routinator/pull/397
+[#398]: https://github.com/NLnetLabs/routinator/pull/398
 [594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
