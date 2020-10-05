@@ -50,6 +50,12 @@ const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 const DEFAULT_RTR_TCP_KEEPALIVE: Option<Duration>
     = Some(Duration::from_secs(60));
 
+/// The default stale policy.
+const DEFAULT_STALE_POLICY: FilterPolicy = FilterPolicy::Reject;
+
+/// The default unsafe-vrps policy.
+const DEFAULT_UNSAFE_VRPS_POLICY: FilterPolicy = FilterPolicy::Warn;
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -101,11 +107,24 @@ pub struct Config {
 
     /// How should we deal with stale objects?
     ///
-    /// See the [`StalePolicy`] type for a description of the available
-    /// options.
+    /// Stale objects are manifests and CRLs that have a `next_update` field
+    /// in the past. The current version of the protocol leaves the decision
+    /// how to interpret stale objects to local policy. This configuration
+    /// value configures this policy.
     ///
-    /// [`StalePolicy`]: enum.StalePolicy.html
-    pub stale: StalePolicy,
+    /// Since the upcoming version of the protocol clarifies that these
+    /// objects should be rejected, this is the default policy.
+    pub stale: FilterPolicy,
+
+    /// How should we deal with unsafe VRPs?
+    ///
+    /// Unsafe VRPs have their prefix intersect with a prefix held by a
+    /// rejected CA. Allowing such VRPs may lead to legitimate routes being
+    /// flagged as RPKI invalid. To avoid this, these can VRPs can be
+    /// filtered.
+    ///
+    /// The default for now is to warn about them.
+    pub unsafe_vrps: FilterPolicy,
 
     /// Allow dubious host names.
     pub allow_dubious_hosts: bool,
@@ -269,6 +288,12 @@ impl Config {
              .value_name("POLICY")
              .help("The policy for handling stale objects")
              .takes_value(true)
+        )
+        .arg(Arg::with_name("unsafe-vrps")
+            .long("unsafe-vrps")
+            .value_name("POLICY")
+            .help("The policy for handling unsafe VRPs")
+            .takes_value(true)
         )
         .arg(Arg::with_name("allow-dubious-hosts")
              .long("allow-dubious-hosts")
@@ -544,6 +569,11 @@ impl Config {
         // stale
         if let Some(value) = from_str_value_of(matches, "stale")? {
             self.stale = value
+        }
+
+        // unsafe_vrps
+        if let Some(value) = from_str_value_of(matches, "unsafe-vrps")? {
+            self.unsafe_vrps = value
         }
 
         // allow_dubious_hosts
@@ -840,7 +870,13 @@ impl Config {
                 file.take_path_array("exceptions")?.unwrap_or_else(Vec::new)
             },
             strict: file.take_bool("strict")?.unwrap_or(false),
-            stale: file.take_from_str("stale")?.unwrap_or_default(),
+            stale: {
+                file.take_from_str("stale")?.unwrap_or(DEFAULT_STALE_POLICY)
+            },
+            unsafe_vrps: {
+                file.take_from_str("unsafe-vrps")?
+                    .unwrap_or(DEFAULT_UNSAFE_VRPS_POLICY)
+            },
             allow_dubious_hosts:
                 file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
             disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
@@ -1032,7 +1068,8 @@ impl Config {
             tal_dir,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
-            stale: Default::default(),
+            stale: DEFAULT_STALE_POLICY,
+            unsafe_vrps: DEFAULT_UNSAFE_VRPS_POLICY,
             allow_dubious_hosts: false,
             disable_rsync: false,
             rsync_command: "rsync".into(),
@@ -1151,6 +1188,9 @@ impl Config {
         );
         res.insert("strict".into(), self.strict.into());
         res.insert("stale".into(), format!("{}", self.stale).into());
+        res.insert(
+            "unsafe-vrps".into(), format!("{}", self.unsafe_vrps).into()
+        );
         res.insert(
             "allow-dubious-hosts".into(), self.allow_dubious_hosts.into()
         );
@@ -1387,63 +1427,42 @@ impl PartialEq for LogTarget {
 impl Eq for LogTarget { }
 
 
-//------------ StalePolicy ---------------------------------------------------
+//------------ FilterPolicy ---------------------------------------------------
 
-/// The local policy for handling of stale objects.
+/// The policy for filtering.
 ///
-/// Stale objects are manifests and CRLs that have a `next_update` field in
-/// the past. The protocol leaves the decision how to interpret stale
-/// objects to local policy. This type defines the options for this local
-/// policy.
+/// Various filters can be configured via this policy.
 #[derive(Clone, Copy, Debug)]
-pub enum StalePolicy {
-    /// Reject to accept a stale objects.
-    ///
-    /// A stale objects and, transitively, all objects that depend on the
-    /// stale objects are considered invalid.
+pub enum FilterPolicy {
+    /// Reject objects matched by the filter.
     Reject,
 
-    /// Accept the stale object but log a warning.
-    ///
-    /// A stale object and, transitively, all objects that depend on the
-    /// stale object are considered valid. A warning is logged about the
-    /// fact that the object is stale.
-    ///
-    /// This is the default policy.
+    /// Accept objects matched by the filter  but log a warning.
     Warn,
 
-    /// Quietly accept the stale object.
-    ///
-    /// A stale object and, transitively, all objects that depend on the
-    /// stale object are considered valid.
+    /// Quietly accept objects matched by the filter.
     Accept
 }
 
-impl Default for StalePolicy {
-    fn default() -> Self {
-        StalePolicy::Reject
-    }
-}
-
-impl FromStr for StalePolicy {
+impl FromStr for FilterPolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "reject" => Ok(StalePolicy::Reject),
-            "warn" => Ok(StalePolicy::Warn),
-            "accept" => Ok(StalePolicy::Accept),
+            "reject" => Ok(FilterPolicy::Reject),
+            "warn" => Ok(FilterPolicy::Warn),
+            "accept" => Ok(FilterPolicy::Accept),
             _ => Err(format!("invalid policy '{}'", s))
         }
     }
 }
 
-impl fmt::Display for StalePolicy {
+impl fmt::Display for FilterPolicy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
-            StalePolicy::Reject => "reject",
-            StalePolicy::Warn => "warn",
-            StalePolicy::Accept => "accept",
+            FilterPolicy::Reject => "reject",
+            FilterPolicy::Warn => "warn",
+            FilterPolicy::Accept => "accept",
         })
     }
 }

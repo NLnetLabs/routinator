@@ -134,7 +134,7 @@ large amount of invalid route origins and should therefore not be used in
 practice.
 .IP
 See
-.B RELAXED VALIDATION
+.B RELAXED DECODING
 below for more information.
 
 .TP
@@ -165,6 +165,38 @@ up on the issue.
 Finally, the
 .I accept
 policy will cause Routinator to quietly accept any stale object as valid.
+
+.TP
+.BI --unsafe-vrps= policy
+This option defines how to deal with "unsafe VRPs." If the address prefix
+of a VRP overlaps with any resources assigned to a CA that has been rejected
+because if failed to validate completely, the VRP is said to be unsafe since
+using it may lead to legitimate routes being flagged as RPKI invalid.
+.IP
+There are three options how to deal with unsafe VRPS:
+.IP
+A policy of
+.I reject
+will filter out these VPRs. Warnings will be logged to indicate which VRPs
+have been filtered
+.IP
+The
+.I warn
+policy will log warnings for unsafe VRPs but will add them to the valid VRPs.
+.IP
+Finally, the
+.I accept
+policy will quietly add unsafe VRPs to the valid VRPs.
+.IP
+Currently, the default policy is
+.I warn
+in order to gain operational experience with the frequency and impact of
+unsafe VRPs. This default may change in future version.
+.IP
+For more information on the process of validation implemented in Routinator,
+see the section
+.B VALIDATION
+below.
 
 .TP
 .B --allow-dubious-hosts
@@ -703,6 +735,21 @@ Quietly consider stale objects valid.
 .RE
 
 .TP
+.B unsafe-vrps
+A string specifying the policy for dealing with unsafe VRPs.
+.RS
+.TP
+.I reject
+Filter unsafe VPRs and add warning messages to the log.
+.TP
+.I warn
+Warn about unsafe VRPs in the log but add them to the final set of VRPs.
+.TP
+.I accept
+Quietly add unsafe VRPs to the final set of VRPs.
+.RE
+
+.TP
 .B allow-dubious-hosts
 A boolean value that, if present and true, disables Routinator's filtering of
 dubious host names in rsync and HTTPS URIs from RPKI data.
@@ -989,7 +1036,7 @@ RPKI repository. It will walk over all certfication authorities (CAs)
 starting with those referred to in the configured TALs.
 .P
 Each CA is checked whether all its published objects are present, correctly
-encoded, and have been signed by the CA. If any of the objects fails this
+encoded, and have been signed by the CA. If any of the objects fail this
 check, the entire CA will be rejected. This means that none of its ROAs will
 be added to the VRP set but also that none of its child CAs will be considered
 at all; their published will not be fetched or validated.
@@ -1004,22 +1051,28 @@ In addition, if a VRP for a less specific prefix exists that covers the
 prefix of the dropped VRP, the route will be invalidated by the less specific
 VRP.
 .P
+Because of this risk of accidentally or maliciously invalidating routes,
+VRPs that have address prefixes overlapping with resources of rejected CAs
+are called
+.I unsafe VRPs.
+.P
 In order to avoid these situations and instead fall back to an RPKI unknown
-state for such routes, Routinator filters out all VRPs that have prefixes
-overlapping with any of the resources delegated to rejected CAs.
+state for such routes, Routinator allows to filter out these unsafe VRPs.
+This can be enabled via the
+.BI --unsafe-vrps= reject
+command line option or setting
+.BI unsafe-vrps= "reject"
+in the config file.
+.P
+By default, this filter is currently disabled but warnings are logged about
+unsafe VPRs. This allows to assess the operation impact of such a filter.
+Depending on this assessment, the default may change in future version.
 .P
 One exception from this rule are CAs that have the full address space
 assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out
 all VRPs. These prefixes are used by the RIR trust anchors to avoid having to
 update these often. However, each RIR has its own address space so losing all
 VRPs should something happen to a trust anchor is unnecessary.
-.P
-We call VRPs filtered because they touch rejected address space
-.IR unsafe .
-Both the resources from rejected CAs and VRPs filtered are being logged at
-log level
-.BR warn .
-In addition, the number of filtered unsafe VRPs are provided in the metrics.
 
 .SH RELAXED DECODING
 The documents defining RPKI include a number of very strict rules

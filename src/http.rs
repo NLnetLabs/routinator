@@ -183,7 +183,7 @@ fn metrics_active(
     // vrps_total
     writeln!(res,
         "\n\
-         # HELP routinator_vrps_total total number of VRPs seen\n\
+         # HELP routinator_vrps_total number of valid VRPs per TAL\n\
          # TYPE routinator_vrps_total gauge"
     ).unwrap();
     for tal in metrics.tals() {
@@ -193,17 +193,26 @@ fn metrics_active(
         ).unwrap();
     }
 
-    // vrps_filtered_unsafe
+    // vrps_final
     writeln!(res,
         "\n\
-         # HELP routinator_vrps_filtered_unsafe \
-                VRPs filtered overlapping with invalid address space\n\
-         # TYPE routinator_vrps_filtered_unsafe gauge"
+        # HELP routinator_vrps_final final number of valid VRPs\n\
+        # TYPE routinator_vrps_final gauge\n\
+        routinator_vrps_final {}",
+        metrics.final_vrps(),
+    ).unwrap();
+
+    // vrps_unsafe
+    writeln!(res,
+        "\n\
+         # HELP routinator_vrps_unsafe \
+                VRPs overlapping with rejected CAs\n\
+         # TYPE routinator_vrps_unsafe gauge"
     ).unwrap();
     for tal in metrics.tals() {
         writeln!(res,
-            "routinator_vrps_filtered_unsafe{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.unsafe_filtered_vrps
+            "routinator_vrps_unsafe{{tal=\"{}\"}} {}",
+            tal.tal.name(), tal.unsafe_vrps
         ).unwrap();
     }
 
@@ -221,16 +230,16 @@ fn metrics_active(
         ).unwrap();
     }
 
-    // vrps_final
+    // vrps_duplicate
     writeln!(res,
         "\n\
-         # HELP routinator_vrps_final final number of  VRPs\n\
-         # TYPE routinator_vrps_final gauge"
+         # HELP routinator_vrps_duplicate number of duplicate VRPs per TAL\n\
+         # TYPE routinator_vrps_duplicate gauge"
     ).unwrap();
     for tal in metrics.tals() {
         writeln!(res,
-            "routinator_vrps_total{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.final_vrps
+            "routinator_vrps_duplicate{{tal=\"{}\"}} {}",
+            tal.tal.name(), tal.duplicate_vrps
         ).unwrap();
     }
 
@@ -295,13 +304,12 @@ fn metrics_active(
         # HELP routinator_serial current RTR serial number\n\
         # TYPE routinator_serial gauge\n\
         routinator_serial {}",
-
         origins.serial()
     ).unwrap();
 
     // rsync_status
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rsync_status exit status of rsync command\n\
         # TYPE routinator_rsync_status gauge"
     ).unwrap();
@@ -318,8 +326,8 @@ fn metrics_active(
     }
 
     // rsync_duration
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rsync_duration duration of rsync in seconds\n\
         # TYPE routinator_rsync_duration gauge"
     ).unwrap();
@@ -336,8 +344,8 @@ fn metrics_active(
     }
 
     // rrdp_status
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rrdp_status status code for getting \
             notification file\n\
         # TYPE routinator_rrdp_status gauge"
@@ -354,8 +362,8 @@ fn metrics_active(
     }
 
     // rrdp_duration
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
         # TYPE routinator_rrdp_duration gauge"
     ).unwrap();
@@ -372,8 +380,8 @@ fn metrics_active(
     }
 
     // rtr_connections
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rtr_connections total number of RTR connections\n\
         # TYPE routinator_rtr_connections counter"
     ).unwrap();
@@ -382,8 +390,8 @@ fn metrics_active(
     ).unwrap();
 
     // rtr_current_connections
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rtr_current_connections currently open RTR \
                                                   connections\n\
         # TYPE routinator_rtr_current_connections gauge"
@@ -394,8 +402,8 @@ fn metrics_active(
     ).unwrap();
 
     // rtr_bytes_read
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rtr_bytes_read number of bytes read via RTR\n\
         # TYPE routinator_rtr_bytes_read counter"
     ).unwrap();
@@ -404,8 +412,8 @@ fn metrics_active(
     ).unwrap();
 
     // rtr_bytes_written
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_rtr_bytes_written number of bytes written via RTR\n\
         # TYPE routinator_rtr_bytes_written counter"
     ).unwrap();
@@ -414,8 +422,8 @@ fn metrics_active(
     ).unwrap();
 
     // http_connections
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_http_connections total number of HTTP connections\n\
         # TYPE routinator_http_connections counter"
     ).unwrap();
@@ -424,8 +432,8 @@ fn metrics_active(
     ).unwrap();
 
     // http_current_connections
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_http_current_connections currently open HTTP \
                                                   connections\n\
         # TYPE routinator_http_current_connections gauge"
@@ -436,8 +444,8 @@ fn metrics_active(
     ).unwrap();
 
     // http_bytes_read
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_http_bytes_read number of bytes read via HTTP\n\
         # TYPE routinator_http_bytes_read counter"
     ).unwrap();
@@ -446,8 +454,8 @@ fn metrics_active(
     ).unwrap();
 
     // http_bytes_written
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_http_bytes_written number of bytes written via HTTP\n\
         # TYPE routinator_http_bytes_written counter"
     ).unwrap();
@@ -456,8 +464,8 @@ fn metrics_active(
     ).unwrap();
 
     // http_requests
-    writeln!(res, "
-        \n\
+    writeln!(res,
+        "\n\
         # HELP routinator_http_requests number of bytes written via HTTP\n\
         # TYPE routinator_http_requests counter"
     ).unwrap();
@@ -556,15 +564,15 @@ fn status_active(
     writeln!(res).unwrap();
 
     // unsafe-filtered-vrps
-    writeln!(res, "unsafe-filtered-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.unsafe_filtered_vrps).sum::<u32>()
+    writeln!(res, "unsafe-vrps: {}",
+        metrics.tals().iter().map(|tal| tal.unsafe_vrps).sum::<u32>()
     ).unwrap();
 
-    // unsafe-filtered-vrps-per-tal
+    // unsafe-vrps-per-tal
     write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
     for tal in metrics.tals() {
         write!(res, "{}={} ",
-            tal.tal.name(), tal.unsafe_filtered_vrps
+            tal.tal.name(), tal.unsafe_vrps
         ).unwrap();
     }
     writeln!(res).unwrap();
@@ -580,6 +588,13 @@ fn status_active(
         write!(res, "{}={} ",
             tal.tal.name(), tal.locally_filtered_vrps
         ).unwrap();
+    }
+    writeln!(res).unwrap();
+
+    // duplicate-vrps-per-tal
+    write!(res, "duplicate-vrps-per-tal: ").unwrap();
+    for tal in metrics.tals() {
+        write!(res, "{}={} ", tal.tal.name(), tal.duplicate_vrps).unwrap();
     }
     writeln!(res).unwrap();
 

@@ -25,7 +25,7 @@ use rpki::sigobj::SignedObject;
 use rpki::tal::{Tal, TalInfo, TalUri};
 use rpki::x509::{Time, ValidationError};
 use crate::{rrdp, rsync};
-use crate::config::{Config, StalePolicy};
+use crate::config::{Config, FilterPolicy};
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::OriginsReport;
@@ -55,7 +55,7 @@ pub struct Repository {
     strict: bool,
 
     /// How do we deal with stale objects?
-    stale: StalePolicy,
+    stale: FilterPolicy,
 
     /// Number of validation threads.
     validation_threads: usize,
@@ -513,14 +513,14 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         if manifest.is_stale() {
             self.metrics.inc_stale_count();
             match self.repository.stale {
-                StalePolicy::Reject => {
+                FilterPolicy::Reject => {
                     warn!("{}: stale manifest", uri);
                     return None;
                 }
-                StalePolicy::Warn => {
+                FilterPolicy::Warn => {
                     warn!("{}: stale manifest", uri);
                 }
-                StalePolicy::Accept => { }
+                FilterPolicy::Accept => { }
             }
         }
         let store = match self.check_manifest_crl(
@@ -939,14 +939,14 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         if crl.is_stale() {
             self.metrics.inc_stale_count();
             match self.repository.stale {
-                StalePolicy::Reject => {
+                FilterPolicy::Reject => {
                     info!("{}: stale CRL.", uri);
                     return Err(ValidationError)
                 }
-                StalePolicy::Warn => {
+                FilterPolicy::Warn => {
                     warn!("{}: stale CRL.", uri);
                 }
-                StalePolicy::Accept => { }
+                FilterPolicy::Accept => { }
             }
         }
         Ok((bytes, crl))

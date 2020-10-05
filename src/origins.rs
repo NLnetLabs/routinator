@@ -23,7 +23,7 @@ use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
 use rpki_rtr::server::VrpSource;
 use rpki_rtr::state::{Serial, State};
 use serde::{Deserialize, Deserializer};
-use crate::config::Config;
+use crate::config::{Config, FilterPolicy};
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::operation::Error;
 use crate::process::LogOutput;
@@ -332,6 +332,9 @@ struct HistoryInner {
     /// The time to wait between updates,
     refresh: Duration,
 
+    /// How to deal with unsafe VRPs.
+    unsafe_vrps: FilterPolicy,
+
     /// The instant when we started an update the last time.
     last_update_start: DateTime<Utc>,
 
@@ -371,6 +374,7 @@ impl OriginsHistory {
                 },
                 keep: config.history_size,
                 refresh: config.refresh,
+                unsafe_vrps: config.unsafe_vrps,
                 last_update_start: Utc::now(),
                 last_update_done: None,
                 last_update_duration: None,
@@ -508,7 +512,8 @@ impl OriginsHistory {
             }
             None => {
                 let origins = AddressOrigins::from_report(
-                    report, exceptions, &mut metrics
+                    report, exceptions, &mut metrics,
+                    self.0.read().unwrap().unsafe_vrps,
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
@@ -753,6 +758,7 @@ impl AddressOrigins {
         report: OriginsReport,
         exceptions: &LocalExceptions,
         metrics: &mut Metrics,
+        unsafe_vrps: FilterPolicy,
     ) -> Self {
         let mut res = HashSet::new();
         let mut refresh = None;
@@ -779,14 +785,28 @@ impl AddressOrigins {
                     tal_metrics.total_valid_vrps += 1;
 
                     if !filter.keep_address(&addr) {
-                        warn!(
-                            "Filtering potentially unsafe VRP \
-                             ({}/{},max {},AS{})",
-                            addr.address(), addr.address_length(),
-                            addr.max_length(), origin.as_id
-                        );
-                        tal_metrics.unsafe_filtered_vrps += 1;
-                        continue;
+                        tal_metrics.unsafe_vrps += 1;
+                        match unsafe_vrps {
+                            FilterPolicy::Reject => {
+                                warn!(
+                                    "Filtering potentially unsafe VRP \
+                                     ({}/{},max {},AS{})",
+                                    addr.address(), addr.address_length(),
+                                    addr.max_length(), origin.as_id
+                                );
+                                tal_metrics.unsafe_vrps += 1;
+                                continue;
+                            }
+                            FilterPolicy::Warn => {
+                                warn!(
+                                    "Encountered potentially unsafe VRP \
+                                     ({}/{},max {},AS{})",
+                                    addr.address(), addr.address_length(),
+                                    addr.max_length(), origin.as_id
+                                );
+                            }
+                            FilterPolicy::Accept => { }
+                        }
                     }
 
                     let addr = AddressOrigin::from_roa(
@@ -801,6 +821,9 @@ impl AddressOrigins {
                     if res.insert(addr) {
                         tal_metrics.final_vrps += 1;
                     }
+                    else {
+                        tal_metrics.duplicate_vrps += 1;
+                    }
                 }
             }
         }
@@ -809,10 +832,12 @@ impl AddressOrigins {
             metrics.inc_local_vrps();
         }
         metrics.set_tals(tal_metrics_vec);
-        AddressOrigins {
+        let res = AddressOrigins {
             origins: res.into_iter().collect(),
             refresh
-        }
+        };
+        metrics.set_final_vrps(res.origins.len() as u32);
+        res
     }
 
     /// Returns an iterator over the address orgins.
