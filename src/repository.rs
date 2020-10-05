@@ -57,6 +57,9 @@ pub struct Repository {
     /// How do we deal with stale objects?
     stale: FilterPolicy,
 
+    /// How do we deal with unknown object types?
+    unknown_objects: FilterPolicy,
+
     /// Number of validation threads.
     validation_threads: usize,
 
@@ -128,6 +131,7 @@ impl Repository {
             tals: Self::load_tals(config)?,
             strict: config.strict,
             stale: config.stale,
+            unknown_objects: config.unknown_objects,
             validation_threads: config.validation_threads,
             rrdp: rrdp::Cache::new(config, update)?,
             rsync: rsync::Cache::new( config, update)?,
@@ -578,6 +582,9 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             // CRLs have already been processed.
             Ok(true)
         }
+        else if uri.ends_with(".gbr") {
+            self.process_gbr(bytes, uri, issuer, crl, process)
+        }
         else {
             self.process_other(bytes, uri, issuer, crl, process)
         }
@@ -741,10 +748,10 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         }
     }
 
-    /// Processes an RPKI object of some other type.
+    /// Processes a Ghostbuster Record.
     ///
     /// Returns whether processing of this CA should continue.
-    fn process_other(
+    fn process_gbr(
         &self,
         bytes: Bytes,
         uri: uri::Rsync,
@@ -763,12 +770,38 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             self.check_crl(&cert, crl)
         }) {
             Ok(content) => {
-                process.process_other(&uri, content)?;
+                process.process_gbr(&uri, content)?;
                 Ok(true)
             }
             Err(_) => {
                 warn!("{}: processing failed.", uri);
                 Ok(false)
+            }
+        }
+    }
+
+    /// Processes an RPKI object of some other type.
+    ///
+    /// Returns whether processing of this CA should continue.
+    fn process_other(
+        &self,
+        _bytes: Bytes,
+        uri: uri::Rsync,
+        _issuer: &Arc<CaCert>,
+        _crl: &CrlStore,
+        _process: &mut P::ProcessCa,
+    ) -> Result<bool, Error> {
+        match self.repository.unknown_objects {
+            FilterPolicy::Reject => {
+                warn!("{}: unknown object; rejecting CA.", uri);
+                Ok(false)
+            }
+            FilterPolicy::Warn => {
+                warn!("{}: unknown object; ignoring.", uri);
+                Ok(true)
+            }
+            FilterPolicy::Accept => {
+                Ok(true)
             }
         }
     }
@@ -1114,11 +1147,14 @@ pub trait ProcessCa: Sized + Send + Sync {
         Ok(())
     }
  
-    /// Process the content of an unspecificed signed object.
+    /// Process the content of a Ghostbuster Record.
     ///
-    /// The method is given both the URI and the content of the object. If it
-    /// returns an error, the entire processing run will be aborted.
-    fn process_other(
+    /// The method is given both the URI and the raw content of the object
+    /// as we currently don’t support parsing of these records.
+    ///
+    /// If the method returns an error, the entire processing run will be
+    /// aborted.
+    fn process_gbr(
         &mut self, uri: &uri::Rsync, content: Bytes
     ) -> Result<(), Error> {
         let _ = (uri, content);
