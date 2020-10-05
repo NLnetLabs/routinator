@@ -199,6 +199,38 @@ see the section
 below.
 
 .TP
+.BI --unknown-objects= policy
+Defines how to deal with unknown types of RPKI objects. Currently, only
+certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
+Ghostbuster Records (.gbr) are allowed to appear in the RPKI repository.
+.IP
+There are, once more, three policies for dealing with an object of any
+other type:
+.IP
+The
+.I reject
+policy will reject the object as well as the entire CA. Consequently, an
+unknown object appearing in a CA will mark all other objects issued by the
+CA as invalid as well.
+.IP
+The policy of
+.I warn
+will log a warning, ignore the object, and accept all known
+objects issued by the CA.
+.IP
+The similar policy of
+.I accept
+will quietly ignore the object and accept all known objects issued by the CA.
+.IP
+The defaul policy if the option is missing is
+.IR warn .
+.IP
+Note that even if unknown objects are accepted, they must appear in the
+manifest and the hash over their content must match the one given in the
+manifest. If the hash does not match, the CA and all its objects are still
+rejected.
+
+.TP
 .B --allow-dubious-hosts
 As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI data
 with dubious host names. In particular, it will reject the name
@@ -726,6 +758,7 @@ A string specifying the policy for dealing with stale objects.
 .I reject
 Consider all stale objects invalid rendering all material published by the CA
 issuing the stale object to be invalid including all material of any child CA.
+This is the default policy if the value is missing.
 .TP
 .I warn
 Consider stale objects to be valid but print a warning to the log.
@@ -744,9 +777,26 @@ Filter unsafe VPRs and add warning messages to the log.
 .TP
 .I warn
 Warn about unsafe VRPs in the log but add them to the final set of VRPs.
+This is the default policy if the value is missing.
 .TP
 .I accept
 Quietly add unsafe VRPs to the final set of VRPs.
+.RE
+
+.TP
+.B unsafe-vrps
+A string specifying the policy for dealing with unknown RPKI object types.
+.RS
+.TP
+.I reject
+Reject the object and its issuing CA.
+.TP
+.I warn
+Warn about the object but ignore it and accept the issuing CA.
+This is the default policy if the value is missing.
+.TP
+.I accept
+Quietly ignore the object and accept the issuing CA.
 .RE
 
 .TP
@@ -1037,9 +1087,18 @@ starting with those referred to in the configured TALs.
 .P
 Each CA is checked whether all its published objects are present, correctly
 encoded, and have been signed by the CA. If any of the objects fail this
-check, the entire CA will be rejected. This means that none of its ROAs will
-be added to the VRP set but also that none of its child CAs will be considered
-at all; their published will not be fetched or validated.
+check, the entire CA will be rejected. If an object of an unknown type is
+encountered, the behaviour depends on the
+.B unknown-objects
+policy. If this policy has a value of
+.I reject
+the entire CA will be rejected. In this case, only certificates (.cer), CRLs
+(.crl), manifestes (.mft), ROAs (.roa), and Ghostbuster records (.gbr) will
+be accepted.
+.P
+If a CA is rejected, none of its ROAs will
+be added to the VRP set but also none of its child CAs will be considered
+at all; their published data will not be fetched or validated.
 .P
 If a prefix has its ROAs published by different CAs, this will lead to some
 of its VRPs being dropped while others are still added. If the VRP for the

@@ -56,6 +56,9 @@ const DEFAULT_STALE_POLICY: FilterPolicy = FilterPolicy::Reject;
 /// The default unsafe-vrps policy.
 const DEFAULT_UNSAFE_VRPS_POLICY: FilterPolicy = FilterPolicy::Warn;
 
+/// The default unknown-objects policy.
+const DEFAULT_UNKNOWN_OBJECTS_POLICY: FilterPolicy = FilterPolicy::Warn;
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -125,6 +128,9 @@ pub struct Config {
     ///
     /// The default for now is to warn about them.
     pub unsafe_vrps: FilterPolicy,
+
+    /// How to deal with unknown RPKI object types.
+    pub unknown_objects: FilterPolicy,
 
     /// Allow dubious host names.
     pub allow_dubious_hosts: bool,
@@ -293,6 +299,12 @@ impl Config {
             .long("unsafe-vrps")
             .value_name("POLICY")
             .help("The policy for handling unsafe VRPs")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("unknown-objects")
+            .long("unknown-objects")
+            .value_name("POLICY")
+            .help("The policy for handling unknown object types")
             .takes_value(true)
         )
         .arg(Arg::with_name("allow-dubious-hosts")
@@ -574,6 +586,11 @@ impl Config {
         // unsafe_vrps
         if let Some(value) = from_str_value_of(matches, "unsafe-vrps")? {
             self.unsafe_vrps = value
+        }
+
+        // unknown_objects
+        if let Some(value) = from_str_value_of(matches, "unknown-objects")? {
+            self.unknown_objects = value
         }
 
         // allow_dubious_hosts
@@ -877,6 +894,10 @@ impl Config {
                 file.take_from_str("unsafe-vrps")?
                     .unwrap_or(DEFAULT_UNSAFE_VRPS_POLICY)
             },
+            unknown_objects: {
+                file.take_from_str("unknown_objects")?
+                    .unwrap_or(DEFAULT_UNKNOWN_OBJECTS_POLICY)
+            },
             allow_dubious_hosts:
                 file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
             disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
@@ -1070,6 +1091,7 @@ impl Config {
             strict: DEFAULT_STRICT,
             stale: DEFAULT_STALE_POLICY,
             unsafe_vrps: DEFAULT_UNSAFE_VRPS_POLICY,
+            unknown_objects: DEFAULT_UNKNOWN_OBJECTS_POLICY,
             allow_dubious_hosts: false,
             disable_rsync: false,
             rsync_command: "rsync".into(),
@@ -1190,6 +1212,9 @@ impl Config {
         res.insert("stale".into(), format!("{}", self.stale).into());
         res.insert(
             "unsafe-vrps".into(), format!("{}", self.unsafe_vrps).into()
+        );
+        res.insert(
+            "unknown-objects".into(), format!("{}", self.unknown_objects).into()
         );
         res.insert(
             "allow-dubious-hosts".into(), self.allow_dubious_hosts.into()
