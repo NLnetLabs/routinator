@@ -649,7 +649,8 @@ impl Vrps {
         let vrps = AddressOrigins::from_report(
             report,
             &exceptions,
-            &mut metrics
+            &mut metrics,
+            process.config().unsafe_vrps,
         );
         let filters = self.filters.as_ref().map(AsRef::as_ref);
         let res = match self.output {
@@ -784,7 +785,8 @@ impl Validate {
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
-            &mut metrics
+            &mut metrics,
+            process.config().unsafe_vrps,
         );
         let validity = RouteValidity::new(self.prefix, self.asn, &vrps);
         if self.json {

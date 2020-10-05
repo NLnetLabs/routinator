@@ -30,6 +30,9 @@ pub struct Metrics {
 
     /// Number of VRPs added from local exceptions.
     local_vrps: u32,
+
+    /// Final number of VRPs.
+    final_vrps: u32,
 }
 
 impl Metrics {
@@ -41,6 +44,7 @@ impl Metrics {
             rrdp: Vec::new(),
             stale_count: AtomicU64::new(0),
             local_vrps: 0,
+            final_vrps: 0,
         }
     }
 
@@ -112,6 +116,14 @@ impl Metrics {
     pub fn inc_local_vrps(&mut self) {
         self.local_vrps += 1
     }
+
+    pub fn final_vrps(&self) -> u32 {
+        self.final_vrps
+    }
+
+    pub fn set_final_vrps(&mut self, count: u32) {
+        self.final_vrps = count
+    }
 }
 
 impl Default for Metrics {
@@ -144,11 +156,16 @@ pub struct TalMetrics {
     /// duplicate VRPs.
     pub total_valid_vrps: u32,
 
-    /// Number of VRPs filtered due to invalid CAs.
-    pub unsafe_filtered_vrps: u32,
+    /// Number of VRPs overlapping with rejected CAs.
+    pub unsafe_vrps: u32,
 
     /// Number of VRPs filtered due to local exceptions.
     pub locally_filtered_vrps: u32,
+
+    /// Number of duplicate VRPs.
+    ///
+    /// This number is only calculated after all filtering is done.
+    pub duplicate_vrps: u32,
 
     /// Total number of VRPs in the final set.
     ///
@@ -162,8 +179,9 @@ impl TalMetrics {
             tal,
             roas: 0,
             total_valid_vrps: 0,
-            unsafe_filtered_vrps: 0,
+            unsafe_vrps: 0,
             locally_filtered_vrps: 0,
+            duplicate_vrps: 0,
             final_vrps: 0,
         }
     }

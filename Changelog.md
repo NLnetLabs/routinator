@@ -16,9 +16,6 @@ Breaking Changes
   with the same consequences as above. ([#397])
 * The default for dealing with stale objects has been changed to `reject`
   in accordance with the same draft. ([#387])
-* All VRPs overlapping with resources from rejected CAs are filtered. This
-  will avoid situations were routes become RPKI invalid if their VRPs are
-  split over multiple CAs or there are less specific ROAs. ([#377])
 * Parsing of local exception files is now more strict in accordance with
   [RFC 8416]. Any additional member in the JSON objects will lead to an
   error. However, error reporting has been greatly improved and now the
@@ -29,6 +26,11 @@ Breaking Changes
 
 New
 
+* All VRPs overlapping with resources from rejected CAs – dubbed ‘unsafe
+  VRPs’ can filtered via the new `usafe-vrps` option. Doing so will avoid
+  situations were routes become RPKI invalid if their VRPs are split over
+  multiple CAs or there are less specific ROAs. By default, unsafe VRPs
+  are only warned about. ([#377], [#400])
 * New metrics for the VRPs produced and filtered on the various TALs.
   ([#377])
 * The logging output of the latest validation run is now available via the
@@ -86,6 +88,7 @@ Other Changes
 [#396]: https://github.com/NLnetLabs/routinator/pull/396
 [#397]: https://github.com/NLnetLabs/routinator/pull/397
 [#398]: https://github.com/NLnetLabs/routinator/pull/398
+[#400]: https://github.com/NLnetLabs/routinator/pull/400
 [594186c]: https://github.com/NLnetLabs/routinator/commit/594186cc2e1521a258f960c4196131e29f6cb1f9
 [RFC 8210]: https://tools.ietf.org/html/rfc8210
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
