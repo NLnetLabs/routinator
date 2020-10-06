@@ -894,7 +894,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 return Err(ValidationError)
             }
         };
-        let crl_name = match crl_uri.relative_to(repo_uri) {
+        let crl_name = match uri_relative_to(&crl_uri, repo_uri) {
             Some(name) => name,
             None => {
                 warn!(
@@ -1174,6 +1174,76 @@ pub trait ProcessCa: Sized + Send + Sync {
     ///
     /// The default implementation does nothing at all.
     fn cancel(self, _cert: &ResourceCert) {
+    }
+}
+
+
+//------------ Helper Functions ----------------------------------------------
+
+#[allow(clippy::manual_strip)] // str::strip_prefix not in 1.42
+fn uri_relative_to<'a>(
+    uri: &'a uri::Rsync,
+    other: &uri::Rsync
+) -> Option<&'a [u8]> {
+    if uri.module() != other.module() {
+        return None
+    }
+    if uri.path() == other.path() {
+        Some(b"")
+    }
+    else if other.path().is_empty() {
+        Some(uri.path().as_bytes())
+    }
+    else if !uri.path().starts_with(other.path()) {
+        None
+    }
+    else {
+        let (left, right) = uri.path().split_at(other.path().len());
+        if left.ends_with('/') {
+            Some(right.as_bytes())
+        }
+        else if right.starts_with('/') {
+            Some(right[1..].as_bytes())
+        }
+        else {
+            None
+        }
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_uri_relative_to() {
+        use std::str::FromStr;
+
+        let aa      = uri::Rsync::from_str("rsync://l/m/aa").unwrap();
+        let aaa     = uri::Rsync::from_str("rsync://l/m/aaa").unwrap();
+        let aa_s    = uri::Rsync::from_str("rsync://l/m/aa/").unwrap();
+        let aa_s_bb = uri::Rsync::from_str("rsync://l/m/aa/bb").unwrap();
+        let cc      = uri::Rsync::from_str("rsync://l/m/cc").unwrap();
+        let cc_s    = uri::Rsync::from_str("rsync://l/m/cc/").unwrap();
+        let dl      = uri::Rsync::from_str("rsync://d/m/aa/").unwrap();
+        let dm      = uri::Rsync::from_str("rsync://l/d/aa/").unwrap();
+        let dlm     = uri::Rsync::from_str("rsync://d/d/aa/").unwrap();
+        let n       = uri::Rsync::from_str("rsync://d/d/").unwrap();
+        let n_bb    = uri::Rsync::from_str("rsync://d/d/bb").unwrap();
+
+        assert_eq!(uri_relative_to(&aa, &aa), Some(b"".as_ref()));
+        assert_eq!(uri_relative_to(&aaa, &aa), None);
+        assert_eq!(uri_relative_to(&aa_s_bb, &aa), Some(b"bb".as_ref()));
+        assert_eq!(uri_relative_to(&aa_s_bb, &aa_s), Some(b"bb".as_ref()));
+        assert_eq!(uri_relative_to(&aa_s_bb, &cc), None);
+        assert_eq!(uri_relative_to(&aa_s_bb, &cc_s), None);
+        assert_eq!(uri_relative_to(&aa_s_bb, &dl), None);
+        assert_eq!(uri_relative_to(&aa_s_bb, &dm), None);
+        assert_eq!(uri_relative_to(&aa_s_bb, &dlm), None);
+        assert_eq!(uri_relative_to(&n_bb, &n), Some(b"bb".as_ref()));
     }
 }
 
