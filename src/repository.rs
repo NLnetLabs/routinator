@@ -1165,8 +1165,8 @@ fn uri_relative_to<'a>(
         if left.ends_with('/') {
             Some(right.as_bytes())
         }
-        else if let Some(res) = right.strip_prefix('/') {
-            Some(res.as_bytes())
+        else if right.starts_with('/') {
+            Some(right[1..].as_bytes())
         }
         else {
             None
