@@ -1144,6 +1144,7 @@ pub trait ProcessCa: Sized + Send + Sync {
 
 //------------ Helper Functions ----------------------------------------------
 
+#[allow(clippy::manual_strip)] // str::strip_prefix not in 1.42
 fn uri_relative_to<'a>(
     uri: &'a uri::Rsync,
     other: &uri::Rsync
