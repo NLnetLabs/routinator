@@ -1,7 +1,7 @@
 [package]
 # Note: some of these values are also used when building Debian packages below.
 name = "routinator"
-version = "0.7.1-bis"
+version = "0.8.0-rc1"
 edition = "2018"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
@@ -29,8 +29,8 @@ num_cpus        = "1.12.0"
 rand            = "0.7.3"
 reqwest         = { version = "0.10.4", default-features = false, features = ["blocking"] }
 ring            = "0.16.12"
-rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git" }
-rpki-rtr        = { git = "https://github.com/NLnetLabs/rpki-rtr.git" }
+rpki            = "0.10.0"
+rpki-rtr        = "0.2.0"
 serde           = { version = "^1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
 slab            = "0.4.2"

@@ -1,6 +1,6 @@
 # Change Log
 
-# Unreleased Next Version
+## 0.8.0-rc1
 
 Breaking Changes
 
@@ -99,14 +99,14 @@ Other Changes
 [draft-michaelson-rpki-rta]: https://datatracker.ietf.org/doc/html/draft-michaelson-rpki-rta
 
 
-# 0.7.1 ‘Moonlight and Love Songs’
+## 0.7.1 ‘Moonlight and Love Songs’
 
 Release 2020-06-15.
 
 There have been no changes since RC2.
 
 
-# 0.7.1-rc2
+## 0.7.1-rc2
 
 Released 2020-06-10.
 
