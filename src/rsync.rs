@@ -491,7 +491,7 @@ impl Command {
                     }
                 }
             }
-            destination.push_str("/");
+            destination.push('/');
         }
         Ok(destination)
     }
