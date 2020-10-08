@@ -4,6 +4,13 @@
 
 Bug Fixes
 
+Other Changes
+
+* Improve log message when listing resources being added to the unsafe
+  filter list. ([#406])
+
+[#406]: https://github.com/NLnetLabs/routinator/pull/406
+
 
 ## 0.8.0-rc1
 
