@@ -492,17 +492,23 @@ impl OriginsHistory {
         mut metrics: Metrics,
         exceptions: &LocalExceptions,
     ) -> bool {
+        let origins = AddressOriginSet::from_report(
+            report, exceptions, &mut metrics,
+            self.0.read().unwrap().unsafe_vrps,
+        );
         match self.current_and_serial() {
             Some((current, serial)) => {
-                let current: HashSet<_> =
-                    current.iter().map(Clone::clone).collect();
-                let (next, diff) = OriginsDiff::construct(
-                    current, report, exceptions, serial, &mut metrics,
+                let diff = OriginsDiff::construct(
+                    &current.to_set(), &origins, serial
                 );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
                 if !diff.is_empty() {
-                    history.current = Some(Arc::new(next));
+                    info!(
+                        "Diff with {} announced and {} withdrawn.",
+                        diff.announce().len(), diff.withdraw().len()
+                    );
+                    history.current = Some(Arc::new(origins.into()));
                     history.push_diff(diff);
                     true
                 }
@@ -511,13 +517,9 @@ impl OriginsHistory {
                 }
             }
             None => {
-                let origins = AddressOrigins::from_report(
-                    report, exceptions, &mut metrics,
-                    self.0.read().unwrap().unsafe_vrps,
-                );
                 let mut history = self.0.write().unwrap();
                 history.metrics = Some(Arc::new(metrics));
-                history.current = Some(Arc::new(origins));
+                history.current = Some(Arc::new(origins.into()));
                 true
             }
         }
@@ -723,27 +725,19 @@ impl RouteOrigin {
 }
 
 
-//------------ AddressOrigins ------------------------------------------------
+//------------ AddressOriginSet ----------------------------------------------
 
-/// A set of address origin statements.
-///
-/// This type contains a list of [`AddressOrigin`] statements. While it is
-/// indeed a set, that is, it doesn’t contain duplicates, it is accessible
-/// like a slice of address origins, to which it even derefs. This is so that
-/// we can iterate over the set using indexes instead of references, avoiding
-/// self-referential types in futures.
-///
-/// [`AddressOrigin`]: struct.AddressOrigin.html
+/// The address origin statements as a set.
 #[derive(Clone, Debug, Default)]
-pub struct AddressOrigins {
-    /// A list of (unique) address origins.
-    origins: Vec<AddressOrigin>,
+pub struct AddressOriginSet {
+    /// The set.
+    origins: HashSet<AddressOrigin>,
 
     /// The time when this set needs to be refreshed at the latest.
     refresh: Option<Time>,
 }
 
-impl AddressOrigins {
+impl AddressOriginSet {
     /// Creates a new, empty set of address origins.
     pub fn new() -> Self {
         Self::default()
@@ -760,7 +754,7 @@ impl AddressOrigins {
         metrics: &mut Metrics,
         unsafe_vrps: FilterPolicy,
     ) -> Self {
-        let mut res = HashSet::new();
+        let mut origins = HashSet::new();
         let mut refresh = None;
 
         let tals = report.tals.into_inner().unwrap();
@@ -818,7 +812,7 @@ impl AddressOrigins {
                         tal_metrics.locally_filtered_vrps += 1;
                     }
 
-                    if res.insert(addr) {
+                    if origins.insert(addr) {
                         tal_metrics.final_vrps += 1;
                     }
                     else {
@@ -828,16 +822,77 @@ impl AddressOrigins {
             }
         }
         for addr in exceptions.assertions() {
-            let _ = res.insert(addr.clone());
-            metrics.inc_local_vrps();
+            if origins.insert(addr.clone()) {
+                metrics.inc_local_vrps();
+            }
         }
         metrics.set_tals(tal_metrics_vec);
-        let res = AddressOrigins {
-            origins: res.into_iter().collect(),
-            refresh
+        let res = AddressOriginSet {
+            origins, refresh
         };
         metrics.set_final_vrps(res.origins.len() as u32);
         res
+    }
+}
+
+impl From<AddressOrigins> for AddressOriginSet {
+    fn from(src: AddressOrigins) -> Self {
+        AddressOriginSet {
+            origins: src.origins.into_iter().collect(),
+            refresh: src.refresh
+        }
+    }
+}
+
+
+//------------ AddressOrigins ------------------------------------------------
+
+/// The address origin statements as a slice.
+///
+/// This type contains a list of [`AddressOrigin`] statements. While it is
+/// indeed a set, that is, it doesn’t contain duplicates, it is accessible
+/// like a slice of address origins, to which it even derefs. This is so that
+/// we can iterate over the set using indexes instead of references, avoiding
+/// self-referential types in futures.
+///
+/// [`AddressOrigin`]: struct.AddressOrigin.html
+#[derive(Clone, Debug, Default)]
+pub struct AddressOrigins {
+    /// A list of (unique) address origins.
+    origins: Vec<AddressOrigin>,
+
+    /// The time when this set needs to be refreshed at the latest.
+    refresh: Option<Time>,
+}
+
+impl AddressOrigins {
+    /// Creates a new, empty set of address origins.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a set from the raw route origins and exceptions.
+    ///
+    /// The function will take all the address origins in `origins`, drop
+    /// duplicates, drop the origins filtered in `execptions` and add the
+    /// assertions from `exceptions`.
+    pub fn from_report(
+        report: OriginsReport,
+        exceptions: &LocalExceptions,
+        metrics: &mut Metrics,
+        unsafe_vrps: FilterPolicy,
+    ) -> Self {
+        AddressOriginSet::from_report(
+            report, exceptions, metrics, unsafe_vrps
+        ).into()
+    }
+
+    /// Converts the origins into a set of origins.
+    pub fn to_set(&self) -> AddressOriginSet {
+        AddressOriginSet {
+            origins: self.origins.iter().cloned().collect(),
+            refresh: self.refresh
+        }
     }
 
     /// Returns an iterator over the address orgins.
@@ -849,11 +904,11 @@ impl AddressOrigins {
 
 //--- From
 
-impl From<HashSet<AddressOrigin>> for AddressOrigins {
-    fn from(set: HashSet<AddressOrigin>) -> Self {
+impl From<AddressOriginSet> for AddressOrigins {
+    fn from(src: AddressOriginSet) -> Self {
         AddressOrigins {
-            origins: set.into_iter().collect(),
-            refresh: None,
+            origins: src.origins.into_iter().collect(),
+            refresh: src.refresh
         }
     }
 }
@@ -953,63 +1008,24 @@ impl OriginsDiff {
     }
 
     /// Constructs a diff.
-    ///
-    /// The method takes the previous list of address origins as a set (so
-    /// that there are definitely no duplicates), a list of route origins
-    /// gained from validation, a list of local exceptions, and the serial
-    /// number of the current version.
-    ///
-    /// It will create and return the new list of address origins from the
-    /// route origins and a origins diff between the new and old address
-    /// origins with the serial number of `serial` plus one.
     pub fn construct(
-        mut current: HashSet<AddressOrigin>,
-        report: OriginsReport,
-        exceptions: &LocalExceptions,
+        current: &AddressOriginSet,
+        next: &AddressOriginSet,
         serial: Serial,
-        metrics: &mut Metrics,
-    ) -> (AddressOrigins, Self) {
-        let mut next = HashSet::new();
-        let mut announce = HashSet::new();
-
-        let tals = report.tals.into_inner().unwrap();
-        let mut tal_metrics_vec: Vec<_> = tals.iter().map(|tal| {
-            TalMetrics::new(tal.clone())
-        }).collect();
-
-        while let Ok(item) = report.origins.pop() {
-            for origin in item {
-                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
-                tal_metrics.roas += 1;
-                for addr in origin.addrs {
-                    tal_metrics.total_valid_vrps += 1;
-                    let addr = AddressOrigin::from_roa(
-                        origin.as_id, addr, origin.info.clone()
-                    );
-                    if !exceptions.keep_origin(&addr) {
-                        continue
-                    }
-                    if next.insert(addr.clone()) && !current.remove(&addr) {
-                        let _ = announce.insert(addr);
-                    }
-                }
-            }
+    ) -> Self {
+        OriginsDiff {
+            announce: {
+                next.origins.difference(
+                    &current.origins
+                ).cloned().collect()
+            },
+            withdraw: {
+                current.origins.difference(
+                    &next.origins
+                ).cloned().collect()
+            },
+            serial: serial.add(1)
         }
-        metrics.set_tals(tal_metrics_vec);
-        for addr in exceptions.assertions() {
-            // Exceptions could have changed, so let’s be thorough here.
-            if next.insert(addr.clone()) && !current.remove(addr)  {
-                announce.insert(addr.clone());
-            }
-        }
-        let withdraw: Vec<_> = current.into_iter().collect();
-        let announce: Vec<_> = announce.into_iter().collect();
-        info!(
-            "Diff with {} announced and {} withdrawn.",
-            announce.len(), withdraw.len()
-        );
-        let serial = serial.add(1);
-        (next.into(), OriginsDiff { serial, announce, withdraw })
     }
 
     /// Returns the serial number of this origins diff.

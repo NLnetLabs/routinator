@@ -1,8 +1,12 @@
 # Change Log
 
-## Unreleased next version
+## Unreleased 0.8.0-rc2
 
 Bug Fixes
+
+* Apply unsafe filter (if requested) also on subsequent validation runs in
+  server mode. ([#407])
+* Update all metrics on all validation runs. ([#407])
 
 Other Changes
 
@@ -10,6 +14,7 @@ Other Changes
   filter list. ([#406])
 
 [#406]: https://github.com/NLnetLabs/routinator/pull/406
+[#407]: https://github.com/NLnetLabs/routinator/pull/407
 
 
 ## 0.8.0-rc1
