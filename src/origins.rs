@@ -1017,12 +1017,12 @@ impl OriginsDiff {
             announce: {
                 next.origins.difference(
                     &current.origins
-                ).into_iter().cloned().collect()
+                ).cloned().collect()
             },
             withdraw: {
                 current.origins.difference(
                     &next.origins
-                ).into_iter().cloned().collect()
+                ).cloned().collect()
             },
             serial: serial.add(1)
         }
