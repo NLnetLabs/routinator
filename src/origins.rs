@@ -218,7 +218,7 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
 
     fn cancel(self, cert: &ResourceCert) {
         if let Some(uri) = cert.ca_repository() {
-            warn!("CA for {} rejected, resources to be filtered:", uri);
+            warn!("CA for {} rejected, resources marked as unsafe:", uri);
             for block in cert.v4_resources().iter() {
                 warn!("   {}", block.display_v4());
             }
