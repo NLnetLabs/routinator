@@ -244,9 +244,7 @@ impl HttpClient {
         &self,
         uri: &uri::Https
     ) -> Result<Response, Error> {
-        self.client().get(uri.as_str()).send().and_then(|res| {
-            res.error_for_status()
-        }).map_err(|err| {
+        self.client().get(uri.as_str()).send().map_err(|err| {
             warn!("RRDP {}: {}", uri, err);
             Error
         })
