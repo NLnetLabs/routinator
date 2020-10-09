@@ -7,6 +7,7 @@ Bug Fixes
 * Apply unsafe filter (if requested) also on subsequent validation runs in
   server mode. ([#407])
 * Update all metrics on all validation runs. ([#407])
+* Show the status code instead of -1 in RRDP status metrics. ([#408])
 
 Other Changes
 
@@ -15,6 +16,7 @@ Other Changes
 
 [#406]: https://github.com/NLnetLabs/routinator/pull/406
 [#407]: https://github.com/NLnetLabs/routinator/pull/407
+[#408]: https://github.com/NLnetLabs/routinator/pull/408
 
 
 ## 0.8.0-rc1
