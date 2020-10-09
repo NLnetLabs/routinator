@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased 0.8.0-rc2
+## 0.8.0-rc2
 
 Bug Fixes
 
