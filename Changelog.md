@@ -1,13 +1,15 @@
 # Change Log
 
-## Unreleased 0.8.0-rc3
+## 0.8.0 ‘Strikes and Gutters, Ups and Downs’
 
-Bug Fixes
+Released 2020-10-19.
 
-Other Changes
+There have been no changes since RC2.
 
 
 ## 0.8.0-rc2
+
+Released 2020-10-09.
 
 Bug Fixes
 
@@ -27,6 +29,8 @@ Other Changes
 
 
 ## 0.8.0-rc1
+
+Released 2020-10-07.
 
 Breaking Changes
 
@@ -127,7 +131,7 @@ Other Changes
 
 ## 0.7.1 ‘Moonlight and Love Songs’
 
-Release 2020-06-15.
+Released 2020-06-15.
 
 There have been no changes since RC2.
 
