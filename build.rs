@@ -1,14 +1,9 @@
-extern crate rustc_version;
-use rustc_version::{Version, version};
-
 fn main() {
-    let version = version().expect("Failed to get rustc version.");
-    if version < Version::parse("1.42.0").unwrap() {
-        eprintln!(
-            "\n\nAt least Rust version 1.42 is required.\n\
-             Version {} is used for building.\n\
-             Build aborted.\n\n",
-             version);
-        panic!();
-    }
+    eprintln!(
+        "\n\nYou are using an outdated branch of the Routinator repository.\n\n\
+         The default branch is now \"main\".\n\n\
+         Please run 'git checkout main' before building.\n\n\
+        "
+    );
+    panic!();
 }
