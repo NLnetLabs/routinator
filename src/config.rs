@@ -895,7 +895,7 @@ impl Config {
                     .unwrap_or(DEFAULT_UNSAFE_VRPS_POLICY)
             },
             unknown_objects: {
-                file.take_from_str("unknown_objects")?
+                file.take_from_str("unknown-objects")?
                     .unwrap_or(DEFAULT_UNKNOWN_OBJECTS_POLICY)
             },
             allow_dubious_hosts:
