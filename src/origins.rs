@@ -1339,7 +1339,7 @@ impl AddressPrefix {
     pub fn covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
-                if self.len > 31 {
+                if self.len > 31 && other.len > 31 {
                     left == right
                 }
                 else if self.len > other.len {
@@ -1354,7 +1354,7 @@ impl AddressPrefix {
                 }
             }
             (IpAddr::V6(left), IpAddr::V6(right)) => {
-                if self.len > 127 {
+                if self.len > 127 && other.len > 127 {
                     left == right
                 }
                 else if self.len > other.len {
