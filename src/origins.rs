@@ -1529,19 +1529,54 @@ pub mod tests {
     }
 
     #[test]
-    fn should_find_covered_prefixes() {
+    fn should_find_covered_prefixes_v4() {
         let outer = make_pfx("10.0.0.0", 16);
         let host_roa = make_pfx("10.0.0.0", 32);
         let sibling = make_pfx("10.1.0.0", 16);
         let inner_low = make_pfx("10.0.0.0", 24);
         let inner_mid = make_pfx("10.0.61.0", 24);
         let inner_hi = make_pfx("10.0.255.0", 24);
+        let supernet = make_pfx("10.0.0.0", 8);
 
+        /// Does not cover a sibling/neighbor prefix.
         assert!(!outer.address_prefix_covers(sibling));
+
+        /// Covers subnets at the extremes and middle of the supernet.
         assert!(outer.address_prefix_covers(inner_low));
         assert!(outer.address_prefix_covers(inner_mid));
         assert!(outer.address_prefix_covers(inner_hi));
+
+        /// Does not cover host-ROA and network: 10.0/32 not cover  10.0/16.
         assert!(!host_roa.address_prefix_covers(outer));
+
+        /// Does not cover supernet (10.0/16 does not cover 10/8).
+        assert!(!outer.address_prefix_covers(supernet));
+    }
+
+    #[test]
+    fn should_find_covered_prefixes_v6() {
+        let outer = make_pfx("2001:db8::", 32);
+        let host_roa = make_pfx("2001:db8::", 128);
+        let sibling = make_pfx("2001:db9::", 32);
+        let inner_low = make_pfx("2001:db8::", 48);
+        let inner_mid = make_pfx("2001:db8:8000::", 48);
+        let inner_hi = make_pfx("2001:db8:FFFF::", 48);
+        let supernet = make_pfx("2001::", 24);
+
+        /// Does not cover a sibling/neighbor prefix.
+        assert!(!outer.address_prefix_covers(sibling));
+
+        /// Covers subnets at the extremes and middle of the supernet.
+        assert!(outer.address_prefix_covers(inner_low));
+        assert!(outer.address_prefix_covers(inner_mid));
+        assert!(outer.address_prefix_covers(inner_hi));
+
+        /// Does not cover host-ROA and network: 2001:db8::/128
+        /// does not cover  2001:db8::/32.
+        assert!(!host_roa.address_prefix_covers(outer));
+
+        /// Does not cover supernet (2001:db8::/32 does not cover 2001::/24).
+        assert!(!outer.address_prefix_covers(supernet));
     }
 }
 
