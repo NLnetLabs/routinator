@@ -1541,7 +1541,7 @@ pub mod tests {
         assert!(outer.covers(inner_low));
         assert!(outer.covers(inner_mid));
         assert!(outer.covers(inner_hi));
-        assert!(host_roa.covers(outer);
+        assert!(!host_roa.covers(outer);
     }
 }
 
