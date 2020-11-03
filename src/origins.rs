@@ -1335,8 +1335,8 @@ impl AddressPrefix {
         self.len
     }
 
-    /// Returns whether `self` covers `other`.
-    pub fn covers(self, other: Self) -> bool {
+    /// Returns whether the prefix `self` covers  the prefix`other`.
+    pub fn address_prefix_covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
                 if self.len > 31 && other.len > 31 {
@@ -1537,11 +1537,11 @@ pub mod tests {
         let inner_mid = make_pfx("10.0.61.0", 24);
         let inner_hi = make_pfx("10.0.255.0", 24);
 
-        assert!(!outer.covers(sibling));
-        assert!(outer.covers(inner_low));
-        assert!(outer.covers(inner_mid));
-        assert!(outer.covers(inner_hi));
-        assert!(!host_roa.covers(outer));
+        assert!(!outer.address_prefix_covers(sibling));
+        assert!(outer.address_prefix_covers(inner_low));
+        assert!(outer.address_prefix_covers(inner_mid));
+        assert!(outer.address_prefix_covers(inner_hi));
+        assert!(!host_roa.address_prefix_covers(outer));
     }
 }
 
