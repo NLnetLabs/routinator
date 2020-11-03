@@ -1531,6 +1531,7 @@ pub mod tests {
     #[test]
     fn should_find_covered_prefixes() {
         let outer = make_pfx("10.0.0.0", 16);
+        let host_roa = make_pfx("10.0.0.0", 32);
         let sibling = make_pfx("10.1.0.0", 16);
         let inner_low = make_pfx("10.0.0.0", 24);
         let inner_mid = make_pfx("10.0.61.0", 24);
@@ -1540,6 +1541,7 @@ pub mod tests {
         assert!(outer.covers(inner_low));
         assert!(outer.covers(inner_mid));
         assert!(outer.covers(inner_hi));
+        assert!(host_roa.covers(outer);
     }
 }
 
