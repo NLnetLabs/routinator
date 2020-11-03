@@ -9,8 +9,16 @@ New
 
 Bug Fixes
 
+* The config file option for the policy on dealing with objects on unknown
+  types is now correctly spelled `unknown-objects` (with a dash rather
+  than an underscore). The old spelling will be also be accepted in 0.8
+  releases. (Found and fixed by @johannesmoos, [#413], [#414].)
+
 Other Changes
 
+[#413]: https://github.com/NLnetLabs/routinator/pull/413
+[#416]: https://github.com/NLnetLabs/routinator/pull/416
+[@johannesmoos]: https://github.com/johannesmoos
 
 ## 0.8.0 ‘Strikes and Gutters, Ups and Downs’
 
