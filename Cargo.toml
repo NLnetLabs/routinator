@@ -30,7 +30,7 @@ rand            = "0.7.3"
 reqwest         = { version = "0.10.4", default-features = false, features = ["blocking"] }
 ring            = "0.16.12"
 rpki            = "0.10.0"
-rpki-rtr        = "0.2.0"
+rpki-rtr        = { git = "https://github.com/NLnetLabs/rpki-rtr.git" }
 serde           = { version = "^1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
 slab            = "0.4.2"

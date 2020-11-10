@@ -1,11 +1,13 @@
 //! Output of lists of VRPs.
 
 use std::io;
+use std::net::IpAddr;
 use std::str::FromStr;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
 use rpki::resources::AsId;
+use rpki_rtr as rtr;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
@@ -58,6 +60,11 @@ pub enum OutputFormat {
     /// This produces a sequence of RPSL objects with various fields.
     Rpsl,
 
+    /// RTR reset query output.
+    ///
+    /// This produces output as if it were a response to an RTR reset query.
+    Rtr,
+
     /// Summary output.
     ///
     /// Produces a textual summary of the ROAs and VRPS.
@@ -72,7 +79,8 @@ pub enum OutputFormat {
 impl OutputFormat {
     /// A list of the known output formats.
     pub const VALUES: &'static [&'static str] = &[
-        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl", "summary", "none"
+        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl",
+        "rtr", "summary", "none"
     ];
 
     /// The default output format.
@@ -92,6 +100,7 @@ impl FromStr for OutputFormat {
             "bird1" => Ok(OutputFormat::Bird1),
             "bird2" => Ok(OutputFormat::Bird2),
             "rpsl" => Ok(OutputFormat::Rpsl),
+            "rtr" => Ok(OutputFormat::Rtr),
             "summary" => Ok(OutputFormat::Summary),
             "none" => Ok(OutputFormat::None),
             _ => {
@@ -146,6 +155,7 @@ impl OutputFormat {
             OutputFormat::ExtendedCsv
                 => "text/csv;charset=utf-8;header=present",
             OutputFormat::Json => "application/json",
+            OutputFormat::Rtr => "application/octet-stream",
             _ => "text/plain;charset=utf-8",
         }
     }
@@ -251,6 +261,7 @@ where
             OutputFormat::Bird1 => bird1_header(vrps, target),
             OutputFormat::Bird2 => bird2_header(vrps, target),
             OutputFormat::Rpsl => rpsl_header(vrps, target),
+            OutputFormat::Rtr => rtr_header(vrps, target),
             OutputFormat::Summary => summary_header(&self.metrics, target),
             OutputFormat::None => Ok(())
         }
@@ -274,6 +285,7 @@ where
             OutputFormat::Bird1 => bird1_origin(vrp, first, target)?,
             OutputFormat::Bird2 => bird2_origin(vrp, first, target)?,
             OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
+            OutputFormat::Rtr => rtr_origin(vrp, first, target)?,
             _ => { }
         }
         Ok(true)
@@ -310,6 +322,7 @@ where
             OutputFormat::Bird1 => bird1_footer(vrps, target),
             OutputFormat::Bird2 => bird2_footer(vrps, target),
             OutputFormat::Rpsl => rpsl_footer(vrps, target),
+            OutputFormat::Rtr => rtr_footer(vrps, target),
             _ => Ok(())
         }
     }
@@ -637,6 +650,52 @@ fn rpsl_footer<W: io::Write>(
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
+}
+
+
+//------------ rtr -----------------------------------------------------------
+
+fn rtr_header<W: io::Write>(
+    _vrps: &AddressOrigins,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    output.write_all(
+        rtr::pdu::CacheResponse::new(0, rtr::state::State::new()).as_ref()
+    )
+}
+
+fn rtr_origin<W: io::Write>(
+    addr: &AddressOrigin,
+    _first: bool,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    match addr.address() {
+        IpAddr::V4(address) => {
+            output.write_all(
+                rtr::pdu::Ipv4Prefix::new(
+                    0, 1, addr.address_length(), addr.max_length(),
+                    address, addr.as_id().into()
+                ).as_ref()
+            )
+        }
+        IpAddr::V6(address) => {
+            output.write_all(
+                rtr::pdu::Ipv6Prefix::new(
+                    0, 1, addr.address_length(), addr.max_length(),
+                    address, addr.as_id().into()
+                ).as_ref()
+            )
+        }
+    }
+}
+
+fn rtr_footer<W: io::Write>(
+    _vrps: &AddressOrigins,
+    output: &mut W,
+) -> Result<(), io::Error> {
+    output.write_all(
+        rtr::pdu::EndOfDataV0::new(rtr::state::State::new()).as_ref()
+    )
 }
 
 
