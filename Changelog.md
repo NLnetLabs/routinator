@@ -9,16 +9,24 @@ New
 
 Bug Fixes
 
+* The prefix validation option incorrectly matched VRPs for host prefixes
+  to prefixes with an identical bit pattern of any length. (Found by
+  [@vamseedhar-reddyvari] and fixed in [#415] by [@morrowc] and
+  [@aaronw112358])
 * The config file option for the policy on dealing with objects on unknown
   types is now correctly spelled `unknown-objects` (with a dash rather
   than an underscore). The old spelling will be also be accepted in 0.8
-  releases. (Found and fixed by @johannesmoos, [#413], [#414].)
+  releases. (Found and fixed by @johannesmoos, [#413], [#416].)
 
 Other Changes
 
 [#413]: https://github.com/NLnetLabs/routinator/pull/413
+[#415]: https://github.com/NLnetLabs/routinator/pull/415
 [#416]: https://github.com/NLnetLabs/routinator/pull/416
 [@johannesmoos]: https://github.com/johannesmoos
+[@morrowc]: https://github.com/morrowc
+[@aaronw112358]: https://github.com/aaronw112358
+
 
 ## 0.8.0 ‘Strikes and Gutters, Ups and Downs’
 
