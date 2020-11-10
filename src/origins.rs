@@ -1335,11 +1335,11 @@ impl AddressPrefix {
         self.len
     }
 
-    /// Returns whether `self` covers `other`.
+    /// Returns whether the prefix `self` covers  the prefix`other`.
     pub fn covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
-                if self.len > 31 {
+                if self.len > 31 && other.len > 31 {
                     left == right
                 }
                 else if self.len > other.len {
@@ -1354,7 +1354,7 @@ impl AddressPrefix {
                 }
             }
             (IpAddr::V6(left), IpAddr::V6(right)) => {
-                if self.len > 127 {
+                if self.len > 127 && other.len > 127 {
                     left == right
                 }
                 else if self.len > other.len {
@@ -1520,7 +1520,7 @@ impl error::Error for FromStrError { }
 //------------ Tests ---------------------------------------------------------
 
 #[cfg(test)]
-pub mod tests {
+pub mod test_covers {
 
     use super::*;
 
@@ -1529,17 +1529,54 @@ pub mod tests {
     }
 
     #[test]
-    fn should_find_covered_prefixes() {
+    fn should_find_covered_prefixes_v4() {
         let outer = make_pfx("10.0.0.0", 16);
+        let host_roa = make_pfx("10.0.0.0", 32);
         let sibling = make_pfx("10.1.0.0", 16);
         let inner_low = make_pfx("10.0.0.0", 24);
         let inner_mid = make_pfx("10.0.61.0", 24);
         let inner_hi = make_pfx("10.0.255.0", 24);
+        let supernet = make_pfx("10.0.0.0", 8);
 
+        // Does not cover a sibling/neighbor prefix.
         assert!(!outer.covers(sibling));
+
+        // Covers subnets at the extremes and middle of the supernet.
         assert!(outer.covers(inner_low));
         assert!(outer.covers(inner_mid));
         assert!(outer.covers(inner_hi));
+
+        // Does not cover host-ROA and network: 10.0/32 not cover  10.0/16.
+        assert!(!host_roa.covers(outer));
+
+        // Does not cover supernet (10.0/16 does not cover 10/8).
+        assert!(!outer.covers(supernet));
+    }
+
+    #[test]
+    fn should_find_covered_prefixes_v6() {
+        let outer = make_pfx("2001:db8::", 32);
+        let host_roa = make_pfx("2001:db8::", 128);
+        let sibling = make_pfx("2001:db9::", 32);
+        let inner_low = make_pfx("2001:db8::", 48);
+        let inner_mid = make_pfx("2001:db8:8000::", 48);
+        let inner_hi = make_pfx("2001:db8:FFFF::", 48);
+        let supernet = make_pfx("2001::", 24);
+
+        // Does not cover a sibling/neighbor prefix.
+        assert!(!outer.covers(sibling));
+
+        // Covers subnets at the extremes and middle of the supernet.
+        assert!(outer.covers(inner_low));
+        assert!(outer.covers(inner_mid));
+        assert!(outer.covers(inner_hi));
+
+        // Does not cover host-ROA and network: 2001:db8::/128
+        // does not cover  2001:db8::/32.
+        assert!(!host_roa.covers(outer));
+
+        // Does not cover supernet (2001:db8::/32 does not cover 2001::/24).
+        assert!(!outer.covers(supernet));
     }
 }
 
