@@ -286,7 +286,7 @@ where
         match self.filters.as_ref() {
             Some(filters) => {
                 for filter in filters.as_ref() {
-                    if filter.address_prefix_covers(origin) {
+                    if filter.covers(origin) {
                         return false
                     }
                 }
@@ -680,10 +680,10 @@ pub enum Filter {
 
 impl Filter {
     /// Returns whether this filter covers this origin.
-    fn address_prefix_covers(self, origin: &AddressOrigin) -> bool {
+    fn covers(self, origin: &AddressOrigin) -> bool {
         match self {
             Filter::As(as_id) => origin.as_id() == as_id,
-            Filter::Prefix(prefix) => origin.prefix().address_prefix_covers(prefix)
+            Filter::Prefix(prefix) => origin.prefix().covers(prefix)
         }
     }
 }

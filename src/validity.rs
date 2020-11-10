@@ -35,7 +35,7 @@ impl<'a> RouteValidity<'a> {
         let mut bad_asn = Vec::new();
         let mut bad_len = Vec::new();
         for origin in origins.iter() {
-            if origin.prefix().address_prefix_covers(prefix) {
+            if origin.prefix().covers(prefix) {
                 if prefix.address_length() > origin.max_length() {
                     bad_len.push(origin);
                 }

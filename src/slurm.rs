@@ -141,10 +141,10 @@ impl PrefixFilter {
     fn filter_origin(&self, addr: &AddressOrigin) -> bool {
         match (self.prefix, self.asn) {
             (Some(prefix), Some(asn)) => {
-                prefix.address_prefix_covers(addr.prefix()) && asn == addr.as_id()
+                prefix.covers(addr.prefix()) && asn == addr.as_id()
             }
             (Some(prefix), None) => {
-                prefix.address_prefix_covers(addr.prefix())
+                prefix.covers(addr.prefix())
             }
             (None, Some(asn)) => {
                 asn == addr.as_id()
