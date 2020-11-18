@@ -133,8 +133,12 @@ impl Server {
         }
 
         let start_time = SystemTime::now();
-        if self.try_update(http, &mut metrics).is_err() && self.check_broken() {
-            let _ = fs::remove_dir_all(self.server_dir.base());
+        if self.try_update(http, &mut metrics).is_err() {
+            if self.check_broken() {
+                let _ = fs::remove_dir_all(self.server_dir.base());
+            }
+            // Mark as broken so we fall back to rsync.
+            self.broken.store(true, Relaxed);
         }
         self.updated.store(true, Relaxed);
         metrics.duration = SystemTime::now().duration_since(start_time);
@@ -371,7 +375,7 @@ impl Server {
             Err(_) => {
                 debug!(
                     "Cannot digest RRDP server directory for '{}'. \
-                    Marking as unsable.",
+                    Marking as unusable.",
                     self.notify_uri
                 );
                 self.broken.store(true, Relaxed);
