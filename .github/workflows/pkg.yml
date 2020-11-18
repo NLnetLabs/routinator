@@ -56,8 +56,8 @@ jobs:
         # Get the operating system and release name (e.g. ubuntu and xenial) from
         # the image name (e.g. ubuntu:xenial) by extracting only the parts before
         # and after but not including the colon:
-        echo ::set-env name=OS_NAME::${MATRIX_IMAGE%:*}
-        echo ::set-env name=OS_REL::${MATRIX_IMAGE#*:}
+        echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
+        echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -72,7 +72,7 @@ jobs:
         apt-get update
         apt-get install -y curl
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal -y
-        echo "::add-path::$HOME/.cargo/bin"
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       env:
         DEBIAN_FRONTEND: noninteractive
 
@@ -219,9 +219,9 @@ jobs:
         OS_NAME=${MATRIX_IMAGE%:*}
         OS_REL=${MATRIX_IMAGE#*:}
 
-        echo ::set-env name=OS_NAME::${OS_NAME}
-        echo ::set-env name=OS_REL::${OS_REL}
-        echo ::set-env name=LXC_IMAGE::images:${OS_NAME}/${OS_REL}/cloud
+        echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
+        echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
+        echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -268,7 +268,7 @@ jobs:
       run: |
         DEB_FILE=$(ls -1 *.deb)
         sg lxd -c "lxc file push ${DEB_FILE} testcon/tmp/"
-        echo ::set-env name=DEB_FILE::${DEB_FILE}
+        echo "DEB_FILE=${DEB_FILE}" >> $GITHUB_ENV
 
     - name: Install new DEB package
       run: |
