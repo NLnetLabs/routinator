@@ -7,6 +7,9 @@ Breaking Changes
 
 New
 
+* Routinator will now attempt to update repositories via rsync whenever an
+  update via RRDP failed. ([#424])
+
 Bug Fixes
 
 * The prefix validation option incorrectly matched VRPs for host prefixes
@@ -23,6 +26,7 @@ Other Changes
 [#413]: https://github.com/NLnetLabs/routinator/pull/413
 [#415]: https://github.com/NLnetLabs/routinator/pull/415
 [#416]: https://github.com/NLnetLabs/routinator/pull/416
+[#424]: https://github.com/NLnetLabs/routinator/pull/424
 [@johannesmoos]: https://github.com/johannesmoos
 [@morrowc]: https://github.com/morrowc
 [@aaronw112358]: https://github.com/aaronw112358
