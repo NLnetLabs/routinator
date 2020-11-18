@@ -9,6 +9,9 @@ New
 
 Bug Fixes
 
+* VRPs filtered via local exceptions are dropped again. In 0.8.0, they
+  were only added to the metrics but not actually dropped. ([#424],
+  discovered by [@cwiech])
 * The prefix validation option incorrectly matched VRPs for host prefixes
   to prefixes with an identical bit pattern of any length. (Found by
   [@vamseedhar-reddyvari] and fixed in [#415] by [@morrowc] and
@@ -23,9 +26,11 @@ Other Changes
 [#413]: https://github.com/NLnetLabs/routinator/pull/413
 [#415]: https://github.com/NLnetLabs/routinator/pull/415
 [#416]: https://github.com/NLnetLabs/routinator/pull/416
+[#424]: https://github.com/NLnetLabs/routinator/pull/424
 [@johannesmoos]: https://github.com/johannesmoos
 [@morrowc]: https://github.com/morrowc
 [@aaronw112358]: https://github.com/aaronw112358
+[@cwiech]: https://github.com/cwiech
 
 
 ## 0.8.0 ‘Strikes and Gutters, Ups and Downs’
