@@ -810,6 +810,7 @@ impl AddressOriginSet {
                     );
                     if !exceptions.keep_origin(&addr) {
                         tal_metrics.locally_filtered_vrps += 1;
+                        continue;
                     }
 
                     if origins.insert(addr) {
