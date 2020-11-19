@@ -91,7 +91,7 @@ const DEFAULT_UNKNOWN_OBJECTS_POLICY: FilterPolicy = FilterPolicy::Warn;
 /// [`switch_logging`]: #method.switch_logging
 /// [`daemonize`]: #method.daemonize
 /// [`to_toml`]: #method.to_toml
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
     /// Path to the directory that contains the repository cache.
     pub cache_dir: PathBuf,
@@ -978,7 +978,8 @@ impl Config {
             },
             systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
             rtr_tcp_keepalive: {
-                match file.take_from_str("rtr-tcp-keepalive")? {
+                // XXX Change this to take_u64 in the next major release.
+                match file.take_u64_maybe_str("rtr-tcp-keepalive")? {
                     Some(0) => None,
                     Some(keep) => Some(Duration::from_secs(keep)),
                     None => DEFAULT_RTR_TCP_KEEPALIVE,
@@ -1463,7 +1464,7 @@ impl Eq for LogTarget { }
 /// The policy for filtering.
 ///
 /// Various filters can be configured via this policy.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FilterPolicy {
     /// Reject objects matched by the filter.
     Reject,
@@ -1640,9 +1641,56 @@ impl ConfigFile {
         }
     }
 
+    /// Takes an unsigned integer which may also be a string.
+    ///
+    /// This is a temporary function to help with a compatibility issue.
+    fn take_u64_maybe_str(&mut self, key: &str) -> Result<Option<u64>, Error> {
+        match self.content.remove(key) {
+            Some(value) => {
+                match value {
+                    toml::Value::Integer(res) => {
+                        if res < 0 {
+                            error!(
+                                "Error in config file {}: \
+                                '{}' expected to be a positive integer.",
+                                self.path.display(), key
+                            );
+                            Err(Error)
+                        }
+                        else {
+                            Ok(Some(res as u64))
+                        }
+                    }
+                    toml::Value::String(res) => {
+                        match u64::from_str(&res) {
+                            Ok(some) => Ok(Some(some)),
+                            Err(_) => {
+                                error!(
+                                    "Error in config file {}: \
+                                    '{}' expected to be a positive integer.",
+                                    self.path.display(), key
+                                );
+                                Err(Error)
+                            }
+                        }
+                    }
+                    _ => {
+                        error!(
+                            "Error in config file {}: \
+                             '{}' expected to be an integer.",
+                            self.path.display(), key
+                        );
+                        Err(Error)
+                    }
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
     /// Takes a small unsigned integer value from the config file.
     ///
-    /// While the result is returned as an `usize`, it musn’t be in the
+    /// While the result is returned as an `usize`, it must be in the
     /// range of a `u16`.
     ///
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
@@ -2230,6 +2278,17 @@ mod test {
             Path::new("/test/routinator.conf")
         ).unwrap();
         assert!(Config::from_config_file(config).is_err());
+    }
+
+    #[test]
+    fn read_your_own_config() {
+        let out_config = get_default_config();
+        let out_file = format!("{}", out_config.to_toml());
+        let in_file = ConfigFile::parse(
+            &out_file, Path::new("/test/routinator.conf")
+        ).unwrap();
+        let in_config = Config::from_config_file(in_file).unwrap();
+        assert_eq!(out_config, in_config);
     }
 
     #[test]
