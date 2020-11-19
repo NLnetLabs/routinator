@@ -788,7 +788,7 @@ impl AddressOriginSet {
                             FilterPolicy::Reject => {
                                 warn!(
                                     "Filtering potentially unsafe VRP \
-                                     ({}/{},max {},AS{})",
+                                     ({}/{}-{}, {})",
                                     addr.address(), addr.address_length(),
                                     addr.max_length(), origin.as_id
                                 );
@@ -798,7 +798,7 @@ impl AddressOriginSet {
                             FilterPolicy::Warn => {
                                 warn!(
                                     "Encountered potentially unsafe VRP \
-                                     ({}/{},max {},AS{})",
+                                     ({}/{}-{}, {})",
                                     addr.address(), addr.address_length(),
                                     addr.max_length(), origin.as_id
                                 );
