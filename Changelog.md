@@ -17,7 +17,12 @@ Bug Fixes
 * The config file option for the policy on dealing with objects on unknown
   types is now correctly spelled `unknown-objects` (with a dash rather
   than an underscore). The old spelling will be also be accepted in 0.8
-  releases. (Found and fixed by @johannesmoos, [#413], [#416].)
+  releases. (Found and fixed by [@johannesmoos], [#413], [#416].)
+* The config file option `rtr-tcp-keepalive` now accepts an integer value
+  as it should have from the beginning (and the `config` command even
+  created). For the time being, both integers and strings will be
+  accepted. String values will be rejected starting with 0.9.0.
+  ([#427], discovered by [@johannesmoos])
 
 New
 
