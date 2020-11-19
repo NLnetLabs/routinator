@@ -5,8 +5,6 @@
 
 Breaking Changes
 
-New
-
 Bug Fixes
 
 * VRPs filtered via local exceptions are dropped again. In 0.8.0, they
@@ -21,12 +19,18 @@ Bug Fixes
   than an underscore). The old spelling will be also be accepted in 0.8
   releases. (Found and fixed by @johannesmoos, [#413], [#416].)
 
+New
+
+* The log output of the HTTP `/log` endpoint now states the start date of
+  the validation run it represents. ([#426])
+
 Other Changes
 
 [#413]: https://github.com/NLnetLabs/routinator/pull/413
 [#415]: https://github.com/NLnetLabs/routinator/pull/415
 [#416]: https://github.com/NLnetLabs/routinator/pull/416
 [#424]: https://github.com/NLnetLabs/routinator/pull/424
+[#426]: https://github.com/NLnetLabs/routinator/pull/426
 [@johannesmoos]: https://github.com/johannesmoos
 [@morrowc]: https://github.com/morrowc
 [@aaronw112358]: https://github.com/aaronw112358

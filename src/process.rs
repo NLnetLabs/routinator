@@ -1,11 +1,12 @@
 //! Managing the process Routinator runs in.
 
-use std::{fs, io};
+use std::{fs, io, mem};
 use std::future::Future;
 use std::path::Path;
 use std::sync::mpsc;
 use std::sync::Mutex;
 use bytes::Bytes;
+use chrono::Utc;
 use log::{error, LevelFilter};
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
@@ -277,6 +278,7 @@ impl Process {
 #[derive(Debug)]
 pub struct LogOutput {
     queue: Mutex<mpsc::Receiver<String>>,
+    header: String,
     current: Bytes,
 }
 
@@ -285,14 +287,26 @@ impl LogOutput {
         let (tx, rx) = mpsc::channel();
         let res = LogOutput {
             queue: Mutex::new(rx),
-            current: Bytes::new(),
+            header: String::new(),
+            current: "Initial validation ongoing. Please wait.".into(),
         };
         (tx, res)
     }
 
+    pub fn start(&mut self) {
+        self.header = format!(
+            "Log from validation run started at {}\n\n",
+            Utc::now()
+        );
+    }
+
     pub fn flush(&mut self) {
         let queue = self.queue.lock().unwrap();
-        self.current = queue.try_iter().collect::<String>().into();
+        let mut current = mem::replace(&mut self.header, String::new());
+        for item in queue.try_iter() {
+            current.push_str(&item)
+        }
+        self.current = current.into();
     }
 
     pub fn get_output(&self) -> Bytes {

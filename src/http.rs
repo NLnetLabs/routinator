@@ -912,9 +912,9 @@ fn output_filters(
 }
 
 
-fn query_iter<'a>(
-    query: Option<&'a str>
-) -> impl Iterator<Item=(&'a str, Option<&'a str>)> + 'a {
+fn query_iter(
+    query: Option<&str>
+) -> impl Iterator<Item=(&str, Option<&str>)> + '_ {
     let query = query.unwrap_or("");
     query.split('&').map(|item| {
         let mut item = item.splitn(2, '=');

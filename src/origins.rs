@@ -527,7 +527,11 @@ impl OriginsHistory {
 
     /// Marks the beginning of an update cycle.
     pub fn mark_update_start(&self) {
-        self.0.write().unwrap().last_update_start = Utc::now();
+        let mut locked = self.0.write().unwrap();
+        locked.last_update_start = Utc::now();
+        if let Some(log) = locked.log.as_mut() {
+            log.start()
+        }
     }
 
     /// Marks the end of an update cycle.
