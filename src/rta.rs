@@ -31,7 +31,7 @@ impl<'a> ValidationReport<'a> {
         })
     }
 
-    pub fn process<'s>(&'s self, repo: &mut Repository) -> Result<(), Error> {
+    pub fn process(&self, repo: &mut Repository) -> Result<(), Error> {
         repo.process(self).map(|_| ())
     }
 
