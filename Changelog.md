@@ -1,6 +1,13 @@
 # Change Log
 
 
+## Unreleased 0.8.1-rc2
+
+Bug Fixes
+
+Other Changes
+
+
 ## 0.8.1-rc1
 
 Released 2020-11-20.
@@ -28,8 +35,6 @@ New
 
 * The log output of the HTTP `/log` endpoint now states the start date of
   the validation run it represents. ([#426])
-
-Other Changes
 
 [#413]: https://github.com/NLnetLabs/routinator/pull/413
 [#415]: https://github.com/NLnetLabs/routinator/pull/415
