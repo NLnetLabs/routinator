@@ -1,9 +1,9 @@
 # Change Log
 
 
-## Unreleased future version
+## 0.8.1-rc1
 
-Breaking Changes
+Released 2020-11-20.
 
 Bug Fixes
 
