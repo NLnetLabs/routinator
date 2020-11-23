@@ -14,7 +14,7 @@ or post a message on our [RPKI mailing list](https://lists.nlnetlabs.nl/mailman/
 You can lean more about Routinator and RPKI technology by reading our documentation on
 [Read the Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
 
-## Quick Start
+## Quick Start with Cargo
 
 Assuming you have a newly installed Debian or Ubuntu machine, you will need to
 install rsync, the C toolchain and Rust. You can then install Routinator and
@@ -45,6 +45,44 @@ sure to install the new TALs using
 ```
 routinator init --force
 ```
+
+## Quick Start with Pre-built Packages
+
+### Disclaimer
+> These packages are provided on a best effort basis as a convenience for our community until such time as equivalent official operating system repository provided packages become available.
+
+Assuming you have a machine running a recent Debian or Ubuntu distribution, you
+can install Routinator from our [software package
+repository](https://packages.nlnetlabs.nl). To use this repository, add the line
+below that corresponds to your operating system to  your `/etc/apt/sources.list`
+or `/etc/apt/sources.list.d/`
+
+```bash
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
+```
+Then run the following commands.
+
+```bash
+sudo apt update && apt-get install -y gnupg2
+wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
+sudo apt update
+```
+
+You can then install, enable and start Krill by running
+
+```bash
+sudo apt install routinator
+sudo routinator-init --accept-arin-rpa
+systemctl enable --now routinator
+
+```
+
+You can check the status of Routinator with `sudo systemctl status 
+routinator` and view the logs with `sudo journalctl --unit=routinator`.
 
 ## Quick Start with Docker
 
