@@ -80,11 +80,14 @@ used in Cargo.
 sudo apt install routinator
 sudo routinator-init
 # Follow instructions provided
-systemctl enable --now routinator
+sudo systemctl enable --now routinator
 ```
 
-You can check the status of Routinator with `sudo systemctl status 
-routinator` and view the logs with `sudo journalctl --unit=routinator`.
+By default, Routinator will start the RTR server on port 3323 and the HTTP
+server on port 8323. These, and other values can be changed in the
+configuration file located in `/etc/routinator/routinator.conf`. You can check
+the status of Routinator with `sudo systemctl status  routinator` and view the
+logs with `sudo journalctl --unit=routinator`.
 
 ## Quick Start with Docker
 
