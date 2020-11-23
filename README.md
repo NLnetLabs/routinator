@@ -46,7 +46,7 @@ sure to install the new TALs using
 routinator init --force
 ```
 
-## Quick Start with Pre-built Packages
+## Quick Start with Debian and Ubuntu Packages
 
 ### Disclaimer
 > These packages are provided on a best effort basis as a convenience for our community until such time as equivalent official operating system repository provided packages become available.
@@ -72,14 +72,18 @@ wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
 sudo apt update
 ```
 
-You can then install, enable and start Routinator by running
+You can then install, initialise, enable and start Routinator by running these
+commands. Note that `routinator-init` is slightly different than the command
+used in Cargo.
 
 ```bash
 sudo apt install routinator
-sudo routinator-init --accept-arin-rpa
+sudo routinator-init
+# Follow instructions provided
 systemctl enable --now routinator
-
 ```
+
+routinator-init
 
 You can check the status of Routinator with `sudo systemctl status 
 routinator` and view the logs with `sudo journalctl --unit=routinator`.
