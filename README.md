@@ -83,8 +83,6 @@ sudo routinator-init
 systemctl enable --now routinator
 ```
 
-routinator-init
-
 You can check the status of Routinator with `sudo systemctl status 
 routinator` and view the logs with `sudo journalctl --unit=routinator`.
 
