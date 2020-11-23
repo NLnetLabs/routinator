@@ -72,7 +72,7 @@ wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
 sudo apt update
 ```
 
-You can then install, enable and start Krill by running
+You can then install, enable and start Routinator by running
 
 ```bash
 sudo apt install routinator
