@@ -1,11 +1,23 @@
 # Change Log
 
 
-## Unreleased 0.8.1-rc2
+## Unreleased next version
+
+Breaking Changes
+
+New
 
 Bug Fixes
 
 Other Changes
+
+
+
+## 0.8.1 ‘Pure as New York Snow’ 
+
+Released 2020-11-30.
+
+There have been no changes since 0.8.1-rc1.
 
 
 ## 0.8.1-rc1

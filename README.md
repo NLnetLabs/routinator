@@ -14,7 +14,7 @@ or post a message on our [RPKI mailing list](https://lists.nlnetlabs.nl/mailman/
 You can lean more about Routinator and RPKI technology by reading our documentation on
 [Read the Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
 
-## Quick Start
+## Quick Start with Cargo
 
 Assuming you have a newly installed Debian or Ubuntu machine, you will need to
 install rsync, the C toolchain and Rust. You can then install Routinator and
@@ -45,6 +45,49 @@ sure to install the new TALs using
 ```
 routinator init --force
 ```
+
+## Quick Start with Debian and Ubuntu Packages
+
+### Disclaimer
+> These packages are provided on a best effort basis as a convenience for our community until such time as equivalent official operating system repository provided packages become available.
+
+Assuming you have a machine running a recent Debian or Ubuntu distribution, you
+can install Routinator from our [software package
+repository](https://packages.nlnetlabs.nl). To use this repository, add the line
+below that corresponds to your operating system to  your `/etc/apt/sources.list`
+or `/etc/apt/sources.list.d/`
+
+```bash
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
+deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
+```
+Then run the following commands.
+
+```bash
+sudo apt update && apt-get install -y gnupg2
+wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
+sudo apt update
+```
+
+You can then install, initialise, enable and start Routinator by running these
+commands. Note that `routinator-init` is slightly different than the command
+used with Cargo.
+
+```bash
+sudo apt install routinator
+sudo routinator-init
+# Follow instructions provided
+sudo systemctl enable --now routinator
+```
+
+By default, Routinator will start the RTR server on port 3323 and the HTTP
+server on port 8323. These, and other values can be changed in the
+configuration file located in `/etc/routinator/routinator.conf`. You can check
+the status of Routinator with `sudo systemctl status  routinator` and view the
+logs with `sudo journalctl --unit=routinator`.
 
 ## Quick Start with Docker
 
@@ -177,11 +220,11 @@ The easiest way to get Routinator is to leave it to cargo by saying
 cargo install --locked routinator
 ```
 
-If you want to try the master branch from the repository instead of a
+If you want to try the main branch from the repository instead of a
 release version, you can run
 
 ```bash
-cargo install --git https://github.com/NLnetLabs/routinator.git
+cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 ```
 
 If you want to update an installed version, you run the same command but
@@ -321,7 +364,7 @@ The configuration file is a TOML file. Its entries are named similarly to
 the command line options. Details about the available entries and there
 meaning can be found in the [manual page](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
 In addition, a complete sample configuration file showing all the default
-values can be found in the repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example).
+values can be found in the repository at [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/main/etc/routinator.conf.example).
 
 ## Local Exceptions
 
