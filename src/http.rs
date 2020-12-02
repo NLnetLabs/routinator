@@ -35,6 +35,7 @@ use crate::metrics::{Metrics, ServerMetrics};
 use crate::operation::{Error, ExitError};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
+use crate::utils::JsonBuilder;
 use crate::validity::RouteValidity;
 
 
@@ -138,6 +139,7 @@ async fn handle_request(
         }
         "/rpsl" => vrps(origins, req.uri().query(), OutputFormat::Rpsl),
         "/status" => status(origins),
+        "/api/v1/status" => api_status(origins),
         "/validity" => validity_query(origins, req.uri().query()),
         "/version" => version(),
         path if path.starts_with("/api/v1/validity/") => {
@@ -521,7 +523,7 @@ fn status_active(
     writeln!(res, "last-update-start-at:  {}", now - start).unwrap();
     writeln!(res, "last-update-start-ago: {}", start).unwrap();
 
-    // last-update-dona-at and -ago
+    // last-update-done-at and -ago
     if let Some(done) = done {
         writeln!(res, "last-update-done-at:   {}", now - done).unwrap();
         writeln!(res, "last-update-done-ago:  {}", done).unwrap();
@@ -699,6 +701,149 @@ fn status_active(
     .header("Content-Type", "text/plain")
     .body(res.into())
     .unwrap()
+}
+
+fn api_status(origins: &OriginsHistory) -> Response<Body> {
+    let metrics = match origins.metrics() {
+        Some(metrics) => metrics,
+        None => {
+            return Response::builder()
+                .status(503)
+                .header("Content-Type", "text/plain")
+                .body("Initial validation ongoing. Please wait.".into())
+                .unwrap()
+        }
+    };
+
+    let server_metrics = origins.server_metrics();
+    let (start, done, duration) = origins.update_times();
+    let now = Utc::now();
+
+
+    let res = JsonBuilder::build(|target| {
+        target.member_str("version",
+            concat!(crate_name!(), "/", crate_version!())
+        );
+        target.member_raw("serial", origins.serial());
+        target.member_str("now", now.format("%+"));
+        target.member_str("lastUpdateStart", start.format("%+"));
+        if let Some(done) = done {
+            target.member_str("lastUpdateDone", done.format("%+"));
+        }
+        else {
+            target.member_raw("lastUpdateDone", "none");
+        }
+        if let Some(duration) = duration {
+            target.member_raw("lastUpdateDuration",
+                format_args!("{:.3}", duration.as_secs_f32())
+            );
+        }
+        else {
+            target.member_raw("lastUpdateDuration", "null");
+        }
+
+        target.member_object("tals", |target| {
+            for tal in metrics.tals() {
+                target.member_object(tal.tal.name(), |target| {
+                    target.member_raw("validROAs", tal.roas);
+                    target.member_raw("vrpsTotal", tal.total_valid_vrps);
+                    target.member_raw("vrpsFinal", tal.final_vrps);
+                    target.member_raw("vrpsUnsafe", tal.unsafe_vrps);
+                    target.member_raw(
+                        "vrpsFilteredLocally", tal.locally_filtered_vrps
+                    );
+                    target.member_raw("vrpsDuplicate", tal.duplicate_vrps);
+
+
+                });
+            }
+        });
+
+        target.member_raw("vrpsAddedLocally", metrics.local_vrps());
+        target.member_raw("staleObjects", metrics.stale_count());
+
+        target.member_object("rsync", |target| {
+            for metrics in metrics.rsync() {
+                target.member_object(&metrics.module, |target| {
+                    target.member_raw("status", 
+                        match metrics.status {
+                            Ok(status) => status.code().unwrap_or(-1),
+                            Err(_) => -1
+                        }
+                    );
+                    match metrics.duration {
+                        Ok(duration) => {
+                            target.member_raw("duration",
+                                format_args!("{:.3}", duration.as_secs_f32())
+                            );
+                        }
+                        Err(_) => target.member_raw("duration", "none")
+                    }
+                })
+            }
+        });
+
+        target.member_object("rrdp", |target| {
+            for metrics in metrics.rrdp() {
+                target.member_object(&metrics.notify_uri, |target| {
+                    target.member_raw("status",
+                        metrics.notify_status.map(|code| {
+                            code.as_u16() as i16
+                        }).unwrap_or(-1),
+                    );
+                    match metrics.duration {
+                        Ok(duration) => {
+                            target.member_raw("duration",
+                                format_args!("{:.3}", duration.as_secs_f32())
+                            );
+                        }
+                        Err(_) => target.member_raw("duration", "none")
+                    }
+                })
+            }
+        });
+
+        target.member_object("rtr", |target| {
+            target.member_raw(
+                "totalConnections", server_metrics.rtr_conn_open()
+            );
+            target.member_raw(
+                "currentConnections",
+                server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close()
+            );
+            target.member_raw(
+                "bytesRead", server_metrics.rtr_bytes_read()
+            );
+            target.member_raw(
+                "bytesWritten", server_metrics.rtr_bytes_written()
+            );
+        });
+
+        target.member_object("http", |target| {
+            target.member_raw(
+                "totalConnections", server_metrics.http_conn_open()
+            );
+            target.member_raw(
+                "currentConnections",
+                server_metrics.http_conn_open()
+                - server_metrics.http_conn_close()
+            );
+            target.member_raw(
+                "requests", server_metrics.http_requests()
+            );
+            target.member_raw(
+                "bytesRead", server_metrics.http_bytes_read()
+            );
+            target.member_raw(
+                "bytesWritten", server_metrics.http_bytes_written()
+            );
+        });
+    });
+   
+    Response::builder()
+        .header("Content-Type", "application/json")
+        .body(res.into())
+        .unwrap()
 }
 
 fn log(origins: &OriginsHistory) -> Response<Body> {
