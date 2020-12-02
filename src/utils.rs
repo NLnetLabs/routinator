@@ -95,7 +95,7 @@ impl<'a> JsonBuilder<'a> {
             indent: self.indent + 1,
             empty: true
         });
-        self.target.push_str("\n");
+        self.target.push('\n');
         self.append_indent();
         self.target.push('}');
     }
@@ -110,7 +110,7 @@ impl<'a> JsonBuilder<'a> {
             indent: self.indent + 1,
             empty: true
         });
-        self.target.push_str("\n");
+        self.target.push('\n');
         self.append_indent();
         self.target.push(']');
     }
@@ -139,7 +139,7 @@ impl<'a> JsonBuilder<'a> {
             indent: self.indent + 1,
             empty: true
         });
-        self.target.push_str("\n");
+        self.target.push('\n');
         self.append_indent();
         self.target.push('}');
     }
@@ -152,7 +152,7 @@ impl<'a> JsonBuilder<'a> {
             indent: self.indent + 1,
             empty: true
         });
-        self.target.push_str("\n");
+        self.target.push('\n');
         self.append_indent();
         self.target.push(']');
     }
