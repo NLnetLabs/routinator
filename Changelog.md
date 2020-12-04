@@ -9,8 +9,11 @@ New
 
 Bug Fixes
 
+* Switch logging to the configured target for the `update` command. ([#433])
+
 Other Changes
 
+[#433]: https://github.com/NLnetLabs/routinator/pull/433
 
 
 ## 0.8.1 ‘Pure as New York Snow’ 
