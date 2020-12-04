@@ -572,7 +572,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         if !process.want(&uri)? {
             return Ok(true)
         }
-        if uri.ends_with(".cer") {
+
+        let res = if uri.ends_with(".cer") {
             self.process_cer(bytes, uri, issuer, crl, process, child_cas)
         }
         else if uri.ends_with(".roa") {
@@ -587,7 +588,12 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         }
         else {
             self.process_other(bytes, uri, issuer, crl, process)
-        }
+        };
+
+        // XXX Invalid objects should not lead to a CA being rejected for now
+        //     pending progress of draft-ietf-sidrops-6486bis
+        let _ = res?;
+        Ok(true)
     }
 
     /// Processes a certificate object.
@@ -742,7 +748,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 Ok(true)
             }
             Err(_) => {
-                warn!("{}: processing failed.", uri);
+                warn!("{}: validation failed.", uri);
                 Ok(false)
             }
         }
@@ -774,7 +780,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 Ok(true)
             }
             Err(_) => {
-                warn!("{}: processing failed.", uri);
+                warn!("{}: validation failed.", uri);
                 Ok(false)
             }
         }
