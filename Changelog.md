@@ -19,8 +19,11 @@ Bug Fixes
 
 Other Changes
 
+* Update minor dependencies in `Cargo.lock`. ([#439]) 
+
 [#433]: https://github.com/NLnetLabs/routinator/pull/433
 [#438]: https://github.com/NLnetLabs/routinator/pull/438
+[#439]: https://github.com/NLnetLabs/routinator/pull/439
 
 
 ## 0.8.1 ‘Pure as New York Snow’ 
