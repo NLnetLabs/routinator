@@ -1,5 +1,13 @@
 # Change Log
 
+
+## Unreleased next version
+
+Bug Fixes
+
+Other Changes
+
+
 ## 0.8.2-rc1
 
 Released 2020-12-04.
