@@ -1,6 +1,17 @@
 # Change Log
 
 
+## Unreleased next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Other Changes
+
+
 ## 0.8.2 ‘Once More, with Feeling’
 
 Released 2020-12-09.
