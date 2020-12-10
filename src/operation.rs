@@ -986,6 +986,7 @@ impl Update {
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut repo = Repository::new(process.config(), true)?;
+        process.switch_logging(false, false)?;
         let (_, metrics) = repo.process_origins()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)

@@ -12,6 +12,37 @@ Bug Fixes
 Other Changes
 
 
+## 0.8.2 ‘Once More, with Feeling’
+
+Released 2020-12-09.
+
+There have been no changes since 0.8.1-rc1.
+
+
+## 0.8.2-rc1
+
+Released 2020-12-04.
+
+Changes
+
+* As the rules proposed by [draft-ietf-sidrops-6486bis] turned out to be too
+  strict, validation has been relaxed again. A CA is now only rejected and
+  all its objects ignored if the manifest or CRL are invalid or if any of
+  the objects listed on the manifest are either missing or have a
+  different hash. ([#438])
+
+Bug Fixes
+
+* Switch logging to the configured target for the `update` command. ([#433])
+
+Other Changes
+
+* Update minor dependencies in `Cargo.lock`. ([#439]) 
+
+[#433]: https://github.com/NLnetLabs/routinator/pull/433
+[#438]: https://github.com/NLnetLabs/routinator/pull/438
+[#439]: https://github.com/NLnetLabs/routinator/pull/439
+
 
 ## 0.8.1 ‘Pure as New York Snow’ 
 
