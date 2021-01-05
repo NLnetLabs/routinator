@@ -7,6 +7,10 @@
 //!
 //! [`Operation`]: enum.Operation.html
 
+// Some functions here have unnecessarily wrapped return types for
+// consisitency.
+#![allow(clippy::unnecessary_wraps)]
+
 use std::{fs, io, thread};
 use std::io::Write;
 use std::path::{Path, PathBuf};
