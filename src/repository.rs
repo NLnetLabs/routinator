@@ -789,6 +789,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Processes an RPKI object of some other type.
     ///
     /// Returns whether processing of this CA should continue.
+    #[allow(clippy::unnecessary_wraps)]
     fn process_other(
         &self,
         _bytes: Bytes,

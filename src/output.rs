@@ -1,5 +1,9 @@
 //! Output of lists of VRPs.
 
+// Some functions here have unnecessarily wrapped return types for
+// consisitency.
+#![allow(clippy::unnecessary_wraps)]
+
 use std::io;
 use std::str::FromStr;
 use chrono::Utc;

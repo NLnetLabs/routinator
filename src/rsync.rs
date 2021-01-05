@@ -432,6 +432,7 @@ impl Command {
     }
 
     #[cfg(not(windows))]
+    #[allow(clippy::unnecessary_wraps)]
     fn format_destination(path: &Path) -> Result<String, Error> {
         let mut destination = format!("{}", path.display());
         if !destination.ends_with('/') {
