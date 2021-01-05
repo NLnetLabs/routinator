@@ -1,10 +1,10 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use rpki::uri;
-use rpki::cert::ResourceCert;
-use rpki::rta::{ResourceTaggedAttestation, Rta, Validation};
-use rpki::tal::{Tal, TalUri};
-use rpki::x509::ValidationError;
+use rpki::repository::cert::ResourceCert;
+use rpki::repository::rta::{ResourceTaggedAttestation, Rta, Validation};
+use rpki::repository::tal::{Tal, TalUri};
+use rpki::repository::x509::ValidationError;
 use crate::config::Config;
 use crate::operation::Error;
 use crate::repository::{ProcessCa, ProcessRun, Repository};

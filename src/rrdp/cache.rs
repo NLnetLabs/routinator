@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
-use rpki::tal::TalInfo;
+use rpki::repository::tal::TalInfo;
 use crate::config::Config;
 use crate::metrics::RrdpServerMetrics;
 use crate::operation::Error;

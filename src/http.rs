@@ -25,7 +25,7 @@ use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::Stream;
