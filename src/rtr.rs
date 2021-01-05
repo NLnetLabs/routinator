@@ -11,7 +11,7 @@ use futures::pin_mut;
 use futures::future::{pending, select_all};
 use tokio::stream::Stream;
 use log::error;
-use rpki_rtr::server::{NotifySender, Server};
+use rpki::rtr::server::{NotifySender, Server};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;

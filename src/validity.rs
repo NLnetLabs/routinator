@@ -1,7 +1,7 @@
 //! Checking for validity of route announcements.
 
 use std::{fmt, io};
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
