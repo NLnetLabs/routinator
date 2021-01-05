@@ -7,9 +7,14 @@ Breaking Changes
 
 New
 
+* Status information is now available in JSON format at `/api/v1/status`.
+  ([#437])
+
 Bug Fixes
 
 Other Changes
+
+[#437]: https://github.com/NLnetLabs/routinator/pull/437
 
 
 ## 0.8.2 ‘Once More, with Feeling’
