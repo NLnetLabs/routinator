@@ -93,7 +93,7 @@ impl Process {
                     self.syslog_logger(fac)?
                 }
                 else {
-                    self.stderr_logger(false)?
+                    self.stderr_logger(false)
                 }
             }
             #[cfg(unix)]
@@ -101,7 +101,7 @@ impl Process {
                 self.syslog_logger(fac)?
             }
             LogTarget::Stderr => {
-                self.stderr_logger(daemon)?
+                self.stderr_logger(daemon)
             }
             LogTarget::File(ref path) => {
                 self.file_logger(path)?
@@ -160,8 +160,8 @@ impl Process {
     /// Creates a stderr logger.
     ///
     /// If we are in daemon mode, we add a timestamp to the output.
-    fn stderr_logger(&self, daemon: bool) -> Result<fern::Dispatch, Error> {
-        Ok(self.fern_logger(daemon).chain(io::stderr()))
+    fn stderr_logger(&self, daemon: bool) -> fern::Dispatch {
+        self.fern_logger(daemon).chain(io::stderr())
     }
 
     /// Creates a file logger using the file provided by `path`.

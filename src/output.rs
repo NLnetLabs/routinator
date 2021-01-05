@@ -1,11 +1,15 @@
 //! Output of lists of VRPs.
 
+// Some functions here have unnecessarily wrapped return types for
+// consisitency.
+#![allow(clippy::unnecessary_wraps)]
+
 use std::io;
 use std::str::FromStr;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};

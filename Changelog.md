@@ -14,7 +14,13 @@ Bug Fixes
 
 Other Changes
 
+* Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
+  to [rpki-rtr]. ([#443])
+
 [#437]: https://github.com/NLnetLabs/routinator/pull/437
+[#443]: https://github.com/NLnetLabs/routinator/pull/443
+[rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
+[rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 
 
 ## 0.8.2 ‘Once More, with Feeling’

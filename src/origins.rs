@@ -14,14 +14,16 @@ use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
 use log::{info, warn};
 use rpki::uri;
-use rpki::cert::{ResourceCert, TbsCert};
-use rpki::resources::{AsId, IpBlocks, IpBlocksBuilder};
-use rpki::roa::{FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation};
-use rpki::tal::{Tal, TalInfo, TalUri};
-use rpki::x509::{Time, Validity};
-use rpki_rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
-use rpki_rtr::server::VrpSource;
-use rpki_rtr::state::{Serial, State};
+use rpki::repository::cert::{ResourceCert, TbsCert};
+use rpki::repository::resources::{AsId, IpBlocks, IpBlocksBuilder};
+use rpki::repository::roa::{
+    FriendlyRoaIpAddress, RoaStatus, RouteOriginAttestation
+};
+use rpki::repository::tal::{Tal, TalInfo, TalUri};
+use rpki::repository::x509::{Time, Validity};
+use rpki::rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
+use rpki::rtr::server::VrpSource;
+use rpki::rtr::state::{Serial, State};
 use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};

@@ -16,14 +16,14 @@ use crossbeam_utils::thread;
 use crossbeam_queue::SegQueue;
 use log::{debug, error, info, warn};
 use rpki::uri;
-use rpki::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
-use rpki::crl::Crl;
-use rpki::crypto::KeyIdentifier;
-use rpki::manifest::{Manifest, ManifestContent, ManifestHash};
-use rpki::roa::{Roa, RouteOriginAttestation};
-use rpki::sigobj::SignedObject;
-use rpki::tal::{Tal, TalInfo, TalUri};
-use rpki::x509::{Time, ValidationError};
+use rpki::repository::cert::{Cert, KeyUsage, ResourceCert, TbsCert};
+use rpki::repository::crl::Crl;
+use rpki::repository::crypto::KeyIdentifier;
+use rpki::repository::manifest::{Manifest, ManifestContent, ManifestHash};
+use rpki::repository::roa::{Roa, RouteOriginAttestation};
+use rpki::repository::sigobj::SignedObject;
+use rpki::repository::tal::{Tal, TalInfo, TalUri};
+use rpki::repository::x509::{Time, ValidationError};
 use crate::{rrdp, rsync};
 use crate::config::{Config, FilterPolicy};
 use crate::metrics::Metrics;
@@ -789,6 +789,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Processes an RPKI object of some other type.
     ///
     /// Returns whether processing of this CA should continue.
+    #[allow(clippy::unnecessary_wraps)]
     fn process_other(
         &self,
         _bytes: Bytes,

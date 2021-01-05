@@ -7,6 +7,10 @@
 //!
 //! [`Operation`]: enum.Operation.html
 
+// Some functions here have unnecessarily wrapped return types for
+// consisitency.
+#![allow(clippy::unnecessary_wraps)]
+
 use std::{fs, io, thread};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -18,9 +22,9 @@ use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info};
-use rpki::resources::AsId;
-#[cfg(feature = "rta")] use rpki::rta::Rta;
-use rpki_rtr::server::NotifySender;
+use rpki::repository::resources::AsId;
+#[cfg(feature = "rta")] use rpki::repository::rta::Rta;
+use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;

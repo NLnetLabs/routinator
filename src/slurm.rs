@@ -6,7 +6,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
 use serde::Deserialize;
 use crate::config::Config;
 use crate::operation::Error;
