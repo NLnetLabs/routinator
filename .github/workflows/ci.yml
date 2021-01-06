@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [1.43.0, stable, beta, nightly]
+        rust: [1.44.0, stable, beta, nightly]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v1
