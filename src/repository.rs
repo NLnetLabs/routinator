@@ -330,7 +330,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let res = thread::scope(|scope| {
             for _ in 0..self.repository.validation_threads {
                 scope.spawn(|_| {
-                    while let Ok(task) = tasks.pop() {
+                    while let Some(task) = tasks.pop() {
                         let err = match task {
                             ValidationTask::Tal { tal, index } => {
                                 self.process_tal(

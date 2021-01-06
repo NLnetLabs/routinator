@@ -40,7 +40,6 @@ use crate::slurm::LocalExceptions;
 use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
-#[cfg(unix)] use tokio::stream::StreamExt;
 #[cfg(not(unix))] use futures::future::pending;
 
 
@@ -402,7 +401,7 @@ impl Server {
         process.drop_privileges()?;
 
         let mut repo = Repository::new(process.config(), true)?;
-        let mut runtime = process.runtime()?;
+        let runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
         let (sig_tx, sig_rx) = mpsc::channel();
@@ -1188,7 +1187,7 @@ impl SignalListener {
     ///
     /// Returns what to do.
     pub async fn next(&mut self) -> UserSignal {
-        self.usr1.next().await;
+        self.usr1.recv().await;
         UserSignal::ReloadTals
     }
 }

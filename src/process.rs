@@ -464,7 +464,7 @@ mod unix {
         }
 
         fn perform_fork(&self) -> Result<(), Error> {
-            match fork() {
+            match unsafe { fork() } {
                 Ok(res) => {
                     if res.is_parent() {
                         std::process::exit(0)

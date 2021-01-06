@@ -770,7 +770,7 @@ impl AddressOriginSet {
 
         let filter = report.filter.into_inner().unwrap().finalize();
 
-        while let Ok(item) = report.origins.pop() {
+        while let Some(item) = report.origins.pop() {
             if let Some(time) = item.refresh {
                 match refresh {
                     Some(current) if current > time => refresh = Some(time),

@@ -26,9 +26,8 @@ use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use rpki::repository::resources::AsId;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::stream::Stream;
 use crate::output;
 use crate::config::Config;
 use crate::metrics::{Metrics, ServerMetrics};
@@ -942,13 +941,19 @@ impl Accept for HttpAccept {
     ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
         let sock = &mut self.sock;
         pin_mut!(sock);
-        sock.poll_next(cx).map(|sock| sock.map(|sock| sock.map(|sock| {
-            self.metrics.inc_http_conn_open();
-            HttpStream {
-                sock,
-                metrics: self.metrics.clone()
+        match sock.poll_accept(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok((sock, _addr))) => {
+                self.metrics.inc_http_conn_open();
+                Poll::Ready(Some(Ok(HttpStream {
+                    sock,
+                    metrics: self.metrics.clone()
+                })))
             }
-        })))
+            Poll::Ready(Err(err)) => {
+                Poll::Ready(Some(Err(err)))
+            }
+        }
     }
 }
 
@@ -960,13 +965,16 @@ struct HttpStream {
 
 impl AsyncRead for HttpStream {
     fn poll_read(
-        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]
-    ) -> Poll<Result<usize, io::Error>> {
+        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut ReadBuf
+    ) -> Poll<Result<(), io::Error>> {
+        let len = buf.filled().len();
         let sock = &mut self.sock;
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
-        if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_http_bytes_read(n as u64)
+        if let Poll::Ready(Ok(())) = res {
+            self.metrics.inc_http_bytes_read(
+                (buf.filled().len().saturating_sub(len)) as u64
+            )    
         }
         res
     }
