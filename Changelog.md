@@ -5,6 +5,8 @@
 
 Breaking Changes
 
+* The minimal supported Rust version is now 1.43.0. [(#444)]
+
 New
 
 Bug Fixes
