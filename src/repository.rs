@@ -330,7 +330,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let res = thread::scope(|scope| {
             for _ in 0..self.repository.validation_threads {
                 scope.spawn(|_| {
-                    while let Ok(task) = tasks.pop() {
+                    while let Some(task) = tasks.pop() {
                         let err = match task {
                             ValidationTask::Tal { tal, index } => {
                                 self.process_tal(
@@ -1187,7 +1187,7 @@ pub trait ProcessCa: Sized + Send + Sync {
 
 //------------ Helper Functions ----------------------------------------------
 
-#[allow(clippy::manual_strip)] // str::strip_prefix not in 1.42
+#[allow(clippy::manual_strip)] // str::strip_prefix not in 1.44
 fn uri_relative_to<'a>(
     uri: &'a uri::Rsync,
     other: &uri::Rsync

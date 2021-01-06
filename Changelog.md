@@ -5,6 +5,8 @@
 
 Breaking Changes
 
+* The minimal supported Rust version is now 1.44.0. [(#444)]
+
 New
 
 * Status information is now available in JSON format at `/api/v1/status`.
@@ -16,9 +18,12 @@ Other Changes
 
 * Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
   to [rpki-rtr]. ([#443])
+* Upgrade Tokio-related dependencies to new version based on Tokio 1.0.
+  ([#444])
 
 [#437]: https://github.com/NLnetLabs/routinator/pull/437
 [#443]: https://github.com/NLnetLabs/routinator/pull/443
+[#444]: https://github.com/NLnetLabs/routinator/pull/444
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 
