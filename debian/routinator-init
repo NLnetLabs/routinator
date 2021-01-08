@@ -1,2 +1,8 @@
 #!/bin/sh
+
+if [ ! -d /var/lib/routinator ]; then
+        mkdir /var/lib/routinator
+        chown routinator:routinator /var/lib/routinator
+fi
+
 sudo -u routinator routinator --config /etc/routinator/routinator.conf init "$@"
