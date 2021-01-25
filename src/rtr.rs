@@ -30,13 +30,18 @@ pub fn rtr_listener(
     for addr in &config.rtr_listen {
         // Binding needs to have happened before dropping privileges
         // during detach. So we do this here synchronously.
-        match StdListener::bind(addr) {
-            Ok(listener) => listeners.push(listener),
+        let listener = match StdListener::bind(addr) {
+            Ok(listener) => listener,
             Err(err) => {
                 error!("Fatal error listening on {}: {}", addr, err);
                 return Err(ExitError::Generic);
             }
         };
+        if let Err(err) = listener.set_nonblocking(true) {
+            error!("Fatal: error switching {} to nonblocking: {}", addr, err);
+            return Err(ExitError::Generic);
+        }
+        listeners.push(listener);
     }
     Ok((sender.clone(), _rtr_listener(
         history, sender, listeners, config.rtr_tcp_keepalive,

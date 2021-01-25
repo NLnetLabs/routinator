@@ -55,13 +55,18 @@ pub fn http_listener(
     for addr in &config.http_listen {
         // Binding needs to have happened before dropping privileges
         // during detach. So we do this here synchronously.
-        match StdListener::bind(addr) {
-            Ok(listener) => listeners.push(listener),
+        let listener = match StdListener::bind(addr) {
+            Ok(listener) => listener,
             Err(err) => {
                 error!("Fatal: error listening on {}: {}", addr, err);
                 return Err(ExitError::Generic);
             }
         };
+        if let Err(err) = listener.set_nonblocking(true) {
+            error!("Fatal: error switching {} to nonblocking: {}", addr, err);
+            return Err(ExitError::Generic);
+        }
+        listeners.push(listener);
     }
     Ok(_http_listener(origins.clone(), listeners))
 }
