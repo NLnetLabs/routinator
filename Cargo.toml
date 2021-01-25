@@ -48,13 +48,14 @@ syslog          = "5.0.0"
 rustc_version   = "0.2.3"
 
 [features]
-default = ["rustls-tls", "socks"]
+default = ["rustls-tls", "socks", "ui"]
 extra-debug = ["rpki/extra-debug"]
 socks = [ "reqwest/socks" ]
 rta = []
 native-tls = [ "reqwest/native-tls", "tls" ]
 rustls-tls = [ "reqwest/rustls-tls", "tls" ]
 tls = []
+ui = []
 
 [profile.release]
 panic = "abort"
