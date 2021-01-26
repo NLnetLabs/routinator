@@ -1,6 +1,17 @@
 # Change Log
 
 
+## Unreleased future version
+
+New
+
+* Status information is now available in JSON format at `/api/v1/status`.
+* Includes [routinator-ui], a UI for Route Origin Validation and
+  Routinator status.
+
+[routinator-ui]: https://github.com/NLnetLabs/routinator-ui/
+
+
 ## 0.8.2 ‘Once More, with Feeling’
 
 Released 2020-12-09.
