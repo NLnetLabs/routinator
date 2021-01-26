@@ -1037,7 +1037,7 @@ mod ui {
                     }
                     $(
                         $(
-                            concat!("/", $path, ".", stringify!($ext)) => {
+                            concat!("/ui/", $path, ".", stringify!($ext)) => {
                                 serve(
                                     include_bytes!(
                                         concat!(
