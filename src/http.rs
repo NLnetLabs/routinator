@@ -1227,6 +1227,7 @@ mod ui {
         ("img/afrinic" => svg),
         ("img/apnic" => svg),
         ("img/arin" => svg),
+        ("img/blue" => svg),
         ("img/lacnic" => svg),
         ("img/ripencc" => svg),
         ("img/routinator_logo_white" => svg),
