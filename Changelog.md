@@ -5,10 +5,12 @@
 
 New
 
-* Status information is now available in JSON format at `/api/v1/status`.
-* Includes [routinator-ui], a UI for Route Origin Validation and
-  Routinator status.
+* Status information is now available in JSON format at `/api/v1/status`
+  ([#449]).
+* Includes version 0.1.0 of [routinator-ui], a UI for Route Origin Validation
+  and Routinator status ([#449]).
 
+[#449]: https://github.com/NLnetLabs/routinator/pull/449
 [routinator-ui]: https://github.com/NLnetLabs/routinator-ui/
 
 
