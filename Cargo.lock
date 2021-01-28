@@ -26,9 +26,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.0.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0688b520bcc7498f6ca8fa006e8031d353e3fd4f51bd4a50fb03cc4230b28bd2"
+checksum = "d4d7d63395147b81a9e570bcc6243aaf71c017bd666d4909cfef0085bdda8d73"
 
 [[package]]
 name = "arrayref"
