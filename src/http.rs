@@ -1177,7 +1177,7 @@ mod ui {
                             include_bytes!(
                                 "../contrib/routinator-ui/index.html"
                             ),
-                            self::ctypes::html
+                            self::content_types::html
                         )
                     }
                     $(
@@ -1191,7 +1191,7 @@ mod ui {
                                             stringify!($ext)
                                         )
                                     ),
-                                    self::ctypes::$ext
+                                    self::content_types::$ext
                                 )
                             }
                         )*
@@ -1243,7 +1243,7 @@ mod ui {
     }
 
     #[allow(non_upper_case_globals)]
-    mod ctypes {
+    mod content_types {
         pub const css: &[u8] = b"text/css";
         pub const html: &[u8] = b"text/html";
         pub const ico: &[u8] = b"image/x-icon";
