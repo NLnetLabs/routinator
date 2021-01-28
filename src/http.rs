@@ -35,6 +35,7 @@ use crate::metrics::{Metrics, ServerMetrics};
 use crate::operation::{Error, ExitError};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
+use crate::utils::JsonBuilder;
 use crate::validity::RouteValidity;
 
 
@@ -138,11 +139,15 @@ async fn handle_request(
         }
         "/rpsl" => vrps(origins, req.uri().query(), OutputFormat::Rpsl),
         "/status" => status(origins),
+        "/api/v1/status" => api_status(origins),
         "/validity" => validity_query(origins, req.uri().query()),
         "/version" => version(),
         path if path.starts_with("/api/v1/validity/") => {
             validity_path(origins, &path[17..])
         }
+        #[cfg(feature = "ui")]
+        _ => self::ui::process_request(req),
+        #[cfg(not(feature = "ui"))]
         _ => not_found()
     })
 }
@@ -701,6 +706,149 @@ fn status_active(
     .unwrap()
 }
 
+fn api_status(origins: &OriginsHistory) -> Response<Body> {
+    let metrics = match origins.metrics() {
+        Some(metrics) => metrics,
+        None => {
+            return Response::builder()
+                .status(503)
+                .header("Content-Type", "text/plain")
+                .body("Initial validation ongoing. Please wait.".into())
+                .unwrap()
+        }
+    };
+
+    let server_metrics = origins.server_metrics();
+    let (start, done, duration) = origins.update_times();
+    let now = Utc::now();
+
+
+    let res = JsonBuilder::build(|target| {
+        target.member_str("version",
+            concat!(crate_name!(), "/", crate_version!())
+        );
+        target.member_raw("serial", origins.serial());
+        target.member_str("now", now.format("%+"));
+        target.member_str("lastUpdateStart", start.format("%+"));
+        if let Some(done) = done {
+            target.member_str("lastUpdateDone", done.format("%+"));
+        }
+        else {
+            target.member_raw("lastUpdateDone", "none");
+        }
+        if let Some(duration) = duration {
+            target.member_raw("lastUpdateDuration",
+                format_args!("{:.3}", duration.as_secs_f32())
+            );
+        }
+        else {
+            target.member_raw("lastUpdateDuration", "null");
+        }
+
+        target.member_object("tals", |target| {
+            for tal in metrics.tals() {
+                target.member_object(tal.tal.name(), |target| {
+                    target.member_raw("validROAs", tal.roas);
+                    target.member_raw("vrpsTotal", tal.total_valid_vrps);
+                    target.member_raw("vrpsFinal", tal.final_vrps);
+                    target.member_raw("vrpsUnsafe", tal.unsafe_vrps);
+                    target.member_raw(
+                        "vrpsFilteredLocally", tal.locally_filtered_vrps
+                    );
+                    target.member_raw("vrpsDuplicate", tal.duplicate_vrps);
+
+
+                });
+            }
+        });
+
+        target.member_raw("vrpsAddedLocally", metrics.local_vrps());
+        target.member_raw("staleObjects", metrics.stale_count());
+
+        target.member_object("rsync", |target| {
+            for metrics in metrics.rsync() {
+                target.member_object(&metrics.module, |target| {
+                    target.member_raw("status", 
+                        match metrics.status {
+                            Ok(status) => status.code().unwrap_or(-1),
+                            Err(_) => -1
+                        }
+                    );
+                    match metrics.duration {
+                        Ok(duration) => {
+                            target.member_raw("duration",
+                                format_args!("{:.3}", duration.as_secs_f32())
+                            );
+                        }
+                        Err(_) => target.member_raw("duration", "none")
+                    }
+                })
+            }
+        });
+
+        target.member_object("rrdp", |target| {
+            for metrics in metrics.rrdp() {
+                target.member_object(&metrics.notify_uri, |target| {
+                    target.member_raw("status",
+                        metrics.notify_status.map(|code| {
+                            code.as_u16() as i16
+                        }).unwrap_or(-1),
+                    );
+                    match metrics.duration {
+                        Ok(duration) => {
+                            target.member_raw("duration",
+                                format_args!("{:.3}", duration.as_secs_f32())
+                            );
+                        }
+                        Err(_) => target.member_raw("duration", "none")
+                    }
+                })
+            }
+        });
+
+        target.member_object("rtr", |target| {
+            target.member_raw(
+                "totalConnections", server_metrics.rtr_conn_open()
+            );
+            target.member_raw(
+                "currentConnections",
+                server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close()
+            );
+            target.member_raw(
+                "bytesRead", server_metrics.rtr_bytes_read()
+            );
+            target.member_raw(
+                "bytesWritten", server_metrics.rtr_bytes_written()
+            );
+        });
+
+        target.member_object("http", |target| {
+            target.member_raw(
+                "totalConnections", server_metrics.http_conn_open()
+            );
+            target.member_raw(
+                "currentConnections",
+                server_metrics.http_conn_open()
+                - server_metrics.http_conn_close()
+            );
+            target.member_raw(
+                "requests", server_metrics.http_requests()
+            );
+            target.member_raw(
+                "bytesRead", server_metrics.http_bytes_read()
+            );
+            target.member_raw(
+                "bytesWritten", server_metrics.http_bytes_written()
+            );
+        });
+    });
+   
+    Response::builder()
+        .header("Content-Type", "application/json")
+        .body(res.into())
+        .unwrap()
+}
+
 fn log(origins: &OriginsHistory) -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain;charset=UTF-8")
@@ -1008,4 +1156,102 @@ impl Drop for HttpStream {
     }
 }
 
+
+//============ Routinator UI =================================================
+
+#[cfg(feature = "ui")]
+mod ui {
+    use hyper::{Body, Request, Response};
+
+    macro_rules! assets {
+        (
+            $(
+                ( $path:expr => $( $ext:ident ),*  ),
+            )*
+        )
+        => {
+            pub fn process_request(req: Request<Body>) -> Response<Body> {
+                match req.uri().path() {
+                    "/" => {
+                        serve(
+                            include_bytes!(
+                                "../contrib/routinator-ui/index.html"
+                            ),
+                            self::content_types::html
+                        )
+                    }
+                    $(
+                        $(
+                            concat!("/ui/", $path, ".", stringify!($ext)) => {
+                                serve(
+                                    include_bytes!(
+                                        concat!(
+                                            "../contrib/routinator-ui/",
+                                            $path, ".",
+                                            stringify!($ext)
+                                        )
+                                    ),
+                                    self::content_types::$ext
+                                )
+                            }
+                        )*
+                    )*
+                    _ => super::not_found()
+                }
+            }
+        }
+    }
+
+    assets!(
+        ("favicon" => ico),
+        ("css/app" => css),
+        ("fonts/element-icons" => ttf, woff),
+        ("fonts/lato-latin-100" => woff, woff2),
+        ("fonts/lato-latin-300" => woff, woff2),
+        ("fonts/lato-latin-400" => woff, woff2),
+        ("fonts/lato-latin-700" => woff, woff2),
+        ("fonts/lato-latin-900" => woff, woff2),
+        ("fonts/lato-latin-100italic" => woff, woff2),
+        ("fonts/lato-latin-300italic" => woff, woff2),
+        ("fonts/lato-latin-400italic" => woff, woff2),
+        ("fonts/lato-latin-700italic" => woff, woff2),
+        ("fonts/lato-latin-900italic" => woff, woff2),
+        ("fonts/source-code-pro-latin-200" => woff, woff2),
+        ("fonts/source-code-pro-latin-200" => woff, woff2),
+        ("fonts/source-code-pro-latin-300" => woff, woff2),
+        ("fonts/source-code-pro-latin-400" => woff, woff2),
+        ("fonts/source-code-pro-latin-500" => woff, woff2),
+        ("fonts/source-code-pro-latin-600" => woff, woff2),
+        ("fonts/source-code-pro-latin-700" => woff, woff2),
+        ("fonts/source-code-pro-latin-900" => woff, woff2),
+        ("img/afrinic" => svg),
+        ("img/apnic" => svg),
+        ("img/arin" => svg),
+        ("img/blue" => svg),
+        ("img/lacnic" => svg),
+        ("img/ripencc" => svg),
+        ("img/routinator_logo_white" => svg),
+        ("img/welcome" => svg),
+        ("js/app" => js),
+    );
+
+    fn serve(data: &'static [u8], ctype: &'static [u8]) -> Response<Body> {
+        Response::builder()
+        .header("Content-Type", ctype)
+        .body(data.into())
+        .unwrap()
+    }
+
+    #[allow(non_upper_case_globals)]
+    mod content_types {
+        pub const css: &[u8] = b"text/css";
+        pub const html: &[u8] = b"text/html";
+        pub const ico: &[u8] = b"image/x-icon";
+        pub const js: &[u8] = b"application/javascript";
+        pub const svg: &[u8] = b"image/svg+xml";
+        pub const ttf: &[u8] = b"font/ttf";
+        pub const woff: &[u8] = b"font/woff";
+        pub const woff2: &[u8] = b"font/woff2";
+    }
+}
 
