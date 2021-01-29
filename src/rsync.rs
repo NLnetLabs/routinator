@@ -1,15 +1,17 @@
 /// Local repository copy synchronized with rsync.
 
-use std::{fs, io, process};
+use std::{fmt, fs, io, ops, process};
+use std::borrow::{Borrow, Cow, ToOwned};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
 use crate::config::Config;
-use crate::metrics::RsyncModuleMetrics;
+use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::operation::Error;
 use crate::utils::UriExt;
 
@@ -84,9 +86,9 @@ pub struct Run<'a> {
     /// A reference to the underlying cache.
     cache: &'a Cache,
 
-    updated: RwLock<HashSet<uri::RsyncModule>>,
+    updated: RwLock<HashSet<OwnedModule>>,
 
-    running: RwLock<HashMap<uri::RsyncModule, Arc<Mutex<()>>>>,
+    running: RwLock<HashMap<OwnedModule, Arc<Mutex<()>>>>,
 
     metrics: Mutex<Vec<RsyncModuleMetrics>>,
 }
@@ -103,7 +105,7 @@ impl<'a> Run<'a> {
     }
 
     pub fn is_current(&self, uri: &uri::Rsync) -> bool {
-        self.updated.read().unwrap().contains(uri.module())
+        self.updated.read().unwrap().contains(Module::from_uri(uri).as_ref())
     }
 
     pub fn load_module(&self, uri: &uri::Rsync) {
@@ -111,10 +113,10 @@ impl<'a> Run<'a> {
             Some(command) => command,
             None => return,
         };
-        let module = uri.module();
+        let module = Module::from_uri(uri);
 
         // If it is already up-to-date, return.
-        if self.updated.read().unwrap().contains(module) {
+        if self.updated.read().unwrap().contains(module.as_ref()) {
             return
         }
 
@@ -122,19 +124,19 @@ impl<'a> Run<'a> {
         // yet.
         let mutex = {
             self.running.write().unwrap()
-            .entry(module.clone()).or_default()
+            .entry(module.clone().into_owned()).or_default()
             .clone()
         };
         
         // Acquire the mutex. Once we have it, see if the module is up-to-date
         // which happens if someone else had it first.
         let _lock = mutex.lock().unwrap();
-        if self.updated.read().unwrap().contains(module) {
+        if self.updated.read().unwrap().contains(module.as_ref()) {
             return
         }
 
         // Check if the module name is dubious. If so, skip updating.
-        if self.cache.filter_dubious && module.has_dubious_authority() {
+        if self.cache.filter_dubious && uri.has_dubious_authority() {
             warn!(
                 "{}: Dubious host name. Skipping update.",
                 module
@@ -143,18 +145,19 @@ impl<'a> Run<'a> {
         else {
             // Run the actual update.
             let metrics = command.update(
-                module, &self.cache.cache_dir.module_path(module)
+                module.as_ref(),
+                &self.cache.cache_dir.module_path(module.as_ref())
             );
 
             // Insert into updated map and metrics.
             self.metrics.lock().unwrap().push(metrics);
         }
 
-        // Insert into updated map no matter what.
-        self.updated.write().unwrap().insert(module.clone());
-
         // Remove from running.
-        self.running.write().unwrap().remove(module);
+        self.running.write().unwrap().remove(module.as_ref());
+
+        // Insert into updated map no matter what.
+        self.updated.write().unwrap().insert(module.into_owned());
     }
 
     pub fn load_file(
@@ -222,7 +225,7 @@ impl<'a> Run<'a> {
     }
 
     #[allow(clippy::mutable_key_type)] // XXX False positive, I think
-    fn cleanup_host(entry: fs::DirEntry, modules: &HashSet<uri::RsyncModule>) {
+    fn cleanup_host(entry: fs::DirEntry, modules: &HashSet<OwnedModule>) {
         if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
             return
         }
@@ -268,11 +271,11 @@ impl<'a> Run<'a> {
             }
             let deleted = match entry_to_uri_component(&entry) {
                 Some(module) => {
-                    Self::cleanup_module(
-                        uri::RsyncModule::new(host.clone(), module),
-                        entry.path(),
-                        modules,
-                    )
+                    let module = match OwnedModule::new(&host, &module) {
+                        Ok(module) => module,
+                        Err(_) => continue,
+                    };
+                    Self::cleanup_module(&module, entry.path(), modules)
                 }
                 None => {
                     info!(
@@ -294,11 +297,11 @@ impl<'a> Run<'a> {
     /// Return if module has been removed.
     #[allow(clippy::mutable_key_type)] // XXX False positive, I think
     fn cleanup_module(
-        module: uri::RsyncModule,
+        module: &Module,
         path: PathBuf,
-        modules: &HashSet<uri::RsyncModule>
+        modules: &HashSet<OwnedModule>
     ) -> bool {
-        if !modules.contains(&module) {
+        if !modules.contains(module) {
             if let Err(err) = fs::remove_dir_all(&path) {
                 error!(
                     "Failed to delete rsync module directory {}: {}",
@@ -315,6 +318,10 @@ impl<'a> Run<'a> {
 
     pub fn into_metrics(self) -> Vec<RsyncModuleMetrics> {
         self.metrics.into_inner().unwrap()
+    }
+
+    pub fn done(self, metrics: &mut Metrics) {
+        metrics.set_rsync(self.into_metrics())
     }
 }
 
@@ -376,7 +383,7 @@ impl Command {
 
     pub fn update(
         &self,
-        source: &uri::RsyncModule,
+        source: &Module,
         destination: &Path
     ) -> RsyncModuleMetrics {
         let start = SystemTime::now();
@@ -390,7 +397,7 @@ impl Command {
             }
         };
         RsyncModuleMetrics {
-            module: source.clone(),
+            module: source.to_uri(),
             status,
             duration: SystemTime::now().duration_since(start),
         }
@@ -398,7 +405,7 @@ impl Command {
 
     fn command(
         &self,
-        source: &uri::RsyncModule,
+        source: &Module,
         destination: &Path
     ) -> Result<process::Command, io::Error> {
         info!("rsyncing from {}.", source);
@@ -424,10 +431,7 @@ impl Command {
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
-        debug!(
-            "rsync://{}/{}: Running command {:?}",
-            source.authority(), source.module(), cmd
-        );
+        debug!("{}: Running command {:?}", source, cmd);
         Ok(cmd)
     }
 
@@ -498,33 +502,23 @@ impl Command {
     }
 
     fn log_output(
-        source: &uri::RsyncModule,
+        source: &Module,
         output: process::Output
     ) -> process::ExitStatus {
         if !output.status.success() {
-            warn!(
-                "rsync://{}/{}: failed with status {}",
-                source.authority(), source.module(), output.status
-            );
+            warn!("{}: failed with status {}", source, output.status);
         }
         else {
-            info!(
-                "rsync://{}/{}: successfully completed.",
-                source.authority(), source.module(),
-            );
+            info!("{}: successfully completed.", source);
         }
         if !output.stderr.is_empty() {
             String::from_utf8_lossy(&output.stderr).lines().for_each(|l| {
-                warn!(
-                    "rsync://{}/{}: {}", source.authority(), source.module(), l
-                );
+                warn!("{}: {}", source, l);
             })
         }
         if !output.stdout.is_empty() {
             String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
-                info!(
-                    "rsync://{}/{}: {}", source.authority(), source.module(), l
-                )
+                info!("{}: {}", source, l)
             })
         }
         output.status
@@ -544,28 +538,120 @@ impl CacheDir {
         CacheDir { base }
     }
 
-    fn module_path(&self, module: &uri::RsyncModule) -> PathBuf {
+    fn module_path(&self, module: &Module) -> PathBuf {
         let mut res = self.base.clone();
-        res.push(module.authority());
-        res.push(module.module());
+        res.push(&module.0[8..]);
         res
     }
 
     fn uri_path(&self, uri: &uri::Rsync) -> PathBuf {
-        let mut res = self.module_path(uri.module());
+        let mut res = self.base.clone();
+        res.push(uri.canonical_authority().as_ref());
+        res.push(uri.module_name());
         res.push(uri.path());
         res
     }
 }
 
 
+//------------ Module --------------------------------------------------------
+
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct Module(str);
+
+impl Module {
+    unsafe fn from_str(s: &str) -> &Module {
+        &*(s as *const str as *const Module)
+    }
+
+    pub fn from_uri(uri: &uri::Rsync) -> Cow<Module> {
+        match uri.canonical_module() {
+            Cow::Borrowed(s) => {
+                Cow::Borrowed(unsafe { Module::from_str(s) })
+            }
+            Cow::Owned(s) => Cow::Owned(OwnedModule(s))
+        }
+    }
+
+    pub fn to_uri(&self) -> uri::Rsync {
+        uri::Rsync::from_str(&self.0).unwrap()
+    }
+}
+
+
+//--- ToOwned
+
+impl ToOwned for Module {
+    type Owned = OwnedModule;
+
+    fn to_owned(&self) -> Self::Owned {
+        OwnedModule(self.0.to_owned())
+    }
+}
+
+
+//--- Display
+
+impl fmt::Display for Module {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.0.fmt(f)
+    }
+}
+
+
+//------------ OwnedModule ---------------------------------------------------
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct OwnedModule(String);
+
+impl OwnedModule {
+    fn new(authority: &str, module: &str) -> Result<Self, uri::Error> {
+        uri::Rsync::from_string(
+            format!("rsync://{}/{}/", authority, module)
+        ).map(|uri| OwnedModule(uri.canonical_module().into_owned()))
+    }
+}
+
+
+//--- Deref, AsRef, Borrow
+
+impl ops::Deref for OwnedModule {
+    type Target = Module;
+
+    fn deref(&self) -> &Module {
+        self.as_ref()
+    }
+}
+
+impl AsRef<Module> for OwnedModule {
+    fn as_ref(&self) -> &Module {
+        unsafe { Module::from_str(self.0.as_str()) }
+    }
+}
+
+impl Borrow<Module> for OwnedModule {
+    fn borrow(&self) -> &Module {
+        self.as_ref()
+    }
+}
+
+
+//--- Display
+
+impl fmt::Display for OwnedModule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.0.fmt(f)
+    }
+}
+
+
 //------------ Helper Functions ----------------------------------------------
 
-fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<Bytes> {
+fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<String> {
     let name = entry.file_name();
-    name.to_str().and_then(|name| {
-        if uri::is_uri_ascii(name) {
-            Some(Bytes::copy_from_slice(name.as_bytes()))
+    name.into_string().ok().and_then(|name| {
+        if uri::check_uri_ascii(name.as_bytes()).is_ok() {
+            Some(name)
         }
         else {
             None

@@ -510,15 +510,15 @@ impl ServerDir {
         self.base.join("data")
     }
 
-    fn module_path(&self, module: &uri::RsyncModule) -> PathBuf {
+    fn module_path(&self, module: &uri::Rsync) -> PathBuf {
         let mut res = self.data_path();
-        res.push(module.authority());
-        res.push(module.module());
+        res.push(module.canonical_authority().as_ref());
+        res.push(module.module_name());
         res
     }
 
     fn uri_path(&self, uri: &uri::Rsync) -> PathBuf {
-        let mut res = self.module_path(uri.module());
+        let mut res = self.module_path(uri);
         res.push(uri.path());
         res
     }

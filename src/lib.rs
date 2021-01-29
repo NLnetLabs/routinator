@@ -33,6 +33,7 @@ pub use self::operation::{Error, ExitError, Operation};
 pub use rpki;
 pub use reqwest;
 
+pub mod cache;
 pub mod config;
 pub mod http;
 pub mod metrics;
@@ -40,12 +41,12 @@ pub mod operation;
 pub mod origins;
 pub mod output;
 pub mod process;
-pub mod repository;
 pub mod rrdp;
 pub mod rtr;
 pub mod rsync;
 pub mod rta;
 pub mod slurm;
+pub mod store;
 pub mod utils;
+pub mod validation;
 pub mod validity;
-

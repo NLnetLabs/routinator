@@ -214,7 +214,7 @@ impl RrdpServerMetrics {
 
 #[derive(Debug)]
 pub struct RsyncModuleMetrics {
-    pub module: uri::RsyncModule,
+    pub module: uri::Rsync,
     pub status: Result<process::ExitStatus, io::Error>,
     pub duration: Result<Duration, SystemTimeError>,
 }
@@ -309,3 +309,4 @@ impl ServerMetrics {
         self.http_requests.fetch_add(1, Ordering::Relaxed);
     }
 }
+

@@ -12,7 +12,7 @@ use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
 use crate::config::Config;
-use crate::metrics::RrdpServerMetrics;
+use crate::metrics::{Metrics, RrdpServerMetrics};
 use crate::operation::Error;
 use crate::utils::UriExt;
 use super::http::HttpClient;
@@ -169,8 +169,14 @@ impl<'a> Run<'a> {
             servers: RwLock::new(servers)
         })
     }
+    
+    pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
+        self.get_ta(uri).ok().flatten()
+    }
 
-    pub fn load_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
+    pub fn load_and_cache_ta(
+        &self, uri: &uri::Https, info: &TalInfo
+    ) -> Option<Bytes> {
         match self.get_ta(uri) {
             Ok(Some(bytes)) => {
                 self.store_ta(&bytes, uri, info);
@@ -250,6 +256,11 @@ impl<'a> Run<'a> {
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_inner().unwrap().into_metrics()
     }
+
+    pub fn done(self, metrics: &mut Metrics) {
+        metrics.set_rrdp(self.into_metrics())
+    }
+
 }
 
 /// # Accessing TA Certificates

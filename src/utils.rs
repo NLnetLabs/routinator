@@ -6,6 +6,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use rpki::uri;
 
+
 //------------ UriExt --------------------------------------------------------
 
 /// An extension trait for URI kind of types.
@@ -51,12 +52,6 @@ impl UriExt for uri::Https {
 }
 
 impl UriExt for uri::Rsync {
-    fn get_authority(&self) -> &str {
-        self.authority()
-    }
-}
-
-impl UriExt for uri::RsyncModule {
     fn get_authority(&self) -> &str {
         self.authority()
     }

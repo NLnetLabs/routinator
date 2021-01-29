@@ -1,13 +1,16 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use rpki::uri;
+use rpki::repository::rta;
 use rpki::repository::cert::ResourceCert;
-use rpki::repository::rta::{ResourceTaggedAttestation, Rta, Validation};
+use rpki::repository::rta::{ResourceTaggedAttestation, Rta};
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::ValidationError;
+use crate::cache::Cache;
 use crate::config::Config;
 use crate::operation::Error;
-use crate::repository::{ProcessCa, ProcessRun, Repository};
+use crate::store::Store;
+use crate::validation::{ProcessCa, ProcessRun, Validation};
 
 
 //------------ ValidationReport ----------------------------------------------
@@ -15,7 +18,7 @@ use crate::repository::{ProcessCa, ProcessRun, Repository};
 /// The result of an RTA validation run.
 #[derive(Debug)]
 pub struct ValidationReport<'a> {
-    validation: Mutex<Validation<'a>>,
+    validation: Mutex<rta::Validation<'a>>,
     complete: AtomicBool,
 }
 
@@ -23,7 +26,7 @@ impl<'a> ValidationReport<'a> {
     pub fn new(
         rta: &'a Rta, config: &Config
     ) -> Result<Self, ValidationError> {
-        Validation::new(rta, config.strict).map(|validation| {
+        rta::Validation::new(rta, config.strict).map(|validation| {
             ValidationReport {
                 validation: Mutex::new(validation),
                 complete: AtomicBool::new(false)
@@ -31,8 +34,14 @@ impl<'a> ValidationReport<'a> {
         })
     }
 
-    pub fn process(&self, repo: &mut Repository) -> Result<(), Error> {
-        repo.process(self).map(|_| ())
+    pub fn process(
+        &self,
+        validation: &Validation,
+        cache: &Cache,
+        store: &Store,
+    ) -> Result<(), Error> {
+        let run = validation.start(cache, store, self)?;
+        run.process()
     }
 
     pub fn finalize(self) -> Result<&'a ResourceTaggedAttestation, Error> {

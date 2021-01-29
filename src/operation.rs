@@ -28,15 +28,17 @@ use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
+use crate::cache::Cache;
 use crate::config::Config;
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::process::Process;
-use crate::repository::Repository;
+use crate::validation::Validation;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
+use crate::store::Store;
 use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -379,13 +381,14 @@ impl Server {
         })
     }
 
-    /// Starts the RTR server.
+    /// Starts Routinator in server mode.
     ///
     /// If `detach` is `true`, will fork the server and exit. Otherwise
     /// just runs the server forever.
-    /// Runs the command.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
-        Repository::init(process.config())?;
+        Validation::init(process.config())?;
+        Cache::init(process.config())?;
+        Store::init(process.config())?;
         let log = process.switch_logging(
             self.detach,
             !process.config().http_listen.is_empty()
@@ -400,12 +403,16 @@ impl Server {
 
         process.drop_privileges()?;
 
-        let mut repo = Repository::new(process.config(), true)?;
+        let mut validation = Validation::new(process.config())?;
+        let store = Store::new(process.config())?;
+        let mut cache = Cache::new(process.config(), true)?;
         let runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
         let (sig_tx, sig_rx) = mpsc::channel();
         let (err_tx, mut err_rx) = oneshot::channel();
+
+        cache.ignite()?;
 
         let join = thread::spawn(move || {
             loop {
@@ -414,7 +421,8 @@ impl Server {
                 ) {
                     Ok(exceptions) => {
                         if Self::process_once(
-                            &mut repo, &history, &mut notify, exceptions
+                            &validation, &cache, &store,
+                            &history, &mut notify, exceptions
                         ).is_err() {
                             break;
                         }
@@ -430,7 +438,7 @@ impl Server {
                 };
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
-                        match repo.reload_tals(process.config()) {
+                        match validation.reload_tals() {
                             Ok(_) => {
                                 info!("Reloaded TALs at user request.");
                             },
@@ -480,13 +488,15 @@ impl Server {
     }
 
     fn process_once(
-        repo: &mut Repository,
+        validation: &Validation,
+        cache: &Cache,
+        store: &Store,
         history: &OriginsHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Error> {
         history.mark_update_start();
-        let (report, metrics) = repo.process_origins()?;
+        let (report, metrics) = validation.process_origins(cache, store)?;
         let must_notify = history.update(
             report, metrics, &exceptions
         );
@@ -645,10 +655,15 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        let validation = Validation::new(process.config())?;
+        let mut cache = Cache::new(process.config(), !self.noupdate)?;
+        let store = Store::new(process.config())?;
+        cache.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
-        let (report, mut metrics) = repo.process_origins()?;
+        let (report, mut metrics) = validation.process_origins(
+            &cache, &store
+        )?;
         let vrps = AddressOrigins::from_report(
             report,
             &exceptions,
@@ -782,9 +797,14 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        let validation = Validation::new(process.config())?;
+        let mut cache = Cache::new(process.config(), !self.noupdate)?;
+        let store = Store::new(process.config())?;
+        cache.ignite()?;
         process.switch_logging(false, false)?;
-        let (report, mut metrics) = repo.process_origins()?;
+        let (report, mut metrics) = validation.process_origins(
+            &cache, &store
+        )?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
@@ -870,7 +890,10 @@ impl ValidateDocument {
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut repo = Repository::new(process.config(), !self.noupdate)?;
+        let validation = Validation::new(process.config())?;
+        let mut cache = Cache::new(process.config(), !self.noupdate)?;
+        let store = Store::new(process.config())?;
+        cache.ignite()?;
         process.switch_logging(false, false)?;
 
         // Load and decode the signature.
@@ -913,22 +936,22 @@ impl ValidateDocument {
             return Err(ExitError::Invalid)
         }
 
-        let validation = match rta::ValidationReport::new(
+        let rta_validation = match rta::ValidationReport::new(
             &rta, process.config()
         ) {
-            Ok(validation) => validation,
+            Ok(rta_validation) => rta_validation,
             Err(_) => {
                 error!("RTA did not validate. (new)");
                 return Err(ExitError::Invalid);
             }
         };
 
-        if validation.process(&mut repo).is_err() {
+        if rta_validation.process(&validation, &cache, &store).is_err() {
             error!("RTA did not validate. (process)");
             return Err(ExitError::Invalid);
         }
 
-        match validation.finalize() {
+        match rta_validation.finalize() {
             Ok(rta) => {
                 for block in rta.as_resources().iter() {
                     println!("{}", block);
@@ -988,9 +1011,12 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut repo = Repository::new(process.config(), true)?;
+        let validation = Validation::new(process.config())?;
+        let mut cache = Cache::new(process.config(), true)?;
+        let store = Store::new(process.config())?;
+        cache.ignite()?;
         process.switch_logging(false, false)?;
-        let (_, metrics) = repo.process_origins()?;
+        let (_, metrics) = validation.process_origins(&cache, &store)?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
