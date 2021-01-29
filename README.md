@@ -146,10 +146,6 @@ as its means of distribution. Some of the cryptographic primitives
 used by the Routinator require a C toolchain, so you need that, too. You
 need Rust because that’s what Routinator has been written in.
 
-Since this currently is an early version, we decided not to distribute
-binary packages just yet. But don’t worry, getting Rust and building
-packages with it is easy.
-
 ### rsync
 
 Currently, Routinator requires the `rsync` executable to be in your path.
