@@ -438,6 +438,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ValidPubPoint::new(self, manifest).process()
     }
 
+    // Clippy false positive: We are using HashSet<Bytes> here -- Bytes is
+    // not a mutable type.
+    #[allow(clippy::mutable_key_type)]
     fn update_stored(&self) -> Result<PointManifest, Error> {
         // If we don’t have a cache, we just use the stored publication point.
         let cache = match self.cache {
@@ -486,6 +489,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // transaction and rollback if anything is wrong.
         let files = self.store.update_point(
             self.cert.rpki_manifest(),
+
             |update| {
                 // Store all files on the cached manifest. Abort if they can’t
                 // be loaded or if their hash doesn’t match.
@@ -1240,6 +1244,11 @@ impl CaCert {
 
 //------------ PointManinfest ------------------------------------------------
 
+// XXX Clippy complains that ValidPointManifest is 1160 bytes. I _think_ this
+//     is fine here as PointManifest is just a helper type to make things
+//     easier and everything eventually turns into a ValidPointManifest, but
+//     perhaps some restructuring might be good, anyway.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 enum PointManifest {
     Unverified(StoredManifest),

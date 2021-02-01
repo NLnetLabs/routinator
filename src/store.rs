@@ -471,7 +471,7 @@ impl TryFrom<sled::IVec> for StoredObject {
         };
 
         // Decode the CA key identifier.
-        if stored.len() < 1 {
+        if stored.is_empty() {
             return Err(ObjectError)
         }
         let key_len = usize::from(stored.split_to(1)[0]);
