@@ -1,13 +1,15 @@
 # Change Log
 
-## Unreleased next version
+## 0.8.3 ‘Like and Subscribe’
 
-Bug Fixes
+Released 2021-02-02.
+
+There have been no changes since 0.8.3-rc1.
 
 
 ## 0.8.3-rc1
 
-Released 2021-01-28
+Released 2021-01-28.
 
 New
 
@@ -24,7 +26,7 @@ New
 
 Released 2020-12-09.
 
-There have been no changes since 0.8.1-rc1.
+There have been no changes since 0.8.2-rc1.
 
 
 ## 0.8.2-rc1
