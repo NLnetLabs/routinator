@@ -1002,6 +1002,12 @@ The service only supports GET requests with the following
 paths:
 
 .TP
+.B /
+Provides access to the Routinator UI. This UI relies on additional resources
+accessed via the
+.B /ui/
+endpoint
+.TP
 .B /metrics
 Returns a set of monitoring metrics in the format used by Prometheus.
 .TP
@@ -1010,6 +1016,9 @@ Returns the current status of the Routinator instance. This is similar to
 the output of the
 .B /metrics
 endpoint but in a more human friendly format.
+.TP
+.B /api/v1/status
+Returns the current status in JSON format.
 .TP
 .B /log
 Returns the logging output of the last validation run. The log level matches
@@ -1030,6 +1039,9 @@ Validator. For more information, see
 .TP
 .B /validity?asn=\fIas-number\fB&prefix=\fIprefix
 Same as above but with a more form-friendly calling convention.
+.TP
+.B /ui/
+Contains various resources necessary for the Routinator UI.
 
 .P
 In addition, the current set of VRPs is available for each output format
