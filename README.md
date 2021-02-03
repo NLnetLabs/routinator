@@ -391,3 +391,12 @@ routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.
 
 A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is 
 available to get started.
+
+## User Interface
+
+The [user interface](https://rpki.readthedocs.io/en/latest/routinator/user-interface.html)
+displays statistics from the last validation run Routinator has performed.
+It can also be used to verify the RPKI origin validation status of an AS
+Number and IP Prefix combination.
+
+![Routinator validity checker](https://rpki.readthedocs.io/en/latest/_images/routinator-ui-validity-checker.png)
