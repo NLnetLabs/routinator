@@ -194,6 +194,7 @@ impl<'a> Run<'a> {
         }
     }
 
+    /*
     pub fn cleanup(&self) {
         if self.cache.command.is_none() {
             return
@@ -315,6 +316,7 @@ impl<'a> Run<'a> {
             false
         }
     }
+    */
 
     pub fn into_metrics(self) -> Vec<RsyncModuleMetrics> {
         self.metrics.into_inner().unwrap()
@@ -604,6 +606,7 @@ impl fmt::Display for Module {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct OwnedModule(String);
 
+/*
 impl OwnedModule {
     fn new(authority: &str, module: &str) -> Result<Self, uri::Error> {
         uri::Rsync::from_string(
@@ -611,6 +614,7 @@ impl OwnedModule {
         ).map(|uri| OwnedModule(uri.canonical_module().into_owned()))
     }
 }
+*/
 
 
 //--- Deref, AsRef, Borrow
@@ -647,6 +651,7 @@ impl fmt::Display for OwnedModule {
 
 //------------ Helper Functions ----------------------------------------------
 
+/*
 fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<String> {
     let name = entry.file_name();
     name.into_string().ok().and_then(|name| {
@@ -658,4 +663,5 @@ fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<String> {
         }
     })
 }
+*/
 

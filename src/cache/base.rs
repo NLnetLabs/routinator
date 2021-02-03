@@ -6,11 +6,11 @@ use bytes::Bytes;
 use log::{error, warn};
 use rpki::repository::tal::TalUri;
 use rpki::uri;
-use crate::{rrdp, rsync};
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::validation::CaCert;
+use super::{rrdp, rsync};
 
 
 //------------ Cache ---------------------------------------------------------

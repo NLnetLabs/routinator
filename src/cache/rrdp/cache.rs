@@ -2,15 +2,13 @@
 ///
 /// This is a private module for organizational purposes.
 
-use std::{fs, io};
+use std::fs;
 use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
-use rpki::repository::tal::TalInfo;
 use crate::config::Config;
 use crate::metrics::{Metrics, RrdpServerMetrics};
 use crate::operation::Error;
@@ -171,23 +169,28 @@ impl<'a> Run<'a> {
     }
     
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        self.get_ta(uri).ok().flatten()
-    }
-
-    pub fn load_and_cache_ta(
-        &self, uri: &uri::Https, info: &TalInfo
-    ) -> Option<Bytes> {
-        match self.get_ta(uri) {
-            Ok(Some(bytes)) => {
-                self.store_ta(&bytes, uri, info);
-                Some(bytes)
-            }
-            Ok(None) => self.read_ta(uri, info),
-            Err(_) => {
-                self.remove_ta(info);
-                None
-            }
+        let http = match self.cache.http {
+            Some(ref http) => http,
+            None => return None,
+        };
+        let mut response = match http.response(uri) {
+            Ok(response) => response,
+            Err(_) => return None,
+        };
+        if response.content_length() > Some(MAX_TA_SIZE) {
+            warn!(
+                "Trust anchor certificate {} exceeds size limit of {} bytes. \
+                 Ignoring.",
+                uri, MAX_TA_SIZE
+            );
+            return None
         }
+        let mut bytes = Vec::new();
+        if let Err(err) = response.copy_to(&mut bytes) {
+            info!("Failed to get trust anchor {}: {}", uri, err);
+            return None
+        }
+        Some(Bytes::from(bytes))
     }
 
     pub fn is_current(&self, notify_uri: &uri::Https) -> bool {
@@ -249,9 +252,11 @@ impl<'a> Run<'a> {
         self.servers.read().unwrap().get(server_id).load_file(uri)
     }
 
+    /*
     pub fn cleanup(&self) {
         self.servers.write().unwrap().cleanup(&self.cache.cache_dir);
     }
+    */
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_inner().unwrap().into_metrics()
@@ -262,108 +267,6 @@ impl<'a> Run<'a> {
     }
 
 }
-
-/// # Accessing TA Certificates
-///
-impl<'a> Run<'a> {
-    fn get_ta(
-        &self,
-        uri: &uri::Https
-    ) -> Result<Option<Bytes>, Error> {
-        let http = match self.cache.http {
-            Some(ref http) => http,
-            None => return Ok(None),
-        };
-        let mut response = match http.response(uri) {
-            Ok(response) => response,
-            Err(_) => return Ok(None),
-        };
-        if response.content_length() > Some(MAX_TA_SIZE) {
-            warn!(
-                "Trust anchor certificate {} exceeds size limit of {} bytes. \
-                 Ignoring.",
-                uri, MAX_TA_SIZE
-            );
-            return Err(Error)
-        }
-        let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {}: {}", uri, err);
-            return Ok(None)
-        }
-        Ok(Some(Bytes::from(bytes)))
-    }
-
-    fn store_ta(&self, bytes: &Bytes, uri: &uri::Https, info: &TalInfo) {
-        let path = self.ta_path(info);
-        let mut file = match fs::File::create(&path) {
-            Ok(file) => file,
-            Err(err) => {
-                error!("Failed to create TA file {}: {}", path.display(), err);
-                return
-            }
-        };
-        if let Err(err) = file.write_all(
-                                 &(uri.as_str().len() as u64).to_be_bytes()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-        if let Err(err) = file.write_all(uri.as_str().as_ref()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-        if let Err(err) = file.write_all(bytes.as_ref()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-    }
-
-    #[allow(clippy::verbose_file_reads)]
-    fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
-        let path = self.ta_path(info);
-        let mut file = match fs::File::open(&path) {
-            Ok(file) => file,
-            Err(err) => {
-                if err.kind() != io::ErrorKind::NotFound {
-                    warn!(
-                        "Failed to open TA file {}: {}",
-                        path.display(), err
-                    );
-                }
-                return None
-            }
-        };
-        let mut len = [0u8; 8];
-        if let Err(err) = file.read_exact(&mut len) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        let len = u64::from_be_bytes(len) as usize;
-        let mut read_uri = vec![0u8; len];
-        if let Err(err) = file.read_exact(&mut read_uri) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        if read_uri != uri.as_str().as_bytes() {
-            warn!("TA file {} for wrong URI.", path.display());
-            return None
-        }
-        let mut bytes = Vec::new();
-        if let Err(err) = file.read_to_end(&mut bytes) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        Some(Bytes::from(bytes))
-    }
-
-    fn remove_ta(&self, info: &TalInfo) {
-        let _ = fs::remove_file(self.ta_path(info));
-    }
-
-    fn ta_path(&self, info: &TalInfo) -> PathBuf {
-        let mut res = self.cache.ta_dir.join(info.name());
-        res.set_extension("cer");
-        res
-    }
-}
-
 
 
 //------------ ServerSet -----------------------------------------------------
@@ -420,6 +323,7 @@ impl ServerSet {
         self.servers[id.0].clone()
     }
 
+    /*
     /// Cleans up the server set.
     ///
     /// This will call `remove_unused` and clear out the server set.
@@ -467,6 +371,7 @@ impl ServerSet {
     fn contains_server_dir(&self, path: &Path) -> bool {
         self.servers.iter().any(|server| server.server_dir() == path)
     }
+    */
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_iter().filter_map(|server| server.metrics()).collect()

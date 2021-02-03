@@ -107,11 +107,6 @@ impl Server {
         Self::new(notify_uri, ServerDir::broken(), true)
     }
 
-    /// Returns a reference to the server directory.
-    pub fn server_dir(&self) -> &Path {
-        &self.server_dir.base
-    }
-
     /// Returns whether the server has been updated.
     pub fn is_current(&self) -> bool {
         self.updated.load(Relaxed)
@@ -440,6 +435,7 @@ impl Server {
         Ok(Some(data.into()))
     }
 
+    /*
     /// Removes the server’s local cache if it hasn’t been used.
     ///
     /// Returns whether it indeed removed the cache.
@@ -450,6 +446,7 @@ impl Server {
         let _ = fs::remove_dir_all(self.server_dir.base());
         true
     }
+    */
 
     /// Return the server metrics if the server was ever updated.
     pub fn metrics(&self) -> Option<RrdpServerMetrics> {
