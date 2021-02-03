@@ -10,8 +10,9 @@ use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::ValidationError;
 use rpki::uri;
+use sled::Transactional;
 use sled::transaction::{
-    ConflictableTransactionError, TransactionError,
+    ConflictableTransactionError, TransactionalTree, TransactionError,
     UnabortableTransactionError
 };
 use crate::config::Config;
@@ -129,11 +130,11 @@ impl<'a> Run<'a> {
         &self, ca: &CaCert
     ) -> Result<Repository, Error> {
         if !self.store.disable_rrdp {
-            if let Some(rrdp_uri) = ca.rpki_notify() {
-                return Ok(Repository::new(self.store.db.open_tree(rrdp_uri)?))
-            }
+            Repository::new(self.store, ca.rpki_notify())
         }
-        Ok(Repository::new(self.store.db.open_tree("rsync")?))
+        else {
+            Repository::new(self.store, None)
+        }
     }
 }
 
@@ -143,18 +144,30 @@ impl<'a> Run<'a> {
 /// Access to a single repository during a validation run.
 #[derive(Debug)]
 pub struct Repository {
-    tree: sled::Tree,
+    manifest_tree: sled::Tree,
+    object_tree: sled::Tree,
 }
 
 impl Repository {
-    fn new(tree: sled::Tree) -> Self {
-        Repository { tree }
+    fn new(
+        store: &Store,
+        rpki_notify: Option<&uri::Https>
+    ) -> Result<Self, Error> {
+        let base = match rpki_notify {
+            Some(uri) => uri.as_str(),
+            None => "rsync"
+        };
+        let manifest_tree = store.db.open_tree(base)?;
+        let object_tree = store.db.open_tree(
+            &format!("{}\0objects", base)
+        )?;
+        Ok(Repository { manifest_tree, object_tree })
     }
 
     pub fn load_manifest(
         &self, uri: &uri::Rsync
     ) -> Result<Option<StoredManifest>, Error> {
-        self.tree.get(uri.as_slice()).map(|value| {
+        self.manifest_tree.get(uri.as_slice()).map(|value| {
             value.and_then(|value| StoredManifest::try_from(value).ok())
         }).map_err(Into::into)
     }
@@ -164,7 +177,7 @@ impl Repository {
         manifest: &uri::Rsync,
         file: &[u8]
     ) -> Result<Option<StoredObject>, Error> {
-        self.tree.get(
+        self.object_tree.get(
             &Self::object_key(manifest, file)
         ).map(|value| {
             value.and_then(|value| StoredObject::try_from(value).ok())
@@ -184,8 +197,8 @@ impl Repository {
     pub fn update_point<T, F: Fn(RepositoryUpdate) -> Result<T, UpdateError>>(
         &self, manifest: &uri::Rsync, op: F
     ) -> Result<T, UpdateError> {
-        self.tree.transaction(|tran| {
-            op(RepositoryUpdate { manifest, tran }).map_err(|err| err.0)
+        (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
+            op(RepositoryUpdate::new(manifest, mt, ot)).map_err(|err| err.0)
         }).map_err(Into::into)
     }
 
@@ -193,15 +206,25 @@ impl Repository {
         &self, manifest: &uri::Rsync
     ) -> Result<(), Error> {
         let mut batch = sled::Batch::default();
-        for key in self.tree.scan_prefix(
+        for key in self.object_tree.scan_prefix(
             Self::object_key(manifest, b"")
         ).keys() {
             batch.remove(key?);
         }
-        batch.remove(manifest.as_str());
-        self.tree.apply_batch(batch).map_err(|err| {
-            error!("Failed to update storage: {}", err);
-            Error
+        (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
+            mt.remove(manifest.as_str())?;
+            ot.apply_batch(&batch)?;
+            Ok(())
+        }).map_err(|err| {
+            match err {
+                TransactionError::Abort(()) => {
+                    unreachable!() // Or is it?
+                }
+                TransactionError::Storage(err) => {
+                    error!("Failed to update storage: {}", err);
+                    Error
+                }
+            }
         })
     }
 
@@ -214,10 +237,10 @@ impl Repository {
         prefix.push(0);
         let prefix = prefix;
         let prefix_len = prefix.len();
-        for key in self.tree.scan_prefix(prefix).keys() {
+        for key in self.object_tree.scan_prefix(prefix).keys() {
             let key = key?;
             if !keep(&key.as_ref()[prefix_len..]) {
-                self.tree.remove(key)?;
+                self.object_tree.remove(key)?;
             }
         }
         Ok(())
@@ -230,14 +253,23 @@ impl Repository {
 /// An atomic update to a repository.
 pub struct RepositoryUpdate<'a> {
     manifest: &'a uri::Rsync,
-    tran: &'a sled::transaction::TransactionalTree,
+    manifest_tran: &'a TransactionalTree,
+    object_tran: &'a TransactionalTree,
 }
 
 impl<'a> RepositoryUpdate<'a> {
+    fn new(
+        manifest: &'a uri::Rsync,
+        manifest_tran: &'a TransactionalTree,
+        object_tran: &'a TransactionalTree
+    ) -> Self {
+        RepositoryUpdate { manifest, manifest_tran, object_tran }
+    }
+
     pub fn update_manifest(
         &self, object: &StoredManifest
     ) -> Result<bool, UpdateError> {
-        self.tran.insert(
+        self.manifest_tran.insert(
             self.manifest.as_str(), object
         ).map(|res| res.is_some()).map_err(Into::into)
     }
@@ -245,14 +277,14 @@ impl<'a> RepositoryUpdate<'a> {
     pub fn insert_object(
         &self, file: &[u8], object: &StoredObject
     ) -> Result<bool, UpdateError> {
-        self.tran.insert(
+        self.object_tran.insert(
             Repository::object_key(self.manifest, file),
             object
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 
     pub fn remove_object(&self, file: &[u8]) -> Result<bool, UpdateError> {
-        self.tran.remove(
+        self.object_tran.remove(
             Repository::object_key(self.manifest, file)
         ).map(|res| res.is_some()).map_err(Into::into)
     }
