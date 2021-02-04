@@ -20,11 +20,12 @@ use rpki::repository::tal::{Tal, TalInfo, TalUri};
 use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
 use crate::{cache, store};
+use crate::cache::Cache;
 use crate::config::{Config, FilterPolicy};
 use crate::metrics::Metrics;
 use crate::operation::Error;
 use crate::origins::OriginsReport;
-use crate::store::StoredManifest;
+use crate::store::{Store, StoredManifest};
 
 
 //------------ Configuration -------------------------------------------------
@@ -39,7 +40,7 @@ const CRL_CACHE_LIMIT: usize = 50;
 //------------ Validation ----------------------------------------------------
 
 /// Information on the trust anchors and rules for validation.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Validation {
     /// The directory to load TALs from.
     tal_dir: PathBuf,
@@ -49,6 +50,12 @@ pub struct Validation {
 
     /// The list of our TALs. 
     tals: Vec<Tal>,
+
+    /// The cache to load updated data from.
+    cache: Cache,
+
+    /// The store to load stored data from.
+    store: Store,
 
     /// Should we be strict when decoding data?
     strict: bool,
@@ -90,12 +97,18 @@ impl Validation {
     }
 
     /// Creates a new set of validation rules from the configuration.
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(
+        config: &Config,
+        cache: Cache,
+        store: Store,
+    ) -> Result<Self, Error> {
         Self::init(config)?;
         let mut res = Validation {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
+            cache,
+            store,
             strict: config.strict,
             stale: config.stale,
             unknown_objects: config.unknown_objects,
@@ -196,18 +209,24 @@ impl Validation {
         path.file_stem().unwrap().to_string_lossy().into_owned()
     }
 
+    /// Ignites validation processing.
+    ///
+    /// This spawns of threads and therefore needs to be done after a
+    /// possible fork.
+    pub fn ignite(&mut self) -> Result<(), Error> {
+        self.cache.ignite()
+    }
+
     /// Starts a validation run.
-    pub fn start<'s, P>(
-        &'s self, cache: &'s cache::Cache, store: &'s store::Store, processor: P
-    ) -> Result<Run<'s, P>, Error> {
-        Ok(Run::new(self, cache.start()?, store.start(), processor))
+    pub fn start<P>(&self, processor: P) -> Result<Run<P>, Error> {
+        Ok(Run::new(self, self.cache.start()?, self.store.start(), processor))
     }
 
     pub fn process_origins(
-        &self, cache: &cache::Cache, store: &store::Store
+        &self
     ) -> Result<(OriginsReport, Metrics), Error> {
         let report = OriginsReport::new();
-        let run = Run::new(self, cache.start()?, store.start(), &report);
+        let run = self.start(&report)?;
         run.process()?;
         let metrics = run.done();
         Ok((report, metrics))

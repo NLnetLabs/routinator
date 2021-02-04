@@ -403,16 +403,18 @@ impl Server {
 
         process.drop_privileges()?;
 
-        let mut validation = Validation::new(process.config())?;
-        let store = Store::new(process.config())?;
-        let mut cache = Cache::new(process.config(), true)?;
+        let mut validation = Validation::new(
+            process.config(),
+            Cache::new(process.config(), true)?,
+            Store::new(process.config())?,
+        )?;
         let runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
         let (sig_tx, sig_rx) = mpsc::channel();
         let (err_tx, mut err_rx) = oneshot::channel();
 
-        cache.ignite()?;
+        validation.ignite()?;
 
         let join = thread::spawn(move || {
             loop {
@@ -421,8 +423,7 @@ impl Server {
                 ) {
                     Ok(exceptions) => {
                         if Self::process_once(
-                            &validation, &cache, &store,
-                            &history, &mut notify, exceptions
+                            &validation, &history, &mut notify, exceptions
                         ).is_err() {
                             break;
                         }
@@ -489,14 +490,12 @@ impl Server {
 
     fn process_once(
         validation: &Validation,
-        cache: &Cache,
-        store: &Store,
         history: &OriginsHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Error> {
         history.mark_update_start();
-        let (report, metrics) = validation.process_origins(cache, store)?;
+        let (report, metrics) = validation.process_origins()?;
         let must_notify = history.update(
             report, metrics, &exceptions
         );
@@ -655,15 +654,15 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let validation = Validation::new(process.config())?;
-        let mut cache = Cache::new(process.config(), !self.noupdate)?;
-        let store = Store::new(process.config())?;
-        cache.ignite()?;
+        let mut validation = Validation::new(
+            process.config(),
+            Cache::new(process.config(), !self.noupdate)?,
+            Store::new(process.config())?,
+        )?;
+        validation.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
-        let (report, mut metrics) = validation.process_origins(
-            &cache, &store
-        )?;
+        let (report, mut metrics) = validation.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
             &exceptions,
@@ -797,14 +796,14 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let validation = Validation::new(process.config())?;
-        let mut cache = Cache::new(process.config(), !self.noupdate)?;
-        let store = Store::new(process.config())?;
-        cache.ignite()?;
-        process.switch_logging(false, false)?;
-        let (report, mut metrics) = validation.process_origins(
-            &cache, &store
+        let mut validation = Validation::new(
+            process.config(),
+            Cache::new(process.config(), !self.noupdate)?,
+            Store::new(process.config())?,
         )?;
+        validation.ignite()?;
+        process.switch_logging(false, false)?;
+        let (report, mut metrics) = validation.process_origins()?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
@@ -890,10 +889,12 @@ impl ValidateDocument {
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let validation = Validation::new(process.config())?;
-        let mut cache = Cache::new(process.config(), !self.noupdate)?;
-        let store = Store::new(process.config())?;
-        cache.ignite()?;
+        let mut validation = Validation::new(
+            process.config(),
+            Cache::new(process.config(), !self.noupdate)?,
+            Store::new(process.config())?,
+        )?;
+        validation.ignite()?;
         process.switch_logging(false, false)?;
 
         // Load and decode the signature.
@@ -946,7 +947,7 @@ impl ValidateDocument {
             }
         };
 
-        if rta_validation.process(&validation, &cache, &store).is_err() {
+        if rta_validation.process(&validation).is_err() {
             error!("RTA did not validate. (process)");
             return Err(ExitError::Invalid);
         }
@@ -1011,12 +1012,14 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let validation = Validation::new(process.config())?;
-        let mut cache = Cache::new(process.config(), true)?;
-        let store = Store::new(process.config())?;
-        cache.ignite()?;
+        let mut validation = Validation::new(
+            process.config(),
+            Cache::new(process.config(), true)?,
+            Store::new(process.config())?,
+        )?;
+        validation.ignite()?;
         process.switch_logging(false, false)?;
-        let (_, metrics) = validation.process_origins(&cache, &store)?;
+        let (_, metrics) = validation.process_origins()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }

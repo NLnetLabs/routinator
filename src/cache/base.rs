@@ -1,4 +1,6 @@
-//! The RPKI data as currently published by the repositories.
+//! The overall cache, binding the various transports together.
+//!
+//! This is a private module. It’s types are re-exported by the parent.
 
 use std::{fs, io};
 use std::path::PathBuf;
@@ -15,7 +17,15 @@ use super::{rrdp, rsync};
 
 //------------ Cache ---------------------------------------------------------
 
-/// The cache maintains a copy of the current RPKI data as published.
+/// Access to a local copy of the currently published RPKI data.
+///
+/// A cache can be created based on the configuration via [Cache::new]. If you
+/// don’t actually want to perform a validation run but just initialize
+/// everything, [Cache::init] will suffice.
+///
+/// `Cache` values don’t actually do anything. Instead, when starting a
+/// validation run, you have to call [`start`][Cache::start] to acquire a
+/// [`Run`] that does all the work.
 #[derive(Debug)]
 pub struct Cache {
     /// The base directory of the cache.
@@ -28,7 +38,7 @@ pub struct Cache {
 
     /// The cache for rsync transport.
     ///
-    /// If this is `None`, use of RRDP has been disable entirely.
+    /// If this is `None`, use of rsync has been disable entirely.
     rsync: Option<rsync::Cache>,
 }
 
@@ -72,7 +82,7 @@ impl Cache {
         Ok(Cache {
             cache_dir: config.cache_dir.clone(),
             rrdp: rrdp::Cache::new(config, update)?,
-            rsync: rsync::Cache::new( config, update)?,
+            rsync: rsync::Cache::new(config, update)?,
         })
     }
 

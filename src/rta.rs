@@ -6,10 +6,8 @@ use rpki::repository::cert::ResourceCert;
 use rpki::repository::rta::{ResourceTaggedAttestation, Rta};
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::ValidationError;
-use crate::cache::Cache;
 use crate::config::Config;
 use crate::operation::Error;
-use crate::store::Store;
 use crate::validation::{ProcessCa, ProcessRun, Validation};
 
 
@@ -37,10 +35,8 @@ impl<'a> ValidationReport<'a> {
     pub fn process(
         &self,
         validation: &Validation,
-        cache: &Cache,
-        store: &Store,
     ) -> Result<(), Error> {
-        let run = validation.start(cache, store, self)?;
+        let run = validation.start(self)?;
         run.process()
     }
 

@@ -24,7 +24,7 @@ use crate::validation::CaCert;
 //------------ Store ---------------------------------------------------------
 
 /// A store for correctly published RPKI objects.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Store {
     /// The database.
     db: sled::Db,
