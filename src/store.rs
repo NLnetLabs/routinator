@@ -1,4 +1,4 @@
-//! A store for published RPKI objects.
+//! A store for correctly published RPKI objects.
 
 use std::{error, fmt, fs, io, mem};
 use std::convert::{TryFrom, TryInto};

@@ -25,7 +25,8 @@ use super::{rrdp, rsync};
 ///
 /// `Cache` values don’t actually do anything. Instead, when starting a
 /// validation run, you have to call [`start`][Cache::start] to acquire a
-/// [`Run`] that does all the work.
+/// [`Run`] that does all the work. Before doing that for the first time,
+/// you need to call [`ignite`][Cache::ignite] once.
 #[derive(Debug)]
 pub struct Cache {
     /// The base directory of the cache.
@@ -43,9 +44,11 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Initializes the cache.
+    /// Initializes the cache without creating a value.
     ///
     /// Ensures that the base directory exisits and creates it if necessary.
+    ///
+    /// The function is called implicitely by [`new`][Cache::new].
     pub fn init(config: &Config) -> Result<(), Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
@@ -73,7 +76,8 @@ impl Cache {
     ///
     /// Takes all necessary information from `config`. If `update` is `false`,
     /// the cache will not be updated from upstream and only files already
-    /// present will be used.
+    /// present will be used. This differs from disabling transports as it
+    /// will still use whatever is present on disk as potentially updated data.
     pub fn new(
         config: &Config,
         update: bool
@@ -88,8 +92,8 @@ impl Cache {
 
     /// Ignites the cache.
     ///
-    /// This needs to be done after a possible fork as the caches may use
-    /// their own threads.
+    /// This needs to be done after a possible fork as the cache may spawn a
+    /// set of worker threads.
     pub fn ignite(&mut self) -> Result<(), Error> {
         self.rsync.as_mut().map_or(Ok(()), rsync::Cache::ignite)?;
         self.rrdp.as_mut().map_or(Ok(()), rrdp::Cache::ignite)?;
@@ -106,10 +110,19 @@ impl Cache {
 //------------ Run -----------------------------------------------------------
 
 /// Using the cache for a single validation run.
+///
+/// This type references the underlying [`Cache`]. It can be used with
+/// multiple threads using
+/// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
+    /// A reference to the underlying cache.
     cache: &'a Cache,
+
+    /// The runner for rsync if this transport is enabled.
     rsync: Option<rsync::Run<'a>>,
+
+    /// The runner for RRDP if this transport is enabled.
     rrdp: Option<rrdp::Run<'a>>,
 }
 
@@ -119,7 +132,7 @@ impl<'a> Run<'a> {
         Ok(Run {
             cache,
             rsync: if let Some(ref rsync) = cache.rsync {
-                Some(rsync.start()?)
+                Some(rsync.start())
             }
             else {
                 None
@@ -133,7 +146,12 @@ impl<'a> Run<'a> {
         })
     }
 
-    /// Finishes the validation run and updates the provided metrics.
+    /// Finishes the validation run.
+    ///
+    /// Updates `metrics` with the cache run’s metrics.
+    ///
+    /// If you are not interested in the metrics, you can simple drop the
+    /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
         if let Some(rrdp) = self.rrdp {
             rrdp.done(metrics)
@@ -144,6 +162,9 @@ impl<'a> Run<'a> {
     }
 
     /// Loads the trust anchor certificate at the given URI.
+    ///
+    /// If the certificate cannot be loaded for whatever reason, logs
+    /// diagnostic information and returns `None`.
     pub fn load_ta(&self, uri: &TalUri) -> Option<Bytes> {
         match *uri {
             TalUri::Rsync(ref uri) => {
@@ -163,7 +184,8 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If the repository is definitely unavailable, returns `None`.
+    /// If the repository is definitely unavailable, logs diagnositic
+    /// information and returns `None`.
     pub fn repository<'s>(
         &'s self, ca: &CaCert
     ) -> Option<Repository<'s>> {
@@ -213,17 +235,27 @@ pub struct Repository<'a>(RepoInner<'a>);
 
 #[derive(Debug)]
 enum RepoInner<'a> {
+    /// The repository is accessed via RRDP.
     Rrdp {
+        /// The RRDP cache runner.
         rrdp: &'a rrdp::Run<'a>,
+
+        /// The server ID for the RRDP server.
         server: rrdp::ServerId,
     },
+
+    /// The repository is accessed via rsync.
     Rsync {
+        /// The rsync cache runner.
         rsync: &'a rsync::Run<'a>,
     }
 }
 
 impl<'a> Repository<'a> {
     /// Loads an object from the repository.
+    ///
+    /// If the object is unavailable for some reason, logs diagnostic
+    /// information and returns `None`.
     pub fn load_object(&self, uri: &uri::Rsync) -> Option<Bytes> {
         match self.0 {
             RepoInner::Rrdp { rrdp, server } => {

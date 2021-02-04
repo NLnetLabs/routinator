@@ -1,6 +1,6 @@
 /// The RRDP cache.
 ///
-/// This is a private module for organizational purposes.
+/// This is a private module. It’s types are reexported by the parent.
 
 use std::fs;
 use std::collections::HashMap;
