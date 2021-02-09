@@ -3,18 +3,20 @@
 use std::{error, fmt, fs, io, mem};
 use std::convert::{TryFrom, TryInto};
 use bytes::Bytes;
+use chrono::{TimeZone, Utc};
 use log::error;
 use rpki::repository::crypto::digest::DigestAlgorithm;
 use rpki::repository::crypto::keys::KeyIdentifier;
 use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
-use rpki::repository::x509::ValidationError;
+use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
 use sled::Transactional;
 use sled::transaction::{
     ConflictableTransactionError, TransactionalTree, TransactionError,
     UnabortableTransactionError
 };
+use crate::cache;
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::operation::Error;
@@ -91,6 +93,35 @@ impl Store {
     pub fn start(&self) -> Run {
         Run::new(self)
     }
+
+    pub fn cleanup(
+        &self,
+        mut cache: cache::Cleanup,
+    ) -> Result<(), Error> {
+        if !self.disable_rrdp {
+            for tree_name in self.db.tree_names() {
+                if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
+                    let names = TreeNames::from_rpki_notify(
+                        Some(&rpki_notify)
+                    );
+                    if Repository::new(self, &names)?.cleanup_rrdp()? {
+                        cache.retain_rrdp_repository(&rpki_notify);
+                    }
+                    else {
+                        names.drop_trees(&self.db)?;
+                    }
+                }
+            }
+        }
+        if !self.disable_rsync {
+            Repository::new(
+                self, &TreeNames::rsync()
+            )?.cleanup_rsync(&mut cache)?
+        }
+        cache.commit();
+        Ok(())
+    }
+
 }
 
 
@@ -130,10 +161,12 @@ impl<'a> Run<'a> {
         &self, ca: &CaCert
     ) -> Result<Repository, Error> {
         if !self.store.disable_rrdp {
-            Repository::new(self.store, ca.rpki_notify())
+            Repository::new(self.store, &TreeNames::from_rpki_notify(
+                ca.rpki_notify())
+            )
         }
         else {
-            Repository::new(self.store, None)
+            Repository::new(self.store, &TreeNames::from_rpki_notify(None))
         }
     }
 }
@@ -144,6 +177,7 @@ impl<'a> Run<'a> {
 /// Access to a single repository during a validation run.
 #[derive(Debug)]
 pub struct Repository {
+    is_rsync: bool,
     manifest_tree: sled::Tree,
     object_tree: sled::Tree,
 }
@@ -151,17 +185,13 @@ pub struct Repository {
 impl Repository {
     fn new(
         store: &Store,
-        rpki_notify: Option<&uri::Https>
+        names: &TreeNames,
     ) -> Result<Self, Error> {
-        let base = match rpki_notify {
-            Some(uri) => uri.as_str(),
-            None => "rsync"
-        };
-        let manifest_tree = store.db.open_tree(base)?;
-        let object_tree = store.db.open_tree(
-            &format!("{}\0objects", base)
-        )?;
-        Ok(Repository { manifest_tree, object_tree })
+        Ok(Repository {
+            is_rsync: names.is_rsync,
+            manifest_tree: names.open_manifest_tree(&store.db)?,
+            object_tree: names.open_object_tree(&store.db)?,
+        })
     }
 
     pub fn load_manifest(
@@ -232,8 +262,15 @@ impl Repository {
         &self, manifest: &uri::Rsync,
         keep: impl Fn(&[u8]) -> bool
     ) -> Result<(), Error> {
-        let mut prefix = Vec::with_capacity(manifest.as_slice().len() + 1);
-        prefix.extend_from_slice(manifest.as_slice());
+        self._drain_point(manifest.as_ref(), keep)
+    }
+
+    pub fn _drain_point(
+        &self, manifest: &[u8],
+        keep: impl Fn(&[u8]) -> bool
+    ) -> Result<(), Error> {
+        let mut prefix = Vec::with_capacity(manifest.len() + 1);
+        prefix.extend_from_slice(manifest);
         prefix.push(0);
         let prefix = prefix;
         let prefix_len = prefix.len();
@@ -244,6 +281,52 @@ impl Repository {
             }
         }
         Ok(())
+    }
+
+    fn cleanup_rsync(self, cache: &mut cache::Cleanup) -> Result<(), Error> {
+        let now = Time::now();
+
+        for item in self.manifest_tree.iter() {
+            let (key, bytes) = item?;
+            let uri = match uri::Rsync::from_slice(&key) {
+                Ok(uri) => {
+                    match StoredManifest::decode_not_after(&bytes) {
+                        Ok(not_after) if not_after > now => Some(uri),
+                        _ => None
+                    }
+                }
+                Err(_) => None
+            };
+            if let Some(uri) = uri {
+                cache.retain_rsync_module(&uri);
+            }
+            else {
+                self._drain_point(&key, |_| false)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn cleanup_rrdp(self) -> Result<bool, Error> {
+        let now = Time::now();
+        let mut keep_repository = false;
+
+        for item in self.manifest_tree.iter() {
+            let (key, bytes) = item?;
+            let keep = match StoredManifest::decode_not_after(&bytes) {
+                Ok(not_after) => not_after > now,
+                Err(_) => false
+            };
+            if keep {
+                keep_repository = true;
+            }
+            else {
+                self._drain_point(&key, |_| false)?;
+            }
+        }
+
+        Ok(keep_repository)
     }
 }
 
@@ -296,6 +379,9 @@ impl<'a> RepositoryUpdate<'a> {
 /// The content of a manifest placed in the store.
 #[derive(Clone, Debug)]
 pub struct StoredManifest {
+    /// The expire time of the EE certificate of the manifest.
+    not_after: Time,
+
     /// The CA repository rsync URI of the issuing CA certificate.
     ca_repository: uri::Rsync,
 
@@ -308,11 +394,16 @@ pub struct StoredManifest {
 
 impl StoredManifest {
     pub fn new(
+        not_after: Time,
         ca_repository: uri::Rsync,
         manifest: Bytes,
         crl: Bytes,
     ) -> Self {
-        StoredManifest { ca_repository, manifest, crl}
+        StoredManifest { not_after, ca_repository, manifest, crl}
+    }
+
+    pub fn not_after(&self) -> Time {
+        self.not_after
     }
 
     pub fn ca_repository(&self) -> &uri::Rsync {
@@ -326,13 +417,28 @@ impl StoredManifest {
     pub fn crl(&self) -> &Bytes {
         &self.crl
     }
+
+    fn decode_not_after(slice: &[u8]) -> Result<Time, ObjectError> {
+        // See below for full encoding. The time is at the start and encoded
+        // as an i64 in network order.
+        if slice.len() < mem::size_of::<i64>() {
+            return Err(ObjectError)
+        }
+        Ok(Utc.timestamp(
+            i64::from_be_bytes(
+                slice[..mem::size_of::<i64>()].try_into().unwrap()
+            ),
+            0
+        ).into())
+    }
+
 }
 
 
 impl<'a> From<&'a StoredManifest> for sled::IVec {
     fn from(manifest: &'a StoredManifest) -> sled::IVec {
         // XXX Limiting the sizes to u32 _should_ be fine. Having bigger
-        //     object will probably cause mayhem before event getting here,
+        //     objects will probably cause mayhem before event getting here,
         //     so panicking should be fine, too?
         let ca_rep_len = u32::try_from(
             manifest.ca_repository.as_slice().len()
@@ -341,10 +447,13 @@ impl<'a> From<&'a StoredManifest> for sled::IVec {
             manifest.manifest.len()
         ).expect("manifest exceeds size limit");
 
-        // Actual encoding: Each component is encoded as its bytes preceeded
-        // by the length as a u32 in network byte order. Except for the last
-        // one, which is just whatever is left.
+        // Actual encoding: not_after is the i64 timestamp in network order.
+        // The caRepository URI and manifest bytes are encoded as its bytes
+        // preceeded by the length as a u32 in network byte order. the CRL
+        // bytes are just the bytes until the end of the buffer.
         let mut vec = Vec::new();
+
+        vec.extend_from_slice(&manifest.not_after.timestamp().to_be_bytes());
 
         vec.extend_from_slice(&ca_rep_len.to_be_bytes());
         vec.extend_from_slice(manifest.ca_repository.as_slice());
@@ -367,6 +476,7 @@ impl TryFrom<sled::IVec> for StoredManifest {
         }
         let mut stored = Bytes::copy_from_slice(stored.as_ref());
 
+        let not_after = take_time(&mut stored)?;
         let len = take_encoded_len(&mut stored)?;
         if stored.len() < len {
             return Err(ObjectError)
@@ -381,7 +491,7 @@ impl TryFrom<sled::IVec> for StoredManifest {
         }
         let manifest = stored.split_to(len);
 
-        Ok(StoredManifest { ca_repository, manifest, crl: stored })
+        Ok(StoredManifest { not_after, ca_repository, manifest, crl: stored })
     }
 }
 
@@ -526,6 +636,58 @@ impl TryFrom<sled::IVec> for StoredObject {
 }
 
 
+//------------ TreeNames -----------------------------------------------------
+
+/// The names for the manifest and object trees for a given repository.
+struct TreeNames<'a> {
+    is_rsync: bool,
+    manifests: &'a [u8],
+    objects: Vec<u8>,
+}
+
+impl<'a> TreeNames<'a> {
+    pub fn from_rpki_notify(rpki_notify: Option<&'a uri::Https>) -> Self {
+        match rpki_notify {
+            Some(uri) => Self::from_manifest_name(uri.as_ref()),
+            None => Self::rsync()
+        }
+    }
+
+    pub fn rsync() -> Self {
+        Self::new(true, b"rsync")
+    }
+
+    pub fn from_manifest_name(manifests: &'a [u8]) -> Self {
+        Self::new(false, manifests)
+    }
+
+    fn new(is_rsync: bool, manifests: &'a [u8]) -> Self {
+        let mut objects = Vec::with_capacity(manifests.len() + 8);
+        objects.extend_from_slice(b"objects:");
+        objects.extend_from_slice(manifests);
+        TreeNames { is_rsync, manifests, objects }
+    }
+
+    pub fn open_manifest_tree(
+        &self, db: &sled::Db
+    ) -> Result<sled::Tree, sled::Error> {
+        db.open_tree(self.manifests)
+    }
+
+    pub fn open_object_tree(
+        &self, db: &sled::Db
+    ) -> Result<sled::Tree, sled::Error> {
+        db.open_tree(&self.objects)
+    }
+
+    pub fn drop_trees(&self, db: &sled::Db) -> Result<(), Error> {
+        db.drop_tree(self.manifests)?;
+        db.drop_tree(&self.objects)?;
+        Ok(())
+    }
+}
+
+
 //------------ ObjectError ---------------------------------------------------
 
 /// A stored object cannot be decoded correctly.
@@ -584,6 +746,17 @@ impl From<sled::Error> for Error {
 }
 
 //------------ Helper Functions ----------------------------------------------
+
+fn take_time(bytes: &mut Bytes) -> Result<Time, ObjectError> {
+    if bytes.len() < mem::size_of::<i64>() {
+        return Err(ObjectError)
+    }
+
+    let int_bytes = bytes.split_to(mem::size_of::<i64>());
+    let int = i64::from_be_bytes(int_bytes.as_ref().try_into().unwrap());
+    Ok(Utc.timestamp(int, 0).into())
+}
+
 
 fn take_encoded_len(bytes: &mut Bytes) -> Result<usize, ObjectError> {
     if bytes.len() < mem::size_of::<u32>() {

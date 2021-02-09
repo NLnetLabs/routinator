@@ -231,6 +231,10 @@ impl Validation {
         let metrics = run.done();
         Ok((report, metrics))
     }
+
+    pub fn cleanup(&self) -> Result<(), Error> {
+        self.store.cleanup(self.cache.cleanup())
+    }
 }
 
 
@@ -556,6 +560,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
                 update.update_manifest(
                     &store::StoredManifest::new(
+                        self.cert.cert.validity().not_after(),
                         self.cert.ca_repository().clone(),
                         cached.manifest_bytes.clone(),
                         cached.crl_bytes.clone(),

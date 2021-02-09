@@ -103,6 +103,113 @@ impl Cache {
     pub fn start(&self) -> Run {
         Run::new(self)
     }
+
+    pub fn cleanup(&self, retain: &ModuleSet) {
+        if self.command.is_none() {
+            return
+        }
+
+        let dir = match fs::read_dir(&self.cache_dir.base) {
+            Ok(dir) => dir,
+            Err(err) => {
+                error!(
+                    "Failed to read rsync cache directory: {}",
+                    err
+                );
+                return
+            }
+        };
+
+        for entry in dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    error!(
+                        "Failed to iterate over rsync cache directory: {}",
+                        err
+                    );
+                    return
+                }
+            };
+
+            let keep = match entry.file_name().into_string() {
+                Ok(name) => {
+                    match retain.authorities.get(&name) {
+                        Some(modules) => self.cleanup_host(&entry, modules),
+                        None => false,
+                    }
+                }
+                Err(_) => false
+            };
+
+            if !keep {
+                if let Err(err) = fs::remove_dir_all(entry.path()) {
+                    info!(
+                        "Failed to use unused rsync cache dir '{}': {}",
+                        entry.path().display(), err
+                    );
+                }
+            }
+        }
+    }
+
+    fn cleanup_host(
+        &self, entry: &fs::DirEntry, retain: &HashSet<String>
+    ) -> bool {
+        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            return false
+        }
+
+        let path = entry.path();
+        let dir = match fs::read_dir(&path) {
+            Ok(dir) => dir,
+            Err(err) => {
+                info!(
+                    "Failed to read directory {}: {}. Skipping.",
+                    path.display(), err
+                );
+                return false
+            }
+        };
+
+        let mut keep_host = false;
+        for entry in dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    info!(
+                        "Failed to iterate over directory {}: {}",
+                        path.display(), err
+                    );
+                    return false
+                }
+            };
+
+            let keep = match entry.file_name().into_string() {
+                Ok(name) => {
+                    if retain.contains(&name) {
+                        keep_host = true;
+                        true
+                    }
+                    else {
+                        false
+                    }
+                }
+                Err(_) => false
+            };
+
+            if !keep {
+                if let Err(err) = fs::remove_dir_all(entry.path()) {
+                    info!(
+                        "Failed to use unused rsync cache dir '{}': {}",
+                        entry.path().display(), err
+                    );
+                }
+            }
+        }
+
+        keep_host
+    }
 }
 
 
@@ -244,130 +351,6 @@ impl<'a> Run<'a> {
             }
         }
     }
-
-    /*
-    pub fn cleanup(&self) {
-        if self.cache.command.is_none() {
-            return
-        }
-        let modules = self.updated.read().unwrap();
-        let dir = match fs::read_dir(&self.cache.cache_dir.base) {
-            Ok(dir) => dir,
-            Err(err) => {
-                error!(
-                    "Failed to read rsync cache directory: {}",
-                    err
-                );
-                return
-            }
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    error!(
-                        "Failed to iterate over rsync cache directory: {}",
-                        err
-                    );
-                    return
-                }
-            };
-            Self::cleanup_host(entry, &modules);
-        }
-    }
-
-    #[allow(clippy::mutable_key_type)] // XXX False positive, I think
-    fn cleanup_host(entry: fs::DirEntry, modules: &HashSet<OwnedModule>) {
-        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-            return
-        }
-        let path = entry.path();
-        let host = match entry_to_uri_component(&entry) {
-            Some(host) => host,
-            None => {
-                info!(
-                    "{}: illegal rsync host directory. Skipping.",
-                    path.display()
-                );
-                return
-            }
-        };
-        let dir = match fs::read_dir(&path) {
-            Ok(dir) => dir,
-            Err(err) => {
-                info!(
-                    "Failed to read directory {}: {}. Skipping.",
-                    path.display(), err
-                );
-                return
-            }
-        };
-        let mut keep = false;
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    info!(
-                        "Failed to iterate over directory {}: {}",
-                        path.display(), err
-                    );
-                    return
-                }
-            };
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                info!(
-                    "{}: unexpected file. Skipping.",
-                    entry.path().display()
-                );
-                continue
-            }
-            let deleted = match entry_to_uri_component(&entry) {
-                Some(module) => {
-                    let module = match OwnedModule::new(&host, &module) {
-                        Ok(module) => module,
-                        Err(_) => continue,
-                    };
-                    Self::cleanup_module(&module, entry.path(), modules)
-                }
-                None => {
-                    info!(
-                        "{}: illegal module directory. Skipping",
-                        entry.path().display()
-                    );
-                    continue
-                }
-            };
-            if !deleted {
-                keep = true
-            }
-        }
-        if !keep {
-            let _ = fs::remove_dir_all(path);
-        }
-    }
-
-    /// Return if module has been removed.
-    #[allow(clippy::mutable_key_type)] // XXX False positive, I think
-    fn cleanup_module(
-        module: &Module,
-        path: PathBuf,
-        modules: &HashSet<OwnedModule>
-    ) -> bool {
-        if !modules.contains(module) {
-            if let Err(err) = fs::remove_dir_all(&path) {
-                error!(
-                    "Failed to delete rsync module directory {}: {}",
-                    path.display(),
-                    err
-                );
-            }
-            true
-        }
-        else {
-            false
-        }
-    }
-    */
 
     /// Finishes the validation run.
     ///
@@ -688,16 +671,6 @@ impl fmt::Display for Module {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct OwnedModule(String);
 
-/*
-impl OwnedModule {
-    fn new(authority: &str, module: &str) -> Result<Self, uri::Error> {
-        uri::Rsync::from_string(
-            format!("rsync://{}/{}/", authority, module)
-        ).map(|uri| OwnedModule(uri.canonical_module().into_owned()))
-    }
-}
-*/
-
 
 //--- Deref, AsRef, Borrow
 
@@ -731,19 +704,48 @@ impl fmt::Display for OwnedModule {
 }
 
 
-//------------ Helper Functions ----------------------------------------------
+//------------ ModuleSet -----------------------------------------------------
 
-/*
-fn entry_to_uri_component(entry: &fs::DirEntry) -> Option<String> {
-    let name = entry.file_name();
-    name.into_string().ok().and_then(|name| {
-        if uri::check_uri_ascii(name.as_bytes()).is_ok() {
-            Some(name)
-        }
-        else {
-            None
-        }
-    })
+/// A set of rsync modules.
+///
+/// This is used in cleanup.
+#[derive(Clone, Debug, Default)]
+pub struct ModuleSet {
+    /// The modules under each authority.
+    authorities: HashMap<String, HashSet<String>>,
 }
-*/
+
+impl ModuleSet {
+    /// Adds a the module from a URI to the set.
+    ///
+    /// Returns whether the module was new to the set.
+    pub fn add_from_uri(&mut self, uri: &uri::Rsync) -> bool {
+        self.with_authority(uri, |auth| {
+            let module_name = uri.module_name();
+            if auth.contains(module_name) {
+                false
+            }
+            else {
+                auth.insert(module_name.to_string());
+                true
+            }
+        })
+    }
+
+    fn with_authority<F: FnOnce(&mut HashSet<String>) -> R, R>(
+        &mut self, uri: &uri::Rsync, op: F,
+    ) -> R {
+        // If uri.canonical_authority returns a borrowed str, we avoid an
+        // allocation at the price of a double lookup for a missing
+        // authority. Given that the map should be relatively small, this
+        // should be faster.
+        let auth = uri.canonical_authority();
+        if let Cow::Borrowed(auth) = auth {
+            if let Some(value) = self.authorities.get_mut(auth) {
+                return op(value)
+            }
+        }
+        op(self.authorities.entry(auth.into_owned()).or_default())
+    }
+}
 

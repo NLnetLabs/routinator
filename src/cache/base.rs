@@ -3,6 +3,7 @@
 //! This is a private module. It’s types are re-exported by the parent.
 
 use std::{fs, io};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use bytes::Bytes;
 use log::{error, warn};
@@ -103,6 +104,10 @@ impl Cache {
     /// Starts a new validation run using this cache.
     pub fn start(&self) -> Result<Run, Error> {
         Run::new(self)
+    }
+
+    pub fn cleanup(&self) -> Cleanup {
+        Cleanup::new(self)
     }
 }
 
@@ -264,6 +269,50 @@ impl<'a> Repository<'a> {
             RepoInner::Rsync { rsync } => {
                 rsync.load_file(uri)
             }
+        }
+    }
+}
+
+
+//------------ Cleanup -------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Cleanup<'a> {
+    /// A reference to the underlying cache.
+    cache: &'a Cache,
+
+    rsync: rsync::ModuleSet,
+
+    rrdp: HashSet<uri::Https>,
+}
+
+impl<'a> Cleanup<'a> {
+    fn new(cache: &'a Cache) -> Self {
+        Cleanup {
+            cache,
+            rsync: Default::default(),
+            rrdp: Default::default(),
+        }
+    }
+
+    pub fn retain_rrdp_repository(&mut self, rpki_notify: &uri::Https) {
+        if self.cache.rrdp.is_some() {
+            self.rrdp.insert(rpki_notify.clone());
+        }
+    }
+
+    pub fn retain_rsync_module(&mut self, uri: &uri::Rsync) {
+        if self.cache.rsync.is_some() {
+            self.rsync.add_from_uri(uri);
+        }
+    }
+
+    pub fn commit(self) {
+        if let Some(rsync) = self.cache.rsync.as_ref() {
+            rsync.cleanup(&self.rsync)
+        }
+        if let Some(rrdp) = self.cache.rrdp.as_ref() {
+            rrdp.cleanup(&self.rrdp)
         }
     }
 }

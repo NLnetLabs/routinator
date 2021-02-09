@@ -435,19 +435,6 @@ impl Server {
         Ok(Some(data.into()))
     }
 
-    /*
-    /// Removes the server’s local cache if it hasn’t been used.
-    ///
-    /// Returns whether it indeed removed the cache.
-    pub fn remove_unused(&self) -> bool {
-        if self.updated.load(Relaxed) && !self.broken.load(Relaxed) {
-            return false
-        }
-        let _ = fs::remove_dir_all(self.server_dir.base());
-        true
-    }
-    */
-
     /// Return the server metrics if the server was ever updated.
     pub fn metrics(&self) -> Option<RrdpServerMetrics> {
         if self.updated.load(Relaxed) {

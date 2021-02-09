@@ -508,7 +508,7 @@ impl Server {
             notify.notify();
         }
         history.mark_update_done();
-        Ok(())
+        validation.cleanup()
     }
 }
 
@@ -669,6 +669,7 @@ impl Vrps {
             &mut metrics,
             process.config().unsafe_vrps,
         );
+        validation.cleanup()?;
         let filters = self.filters.as_ref().map(AsRef::as_ref);
         let res = match self.output {
             Some(ref path) => {
@@ -804,6 +805,7 @@ impl Validate {
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
+        validation.cleanup()?;
         let vrps = AddressOrigins::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
@@ -951,6 +953,7 @@ impl ValidateDocument {
             error!("RTA did not validate. (process)");
             return Err(ExitError::Invalid);
         }
+        validation.cleanup()?;
 
         match rta_validation.finalize() {
             Ok(rta) => {
@@ -1020,6 +1023,7 @@ impl Update {
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (_, metrics) = validation.process_origins()?;
+        validation.cleanup()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }

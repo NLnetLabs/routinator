@@ -24,7 +24,7 @@
 //  mirroring the structure of the base module, i.e., they also have `Cache`
 //  and `Run` types.
 //
-pub use self::base::{Cache, Run, Repository};
+pub use self::base::{Cache, Cleanup, Run, Repository};
 
 mod base;
 mod rrdp;

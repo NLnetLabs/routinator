@@ -3,7 +3,7 @@
 /// This is a private module. It’s types are reexported by the parent.
 
 use std::fs;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
@@ -95,6 +95,11 @@ impl Cache {
 
     pub fn start(&self) -> Result<Run, Error> {
         Run::new(self)
+    }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup(&self, _retain: &HashSet<uri::Https>) {
+        // XXX Unimplemented pending RRDP rewrite.
     }
 }
 
@@ -252,12 +257,6 @@ impl<'a> Run<'a> {
         self.servers.read().unwrap().get(server_id).load_file(uri)
     }
 
-    /*
-    pub fn cleanup(&self) {
-        self.servers.write().unwrap().cleanup(&self.cache.cache_dir);
-    }
-    */
-
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_inner().unwrap().into_metrics()
     }
@@ -265,7 +264,6 @@ impl<'a> Run<'a> {
     pub fn done(self, metrics: &mut Metrics) {
         metrics.set_rrdp(self.into_metrics())
     }
-
 }
 
 
@@ -322,56 +320,6 @@ impl ServerSet {
     pub fn get(&self, id: ServerId) -> Arc<Server> {
         self.servers[id.0].clone()
     }
-
-    /*
-    /// Cleans up the server set.
-    ///
-    /// This will call `remove_unused` and clear out the server set.
-    pub fn cleanup(&mut self, cache_dir: &Path) {
-        self.servers = self.servers.drain(..).filter(|server| {
-            !server.remove_unused()
-        }).collect();
-        self.uris = self.servers.iter().enumerate().map(|(idx, server)| {
-            (server.notify_uri().clone(), ServerId(idx))
-        }).collect();
-
-        let dir = match cache_dir.read_dir() {
-            Ok(dir) => dir,
-            Err(err) => {
-                info!(
-                    "Failed to open RRDP cache directory '{}': {}",
-                    cache_dir.display(), err
-                );
-                return;
-            }
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    info!(
-                        "Failed to read RRDP cache directory '{}': {}",
-                        cache_dir.display(), err
-                    );
-                    return;
-                }
-            };
-            let path = entry.path();
-            if !self.contains_server_dir(&path) {
-                if let Err(err) = fs::remove_dir_all(&path) {
-                    info!(
-                        "Failed to delete unused RRDP server dir '{}': {}",
-                        path.display(), err
-                    );
-                }
-            }
-        }
-    }
-
-    fn contains_server_dir(&self, path: &Path) -> bool {
-        self.servers.iter().any(|server| server.server_dir() == path)
-    }
-    */
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_iter().filter_map(|server| server.metrics()).collect()
