@@ -1,7 +1,49 @@
 //! A store for correctly published RPKI objects.
+//!
+//! To be more resistant against accidental or malicious errors in the data
+//! published by repositories, we retain a separate copy of all RPKI data that
+//! has been found to be covered by a valid manifest in what we call the
+//! _store._ The types in this module provide access to this store.
+//!
+//! The store is initialized and configured via [`Store`]. During validation,
+//! [`Run`] is used whicht can be aquired from the store via the
+//! [`start`][Store::start] method. It provides access to the trust anchor
+//! certificates via the [`load_ta`][Run::load_ta] and
+//! [`update_ta`][Run::update_ta] methods and individual repositories via
+//! [`repository`][Run::repository]. These repositories are represented by
+//! the [`Repository`] type and allow loading manifests and objects. They can
+//! only be updated at once.
+//!
+//! # Data Storage
+//!
+//! The store uses a [sled] database to store RPKI data. For reach
+//! RPKI repository accessed via RRDP, two separate trees are used.
+//!
+//! The _manifest tree_ contains all the manifests published via that
+//! repository keyed by their rsync URI. The manifests are stored as
+//! [`StoredManifest`] objects, which include the raw manifest, the raw CRL
+//! referenced by the manifest plus some additional meta data.
+//!
+//! The _objects tree_ contains all other objects. These objects are keyed by
+//! a concatenation of the rsync URI of the manifest and their file name on
+//! the manifest. This makes it possible to retain multiple versions of an
+//! object that appeared on multiple manifests for some reasons. It also makes
+//! it easier to iterate over all objects of a manifest for instance during
+//! cleanup. Objects are stored as [`StoredObject`].
+//!
+//! For an RRDP repository, the rpkiNotify URI of the repository is used as
+//! the name of the manifest tree, while the object tree uses this URI
+//! prefixed by `"objects:"`.
+//!
+//! There is only one pair of manifest and objects tree for rsync since the
+//! name of the repository is part of the object URIs. The manifest tree is
+//! named `"rsync"` and the objects tree `"objects:rsync"`.
+//!
+//! [sled]: https://github.com/spacejam/sled
 
 use std::{error, fmt, fs, io, mem};
 use std::convert::{TryFrom, TryInto};
+use std::path::Path;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use log::error;
@@ -26,6 +68,20 @@ use crate::validation::CaCert;
 //------------ Store ---------------------------------------------------------
 
 /// A store for correctly published RPKI objects.
+///
+/// The store retains a copy of curated, published RPKI data. Its intended use
+/// is for keeping most recent data of a given RPKI publication point that was
+/// found to be correctly published. However, the store doesn’t enforce this,
+/// and can be used for other purposes as well.
+///
+/// A store can be created via the [`new`][Store::new] function which will
+/// initialize a new store on disk if necessary and open it. If you only want
+/// to make sure that the store is initilized without actually using it,
+/// the [`init`][Store::init] function can be used.
+///
+/// To use the store during a validation run, the [`start`][Store::start]
+/// method is used. It returns a [`Run`] object providing actual access to
+/// the store.
 #[derive(Clone, Debug)]
 pub struct Store {
     /// The database.
@@ -39,47 +95,57 @@ pub struct Store {
 }
 
 impl Store {
-    /// Initializes the store.
-    pub fn init(config: &Config) -> Result<(), Error> {
+    /// Attempts to create the sled database under the given cache dir.
+    ///
+    /// NB: The database will be opened below the given directory. I,e., the
+    /// provided path is `cache_dir` from the
+    /// [`Config`][crate::config::Config].
+    fn open_db(cache_dir: &Path) -> Result<sled::Db, Error> {
         // XXX This checks that config.cache_dir exists which actually happens
         //     elsewhere again. Perhaps move it to Config and only do it once?
-        if let Err(err) = fs::read_dir(&config.cache_dir) {
+        if let Err(err) = fs::read_dir(cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
                 error!(
                     "Missing repository directory {}.\n\
                      You may have to initialize it via \
                      \'routinator init\'.",
-                     config.cache_dir.display()
+                     cache_dir.display()
                 );
             }
             else {
                 error!(
                     "Failed to open repository directory {}: {}",
-                    config.cache_dir.display(), err
+                    cache_dir.display(), err
                 );
             }
             return Err(Error)
         }
-        Ok(())
 
+        let db_path = cache_dir.join("store.db");
+        sled::open(&db_path).map_err(|err| {
+            error!(
+                "Failed to open storage database at {}: {}",
+                db_path.display(),
+                err
+            );
+            Error
+        })
+    }
+
+    /// Initializes the store.
+    ///
+    /// Ensures that the database is present and initialized.
+    ///
+    /// This function is called implicitely by [`new`][Store::new].
+    pub fn init(config: &Config) -> Result<(), Error> {
+        Self::open_db(&config.cache_dir).map(|_| ())
     }
 
     /// Creates a new store.
     pub fn new(config: &Config) -> Result<Self, Error> {
-        Self::init(config)?;
-        let db_path = config.cache_dir.join("store.db");
-        let db = match sled::open(&db_path) {
-            Ok(db) => db,
-            Err(err) => {
-                error!(
-                    "Failed to open storage database at {}: {}",
-                    db_path.display(),
-                    err
-                );
-                return Err(Error);
-            }
-        };
-        Ok(Self::with_db(db, config.disable_rsync, config.disable_rrdp))
+        Self::open_db(&config.cache_dir).map(|db| {
+            Self::with_db(db, config.disable_rsync, config.disable_rrdp)
+        })
     }
 
     /// Creates a store using a provided database.

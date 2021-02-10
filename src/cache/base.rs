@@ -106,6 +106,10 @@ impl Cache {
         Run::new(self)
     }
 
+    /// Prepares for a cleanup run.
+    ///
+    /// The method returns a [`Cleanup`] value that can be used to register
+    /// those repositories that should be kept around.
     pub fn cleanup(&self) -> Cleanup {
         Cleanup::new(self)
     }
@@ -276,17 +280,28 @@ impl<'a> Repository<'a> {
 
 //------------ Cleanup -------------------------------------------------------
 
+/// A builder-style type for cache cleanup.
+///
+/// This type can be requested from a cache via [`Cache::cleanup`]. 
+/// Repositories that should be be kept in the cache can be registered via
+/// the [`retain_rrdp_repository`][Cleanup::retain_rrdp_repository] and
+/// [`retain_rsync_module`][Cleanup::retain_rsync_module] methods. A call to
+/// [`commit`][Cleanup::commit] will cause the cache to delete all
+/// repositories that have not been registered.
 #[derive(Clone, Debug)]
 pub struct Cleanup<'a> {
     /// A reference to the underlying cache.
     cache: &'a Cache,
 
+    /// The set of rsync modules to retain.
     rsync: rsync::ModuleSet,
 
+    /// The set of RRDP repositories to retain.
     rrdp: HashSet<uri::Https>,
 }
 
 impl<'a> Cleanup<'a> {
+    /// Creates a new cleanup object for the given cache..
     fn new(cache: &'a Cache) -> Self {
         Cleanup {
             cache,
@@ -295,18 +310,21 @@ impl<'a> Cleanup<'a> {
         }
     }
 
+    /// Registers an RRDP repository to be retained in cleanup.
     pub fn retain_rrdp_repository(&mut self, rpki_notify: &uri::Https) {
         if self.cache.rrdp.is_some() {
             self.rrdp.insert(rpki_notify.clone());
         }
     }
 
+    /// Registers an rsync module to be retained in cleanup.
     pub fn retain_rsync_module(&mut self, uri: &uri::Rsync) {
         if self.cache.rsync.is_some() {
             self.rsync.add_from_uri(uri);
         }
     }
 
+    /// Performs the cleanup run.
     pub fn commit(self) {
         if let Some(rsync) = self.cache.rsync.as_ref() {
             rsync.cleanup(&self.rsync)

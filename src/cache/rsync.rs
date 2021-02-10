@@ -104,6 +104,10 @@ impl Cache {
         Run::new(self)
     }
 
+    /// Cleans the cache only keeping the modules included in `retain`.
+    //
+    //  This currently is super agressive, deleting everyting that it doesn’t
+    //  like.
     pub fn cleanup(&self, retain: &ModuleSet) {
         if self.command.is_none() {
             return
@@ -153,6 +157,9 @@ impl Cache {
         }
     }
 
+    /// Removes all modules from the directory that are not in `retain`.
+    ///
+    /// Returns whether the host should be kept or can be deleted, too.
     fn cleanup_host(
         &self, entry: &fs::DirEntry, retain: &HashSet<String>
     ) -> bool {
