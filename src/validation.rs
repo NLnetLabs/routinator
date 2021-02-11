@@ -433,11 +433,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         cert: &'a Arc<CaCert>,
         processor: P::ProcessCa,
     ) -> Result<Self, Error> {
-        Ok(PubPoint {
-            run, cert, processor,
-            cache: run.cache.repository(cert),
-            store: run.store.repository(cert)?,
-        })
+        let cache = run.cache.repository(cert);
+        let store = run.store.repository(cert, cache.as_ref())?;
+        Ok(PubPoint { run, cert, processor, cache, store })
     }
 
     pub fn process(self) -> Result<Vec<CaTask<P::ProcessCa>>, Error> {

@@ -261,6 +261,11 @@ enum RepoInner<'a> {
 }
 
 impl<'a> Repository<'a> {
+    /// Returns whether the repository was accessed via RRDP.
+    pub fn is_rrdp(&self) -> bool {
+        matches!(self.0, RepoInner::Rrdp { .. })
+    }
+
     /// Loads an object from the repository.
     ///
     /// If the object is unavailable for some reason, logs diagnostic

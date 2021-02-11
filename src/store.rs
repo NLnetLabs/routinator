@@ -39,6 +39,11 @@
 //! name of the repository is part of the object URIs. The manifest tree is
 //! named `"rsync"` and the objects tree `"objects:rsync"`.
 //!
+//! Whether the appropriate RRDP trees or the rsync trees are used depends
+//! on the presence of the rpkiNotify URI in the CA certificate for a
+//! publication point. If it is present, the RRDP trees are used independently
+//! of how the publication point was actually accessed.
+//!
 //! [sled]: https://github.com/spacejam/sled
 
 use std::{error, fmt, fs, io, mem};
@@ -86,12 +91,6 @@ use crate::validation::CaCert;
 pub struct Store {
     /// The database.
     db: sled::Db,
-
-    /// Is rsync support disabled?
-    disable_rsync: bool,
-
-    /// Is RRDP support disabled?
-    disable_rrdp: bool,
 }
 
 impl Store {
@@ -141,18 +140,18 @@ impl Store {
         Self::open_db(&config.cache_dir).map(|_| ())
     }
 
-    /// Creates a new store.
+    /// Creates a new store based on configuration information.
     pub fn new(config: &Config) -> Result<Self, Error> {
         Self::open_db(&config.cache_dir).map(|db| {
-            Self::with_db(db, config.disable_rsync, config.disable_rrdp)
+            Self::with_db(db)
         })
     }
 
     /// Creates a store using a provided database.
-    pub fn with_db(
-        db: sled::Db, disable_rsync: bool, disable_rrdp: bool
-    ) -> Self {
-        Store { db, disable_rsync, disable_rrdp }
+    ///
+    /// This can be used for testing.
+    pub fn with_db( db: sled::Db) -> Self {
+        Store { db }
     }
 
     /// Start a validation run with the store.
@@ -164,26 +163,25 @@ impl Store {
         &self,
         mut cache: cache::Cleanup,
     ) -> Result<(), Error> {
-        if !self.disable_rrdp {
-            for tree_name in self.db.tree_names() {
-                if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
-                    let names = TreeNames::from_rpki_notify(
-                        Some(&rpki_notify)
-                    );
-                    if Repository::new(self, &names)?.cleanup_rrdp()? {
-                        cache.retain_rrdp_repository(&rpki_notify);
-                    }
-                    else {
-                        names.drop_trees(&self.db)?;
-                    }
+        // Cleanup RRDP repositories
+        for tree_name in self.db.tree_names() {
+            if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
+                let names = TreeNames::rrdp(&rpki_notify);
+                if Repository::new(self, &names)?.cleanup_rrdp()? {
+                    cache.retain_rrdp_repository(&rpki_notify);
+                }
+                else {
+                    names.drop_trees(&self.db)?;
                 }
             }
         }
-        if !self.disable_rsync {
-            Repository::new(
-                self, &TreeNames::rsync()
-            )?.cleanup_rsync(&mut cache)?
-        }
+
+        // Cleanup rsync modules
+        Repository::new(
+            self, &TreeNames::rsync()
+        )?.cleanup_rsync(&mut cache)?;
+
+        // Cleanup cache.
         cache.commit();
         Ok(())
     }
@@ -224,16 +222,24 @@ impl<'a> Run<'a> {
     }
 
     pub fn repository(
-        &self, ca: &CaCert
+        &self, ca_cert: &CaCert, cache: Option<&cache::Repository>
     ) -> Result<Repository, Error> {
-        if !self.store.disable_rrdp {
-            Repository::new(self.store, &TreeNames::from_rpki_notify(
-                ca.rpki_notify())
-            )
+        match (ca_cert.rpki_notify(), cache.map(|cache| cache.is_rrdp())) {
+            (Some(rpki_notify), Some(true)) | (Some(rpki_notify), None) => {
+                self.rrdp_repository(rpki_notify)
+            }
+            _ => self.rsync_repository()
         }
-        else {
-            Repository::new(self.store, &TreeNames::from_rpki_notify(None))
-        }
+    }
+
+    pub fn rrdp_repository(
+        &self, rpki_notify: &uri::Https,
+    ) -> Result<Repository, Error> {
+        Repository::new(self.store, &TreeNames::rrdp(rpki_notify))
+    }
+
+    pub fn rsync_repository(&self) -> Result<Repository, Error> {
+        Repository::new(self.store, &TreeNames::rsync())
     }
 }
 
@@ -712,11 +718,8 @@ struct TreeNames<'a> {
 }
 
 impl<'a> TreeNames<'a> {
-    pub fn from_rpki_notify(rpki_notify: Option<&'a uri::Https>) -> Self {
-        match rpki_notify {
-            Some(uri) => Self::from_manifest_name(uri.as_ref()),
-            None => Self::rsync()
-        }
+    pub fn rrdp(rpki_notify: &'a uri::Https) -> Self {
+        Self::from_manifest_name(rpki_notify.as_ref())
     }
 
     pub fn rsync() -> Self {
