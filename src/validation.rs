@@ -1,4 +1,22 @@
 /// Validation of RPKI data.
+///
+/// This module provides types and traits implementing validation of RPKI data
+/// from a set of trust anchor locators to some output data.
+///
+/// Data validation is configured through [`Validation`] so that the
+/// configuration can be used for multiple validation runs. This includes both
+/// a [cache][crate::cache::Cache] and [store][crate::store::Store] to use
+/// for validation.
+///
+/// Individual validation runs are managed through [`Run`]. Such a runner can
+/// be obtained from validation via its [`start`][Validation::start] method.
+/// It in turn provides the [`process`][Run::process] method which drives the
+/// actual validation.
+///
+/// Validation runs are generic over what exactly should be done with valid
+/// RPKI data. The trait [`ProcessRun`] represents a full validation run with
+/// the accompanying trait [`ProcessCa`] dealing with individual publication
+/// points.
 
 use std::{fs, io};
 use std::collections::{HashMap, HashSet};
@@ -32,14 +50,34 @@ use crate::store::{Store, StoredManifest};
 
 /// The minimum number of manifest entries that triggers CRL serial caching.
 ///
-/// The value has been determined exprimentally with the RPKI repository at
+/// The value has been determined experimentally with the RPKI repository at
 /// a certain state so may or may not be a good one, really.
 const CRL_CACHE_LIMIT: usize = 50;
 
 
 //------------ Validation ----------------------------------------------------
 
-/// Information on the trust anchors and rules for validation.
+/// Information for RPKI validation.
+///
+/// A validation value can be created from the configuration via
+/// [Validation::new]. If you don’t actually want to perform a validation run
+/// but just initialize everything, [Validation::init] will suffice.
+///
+/// When created, the set of TALs is loaded and kept around. It will only be
+/// refreshed explicitly through the [`reload_tals`][Self::reload_tals]
+/// method.
+///
+/// Before starting the very first validation run, you need to call
+/// [`ignite`][Self::ignite] at least once. As this may spawn threads, this
+/// must happen after a possible fork.
+///
+/// A run is started via the [`start`][Self::start] method, providing a
+/// processor that handles valid data. The method returns a [Run] value that
+/// drives the validation run. For route origin validation, a shortcut is
+/// available through [`process_origins`][Self::process_origins].
+///
+/// Finally, the method [`cleanup`][Self::cleanup] can be used to perform
+/// cleanup on both the store and cache owned by the validation.
 #[derive(Debug)]
 pub struct Validation {
     /// The directory to load TALs from.
@@ -74,7 +112,12 @@ pub struct Validation {
 }
 
 impl Validation {
-    /// Initializes whatever needs initializing.
+    /// Initializes validation without creating a value.
+    ///
+    /// This ensures that the TAL directory is present and logs a hint how
+    /// to achieve that if not.
+    ///
+    /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Error> {
         if let Err(err) = fs::read_dir(&config.tal_dir) {
             if err.kind() == io::ErrorKind::NotFound {
@@ -96,7 +139,13 @@ impl Validation {
         Ok(())
     }
 
-    /// Creates a new set of validation rules from the configuration.
+    /// Creates a new validation.
+    ///
+    /// Takes all necessary information for validation itself from `config`.
+    /// It also takes over the provided cache and store for use during
+    /// validation.
+    ///
+    /// Loads the initial set of TALs and errors out if that fails.
     pub fn new(
         config: &Config,
         cache: Cache,
@@ -119,7 +168,15 @@ impl Validation {
         Ok(res)
     }
 
-    /// Reloads the TAL files based on the config object.
+    /// Reloads the set of TALs.
+    ///
+    /// Assumes that all regular files with an extension of `tal` in the
+    /// TAL directory specified during object creation are TAL files and
+    /// tries to load and decode them. Fails if that fails for at least one
+    /// of those files.
+    ///
+    /// It is not considered an error if there are no TAL files in the TAL
+    /// directory. However, a warning will be logged in this case.
     pub fn reload_tals(&mut self) -> Result<(), Error> {
         let mut res = Vec::new();
         let dir = match fs::read_dir(&self.tal_dir) {
@@ -191,7 +248,7 @@ impl Validation {
             res.push(tal);
         }
         if res.is_empty() {
-            error!(
+            warn!(
                 "No TALs found in TAL directory. Starting anyway."
             );
         }
@@ -200,6 +257,10 @@ impl Validation {
     }
 
     /// Converts a path into a TAL label.
+    ///
+    /// This will be an explicitly configured TAL label if the file name
+    /// portion of the path is registered in `self.tal_labels` or the file
+    /// name without the `tal` extension otherwise.
     fn path_to_tal_label(&self, path: &Path) -> String {
         if let Some(name) = path.file_name().unwrap().to_str() {
             if let Some(label) = self.tal_labels.get(name) {
@@ -211,17 +272,27 @@ impl Validation {
 
     /// Ignites validation processing.
     ///
-    /// This spawns of threads and therefore needs to be done after a
+    /// This spawns threads and therefore needs to be done after a
     /// possible fork.
     pub fn ignite(&mut self) -> Result<(), Error> {
         self.cache.ignite()
     }
 
     /// Starts a validation run.
-    pub fn start<P>(&self, processor: P) -> Result<Run<P>, Error> {
+    ///
+    /// During the run, `processor` will be responsible for dealing with
+    /// valid objects. It must implement the [`ProcessRun`] trait.
+    ///
+    /// The method returns a [`Run`] that drives the validation run.
+    pub fn start<P: ProcessRun>(
+        &self, processor: P
+    ) -> Result<Run<P>, Error> {
         Ok(Run::new(self, self.cache.start()?, self.store.start(), processor))
     }
 
+    /// Performs a route origin validation run.
+    ///
+    /// Returns the result of the run and the run’s metrics.
     pub fn process_origins(
         &self
     ) -> Result<(OriginsReport, Metrics), Error> {
@@ -232,6 +303,7 @@ impl Validation {
         Ok((report, metrics))
     }
 
+    /// Cleans the cache and store owned by the validation.
     pub fn cleanup(&self) -> Result<(), Error> {
         self.store.cleanup(self.cache.cleanup())
     }
@@ -242,16 +314,30 @@ impl Validation {
 //------------ Run -----------------------------------------------------------
 
 /// A single validation run.
-#[derive(Debug)]
+///
+/// The runner is generic over the processor of valid data which must
+/// implement the [`ProcessRun`] trait. The actual run is triggered by the
+/// [`process`][Self::process] method. Upon completion, metrics of the run
+/// can be extracted through [`done`][Self::done].
 pub struct Run<'a, P> {
+    /// A reference to the underlying validation.
     validation: &'a Validation,
+
+    /// The runner for the cache.
     cache: cache::Run<'a>,
+
+    /// The runner for the store.
     store: store::Run<'a>,
+
+    /// The processor for valid data.
     processor: P,
+
+    /// The metrics collected during the run.
     metrics: Metrics,
 }
 
 impl<'a, P> Run<'a, P> {
+    /// Creates a new runner from all the parts.
     fn new(
         validation: &'a Validation,
         cache: cache::Run<'a>,
@@ -264,6 +350,10 @@ impl<'a, P> Run<'a, P> {
         }
     }
 
+    /// Finishes the validation run and returns the metrics.
+    ///
+    /// If you are not interested in the metrics, you can simple drop the
+    /// value, instead.
     pub fn done(mut self) -> Metrics {
         self.cache.done(&mut self.metrics);
         self.store.done(&mut self.metrics);
@@ -419,15 +509,26 @@ impl<'a, P: ProcessRun> Run<'a, P> {
 
 //------------ PubPoint ------------------------------------------------------
 
+/// Validation of a single publication point.
 struct PubPoint<'a, P: ProcessRun> {
+    /// A reference to the runner.
     run: &'a Run<'a, P>,
+
+    /// A reference to the CA certificate of the publication point.
     cert: &'a Arc<CaCert>,
+
+    /// The processor for valid data at this publication point.
     processor: P::ProcessCa,
+
+    /// The point’s repository in the cache if available.
     cache: Option<cache::Repository<'a>>,
+
+    /// The point’s repository in the store.
     store: store::Repository,
 }
 
 impl<'a, P: ProcessRun> PubPoint<'a, P> {
+    /// Creates a new publication point validator based on a CA certificate.
     pub fn new(
         run: &'a Run<'a, P>,
         cert: &'a Arc<CaCert>,
@@ -438,6 +539,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok(PubPoint { run, cert, processor, cache, store })
     }
 
+    /// Performs validation of the publication point.
+    ///
+    /// Upon success, returns a list of all the child CAs of this publication
+    /// point as CA processing tasks.
     pub fn process(self) -> Result<Vec<CaTask<P::ProcessCa>>, Error> {
         let manifest = match self.update_stored()? {
             PointManifest::Valid(manifest) => manifest,
@@ -459,6 +564,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ValidPubPoint::new(self, manifest).process()
     }
 
+    /// Tries to update the stored data for the publication point.
+    ///
+    /// Tries to fetch the updated manifest from the cache. If it differs
+    /// from the stored cache, updates the stored manifest and objects if the
+    /// manifest is valid and all the objects are present and match their
+    /// hashes.
+    ///
+    /// Depending on how far it gets, returns either a validated or raw
+    /// manifest or that the publication point can’t be found at all.
     // Clippy false positive: We are using HashSet<Bytes> here -- Bytes is
     // not a mutable type.
     #[allow(clippy::mutable_key_type)]
@@ -550,7 +664,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
                     update.insert_object(
                         item.file(),
-                        &store::StoredObject::new(content, Some(hash), None)
+                        &store::StoredObject::new(content, Some(hash))
                     )?;
 
                     files.insert(item.file().clone());
@@ -594,6 +708,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok(cached.into())
     }
 
+    /// Tries to validate a manifest acquired from the cache.
+    ///
+    /// Checks that the manifest is correct itself and has been signed by the
+    /// publication point’s CA. Tries to load the associated CRL from the
+    /// cache, validates that against the CA and checks that the manifest
+    /// has not been revoked.
     fn validate_cached_manifest(
         &self, manifest_bytes: Bytes, cache: &cache::Repository
     ) -> Result<ValidPointManifest, ValidationError> {
@@ -756,6 +876,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok((crl_uri, crl, crl_bytes))
     }
 
+    /// Tries to validate a stored manifest.
+    ///
+    /// This is similar to
+    /// [`validate_cached_manifest`][Self::validate_cached_manifest] but has
+    /// less hassle with the CRL because that is actually included in the
+    /// stored manifest.
     fn validate_stored_manifest(
         &self, stored_manifest: StoredManifest
     ) -> Result<ValidPointManifest, ValidationError> {
@@ -859,13 +985,20 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
 //------------ ValidPubPoint -------------------------------------------------
 
+/// Processing of a publication point that is known to be valid.
 struct ValidPubPoint<'a, P: ProcessRun> {
+    /// A reference to the publication point.
     point: PubPoint<'a, P>,
+
+    /// The valid manifest of the point.
     manifest: ValidPointManifest,
+
+    /// The list of child CA processing tasks we want to return eventually.
     child_cas: Vec<CaTask<P::ProcessCa>>,
 }
 
 impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
+    /// Creates a new valid publication point from point and manifest.
     pub fn new(point: PubPoint<'a, P>, manifest: ValidPointManifest) -> Self {
         ValidPubPoint {
             point, manifest,
@@ -873,6 +1006,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         }
     }
 
+    /// Processes the point returning the child CAs.
     pub fn process(mut self) -> Result<Vec<CaTask<P::ProcessCa>>, Error> {
         if self._process()? {
             self.point.processor.commit();
@@ -884,6 +1018,10 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         }
     }
 
+    /// Processes the point returning whether the point was accepted.
+    ///
+    /// If the processor votes to abort processing of the entire point, this
+    /// will return `Ok(false)`.
     pub fn _process(&mut self) -> Result<bool, Error> {
         for item in self.manifest.content.iter() {
             let (file, hash) = item.into_pair();
@@ -909,10 +1047,10 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         Ok(true)
     }
 
-    /// Processes a single object on the manifest.
+    /// Processes a single object.
     ///
-    /// Returns whether processing of the manifest should continue or whether
-    /// the entire (!) manifest should be disregarded.
+    /// Returns whether processing should continue or whether the entire (!)
+    /// publication point should be disregarded.
     fn process_object(
         &mut self, uri: uri::Rsync, file: &[u8], hash: ManifestHash,
     ) -> Result<bool, Error> {
@@ -1083,6 +1221,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         Ok(())
     }
 
+    /// Checks whether `cert` has been revoked.
     fn check_crl(
         &self, uri: &uri::Rsync, cert: &Cert
     ) -> Result<(), ValidationError> {
@@ -1113,16 +1252,19 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
 /// Any task that can be queued for delayed processing.
 enum Task<'a, P> {
+    /// The task is to process a trust anchor locator.
     Tal(TalTask<'a>),
+
+    /// The task is to process a CA.
     Ca(CaTask<P>),
 }
 
 
 //------------ TalTask ------------------------------------------------------
 
-/// A task for processing a single TAL.
+/// A task for processing a single trust anchor locator.
 struct TalTask<'a> {
-    /// A reference to the actual tal.
+    /// A reference to the actual TAL.
     tal: &'a Tal,
 
     /// The index of this TAL in the metrics.
@@ -1141,6 +1283,9 @@ struct CaTask<P> {
     processor: P,
 
     /// Defer processing?
+    ///
+    /// Processing is deferred if the CA lives in a different repository than
+    /// its issuing CA:
     defer: bool,
 }
 
@@ -1164,10 +1309,10 @@ pub struct CaCert {
 
     /// The parent CA.
     /// 
-    /// This will be none for a trust anchor.
+    /// This will be `None` for a trust anchor certificate.
     parent: Option<Arc<CaCert>>,
 
-    /// The index of the TAL.
+    /// The index of the TAL in the metrics.
     tal: usize,
 }
 
@@ -1179,14 +1324,16 @@ impl CaCert {
         Self::new(cert, uri, None, tal)
     }
 
+    /// Creates a new CA cert for an issued CA.
     pub fn chain(
-        this: &Arc<Self>,
+        issuer: &Arc<Self>,
         uri: uri::Rsync,
         cert: ResourceCert
     ) -> Result<Arc<Self>, Error> {
-        Self::new(cert, TalUri::Rsync(uri), Some(this.clone()), this.tal)
+        Self::new(cert, TalUri::Rsync(uri), Some(issuer.clone()), issuer.tal)
     }
 
+    /// Creates a new CA cert from its various parts.
     fn new(
         cert: ResourceCert,
         uri: TalUri, 
@@ -1225,7 +1372,7 @@ impl CaCert {
         }))
     }
 
-    /// Checks whether a child cert has appeared in chain already.
+    /// Checks whether a child cert has appeared in the chain already.
     pub fn check_loop(&self, cert: &Cert) -> Result<(), Error> {
         self._check_loop(cert.subject_key_identifier())
     }
@@ -1246,26 +1393,31 @@ impl CaCert {
         }
     }
 
+    /// Returns a reference to the resource certificate.
     pub fn cert(&self) -> &ResourceCert {
         &self.cert
     }
 
+    /// Returns a reference the caRepository URI of the certificate.
     pub fn ca_repository(&self) -> &uri::Rsync {
         &self.ca_repository
     }
 
+    /// Returns a reference to the rpkiManifest URI of the certificate.
     pub fn rpki_manifest(&self) -> &uri::Rsync {
         &self.rpki_manifest
     }
 
+    /// Returns a reference to the rpkiNotify URI of the certificate.
     pub fn rpki_notify(&self) -> Option<&uri::Https> {
         self.cert.rpki_notify()
     }
 } 
 
 
-//------------ PointManinfest ------------------------------------------------
+//------------ PointManifest -------------------------------------------------
 
+/// The various results of getting manifest from cache and store.
 // XXX Clippy complains that ValidPointManifest is 1160 bytes. I _think_ this
 //     is fine here as PointManifest is just a helper type to make things
 //     easier and everything eventually turns into a ValidPointManifest, but
@@ -1273,8 +1425,13 @@ impl CaCert {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 enum PointManifest {
+    /// The manifest has been loaded from store but has not been verified.
     Unverified(StoredManifest),
+
+    /// The manifest has been loaded and has been validated.
     Valid(ValidPointManifest),
+
+    /// The manifest has not been found anywhere.
     NotFound,
 }
 
@@ -1302,23 +1459,40 @@ impl From<ValidPointManifest> for PointManifest {
 
 //------------ ValidPointManifest --------------------------------------------
 
+/// All information from a validated manifest.
 #[derive(Clone, Debug)]
 struct ValidPointManifest {
+    /// The EE certificate the manifest was signed with.
     ee_cert: ResourceCert,
+
+    /// The payload of the manifest.
     content: ManifestContent,
+
+    /// The CRL distribution point URI of the manifest.
+    ///
+    /// This is here separately because it may be `None` in a `ResourceCert`
+    /// but can’t be in a valid CA cert.
     crl_uri: uri::Rsync,
+
+    /// The CRL.
     crl: Crl,
+
+    /// The raw bytes of the manifest.
     manifest_bytes: Bytes,
+
+    /// The raw bytes of the CRL.
     crl_bytes: Bytes,
 }
 
 
 //------------ ProcessRun ----------------------------------------------------
 
+/// A type that can process the valid data from the RPKI.
 pub trait ProcessRun: Send + Sync {
+    /// The type processing the valid data of a single publication point.
     type ProcessCa: ProcessCa;
 
-    /// Process the given trust anchor.
+    /// Processes the given trust anchor.
     ///
     /// If the method wants the content of this trust anchor to be validated
     /// and processed, it returns a processor for it as some success value.
@@ -1332,8 +1506,9 @@ pub trait ProcessRun: Send + Sync {
 
 //------------ ProcessCa -----------------------------------------------------
 
+/// A type that can process the valid data from an RPKI publication point.
 pub trait ProcessCa: Sized + Send + Sync {
-    /// Updates the refresh time for this CA.
+    /// Updates the refresh time for this publication poont.
     fn update_refresh(&mut self, _not_after: Time) { }
 
     /// Determines whether an object with the given URI should be processed.

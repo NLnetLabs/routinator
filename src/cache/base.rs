@@ -47,9 +47,9 @@ pub struct Cache {
 impl Cache {
     /// Initializes the cache without creating a value.
     ///
-    /// Ensures that the base directory exisits and creates it if necessary.
+    /// Ensures that the base directory exists and creates it if necessary.
     ///
-    /// The function is called implicitely by [`new`][Cache::new].
+    /// The function is called implicitly by [`new`][Cache::new].
     pub fn init(config: &Config) -> Result<(), Error> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
@@ -120,6 +120,10 @@ impl Cache {
 
 /// Using the cache for a single validation run.
 ///
+/// The type provides access to updated versions of trust anchor certificates
+/// and RPKI repositories via the [`load_ta`][Self::load_ta] and
+/// [`repository`][Self::repository] methods, respectively.
+///
 /// This type references the underlying [`Cache`]. It can be used with
 /// multiple threads using
 /// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
@@ -172,8 +176,13 @@ impl<'a> Run<'a> {
 
     /// Loads the trust anchor certificate at the given URI.
     ///
-    /// If the certificate cannot be loaded for whatever reason, logs
-    /// diagnostic information and returns `None`.
+    /// The method will block until the certificate has been downloaded or
+    /// the download failed. In the latter case, diagnostic information will
+    /// be logged and `None` returned.
+    ///
+    /// Trust anchor certificates referenced by a rsync URI will cause that
+    /// module to be updated once wheres those referenced via HTTPS URIs
+    /// will be newly downloaded upon each call.
     pub fn load_ta(&self, uri: &TalUri) -> Option<Bytes> {
         match *uri {
             TalUri::Rsync(ref uri) => {

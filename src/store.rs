@@ -14,6 +14,14 @@
 //! the [`Repository`] type and allow loading manifests and objects. They can
 //! only be updated at once.
 //!
+//! # Error Handling
+//!
+//! Pretty much all methods and functions provided by this module can return
+//! an error. This is because the underlying database may produce an error at
+//! any time. The concrete error reason is logged and our generic
+//! [`Error`][crate::operation::Error] is returned. When this happens, the
+//! store should be considered broken and not be used anymore.
+//!
 //! # Data Storage
 //!
 //! The store uses a [sled] database to store RPKI data. For reach
@@ -39,10 +47,9 @@
 //! name of the repository is part of the object URIs. The manifest tree is
 //! named `"rsync"` and the objects tree `"objects:rsync"`.
 //!
-//! Whether the appropriate RRDP trees or the rsync trees are used depends
-//! on the presence of the rpkiNotify URI in the CA certificate for a
-//! publication point. If it is present, the RRDP trees are used independently
-//! of how the publication point was actually accessed.
+//! In addition, the default tree of the database is used for trust anchor
+//! certificates. These are keyed by their URI. Only their raw bytes are
+//! stored.
 //!
 //! [sled]: https://github.com/spacejam/sled
 
@@ -53,7 +60,6 @@ use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use log::error;
 use rpki::repository::crypto::digest::DigestAlgorithm;
-use rpki::repository::crypto::keys::KeyIdentifier;
 use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::{Time, ValidationError};
@@ -159,6 +165,16 @@ impl Store {
         Run::new(self)
     }
 
+    /// Cleans up the store.
+    ///
+    /// All publication points that have an expired manifest will be removed.
+    /// RRDP repositories that have no more publication points are removed,
+    /// too.
+    ///
+    /// The method also triggers a cleanup of the cache via the provided
+    /// cache cleanup object. All RRDP repositories and rsync modules that
+    /// have still non-expired publication points will be registered to be
+    /// retained with the cache cleanup and then a cleaning run is started.
     pub fn cleanup(
         &self,
         mut cache: cache::Cleanup,
@@ -192,27 +208,53 @@ impl Store {
 //------------ Run -----------------------------------------------------------
 
 /// A single validation run on using the store.
+///
+/// The type provides access to the stored versions of trust anchor
+/// certificates via the [`load_ta`][Self::load_ta] method and repositories
+/// through the [`repository`][Self::repository] method and its more specific
+/// friends [`rrdp_repository`][Self::rrdp_repository] and
+/// [`rsync_repository`][Self::rsync_repository].
+///
+/// Stored trust anchor certificates can be updated via
+/// [`update_ta`][Self::update_ta] on [`Run`] directly, while the
+/// [`Repository`] provides means to that for all other data.
+///
+/// This type references the underlying [`Store`]. It can be used with
+/// multiple threads using
+/// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
+    /// A reference to the underlying store.
     store: &'a Store,
 }
 
 impl<'a> Run<'a> {
+    /// Creates a new runner from a store.
     fn new(
         store: &'a Store,
     ) -> Self {
         Run { store }
     }
 
+    /// Finishes the validation run.
+    ///
+    /// Updates the `metrics` with the store run’s metrics.
+    ///
+    /// If you are not interested in the metrics, you can simple drop the
+    /// value, instead.
     pub fn done(self, _metrics: &mut Metrics) {
     }
 
+    /// Loads a stored trust anchor certificate.
     pub fn load_ta(&self, uri: &TalUri) -> Result<Option<Bytes>, Error> {
         self.store.db.get(uri.as_str()).map(|value| {
             value.map(|value| Bytes::copy_from_slice(value.as_ref()))
         }).map_err(Into::into)
     }
 
+    /// Updates or inserts a stored trust anchor certificate.
+    ///
+    /// Returns whether the certificate was newly added to the store.
     pub fn update_ta(
         &self, uri: &TalUri, content: &[u8]
     ) -> Result<bool, Error> {
@@ -221,6 +263,21 @@ impl<'a> Run<'a> {
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 
+    /// Accesses the repository for the provided PRKI CA.
+    ///
+    /// Normally, if the CA’s rpkiNotify URI is present, the RRDP repository
+    /// identified by that URI will be returned, otherwise the rsync
+    /// repository will be used.
+    ///
+    /// However, if the repository needs to reflect the repository that was
+    /// previously updated via the cache and the cache had to fall back from
+    /// RRDP to rsync, the rsync repository is used even if the rpkiNotify
+    /// URI is present. This is so that data from the two transport methods
+    /// is kept strictly separate to avoid potential poisoning.
+    ///
+    /// Therefore, if `cache` is not `None`, the provided cache repository’s
+    /// chosen transport will be used to determine whether RRDP is used if
+    /// available or not.
     pub fn repository(
         &self, ca_cert: &CaCert, cache: Option<&cache::Repository>
     ) -> Result<Repository, Error> {
@@ -232,12 +289,21 @@ impl<'a> Run<'a> {
         }
     }
 
+    /// Accesses the RRDP repository identified by the given rpkiNotify URI.
+    ///
+    /// The repository is created if it is not yet present.
     pub fn rrdp_repository(
         &self, rpki_notify: &uri::Https,
     ) -> Result<Repository, Error> {
         Repository::new(self.store, &TreeNames::rrdp(rpki_notify))
     }
 
+    /// Accesses the rsync repository.
+    ///
+    /// Because all objects retrieved via rsync can safely share a single
+    /// namespace, we only have a single store repository for all of them.
+    ///
+    /// The repository is created if it is not yet present.
     pub fn rsync_repository(&self) -> Result<Repository, Error> {
         Repository::new(self.store, &TreeNames::rsync())
     }
@@ -247,25 +313,49 @@ impl<'a> Run<'a> {
 //------------ Repository ----------------------------------------------------
 
 /// Access to a single repository during a validation run.
+///
+/// A repository is a collection of publication points. Each of these points
+/// has a manifest and a set of objects. The manifest is identified by its
+/// signedObject URI while the objects are identified by their name on the
+/// manifest’s object list.
+///
+/// You can load the manifest of a publication point via
+/// [`load_manifest`][Self::load_manifest] and the objects via
+/// [`load_object`][Self::load_object].
+///
+/// The manifest and multiple objects of
+/// a point can updated atomically through
+/// [`update_point`][Self::update_point] to make sure that the objects stay in
+/// sync with what’s mentioned on the manifest.
+///
+/// You can delete an entire publication point via
+/// [`remove_point`][Self::remove_point] or remove select objects from the
+/// point via [`drain_point`][Self::drain_point].
 #[derive(Debug)]
 pub struct Repository {
-    is_rsync: bool,
+    /// The database tree holding the repository’s manifests.
     manifest_tree: sled::Tree,
+
+    /// The database tree holding the repository’s objects.
     object_tree: sled::Tree,
 }
 
 impl Repository {
+    /// Creates a repository object on a store using the given tree names.
     fn new(
         store: &Store,
         names: &TreeNames,
     ) -> Result<Self, Error> {
         Ok(Repository {
-            is_rsync: names.is_rsync,
             manifest_tree: names.open_manifest_tree(&store.db)?,
             object_tree: names.open_object_tree(&store.db)?,
         })
     }
 
+    /// Loads the manifest of a publication point in the repository.
+    ///
+    /// The manifest is identified via its signedObject URI. If present, it is
+    /// return as a [`StoredManifest`].
     pub fn load_manifest(
         &self, uri: &uri::Rsync
     ) -> Result<Option<StoredManifest>, Error> {
@@ -274,6 +364,14 @@ impl Repository {
         }).map_err(Into::into)
     }
 
+    /// Loads an object from the repository.
+    ///
+    /// The object’s publication point is identified via the signedObject URI
+    /// of the point’s manifest while the object itself is identified through
+    /// the name it has on the point’s manifest.
+    ///
+    /// If publication point and object are present, the object is returned
+    /// as a [`StoredObject`].
     pub fn load_object(
         &self,
         manifest: &uri::Rsync,
@@ -286,6 +384,7 @@ impl Repository {
         }).map_err(Into::into)
     }
 
+    /// Calculates the key of an object in the object tree.
     fn object_key(manifest: &uri::Rsync, file: &[u8]) -> Vec<u8> {
         let mut res = Vec::with_capacity(
             manifest.as_slice().len() + file.len() + 1
@@ -296,6 +395,27 @@ impl Repository {
         res
     }
 
+    /// Updates a publication point in the repository.
+    ///
+    /// The publication point to be updated is given via its manifest’s
+    /// signedObject URI.
+    ///
+    /// In order to be able to update multiple items of the publication point
+    /// atomically, the actual update happens via a closure. This closure
+    /// receives a [`RepositoryUpdate`] object that provides means to update
+    /// the point’s manifest and objects. The closure should pass through any
+    /// error returned by them. Alternatively, it can decide to abort the
+    /// update by returning the error produced by [`UpdateError::abort`].
+    ///
+    /// Note that the closure may be executed multiple times if the underlying
+    /// database decides it wants to give updating another try after a
+    /// conflict. This is why this is an `Fn` closure and cannot consume any
+    /// values in its context.
+    ///
+    /// If the update succeeds, the method returns whatever it is the closure
+    /// returned. If it fails, it was either aborted by the closure or there
+    /// was a database error. You can check whether it was indeed aborted by
+    /// calling [`was_aborted`](UpdateError::was_aborted) on the error.
     pub fn update_point<T, F: Fn(RepositoryUpdate) -> Result<T, UpdateError>>(
         &self, manifest: &uri::Rsync, op: F
     ) -> Result<T, UpdateError> {
@@ -304,6 +424,13 @@ impl Repository {
         }).map_err(Into::into)
     }
 
+    /// Completely removes a publication point.
+    ///
+    /// The publication point to be updated is given via its manifest’s
+    /// signedObject URI.
+    ///
+    /// If the publication point exists, its manifest and all its objects are
+    /// removed from the database.
     pub fn remove_point(
         &self, manifest: &uri::Rsync
     ) -> Result<(), Error> {
@@ -330,6 +457,16 @@ impl Repository {
         })
     }
 
+    /// Drains select objects from a publication point.
+    ///
+    /// The publication point to be updated is given via its manifest’s
+    /// signedObject URI.
+    ///
+    /// For each object of the publication point, the closure `keep` is
+    /// executed and receives the file name of the object on the manifest.
+    /// If it returns `true`, the object is kept, otherwise it is removed.
+    ///
+    /// The manifest of the point is not removed.
     pub fn drain_point(
         &self, manifest: &uri::Rsync,
         keep: impl Fn(&[u8]) -> bool
@@ -337,6 +474,11 @@ impl Repository {
         self._drain_point(manifest.as_ref(), keep)
     }
 
+    /// Drains selected objects from a publication point.
+    ///
+    /// This differs from the public [`drain_point`][Self::drain_point] only
+    /// in that it uses the raw manifest key for identifying the publication
+    /// point (which is the octets of the manifest’s signedObject URI).
     pub fn _drain_point(
         &self, manifest: &[u8],
         keep: impl Fn(&[u8]) -> bool
@@ -355,6 +497,11 @@ impl Repository {
         Ok(())
     }
 
+    /// Cleans the repository assuming it is the rsync repository.
+    ///
+    /// Removes all publication points that have an expired manifest.
+    /// Registers all rsync modules that have at least one non-expired
+    /// manifest to be retained by the cache.
     fn cleanup_rsync(self, cache: &mut cache::Cleanup) -> Result<(), Error> {
         let now = Time::now();
 
@@ -380,6 +527,10 @@ impl Repository {
         Ok(())
     }
 
+    /// Cleans the repository assuming it is an RRDP repository.
+    ///
+    /// Removes all publication points that have an expired manifest.
+    /// Returns whether there was at least one non-expired manifest.
     fn cleanup_rrdp(self) -> Result<bool, Error> {
         let now = Time::now();
         let mut keep_repository = false;
@@ -405,14 +556,26 @@ impl Repository {
 
 //------------ RepositoryUpdate ----------------------------------------------
 
-/// An atomic update to a repository.
+/// An atomic update to a publication point in a repository.
+///
+/// This type allows you to update point’s manifest and insert or remove
+/// objects of the publication point.
+///
+/// A value of this type is passed to the closure used in
+/// [`Repository::update_point`].
 pub struct RepositoryUpdate<'a> {
+    /// The signedObject URI of the point’s manifest.
     manifest: &'a uri::Rsync,
+
+    /// The transaction for updating the manifest.
     manifest_tran: &'a TransactionalTree,
+
+    /// The transaction for updating the objects.
     object_tran: &'a TransactionalTree,
 }
 
 impl<'a> RepositoryUpdate<'a> {
+    /// Creates an update from the manifest URI and the transactions.
     fn new(
         manifest: &'a uri::Rsync,
         manifest_tran: &'a TransactionalTree,
@@ -421,6 +584,11 @@ impl<'a> RepositoryUpdate<'a> {
         RepositoryUpdate { manifest, manifest_tran, object_tran }
     }
 
+    /// Updates the manifest for the publication point.
+    ///
+    /// If the publication point is new and has no manifest stored for it yet,
+    /// the manifest will be inserted. The method returns whether that was
+    /// indeed the case.
     pub fn update_manifest(
         &self, object: &StoredManifest
     ) -> Result<bool, UpdateError> {
@@ -429,6 +597,12 @@ impl<'a> RepositoryUpdate<'a> {
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 
+    /// ‘Upserts’ an object of the publication point.
+    ///
+    /// The object is identified by its name on the manifest. If an object
+    /// by that name is already stored, that object will be updated. If there
+    /// is no object yet by that name, the object will be inserted. The method
+    /// returns whether the object was indeed newly inserted.
     pub fn insert_object(
         &self, file: &[u8], object: &StoredObject
     ) -> Result<bool, UpdateError> {
@@ -438,6 +612,10 @@ impl<'a> RepositoryUpdate<'a> {
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 
+    /// Removes an object from the publication point.
+    ///
+    /// The object is identified by its name on the manifest. Returns whether
+    /// the object existed and was actually removed.
     pub fn remove_object(&self, file: &[u8]) -> Result<bool, UpdateError> {
         self.object_tran.remove(
             Repository::object_key(self.manifest, file)
@@ -449,6 +627,28 @@ impl<'a> RepositoryUpdate<'a> {
 //------------ StoredManifest ------------------------------------------------
 
 /// The content of a manifest placed in the store.
+///
+/// This type collects all data that is stored as the manifest for a
+/// publication point.
+///
+/// This contains the raw bytes of both the manifest itself plus data that
+/// will be needed to use the manifest during processing. In particular:
+///
+/// * The expiry time of the manifest’s EE certificate via the
+///   [`not_after`][Self::not_after] method. This is used during cleanup to
+///   determine whether to keep a publication point. It is stored to avoid
+///   having to parse the whole manifest.
+/// * The caRepository URI of the CA certificate that has issued the manifest
+///   via the [`ca_repository`][Self::ca_repository] method.  This is
+///   necessary to convert the file names mentioned on the manifest into their
+///   full rsync URIs. Confusingly, this information is not available on the
+///   manifest itself and therefore needs to be stored.
+/// * The raw bytes of the manifest via the [`manifest`][Self::manifest]
+///   method.
+/// * The raw bytes of the CRL referenced by the manifest via the
+///   [`crl`][Self::crl] method. There must always be exactly one CRL used by
+///   a publication point. As it needs to be available for validation, we
+///   might as well store it together with the manifest.
 #[derive(Clone, Debug)]
 pub struct StoredManifest {
     /// The expire time of the EE certificate of the manifest.
@@ -465,6 +665,10 @@ pub struct StoredManifest {
 }
 
 impl StoredManifest {
+    /// Creates a new stored manifest.
+    ///
+    /// The new value is created from the components of the stored manifest.
+    /// See the methods with the same name for their meaning.
     pub fn new(
         not_after: Time,
         ca_repository: uri::Rsync,
@@ -474,22 +678,44 @@ impl StoredManifest {
         StoredManifest { not_after, ca_repository, manifest, crl}
     }
 
+    /// Returns the expire time of the manifest.
+    ///
+    /// This should be equal to the ‘not after’ validity time of the EE
+    /// certificate included with the manifest.
     pub fn not_after(&self) -> Time {
         self.not_after
     }
 
+    /// Returns the rsync URI of the directory containing the objects.
+    ///
+    /// As the manifest only lists relative file names, this URI is necessary
+    /// to convert them into full rsync URIs.
+    ///
+    /// The URI should be taken from the ‘caRepository’ subject information
+    /// access extension of the CA certificate that was used to issue the
+    /// manifest’s EE certificate.
     pub fn ca_repository(&self) -> &uri::Rsync {
         &self.ca_repository
     }
 
+    /// Returns the bytes of the manifest.
     pub fn manifest(&self) -> &Bytes {
         &self.manifest
     }
 
+    /// Returns the bytes of the publication point’s CRL.
+    ///
+    /// This CRL should be the CRL referenced via the CRL distribution
+    /// point of the manifest’s EE certificate. It should be correctly 
+    /// referenced at that location on the manifest.
     pub fn crl(&self) -> &Bytes {
         &self.crl
     }
 
+    /// Decodes only the [`not_after`][Self::not_after] field.
+    ///
+    /// This is used to quickly check if the manifest is still valid during
+    /// the cleanup without all the allocations necessary for actual decoding.
     fn decode_not_after(slice: &[u8]) -> Result<Time, ObjectError> {
         // See below for full encoding. The time is at the start and encoded
         // as an i64 in network order.
@@ -506,6 +732,8 @@ impl StoredManifest {
 
 }
 
+
+//--- From and TryFrom
 
 impl<'a> From<&'a StoredManifest> for sled::IVec {
     fn from(manifest: &'a StoredManifest) -> sled::IVec {
@@ -571,27 +799,33 @@ impl TryFrom<sled::IVec> for StoredManifest {
 //------------ StoredObject --------------------------------------------------
 
 /// The content of an object placed in the store.
+///
+/// This type collects all the data that is stored for regular objects of a
+/// publication point: the raw bytes of the object as well as its hash as
+/// stated on the publication point’s manifest.
 #[derive(Clone, Debug)]
 pub struct StoredObject {
     /// The manifest hash of the object if available.
     hash: Option<ManifestHash>,
-
-    /// The key identifier for the CA cert that signed the object.
-    ca_key: Option<KeyIdentifier>,
 
     /// The content of the object.
     content: Bytes,
 }
 
 impl StoredObject {
+    /// Creates a new stored object from its bytes and manifest hash.
     pub fn new(
         content: Bytes,
         hash: Option<ManifestHash>,
-        ca_key: Option<KeyIdentifier>,
     ) -> Self {
-        StoredObject { hash, ca_key, content }
+        StoredObject { hash, content }
     }
 
+    /// Verifies that the object matches the given hash.
+    ///
+    /// This will be a simple comparison with [`Self::hash`] if both hashes
+    /// use the same algorithm (which currently is always true but may change
+    /// in the future) otherwise the object’s bytes are being hashed.
     pub fn verify_hash(
         &self, hash: &ManifestHash
     ) -> Result<(), ValidationError> {
@@ -609,10 +843,14 @@ impl StoredObject {
         hash.verify(&self.content)
     }
 
+    /// Converts the stored object into the object’s raw bytes.
     pub fn into_content(self) -> Bytes {
         self.content
     }
 }
+
+
+//--- From and TryFrom
 
 impl<'a> From<&'a StoredObject> for sled::IVec {
     fn from(object: &'a StoredObject) -> sled::IVec {
@@ -632,21 +870,6 @@ impl<'a> From<&'a StoredObject> for sled::IVec {
             }
             _ => {
                 vec.push(0)
-            }
-        }
-
-        // Encode CA key identifier.
-        //
-        // One octets as the identifier length followed by that many octets.
-        // A length of zero means `None`.
-        match object.ca_key.as_ref() {
-            Some(key) => {
-                let key = key.as_slice();
-                vec.push(u8::try_from(key.len()).unwrap());
-                vec.extend_from_slice(key);
-            }
-            None => {
-                vec.push(0);
             }
         }
         
@@ -684,26 +907,7 @@ impl TryFrom<sled::IVec> for StoredObject {
             _ => return Err(ObjectError)
         };
 
-        // Decode the CA key identifier.
-        if stored.is_empty() {
-            return Err(ObjectError)
-        }
-        let key_len = usize::from(stored.split_to(1)[0]);
-        let ca_key = if key_len == 0 {
-            None
-        }
-        else {
-            if stored.len() < key_len {
-                return Err(ObjectError)
-            }
-            Some(
-                KeyIdentifier::try_from(
-                    stored.split_to(key_len).as_ref()
-                ).map_err(|_| ObjectError)?
-            )
-        };
-
-        Ok(StoredObject { hash, ca_key, content: stored })
+        Ok(StoredObject { hash, content: stored })
     }
 }
 
@@ -711,44 +915,50 @@ impl TryFrom<sled::IVec> for StoredObject {
 //------------ TreeNames -----------------------------------------------------
 
 /// The names for the manifest and object trees for a given repository.
+///
+/// This type exists so we are guaranteed to always use the same names.
 struct TreeNames<'a> {
-    is_rsync: bool,
+    /// The name of the manifest tree.
     manifests: &'a [u8],
+
+    /// The name of the objects tree.
     objects: Vec<u8>,
 }
 
 impl<'a> TreeNames<'a> {
+    /// Returns the tree names for a RRDP repository.
     pub fn rrdp(rpki_notify: &'a uri::Https) -> Self {
         Self::from_manifest_name(rpki_notify.as_ref())
     }
 
+    /// Returns the tree names for the rsync repository.
     pub fn rsync() -> Self {
-        Self::new(true, b"rsync")
+        Self::from_manifest_name(b"rsync")
     }
 
+    /// Returns the tree names for a given manifest tree name.
     pub fn from_manifest_name(manifests: &'a [u8]) -> Self {
-        Self::new(false, manifests)
-    }
-
-    fn new(is_rsync: bool, manifests: &'a [u8]) -> Self {
         let mut objects = Vec::with_capacity(manifests.len() + 8);
         objects.extend_from_slice(b"objects:");
         objects.extend_from_slice(manifests);
-        TreeNames { is_rsync, manifests, objects }
+        TreeNames { manifests, objects }
     }
 
+    /// Opens the manifest tree referenced by `self` on the given database.
     pub fn open_manifest_tree(
         &self, db: &sled::Db
     ) -> Result<sled::Tree, sled::Error> {
         db.open_tree(self.manifests)
     }
 
+    /// Opens the objects tree referenced by `self` on the given database.
     pub fn open_object_tree(
         &self, db: &sled::Db
     ) -> Result<sled::Tree, sled::Error> {
         db.open_tree(&self.objects)
     }
 
+    /// Drops both trees referenced by `self` on the given database.
     pub fn drop_trees(&self, db: &sled::Db) -> Result<(), Error> {
         db.drop_tree(self.manifests)?;
         db.drop_tree(&self.objects)?;
@@ -774,6 +984,14 @@ impl error::Error for ObjectError { }
 
 //------------ UpdateError ---------------------------------------------------
 
+/// An update of a publication point has failed.
+///
+/// This can be deliberate if the update was aborted. Such an error can be
+/// created via the [`UpdateError::abort`][Self::abort] function and checked
+/// for via the [`was_aborted`][Self::was_aborted] method.
+///
+/// Otherwise, this is an error of the underlying database and should be
+/// considered fatal.
 #[derive(Clone, Debug)]
 pub struct UpdateError(ConflictableTransactionError<()>);
 
@@ -816,6 +1034,10 @@ impl From<sled::Error> for Error {
 
 //------------ Helper Functions ----------------------------------------------
 
+/// Takes an encoded `Time` value from the beginning of a bytes value.
+///
+/// Upon success, the decoded time will be returned and `bytes` will have
+/// been modified to start after the encoded time.
 fn take_time(bytes: &mut Bytes) -> Result<Time, ObjectError> {
     if bytes.len() < mem::size_of::<i64>() {
         return Err(ObjectError)
@@ -827,6 +1049,13 @@ fn take_time(bytes: &mut Bytes) -> Result<Time, ObjectError> {
 }
 
 
+/// Takes an encoded sequence length from the beginning of a bytes value.
+///
+/// Upon success, the decoded length will be returned and `bytes` will have
+/// been modified to start after the encoded length.
+///
+/// All lengths are encoded as `u32` in network byte order, even if we
+/// return `usize` for convenience.
 fn take_encoded_len(bytes: &mut Bytes) -> Result<usize, ObjectError> {
     if bytes.len() < mem::size_of::<u32>() {
         return Err(ObjectError)
