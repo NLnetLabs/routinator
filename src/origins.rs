@@ -29,7 +29,7 @@ use crate::config::{Config, FilterPolicy};
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
 use crate::operation::Error;
 use crate::process::LogOutput;
-use crate::validation::{ProcessCa, ProcessRun};
+use crate::engine::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
 
 

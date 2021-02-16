@@ -1,19 +1,19 @@
-/// Validation of RPKI data.
+/// Updating and processing of  RPKI data.
 ///
 /// This module provides types and traits implementing validation of RPKI data
 /// from a set of trust anchor locators to some output data.
 ///
-/// Data validation is configured through [`Validation`] so that the
+/// Data validation is configured through [`Engine`] so that the
 /// configuration can be used for multiple validation runs. This includes both
 /// a [cache][crate::cache::Cache] and [store][crate::store::Store] to use
 /// for validation.
 ///
 /// Individual validation runs are managed through [`Run`]. Such a runner can
-/// be obtained from validation via its [`start`][Validation::start] method.
+/// be obtained from validation via its [`start`][Engine::start] method.
 /// It in turn provides the [`process`][Run::process] method which drives the
 /// actual validation.
 ///
-/// Validation runs are generic over what exactly should be done with valid
+/// Engine runs are generic over what exactly should be done with valid
 /// RPKI data. The trait [`ProcessRun`] represents a full validation run with
 /// the accompanying trait [`ProcessCa`] dealing with individual publication
 /// points.
@@ -55,13 +55,13 @@ use crate::store::{Store, StoredManifest};
 const CRL_CACHE_LIMIT: usize = 50;
 
 
-//------------ Validation ----------------------------------------------------
+//------------ Engine --------------------------------------------------------
 
-/// Information for RPKI validation.
+/// The mechanism to update and process RPKI data.
 ///
 /// A validation value can be created from the configuration via
-/// [Validation::new]. If you don’t actually want to perform a validation run
-/// but just initialize everything, [Validation::init] will suffice.
+/// [`Engine::new`]. If you don’t actually want to perform a validation run
+/// but just initialize everything, [`Engine::init`] will suffice.
 ///
 /// When created, the set of TALs is loaded and kept around. It will only be
 /// refreshed explicitly through the [`reload_tals`][Self::reload_tals]
@@ -79,7 +79,7 @@ const CRL_CACHE_LIMIT: usize = 50;
 /// Finally, the method [`cleanup`][Self::cleanup] can be used to perform
 /// cleanup on both the store and cache owned by the validation.
 #[derive(Debug)]
-pub struct Validation {
+pub struct Engine {
     /// The directory to load TALs from.
     tal_dir: PathBuf,
 
@@ -111,7 +111,7 @@ pub struct Validation {
     dirty_repository: bool,
 }
 
-impl Validation {
+impl Engine {
     /// Initializes validation without creating a value.
     ///
     /// This ensures that the TAL directory is present and logs a hint how
@@ -152,7 +152,7 @@ impl Validation {
         store: Store,
     ) -> Result<Self, Error> {
         Self::init(config)?;
-        let mut res = Validation {
+        let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
@@ -321,7 +321,7 @@ impl Validation {
 /// can be extracted through [`done`][Self::done].
 pub struct Run<'a, P> {
     /// A reference to the underlying validation.
-    validation: &'a Validation,
+    validation: &'a Engine,
 
     /// The runner for the cache.
     cache: cache::Run<'a>,
@@ -339,7 +339,7 @@ pub struct Run<'a, P> {
 impl<'a, P> Run<'a, P> {
     /// Creates a new runner from all the parts.
     fn new(
-        validation: &'a Validation,
+        validation: &'a Engine,
         cache: cache::Run<'a>,
         store: store::Run<'a>,
         processor: P,
@@ -396,7 +396,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         if res.is_err() {
             // One of the workers has panicked. Well gosh darn.
             error!(
-                "Validation failed after a worker thread has panicked. \
+                "Engine failed after a worker thread has panicked. \
                  This is most assuredly a bug."
             );
             return Err(Error);

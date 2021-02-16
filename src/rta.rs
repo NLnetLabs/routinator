@@ -8,7 +8,7 @@ use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::ValidationError;
 use crate::config::Config;
 use crate::operation::Error;
-use crate::validation::{ProcessCa, ProcessRun, Validation};
+use crate::engine::{ProcessCa, ProcessRun, Engine};
 
 
 //------------ ValidationReport ----------------------------------------------
@@ -34,9 +34,9 @@ impl<'a> ValidationReport<'a> {
 
     pub fn process(
         &self,
-        validation: &Validation,
+        engine: &Engine,
     ) -> Result<(), Error> {
-        let run = validation.start(self)?;
+        let run = engine.start(self)?;
         run.process()
     }
 

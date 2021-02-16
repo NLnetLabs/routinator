@@ -71,9 +71,9 @@ use sled::transaction::{
 };
 use crate::cache;
 use crate::config::Config;
+use crate::engine::CaCert;
 use crate::metrics::Metrics;
 use crate::operation::Error;
-use crate::validation::CaCert;
 
 
 //------------ Store ---------------------------------------------------------

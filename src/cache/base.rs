@@ -12,7 +12,7 @@ use rpki::uri;
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::operation::Error;
-use crate::validation::CaCert;
+use crate::engine::CaCert;
 use super::{rrdp, rsync};
 
 

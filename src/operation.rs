@@ -35,7 +35,7 @@ use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::process::Process;
-use crate::validation::Validation;
+use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
 use crate::store::Store;
@@ -386,7 +386,7 @@ impl Server {
     /// If `detach` is `true`, will fork the server and exit. Otherwise
     /// just runs the server forever.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
-        Validation::init(process.config())?;
+        Engine::init(process.config())?;
         Cache::init(process.config())?;
         Store::init(process.config())?;
         let log = process.switch_logging(
@@ -403,7 +403,7 @@ impl Server {
 
         process.drop_privileges()?;
 
-        let mut validation = Validation::new(
+        let mut validation = Engine::new(
             process.config(),
             Cache::new(process.config(), true)?,
             Store::new(process.config())?,
@@ -489,7 +489,7 @@ impl Server {
     }
 
     fn process_once(
-        validation: &Validation,
+        validation: &Engine,
         history: &OriginsHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
@@ -654,7 +654,7 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Validation::new(
+        let mut validation = Engine::new(
             process.config(),
             Cache::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
@@ -797,7 +797,7 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Validation::new(
+        let mut validation = Engine::new(
             process.config(),
             Cache::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
@@ -891,7 +891,7 @@ impl ValidateDocument {
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Validation::new(
+        let mut validation = Engine::new(
             process.config(),
             Cache::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
@@ -1015,7 +1015,7 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Validation::new(
+        let mut validation = Engine::new(
             process.config(),
             Cache::new(process.config(), true)?,
             Store::new(process.config())?,
