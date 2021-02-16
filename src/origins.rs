@@ -26,8 +26,8 @@ use rpki::rtr::server::VrpSource;
 use rpki::rtr::state::{Serial, State};
 use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
+use crate::error::Failed;
 use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
-use crate::operation::Error;
 use crate::process::LogOutput;
 use crate::engine::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -67,7 +67,7 @@ impl<'a> ProcessRun for &'a OriginsReport {
 
     fn process_ta(
         &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
-    ) -> Result<Option<Self::ProcessCa>, Error> {
+    ) -> Result<Option<Self::ProcessCa>, Failed> {
         let tal = {
             let mut tals = self.tals.lock().unwrap();
             let len = tals.len();
@@ -190,13 +190,13 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
         }
     }
 
-    fn want(&self, uri: &uri::Rsync) -> Result<bool, Error> {
+    fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
         Ok(uri.ends_with(".cer") || uri.ends_with(".roa"))
     }
 
     fn process_ca(
         &mut self, _uri: &uri::Rsync, _cert: &ResourceCert
-    ) -> Result<Option<Self>, Error> {
+    ) -> Result<Option<Self>, Failed> {
         Ok(Some(ProcessRouteOrigins {
             report: self.report,
             origins: RouteOrigins::new(),
@@ -206,7 +206,7 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
 
     fn process_roa(
         &mut self, _uri: &uri::Rsync, route: RouteOriginAttestation
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         if let RoaStatus::Valid { ref cert } = *route.status() {
             self.update_refresh(cert.validity().not_after());
         }

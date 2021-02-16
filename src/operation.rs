@@ -30,6 +30,7 @@ use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
 use crate::cache::Cache;
 use crate::config::Config;
+use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output;
@@ -77,7 +78,7 @@ impl Operation {
     /// Prepares everything.
     ///
     /// Call this before doing anything else.
-    pub fn prepare() -> Result<(), Error> {
+    pub fn prepare() -> Result<(), Failed> {
         Process::init()
     }
 
@@ -101,7 +102,7 @@ impl Operation {
         matches: &ArgMatches,
         cur_dir: &Path,
         config: &mut Config
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Ok(match matches.subcommand() {
             ("init", Some(matches)) => {
                 Operation::Init(Init::from_arg_matches(matches)?)
@@ -136,7 +137,7 @@ impl Operation {
             }
             ("", _) => {
                 error!(
-                    "Error: a command is required.\n\
+                    "Failed: a command is required.\n\
                      \nCommonly used commands are:\
                      \n   vrps      Produces a list of validated ROA payload\
                      \n   validate  Perform origin validation for an \
@@ -147,7 +148,7 @@ impl Operation {
                      \nSee routinator -h for a usage summary or \
                        routinator man for detailed help."
                 );
-                return Err(Error)
+                return Err(Failed)
             }
             _ => panic!("Unexpected subcommand."),
         })
@@ -221,7 +222,7 @@ impl Init {
     /// Creates a command from clap matches.
     pub fn from_arg_matches(
         matches: &ArgMatches,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Ok(Init {
             force: matches.is_present("force"),
             accept_arin_rpa: matches.is_present("accept-arin-rpa"),
@@ -250,7 +251,7 @@ impl Init {
                         Use -f to force installation of TALs.",
                         process.config().tal_dir.display()
                     );
-                    return Err(Error.into());
+                    return Err(Failed.into());
                 }
             }
             else {
@@ -258,7 +259,7 @@ impl Init {
                     "TAL directory {} exists and is not a directory.",
                     process.config().tal_dir.display()
                 );
-                return Err(Error.into())
+                return Err(Failed.into())
             }
         }
 
@@ -276,7 +277,7 @@ impl Init {
                  If you agree to the RPA, please run the command\n\
                  again with the --accept-arin-rpa option."
             );
-            return Err(Error.into())
+            return Err(Failed.into())
         }
 
         // Try to create the TAL directory and error out if that fails.
@@ -285,7 +286,7 @@ impl Init {
                 "Cannot create TAL directory {}: {}",
                 process.config().tal_dir.display(), err
             );
-            return Err(Error.into())
+            return Err(Failed.into())
         }
 
         // Now write all the TALs. Overwrite existing ones.
@@ -320,7 +321,7 @@ impl Init {
         tal_dir: &Path,
         name: &str,
         content: &[u8]
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut file = match fs::File::create(tal_dir.join(name)) {
             Ok(file) => file,
             Err(err) => {
@@ -328,7 +329,7 @@ impl Init {
                     "Can't create TAL file {}: {}.\n Aborting.",
                     tal_dir.join(name).display(), err
                 );
-                return Err(Error);
+                return Err(Failed);
             }
         };
         if let Err(err) = file.write_all(content) {
@@ -336,7 +337,7 @@ impl Init {
                 "Can't create TAL file {}: {}.\n Aborting.",
                 tal_dir.join(name).display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         Ok(())
     }
@@ -374,7 +375,7 @@ impl Server {
         matches: &ArgMatches,
         cur_dir: &Path,
         config: &mut Config
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         config.apply_server_arg_matches(matches, cur_dir)?;
         Ok(Server {
             detach: matches.is_present("detach")
@@ -462,7 +463,7 @@ impl Server {
             let _ = err_tx.send(());
         });
 
-        let _: Result<(), Error> = runtime.block_on(async move {
+        let _: Result<(), Failed> = runtime.block_on(async move {
             let mut signal = SignalListener::new()?;
             loop {
                 tokio::select! {
@@ -493,7 +494,7 @@ impl Server {
         history: &OriginsHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         history.mark_update_start();
         let (report, metrics) = validation.process_origins()?;
         let must_notify = history.update(
@@ -589,7 +590,7 @@ impl Vrps {
     /// Creates a command from clap matches.
     pub fn from_arg_matches(
         matches: &ArgMatches,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Ok(Vrps {
             filters: Self::output_filters(matches)?,
             output: match matches.value_of("output").unwrap() {
@@ -607,7 +608,7 @@ impl Vrps {
     /// Creates the filters for the vrps command.
     fn output_filters(
         matches: &ArgMatches
-    ) -> Result<Option<Vec<output::Filter>>, Error> {
+    ) -> Result<Option<Vec<output::Filter>>, Failed> {
         let mut res = Vec::new();
         if let Some(list) = matches.values_of("filter-prefix") {
             for value in list {
@@ -618,7 +619,7 @@ impl Vrps {
                             "Invalid prefix \"{}\" in --filter-prefix",
                             value
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 }
             }
@@ -632,7 +633,7 @@ impl Vrps {
                             "Invalid ASN \"{}\" in --filter-asn",
                             value
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 };
                 res.push(output::Filter::As(asn))
@@ -680,7 +681,7 @@ impl Vrps {
                             "Failed to open output file '{}': {}",
                             path.display(), err
                         );
-                        return Err(Error.into())
+                        return Err(Failed.into())
                     }
                 };
                 self.format.output(&vrps, filters, &metrics, &mut file)
@@ -766,7 +767,7 @@ impl Validate {
     }
 
     /// Creates a command from clap matches.
-    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
         Ok(Validate {
             prefix: {
                 let prefix = matches.value_of("prefix").unwrap();
@@ -774,7 +775,7 @@ impl Validate {
                     Ok(prefix) => prefix,
                     Err(err) => {
                         error!("illegal address prefix: {}", err);
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             },
@@ -784,7 +785,7 @@ impl Validate {
                     Ok(asn) => asn,
                     Err(_) => {
                         error!("illegal AS number");
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             }, 
@@ -818,7 +819,7 @@ impl Validate {
             let mut stdout = stdout.lock();
             validity.write_json(&mut stdout).map_err(|err| {
                 error!("Writing to stdout failed: {}", err);
-                Error
+                Failed
             })?;
         }
         else {
@@ -878,7 +879,7 @@ impl ValidateDocument {
     /// Creates a command from clap matches.
     pub fn from_arg_matches(
         matches: &ArgMatches,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Ok(ValidateDocument {
             document: matches.value_of("document").unwrap().into(),
             signature: matches.value_of("signature").unwrap().into(),
@@ -1002,7 +1003,7 @@ impl Update {
     }
 
     /// Creates a command from clap matches.
-    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
         Ok(Update {
             complete: matches.is_present("complete"),
         })
@@ -1054,7 +1055,7 @@ impl PrintConfig {
         matches: &ArgMatches,
         cur_dir: &Path,
         config: &mut Config,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         config.apply_server_arg_matches(matches, cur_dir)?;
         Ok(PrintConfig)
     }
@@ -1096,7 +1097,7 @@ impl Man {
     }
 
     /// Creates a command from clap matches.
-    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
         Ok(Man {
             output: matches.value_of("output").map(|value| {
                 match value {
@@ -1127,12 +1128,12 @@ impl Man {
                             "Failed to open output file {}: {}",
                             path.display(), err
                         );
-                        return Err(Error.into())
+                        return Err(Failed.into())
                     }
                 };
                 if let Err(err) = file.write_all(MAN_PAGE) {
                     error!("Failed to write to output file: {}", err);
-                    return Err(Error.into())
+                    return Err(Failed.into())
                 }
                 info!(
                     "Successfully writen manual page to {}",
@@ -1144,7 +1145,7 @@ impl Man {
                 let mut out = out.lock();
                 if let Err(err) = out.write_all(MAN_PAGE) {
                     error!("Failed to write man page: {}", err);
-                    return Err(Error.into())
+                    return Err(Failed.into())
                 }
             }
         }
@@ -1162,7 +1163,7 @@ impl Man {
                  Failed to create temporary file: {}.",
                 err
             );
-            Error
+            Failed
         })?;
         file.write_all(MAN_PAGE).map_err(|err| {
             error!(
@@ -1170,17 +1171,17 @@ impl Man {
                 Failed to write to temporary file: {}.",
                 err
             );
-            Error
+            Failed
         })?;
         Command::new("man").arg(file.path()).status().map_err(|err| {
             error!("Failed to run man: {}", err);
-            Error
+            Failed
         }).and_then(|exit| {
             if exit.success() {
                 Ok(())
             }
             else {
-                Err(Error)
+                Err(Failed)
             }
         }).map_err(Into::into)
     }
@@ -1204,13 +1205,13 @@ struct SignalListener {
 
 #[cfg(unix)]
 impl SignalListener {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Failed> {
         Ok(SignalListener {
             usr1: match signal(SignalKind::user_defined1()) {
                 Ok(usr1) => usr1,
                 Err(err) => {
                     error!("Attaching to signal USR1 failed: {}", err);
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
         })
@@ -1230,7 +1231,7 @@ struct SignalListener;
 
 #[cfg(not(unix))]
 impl SignalListener {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Failed> {
         Ok(SignalListener)
     }
 
@@ -1239,47 +1240,6 @@ impl SignalListener {
     /// Returns whether to continue working.
     pub async fn next(&mut self) -> UserSignal {
         pending().await
-    }
-}
-
-//------------ Error ---------------------------------------------------------
-
-/// An error has occurred during operation.
-///
-/// This is really just a placeholder type. All necessary output has happend
-/// already.
-///
-/// When returning this error, you should specify whether error is printed
-/// to stderr, as should happen in early stages of operation, or should be
-/// logged.
-#[derive(Clone, Copy, Debug)]
-pub struct Error;
-
-
-//------------ ExitError -----------------------------------------------------
-
-/// An error should be reported after running has completed.
-#[derive(Clone, Copy, Debug)]
-pub enum ExitError {
-    /// Something has happened.
-    ///
-    /// This should be exit status 1.
-    Generic,
-
-    /// Incomplete update.
-    ///
-    /// This should be exit status 2.
-    IncompleteUpdate,
-
-    /// An object could not be validated.
-    ///
-    /// This should be exit status 3.
-    Invalid,
-}
-
-impl From<Error> for ExitError {
-    fn from(_: Error) -> ExitError {
-        ExitError::Generic
     }
 }
 

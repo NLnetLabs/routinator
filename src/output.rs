@@ -10,8 +10,8 @@ use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
 use rpki::repository::resources::AsId;
+use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
@@ -84,9 +84,9 @@ impl OutputFormat {
 }
 
 impl FromStr for OutputFormat {
-    type Err = Error;
+    type Err = Failed;
 
-    fn from_str(value: &str) -> Result<Self, Error> {
+    fn from_str(value: &str) -> Result<Self, Failed> {
         match value {
             "csv" => Ok(OutputFormat::Csv),
             "csvcompat" => Ok(OutputFormat::CompatCsv),
@@ -100,7 +100,7 @@ impl FromStr for OutputFormat {
             "none" => Ok(OutputFormat::None),
             _ => {
                 error!("Unknown output format '{}'", value);
-                Err(Error)
+                Err(Failed)
             }
         }
     }

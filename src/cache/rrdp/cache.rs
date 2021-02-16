@@ -11,7 +11,7 @@ use log::{debug, error, info, warn};
 use rpki::uri;
 use crate::config::Config;
 use crate::metrics::{Metrics, RrdpServerMetrics};
-use crate::operation::Error;
+use crate::error::Failed;
 use crate::utils::UriExt;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
@@ -44,14 +44,14 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         let rrdp_dir = Self::cache_dir(config);
         if let Err(err) = fs::create_dir_all(&rrdp_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",
                 rrdp_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         let ta_dir = Self::ta_dir(config);
         if let Err(err) = fs::create_dir_all(&ta_dir) {
@@ -59,13 +59,13 @@ impl Cache {
                 "Failed to create HTTP cache directory {}: {}.",
                 ta_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         HttpClient::init(config)?;
         Ok(())
     }
 
-    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Error> {
+    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Failed> {
         if config.disable_rrdp {
             Ok(None)
         }
@@ -81,7 +81,7 @@ impl Cache {
         }
     }
 
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         self.http.as_mut().map_or(Ok(()), HttpClient::ignite)
     }
 
@@ -93,7 +93,7 @@ impl Cache {
         config.cache_dir.join("http")
     }
 
-    pub fn start(&self) -> Result<Run, Error> {
+    pub fn start(&self) -> Result<Run, Failed> {
         Run::new(self)
     }
 
@@ -117,7 +117,7 @@ pub struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
-    fn new(cache: &'a Cache) -> Result<Self, Error> {
+    fn new(cache: &'a Cache) -> Result<Self, Failed> {
         let mut servers = ServerSet::new();
         let dir = match cache.cache_dir.read_dir() {
             Ok(dir) => dir,
@@ -126,7 +126,7 @@ impl<'a> Run<'a> {
                     "Fatal: Cannot open RRDP cache dir '{}': {}",
                     cache.cache_dir.display(), err
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         for entry in dir {
@@ -137,7 +137,7 @@ impl<'a> Run<'a> {
                         "Fatal: Cannot iterate over RRDP cache dir '{}': {}",
                         cache.cache_dir.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -253,7 +253,7 @@ impl<'a> Run<'a> {
         &self,
         server_id: ServerId,
         uri: &uri::Rsync
-    ) -> Result<Option<Bytes>, Error> {
+    ) -> Result<Option<Bytes>, Failed> {
         self.servers.read().unwrap().get(server_id).load_file(uri)
     }
 

@@ -24,8 +24,8 @@ use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
 use crate::config::Config;
+use crate::error::Failed;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
-use crate::operation::Error;
 use crate::utils::UriExt;
 
 
@@ -52,20 +52,20 @@ impl Cache {
     /// Initializes the rsync cache without creating a value.
     ///
     /// This function is called implicitely by [`new`][Cache::new].
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         let _ = Self::create_cache_dir(config)?;
         Ok(())
     }
 
     /// Creates the cache dir and returns its path.
-    fn create_cache_dir(config: &Config) -> Result<PathBuf, Error> {
+    fn create_cache_dir(config: &Config) -> Result<PathBuf, Failed> {
         let cache_dir = config.cache_dir.join("rsync");
         if let Err(err) = fs::create_dir_all(&cache_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",
                 cache_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         Ok(cache_dir)
     }
@@ -76,7 +76,7 @@ impl Cache {
     ///
     /// The cache will not actually run rsync but use whatever files are
     /// present already in the cache directory if `update` is `false`.
-    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Error> {
+    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Failed> {
         if config.disable_rsync {
             Ok(None)
         }
@@ -93,7 +93,7 @@ impl Cache {
     }
 
     /// Prepares the cache for use in a validation run.
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         // We don’t need to do anything. But just in case we later will,
         // let’s keep the method around.
         Ok(())
@@ -387,7 +387,7 @@ struct Command {
 
 impl Command {
     /// Creates a new rsync command from the config.
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(config: &Config) -> Result<Self, Failed> {
         let command = config.rsync_command.clone();
         let output = match process::Command::new(&command).arg("-h").output() {
             Ok(output) => output,
@@ -396,7 +396,7 @@ impl Command {
                     "Failed to run rsync: {}",
                     err
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         if !output.status.success() {
@@ -404,7 +404,7 @@ impl Command {
                 "Running rsync failed with output: \n{}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            return Err(Error);
+            return Err(Failed);
         }
         let args = match config.rsync_args {
             Some(ref args) => args.clone(),
@@ -489,7 +489,7 @@ impl Command {
     /// Formats the destination path for inclusion in the command.
     #[cfg(not(windows))]
     #[allow(clippy::unnecessary_wraps)]
-    fn format_destination(path: &Path) -> Result<String, Error> {
+    fn format_destination(path: &Path) -> Result<String, Failed> {
         // Make sure the path ends in a slash or strange things happen.
         let mut destination = format!("{}", path.display());
         if !destination.ends_with('/') {
@@ -500,7 +500,7 @@ impl Command {
 
     /// Formats the destination path for inclusion in the command.
     #[cfg(windows)]
-    fn format_destination(path: &Path) -> Result<String, Error> {
+    fn format_destination(path: &Path) -> Result<String, Failed> {
         // On Windows we are using Cygwin rsync which requires Unix-style
         // paths. In particular, the drive parameter needs to be turned
         // from e.g. `C:` into `/cygdrive/c` and all backslashes should
@@ -518,7 +518,7 @@ impl Command {
                             let (server, share) = match (server.to_str(),
                                                          share.to_str()) {
                                 (Some(srv), Some(shr)) => (srv, shr),
-                                _ => return Err(Error)
+                                _ => return Err(Failed)
                             };
                             destination.push_str(server);
                             destination.push('/');
@@ -529,12 +529,12 @@ impl Command {
                                 (disk as char).to_ascii_lowercase()
                             }
                             else {
-                                return Err(Error)
+                                return Err(Failed)
                             };
                             destination.push_str("/cygdrive/");
                             destination.push(disk);
                         }
-                        _ => return Err(Error)
+                        _ => return Err(Failed)
                     }
                 }
                 Component::CurDir | Component::RootDir => {
@@ -546,7 +546,7 @@ impl Command {
                 Component::Normal(s) => {
                     match s.to_str() {
                         Some(s) => destination.push_str(s),
-                        None => return Err(Error)
+                        None => return Err(Failed)
                     }
                 }
             }

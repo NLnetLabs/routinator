@@ -7,8 +7,8 @@ use rpki::repository::rta::{ResourceTaggedAttestation, Rta};
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::ValidationError;
 use crate::config::Config;
-use crate::operation::Error;
 use crate::engine::{ProcessCa, ProcessRun, Engine};
+use crate::error::Failed;
 
 
 //------------ ValidationReport ----------------------------------------------
@@ -35,13 +35,13 @@ impl<'a> ValidationReport<'a> {
     pub fn process(
         &self,
         engine: &Engine,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let run = engine.start(self)?;
         run.process()
     }
 
-    pub fn finalize(self) -> Result<&'a ResourceTaggedAttestation, Error> {
-        self.validation.into_inner().unwrap().finalize().map_err(|_| Error)
+    pub fn finalize(self) -> Result<&'a ResourceTaggedAttestation, Failed> {
+        self.validation.into_inner().unwrap().finalize().map_err(|_| Failed)
     }
 }
 
@@ -50,7 +50,7 @@ impl<'a, 's> ProcessRun for &'s ValidationReport<'a> {
 
     fn process_ta(
         &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
-    ) -> Result<Option<Self::ProcessCa>, Error> {
+    ) -> Result<Option<Self::ProcessCa>, Failed> {
         let mut validation = self.validation.lock().unwrap();
         match validation.supply_tal(tal) {
             Ok(true) | Err(_) => {
@@ -82,13 +82,13 @@ impl<'a, 's> ValidateCa<'a, 's> {
 }
 
 impl<'a, 's> ProcessCa for ValidateCa<'a, 's> {
-    fn want(&self, uri: &uri::Rsync) -> Result<bool, Error> {
+    fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
         Ok(uri.ends_with(".cer"))
     }
 
     fn process_ca(
         &mut self, _uri: &uri::Rsync, cert: &ResourceCert
-    ) -> Result<Option<Self>, Error> {
+    ) -> Result<Option<Self>, Failed> {
         if self.report.complete.load(Ordering::Relaxed) {
             return Ok(None)
         }

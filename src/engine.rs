@@ -40,8 +40,8 @@ use rpki::uri;
 use crate::{cache, store};
 use crate::cache::Cache;
 use crate::config::{Config, FilterPolicy};
+use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::operation::Error;
 use crate::origins::OriginsReport;
 use crate::store::{Store, StoredManifest};
 
@@ -118,7 +118,7 @@ impl Engine {
     /// to achieve that if not.
     ///
     /// The function is called implicitly by [`new`][Self::new].
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         if let Err(err) = fs::read_dir(&config.tal_dir) {
             if err.kind() == io::ErrorKind::NotFound {
                 error!(
@@ -134,7 +134,7 @@ impl Engine {
                     config.cache_dir.display(), err
                 );
             }
-            return Err(Error)
+            return Err(Failed)
         }
         Ok(())
     }
@@ -150,7 +150,7 @@ impl Engine {
         config: &Config,
         cache: Cache,
         store: Store,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Self::init(config)?;
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
@@ -177,7 +177,7 @@ impl Engine {
     ///
     /// It is not considered an error if there are no TAL files in the TAL
     /// directory. However, a warning will be logged in this case.
-    pub fn reload_tals(&mut self) -> Result<(), Error> {
+    pub fn reload_tals(&mut self) -> Result<(), Failed> {
         let mut res = Vec::new();
         let dir = match fs::read_dir(&self.tal_dir) {
             Ok(dir) => dir,
@@ -193,7 +193,7 @@ impl Engine {
                 else {
                     error!("Failed to open TAL directory: {}.", err);
                 }
-                return Err(Error)
+                return Err(Failed)
             }
         };
         for entry in dir {
@@ -204,7 +204,7 @@ impl Engine {
                         "Failed to iterate over tal directory: {}",
                         err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
 
@@ -227,7 +227,7 @@ impl Engine {
                          Aborting.",
                          path.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             let mut tal = match Tal::read_named(
@@ -241,7 +241,7 @@ impl Engine {
                          Aborting.",
                         path.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             tal.prefer_https();
@@ -274,7 +274,7 @@ impl Engine {
     ///
     /// This spawns threads and therefore needs to be done after a
     /// possible fork.
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         self.cache.ignite()
     }
 
@@ -286,7 +286,7 @@ impl Engine {
     /// The method returns a [`Run`] that drives the validation run.
     pub fn start<P: ProcessRun>(
         &self, processor: P
-    ) -> Result<Run<P>, Error> {
+    ) -> Result<Run<P>, Failed> {
         Ok(Run::new(self, self.cache.start()?, self.store.start(), processor))
     }
 
@@ -295,7 +295,7 @@ impl Engine {
     /// Returns the result of the run and the run’s metrics.
     pub fn process_origins(
         &self
-    ) -> Result<(OriginsReport, Metrics), Error> {
+    ) -> Result<(OriginsReport, Metrics), Failed> {
         let report = OriginsReport::new();
         let run = self.start(&report)?;
         run.process()?;
@@ -304,7 +304,7 @@ impl Engine {
     }
 
     /// Cleans the cache and store owned by the validation.
-    pub fn cleanup(&self) -> Result<(), Error> {
+    pub fn cleanup(&self) -> Result<(), Failed> {
         self.store.cleanup(self.cache.cleanup())
     }
 }
@@ -363,7 +363,7 @@ impl<'a, P> Run<'a, P> {
 
 impl<'a, P: ProcessRun> Run<'a, P> {
     /// Performs the validation run.
-    pub fn process(&self) -> Result<(), Error> {
+    pub fn process(&self) -> Result<(), Failed> {
         // If we don’t have any TALs, we ain’t got nothing to do.
         if self.validation.tals.is_empty() {
             return Ok(())
@@ -399,7 +399,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 "Engine failed after a worker thread has panicked. \
                  This is most assuredly a bug."
             );
-            return Err(Error);
+            return Err(Failed);
         }
 
         Ok(())
@@ -408,7 +408,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Process a task. Any task.
     fn process_task(
         &self, task: Task<P::ProcessCa>, tasks: &SegQueue<Task<P::ProcessCa>>
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         match task {
             Task::Tal(task) => self.process_tal_task(task, tasks),
             Task::Ca(task) => self.process_ca_task(task, tasks)
@@ -418,7 +418,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Processes a trust anchor.
     fn process_tal_task(
         &self, task: TalTask, tasks: &SegQueue<Task<P::ProcessCa>>
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
             let cert = match self.load_ta(uri, task.tal.info())? {
                 Some(cert) => cert,
@@ -470,7 +470,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         &self,
         uri: &TalUri,
         _info: &TalInfo,
-    ) -> Result<Option<Cert>, Error> {
+    ) -> Result<Option<Cert>, Failed> {
         // Get the new version, store and return it if it decodes.
         if let Some(bytes) = self.cache.load_ta(uri) {
             if let Ok(cert) = Cert::decode(bytes.clone()) {
@@ -490,7 +490,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         &self,
         task: CaTask<P::ProcessCa>,
         tasks: &SegQueue<Task<P::ProcessCa>>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let more_tasks = PubPoint::new(
             self, &task.cert, task.processor
         )?.process()?;
@@ -533,7 +533,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         run: &'a Run<'a, P>,
         cert: &'a Arc<CaCert>,
         processor: P::ProcessCa,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         let cache = run.cache.repository(cert);
         let store = run.store.repository(cert, cache.as_ref())?;
         Ok(PubPoint { run, cert, processor, cache, store })
@@ -543,7 +543,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ///
     /// Upon success, returns a list of all the child CAs of this publication
     /// point as CA processing tasks.
-    pub fn process(self) -> Result<Vec<CaTask<P::ProcessCa>>, Error> {
+    pub fn process(self) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
         let manifest = match self.update_stored()? {
             PointManifest::Valid(manifest) => manifest,
             PointManifest::Unverified(stored) => {
@@ -576,7 +576,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     // Clippy false positive: We are using HashSet<Bytes> here -- Bytes is
     // not a mutable type.
     #[allow(clippy::mutable_key_type)]
-    fn update_stored(&self) -> Result<PointManifest, Error> {
+    fn update_stored(&self) -> Result<PointManifest, Failed> {
         // If we don’t have a cache, we just use the stored publication point.
         let cache = match self.cache {
             Some(ref cache) => cache,
@@ -694,7 +694,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     return Ok(stored.into())
                 }
                 else {
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
         };
@@ -1007,7 +1007,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     }
 
     /// Processes the point returning the child CAs.
-    pub fn process(mut self) -> Result<Vec<CaTask<P::ProcessCa>>, Error> {
+    pub fn process(mut self) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
         if self._process()? {
             self.point.processor.commit();
             Ok(self.child_cas)
@@ -1022,7 +1022,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     ///
     /// If the processor votes to abort processing of the entire point, this
     /// will return `Ok(false)`.
-    pub fn _process(&mut self) -> Result<bool, Error> {
+    pub fn _process(&mut self) -> Result<bool, Failed> {
         for item in self.manifest.content.iter() {
             let (file, hash) = item.into_pair();
             let uri = match self.point.cert.ca_repository().join(&file) {
@@ -1053,7 +1053,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// publication point should be disregarded.
     fn process_object(
         &mut self, uri: uri::Rsync, file: &[u8], hash: ManifestHash,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, Failed> {
         let object = match self.point.store.load_object(
             self.point.cert.rpki_manifest(), file
         )? {
@@ -1094,7 +1094,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Processes a certificate object.
     fn process_cer(
         &mut self, uri: uri::Rsync, object: store::StoredObject,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let cert = match Cert::decode(object.into_content()) {
             Ok(cert) => cert,
             Err(_) => {
@@ -1115,7 +1115,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     #[allow(clippy::too_many_arguments)]
     fn process_ca_cer(
         &mut self, uri: uri::Rsync, cert: Cert,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         if self.point.cert.check_loop(&cert).is_err() {
             warn!("{}: certificate loop detected.", uri);
             return Ok(())
@@ -1159,7 +1159,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Processes an EE certificate.
     fn process_ee_cer(
         &mut self, uri: uri::Rsync, cert: Cert,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         if cert.validate_router(
             &self.point.cert.cert, self.point.run.validation.strict
         ).is_err() {
@@ -1176,7 +1176,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Processes a ROA object.
     fn process_roa(
         &mut self, uri: uri::Rsync, object: store::StoredObject,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let roa = match Roa::decode(
             object.into_content(), self.point.run.validation.strict
         ) {
@@ -1200,7 +1200,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Processes a Ghostbuster Record.
     fn process_gbr(
         &mut self, uri: uri::Rsync, object: store::StoredObject,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let obj = match SignedObject::decode(
             object.into_content(), self.point.run.validation.strict
         ) {
@@ -1320,7 +1320,7 @@ impl CaCert {
     /// Creates a new CA cert for a trust anchor.
     pub fn root(
         cert: ResourceCert, uri: TalUri, tal: usize
-    ) -> Result<Arc<Self>, Error> {
+    ) -> Result<Arc<Self>, Failed> {
         Self::new(cert, uri, None, tal)
     }
 
@@ -1329,7 +1329,7 @@ impl CaCert {
         issuer: &Arc<Self>,
         uri: uri::Rsync,
         cert: ResourceCert
-    ) -> Result<Arc<Self>, Error> {
+    ) -> Result<Arc<Self>, Failed> {
         Self::new(cert, TalUri::Rsync(uri), Some(issuer.clone()), issuer.tal)
     }
 
@@ -1339,7 +1339,7 @@ impl CaCert {
         uri: TalUri, 
         parent: Option<Arc<Self>>,
         tal: usize
-    ) -> Result<Arc<Self>, Error> {
+    ) -> Result<Arc<Self>, Failed> {
         let ca_repository = match cert.ca_repository() {
             Some(uri) => uri.clone(),
             None => {
@@ -1350,7 +1350,7 @@ impl CaCert {
                      Why has it not been rejected yet?",
                     uri
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         
@@ -1364,7 +1364,7 @@ impl CaCert {
                      Why has it not been rejected yet?",
                     uri
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         Ok(Arc::new(CaCert {
@@ -1373,7 +1373,7 @@ impl CaCert {
     }
 
     /// Checks whether a child cert has appeared in the chain already.
-    pub fn check_loop(&self, cert: &Cert) -> Result<(), Error> {
+    pub fn check_loop(&self, cert: &Cert) -> Result<(), Failed> {
         self._check_loop(cert.subject_key_identifier())
     }
 
@@ -1381,9 +1381,9 @@ impl CaCert {
     ///
     /// We are comparing certificates by comparing their subject key
     /// identifiers.
-    fn _check_loop(&self, key_id: KeyIdentifier) -> Result<(), Error> {
+    fn _check_loop(&self, key_id: KeyIdentifier) -> Result<(), Failed> {
         if self.cert.subject_key_identifier() == key_id {
-            Err(Error)
+            Err(Failed)
         }
         else if let Some(ref parent) = self.parent {
             parent._check_loop(key_id)
@@ -1500,7 +1500,7 @@ pub trait ProcessRun: Send + Sync {
     /// If it wishes to abort processing, it returns an error.
     fn process_ta(
         &self, tal: &Tal, uri: &TalUri, cert: &ResourceCert
-    ) -> Result<Option<Self::ProcessCa>, Error>;
+    ) -> Result<Option<Self::ProcessCa>, Failed>;
 }
 
 
@@ -1516,7 +1516,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// The object will only be processed if the method returns `Ok(true)`.
     /// If it returns `Ok(false)`, the object will be skipped quietly. If it
     /// returns an error, the entire processing run will be aborted.
-    fn want(&self, uri: &uri::Rsync) -> Result<bool, Error>;
+    fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed>;
    
     /// Process the content of a validated CA.
     ///
@@ -1526,7 +1526,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// wishes to abort processing, it returns an error.
     fn process_ca(
         &mut self, uri: &uri::Rsync, cert: &ResourceCert
-    ) -> Result<Option<Self>, Error>;
+    ) -> Result<Option<Self>, Failed>;
 
     /// Process the content of a validated EE certificate.
     ///
@@ -1534,7 +1534,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// returns an error, the entire processing run will be aborted.
     fn process_ee_cert(
         &mut self, uri: &uri::Rsync, cert: Cert
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let _ = (uri, cert);
         Ok(())
     }
@@ -1545,7 +1545,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// returns an error, the entire processing run will be aborted.
     fn process_roa(
         &mut self, uri: &uri::Rsync, route: RouteOriginAttestation
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let _ = (uri, route);
         Ok(())
     }
@@ -1559,7 +1559,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// aborted.
     fn process_gbr(
         &mut self, uri: &uri::Rsync, content: Bytes
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let _ = (uri, content);
         Ok(())
     }

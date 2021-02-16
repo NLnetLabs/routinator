@@ -10,7 +10,7 @@ use chrono::Utc;
 use log::{error, LevelFilter};
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
-use crate::operation::Error;
+use crate::error::Failed;
 
 
 //------------ Process -------------------------------------------------------
@@ -25,7 +25,7 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn init() -> Result<(), Error> {
+    pub fn init() -> Result<(), Failed> {
         Self::init_logging()?;
 
         Ok(())
@@ -62,11 +62,11 @@ impl Process {
     /// does exactly that. It sets a maximum log level of `warn`, leading
     /// only printing important information, and directs all logging to
     /// stderr.
-    fn init_logging() -> Result<(), Error> {
+    fn init_logging() -> Result<(), Failed> {
         log::set_max_level(LevelFilter::Warn);
         if let Err(err) = log_reroute::init() {
             eprintln!("Failed to initialize logger: {}.\nAborting.", err);
-            return Err(Error)
+            return Err(Failed)
         };
         let dispatch = fern::Dispatch::new()
             .level(LevelFilter::Error)
@@ -85,7 +85,7 @@ impl Process {
         &self,
         daemon: bool,
         with_output: bool
-    ) -> Result<Option<LogOutput>, Error> {
+    ) -> Result<Option<LogOutput>, Failed> {
         let logger = match self.config.log_target {
             #[cfg(unix)]
             LogTarget::Default(fac) => {
@@ -126,7 +126,7 @@ impl Process {
     fn syslog_logger(
         &self,
         facility: syslog::Facility
-    ) -> Result<fern::Dispatch, Error> {
+    ) -> Result<fern::Dispatch, Failed> {
         let process = std::env::current_exe().ok().and_then(|path|
             path.file_name()
                 .and_then(std::ffi::OsStr::to_str)
@@ -152,7 +152,7 @@ impl Process {
             }
             Err(err) => {
                 error!("Cannot connect to syslog: {}", err);
-                Err(Error)
+                Err(Failed)
             }
         }
     }
@@ -165,7 +165,7 @@ impl Process {
     }
 
     /// Creates a file logger using the file provided by `path`.
-    fn file_logger(&self, path: &Path) -> Result<fern::Dispatch, Error> {
+    fn file_logger(&self, path: &Path) -> Result<fern::Dispatch, Failed> {
         let file = match fern::log_file(path) {
             Ok(file) => file,
             Err(err) => {
@@ -173,7 +173,7 @@ impl Process {
                     "Failed to open log file '{}': {}",
                     path.display(), err
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         Ok(self.fern_logger(true).chain(file))
@@ -222,7 +222,7 @@ impl Process {
     ///
     /// This method may encounter and log errors after detaching. You should
     /// therefore call `switch_logging` before this method.
-    pub fn setup_service(&mut self, detach: bool) -> Result<(), Error> {
+    pub fn setup_service(&mut self, detach: bool) -> Result<(), Failed> {
         self.service.as_mut().unwrap().setup_service(&self.config, detach)
     }
 
@@ -231,7 +231,7 @@ impl Process {
     /// If requested via the config, this method will drop all potentially
     /// elevated privileges. This may include loosing root or system
     /// administrator permissions and change the file system root.
-    pub fn drop_privileges(&mut self) -> Result<(), Error> {
+    pub fn drop_privileges(&mut self) -> Result<(), Failed> {
         self.service.take().unwrap().drop_privileges(&mut self.config)
     }
 }
@@ -243,12 +243,12 @@ impl Process {
     /// Creates the cache directory.
     ///
     /// This will also change ownership of the directory if necessary.
-    pub fn create_cache_dir(&self) -> Result<(), Error> {
+    pub fn create_cache_dir(&self) -> Result<(), Failed> {
         if let Err(err) = fs::create_dir_all(&self.config.cache_dir) {
             error!("Fatal: failed to create cache directory {}: {}",
                 self.config.cache_dir.display(), err
             );
-            return Err(Error)
+            return Err(Failed)
         }
         ServiceImpl::prepare_cache_dir(&self.config)
     }
@@ -259,15 +259,15 @@ impl Process {
 ///
 impl Process {
     /// Returns a Tokio runtime based on the configuration.
-    pub fn runtime(&self) -> Result<Runtime, Error> {
+    pub fn runtime(&self) -> Result<Runtime, Failed> {
         Runtime::new().map_err(|err| {
             error!("Failed to create runtime: {}", err);
-            Error
+            Failed
         })
     }
 
     /// Runs a future to completion atop a Tokio runtime.
-    pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Error> {
+    pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Failed> {
         Ok(self.runtime()?.block_on(future))
     }
 }
@@ -342,8 +342,8 @@ mod unix {
         chown, chroot, fork, getpid, setgid, setuid, write, Gid, Uid
     };
     use nix::sys::stat::Mode;
-    use crate::operation::Error;
     use crate::config::Config;
+    use crate::error::Failed;
 
     #[derive(Debug, Default)]
     pub struct ServiceImpl {
@@ -359,7 +359,7 @@ mod unix {
 
         pub fn setup_service(
             &mut self, config: &Config, detach: bool
-        ) -> Result<(), Error> {
+        ) -> Result<(), Failed> {
             if let Some(pid_file) = config.pid_file.as_ref() {
                 self.create_pid_file(pid_file)?
             }
@@ -371,7 +371,7 @@ mod unix {
                     error!("Fatal: failed to set working directory {}: {}",
                         path.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
             // set_sid 
@@ -389,26 +389,26 @@ mod unix {
 
         pub fn drop_privileges(
             self, config: &mut Config
-        ) -> Result<(), Error> {
+        ) -> Result<(), Failed> {
             config.adjust_chroot_paths()?;
             if let Some(path) = config.chroot.as_ref() {
                 if let Err(err) = chroot(path) {
                     error!("Fatal: cannot chroot to '{}': {}'",
                         path.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
             if let Some(gid) = self.gid {
                 if let Err(err) = setgid(gid) {
                     error!("Fatal: failed to set group: {}", err);
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
             if let Some(uid) = self.uid {
                 if let Err(err) = setuid(uid) {
                     error!("Fatal: failed to set user: {}", err);
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
             self.write_pid_file()?;
@@ -416,7 +416,7 @@ mod unix {
             Ok(())
         }
 
-        fn create_pid_file(&mut self, path: &Path) -> Result<(), Error> {
+        fn create_pid_file(&mut self, path: &Path) -> Result<(), Failed> {
             let fd = match open(
                 path,
                 OFlag::O_WRONLY | OFlag::O_CREAT,
@@ -427,20 +427,20 @@ mod unix {
                     error!("Fatal: failed to create PID file {}: {}",
                         path.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             if let Err(err) = flock(fd, FlockArg::LockExclusiveNonblock) {
                 error!("Fatal: cannot lock PID file {}: {}",
                     path.display(), err
                 );
-                return Err(Error)
+                return Err(Failed)
             }
             self.pid_file = Some(fd);
             Ok(())
         }
 
-        fn write_pid_file(&self) -> Result<(), Error> {
+        fn write_pid_file(&self) -> Result<(), Failed> {
             if let Some(pid_file) = self.pid_file {
                 let pid = format!("{}", getpid());
                 match write(pid_file, pid.as_bytes()) {
@@ -450,20 +450,20 @@ mod unix {
                             "Fatal: failed to write PID to PID file: \
                              short write"
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                     Err(err) => {
                         error!(
                             "Fatal: failed to write PID to PID file: {}", err
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 }
             }
             Ok(())
         }
 
-        fn perform_fork(&self) -> Result<(), Error> {
+        fn perform_fork(&self) -> Result<(), Failed> {
             match unsafe { fork() } {
                 Ok(res) => {
                     if res.is_parent() {
@@ -473,12 +473,12 @@ mod unix {
                 }
                 Err(err) => {
                     error!("Fatal: failed to detach: {}", err);
-                    Err(Error)
+                    Err(Failed)
                 }
             }
         }
 
-        fn get_user(config: &Config) -> Result<Option<Uid>, Error> {
+        fn get_user(config: &Config) -> Result<Option<Uid>, Failed> {
             let name = match config.user.as_ref() {
                 Some(name) => name,
                 None => return Ok(None)
@@ -487,7 +487,7 @@ mod unix {
                 Ok(name) => name,
                 Err(_) => {
                     error!("Fatal: invalid user ID '{}'", name);
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
 
@@ -505,12 +505,12 @@ mod unix {
                 Some(uid) => Ok(Some(Uid::from_raw(uid))),
                 None => {
                     error!("Fatal: unknown user ID '{}'", name);
-                    Err(Error)
+                    Err(Failed)
                 }
             }
         }
 
-        fn get_group(config: &Config) -> Result<Option<Gid>, Error> {
+        fn get_group(config: &Config) -> Result<Option<Gid>, Failed> {
             let name = match config.group.as_ref() {
                 Some(name) => name,
                 None => return Ok(None)
@@ -519,7 +519,7 @@ mod unix {
                 Ok(name) => name,
                 Err(_) => {
                     error!("Fatal: invalid user ID '{}'", name);
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
 
@@ -537,12 +537,12 @@ mod unix {
                 Some(gid) => Ok(Some(Gid::from_raw(gid))),
                 None => {
                     error!("Fatal: unknown group ID '{}'", name);
-                    Err(Error)
+                    Err(Failed)
                 }
             }
         }
      
-        pub fn prepare_cache_dir(config: &Config) -> Result<(), Error> {
+        pub fn prepare_cache_dir(config: &Config) -> Result<(), Failed> {
             let uid = Self::get_user(config)?;
             let gid = Self::get_group(config)?;
             if uid.is_some() || gid.is_some() {
@@ -553,7 +553,7 @@ mod unix {
                         config.cache_dir.display(),
                         err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
             Ok(())
@@ -563,7 +563,7 @@ mod unix {
 
 #[cfg(not(unix))]
 mod noop {
-    use crate::operation::Error;
+    use crate::operation::Failed;
     use crate::config::Config;
 
     pub struct ServiceImpl;
@@ -575,17 +575,17 @@ mod noop {
 
         pub fn setup_service(
             &mut self, _config: &Config, _detach: bool
-        ) -> Result<(), Error> {
+        ) -> Result<(), Failed> {
             Ok(())
         }
 
         pub fn drop_privileges(
             self, _config: &mut Config
-        ) -> Result<(), Error> {
+        ) -> Result<(), Failed> {
             Ok(())
         }
  
-        pub fn prepare_cache_dir(_config: &Config) -> Result<(), Error> {
+        pub fn prepare_cache_dir(_config: &Config) -> Result<(), Failed> {
             Ok(())
         }
     }

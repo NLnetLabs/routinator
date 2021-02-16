@@ -17,7 +17,7 @@ use clap::{App, Arg, ArgMatches, crate_version};
 use dirs::home_dir;
 use log::{LevelFilter, error};
 #[cfg(unix)] use syslog::Facility;
-use crate::operation::Error;
+use crate::error::Failed;
 
 
 //------------ Defaults for Some Values --------------------------------------
@@ -515,7 +515,7 @@ impl Config {
     pub fn from_arg_matches(
         matches: &ArgMatches,
         cur_dir: &Path,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         let mut res = Self::create_base_config(
             Self::path_value_of(matches, "config", &cur_dir)
                 .as_ref().map(AsRef::as_ref)
@@ -535,7 +535,7 @@ impl Config {
         &mut self,
         matches: &ArgMatches,
         cur_dir: &Path,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         // cache_dir
         if let Some(dir) = matches.value_of("repository-dir") {
             self.cache_dir = cur_dir.join(dir)
@@ -549,7 +549,7 @@ impl Config {
                  no home directory.\n\
                  Please specify the repository directory with the -r option."
             );
-            return Err(Error)
+            return Err(Failed)
         }
 
         // tal_dir
@@ -565,7 +565,7 @@ impl Config {
                  no home directory.\n\
                  Please specify the repository directory with the -t option."
             );
-            return Err(Error)
+            return Err(Failed)
         }
 
         // expceptions
@@ -644,7 +644,7 @@ impl Config {
                     Ok(path) => self.rrdp_root_certs.push(path),
                     Err(_) => {
                         error!("Invalid path for rrdp-root-cert '{}'", value);
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 };
             }
@@ -692,7 +692,7 @@ impl Config {
         &mut self,
         matches: &ArgMatches,
         cur_dir: &Path,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         if matches.is_present("syslog") {
             self.log_target = LogTarget::Syslog(
                 match Facility::from_str(
@@ -700,7 +700,7 @@ impl Config {
                     Ok(value) => value,
                     Err(_) => {
                         error!("Invalid value for syslog-facility.");
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             )
@@ -725,7 +725,7 @@ impl Config {
         &mut self,
         matches: &ArgMatches,
         cur_dir: &Path,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         if let Some(file) = matches.value_of("logfile") {
             if file == "-" {
                 self.log_target = LogTarget::Stderr
@@ -745,7 +745,7 @@ impl Config {
         &mut self,
         matches: &ArgMatches,
         cur_dir: &Path,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         // refresh
         if let Some(value) = from_str_value_of(matches, "refresh")? {
             self.refresh = Duration::from_secs(value)
@@ -774,7 +774,7 @@ impl Config {
                     Ok(some) => self.rtr_listen.push(some),
                     Err(_) => {
                         error!("Invalid value for rtr: {}", value);
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             }
@@ -788,7 +788,7 @@ impl Config {
                     Ok(some) => self.http_listen.push(some),
                     Err(_) => {
                         error!("Invalid value for http: {}", value);
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             }
@@ -853,14 +853,14 @@ impl Config {
     /// If no config path is given, tries to read the default config in
     /// `$HOME/.routinator.conf`. If that doesn’t exist, creates a default
     /// config.
-    fn create_base_config(path: Option<&Path>) -> Result<Self, Error> {
+    fn create_base_config(path: Option<&Path>) -> Result<Self, Failed> {
         let file = match path {
             Some(path) => {
                 match ConfigFile::read(&path)? {
                     Some(file) => file,
                     None => {
                         error!("Cannot read config file {}", path.display());
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             }
@@ -879,7 +879,7 @@ impl Config {
     }
 
     /// Creates a base config from a config file.
-    fn from_config_file(mut file: ConfigFile) -> Result<Self, Error> {
+    fn from_config_file(mut file: ConfigFile) -> Result<Self, Failed> {
         let log_target = Self::log_target_from_config_file(&mut file)?;
         let res = Config {
             cache_dir: file.take_mandatory_path("repository-dir")?,
@@ -1007,7 +1007,7 @@ impl Config {
     #[cfg(unix)]
     fn log_target_from_config_file(
         file: &mut ConfigFile
-    ) -> Result<LogTarget, Error> {
+    ) -> Result<LogTarget, Failed> {
         let facility = file.take_string("syslog-facility")?;
         let facility = facility.as_ref().map(AsRef::as_ref)
                                .unwrap_or("daemon");
@@ -1015,10 +1015,10 @@ impl Config {
             Ok(value) => value,
             Err(_) => {
                 error!(
-                    "Error in config file {}: invalid syslog-facility.",
+                    "Failed in config file {}: invalid syslog-facility.",
                     file.path.display()
                 );
-                return Err(Error);
+                return Err(Failed);
             }
         };
         let log_target = file.take_string("log")?;
@@ -1032,22 +1032,22 @@ impl Config {
                     Some(file) => Ok(LogTarget::File(file)),
                     None => {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                              log target \"file\" requires 'log-file' value.",
                             file.path.display()
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                 }
             }
             Some(value) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      invalid log target '{}'",
                      file.path.display(),
                      value
                 );
-                Err(Error)
+                Err(Failed)
             }
         }
     }
@@ -1058,7 +1058,7 @@ impl Config {
     #[cfg(not(unix))]
     fn log_target_from_config_file(
         file: &mut ConfigFile
-    ) -> Result<LogTarget, Error> {
+    ) -> Result<LogTarget, Failed> {
         let log_target = file.take_string("log")?;
         let log_file = file.take_path("log-file")?;
         match log_target.as_ref().map(AsRef::as_ref) {
@@ -1068,21 +1068,21 @@ impl Config {
                     Some(file) => Ok(LogTarget::File(file)),
                     None => {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                              log target \"file\" requires 'log-file' value.",
                             file.path.display()
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                 }
             }
             Some(value) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      invalid log target '{}'",
                     file.path.display(), value
                 );
-                Err(Error)
+                Err(Failed)
             }
         }
     }
@@ -1134,7 +1134,7 @@ impl Config {
     }
 
     /// Alters paths so that they are relative to a possible chroot.
-    pub fn adjust_chroot_paths(&mut self) -> Result<(), Error> {
+    pub fn adjust_chroot_paths(&mut self) -> Result<(), Failed> {
         if let Some(ref chroot) = self.chroot {
             self.cache_dir = match self.cache_dir.strip_prefix(chroot) {
                 Ok(dir) => dir.into(),
@@ -1144,7 +1144,7 @@ impl Config {
                          not under chroot {}.",
                          self.cache_dir.display(), chroot.display()
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             self.tal_dir = match self.tal_dir.strip_prefix(chroot) {
@@ -1154,7 +1154,7 @@ impl Config {
                         "Fatal: TAL directory {} not under chroot {}.",
                          self.tal_dir.display(), chroot.display()
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             for item in &mut self.exceptions {
@@ -1165,7 +1165,7 @@ impl Config {
                             "Fatal: Exception file {} not under chroot {}.",
                              item.display(), chroot.display()
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 }
             }
@@ -1177,7 +1177,7 @@ impl Config {
                             "Fatal: Log file {} not under chroot {}.",
                              file.display(), chroot.display()
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 };
             }
@@ -1189,7 +1189,7 @@ impl Config {
                             "Fatal: working directory {} not under chroot {}.",
                              dir.display(), chroot.display()
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 }
             }
@@ -1527,7 +1527,7 @@ impl ConfigFile {
     /// If there is no such file, returns `None`. If there is a file but it
     /// is broken, aborts.
     #[allow(clippy::verbose_file_reads)]
-    fn read(path: &Path) -> Result<Option<Self>, Error> {
+    fn read(path: &Path) -> Result<Option<Self>, Failed> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
             Err(_) => return Ok(None)
@@ -1538,13 +1538,13 @@ impl ConfigFile {
                 "Failed to read config file {}: {}",
                 path.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         Self::parse(&config, path).map(Some)
     }
 
     /// Parses the content of the file from a string.
-    fn parse(content: &str, path: &Path) -> Result<Self, Error> {
+    fn parse(content: &str, path: &Path) -> Result<Self, Failed> {
         let content = match toml::from_str(content) {
             Ok(toml::Value::Table(content)) => content,
             Ok(_) => {
@@ -1552,14 +1552,14 @@ impl ConfigFile {
                     "Failed to parse config file {}: Not a mapping.",
                     path.display()
                 );
-                return Err(Error);
+                return Err(Failed);
             }
             Err(err) => {
                 error!(
                     "Failed to parse config file {}: {}",
                     path.display(), err
                 );
-                return Err(Error);
+                return Err(Failed);
             }
         };
         let dir = if path.is_relative() {
@@ -1570,7 +1570,7 @@ impl ConfigFile {
                         "Fatal: Can't determine current directory: {}.",
                         err
                     );
-                    return Err(Error);
+                    return Err(Failed);
                 }
             }).parent().unwrap().into() // a file always has a parent
         }
@@ -1589,7 +1589,7 @@ impl ConfigFile {
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t a booelan.
-    fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Error> {
+    fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Failed> {
         match self.content.remove(key) {
             Some(value) => {
                 if let toml::Value::Boolean(res) = value {
@@ -1597,11 +1597,11 @@ impl ConfigFile {
                 }
                 else {
                     error!(
-                        "Error in config file {}: \
+                        "Failed in config file {}: \
                          '{}' expected to be a boolean.",
                         self.path.display(), key
                     );
-                    Err(Error)
+                    Err(Failed)
                 }
             }
             None => Ok(None)
@@ -1613,17 +1613,17 @@ impl ConfigFile {
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t an integer or if it is negative.
-    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Error> {
+    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Failed> {
         match self.content.remove(key) {
             Some(value) => {
                 if let toml::Value::Integer(res) = value {
                     if res < 0 {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a positive integer.",
                             self.path.display(), key
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                     else {
                         Ok(Some(res as u64))
@@ -1631,11 +1631,11 @@ impl ConfigFile {
                 }
                 else {
                     error!(
-                        "Error in config file {}: \
+                        "Failed in config file {}: \
                          '{}' expected to be an integer.",
                         self.path.display(), key
                     );
-                    Err(Error)
+                    Err(Failed)
                 }
             }
             None => Ok(None)
@@ -1645,18 +1645,18 @@ impl ConfigFile {
     /// Takes an unsigned integer which may also be a string.
     ///
     /// This is a temporary function to help with a compatibility issue.
-    fn take_u64_maybe_str(&mut self, key: &str) -> Result<Option<u64>, Error> {
+    fn take_u64_maybe_str(&mut self, key: &str) -> Result<Option<u64>, Failed> {
         match self.content.remove(key) {
             Some(value) => {
                 match value {
                     toml::Value::Integer(res) => {
                         if res < 0 {
                             error!(
-                                "Error in config file {}: \
+                                "Failed in config file {}: \
                                 '{}' expected to be a positive integer.",
                                 self.path.display(), key
                             );
-                            Err(Error)
+                            Err(Failed)
                         }
                         else {
                             Ok(Some(res as u64))
@@ -1667,21 +1667,21 @@ impl ConfigFile {
                             Ok(some) => Ok(Some(some)),
                             Err(_) => {
                                 error!(
-                                    "Error in config file {}: \
+                                    "Failed in config file {}: \
                                     '{}' expected to be a positive integer.",
                                     self.path.display(), key
                                 );
-                                Err(Error)
+                                Err(Failed)
                             }
                         }
                     }
                     _ => {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                              '{}' expected to be an integer.",
                             self.path.display(), key
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                 }
             }
@@ -1697,25 +1697,25 @@ impl ConfigFile {
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t an integer or if it is out of bounds.
-    fn take_small_usize(&mut self, key: &str) -> Result<Option<usize>, Error> {
+    fn take_small_usize(&mut self, key: &str) -> Result<Option<usize>, Failed> {
         match self.content.remove(key) {
             Some(value) => {
                 if let toml::Value::Integer(res) = value {
                     if res < 0 {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a positive integer.",
                             self.path.display(), key
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                     else if res > ::std::u16::MAX.into() {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             value for '{}' is too large.",
                             self.path.display(), key
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                     else {
                         Ok(Some(res as usize))
@@ -1723,11 +1723,11 @@ impl ConfigFile {
                 }
                 else {
                     error!(
-                        "Error in config file {}: \
+                        "Failed in config file {}: \
                          '{}' expected to be a integer.",
                         self.path.display(), key
                     );
-                    Err(Error)
+                    Err(Failed)
                 }
             }
             None => Ok(None)
@@ -1739,7 +1739,7 @@ impl ConfigFile {
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t a string.
-    fn take_string(&mut self, key: &str) -> Result<Option<String>, Error> {
+    fn take_string(&mut self, key: &str) -> Result<Option<String>, Failed> {
         match self.content.remove(key) {
             Some(value) => {
                 if let toml::Value::String(res) = value {
@@ -1747,11 +1747,11 @@ impl ConfigFile {
                 }
                 else {
                     error!(
-                        "Error in config file {}: \
+                        "Failed in config file {}: \
                          '{}' expected to be a string.",
                         self.path.display(), key
                     );
-                    Err(Error)
+                    Err(Failed)
                 }
             }
             None => Ok(None)
@@ -1765,7 +1765,7 @@ impl ConfigFile {
     ///
     /// Returns `Ok(None)` if the key doesn’t exist. Returns an error if the
     /// key exists but the value isn’t a string or conversion fails.
-    fn take_from_str<T>(&mut self, key: &str) -> Result<Option<T>, Error>
+    fn take_from_str<T>(&mut self, key: &str) -> Result<Option<T>, Failed>
     where T: FromStr, T::Err: fmt::Display {
         match self.take_string(key)? {
             Some(value) => {
@@ -1773,11 +1773,11 @@ impl ConfigFile {
                     Ok(some) => Ok(Some(some)),
                     Err(err) => {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                              illegal value in '{}': {}.",
                             self.path.display(), key, err
                         );
-                        Err(Error)
+                        Err(Failed)
                     }
                 }
             }
@@ -1794,7 +1794,7 @@ impl ConfigFile {
     ///
     /// Returns `Ok(None)` if the key does not exist. Returns an error if the
     /// key exists but the value isn’t a string.
-    fn take_path(&mut self, key: &str) -> Result<Option<PathBuf>, Error> {
+    fn take_path(&mut self, key: &str) -> Result<Option<PathBuf>, Failed> {
         self.take_string(key).map(|opt| opt.map(|path| self.dir.join(path)))
     }
 
@@ -1804,15 +1804,15 @@ impl ConfigFile {
     /// an error if the key does not exist.
     ///
     /// [`take_path`]: #method.take_path
-    fn take_mandatory_path(&mut self, key: &str) -> Result<PathBuf, Error> {
+    fn take_mandatory_path(&mut self, key: &str) -> Result<PathBuf, Failed> {
         match self.take_path(key)? {
             Some(res) => Ok(res),
             None => {
                 error!(
-                    "Error in config file {}: missing required '{}'.",
+                    "Failed in config file {}: missing required '{}'.",
                     self.path.display(), key
                 );
-                Err(Error)
+                Err(Failed)
             }
         }
     }
@@ -1826,7 +1826,7 @@ impl ConfigFile {
     fn take_string_array(
         &mut self,
         key: &str
-    ) -> Result<Option<Vec<String>>, Error> {
+    ) -> Result<Option<Vec<String>>, Failed> {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
@@ -1836,23 +1836,23 @@ impl ConfigFile {
                     }
                     else {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a array of strings.",
                             self.path.display(),
                             key
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
                 Ok(Some(res))
             }
             Some(_) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      '{}' expected to be a array of strings.",
                     self.path.display(), key
                 );
-                Err(Error)
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -1870,7 +1870,7 @@ impl ConfigFile {
     fn take_from_str_array<T>(
         &mut self,
         key: &str
-    ) -> Result<Option<Vec<T>>, Error>
+    ) -> Result<Option<Vec<T>>, Failed>
     where T: FromStr, T::Err: fmt::Display {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
@@ -1881,33 +1881,33 @@ impl ConfigFile {
                             Ok(value) => res.push(value),
                             Err(err) => {
                                 error!(
-                                    "Error in config file {}: \
+                                    "Failed in config file {}: \
                                      Invalid value in '{}': {}",
                                     self.path.display(), key, err
                                 );
-                                return Err(Error)
+                                return Err(Failed)
                             }
                         }
                     }
                     else {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a array of strings.",
                             self.path.display(),
                             key
                         );
-                        return Err(Error)
+                        return Err(Failed)
                     }
                 }
                 Ok(Some(res))
             }
             Some(_) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      '{}' expected to be a array of strings.",
                     self.path.display(), key
                 );
-                Err(Error)
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -1925,7 +1925,7 @@ impl ConfigFile {
     fn take_path_array(
         &mut self,
         key: &str
-    ) -> Result<Option<Vec<PathBuf>>, Error> {
+    ) -> Result<Option<Vec<PathBuf>>, Failed> {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
@@ -1935,23 +1935,23 @@ impl ConfigFile {
                     }
                     else {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a array of paths.",
                             self.path.display(),
                             key
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
                 Ok(Some(res))
             }
             Some(_) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      '{}' expected to be a array of paths.",
                     self.path.display(), key
                 );
-                Err(Error)
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -1961,7 +1961,7 @@ impl ConfigFile {
     fn take_string_map(
         &mut self,
         key: &str
-    ) -> Result<Option<HashMap<String, String>>, Error> {
+    ) -> Result<Option<HashMap<String, String>>, Failed> {
         match self.content.remove(key) {
             Some(::toml::Value::Array(vec)) => {
                 let mut res = HashMap::new();
@@ -1970,66 +1970,66 @@ impl ConfigFile {
                         ::toml::Value::Array(pair) => pair.into_iter(),
                         _ => {
                             error!(
-                                "Error in config file {}: \
+                                "Failed in config file {}: \
                                 '{}' expected to be a array of string pairs.",
                                 self.path.display(),
                                 key
                             );
-                            return Err(Error);
+                            return Err(Failed);
                         }
                     };
                     let left = match pair.next() {
                         Some(::toml::Value::String(value)) => value,
                         _ => {
                             error!(
-                                "Error in config file {}: \
+                                "Failed in config file {}: \
                                 '{}' expected to be a array of string pairs.",
                                 self.path.display(),
                                 key
                             );
-                            return Err(Error);
+                            return Err(Failed);
                         }
                     };
                     let right = match pair.next() {
                         Some(::toml::Value::String(value)) => value,
                         _ => {
                             error!(
-                                "Error in config file {}: \
+                                "Failed in config file {}: \
                                 '{}' expected to be a array of string pairs.",
                                 self.path.display(),
                                 key
                             );
-                            return Err(Error);
+                            return Err(Failed);
                         }
                     };
                     if pair.next().is_some() {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             '{}' expected to be a array of string pairs.",
                             self.path.display(),
                             key
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                     if res.insert(left, right).is_some() {
                         error!(
-                            "Error in config file {}: \
+                            "Failed in config file {}: \
                             'duplicate item in '{}'.",
                             self.path.display(),
                             key
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
                 Ok(Some(res))
             }
             Some(_) => {
                 error!(
-                    "Error in config file {}: \
+                    "Failed in config file {}: \
                      '{}' expected to be a array of string pairs.",
                     self.path.display(), key
                 );
-                Err(Error)
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -2038,10 +2038,10 @@ impl ConfigFile {
     /// Checks whether the config file is now empty.
     ///
     /// If it isn’t, logs a complaint and returns an error.
-    fn check_exhausted(&self) -> Result<(), Error> {
+    fn check_exhausted(&self) -> Result<(), Failed> {
         if !self.content.is_empty() {
             print!(
-                "Error in config file {}: Unknown settings ",
+                "Failed in config file {}: Unknown settings ",
                 self.path.display()
             );
             let mut first = true;
@@ -2055,7 +2055,7 @@ impl ConfigFile {
                 print!("{}", key);
             }
             error!(".");
-            Err(Error)
+            Err(Failed)
         }
         else {
             Ok(())
@@ -2074,7 +2074,7 @@ impl ConfigFile {
 fn from_str_value_of<T>(
     matches: &ArgMatches,
     key: &str
-) -> Result<Option<T>, Error>
+) -> Result<Option<T>, Failed>
 where T: FromStr, T::Err: fmt::Display {
     match matches.value_of(key) {
         Some(value) => {
@@ -2085,7 +2085,7 @@ where T: FromStr, T::Err: fmt::Display {
                         "Invalid value for {}: {}.", 
                         key, err
                     );
-                    Err(Error)
+                    Err(Failed)
                 }
             }
         }

@@ -15,8 +15,8 @@ use rpki::rtr::server::{NotifySender, Server};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
+use crate::error::ExitError;
 use crate::metrics::ServerMetrics;
-use crate::operation::ExitError;
 use crate::origins::OriginsHistory;
 
 

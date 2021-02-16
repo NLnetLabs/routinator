@@ -19,7 +19,7 @@
 //! Pretty much all methods and functions provided by this module can return
 //! an error. This is because the underlying database may produce an error at
 //! any time. The concrete error reason is logged and our generic
-//! [`Error`][crate::operation::Error] is returned. When this happens, the
+//! [`Failed`][crate::error::Failed] is returned. When this happens, the
 //! store should be considered broken and not be used anymore.
 //!
 //! # Data Storage
@@ -72,8 +72,8 @@ use sled::transaction::{
 use crate::cache;
 use crate::config::Config;
 use crate::engine::CaCert;
+use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::operation::Error;
 
 
 //------------ Store ---------------------------------------------------------
@@ -105,7 +105,7 @@ impl Store {
     /// NB: The database will be opened below the given directory. I,e., the
     /// provided path is `cache_dir` from the
     /// [`Config`][crate::config::Config].
-    fn open_db(cache_dir: &Path) -> Result<sled::Db, Error> {
+    fn open_db(cache_dir: &Path) -> Result<sled::Db, Failed> {
         // XXX This checks that config.cache_dir exists which actually happens
         //     elsewhere again. Perhaps move it to Config and only do it once?
         if let Err(err) = fs::read_dir(cache_dir) {
@@ -123,7 +123,7 @@ impl Store {
                     cache_dir.display(), err
                 );
             }
-            return Err(Error)
+            return Err(Failed)
         }
 
         let db_path = cache_dir.join("store.db");
@@ -133,7 +133,7 @@ impl Store {
                 db_path.display(),
                 err
             );
-            Error
+            Failed
         })
     }
 
@@ -142,12 +142,12 @@ impl Store {
     /// Ensures that the database is present and initialized.
     ///
     /// This function is called implicitely by [`new`][Store::new].
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         Self::open_db(&config.cache_dir).map(|_| ())
     }
 
     /// Creates a new store based on configuration information.
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(config: &Config) -> Result<Self, Failed> {
         Self::open_db(&config.cache_dir).map(|db| {
             Self::with_db(db)
         })
@@ -178,7 +178,7 @@ impl Store {
     pub fn cleanup(
         &self,
         mut cache: cache::Cleanup,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         // Cleanup RRDP repositories
         for tree_name in self.db.tree_names() {
             if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
@@ -246,7 +246,7 @@ impl<'a> Run<'a> {
     }
 
     /// Loads a stored trust anchor certificate.
-    pub fn load_ta(&self, uri: &TalUri) -> Result<Option<Bytes>, Error> {
+    pub fn load_ta(&self, uri: &TalUri) -> Result<Option<Bytes>, Failed> {
         self.store.db.get(uri.as_str()).map(|value| {
             value.map(|value| Bytes::copy_from_slice(value.as_ref()))
         }).map_err(Into::into)
@@ -257,7 +257,7 @@ impl<'a> Run<'a> {
     /// Returns whether the certificate was newly added to the store.
     pub fn update_ta(
         &self, uri: &TalUri, content: &[u8]
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, Failed> {
         self.store.db.insert(
             uri.as_str(), content
         ).map(|res| res.is_some()).map_err(Into::into)
@@ -280,7 +280,7 @@ impl<'a> Run<'a> {
     /// available or not.
     pub fn repository(
         &self, ca_cert: &CaCert, cache: Option<&cache::Repository>
-    ) -> Result<Repository, Error> {
+    ) -> Result<Repository, Failed> {
         match (ca_cert.rpki_notify(), cache.map(|cache| cache.is_rrdp())) {
             (Some(rpki_notify), Some(true)) | (Some(rpki_notify), None) => {
                 self.rrdp_repository(rpki_notify)
@@ -294,7 +294,7 @@ impl<'a> Run<'a> {
     /// The repository is created if it is not yet present.
     pub fn rrdp_repository(
         &self, rpki_notify: &uri::Https,
-    ) -> Result<Repository, Error> {
+    ) -> Result<Repository, Failed> {
         Repository::new(self.store, &TreeNames::rrdp(rpki_notify))
     }
 
@@ -304,7 +304,7 @@ impl<'a> Run<'a> {
     /// namespace, we only have a single store repository for all of them.
     ///
     /// The repository is created if it is not yet present.
-    pub fn rsync_repository(&self) -> Result<Repository, Error> {
+    pub fn rsync_repository(&self) -> Result<Repository, Failed> {
         Repository::new(self.store, &TreeNames::rsync())
     }
 }
@@ -345,7 +345,7 @@ impl Repository {
     fn new(
         store: &Store,
         names: &TreeNames,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Ok(Repository {
             manifest_tree: names.open_manifest_tree(&store.db)?,
             object_tree: names.open_object_tree(&store.db)?,
@@ -358,7 +358,7 @@ impl Repository {
     /// return as a [`StoredManifest`].
     pub fn load_manifest(
         &self, uri: &uri::Rsync
-    ) -> Result<Option<StoredManifest>, Error> {
+    ) -> Result<Option<StoredManifest>, Failed> {
         self.manifest_tree.get(uri.as_slice()).map(|value| {
             value.and_then(|value| StoredManifest::try_from(value).ok())
         }).map_err(Into::into)
@@ -376,7 +376,7 @@ impl Repository {
         &self,
         manifest: &uri::Rsync,
         file: &[u8]
-    ) -> Result<Option<StoredObject>, Error> {
+    ) -> Result<Option<StoredObject>, Failed> {
         self.object_tree.get(
             &Self::object_key(manifest, file)
         ).map(|value| {
@@ -433,7 +433,7 @@ impl Repository {
     /// removed from the database.
     pub fn remove_point(
         &self, manifest: &uri::Rsync
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut batch = sled::Batch::default();
         for key in self.object_tree.scan_prefix(
             Self::object_key(manifest, b"")
@@ -451,7 +451,7 @@ impl Repository {
                 }
                 TransactionError::Storage(err) => {
                     error!("Failed to update storage: {}", err);
-                    Error
+                    Failed
                 }
             }
         })
@@ -470,7 +470,7 @@ impl Repository {
     pub fn drain_point(
         &self, manifest: &uri::Rsync,
         keep: impl Fn(&[u8]) -> bool
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         self._drain_point(manifest.as_ref(), keep)
     }
 
@@ -482,7 +482,7 @@ impl Repository {
     pub fn _drain_point(
         &self, manifest: &[u8],
         keep: impl Fn(&[u8]) -> bool
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut prefix = Vec::with_capacity(manifest.len() + 1);
         prefix.extend_from_slice(manifest);
         prefix.push(0);
@@ -502,7 +502,7 @@ impl Repository {
     /// Removes all publication points that have an expired manifest.
     /// Registers all rsync modules that have at least one non-expired
     /// manifest to be retained by the cache.
-    fn cleanup_rsync(self, cache: &mut cache::Cleanup) -> Result<(), Error> {
+    fn cleanup_rsync(self, cache: &mut cache::Cleanup) -> Result<(), Failed> {
         let now = Time::now();
 
         for item in self.manifest_tree.iter() {
@@ -531,7 +531,7 @@ impl Repository {
     ///
     /// Removes all publication points that have an expired manifest.
     /// Returns whether there was at least one non-expired manifest.
-    fn cleanup_rrdp(self) -> Result<bool, Error> {
+    fn cleanup_rrdp(self) -> Result<bool, Failed> {
         let now = Time::now();
         let mut keep_repository = false;
 
@@ -959,7 +959,7 @@ impl<'a> TreeNames<'a> {
     }
 
     /// Drops both trees referenced by `self` on the given database.
-    pub fn drop_trees(&self, db: &sled::Db) -> Result<(), Error> {
+    pub fn drop_trees(&self, db: &sled::Db) -> Result<(), Failed> {
         db.drop_tree(self.manifests)?;
         db.drop_tree(&self.objects)?;
         Ok(())
@@ -1023,12 +1023,12 @@ impl From<TransactionError<()>> for UpdateError {
 }
 
 
-//------------ Sled Error Conversion -----------------------------------------
+//------------ Sled Failed Conversion -----------------------------------------
 
-impl From<sled::Error> for Error {
-    fn from(err: sled::Error) -> Error {
+impl From<sled::Error> for Failed {
+    fn from(err: sled::Error) -> Failed {
         error!("RPKI storage error: {}", err);
-        Error
+        Failed
     }
 }
 

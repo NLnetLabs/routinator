@@ -10,8 +10,8 @@ use log::{error, warn};
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::Config;
+use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::operation::Error;
 use crate::engine::CaCert;
 use super::{rrdp, rsync};
 
@@ -50,7 +50,7 @@ impl Cache {
     /// Ensures that the base directory exists and creates it if necessary.
     ///
     /// The function is called implicitly by [`new`][Cache::new].
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
                 error!(
@@ -66,7 +66,7 @@ impl Cache {
                     config.cache_dir.display(), err
                 );
             }
-            return Err(Error)
+            return Err(Failed)
         }
         rrdp::Cache::init(config)?;
         rsync::Cache::init(config)?;
@@ -82,7 +82,7 @@ impl Cache {
     pub fn new(
         config: &Config,
         update: bool
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Cache {
             cache_dir: config.cache_dir.clone(),
@@ -95,14 +95,14 @@ impl Cache {
     ///
     /// This needs to be done after a possible fork as the cache may spawn a
     /// set of worker threads.
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         self.rsync.as_mut().map_or(Ok(()), rsync::Cache::ignite)?;
         self.rrdp.as_mut().map_or(Ok(()), rrdp::Cache::ignite)?;
         Ok(())
     }
 
     /// Starts a new validation run using this cache.
-    pub fn start(&self) -> Result<Run, Error> {
+    pub fn start(&self) -> Result<Run, Failed> {
         Run::new(self)
     }
 
@@ -141,7 +141,7 @@ pub struct Run<'a> {
 
 impl<'a> Run<'a> {
     /// Creates a new validation run for the given cache.
-    fn new(cache: &'a Cache) -> Result<Self, Error> {
+    fn new(cache: &'a Cache) -> Result<Self, Failed> {
         Ok(Run {
             cache,
             rsync: if let Some(ref rsync) = cache.rsync {

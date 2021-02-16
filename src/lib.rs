@@ -47,13 +47,15 @@
 #![allow(clippy::unknown_clippy_lints)]
 
 pub use self::config::Config;
-pub use self::operation::{Error, ExitError, Operation};
+pub use self::error::{Failed, ExitError};
+pub use self::operation::Operation;
 pub use rpki;
 pub use reqwest;
 
 pub mod cache;
 pub mod config;
 pub mod engine;
+pub mod error;
 pub mod http;
 pub mod metrics;
 pub mod operation;

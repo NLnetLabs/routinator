@@ -19,7 +19,7 @@ use rpki::xml::decode as xml;
 use tempfile::TempDir;
 use uuid::Uuid;
 use crate::config::Config;
-use crate::operation::Error;
+use crate::error::Failed;
 use super::utils::create_unique_file;
 
 
@@ -40,19 +40,19 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         let tmp_dir = config.cache_dir.join("tmp");
         if let Err(err) = fs::create_dir_all(&tmp_dir) {
             error!(
                 "Failed to create temporary directory {}: {}.",
                 tmp_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         Ok(())
     }
 
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(config: &Config) -> Result<Self, Failed> {
         let mut builder = Client::builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
         match config.rrdp_timeout {
@@ -82,7 +82,7 @@ impl HttpClient {
                     error!(
                         "Invalid rrdp-proxy '{}': {}", proxy, err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             builder = builder.proxy(proxy);
@@ -93,14 +93,14 @@ impl HttpClient {
         })
     }
 
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         let builder = match self.client.as_mut() {
             Ok(_) => return Ok(()),
             Err(builder) => match builder.take() {
                 Some(builder) => builder,
                 None => {
                     error!("Previously failed to initialize HTTP client.");
-                    return Err(Error)
+                    return Err(Failed)
                 }
             }
         };
@@ -108,7 +108,7 @@ impl HttpClient {
             Ok(client) => client,
             Err(err) => {
                 error!("Failed to initialize HTTP client: {}.", err);
-                return Err(Error)
+                return Err(Failed)
             }
         };
         self.client = Ok(client);
@@ -119,7 +119,7 @@ impl HttpClient {
         self.client.as_ref().unwrap()
     }
 
-    fn load_cert(path: &Path) -> Result<Certificate, Error> {
+    fn load_cert(path: &Path) -> Result<Certificate, Failed> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
             Err(err) => {
@@ -127,7 +127,7 @@ impl HttpClient {
                     "Cannot open rrdp-root-cert file '{}': {}'",
                     path.display(), err
                 );
-                return Err(Error);
+                return Err(Failed);
             }
         };
         let mut data = Vec::new();
@@ -136,14 +136,14 @@ impl HttpClient {
                 "Cannot read rrdp-root-cert file '{}': {}'",
                 path.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         Certificate::from_pem(&data).map_err(|err| {
             error!(
                 "Cannot decode rrdp-root-cert file '{}': {}'",
                 path.display(), err
             );
-            Error
+            Failed
         })
     }
  
@@ -155,7 +155,7 @@ impl HttpClient {
         &self,
         uri: &uri::Https,
         status: &mut Option<StatusCode>,
-    ) -> Result<NotificationFile, Error> {
+    ) -> Result<NotificationFile, Failed> {
         let response = match self.response(uri) {
             Ok(response) => {
                 *status = Some(response.status());
@@ -163,7 +163,7 @@ impl HttpClient {
             }
             Err(_) => {
                 *status = None;
-                return Err(Error);
+                return Err(Failed);
             }
         };
         if !response.status().is_success() {
@@ -171,7 +171,7 @@ impl HttpClient {
                 "RRDP {}: Getting notification file failed with status {}",
                 uri, response.status()
             );
-            return Err(Error);
+            return Err(Failed);
         }
         match NotificationFile::parse(io::BufReader::new(response)) {
             Ok(mut res) => {
@@ -180,7 +180,7 @@ impl HttpClient {
             }
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
-                Err(Error)
+                Err(Failed)
             }
         }
     }
@@ -189,14 +189,14 @@ impl HttpClient {
         &self,
         notify: &NotificationFile,
         path_op: F
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut processor = SnapshotProcessor { notify, path_op };
         let mut reader = io::BufReader::new(DigestRead::sha256(
                 self.response(notify.snapshot.uri())?
         ));
         if let Err(err) = processor.process(&mut reader) {
             warn!("RRDP {}: {}", notify.snapshot.uri(), err);
-            return Err(Error)
+            return Err(Failed)
         }
         let digest = reader.into_inner().into_digest();
         if verify_slices_are_equal(
@@ -204,7 +204,7 @@ impl HttpClient {
             notify.snapshot.hash().as_ref()
         ).is_err() {
             warn!("RRDP {}: hash value mismatch.", notify.snapshot.uri());
-            return Err(Error)
+            return Err(Failed)
         }
         Ok(())
     }
@@ -216,7 +216,7 @@ impl HttpClient {
         delta: &(u64, UriAndHash),
         targets: &mut DeltaTargets,
         path_op: F
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut processor = DeltaProcessor {
             server_uri, notify, delta, path_op, targets
         };
@@ -227,7 +227,7 @@ impl HttpClient {
             if let ProcessError::Xml(err) = err {
                 warn!("RRDP {}: {}", delta.1.uri(), err);
             }
-            return Err(Error)
+            return Err(Failed)
         }
         let digest = reader.into_inner().into_digest();
         if verify_slices_are_equal(
@@ -235,7 +235,7 @@ impl HttpClient {
             delta.1.hash().as_ref()
         ).is_err() {
             warn!("RRDP {}: hash value mismatch.", delta.1.uri());
-            return Err(Error)
+            return Err(Failed)
         }
         Ok(())
     }
@@ -243,10 +243,10 @@ impl HttpClient {
     pub fn response(
         &self,
         uri: &uri::Https
-    ) -> Result<Response, Error> {
+    ) -> Result<Response, Failed> {
         self.client().get(uri.as_str()).send().map_err(|err| {
             warn!("RRDP {}: {}", uri, err);
-            Error
+            Failed
         })
     }
 }
@@ -379,7 +379,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
                     "Failed to open file '{}': file has been withdrawn.",
                     path.display()
                 );
-                return Err(ProcessError::Error)
+                return Err(ProcessError::Failed)
             }
         };
         let file = match fs::File::open(path) {
@@ -389,7 +389,7 @@ impl<'a, F> DeltaProcessor<'a, F> {
                     "Failed to open file '{}': {}",
                     path.display(), err
                 );
-                return Err(ProcessError::Error)
+                return Err(ProcessError::Failed)
             }
         };
         let digest = match DigestRead::sha256(file).read_all() {
@@ -399,14 +399,14 @@ impl<'a, F> DeltaProcessor<'a, F> {
                     "Failed to read file '{}': {}",
                     path.display(), err
                 );
-                return Err(ProcessError::Error)
+                return Err(ProcessError::Failed)
             }
         };
         verify_slices_are_equal(hash.as_ref(), digest.as_ref()).map_err(|_| {
             warn!(
                 "RRDP hash mismatch in local file {}.", uri
             );
-            ProcessError::Error
+            ProcessError::Failed
         })
     }
 }
@@ -426,7 +426,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
                 Mismatch between notification session and delta session",
                 self.server_uri
             );
-            return Err(ProcessError::Error)
+            return Err(ProcessError::Failed)
         }
         if serial != self.delta.0 {
             warn!(
@@ -434,7 +434,7 @@ where F: Fn(&uri::Rsync) -> PathBuf {
                 Mismatch between announced and actual serial in delta.",
                 self.server_uri
             );
-            return Err(ProcessError::Error)
+            return Err(ProcessError::Failed)
         }
         Ok(())
     }
@@ -483,7 +483,7 @@ enum DeltaEntry {
 }
 
 impl DeltaTargets {
-    pub fn new(cache_dir: &Path) -> Result<Self, Error> {
+    pub fn new(cache_dir: &Path) -> Result<Self, Failed> {
         Ok(DeltaTargets {
             tmp_dir: match TempDir::new_in(cache_dir) {
                 Ok(tmp_dir) => tmp_dir,
@@ -492,14 +492,14 @@ impl DeltaTargets {
                         "Unable to create temporary directory under {}: {}",
                         cache_dir.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             },
             targets: Vec::new()
         })
     }
 
-    pub fn apply(self) -> Result<(), Error> {
+    pub fn apply(self) -> Result<(), Failed> {
         for entry in self.targets {
             match entry {
                 DeltaEntry::Publish { source, target } => {
@@ -513,7 +513,7 @@ impl DeltaTargets {
                             target.display(),
                             err
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
                 DeltaEntry::Withdraw { target } => {
@@ -522,7 +522,7 @@ impl DeltaTargets {
                             "Failed to delete file '{}': {}",
                             target.display(), err
                         );
-                        return Err(Error);
+                        return Err(Failed);
                     }
                 }
             }
@@ -541,7 +541,7 @@ impl DeltaTargets {
                 "Failed to write temporary file '{}': {}",
                 source.display(), err
             );
-            return Err(ProcessError::Error)
+            return Err(ProcessError::Failed)
         }
         self.targets.push(DeltaEntry::Publish { source, target });
         Ok(())
@@ -626,7 +626,7 @@ impl error::Error for SnapshotError { }
 #[derive(Debug)]
 pub enum ProcessError {
     Xml(xml::Error),
-    Error,
+    Failed,
 }
 
 impl From<xml::Error> for ProcessError {
@@ -635,9 +635,9 @@ impl From<xml::Error> for ProcessError {
     }
 }
 
-impl From<Error> for ProcessError {
-    fn from(_: Error) -> ProcessError {
-        ProcessError::Error
+impl From<Failed> for ProcessError {
+    fn from(_: Failed) -> ProcessError {
+        ProcessError::Failed
     }
 }
 

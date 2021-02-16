@@ -17,8 +17,8 @@ use ring::constant_time::verify_slices_are_equal;
 use rpki::uri;
 use rpki::rrdp::{DigestHex, NotificationFile, UriAndHash};
 use uuid::Uuid;
+use crate::error::Failed;
 use crate::metrics::RrdpServerMetrics;
-use crate::operation::Error;
 use super::http::{DeltaTargets, HttpClient};
 use super::utils::create_unique_dir;
 
@@ -142,7 +142,7 @@ impl Server {
         &self,
         http: &HttpClient,
         metrics: &mut RrdpServerMetrics
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         debug!("RRDP {}: Updating server", self.notify_uri);
         metrics.serial = None;
         let notify = http.notification_file(
@@ -161,7 +161,7 @@ impl Server {
         notify: &NotificationFile,
         http: &HttpClient,
         metrics: &mut RrdpServerMetrics
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         let mut state = ServerState::load(self.server_dir.state_path())?;
         let deltas = match Self::calc_deltas(notify, &state)? {
             Some(deltas) => deltas,
@@ -175,22 +175,22 @@ impl Server {
         let targets = match targets {
             Ok(targets) => targets,
             Err(_) => {
-                return Err(Error)
+                return Err(Failed)
             }
         };
         self.server_dir.check_digest(&state.hash)?;
         if targets.apply().is_err() {
-            return Err(Error);
+            return Err(Failed);
         }
         state.serial = notify.serial;
         state.hash = match self.server_dir.digest() {
             Ok(hash) => hash.into(),
             Err(_) => {
-                return Err(Error);
+                return Err(Failed);
             }
         };
         if state.save(self.server_dir.state_path()).is_err() {
-            return Err(Error);
+            return Err(Failed);
         }
         metrics.serial = Some(state.serial);
         Ok(())
@@ -204,10 +204,10 @@ impl Server {
     fn calc_deltas<'a>(
         notify: &'a NotificationFile,
         state: &ServerState
-    ) -> Result<Option<&'a [(u64, UriAndHash)]>, Error> {
+    ) -> Result<Option<&'a [(u64, UriAndHash)]>, Failed> {
         if notify.session_id != state.session {
             debug!("New session. Need to get snapshot.");
-            return Err(Error);
+            return Err(Failed);
         }
         debug!("Serials: us {}, them {}", state.serial, notify.serial);
         if notify.serial == state.serial {
@@ -220,26 +220,26 @@ impl Server {
         // bail out.
         if notify.deltas.last().map(|delta| delta.0) != Some(notify.serial) {
             debug!("Last delta serial differs from current serial.");
-            return Err(Error)
+            return Err(Failed)
         }
 
         let mut deltas = notify.deltas.as_slice();
         let serial = match state.serial.checked_add(1) {
             Some(serial) => serial,
-            None => return Err(Error)
+            None => return Err(Failed)
         };
         loop {
             let first = match deltas.first() {
                 Some(first) => first,
                 None => {
                     debug!("Ran out of deltas.");
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             match first.0.cmp(&serial) {
                 cmp::Ordering::Greater => {
                     debug!("First delta is too new ({})", first.0);
-                    return Err(Error)
+                    return Err(Failed)
                 }
                 cmp::Ordering::Equal => break,
                 cmp::Ordering::Less => deltas = &deltas[1..]
@@ -255,7 +255,7 @@ impl Server {
         notify: &NotificationFile,
         deltas: &[(u64, UriAndHash)],
         http: &HttpClient
-    ) -> Result<DeltaTargets, Error> {
+    ) -> Result<DeltaTargets, Failed> {
         self.server_dir.check_digest(&state.hash)?;
         let mut targets = DeltaTargets::new(http.tmp_dir())?;
         for delta in deltas {
@@ -273,14 +273,14 @@ impl Server {
         notify: &NotificationFile,
         http: &HttpClient,
         metrics: &mut RrdpServerMetrics
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failed> {
         debug!("RRDP {}: updating from snapshot.", self.notify_uri);
-        let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Error)?;
+        let tmp_dir = ServerDir::create(http.tmp_dir()).map_err(|_| Failed)?;
         let state =  match self.snapshot_into_tmp(notify, http, &tmp_dir) {
             Ok(state) => state,
             Err(_) => {
                 let _ = fs::remove_dir_all(tmp_dir.base());
-                return Err(Error);
+                return Err(Failed);
             }
         };
         self.move_from_tmp(tmp_dir)?;
@@ -293,7 +293,7 @@ impl Server {
         notify: &NotificationFile,
         http: &HttpClient,
         tmp_dir: &ServerDir,
-    ) -> Result<ServerState, Error> {
+    ) -> Result<ServerState, Failed> {
         http.snapshot(notify, |uri| tmp_dir.uri_path(uri))?;
         let state = ServerState {
             notify_uri: self.notify_uri().clone(),
@@ -306,7 +306,7 @@ impl Server {
     }
 
     /// Moves everything back from a temporary directory.
-    fn move_from_tmp(&self, tmp_dir: ServerDir) -> Result<(), Error> {
+    fn move_from_tmp(&self, tmp_dir: ServerDir) -> Result<(), Failed> {
         let _ = fs::remove_file(self.server_dir.state_path());
         let state_res = fs::rename(
             tmp_dir.state_path(), self.server_dir.state_path()
@@ -318,7 +318,7 @@ impl Server {
                 tmp_dir.state_path().display(),
                 err
             );
-            Error
+            Failed
         });
         let _ = fs::remove_dir_all(self.server_dir.data_path());
         let data_res = fs::rename(
@@ -331,11 +331,11 @@ impl Server {
                 tmp_dir.data_path().display(),
                 err
             );
-            Error
+            Failed
         });
         let _ = fs::remove_dir_all(tmp_dir.base());
         if state_res.is_err() || data_res.is_err() {
-            Err(Error)
+            Err(Failed)
         }
         else {
             Ok(())
@@ -403,9 +403,9 @@ impl Server {
     /// This assumes that the server is updated already. If there is no file
     /// corresponding to the URI, returns `None`.
     #[allow(clippy::verbose_file_reads)]
-    pub fn load_file(&self, uri: &uri::Rsync) -> Result<Option<Bytes>, Error> {
+    pub fn load_file(&self, uri: &uri::Rsync) -> Result<Option<Bytes>, Failed> {
         if self.broken.load(Relaxed) {
-            return Err(Error)
+            return Err(Failed)
         }
         
         let path = self.server_dir.uri_path(uri);
@@ -508,13 +508,13 @@ impl ServerDir {
     }
 
     /// Determines the digest of a data directory.
-    pub fn digest(&self) -> Result<digest::Digest, Error> {
+    pub fn digest(&self) -> Result<digest::Digest, Failed> {
         self._digest().map_err(|err| {
             debug!(
                 "Failed to caculate digest for '{}': {}",
                 self.data_path().display(), err
             );
-            Error
+            Failed
         })
     }
 
@@ -571,14 +571,14 @@ impl ServerDir {
     }
 
     /// Checks that the digest of the data directory matches the given one.
-    pub fn check_digest(&self, hash: &DigestHex) -> Result<(), Error> {
+    pub fn check_digest(&self, hash: &DigestHex) -> Result<(), Failed> {
         let digest = self.digest()?;
         verify_slices_are_equal(digest.as_ref(), hash.as_ref()).map_err(|_| {
             debug!(
                 "Mismatch of digest for '{}'. Content must have changed.",
                 self.data_path().display()
             );
-            Error
+            Failed
         })
     }
 }
@@ -602,7 +602,7 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    pub fn load(path: &Path) -> Result<Self, Error> {
+    pub fn load(path: &Path) -> Result<Self, Failed> {
         Self::_load(path).map_err(|err| {
             // Not found is mostly normal, don’t complain about that.
             if err.kind() != io::ErrorKind::NotFound {
@@ -611,7 +611,7 @@ impl ServerState {
                     path.display(), err
                 );
             }
-            Error
+            Failed
         })
     }
 
@@ -632,13 +632,13 @@ impl ServerState {
         }
     }
 
-    pub fn save(&self, path: &Path) -> Result<(), Error> {
+    pub fn save(&self, path: &Path) -> Result<(), Failed> {
         self._save(path).map_err(|err| {
             error!(
                 "Failed to write state file '{}': {}",
                 path.display(), err
             );
-            Error
+            Failed
         })
     }
 
