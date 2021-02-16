@@ -44,7 +44,6 @@
 //! Apart from these, there are a few more modules that support these core
 //! parts in their work.
 //!
-#![allow(unknown_lints)]
 #![allow(clippy::unknown_clippy_lints)]
 
 pub use self::config::Config;
