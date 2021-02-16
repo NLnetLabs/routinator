@@ -11,6 +11,8 @@ New
 
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
+* The RRDP client now supports the gzip transfer encoding for HTTPs.
+  ([#463], contributed by [@bjpbakker])
 
 Bug Fixes
 
@@ -24,8 +26,10 @@ Other Changes
 [#437]: https://github.com/NLnetLabs/routinator/pull/437
 [#443]: https://github.com/NLnetLabs/routinator/pull/443
 [#444]: https://github.com/NLnetLabs/routinator/pull/444
+[#463]: https://github.com/NLnetLabs/routinator/pull/463
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
+[@bjpbakker]: https://github.com/bjpbakker
 
 
 ## 0.8.2 ‘Once More, with Feeling’

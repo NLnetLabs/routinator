@@ -11,7 +11,7 @@ Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki).
-You can lean more about Routinator and RPKI technology by reading our documentation on
+You can learn more about Routinator and RPKI technology by reading our documentation on
 [Read the Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
 
 ## Quick Start with Cargo
@@ -145,10 +145,6 @@ Rust. You need rsync because some RPKI repositories currently use this
 as its means of distribution. Some of the cryptographic primitives
 used by the Routinator require a C toolchain, so you need that, too. You
 need Rust because that’s what Routinator has been written in.
-
-Since this currently is an early version, we decided not to distribute
-binary packages just yet. But don’t worry, getting Rust and building
-packages with it is easy.
 
 ### rsync
 
@@ -395,3 +391,12 @@ routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.
 
 A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is 
 available to get started.
+
+## User Interface
+
+The [user interface](https://rpki.readthedocs.io/en/latest/routinator/user-interface.html)
+displays statistics from the last validation run Routinator has performed.
+It can also be used to verify the RPKI origin validation status of an AS
+Number and IP Prefix combination.
+
+![Routinator validity checker](https://rpki.readthedocs.io/en/latest/_images/routinator-ui-validity-checker.png)
