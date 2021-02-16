@@ -7,44 +7,14 @@
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
+<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="100">
+
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
 or post a message on our [RPKI mailing list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki).
 You can learn more about Routinator and RPKI technology by reading our documentation on
 [Read the Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
-
-## Quick Start with Cargo
-
-Assuming you have a newly installed Debian or Ubuntu machine, you will need to
-install rsync, the C toolchain and Rust. You can then install Routinator and
-start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
-port 8323:
-
-```bash
-apt install rsync build-essential
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-cargo install --locked routinator
-routinator init
-# Follow instructions provided
-routinator server --rtr 127.0.0.1:3323 --http 127.0.0.1:8323
-```
-
-If you have an older version of Rust and Routinator, you can update using
-
-```bash
-rustup update
-cargo install --locked --force routinator
-```
-
-Routinator 0.7.1 and newer are shipped with updated Trust Anchor Locators
-(TALs). Once you have upgraded from an older version of Routinator, make 
-sure to install the new TALs using
-
-```
-routinator init --force
-```
 
 ## Quick Start with Debian and Ubuntu Packages
 
@@ -114,6 +84,38 @@ sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
 
 For additional isolation, Routinator container is known to successfully run
 under [gVisor](https://gvisor.dev/).
+
+## Quick Start with Cargo
+
+Assuming you have a newly installed Debian or Ubuntu machine, you will need to
+install rsync, the C toolchain and Rust. You can then install Routinator and
+start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
+port 8323:
+
+```bash
+apt install rsync build-essential
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+cargo install --locked routinator
+routinator init
+# Follow instructions provided
+routinator server --rtr 127.0.0.1:3323 --http 127.0.0.1:8323
+```
+
+If you have an older version of Rust and Routinator, you can update using
+
+```bash
+rustup update
+cargo install --locked --force routinator
+```
+
+Routinator 0.7.1 and newer are shipped with updated Trust Anchor Locators
+(TALs). Once you have upgraded from an older version of Routinator, make 
+sure to install the new TALs using
+
+```
+routinator init --force
+```
 
 ## RPKI
 
