@@ -563,7 +563,7 @@ mod unix {
 
 #[cfg(not(unix))]
 mod noop {
-    use crate::operation::Failed;
+    use crate::error::Failed;
     use crate::config::Config;
 
     pub struct ServiceImpl;
