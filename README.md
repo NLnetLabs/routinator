@@ -67,10 +67,10 @@ logs with `sudo journalctl --unit=routinator`.
 
 Due to the impracticality of complying with the ARIN TAL distribution terms
 in an unsupervised Docker environment, prior to launching the container it
-is necessary to first review and agree to the ARIN TAL terms available at
-https://www.arin.net/resources/rpki/tal.html. If you agree to the terms,
-you can let the Routinator Docker image install the TALs into a mounted
-volume that is later reused for the server:
+is necessary to first review and agree to the
+[ARIN Relying Party Agreement](https://www.arin.net/resources/rpki/tal.html). 
+If you agree to the terms, you can let the Routinator Docker image install 
+the TALs into a mounted volume that is later reused for the server:
 
 ```bash
 # Create a Docker volume to persist TALs in
