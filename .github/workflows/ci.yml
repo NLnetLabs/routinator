@@ -21,9 +21,9 @@ jobs:
       uses: hecrj/setup-rust-action@v1
       with:
         rust-version: ${{ matrix.rust }}
-    - if: matrix.rust != 'nightly'
+    - if: matrix.rust == 'stable'
       run: rustup component add clippy
-    - if: matrix.rust != 'nightly'
+    - if: matrix.rust == 'stable'
       run: cargo clippy -- -D warnings
     - run: cargo build --verbose
     - run: cargo test --verbose
