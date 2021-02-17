@@ -6,7 +6,7 @@
 //! _store._ The types in this module provide access to this store.
 //!
 //! The store is initialized and configured via [`Store`]. During validation,
-//! [`Run`] is used whicht can be aquired from the store via the
+//! [`Run`] is used which can be aquired from the store via the
 //! [`start`][Store::start] method. It provides access to the trust anchor
 //! certificates via the [`load_ta`][Run::load_ta] and
 //! [`update_ta`][Run::update_ta] methods and individual repositories via
@@ -24,7 +24,7 @@
 //!
 //! # Data Storage
 //!
-//! The store uses a [sled] database to store RPKI data. For reach
+//! The store uses a [sled] database to store RPKI data. For each
 //! RPKI repository accessed via RRDP, two separate trees are used.
 //!
 //! The _manifest tree_ contains all the manifests published via that
@@ -40,7 +40,7 @@
 //! cleanup. Objects are stored as [`StoredObject`].
 //!
 //! For an RRDP repository, the rpkiNotify URI of the repository is used as
-//! the name of the manifest tree, while the object tree uses this URI
+//! the name of the manifest tree, while the objects tree uses this URI
 //! prefixed by `"objects:"`.
 //!
 //! There is only one pair of manifest and objects tree for rsync since the

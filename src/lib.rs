@@ -8,7 +8,7 @@
 //! good starting point and set of examples since it contains the code for the
 //! various commands Routinator provides and uses all functionality.
 //!
-//! The library roughly consists of threee parts: one part collects and
+//! The library roughly consists of three parts: one part collects and
 //! validates RPKI data, one processes the validated data, and the third
 //! part distributes the output data to whomever it may concern.
 //!

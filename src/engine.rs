@@ -1,4 +1,4 @@
-/// Updating and processing of  RPKI data.
+/// Updating and processing of RPKI data.
 ///
 /// This module provides types and traits implementing validation of RPKI data
 /// from a set of trust anchor locators to some output data.

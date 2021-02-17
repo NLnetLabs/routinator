@@ -35,12 +35,12 @@ pub struct Cache {
 
     /// The cache for RRDP transport.
     ///
-    /// If this is `None`, use of RRDP has been disable entirely.
+    /// If this is `None`, use of RRDP has been disabled entirely.
     rrdp: Option<rrdp::Cache>,
 
     /// The cache for rsync transport.
     ///
-    /// If this is `None`, use of rsync has been disable entirely.
+    /// If this is `None`, use of rsync has been disabled entirely.
     rsync: Option<rsync::Cache>,
 }
 
@@ -163,7 +163,7 @@ impl<'a> Run<'a> {
     ///
     /// Updates `metrics` with the cache run’s metrics.
     ///
-    /// If you are not interested in the metrics, you can simple drop the
+    /// If you are not interested in the metrics, you can simply drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
         if let Some(rrdp) = self.rrdp {
@@ -181,7 +181,7 @@ impl<'a> Run<'a> {
     /// be logged and `None` returned.
     ///
     /// Trust anchor certificates referenced by a rsync URI will cause that
-    /// module to be updated once wheres those referenced via HTTPS URIs
+    /// module to be updated once, whereas those referenced via HTTPS URIs
     /// will be newly downloaded upon each call.
     pub fn load_ta(&self, uri: &TalUri) -> Option<Bytes> {
         match *uri {
