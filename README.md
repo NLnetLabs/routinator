@@ -15,7 +15,7 @@ as a one-time operation and store the result on disk in formats such as CSV, JSO
 and RPSL, or run as a service that periodically downloads and verifies RPKI data. 
 Routers can connect to Routinator to fetch verified RPKI data via the RTR protocol.
 The built-in HTTP server offers a user interface and endpoints for the various file 
-formats, as well as logging and status. 
+formats, as well as logging, status and Prometheus monitoring. 
 
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
