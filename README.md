@@ -7,14 +7,15 @@
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
-<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="100">
+<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="120">
 
 Introducing ‘Routinator 3000,’ RPKI relying party software written in Rust.
 Routinator is a full featured software package that can perform RPKI validation
 as a one-time operation and store the result on disk in formats such as CSV, JSON
-and RPSL, or run as a service that periodically fetches and verifies RPKI data. 
-The data is then served via the built-in HTTP server which also offers a user
-interface, or fetched from RPKI-capable routers via the RPKI-RTR protocol.
+and RPSL, or run as a service that periodically downloads and verifies RPKI data. 
+Routers can connect to Routinator to fetch verified RPKI data via the RTR protocol.
+The built-in HTTP server offers a user interface and endpoints for the various file 
+formats, as well as logging and status. 
 
 If you have any feedback, we would love to hear from you. Don’t hesitate to
 [create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
@@ -23,9 +24,6 @@ You can learn more about Routinator and RPKI technology by reading our documenta
 [Read the Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
 
 ## Quick Start with Debian and Ubuntu Packages
-
-### Disclaimer
-> These packages are provided on a best effort basis as a convenience for our community until such time as equivalent official operating system repository provided packages become available.
 
 Assuming you have a machine running a recent Debian or Ubuntu distribution, you
 can install Routinator from our [software package
