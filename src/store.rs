@@ -81,9 +81,9 @@ use crate::metrics::Metrics;
 /// A store for correctly published RPKI objects.
 ///
 /// The store retains a copy of curated, published RPKI data. Its intended use
-/// is for keeping most recent data of a given RPKI publication point that was
-/// found to be correctly published. However, the store doesn’t enforce this,
-/// and can be used for other purposes as well.
+/// is for keeping the most recent data of a given RPKI publication point that
+/// was found to be correctly published. However, the store doesn’t enforce
+/// this, and can be used for other purposes as well.
 ///
 /// A store can be created via the [`new`][Store::new] function which will
 /// initialize a new store on disk if necessary and open it. If you only want
