@@ -226,7 +226,7 @@ If you want to try the main branch from the repository instead of a
 release version, you can run
 
 ```bash
-cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
+cargo install --locked --git https://github.com/NLnetLabs/routinator.git --branch main
 ```
 
 If you want to update an installed version, you run the same command but
