@@ -3,7 +3,7 @@
 pub use self::cache::{Cache, Run, ServerId};
 
 mod cache;
-pub mod http;
-pub mod server;
+mod http;
+mod server;
 mod utils;
 

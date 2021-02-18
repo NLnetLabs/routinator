@@ -30,8 +30,8 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
+use crate::error::{Failed, ExitError};
 use crate::metrics::{Metrics, ServerMetrics};
-use crate::operation::{Error, ExitError};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::JsonBuilder;
@@ -107,7 +107,7 @@ async fn single_http_listener(
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Error on HTTP listener: {}", err);
+                error!("Failed on HTTP listener: {}", err);
                 return
             }
         },
@@ -1010,7 +1010,7 @@ fn not_found() -> Response<Body> {
 /// Produces the output filters from a query string.
 fn output_filters(
     query: Option<&str>
-) -> Result<Option<Vec<output::Filter>>, Error> {
+) -> Result<Option<Vec<output::Filter>>, Failed> {
     let mut query = match query {
         Some(query) => query,
         None => return Ok(None)
@@ -1027,7 +1027,7 @@ fn output_filters(
         // Split the pair.
         let equals = match part.find('=') {
             Some(equals) => equals,
-            None => return Err(Error)
+            None => return Err(Failed)
         };
         let key = &part[..equals];
         let value = &part[equals + 1..];
@@ -1035,7 +1035,7 @@ fn output_filters(
         if key == "filter-prefix" {
             match AddressPrefix::from_str(value) {
                 Ok(some) => res.push(output::Filter::Prefix(some)),
-                Err(_) => return Err(Error)
+                Err(_) => return Err(Failed)
             }
         }
         else if key == "filter-asn" {
@@ -1043,13 +1043,13 @@ fn output_filters(
                 Ok(asn) => asn,
                 Err(_) => match u32::from_str(value) {
                     Ok(asn) => asn.into(),
-                    Err(_) => return Err(Error)
+                    Err(_) => return Err(Failed)
                 }
             };
             res.push(output::Filter::As(asn))
         }
         else {
-            return Err(Error)
+            return Err(Failed)
         }
     }
     if res.is_empty() {

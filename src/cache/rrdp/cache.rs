@@ -1,19 +1,17 @@
 /// The RRDP cache.
 ///
-/// This is a private module for organizational purposes.
+/// This is a private module. It’s types are reexported by the parent.
 
-use std::{fs, io};
-use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
-use rpki::repository::tal::TalInfo;
 use crate::config::Config;
-use crate::metrics::RrdpServerMetrics;
-use crate::operation::Error;
+use crate::metrics::{Metrics, RrdpServerMetrics};
+use crate::error::Failed;
 use crate::utils::UriExt;
 use super::http::HttpClient;
 use super::server::{Server, ServerState};
@@ -46,14 +44,14 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn init(config: &Config) -> Result<(), Error> {
+    pub fn init(config: &Config) -> Result<(), Failed> {
         let rrdp_dir = Self::cache_dir(config);
         if let Err(err) = fs::create_dir_all(&rrdp_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",
                 rrdp_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         let ta_dir = Self::ta_dir(config);
         if let Err(err) = fs::create_dir_all(&ta_dir) {
@@ -61,13 +59,13 @@ impl Cache {
                 "Failed to create HTTP cache directory {}: {}.",
                 ta_dir.display(), err
             );
-            return Err(Error);
+            return Err(Failed);
         }
         HttpClient::init(config)?;
         Ok(())
     }
 
-    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Error> {
+    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Failed> {
         if config.disable_rrdp {
             Ok(None)
         }
@@ -83,7 +81,7 @@ impl Cache {
         }
     }
 
-    pub fn ignite(&mut self) -> Result<(), Error> {
+    pub fn ignite(&mut self) -> Result<(), Failed> {
         self.http.as_mut().map_or(Ok(()), HttpClient::ignite)
     }
 
@@ -95,8 +93,13 @@ impl Cache {
         config.cache_dir.join("http")
     }
 
-    pub fn start(&self) -> Result<Run, Error> {
+    pub fn start(&self) -> Result<Run, Failed> {
         Run::new(self)
+    }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup(&self, _retain: &HashSet<uri::Https>) {
+        // XXX Unimplemented pending RRDP rewrite.
     }
 }
 
@@ -114,7 +117,7 @@ pub struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
-    fn new(cache: &'a Cache) -> Result<Self, Error> {
+    fn new(cache: &'a Cache) -> Result<Self, Failed> {
         let mut servers = ServerSet::new();
         let dir = match cache.cache_dir.read_dir() {
             Ok(dir) => dir,
@@ -123,7 +126,7 @@ impl<'a> Run<'a> {
                     "Fatal: Cannot open RRDP cache dir '{}': {}",
                     cache.cache_dir.display(), err
                 );
-                return Err(Error)
+                return Err(Failed)
             }
         };
         for entry in dir {
@@ -134,7 +137,7 @@ impl<'a> Run<'a> {
                         "Fatal: Cannot iterate over RRDP cache dir '{}': {}",
                         cache.cache_dir.display(), err
                     );
-                    return Err(Error)
+                    return Err(Failed)
                 }
             };
             if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -169,19 +172,30 @@ impl<'a> Run<'a> {
             servers: RwLock::new(servers)
         })
     }
-
-    pub fn load_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
-        match self.get_ta(uri) {
-            Ok(Some(bytes)) => {
-                self.store_ta(&bytes, uri, info);
-                Some(bytes)
-            }
-            Ok(None) => self.read_ta(uri, info),
-            Err(_) => {
-                self.remove_ta(info);
-                None
-            }
+    
+    pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
+        let http = match self.cache.http {
+            Some(ref http) => http,
+            None => return None,
+        };
+        let mut response = match http.response(uri) {
+            Ok(response) => response,
+            Err(_) => return None,
+        };
+        if response.content_length() > Some(MAX_TA_SIZE) {
+            warn!(
+                "Trust anchor certificate {} exceeds size limit of {} bytes. \
+                 Ignoring.",
+                uri, MAX_TA_SIZE
+            );
+            return None
         }
+        let mut bytes = Vec::new();
+        if let Err(err) = response.copy_to(&mut bytes) {
+            info!("Failed to get trust anchor {}: {}", uri, err);
+            return None
+        }
+        Some(Bytes::from(bytes))
     }
 
     pub fn is_current(&self, notify_uri: &uri::Https) -> bool {
@@ -239,120 +253,18 @@ impl<'a> Run<'a> {
         &self,
         server_id: ServerId,
         uri: &uri::Rsync
-    ) -> Result<Option<Bytes>, Error> {
+    ) -> Result<Option<Bytes>, Failed> {
         self.servers.read().unwrap().get(server_id).load_file(uri)
-    }
-
-    pub fn cleanup(&self) {
-        self.servers.write().unwrap().cleanup(&self.cache.cache_dir);
     }
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {
         self.servers.into_inner().unwrap().into_metrics()
     }
-}
 
-/// # Accessing TA Certificates
-///
-impl<'a> Run<'a> {
-    fn get_ta(
-        &self,
-        uri: &uri::Https
-    ) -> Result<Option<Bytes>, Error> {
-        let http = match self.cache.http {
-            Some(ref http) => http,
-            None => return Ok(None),
-        };
-        let mut response = match http.response(uri) {
-            Ok(response) => response,
-            Err(_) => return Ok(None),
-        };
-        if response.content_length() > Some(MAX_TA_SIZE) {
-            warn!(
-                "Trust anchor certificate {} exceeds size limit of {} bytes. \
-                 Ignoring.",
-                uri, MAX_TA_SIZE
-            );
-            return Err(Error)
-        }
-        let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {}: {}", uri, err);
-            return Ok(None)
-        }
-        Ok(Some(Bytes::from(bytes)))
-    }
-
-    fn store_ta(&self, bytes: &Bytes, uri: &uri::Https, info: &TalInfo) {
-        let path = self.ta_path(info);
-        let mut file = match fs::File::create(&path) {
-            Ok(file) => file,
-            Err(err) => {
-                error!("Failed to create TA file {}: {}", path.display(), err);
-                return
-            }
-        };
-        if let Err(err) = file.write_all(
-                                 &(uri.as_str().len() as u64).to_be_bytes()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-        if let Err(err) = file.write_all(uri.as_str().as_ref()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-        if let Err(err) = file.write_all(bytes.as_ref()) {
-            info!("Failed to write to TA file {}: {}", path.display(), err);
-        }
-    }
-
-    #[allow(clippy::verbose_file_reads)]
-    fn read_ta(&self, uri: &uri::Https, info: &TalInfo) -> Option<Bytes> {
-        let path = self.ta_path(info);
-        let mut file = match fs::File::open(&path) {
-            Ok(file) => file,
-            Err(err) => {
-                if err.kind() != io::ErrorKind::NotFound {
-                    warn!(
-                        "Failed to open TA file {}: {}",
-                        path.display(), err
-                    );
-                }
-                return None
-            }
-        };
-        let mut len = [0u8; 8];
-        if let Err(err) = file.read_exact(&mut len) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        let len = u64::from_be_bytes(len) as usize;
-        let mut read_uri = vec![0u8; len];
-        if let Err(err) = file.read_exact(&mut read_uri) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        if read_uri != uri.as_str().as_bytes() {
-            warn!("TA file {} for wrong URI.", path.display());
-            return None
-        }
-        let mut bytes = Vec::new();
-        if let Err(err) = file.read_to_end(&mut bytes) {
-            warn!("Failed to read TA file {}: {}", path.display(), err);
-            return None
-        };
-        Some(Bytes::from(bytes))
-    }
-
-    fn remove_ta(&self, info: &TalInfo) {
-        let _ = fs::remove_file(self.ta_path(info));
-    }
-
-    fn ta_path(&self, info: &TalInfo) -> PathBuf {
-        let mut res = self.cache.ta_dir.join(info.name());
-        res.set_extension("cer");
-        res
+    pub fn done(self, metrics: &mut Metrics) {
+        metrics.set_rrdp(self.into_metrics())
     }
 }
-
 
 
 //------------ ServerSet -----------------------------------------------------
@@ -407,54 +319,6 @@ impl ServerSet {
     /// Looks up a server based on its server ID
     pub fn get(&self, id: ServerId) -> Arc<Server> {
         self.servers[id.0].clone()
-    }
-
-    /// Cleans up the server set.
-    ///
-    /// This will call `remove_unused` and clear out the server set.
-    pub fn cleanup(&mut self, cache_dir: &Path) {
-        self.servers = self.servers.drain(..).filter(|server| {
-            !server.remove_unused()
-        }).collect();
-        self.uris = self.servers.iter().enumerate().map(|(idx, server)| {
-            (server.notify_uri().clone(), ServerId(idx))
-        }).collect();
-
-        let dir = match cache_dir.read_dir() {
-            Ok(dir) => dir,
-            Err(err) => {
-                info!(
-                    "Failed to open RRDP cache directory '{}': {}",
-                    cache_dir.display(), err
-                );
-                return;
-            }
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    info!(
-                        "Failed to read RRDP cache directory '{}': {}",
-                        cache_dir.display(), err
-                    );
-                    return;
-                }
-            };
-            let path = entry.path();
-            if !self.contains_server_dir(&path) {
-                if let Err(err) = fs::remove_dir_all(&path) {
-                    info!(
-                        "Failed to delete unused RRDP server dir '{}': {}",
-                        path.display(), err
-                    );
-                }
-            }
-        }
-    }
-
-    fn contains_server_dir(&self, path: &Path) -> bool {
-        self.servers.iter().any(|server| server.server_dir() == path)
     }
 
     pub fn into_metrics(self) -> Vec<RrdpServerMetrics> {

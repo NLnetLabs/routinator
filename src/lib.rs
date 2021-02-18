@@ -6,46 +6,66 @@
 //! In addition, this also lets you use Routinator as a library for your own
 //! dedicated RPKI validation needs. The [operation] module should serve as a
 //! good starting point and set of examples since it contains the code for the
-//! various commands Routinator provides.
+//! various commands Routinator provides and uses all functionality.
 //!
-//! The most important modules of the crate are:
+//! The library roughly consists of three parts: one part collects and
+//! validates RPKI data, one processes the validated data, and the third
+//! part distributes the output data to whomever it may concern.
 //!
-//! * [config], which contains all the configuration options as well as means
-//! to load them from config files and command line options,
-//! * [repository], which provides access to the local copy of the RPKI
-//! repository and knows how to update and validate it,
-//! * [origins], which allows working with the result of validation, and
-//! * [metrics], which contains useful metrics.
+//! The first part can be found in three modules:
 //!
-//! The additional modules provide additional functionality provided or
-//! relied upon by Routinator.
+//! * [cache], which synchronizes a local copy of the published RPKI data
+//!   with its upstream sources,
+//! * [store], which maintains a set of data that has passed fundamental
+//!   vetting in order to deal with incomplete or broken updates from upstream
+//!   sources, and
+//! * [validation], which performs a validation run using both cache and store.
 //!
-//! [config]: config/index.html
-//! [metrics]: metrics/index.html
-//! [operation]: operation/index.html
-//! [origins]: origins/index.html
-//! [repository]: repository/index.html
+//! The second part currently comes in two flavours:
+//!
+//! * [origins], which processes data for Route Origin Validation (i.e.,
+//!   checking that a BGP route has been announced by someone who was
+//!   authorized to do so), and
+//! * [rta], which processes Resource Tagged Authorizations (i.e., objects
+//!   signed by resource holders).
+//!
+//! Additional modules can be added in the future.
+//!
+//! The third part is represented by a number of modules with differing
+//! purposes:
+//!
+//! * [output] allows formatting data – currently Route Origin Validation
+//!   data only – in different formats,
+//! * [http] provides an HTTP server with mutliple endpoints for all sorts
+//!   of purposes, and
+//! * [rtr] provides an RTR server which allows routers to synchronize their
+//!   RPKI filter tables.
+//!
+//! Apart from these, there are a few more modules that support these core
+//! parts in their work.
 //!
 #![allow(clippy::unknown_clippy_lints)]
 
 pub use self::config::Config;
-pub use self::operation::{Error, ExitError, Operation};
+pub use self::error::{Failed, ExitError};
+pub use self::operation::Operation;
 pub use rpki;
 pub use reqwest;
 
+pub mod cache;
 pub mod config;
+pub mod engine;
+pub mod error;
 pub mod http;
 pub mod metrics;
 pub mod operation;
 pub mod origins;
 pub mod output;
 pub mod process;
-pub mod repository;
-pub mod rrdp;
 pub mod rtr;
-pub mod rsync;
 pub mod rta;
 pub mod slurm;
+pub mod store;
 pub mod utils;
 pub mod validity;
 

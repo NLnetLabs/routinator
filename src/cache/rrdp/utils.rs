@@ -7,11 +7,11 @@ use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf};
 use log::error;
 use rand::random;
-use crate::operation::Error;
+use crate::error::Failed;
 
 
 /// Creates a new directory under the given path with a unique name.
-pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
+pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Failed> {
     for _ in 0..100 {
         let target = random_path(path);
         match create_dir_all(&target) {
@@ -22,7 +22,7 @@ pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
                         "Failed to create unique directory under {}: {}",
                         path.display(), err
                     );
-                    return Err(Error);
+                    return Err(Failed);
                 }
             }
         }
@@ -31,11 +31,11 @@ pub fn create_unique_dir(path: &Path) -> Result<PathBuf, Error> {
         "Failed to create unique directory under {}: tried a hundred times.",
         path.display()
     );
-    Err(Error)
+    Err(Failed)
 }
 
 /// Creates a new file under the given path with a unique name.
-pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Error> {
+pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Failed> {
     for _ in 0..100 {
         let target = random_path(path);
         match File::create(&target) {
@@ -46,7 +46,7 @@ pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Error> {
                         "Failed to create unique directory under {}: {}",
                         path.display(), err
                     );
-                    return Err(Error);
+                    return Err(Failed);
                 }
             }
         }
@@ -55,7 +55,7 @@ pub fn create_unique_file(path: &Path) -> Result<(File, PathBuf), Error> {
         "Failed to create unique directory under {}: tried a hundred times.",
         path.display()
     );
-    Err(Error)
+    Err(Failed)
 }
 
 /// Creates a new path name.
