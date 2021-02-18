@@ -649,7 +649,7 @@ impl<'a> RepositoryUpdate<'a> {
 ///   [`crl`][Self::crl] method. There must always be exactly one CRL used by
 ///   a publication point. As it needs to be available for validation, we
 ///   might as well store it together with the manifest.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StoredManifest {
     /// The expire time of the EE certificate of the manifest.
     not_after: Time,
@@ -717,11 +717,19 @@ impl StoredManifest {
     /// This is used to quickly check if the manifest is still valid during
     /// the cleanup without all the allocations necessary for actual decoding.
     fn decode_not_after(slice: &[u8]) -> Result<Time, ObjectError> {
-        // See below for full encoding. The time is at the start and encoded
+        // See below for full encoding. First is a 0u8, then time encoded
         // as an i64 in network order.
-        if slice.len() < mem::size_of::<i64>() {
+        if slice.len() < mem::size_of::<i64>() + 1{
             return Err(ObjectError)
         }
+
+        let slice = if slice.first().cloned() == Some(0) {
+            &slice[1..]
+        }
+        else {
+            return Err(ObjectError)
+        };
+
         Ok(Utc.timestamp(
             i64::from_be_bytes(
                 slice[..mem::size_of::<i64>()].try_into().unwrap()
@@ -747,12 +755,16 @@ impl<'a> From<&'a StoredManifest> for sled::IVec {
             manifest.manifest.len()
         ).expect("manifest exceeds size limit");
 
-        // Actual encoding: not_after is the i64 timestamp in network order.
+        // Actual encoding:
+        //
+        // We start with a version number of 0u8. Then follows not_after
+        // as the i64 timestamp in network order.
         // The caRepository URI and manifest bytes are encoded as its bytes
         // preceeded by the length as a u32 in network byte order. the CRL
         // bytes are just the bytes until the end of the buffer.
         let mut vec = Vec::new();
 
+        vec.push(0u8);
         vec.extend_from_slice(&manifest.not_after.timestamp().to_be_bytes());
 
         vec.extend_from_slice(&ca_rep_len.to_be_bytes());
@@ -776,6 +788,9 @@ impl TryFrom<sled::IVec> for StoredManifest {
         }
         let mut stored = Bytes::copy_from_slice(stored.as_ref());
 
+        if stored.split_to(1).as_ref() != b"\0" {
+            return Err(ObjectError)
+        }
         let not_after = take_time(&mut stored)?;
         let len = take_encoded_len(&mut stored)?;
         if stored.len() < len {
@@ -856,6 +871,9 @@ impl<'a> From<&'a StoredObject> for sled::IVec {
     fn from(object: &'a StoredObject) -> sled::IVec {
         let mut vec = Vec::new();
 
+        // Version. 0u8.
+        vec.push(0u8);
+
         // Encode the hash.
         //
         // One octet hash type: 0 .. None, 1 .. SHA-256
@@ -891,6 +909,10 @@ impl TryFrom<sled::IVec> for StoredObject {
             return Err(ObjectError);
         }
         let mut stored = Bytes::copy_from_slice(stored.as_ref());
+
+        if stored.split_to(1).as_ref() != b"\0" {
+            return Err(ObjectError)
+        }
 
         // Decode the hash.
         let hash_type = stored.split_to(1);
@@ -1032,6 +1054,7 @@ impl From<sled::Error> for Failed {
     }
 }
 
+
 //------------ Helper Functions ----------------------------------------------
 
 /// Takes an encoded `Time` value from the beginning of a bytes value.
@@ -1065,5 +1088,45 @@ fn take_encoded_len(bytes: &mut Bytes) -> Result<usize, ObjectError> {
     usize::try_from(
         u32::from_be_bytes(int_bytes.as_ref().try_into().unwrap())
     ).map_err(|_| ObjectError)
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn encoded_stored_manifest() {
+        let orig = StoredManifest::new(
+            Time::utc(2021, 02, 18, 13, 22, 06),
+            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
+            Bytes::from(b"foobar".as_ref()),
+            Bytes::from(b"blablubb".as_ref())
+        );
+
+        let encoded = sled::IVec::from(&orig);
+        assert_eq!(
+            StoredManifest::decode_not_after(&encoded).unwrap(),
+            orig.not_after
+        );
+        let decoded = StoredManifest::try_from(encoded).unwrap();
+        assert_eq!(orig, decoded);
+    }
+
+    #[test]
+    fn encoded_stored_object() {
+        let orig = StoredObject::new(
+            Bytes::from(b"foobar".as_ref()),
+            None
+        );
+        let decoded = StoredObject::try_from(
+            sled::IVec::from(&orig)
+        ).unwrap();
+        assert_eq!(orig.hash, decoded.hash);
+        assert_eq!(orig.content, decoded.content);
+    }
 }
 

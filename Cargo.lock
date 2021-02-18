@@ -1194,7 +1194,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.11.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git#1dc067c0f04e1a60bfdfe5a9b9c11d1daf712d3d"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#a81ac53c5389da17ac1833e3bf26b9a012be53a4"
 dependencies = [
  "base64",
  "bcder",
