@@ -2,7 +2,7 @@
 ///
 /// This is a private module. It’s types are reexported by the parent.
 
-use std::fs;
+use std::{fs, io};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -46,6 +46,19 @@ pub struct Cache {
 impl Cache {
     pub fn init(config: &Config) -> Result<(), Failed> {
         let rrdp_dir = Self::cache_dir(config);
+
+        if config.fresh {
+            if let Err(err) = fs::remove_dir_all(&rrdp_dir) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Failed to delete RRDP cache at {}: {}",
+                        rrdp_dir.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+
         if let Err(err) = fs::create_dir_all(&rrdp_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",

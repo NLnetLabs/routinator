@@ -135,6 +135,11 @@ pub struct Config {
     /// Allow dubious host names.
     pub allow_dubious_hosts: bool,
 
+    /// Should we wipe store and cache before starting?
+    ///
+    /// (This option is only available on command line.)
+    pub fresh: bool,
+
     /// Whether to disable rsync.
     pub disable_rsync: bool,
 
@@ -310,6 +315,10 @@ impl Config {
         .arg(Arg::with_name("allow-dubious-hosts")
              .long("allow-dubious-hosts")
              .help("Allow dubious host names in rsync and HTTPS URIs")
+        )
+        .arg(Arg::with_name("fresh")
+            .long("fresh")
+            .help("Delete all locally stored data, download everything again") 
         )
         .arg(Arg::with_name("disable-rsync")
             .long("disable-rsync")
@@ -596,6 +605,11 @@ impl Config {
         // allow_dubious_hosts
         if matches.is_present("allow-dubious-hosts") {
             self.allow_dubious_hosts = true
+        }
+
+        // fresh
+        if matches.is_present("fresh") {
+            self.fresh = true
         }
 
         // disable_rsync
@@ -907,6 +921,7 @@ impl Config {
             },
             allow_dubious_hosts:
                 file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
+            fresh: false,
             disable_rsync: file.take_bool("disable-rsync")?.unwrap_or(false),
             rsync_command: {
                 file.take_string("rsync-command")?
@@ -1101,6 +1116,7 @@ impl Config {
             unsafe_vrps: DEFAULT_UNSAFE_VRPS_POLICY,
             unknown_objects: DEFAULT_UNKNOWN_OBJECTS_POLICY,
             allow_dubious_hosts: false,
+            fresh: false,
             disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
