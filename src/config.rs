@@ -1828,10 +1828,10 @@ impl ConfigFile {
         key: &str
     ) -> Result<Option<Vec<String>>, Failed> {
         match self.content.remove(key) {
-            Some(::toml::Value::Array(vec)) => {
+            Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
-                    if let ::toml::Value::String(value) = value {
+                    if let toml::Value::String(value) = value {
                         res.push(value)
                     }
                     else {
@@ -1873,10 +1873,10 @@ impl ConfigFile {
     ) -> Result<Option<Vec<T>>, Failed>
     where T: FromStr, T::Err: fmt::Display {
         match self.content.remove(key) {
-            Some(::toml::Value::Array(vec)) => {
+            Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
-                    if let ::toml::Value::String(value) = value {
+                    if let toml::Value::String(value) = value {
                         match T::from_str(&value) {
                             Ok(value) => res.push(value),
                             Err(err) => {
@@ -1927,10 +1927,13 @@ impl ConfigFile {
         key: &str
     ) -> Result<Option<Vec<PathBuf>>, Failed> {
         match self.content.remove(key) {
-            Some(::toml::Value::Array(vec)) => {
+            Some(toml::Value::String(value)) => {
+                Ok(Some(vec![self.dir.join(value)]))
+            }
+            Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
-                    if let ::toml::Value::String(value) = value {
+                    if let toml::Value::String(value) = value {
                         res.push(self.dir.join(value))
                     }
                     else {
@@ -1963,11 +1966,11 @@ impl ConfigFile {
         key: &str
     ) -> Result<Option<HashMap<String, String>>, Failed> {
         match self.content.remove(key) {
-            Some(::toml::Value::Array(vec)) => {
+            Some(toml::Value::Array(vec)) => {
                 let mut res = HashMap::new();
                 for value in vec.into_iter() {
                     let mut pair = match value {
-                        ::toml::Value::Array(pair) => pair.into_iter(),
+                        toml::Value::Array(pair) => pair.into_iter(),
                         _ => {
                             error!(
                                 "Failed in config file {}: \
@@ -1979,7 +1982,7 @@ impl ConfigFile {
                         }
                     };
                     let left = match pair.next() {
-                        Some(::toml::Value::String(value)) => value,
+                        Some(toml::Value::String(value)) => value,
                         _ => {
                             error!(
                                 "Failed in config file {}: \
@@ -1991,7 +1994,7 @@ impl ConfigFile {
                         }
                     };
                     let right = match pair.next() {
-                        Some(::toml::Value::String(value)) => value,
+                        Some(toml::Value::String(value)) => value,
                         _ => {
                             error!(
                                 "Failed in config file {}: \
