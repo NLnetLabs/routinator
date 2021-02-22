@@ -105,7 +105,7 @@ impl Store {
     /// NB: The database will be opened below the given directory. I,e., the
     /// provided path is `cache_dir` from the
     /// [`Config`][crate::config::Config].
-    fn open_db(cache_dir: &Path) -> Result<sled::Db, Failed> {
+    fn open_db(cache_dir: &Path, fresh: bool) -> Result<sled::Db, Failed> {
         // XXX This checks that config.cache_dir exists which actually happens
         //     elsewhere again. Perhaps move it to Config and only do it once?
         if let Err(err) = fs::read_dir(cache_dir) {
@@ -126,10 +126,23 @@ impl Store {
             return Err(Failed)
         }
 
-        let db_path = cache_dir.join("store.db");
+        let db_path = cache_dir.join("store");
+
+        if fresh {
+            if let Err(err) = fs::remove_dir_all(&db_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Failed to delete store database at {}: {}",
+                        db_path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+
         sled::open(&db_path).map_err(|err| {
             error!(
-                "Failed to open storage database at {}: {}",
+                "Failed to open store database at {}: {}",
                 db_path.display(),
                 err
             );
@@ -143,12 +156,12 @@ impl Store {
     ///
     /// This function is called implicitely by [`new`][Store::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
-        Self::open_db(&config.cache_dir).map(|_| ())
+        Self::open_db(&config.cache_dir, config.fresh).map(|_| ())
     }
 
     /// Creates a new store based on configuration information.
     pub fn new(config: &Config) -> Result<Self, Failed> {
-        Self::open_db(&config.cache_dir).map(|db| {
+        Self::open_db(&config.cache_dir, config.fresh).map(|db| {
             Self::with_db(db)
         })
     }
@@ -1050,6 +1063,12 @@ impl From<TransactionError<()>> for UpdateError {
 impl From<sled::Error> for Failed {
     fn from(err: sled::Error) -> Failed {
         error!("RPKI storage error: {}", err);
+        if matches!(err, sled::Error::Io(_) | sled::Error::Corruption {..}) {
+            error!(
+                "Starting Routinator with the --fresh option \
+                may fix this issue"
+            );
+        }
         Failed
     }
 }
