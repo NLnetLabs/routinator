@@ -18,6 +18,8 @@ New
   ([#437])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
+* The `exception` config file value now also accepts a single string with
+  a path name instead of an array of strings. ([#471])
 
 Bug Fixes
 
@@ -33,6 +35,7 @@ Other Changes
 [#444]: https://github.com/NLnetLabs/routinator/pull/444
 [#456]: https://github.com/NLnetLabs/routinator/pull/456
 [#463]: https://github.com/NLnetLabs/routinator/pull/463
+[#471]: https://github.com/NLnetLabs/routinator/pull/471
 [#470]: https://github.com/NLnetLabs/routinator/pull/470
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
