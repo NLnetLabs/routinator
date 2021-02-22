@@ -200,7 +200,8 @@ impl Process {
                 .level_for("tokio_reactor", LevelFilter::Info)
                 .level_for("hyper", LevelFilter::Info)
                 .level_for("reqwest", LevelFilter::Info)
-                .level_for("h2", LevelFilter::Info);
+                .level_for("h2", LevelFilter::Info)
+                .level_for("sled", LevelFilter::Info);
         }
         res
     }

@@ -60,6 +60,19 @@ impl Cache {
     /// Creates the cache dir and returns its path.
     fn create_cache_dir(config: &Config) -> Result<PathBuf, Failed> {
         let cache_dir = config.cache_dir.join("rsync");
+
+        if config.fresh {
+            if let Err(err) = fs::remove_dir_all(&cache_dir) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Failed to delete rsync cache at {}: {}",
+                        cache_dir.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+
         if let Err(err) = fs::create_dir_all(&cache_dir) {
             error!(
                 "Failed to create RRDP cache directory {}: {}.",
