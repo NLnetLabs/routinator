@@ -12,9 +12,8 @@ New
 * Routinator now keeps the last valid data from a publication point and
   falls back to using that if an update to the publication point does not
   have a valid manifest or the data does not match the manifest. ([#456]).
-* The new option `--fresh` causes Routinator to delete all locally stored
-  data before starting. This can be used when data corruption is
-  reported. ([#470])
+* The new option `--fresh` causes Routinator to delete all cached data
+  before starting. This can be used when data corruption is reported. ([#470])
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.

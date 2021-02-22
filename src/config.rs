@@ -135,7 +135,7 @@ pub struct Config {
     /// Allow dubious host names.
     pub allow_dubious_hosts: bool,
 
-    /// Should we wipe store and cache before starting?
+    /// Should we wipe the cache before starting?
     ///
     /// (This option is only available on command line.)
     pub fresh: bool,
@@ -318,7 +318,7 @@ impl Config {
         )
         .arg(Arg::with_name("fresh")
             .long("fresh")
-            .help("Delete all locally stored data, download everything again") 
+            .help("Delete cached data, download everything again") 
         )
         .arg(Arg::with_name("disable-rsync")
             .long("disable-rsync")
