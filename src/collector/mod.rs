@@ -9,10 +9,10 @@
 //! data downloaded from each repository for later use greatly improves
 //! performance.
 //!
-//! This module provides three public types: [`Cache`] collects all
-//! information necessary to run the cache. When it is time to actually use
-//! the cache, its [`start`][Cache::start] method creates and returns a [`Run`]
-//! which represents an ‘active’ cache that can actually go and fetch data.
+//! This module provides three public types: [`Collector`] holds all
+//! information necessary to run the collector. When it is time to actually use
+//! it, the [`start`][Collector::start] method creates and returns a [`Run`]
+//! which represents an ‘active’ collector that can actually go and fetch data.
 //! It provides two methods: [`load_ta`][Run::load_ta] to fetch and load a
 //! trust anchor certificate, and [`repository`][Run::repository] to update a
 //! respository and subsequently provide access to the updated data via a
@@ -21,10 +21,10 @@
 //  Internally, the module is split up into three private sub-modules. The
 //  public types mentioned above live in the base module. In addition, the
 //  rsync and rrdp modules that implement those two transport protocols,
-//  mirroring the structure of the base module, i.e., they also have `Cache`
-//  and `Run` types.
+//  mirroring the structure of the base module, i.e., they also have
+//  `Collector`, `Run`, and `Repository` types.
 //
-pub use self::base::{Cache, Cleanup, Run, Repository};
+pub use self::base::{Collector, Cleanup, Run, Repository};
 
 mod base;
 mod rrdp;

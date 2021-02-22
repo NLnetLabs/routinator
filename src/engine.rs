@@ -5,8 +5,8 @@
 ///
 /// Data validation is configured through [`Engine`] so that the
 /// configuration can be used for multiple validation runs. This includes both
-/// a [cache][crate::cache::Cache] and [store][crate::store::Store] to use
-/// for validation.
+/// a [collector][crate::collector::Collector] and
+/// [store][crate::store::Store] to use for validation.
 ///
 /// Individual validation runs are managed through [`Run`]. Such a runner can
 /// be obtained from validation via its [`start`][Engine::start] method.
@@ -37,8 +37,8 @@ use rpki::repository::sigobj::SignedObject;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
 use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
-use crate::{cache, store};
-use crate::cache::Cache;
+use crate::{collector, store};
+use crate::collector::Collector;
 use crate::config::{Config, FilterPolicy};
 use crate::error::Failed;
 use crate::metrics::Metrics;
@@ -77,7 +77,7 @@ const CRL_CACHE_LIMIT: usize = 50;
 /// available through [`process_origins`][Self::process_origins].
 ///
 /// Finally, the method [`cleanup`][Self::cleanup] can be used to perform
-/// cleanup on both the store and cache owned by the validation.
+/// cleanup on both the store and collector owned by the validation.
 #[derive(Debug)]
 pub struct Engine {
     /// The directory to load TALs from.
@@ -89,8 +89,8 @@ pub struct Engine {
     /// The list of our TALs. 
     tals: Vec<Tal>,
 
-    /// The cache to load updated data from.
-    cache: Cache,
+    /// The collector to load updated data from.
+    collector: Collector,
 
     /// The store to load stored data from.
     store: Store,
@@ -148,7 +148,7 @@ impl Engine {
     /// Loads the initial set of TALs and errors out if that fails.
     pub fn new(
         config: &Config,
-        cache: Cache,
+        collector: Collector,
         store: Store,
     ) -> Result<Self, Failed> {
         Self::init(config)?;
@@ -156,7 +156,7 @@ impl Engine {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
-            cache,
+            collector,
             store,
             strict: config.strict,
             stale: config.stale,
@@ -275,7 +275,7 @@ impl Engine {
     /// This spawns threads and therefore needs to be done after a
     /// possible fork.
     pub fn ignite(&mut self) -> Result<(), Failed> {
-        self.cache.ignite()
+        self.collector.ignite()
     }
 
     /// Starts a validation run.
@@ -287,7 +287,9 @@ impl Engine {
     pub fn start<P: ProcessRun>(
         &self, processor: P
     ) -> Result<Run<P>, Failed> {
-        Ok(Run::new(self, self.cache.start()?, self.store.start(), processor))
+        Ok(Run::new(
+            self, self.collector.start()?, self.store.start(), processor
+        ))
     }
 
     /// Performs a route origin validation run.
@@ -303,9 +305,9 @@ impl Engine {
         Ok((report, metrics))
     }
 
-    /// Cleans the cache and store owned by the validation.
+    /// Cleans the collector and store owned by the validation.
     pub fn cleanup(&self) -> Result<(), Failed> {
-        self.store.cleanup(self.cache.cleanup())
+        self.store.cleanup(self.collector.cleanup())
     }
 }
 
@@ -323,8 +325,8 @@ pub struct Run<'a, P> {
     /// A reference to the underlying validation.
     validation: &'a Engine,
 
-    /// The runner for the cache.
-    cache: cache::Run<'a>,
+    /// The runner for the collector.
+    collector: collector::Run<'a>,
 
     /// The runner for the store.
     store: store::Run<'a>,
@@ -340,12 +342,12 @@ impl<'a, P> Run<'a, P> {
     /// Creates a new runner from all the parts.
     fn new(
         validation: &'a Engine,
-        cache: cache::Run<'a>,
+        collector: collector::Run<'a>,
         store: store::Run<'a>,
         processor: P,
     ) -> Self {
         Run {
-            validation, cache, store, processor,
+            validation, collector, store, processor,
             metrics: Metrics::new()
         }
     }
@@ -355,7 +357,7 @@ impl<'a, P> Run<'a, P> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(mut self) -> Metrics {
-        self.cache.done(&mut self.metrics);
+        self.collector.done(&mut self.metrics);
         self.store.done(&mut self.metrics);
         self.metrics
     }
@@ -472,7 +474,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         _info: &TalInfo,
     ) -> Result<Option<Cert>, Failed> {
         // Get the new version, store and return it if it decodes.
-        if let Some(bytes) = self.cache.load_ta(uri) {
+        if let Some(bytes) = self.collector.load_ta(uri) {
             if let Ok(cert) = Cert::decode(bytes.clone()) {
                 self.store.update_ta(uri, &bytes)?;
                 return Ok(Some(cert))
@@ -520,8 +522,8 @@ struct PubPoint<'a, P: ProcessRun> {
     /// The processor for valid data at this publication point.
     processor: P::ProcessCa,
 
-    /// The point’s repository in the cache if available.
-    cache: Option<cache::Repository<'a>>,
+    /// The point’s repository in the collector if available.
+    collector: Option<collector::Repository<'a>>,
 
     /// The point’s repository in the store.
     store: store::Repository,
@@ -534,9 +536,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         cert: &'a Arc<CaCert>,
         processor: P::ProcessCa,
     ) -> Result<Self, Failed> {
-        let cache = run.cache.repository(cert);
-        let store = run.store.repository(cert, cache.as_ref())?;
-        Ok(PubPoint { run, cert, processor, cache, store })
+        let collector = run.collector.repository(cert);
+        let store = run.store.repository(cert, collector.as_ref())?;
+        Ok(PubPoint { run, cert, processor, collector, store })
     }
 
     /// Performs validation of the publication point.
@@ -566,9 +568,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
     /// Tries to update the stored data for the publication point.
     ///
-    /// Tries to fetch the updated manifest from the cache. If it differs
-    /// from the stored cache, updates the stored manifest and objects if the
-    /// manifest is valid and all the objects are present and match their
+    /// Tries to fetch the updated manifest from the collector. If it differs
+    /// from the stored manifest, updates the stored manifest and objects if
+    /// the manifest is valid and all the objects are present and match their
     /// hashes.
     ///
     /// Depending on how far it gets, returns either a validated or raw
@@ -577,9 +579,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     // not a mutable type.
     #[allow(clippy::mutable_key_type)]
     fn update_stored(&self) -> Result<PointManifest, Failed> {
-        // If we don’t have a cache, we just use the stored publication point.
-        let cache = match self.cache {
-            Some(ref cache) => cache,
+        // If we don’t have a collector, we just use the stored publication
+        // point.
+        let collector = match self.collector {
+            Some(ref collector) => collector,
             None => {
                 return self.store.load_manifest(
                     self.cert.rpki_manifest()
@@ -587,22 +590,22 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
-        // Try to load the manifest both from store and cache.
-        let cached = cache.load_object(self.cert.rpki_manifest());
+        // Try to load the manifest both from store and collector.
+        let collected = collector.load_object(self.cert.rpki_manifest());
         let stored = self.store.load_manifest(self.cert.rpki_manifest())?;
 
-        // If the manifest is not in the cache, we can abort already.
-        let cached = match cached {
+        // If the manifest is not in the collector, we can abort already.
+        let collected = match collected {
             Some(mft) => mft,
             None => return Ok(stored.into())
         };
 
-        // If the stored and cached manifests are the same, nothing has
+        // If the stored and collected manifests are the same, nothing has
         // changed and we can abort the update. However, we need to check that
         // the stored manifest refers to the same CA repository URI, just to
         // be sure.
         let same = if let Some(mft) = stored.as_ref() {
-            mft.manifest() == &cached
+            mft.manifest() == &collected
                 && mft.ca_repository() == self.cert.ca_repository()
         }
         else {
@@ -612,27 +615,29 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             return Ok(stored.into())
         }
 
-        // Validate the cached manifest.
-        let cached = match self.validate_cached_manifest(cached, cache) {
-            Ok(cached) => cached,
+        // Validate the collected manifest.
+        let collected = match self.validate_collected_manifest(
+            collected, collector
+        ) {
+            Ok(collected) => collected,
             Err(_) => {
                 return Ok(stored.into())
             }
         };
 
-        // The manifest is fine. Now we can update the cache. We do this in a
+        // The manifest is fine. Now we can update the store. We do this in a
         // transaction and rollback if anything is wrong.
         let files = self.store.update_point(
             self.cert.rpki_manifest(),
 
             |update| {
-                // Store all files on the cached manifest. Abort if they can’t
-                // be loaded or if their hash doesn’t match.
+                // Store all files on the collected manifest. Abort if they
+                // can’t be loaded or if their hash doesn’t match.
                 //
                 // We also stick all file names into a set so we can delete
                 // everything that isn’t on the manifest.
                 let mut files = HashSet::new();
-                for item in cached.content.iter() {
+                for item in collected.content.iter() {
                     let uri = match self.cert.ca_repository().join(
                         item.file()
                     ) {
@@ -646,10 +651,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                         }
                     };
                     let hash = ManifestHash::new(
-                        item.hash().clone(), cached.content.file_hash_alg()
+                        item.hash().clone(), collected.content.file_hash_alg()
                     );
 
-                    let content = match cache.load_object(&uri) {
+                    let content = match collector.load_object(&uri) {
                         Some(content) => content,
                         None => {
                             warn!("{}: failed to load.", uri);
@@ -674,8 +679,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     &store::StoredManifest::new(
                         self.cert.cert.validity().not_after(),
                         self.cert.ca_repository().clone(),
-                        cached.manifest_bytes.clone(),
-                        cached.crl_bytes.clone(),
+                        collected.manifest_bytes.clone(),
+                        collected.crl_bytes.clone(),
                     )
                 )?;
                 Ok(files)
@@ -705,17 +710,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             |file| files.contains(file)
         )?;
 
-        Ok(cached.into())
+        Ok(collected.into())
     }
 
-    /// Tries to validate a manifest acquired from the cache.
+    /// Tries to validate a manifest acquired from the collector.
     ///
     /// Checks that the manifest is correct itself and has been signed by the
     /// publication point’s CA. Tries to load the associated CRL from the
-    /// cache, validates that against the CA and checks that the manifest
+    /// collector, validates that against the CA and checks that the manifest
     /// has not been revoked.
-    fn validate_cached_manifest(
-        &self, manifest_bytes: Bytes, cache: &cache::Repository
+    fn validate_collected_manifest(
+        &self, manifest_bytes: Bytes, repository: &collector::Repository
     ) -> Result<ValidPointManifest, ValidationError> {
         let manifest = match Manifest::decode(
             manifest_bytes.clone(), self.run.validation.strict
@@ -749,8 +754,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         }
 
-        let (crl_uri, crl, crl_bytes) = self.validate_cached_crl(
-            &ee_cert, &content, cache
+        let (crl_uri, crl, crl_bytes) = self.validate_collected_crl(
+            &ee_cert, &content, repository
         )?;
 
         Ok(ValidPointManifest {
@@ -766,11 +771,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// not revoke the manifest’s EE certificate.
     ///
     /// If all that is true, returns the decoded CRL.
-    fn validate_cached_crl(
+    fn validate_collected_crl(
         &self,
         ee_cert: &ResourceCert,
         manifest: &ManifestContent,
-        cache: &cache::Repository
+        repository: &collector::Repository
     ) -> Result<(uri::Rsync, Crl, Bytes), ValidationError> {
         // Let’s first get the manifest CRL’s name relative to repo_uri. If
         // it ain’t relative at all, this is already invalid.
@@ -799,7 +804,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         for item in manifest.iter() {
             let (file, hash) = item.into_pair();
             if file == crl_name {
-                let bytes = match cache.load_object(&crl_uri) {
+                let bytes = match repository.load_object(&crl_uri) {
                     Some(bytes) => bytes,
                     None => {
                         warn!("{}: failed to load.", crl_uri);
@@ -879,9 +884,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// Tries to validate a stored manifest.
     ///
     /// This is similar to
-    /// [`validate_cached_manifest`][Self::validate_cached_manifest] but has
-    /// less hassle with the CRL because that is actually included in the
-    /// stored manifest.
+    /// [`validate_collecteded_manifest`][Self::validate_collected_manifest]
+    /// but has less hassle with the CRL because that is actually included in
+    /// the stored manifest.
     fn validate_stored_manifest(
         &self, stored_manifest: StoredManifest
     ) -> Result<ValidPointManifest, ValidationError> {
@@ -1150,7 +1155,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
-        let defer = self.point.run.cache.is_current(&cert);
+        let defer = self.point.run.collector.is_current(&cert);
 
         self.child_cas.push(CaTask { cert, processor, defer });
         Ok(())
@@ -1417,7 +1422,7 @@ impl CaCert {
 
 //------------ PointManifest -------------------------------------------------
 
-/// The various results of getting manifest from cache and store.
+/// The various results of getting manifest from collector and store.
 // XXX Clippy complains that ValidPointManifest is 1160 bytes. I _think_ this
 //     is fine here as PointManifest is just a helper type to make things
 //     easier and everything eventually turns into a ValidPointManifest, but

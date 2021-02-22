@@ -1,4 +1,4 @@
-//! The overall cache, binding the various transports together.
+//! The overall collector, binding the various transports together.
 //!
 //! This is a private module. It’s types are re-exported by the parent.
 
@@ -16,40 +16,40 @@ use crate::engine::CaCert;
 use super::{rrdp, rsync};
 
 
-//------------ Cache ---------------------------------------------------------
+//------------ Collector -----------------------------------------------------
 
-/// Access to a local copy of the currently published RPKI data.
+/// Access to the currently published RPKI data.
 ///
-/// A cache can be created based on the configuration via [Cache::new]. If you
-/// don’t actually want to perform a validation run but just initialize
-/// everything, [Cache::init] will suffice.
+/// A collector can be created based on the configuration via
+/// [Collector::new]. If you don’t actually want to perform a validation run 
+/// but just initialize everything, [Collector::init] will suffice.
 ///
-/// `Cache` values don’t actually do anything. Instead, when starting a
-/// validation run, you have to call [`start`][Cache::start] to acquire a
+/// `Collector` values don’t actually do anything. Instead, when starting a
+/// validation run, you have to call [`start`][Self::start] to acquire a
 /// [`Run`] that does all the work. Before doing that for the first time,
-/// you need to call [`ignite`][Cache::ignite] once.
+/// you need to call [`ignite`][Self::ignite] once.
 #[derive(Debug)]
-pub struct Cache {
+pub struct Collector {
     /// The base directory of the cache.
     cache_dir: PathBuf,
 
-    /// The cache for RRDP transport.
+    /// The collector for RRDP transport.
     ///
     /// If this is `None`, use of RRDP has been disabled entirely.
     rrdp: Option<rrdp::Cache>,
 
-    /// The cache for rsync transport.
+    /// The collector for rsync transport.
     ///
     /// If this is `None`, use of rsync has been disabled entirely.
-    rsync: Option<rsync::Cache>,
+    rsync: Option<rsync::Collector>,
 }
 
-impl Cache {
-    /// Initializes the cache without creating a value.
+impl Collector {
+    /// Initializes the collector without creating a value.
     ///
     /// Ensures that the base directory exists and creates it if necessary.
     ///
-    /// The function is called implicitly by [`new`][Cache::new].
+    /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
         if let Err(err) = fs::read_dir(&config.cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
@@ -69,39 +69,40 @@ impl Cache {
             return Err(Failed)
         }
         rrdp::Cache::init(config)?;
-        rsync::Cache::init(config)?;
+        rsync::Collector::init(config)?;
         Ok(())
     }
 
-    /// Creates a new cache.
+    /// Creates a new collector.
     ///
     /// Takes all necessary information from `config`. If `update` is `false`,
-    /// the cache will not be updated from upstream and only files already
-    /// present will be used. This differs from disabling transports as it
-    /// will still use whatever is present on disk as potentially updated data.
+    /// the collector will not be updated from upstream and only data that has
+    /// been collected previosuly will be used. This differs from disabling
+    /// transports as it will still use whatever is present on disk as
+    /// potentially updated data.
     pub fn new(
         config: &Config,
         update: bool
     ) -> Result<Self, Failed> {
         Self::init(config)?;
-        Ok(Cache {
+        Ok(Collector {
             cache_dir: config.cache_dir.clone(),
             rrdp: rrdp::Cache::new(config, update)?,
-            rsync: rsync::Cache::new(config, update)?,
+            rsync: rsync::Collector::new(config, update)?,
         })
     }
 
-    /// Ignites the cache.
+    /// Ignites the collector.
     ///
-    /// This needs to be done after a possible fork as the cache may spawn a
-    /// set of worker threads.
+    /// This needs to be done after a possible fork as the collector may spawn
+    /// a set of worker threads.
     pub fn ignite(&mut self) -> Result<(), Failed> {
-        self.rsync.as_mut().map_or(Ok(()), rsync::Cache::ignite)?;
         self.rrdp.as_mut().map_or(Ok(()), rrdp::Cache::ignite)?;
+        self.rsync.as_mut().map_or(Ok(()), rsync::Collector::ignite)?;
         Ok(())
     }
 
-    /// Starts a new validation run using this cache.
+    /// Starts a new validation run using this collector.
     pub fn start(&self) -> Result<Run, Failed> {
         Run::new(self)
     }
@@ -118,19 +119,19 @@ impl Cache {
 
 //------------ Run -----------------------------------------------------------
 
-/// Using the cache for a single validation run.
+/// Using the collector for a single validation run.
 ///
 /// The type provides access to updated versions of trust anchor certificates
 /// and RPKI repositories via the [`load_ta`][Self::load_ta] and
 /// [`repository`][Self::repository] methods, respectively.
 ///
-/// This type references the underlying [`Cache`]. It can be used with
+/// This type references the underlying [`Collector`]. It can be used with
 /// multiple threads using
 /// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
-    /// A reference to the underlying cache.
-    cache: &'a Cache,
+    /// A reference to the underlying collector.
+    collector: &'a Collector,
 
     /// The runner for rsync if this transport is enabled.
     rsync: Option<rsync::Run<'a>>,
@@ -140,17 +141,17 @@ pub struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
-    /// Creates a new validation run for the given cache.
-    fn new(cache: &'a Cache) -> Result<Self, Failed> {
+    /// Creates a new validation run for the given collector.
+    fn new(collector: &'a Collector) -> Result<Self, Failed> {
         Ok(Run {
-            cache,
-            rsync: if let Some(ref rsync) = cache.rsync {
+            collector,
+            rsync: if let Some(ref rsync) = collector.rsync {
                 Some(rsync.start())
             }
             else {
                 None
             },
-            rrdp: if let Some(ref rrdp) = cache.rrdp {
+            rrdp: if let Some(ref rrdp) = collector.rrdp {
                 Some(rrdp.start()?)
             }
             else {
@@ -161,7 +162,7 @@ impl<'a> Run<'a> {
 
     /// Finishes the validation run.
     ///
-    /// Updates `metrics` with the cache run’s metrics.
+    /// Updates `metrics` with the collector run’s metrics.
     ///
     /// If you are not interested in the metrics, you can simply drop the
     /// value, instead.
@@ -255,7 +256,7 @@ pub struct Repository<'a>(RepoInner<'a>);
 enum RepoInner<'a> {
     /// The repository is accessed via RRDP.
     Rrdp {
-        /// The RRDP cache runner.
+        /// The RRDP runner.
         rrdp: &'a rrdp::Run<'a>,
 
         /// The server ID for the RRDP server.
@@ -264,7 +265,7 @@ enum RepoInner<'a> {
 
     /// The repository is accessed via rsync.
     Rsync {
-        /// The rsync cache runner.
+        /// The rsync runner.
         rsync: &'a rsync::Run<'a>,
     }
 }
@@ -294,18 +295,18 @@ impl<'a> Repository<'a> {
 
 //------------ Cleanup -------------------------------------------------------
 
-/// A builder-style type for cache cleanup.
+/// A builder-style type for cleanup.
 ///
-/// This type can be requested from a cache via [`Cache::cleanup`]. 
-/// Repositories that should be be kept in the cache can be registered via
+/// This type can be requested from a collector via [`Collector::cleanup`]. 
+/// Repositories that should be be kept in the collector can be registered via
 /// the [`retain_rrdp_repository`][Cleanup::retain_rrdp_repository] and
 /// [`retain_rsync_module`][Cleanup::retain_rsync_module] methods. A call to
-/// [`commit`][Cleanup::commit] will cause the cache to delete all
+/// [`commit`][Cleanup::commit] will cause the collector to delete all
 /// repositories that have not been registered.
 #[derive(Clone, Debug)]
 pub struct Cleanup<'a> {
-    /// A reference to the underlying cache.
-    cache: &'a Cache,
+    /// A reference to the underlying collector.
+    collector: &'a Collector,
 
     /// The set of rsync modules to retain.
     rsync: rsync::ModuleSet,
@@ -315,10 +316,10 @@ pub struct Cleanup<'a> {
 }
 
 impl<'a> Cleanup<'a> {
-    /// Creates a new cleanup object for the given cache..
-    fn new(cache: &'a Cache) -> Self {
+    /// Creates a new cleanup object for the given collector.
+    fn new(collector: &'a Collector) -> Self {
         Cleanup {
-            cache,
+            collector,
             rsync: Default::default(),
             rrdp: Default::default(),
         }
@@ -326,24 +327,24 @@ impl<'a> Cleanup<'a> {
 
     /// Registers an RRDP repository to be retained in cleanup.
     pub fn retain_rrdp_repository(&mut self, rpki_notify: &uri::Https) {
-        if self.cache.rrdp.is_some() {
+        if self.collector.rrdp.is_some() {
             self.rrdp.insert(rpki_notify.clone());
         }
     }
 
     /// Registers an rsync module to be retained in cleanup.
     pub fn retain_rsync_module(&mut self, uri: &uri::Rsync) {
-        if self.cache.rsync.is_some() {
+        if self.collector.rsync.is_some() {
             self.rsync.add_from_uri(uri);
         }
     }
 
     /// Performs the cleanup run.
     pub fn commit(self) {
-        if let Some(rsync) = self.cache.rsync.as_ref() {
+        if let Some(rsync) = self.collector.rsync.as_ref() {
             rsync.cleanup(&self.rsync)
         }
-        if let Some(rrdp) = self.cache.rrdp.as_ref() {
+        if let Some(rrdp) = self.collector.rrdp.as_ref() {
             rrdp.cleanup(&self.rrdp)
         }
     }
