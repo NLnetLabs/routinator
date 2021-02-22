@@ -14,7 +14,7 @@ New
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
-  a path name in addition to an array of strings. ([#471])
+  a path name instead of an array of strings. ([#471])
 
 Bug Fixes
 
