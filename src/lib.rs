@@ -14,12 +14,13 @@
 //!
 //! The first part can be found in three modules:
 //!
-//! * [cache], which synchronizes a local copy of the published RPKI data
+//! * [collector], which synchronizes a local copy of the published RPKI data
 //!   with its upstream sources,
 //! * [store], which maintains a set of data that has passed fundamental
 //!   vetting in order to deal with incomplete or broken updates from upstream
 //!   sources, and
-//! * [validation], which performs a validation run using both cache and store.
+//! * [engine], which performs a validation run using both collector and
+//!   store.
 //!
 //! The second part currently comes in two flavours:
 //!
@@ -52,7 +53,7 @@ pub use self::operation::Operation;
 pub use rpki;
 pub use reqwest;
 
-pub mod cache;
+pub mod collector;
 pub mod config;
 pub mod engine;
 pub mod error;

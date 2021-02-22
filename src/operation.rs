@@ -28,7 +28,7 @@ use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
-use crate::cache::Cache;
+use crate::collector::Collector;
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
@@ -388,7 +388,7 @@ impl Server {
     /// just runs the server forever.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
         Engine::init(process.config())?;
-        Cache::init(process.config())?;
+        Collector::init(process.config())?;
         Store::init(process.config())?;
         let log = process.switch_logging(
             self.detach,
@@ -406,7 +406,7 @@ impl Server {
 
         let mut validation = Engine::new(
             process.config(),
-            Cache::new(process.config(), true)?,
+            Collector::new(process.config(), true)?,
             Store::new(process.config())?,
         )?;
         let runtime = process.runtime()?;
@@ -657,7 +657,7 @@ impl Vrps {
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut validation = Engine::new(
             process.config(),
-            Cache::new(process.config(), !self.noupdate)?,
+            Collector::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
         )?;
         validation.ignite()?;
@@ -800,7 +800,7 @@ impl Validate {
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut validation = Engine::new(
             process.config(),
-            Cache::new(process.config(), !self.noupdate)?,
+            Collector::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
         )?;
         validation.ignite()?;
@@ -894,7 +894,7 @@ impl ValidateDocument {
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut validation = Engine::new(
             process.config(),
-            Cache::new(process.config(), !self.noupdate)?,
+            Collector::new(process.config(), !self.noupdate)?,
             Store::new(process.config())?,
         )?;
         validation.ignite()?;
@@ -1018,7 +1018,7 @@ impl Update {
     fn run(self, process: Process) -> Result<(), ExitError> {
         let mut validation = Engine::new(
             process.config(),
-            Cache::new(process.config(), true)?,
+            Collector::new(process.config(), true)?,
             Store::new(process.config())?,
         )?;
         validation.ignite()?;

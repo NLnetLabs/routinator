@@ -69,7 +69,7 @@ use sled::transaction::{
     ConflictableTransactionError, TransactionalTree, TransactionError,
     UnabortableTransactionError
 };
-use crate::cache;
+use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
 use crate::error::Failed;
@@ -184,20 +184,21 @@ impl Store {
     /// RRDP repositories that have no more publication points are removed,
     /// too.
     ///
-    /// The method also triggers a cleanup of the cache via the provided
-    /// cache cleanup object. All RRDP repositories and rsync modules that
+    /// The method also triggers a cleanup of the collector via the provided
+    /// collector cleanup object. All RRDP repositories and rsync modules that
     /// have still non-expired publication points will be registered to be
-    /// retained with the cache cleanup and then a cleaning run is started.
+    /// retained with the collector cleanup and then a cleaning run is
+    /// started.
     pub fn cleanup(
         &self,
-        mut cache: cache::Cleanup,
+        mut collector: collector::Cleanup,
     ) -> Result<(), Failed> {
         // Cleanup RRDP repositories
         for tree_name in self.db.tree_names() {
             if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
                 let names = TreeNames::rrdp(&rpki_notify);
                 if Repository::new(self, &names)?.cleanup_rrdp()? {
-                    cache.retain_rrdp_repository(&rpki_notify);
+                    collector.retain_rrdp_repository(&rpki_notify);
                 }
                 else {
                     names.drop_trees(&self.db)?;
@@ -208,10 +209,10 @@ impl Store {
         // Cleanup rsync modules
         Repository::new(
             self, &TreeNames::rsync()
-        )?.cleanup_rsync(&mut cache)?;
+        )?.cleanup_rsync(&mut collector)?;
 
-        // Cleanup cache.
-        cache.commit();
+        // Cleanup collector.
+        collector.commit();
         Ok(())
     }
 
@@ -283,18 +284,18 @@ impl<'a> Run<'a> {
     /// repository will be used.
     ///
     /// However, if the repository needs to reflect the repository that was
-    /// previously updated via the cache and the cache had to fall back from
-    /// RRDP to rsync, the rsync repository is used even if the rpkiNotify
-    /// URI is present. This is so that data from the two transport methods
-    /// is kept strictly separate to avoid potential poisoning.
+    /// previously updated via the collector and the collector had to fall
+    /// back from RRDP to rsync, the rsync repository is used even if the
+    /// rpkiNotify URI is present. This is so that data from the two transport
+    /// methods is kept strictly separate to avoid potential poisoning.
     ///
-    /// Therefore, if `cache` is not `None`, the provided cache repository’s
-    /// chosen transport will be used to determine whether RRDP is used if
-    /// available or not.
+    /// Therefore, if `collector` is not `None`, the provided collector
+    /// repository’s chosen transport will be used to determine whether RRDP
+    /// is used if available or not.
     pub fn repository(
-        &self, ca_cert: &CaCert, cache: Option<&cache::Repository>
+        &self, ca_cert: &CaCert, collector: Option<&collector::Repository>
     ) -> Result<Repository, Failed> {
-        match (ca_cert.rpki_notify(), cache.map(|cache| cache.is_rrdp())) {
+        match (ca_cert.rpki_notify(), collector.map(|c| c.is_rrdp())) {
             (Some(rpki_notify), Some(true)) | (Some(rpki_notify), None) => {
                 self.rrdp_repository(rpki_notify)
             }
@@ -514,8 +515,10 @@ impl Repository {
     ///
     /// Removes all publication points that have an expired manifest.
     /// Registers all rsync modules that have at least one non-expired
-    /// manifest to be retained by the cache.
-    fn cleanup_rsync(self, cache: &mut cache::Cleanup) -> Result<(), Failed> {
+    /// manifest to be retained by the collector.
+    fn cleanup_rsync(
+        self, collector: &mut collector::Cleanup
+    ) -> Result<(), Failed> {
         let now = Time::now();
 
         for item in self.manifest_tree.iter() {
@@ -530,7 +533,7 @@ impl Repository {
                 Err(_) => None
             };
             if let Some(uri) = uri {
-                cache.retain_rsync_module(&uri);
+                collector.retain_rsync_module(&uri);
             }
             else {
                 self._drain_point(&key, |_| false)?;

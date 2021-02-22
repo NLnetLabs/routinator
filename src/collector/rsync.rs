@@ -1,6 +1,6 @@
 /// Local repository copy synchronized with rsync.
 //
-//  The rsync cache works as follows:
+//  The rsync collector works as follows:
 //
 //  Data is kept in the directory given via the cache_dir attribute using the
 //  rsync URI without the scheme as the path. We assume that data is published
@@ -29,13 +29,13 @@ use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::UriExt;
 
 
-//------------ Cache ---------------------------------------------------------
+//------------ Collector -----------------------------------------------------
 
 /// A local copy of repositories synchronized via rsync.
 #[derive(Debug)]
-pub struct Cache {
-    /// The base directory of the cache.
-    cache_dir: CacheDir,
+pub struct Collector {
+    /// The base directory of the collector.
+    working_dir: WorkingDir,
 
     /// The command for running rsync.
     ///
@@ -48,54 +48,56 @@ pub struct Cache {
 }
  
 
-impl Cache {
-    /// Initializes the rsync cache without creating a value.
+impl Collector {
+    /// Initializes the rsync collector without creating a value.
     ///
-    /// This function is called implicitely by [`new`][Cache::new].
+    /// This function is called implicitely by [`new`][Collector::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
-        let _ = Self::create_cache_dir(config)?;
+        let _ = Self::create_working_dir(config)?;
         Ok(())
     }
 
-    /// Creates the cache dir and returns its path.
-    fn create_cache_dir(config: &Config) -> Result<PathBuf, Failed> {
-        let cache_dir = config.cache_dir.join("rsync");
+    /// Creates the working dir and returns its path.
+    fn create_working_dir(config: &Config) -> Result<PathBuf, Failed> {
+        let working_dir = config.cache_dir.join("rsync");
 
         if config.fresh {
-            if let Err(err) = fs::remove_dir_all(&cache_dir) {
+            if let Err(err) = fs::remove_dir_all(&working_dir) {
                 if err.kind() != io::ErrorKind::NotFound {
                     error!(
-                        "Failed to delete rsync cache at {}: {}",
-                        cache_dir.display(), err
+                        "Failed to delete rsync working directory at {}: {}",
+                        working_dir.display(), err
                     );
                     return Err(Failed)
                 }
             }
         }
 
-        if let Err(err) = fs::create_dir_all(&cache_dir) {
+        if let Err(err) = fs::create_dir_all(&working_dir) {
             error!(
-                "Failed to create RRDP cache directory {}: {}.",
-                cache_dir.display(), err
+                "Failed to create rsync working directory {}: {}.",
+                working_dir.display(), err
             );
             return Err(Failed);
         }
-        Ok(cache_dir)
+        Ok(working_dir)
     }
 
-    /// Creates a new rsync cache.
+    /// Creates a new rsync collector.
     ///
     /// If use of rsync is disabled via the config, returns `Ok(None)`.
     ///
-    /// The cache will not actually run rsync but use whatever files are
-    /// present already in the cache directory if `update` is `false`.
+    /// The collector will not actually run rsync but use whatever files are
+    /// present already in the working directory if `update` is `false`.
     pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Failed> {
         if config.disable_rsync {
             Ok(None)
         }
         else {
-            Ok(Some(Cache {
-                cache_dir: CacheDir::new(Self::create_cache_dir(config)?),
+            Ok(Some(Collector {
+                working_dir: WorkingDir::new(
+                    Self::create_working_dir(config)?
+                ),
                 command: if update {
                     Some(Command::new(config)?)
                 }
@@ -105,19 +107,19 @@ impl Cache {
         }
     }
 
-    /// Prepares the cache for use in a validation run.
+    /// Prepares the collector for use in a validation run.
     pub fn ignite(&mut self) -> Result<(), Failed> {
         // We don’t need to do anything. But just in case we later will,
         // let’s keep the method around.
         Ok(())
     }
 
-    /// Start a validation run on the cache.
+    /// Start a validation run on the collector.
     pub fn start(&self) -> Run {
         Run::new(self)
     }
 
-    /// Cleans the cache only keeping the modules included in `retain`.
+    /// Cleans the collector only keeping the modules included in `retain`.
     //
     //  This currently is super agressive, deleting everyting that it doesn’t
     //  like.
@@ -126,11 +128,11 @@ impl Cache {
             return
         }
 
-        let dir = match fs::read_dir(&self.cache_dir.base) {
+        let dir = match fs::read_dir(&self.working_dir.base) {
             Ok(dir) => dir,
             Err(err) => {
                 error!(
-                    "Failed to read rsync cache directory: {}",
+                    "Failed to read rsync working directory: {}",
                     err
                 );
                 return
@@ -142,7 +144,7 @@ impl Cache {
                 Ok(entry) => entry,
                 Err(err) => {
                     error!(
-                        "Failed to iterate over rsync cache directory: {}",
+                        "Failed to iterate over rsync directory: {}",
                         err
                     );
                     return
@@ -162,7 +164,7 @@ impl Cache {
             if !keep {
                 if let Err(err) = fs::remove_dir_all(entry.path()) {
                     info!(
-                        "Failed to use unused rsync cache dir '{}': {}",
+                        "Failed to remove unused rsync working dir '{}': {}",
                         entry.path().display(), err
                     );
                 }
@@ -221,7 +223,7 @@ impl Cache {
             if !keep {
                 if let Err(err) = fs::remove_dir_all(entry.path()) {
                     info!(
-                        "Failed to use unused rsync cache dir '{}': {}",
+                        "Failed to remove unused rsync dir '{}': {}",
                         entry.path().display(), err
                     );
                 }
@@ -235,11 +237,11 @@ impl Cache {
 
 //------------ Run -----------------------------------------------------------
 
-/// Using the rsync cache during a validation run.
+/// Using the rsync collector during a validation run.
 #[derive(Debug)]
 pub struct Run<'a> {
-    /// A reference to the underlying cache.
-    cache: &'a Cache,
+    /// A reference to the underlying collector.
+    collector: &'a Collector,
 
     /// The set of modules that has been updated already.
     updated: RwLock<HashSet<OwnedModule>>,
@@ -257,10 +259,10 @@ pub struct Run<'a> {
 
 
 impl<'a> Run<'a> {
-    /// Creates a new runner from a cache.
-    fn new(cache: &'a Cache) -> Self {
+    /// Creates a new runner from a collector.
+    fn new(collector: &'a Collector) -> Self {
         Run {
-            cache,
+            collector,
             updated: Default::default(),
             running: Default::default(),
             metrics: Default::default(),
@@ -281,7 +283,7 @@ impl<'a> Run<'a> {
     /// finished. This update may not be successful and files in the module
     /// may be outdated or missing completely.
     pub fn load_module(&self, uri: &uri::Rsync) {
-        let command = match self.cache.command.as_ref() {
+        let command = match self.collector.command.as_ref() {
             Some(command) => command,
             None => return,
         };
@@ -308,7 +310,7 @@ impl<'a> Run<'a> {
         }
 
         // Check if the module name is dubious. If so, skip updating.
-        if self.cache.filter_dubious && uri.has_dubious_authority() {
+        if self.collector.filter_dubious && uri.has_dubious_authority() {
             warn!(
                 "{}: Dubious host name. Skipping update.",
                 module
@@ -318,7 +320,7 @@ impl<'a> Run<'a> {
             // Run the actual update.
             let metrics = command.update(
                 module.as_ref(),
-                &self.cache.cache_dir.module_path(module.as_ref())
+                &self.collector.working_dir.module_path(module.as_ref())
             );
 
             // Insert into updated map and metrics.
@@ -342,7 +344,7 @@ impl<'a> Run<'a> {
         &self,
         uri: &uri::Rsync,
     ) -> Option<Bytes> {
-        let path = self.cache.cache_dir.uri_path(uri);
+        let path = self.collector.working_dir.uri_path(uri);
         match fs::File::open(&path) {
             Ok(mut file) => {
                 let mut data = Vec::new();
@@ -374,7 +376,7 @@ impl<'a> Run<'a> {
 
     /// Finishes the validation run.
     ///
-    /// Updates `metrics` with the cache run’s metrics.
+    /// Updates `metrics` with the collector run’s metrics.
     ///
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
@@ -594,21 +596,21 @@ impl Command {
 }
 
 
-//------------ CacheDir ------------------------------------------------------
+//------------ WorkingDir ----------------------------------------------------
 
-/// The cache directory of the rsync cache.
+/// The working directory of the rsync collector.
 #[derive(Clone, Debug)]
-struct CacheDir {
+struct WorkingDir {
     /// The base path.
     base: PathBuf
 }
 
-impl CacheDir {
-    /// Creates a new cache directory.
+impl WorkingDir {
+    /// Creates a new value.
     ///
     /// Does not actually create the directory on disk.
     pub fn new(base: PathBuf) -> Self {
-        CacheDir { base }
+        WorkingDir { base }
     }
 
     /// Returns the absolute path for the given module.
