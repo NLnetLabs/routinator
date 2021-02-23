@@ -18,7 +18,7 @@
 /// the accompanying trait [`ProcessCa`] dealing with individual publication
 /// points.
 
-use std::{fs, io};
+use std::{fs, io, str};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -44,6 +44,7 @@ use crate::error::Failed;
 use crate::metrics::Metrics;
 use crate::origins::OriginsReport;
 use crate::store::{Store, StoredManifest};
+use crate::utils::str_from_ascii;
 
 
 //------------ Configuration -------------------------------------------------
@@ -89,6 +90,9 @@ pub struct Engine {
     /// The list of our TALs. 
     tals: Vec<Tal>,
 
+    /// The sled database.
+    db: sled::Db,
+
     /// The collector to load updated data from.
     collector: Collector,
 
@@ -112,50 +116,84 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Initializes validation without creating a value.
+    /// Attempts to create the sled database under the given cache dir.
+    ///
+    /// NB: The database will be opened below the given directory. I,e., the
+    /// provided path is `cache_dir` from the
+    /// [`Config`][crate::config::Config].
+    fn open_db(cache_dir: &Path, fresh: bool) -> Result<sled::Db, Failed> {
+        if let Err(err) = fs::read_dir(cache_dir) {
+            if err.kind() == io::ErrorKind::NotFound {
+                error!(
+                    "Missing repository directory {}.\n\
+                     You may have to initialize it via \
+                     \'routinator init\'.",
+                     cache_dir.display()
+                );
+            }
+            else {
+                error!(
+                    "Failed to open repository directory {}: {}",
+                    cache_dir.display(), err
+                );
+            }
+            return Err(Failed)
+        }
+
+        let db_path = cache_dir.join("store");
+
+        if fresh {
+            if let Err(err) = fs::remove_dir_all(&db_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Failed to delete store database at {}: {}",
+                        db_path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+
+        sled::open(&db_path).map_err(|err| {
+            error!(
+                "Failed to open store database at {}: {}",
+                db_path.display(),
+                err
+            );
+            Failed
+        })
+    }
+
+    /// Initializes the engine without creating a value.
     ///
     /// This ensures that the TAL directory is present and logs a hint how
     /// to achieve that if not.
     ///
     /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
-        if let Err(err) = fs::read_dir(&config.tal_dir) {
-            if err.kind() == io::ErrorKind::NotFound {
-                error!(
-                    "Missing repository directory {}.\n\
-                     You may have to initialize it via \
-                     \'routinator init\'.",
-                     config.cache_dir.display()
-                );
-            }
-            else {
-                error!(
-                    "Failed to open repository directory {}: {}",
-                    config.cache_dir.display(), err
-                );
-            }
-            return Err(Failed)
-        }
-        Ok(())
+        Collector::init(config)?;
+        Self::open_db(&config.cache_dir, config.fresh).map(|_| ())
     }
 
-    /// Creates a new validation.
+    /// Creates a new engine.
     ///
-    /// Takes all necessary information for validation itself from `config`.
+    /// Takes all necessary information from `config`.
     /// It also takes over the provided cache and store for use during
     /// validation.
     ///
     /// Loads the initial set of TALs and errors out if that fails.
     pub fn new(
         config: &Config,
-        collector: Collector,
-        store: Store,
+        update: bool,
     ) -> Result<Self, Failed> {
-        Self::init(config)?;
+        let db = Self::open_db(&config.cache_dir, config.fresh)?;
+        let collector = Collector::new(config, update)?;
+        let store = Store::new(&db)?;
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
+            db,
             collector,
             store,
             strict: config.strict,
@@ -526,7 +564,7 @@ struct PubPoint<'a, P: ProcessRun> {
     collector: Option<collector::Repository<'a>>,
 
     /// The point’s repository in the store.
-    store: store::Repository,
+    store: store::Repository<'a>,
 }
 
 impl<'a, P: ProcessRun> PubPoint<'a, P> {
@@ -537,7 +575,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         processor: P::ProcessCa,
     ) -> Result<Self, Failed> {
         let collector = run.collector.repository(cert);
-        let store = run.store.repository(cert, collector.as_ref())?;
+        let store = run.store.repository(cert, collector.as_ref());
         Ok(PubPoint { run, cert, processor, collector, store })
     }
 
@@ -638,10 +676,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 // everything that isn’t on the manifest.
                 let mut files = HashSet::new();
                 for item in collected.content.iter() {
-                    let uri = match self.cert.ca_repository().join(
-                        item.file()
-                    ) {
-                        Ok(uri) => uri,
+                    let file = match str_from_ascii(item.file()) {
+                        Ok(file) => file,
                         Err(_) => {
                             warn!("{}: illegal file name '{}'.",
                                 self.cert.rpki_manifest(),
@@ -650,6 +686,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                             return Err(store::UpdateError::abort())
                         }
                     };
+                    let uri = self.cert.ca_repository().join(
+                        file.as_ref()
+                    ).unwrap();
+
                     let hash = ManifestHash::new(
                         item.hash().clone(), collected.content.file_hash_alg()
                     );
@@ -668,7 +708,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     }
 
                     update.insert_object(
-                        item.file(),
+                        file,
                         &store::StoredObject::new(content, Some(hash))
                     )?;
 
@@ -705,9 +745,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         };
 
         // Delete everything in the store that is not in files.
-        self.store.drain_point(
+        self.store.retain_objects(
             self.cert.rpki_manifest(),
-            |file| files.contains(file)
+            |file| files.contains(file.as_bytes())
         )?;
 
         Ok(collected.into())
@@ -1030,8 +1070,8 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     pub fn _process(&mut self) -> Result<bool, Failed> {
         for item in self.manifest.content.iter() {
             let (file, hash) = item.into_pair();
-            let uri = match self.point.cert.ca_repository().join(&file) {
-                Ok(uri) => uri,
+            let file = match str_from_ascii(&file) {
+                Ok(file) => file,
                 Err(_) => {
                     warn!(
                         "{}: illegal file name {} in manifest.",
@@ -1041,10 +1081,13 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
                     return Ok(false)
                 }
             };
+            let uri = self.point.cert.ca_repository().join(
+                file.as_ref()
+            ).unwrap();
             let hash = ManifestHash::new(
                 hash, self.manifest.content.file_hash_alg()
             );
-            if !self.process_object(uri, &file, hash)? {
+            if !self.process_object(uri, file, hash)? {
                 return Ok(false)
             }
         }
@@ -1057,7 +1100,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Returns whether processing should continue or whether the entire (!)
     /// publication point should be disregarded.
     fn process_object(
-        &mut self, uri: uri::Rsync, file: &[u8], hash: ManifestHash,
+        &mut self, uri: uri::Rsync, file: &str, hash: ManifestHash,
     ) -> Result<bool, Failed> {
         let object = match self.point.store.load_object(
             self.point.cert.rpki_manifest(), file

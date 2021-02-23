@@ -1,10 +1,28 @@
 //! Various useful things.
 //!
-use std::fmt;
+use std::{fmt, str};
 use std::fmt::Write;
 use std::net::IpAddr;
 use std::str::FromStr;
 use rpki::uri;
+
+
+//------------ str_from_ascii ------------------------------------------------
+
+/// Converts a sequence of ASCII octets into a str.
+pub fn str_from_ascii(src: &[u8]) -> Result<&str, AsciiError> {
+    if src.is_ascii() {
+        Ok(unsafe { str::from_utf8_unchecked(src) })
+    }
+    else {
+        Err(AsciiError)
+    }
+}
+
+
+//------------ AsciiError ----------------------------------------------------
+
+pub struct AsciiError;
 
 
 //------------ UriExt --------------------------------------------------------

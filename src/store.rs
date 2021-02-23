@@ -53,9 +53,9 @@
 //!
 //! [sled]: https://github.com/spacejam/sled
 
-use std::{error, fmt, fs, io, mem};
+use std::{error, fmt, mem};
 use std::convert::{TryFrom, TryInto};
-use std::path::Path;
+use std::str::FromStr;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use log::error;
@@ -70,10 +70,10 @@ use sled::transaction::{
     UnabortableTransactionError
 };
 use crate::collector;
-use crate::config::Config;
 use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
+use crate::utils::str_from_ascii;
 
 
 //------------ Store ---------------------------------------------------------
@@ -95,82 +95,54 @@ use crate::metrics::Metrics;
 /// the store.
 #[derive(Clone, Debug)]
 pub struct Store {
-    /// The database.
-    db: sled::Db,
+    /// The trust anchor certificate tree.
+    ta_tree: sled::Tree,
+
+    /// The manifest tree.
+    manifest_tree: sled::Tree,
+
+    /// The object tree.
+    object_tree: sled::Tree,
 }
 
 impl Store {
-    /// Attempts to create the sled database under the given cache dir.
-    ///
-    /// NB: The database will be opened below the given directory. I,e., the
-    /// provided path is `cache_dir` from the
-    /// [`Config`][crate::config::Config].
-    fn open_db(cache_dir: &Path, fresh: bool) -> Result<sled::Db, Failed> {
-        // XXX This checks that config.cache_dir exists which actually happens
-        //     elsewhere again. Perhaps move it to Config and only do it once?
-        if let Err(err) = fs::read_dir(cache_dir) {
-            if err.kind() == io::ErrorKind::NotFound {
-                error!(
-                    "Missing repository directory {}.\n\
-                     You may have to initialize it via \
-                     \'routinator init\'.",
-                     cache_dir.display()
-                );
-            }
-            else {
-                error!(
-                    "Failed to open repository directory {}: {}",
-                    cache_dir.display(), err
-                );
-            }
-            return Err(Failed)
-        }
-
-        let db_path = cache_dir.join("store");
-
-        if fresh {
-            if let Err(err) = fs::remove_dir_all(&db_path) {
-                if err.kind() != io::ErrorKind::NotFound {
+    /// Creates a new store using trees from the provided database.
+    pub fn new(db: &sled::Db) -> Result<Self, Failed> {
+        Ok(Store {
+            ta_tree: match db.open_tree("trust-anchor-certificates") {
+                Ok(tree) => tree,
+                Err(err) => {
                     error!(
-                        "Failed to delete store database at {}: {}",
-                        db_path.display(), err
+                        "Database error: \
+                        failed to open trust anchor certificate tree, {}",
+                        err
                     );
                     return Err(Failed)
                 }
-            }
-        }
-
-        sled::open(&db_path).map_err(|err| {
-            error!(
-                "Failed to open store database at {}: {}",
-                db_path.display(),
-                err
-            );
-            Failed
+            },
+            manifest_tree: match db.open_tree("store-manifests") {
+                Ok(tree) => tree,
+                Err(err) => {
+                    error!(
+                        "Database error: \
+                         failed to open manifest tree, {}",
+                        err
+                    );
+                    return Err(Failed)
+                }
+            },
+            object_tree: match db.open_tree("store-objects") {
+                Ok(tree) => tree,
+                Err(err) => {
+                    error!(
+                        "Database error: \
+                         failed to open object tree, {}",
+                        err
+                    );
+                    return Err(Failed)
+                }
+            },
         })
-    }
-
-    /// Initializes the store.
-    ///
-    /// Ensures that the database is present and initialized.
-    ///
-    /// This function is called implicitely by [`new`][Store::new].
-    pub fn init(config: &Config) -> Result<(), Failed> {
-        Self::open_db(&config.cache_dir, config.fresh).map(|_| ())
-    }
-
-    /// Creates a new store based on configuration information.
-    pub fn new(config: &Config) -> Result<Self, Failed> {
-        Self::open_db(&config.cache_dir, config.fresh).map(|db| {
-            Self::with_db(db)
-        })
-    }
-
-    /// Creates a store using a provided database.
-    ///
-    /// This can be used for testing.
-    pub fn with_db( db: sled::Db) -> Self {
-        Store { db }
     }
 
     /// Start a validation run with the store.
@@ -193,29 +165,62 @@ impl Store {
         &self,
         mut collector: collector::Cleanup,
     ) -> Result<(), Failed> {
-        // Cleanup RRDP repositories
-        for tree_name in self.db.tree_names() {
-            if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
-                let names = TreeNames::rrdp(&rpki_notify);
-                if Repository::new(self, &names)?.cleanup_rrdp()? {
-                    collector.retain_rrdp_repository(&rpki_notify);
+        // Go through the manifest tree and look at each manifests.
+        // If the manifest is expired, delete all its objects and then itself.
+        // If it isn’t, add it to the collector’s cleanup.
+        
+        let now = Time::now();
+        for item in self.manifest_tree.iter() {
+            let (key, value) = item?;
+            let (repo, mft) = match KeyBase::from_manifest_key(&key) {
+                Some(some) => some,
+                None => {
+                    // Garbage key. Just delete the item.
+                    self.manifest_tree.remove(key)?;
+                    continue
                 }
-                else {
-                    names.drop_trees(&self.db)?;
+            };
+
+            let keep = match StoredManifest::decode_not_after(&value) {
+                Ok(not_after) if not_after > now => true,
+                _ => false
+            };
+            if keep {
+                // Try to register with the collector cleanup. If that works
+                // out, continue to the next item. Otherwise, fall through to
+                // deletion.
+                match repo.rpki_notify() {
+                    Ok(Some(uri)) => {
+                        // RRDP
+                        collector.retain_rrdp_repository(&uri);
+                        continue
+                    }
+                    Ok(None) => {
+                        // rsync.
+                        if let Ok(uri) = uri::Rsync::from_str(mft) {
+                            collector.retain_rsync_module(&uri);
+                            continue
+                        }
+                        // fall through to deletion
+                    }
+                    Err(_) => {
+                        // fall through to deletion
+                    }
                 }
             }
-        }
 
-        // Cleanup rsync modules
-        Repository::new(
-            self, &TreeNames::rsync()
-        )?.cleanup_rsync(&mut collector)?;
+            for key in self.object_tree.scan_prefix(
+                repo.object_prefix_str(mft)
+            ).keys() {
+                let key = key?;
+                self.object_tree.remove(key)?;
+            }
+        }
 
         // Cleanup collector.
         collector.commit();
         Ok(())
     }
-
 }
 
 
@@ -261,7 +266,7 @@ impl<'a> Run<'a> {
 
     /// Loads a stored trust anchor certificate.
     pub fn load_ta(&self, uri: &TalUri) -> Result<Option<Bytes>, Failed> {
-        self.store.db.get(uri.as_str()).map(|value| {
+        self.store.ta_tree.get(uri.as_str()).map(|value| {
             value.map(|value| Bytes::copy_from_slice(value.as_ref()))
         }).map_err(Into::into)
     }
@@ -272,7 +277,7 @@ impl<'a> Run<'a> {
     pub fn update_ta(
         &self, uri: &TalUri, content: &[u8]
     ) -> Result<bool, Failed> {
-        self.store.db.insert(
+        self.store.ta_tree.insert(
             uri.as_str(), content
         ).map(|res| res.is_some()).map_err(Into::into)
     }
@@ -292,34 +297,17 @@ impl<'a> Run<'a> {
     /// Therefore, if `collector` is not `None`, the provided collector
     /// repository’s chosen transport will be used to determine whether RRDP
     /// is used if available or not.
-    pub fn repository(
-        &self, ca_cert: &CaCert, collector: Option<&collector::Repository>
-    ) -> Result<Repository, Failed> {
+    pub fn repository<'s>(
+        &'s self,
+        ca_cert: &'s CaCert,
+        collector: Option<&collector::Repository>
+    ) -> Repository {
         match (ca_cert.rpki_notify(), collector.map(|c| c.is_rrdp())) {
             (Some(rpki_notify), Some(true)) | (Some(rpki_notify), None) => {
-                self.rrdp_repository(rpki_notify)
+                Repository::rrdp(self, rpki_notify)
             }
-            _ => self.rsync_repository()
+            _ => Repository::rsync(self)
         }
-    }
-
-    /// Accesses the RRDP repository identified by the given rpkiNotify URI.
-    ///
-    /// The repository is created if it is not yet present.
-    pub fn rrdp_repository(
-        &self, rpki_notify: &uri::Https,
-    ) -> Result<Repository, Failed> {
-        Repository::new(self.store, &TreeNames::rrdp(rpki_notify))
-    }
-
-    /// Accesses the rsync repository.
-    ///
-    /// Because all objects retrieved via rsync can safely share a single
-    /// namespace, we only have a single store repository for all of them.
-    ///
-    /// The repository is created if it is not yet present.
-    pub fn rsync_repository(&self) -> Result<Repository, Failed> {
-        Repository::new(self.store, &TreeNames::rsync())
     }
 }
 
@@ -346,24 +334,35 @@ impl<'a> Run<'a> {
 /// [`remove_point`][Self::remove_point] or remove select objects from the
 /// point via [`drain_point`][Self::drain_point].
 #[derive(Debug)]
-pub struct Repository {
-    /// The database tree holding the repository’s manifests.
-    manifest_tree: sled::Tree,
+pub struct Repository<'a> {
+    /// A reference to the underlying store.
+    store: &'a Store,
 
-    /// The database tree holding the repository’s objects.
-    object_tree: sled::Tree,
+    /// The key base for this repository.
+    ///
+    /// This is the rpkiNotify URI for RRDP repositories and `"rsync"` for the
+    /// rsync repository.
+    key_base: KeyBase<'a>,
 }
 
-impl Repository {
-    /// Creates a repository object on a store using the given tree names.
-    fn new(
-        store: &Store,
-        names: &TreeNames,
-    ) -> Result<Self, Failed> {
-        Ok(Repository {
-            manifest_tree: names.open_manifest_tree(&store.db)?,
-            object_tree: names.open_object_tree(&store.db)?,
-        })
+impl<'a> Repository<'a> {
+    /// Creates a new RRDP repository object.
+    fn rrdp(
+        run: &Run<'a>,
+        rpki_notify: &'a uri::Https,
+    ) -> Self {
+        Repository {
+            store: run.store,
+            key_base: KeyBase::rrdp(rpki_notify)
+        }
+    }
+
+    /// Creates a new rsync repository object.
+    fn rsync(run: &Run<'a>) -> Self {
+        Repository {
+            store: run.store,
+            key_base: KeyBase::rsync(),
+        }
     }
 
     /// Loads the manifest of a publication point in the repository.
@@ -373,7 +372,9 @@ impl Repository {
     pub fn load_manifest(
         &self, uri: &uri::Rsync
     ) -> Result<Option<StoredManifest>, Failed> {
-        self.manifest_tree.get(uri.as_slice()).map(|value| {
+        self.store.manifest_tree.get(
+            self.key_base.manifest_key(uri)
+        ).map(|value| {
             value.and_then(|value| StoredManifest::try_from(value).ok())
         }).map_err(Into::into)
     }
@@ -389,24 +390,13 @@ impl Repository {
     pub fn load_object(
         &self,
         manifest: &uri::Rsync,
-        file: &[u8]
+        file: &str
     ) -> Result<Option<StoredObject>, Failed> {
-        self.object_tree.get(
-            &Self::object_key(manifest, file)
+        self.store.object_tree.get(
+            self.key_base.object_key(manifest, file)
         ).map(|value| {
             value.and_then(|value| StoredObject::try_from(value).ok())
         }).map_err(Into::into)
-    }
-
-    /// Calculates the key of an object in the object tree.
-    fn object_key(manifest: &uri::Rsync, file: &[u8]) -> Vec<u8> {
-        let mut res = Vec::with_capacity(
-            manifest.as_slice().len() + file.len() + 1
-        );
-        res.extend_from_slice(manifest.as_slice());
-        res.push(0);
-        res.extend_from_slice(file);
-        res
     }
 
     /// Updates a publication point in the repository.
@@ -433,9 +423,15 @@ impl Repository {
     pub fn update_point<T, F: Fn(RepositoryUpdate) -> Result<T, UpdateError>>(
         &self, manifest: &uri::Rsync, op: F
     ) -> Result<T, UpdateError> {
-        (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
-            op(RepositoryUpdate::new(manifest, mt, ot)).map_err(|err| err.0)
-        }).map_err(Into::into)
+        (&self.store.manifest_tree, &self.store.object_tree).transaction(
+            |(mt, ot)| {
+                op(
+                    RepositoryUpdate::new(
+                        self.key_base, manifest, mt, ot
+                    )
+                ).map_err(|err| err.0)
+            }
+        ).map_err(Into::into)
     }
 
     /// Completely removes a publication point.
@@ -449,16 +445,18 @@ impl Repository {
         &self, manifest: &uri::Rsync
     ) -> Result<(), Failed> {
         let mut batch = sled::Batch::default();
-        for key in self.object_tree.scan_prefix(
-            Self::object_key(manifest, b"")
+        for key in self.store.object_tree.scan_prefix(
+            self.key_base.object_prefix(manifest)
         ).keys() {
             batch.remove(key?);
         }
-        (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
-            mt.remove(manifest.as_str())?;
-            ot.apply_batch(&batch)?;
-            Ok(())
-        }).map_err(|err| {
+        (&self.store.manifest_tree, &self.store.object_tree).transaction(
+            |(mt, ot)| {
+                mt.remove(self.key_base.manifest_key(manifest))?;
+                ot.apply_batch(&batch)?;
+                Ok(())
+            }
+        ).map_err(|err| {
             match err {
                 TransactionError::Abort(()) => {
                     unreachable!() // Or is it?
@@ -471,7 +469,7 @@ impl Repository {
         })
     }
 
-    /// Drains select objects from a publication point.
+    /// Retains select objects from a publication point.
     ///
     /// The publication point to be updated is given via its manifest’s
     /// signedObject URI.
@@ -481,11 +479,13 @@ impl Repository {
     /// If it returns `true`, the object is kept, otherwise it is removed.
     ///
     /// The manifest of the point is not removed.
-    pub fn drain_point(
+    pub fn retain_objects(
         &self, manifest: &uri::Rsync,
-        keep: impl Fn(&[u8]) -> bool
+        keep: impl Fn(&str) -> bool
     ) -> Result<(), Failed> {
-        self._drain_point(manifest.as_ref(), keep)
+        self.retain_prefix_objects(
+            &self.key_base.object_prefix(manifest), keep
+        )
     }
 
     /// Drains selected objects from a publication point.
@@ -493,79 +493,22 @@ impl Repository {
     /// This differs from the public [`drain_point`][Self::drain_point] only
     /// in that it uses the raw manifest key for identifying the publication
     /// point (which is the octets of the manifest’s signedObject URI).
-    pub fn _drain_point(
-        &self, manifest: &[u8],
-        keep: impl Fn(&[u8]) -> bool
+    fn retain_prefix_objects(
+        &self, prefix: &[u8],
+        keep: impl Fn(&str) -> bool
     ) -> Result<(), Failed> {
-        let mut prefix = Vec::with_capacity(manifest.len() + 1);
-        prefix.extend_from_slice(manifest);
-        prefix.push(0);
-        let prefix = prefix;
         let prefix_len = prefix.len();
-        for key in self.object_tree.scan_prefix(prefix).keys() {
+        for key in self.store.object_tree.scan_prefix(prefix).keys() {
             let key = key?;
-            if !keep(&key.as_ref()[prefix_len..]) {
-                self.object_tree.remove(key)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Cleans the repository assuming it is the rsync repository.
-    ///
-    /// Removes all publication points that have an expired manifest.
-    /// Registers all rsync modules that have at least one non-expired
-    /// manifest to be retained by the collector.
-    fn cleanup_rsync(
-        self, collector: &mut collector::Cleanup
-    ) -> Result<(), Failed> {
-        let now = Time::now();
-
-        for item in self.manifest_tree.iter() {
-            let (key, bytes) = item?;
-            let uri = match uri::Rsync::from_slice(&key) {
-                Ok(uri) => {
-                    match StoredManifest::decode_not_after(&bytes) {
-                        Ok(not_after) if not_after > now => Some(uri),
-                        _ => None
-                    }
-                }
-                Err(_) => None
-            };
-            if let Some(uri) = uri {
-                collector.retain_rsync_module(&uri);
-            }
-            else {
-                self._drain_point(&key, |_| false)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Cleans the repository assuming it is an RRDP repository.
-    ///
-    /// Removes all publication points that have an expired manifest.
-    /// Returns whether there was at least one non-expired manifest.
-    fn cleanup_rrdp(self) -> Result<bool, Failed> {
-        let now = Time::now();
-        let mut keep_repository = false;
-
-        for item in self.manifest_tree.iter() {
-            let (key, bytes) = item?;
-            let keep = match StoredManifest::decode_not_after(&bytes) {
-                Ok(not_after) => not_after > now,
+            let want = match str_from_ascii(&key.as_ref()[prefix_len..]) {
+                Ok(key) => keep(key),
                 Err(_) => false
             };
-            if keep {
-                keep_repository = true;
-            }
-            else {
-                self._drain_point(&key, |_| false)?;
+            if !want {
+                self.store.object_tree.remove(key)?;
             }
         }
-
-        Ok(keep_repository)
+        Ok(())
     }
 }
 
@@ -580,24 +523,28 @@ impl Repository {
 /// A value of this type is passed to the closure used in
 /// [`Repository::update_point`].
 pub struct RepositoryUpdate<'a> {
-    /// The signedObject URI of the point’s manifest.
+    /// The key base for the repository.
+    key_base: KeyBase<'a>,
+
+    /// The manifest URI.
     manifest: &'a uri::Rsync,
 
-    /// The transaction for updating the manifest.
+    /// The transaction for updating the manifest tree.
     manifest_tran: &'a TransactionalTree,
 
-    /// The transaction for updating the objects.
+    /// The transaction for updating the object tree.
     object_tran: &'a TransactionalTree,
 }
 
 impl<'a> RepositoryUpdate<'a> {
     /// Creates an update from the manifest URI and the transactions.
     fn new(
+        key_base: KeyBase<'a>,
         manifest: &'a uri::Rsync,
         manifest_tran: &'a TransactionalTree,
         object_tran: &'a TransactionalTree
     ) -> Self {
-        RepositoryUpdate { manifest, manifest_tran, object_tran }
+        RepositoryUpdate { key_base, manifest, manifest_tran, object_tran }
     }
 
     /// Updates the manifest for the publication point.
@@ -609,7 +556,8 @@ impl<'a> RepositoryUpdate<'a> {
         &self, object: &StoredManifest
     ) -> Result<bool, UpdateError> {
         self.manifest_tran.insert(
-            self.manifest.as_str(), object
+            self.key_base.manifest_key(self.manifest),
+            object
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 
@@ -620,10 +568,10 @@ impl<'a> RepositoryUpdate<'a> {
     /// is no object yet by that name, the object will be inserted. The method
     /// returns whether the object was indeed newly inserted.
     pub fn insert_object(
-        &self, file: &[u8], object: &StoredObject
+        &self, file: &str, object: &StoredObject
     ) -> Result<bool, UpdateError> {
         self.object_tran.insert(
-            Repository::object_key(self.manifest, file),
+            self.key_base.object_key(self.manifest, file),
             object
         ).map(|res| res.is_some()).map_err(Into::into)
     }
@@ -632,9 +580,9 @@ impl<'a> RepositoryUpdate<'a> {
     ///
     /// The object is identified by its name on the manifest. Returns whether
     /// the object existed and was actually removed.
-    pub fn remove_object(&self, file: &[u8]) -> Result<bool, UpdateError> {
+    pub fn remove_object(&self, file: &str) -> Result<bool, UpdateError> {
         self.object_tran.remove(
-            Repository::object_key(self.manifest, file)
+            self.key_base.object_key(self.manifest, file)
         ).map(|res| res.is_some()).map_err(Into::into)
     }
 }
@@ -950,59 +898,75 @@ impl TryFrom<sled::IVec> for StoredObject {
 }
 
 
-//------------ TreeNames -----------------------------------------------------
+//------------ KeyBase -------------------------------------------------------
 
-/// The names for the manifest and object trees for a given repository.
+/// The basis for generating keys in the various database trees.
 ///
-/// This type exists so we are guaranteed to always use the same names.
-struct TreeNames<'a> {
-    /// The name of the manifest tree.
-    manifests: &'a [u8],
-
-    /// The name of the objects tree.
-    objects: Vec<u8>,
+/// This type exists so we are guaranteed to always use the same keys.
+#[derive(Clone, Copy, Debug)]
+struct KeyBase<'a> {
+    key_base: &'a str,
 }
 
-impl<'a> TreeNames<'a> {
-    /// Returns the tree names for a RRDP repository.
-    pub fn rrdp(rpki_notify: &'a uri::Https) -> Self {
-        Self::from_manifest_name(rpki_notify.as_ref())
+impl<'a> KeyBase<'a> {
+    /// Returns the key base for an RRDP repository.
+    fn rrdp(
+        rpki_notify: &'a uri::Https
+    ) -> Self {
+        KeyBase { key_base: rpki_notify.as_str() }
     }
 
-    /// Returns the tree names for the rsync repository.
-    pub fn rsync() -> Self {
-        Self::from_manifest_name(b"rsync")
+    /// Returns the key base for the rsync tree.
+    fn rsync() -> Self {
+        KeyBase { key_base: "rsync" }
     }
 
-    /// Returns the tree names for a given manifest tree name.
-    pub fn from_manifest_name(manifests: &'a [u8]) -> Self {
-        let mut objects = Vec::with_capacity(manifests.len() + 8);
-        objects.extend_from_slice(b"objects:");
-        objects.extend_from_slice(manifests);
-        TreeNames { manifests, objects }
+    /// Returns a key base and manifest URI from the manifest key.
+    ///
+    /// The manifest URI is returned as a bytes slice.
+    ///
+    /// If the key isn’t a valid manifest key, returns `None`.
+    fn from_manifest_key(key: &'a [u8]) -> Option<(Self, &str)> {
+        let key = str_from_ascii(key).ok()?;
+        let mut parts = key.split('\0');
+        let base = parts.next()?;
+        let manifest = parts.next()?;
+        if parts.next().is_some() {
+            return None
+        }
+        Some((KeyBase { key_base: base }, manifest))
     }
 
-    /// Opens the manifest tree referenced by `self` on the given database.
-    pub fn open_manifest_tree(
-        &self, db: &sled::Db
-    ) -> Result<sled::Tree, sled::Error> {
-        db.open_tree(self.manifests)
+    /// Returns whether this key base is for the rsync repository.
+    fn rpki_notify(&self) -> Result<Option<uri::Https>, uri::Error> {
+        if self.key_base == "rsync" {
+            Ok(None)
+        }
+        else {
+            uri::Https::from_str(self.key_base).map(Some)
+        }
     }
 
-    /// Opens the objects tree referenced by `self` on the given database.
-    pub fn open_object_tree(
-        &self, db: &sled::Db
-    ) -> Result<sled::Tree, sled::Error> {
-        db.open_tree(&self.objects)
+    /// Calculates the key of a manifest in the manifest tree.
+    fn manifest_key(&self, manifest: &uri::Rsync) -> Vec<u8> {
+        format!("{}\0{}", self.key_base, manifest.as_str()).into()
     }
 
-    /// Drops both trees referenced by `self` on the given database.
-    pub fn drop_trees(&self, db: &sled::Db) -> Result<(), Failed> {
-        db.drop_tree(self.manifests)?;
-        db.drop_tree(&self.objects)?;
-        Ok(())
+    /// Calculates the key of an object in the object tree.
+    fn object_key(&self, manifest: &uri::Rsync, file: &str) -> Vec<u8> {
+        format!("{}\0{}\0{}", self.key_base, manifest.as_str(), file).into()
     }
-}
+
+    /// Calculates the prefix for objects of a manifest in the objects tree.
+    fn object_prefix(&self, manifest: &uri::Rsync) -> Vec<u8> {
+        self.object_prefix_str(manifest.as_str())
+    }
+
+    /// Calculates the object prefix from a string manifest URI.
+    fn object_prefix_str(&self, manifest: &str) -> Vec<u8> {
+        format!("{}\0{}\0", self.key_base, manifest).into()
+    }
+} 
 
 
 //------------ ObjectError ---------------------------------------------------
