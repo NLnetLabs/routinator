@@ -966,6 +966,8 @@ fn vrps(
         }
     };
 
+    let (_start, done, _duration) = origins.update_times();
+
     let filters = match output_filters(query) {
         Ok(filters) => filters,
         Err(_) => return bad_request(),
@@ -977,6 +979,7 @@ fn vrps(
     Response::builder()
     .header("Content-Type", format.content_type())
     .header("content-length", stream.output_len())
+    .header("Last-Modified", done.unwrap().format("%a, %d %h %Y %H:%M:%S GMT").to_string())
     .body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
     )))
