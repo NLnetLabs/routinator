@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use chrono::{Duration, Utc};
+use chrono::format::strftime::StrftimeItems;
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
@@ -967,6 +968,7 @@ fn vrps(
     };
 
     let (_start, done, _duration) = origins.update_times();
+    let http_date = StrftimeItems::new("%a, %d %h %Y %H:%M:%S GMT");
 
     let filters = match output_filters(query) {
         Ok(filters) => filters,
@@ -979,7 +981,7 @@ fn vrps(
     Response::builder()
     .header("Content-Type", format.content_type())
     .header("content-length", stream.output_len())
-    .header("Last-Modified", done.unwrap().format("%a, %d %h %Y %H:%M:%S GMT").to_string())
+    .header("Last-Modified", done.unwrap().format_with_items(http_date.clone()).to_string())
     .body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
     )))
