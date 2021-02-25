@@ -978,14 +978,18 @@ fn vrps(
         current, filters, metrics
     );
 
-    Response::builder()
-    .header("Content-Type", format.content_type())
-    .header("content-length", stream.output_len())
-    .header("Last-Modified", done.unwrap().format_with_items(http_date.clone()).to_string())
-    .body(Body::wrap_stream(stream::iter(
+    let mut builder = Response::builder();
+
+    builder = builder.header("Content-Type", format.content_type())
+        .header("Content-Length", stream.output_len());
+
+    if let Some(done) = done {
+        builder = builder.header("Last-Modified", done.format_with_items(http_date.clone()).to_string());
+    }
+
+    builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
-    )))
-    .unwrap()
+    ))).unwrap()
 }
 
 fn bad_request() -> Response<Body> {
