@@ -989,7 +989,8 @@ fn vrps(
 
     builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
-    ))).unwrap()
+    )))
+    .unwrap()
 }
 
 fn bad_request() -> Response<Body> {
