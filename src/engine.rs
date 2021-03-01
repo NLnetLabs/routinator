@@ -187,7 +187,7 @@ impl Engine {
         update: bool,
     ) -> Result<Self, Failed> {
         let db = Self::open_db(&config.cache_dir, config.fresh)?;
-        let collector = Collector::new(config, update)?;
+        let collector = Collector::new(config, &db, update)?;
         let store = Store::new(&db)?;
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
@@ -326,7 +326,7 @@ impl Engine {
         &self, processor: P
     ) -> Result<Run<P>, Failed> {
         Ok(Run::new(
-            self, self.collector.start()?, self.store.start(), processor
+            self, self.collector.start(), self.store.start(), processor
         ))
     }
 
@@ -574,7 +574,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         cert: &'a Arc<CaCert>,
         processor: P::ProcessCa,
     ) -> Result<Self, Failed> {
-        let collector = run.collector.repository(cert);
+        let collector = run.collector.repository(cert)?;
         let store = run.store.repository(cert, collector.as_ref());
         Ok(PubPoint { run, cert, processor, collector, store })
     }
@@ -629,7 +629,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         };
 
         // Try to load the manifest both from store and collector.
-        let collected = collector.load_object(self.cert.rpki_manifest());
+        let collected = collector.load_object(self.cert.rpki_manifest())?;
         let stored = self.store.load_manifest(self.cert.rpki_manifest())?;
 
         // If the manifest is not in the collector, we can abort already.
@@ -656,9 +656,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Validate the collected manifest.
         let collected = match self.validate_collected_manifest(
             collected, collector
-        ) {
-            Ok(collected) => collected,
-            Err(_) => {
+        )? {
+            Some(collected) => collected,
+            None => {
                 return Ok(stored.into())
             }
         };
@@ -694,7 +694,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                         item.hash().clone(), collected.content.file_hash_alg()
                     );
 
-                    let content = match collector.load_object(&uri) {
+                    let content = match collector.load_object(&uri)? {
                         Some(content) => content,
                         None => {
                             warn!("{}: failed to load.", uri);
@@ -761,14 +761,14 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// has not been revoked.
     fn validate_collected_manifest(
         &self, manifest_bytes: Bytes, repository: &collector::Repository
-    ) -> Result<ValidPointManifest, ValidationError> {
+    ) -> Result<Option<ValidPointManifest>, Failed> {
         let manifest = match Manifest::decode(
             manifest_bytes.clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
             Err(_) => {
                 warn!("{}: failed to decode", self.cert.rpki_manifest());
-                return Err(ValidationError);
+                return Ok(None)
             }
         };
         let (ee_cert, content) = match manifest.validate(
@@ -777,7 +777,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(some) => some,
             Err(_) => {
                 warn!("{}: failed to validate", self.cert.rpki_manifest());
-                return Err(ValidationError);
+                return Ok(None)
             }
         };
         if content.is_stale() {
@@ -785,7 +785,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
-                    return Err(ValidationError);
+                    return Ok(None)
                 }
                 FilterPolicy::Warn => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
@@ -794,13 +794,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         }
 
-        let (crl_uri, crl, crl_bytes) = self.validate_collected_crl(
+        let (crl_uri, crl, crl_bytes) = match self.validate_collected_crl(
             &ee_cert, &content, repository
-        )?;
+        )? {
+            Some(some) => some,
+            None => return Ok(None)
+        };
 
-        Ok(ValidPointManifest {
+        Ok(Some(ValidPointManifest {
             ee_cert, content, crl_uri, crl, manifest_bytes, crl_bytes
-        })
+        }))
     }
 
     /// Check the manifest CRL.
@@ -816,7 +819,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ee_cert: &ResourceCert,
         manifest: &ManifestContent,
         repository: &collector::Repository
-    ) -> Result<(uri::Rsync, Crl, Bytes), ValidationError> {
+    ) -> Result<Option<(uri::Rsync, Crl, Bytes)>, Failed> {
         // Let’s first get the manifest CRL’s name relative to repo_uri. If
         // it ain’t relative at all, this is already invalid.
         let crl_uri = match ee_cert.crl_uri() {
@@ -824,7 +827,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(some) if some.ends_with(".crl") => some.clone(),
             _ => {
                 warn!("{}: invalid CRL URI.", self.cert.rpki_manifest());
-                return Err(ValidationError)
+                return Ok(None)
             }
         };
         let crl_name = match crl_uri.relative_to(&self.cert.ca_repository()) {
@@ -834,7 +837,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     "{}: CRL URI outside repository directory.",
                     self.cert.rpki_manifest()
                 );
-                return Err(ValidationError)
+                return Ok(None)
             }
         };
 
@@ -844,17 +847,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         for item in manifest.iter() {
             let (file, hash) = item.into_pair();
             if file == crl_name {
-                let bytes = match repository.load_object(&crl_uri) {
+                let bytes = match repository.load_object(&crl_uri)? {
                     Some(bytes) => bytes,
                     None => {
                         warn!("{}: failed to load.", crl_uri);
-                        return Err(ValidationError);
+                        return Ok(None)
                     }
                 };
                 let hash = ManifestHash::new(hash, manifest.file_hash_alg());
                 if hash.verify(&bytes).is_err() {
                     warn!("{}: file has wrong hash.", crl_uri);
-                    return Err(ValidationError)
+                    return Ok(None)
                 }
                 crl_bytes = Some(bytes);
             }
@@ -863,7 +866,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     "{}: manifest contains unexpected CRLs.",
                     self.cert.rpki_manifest()
                 );
-                return Err(ValidationError)
+                return Ok(None)
             }
         }
         let crl_bytes = match crl_bytes {
@@ -873,7 +876,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     "{}: CRL not listed on manifest.",
                     self.cert.rpki_manifest()
                 );
-                return Err(ValidationError);
+                return Ok(None)
             }
         };
 
@@ -882,19 +885,19 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(crl) => crl,
             Err(_) => {
                 warn!("{}: failed to decode.", crl_uri);
-                return Err(ValidationError)
+                return Ok(None)
             }
         };
         if crl.validate(self.cert.cert().subject_public_key_info()).is_err() {
             warn!("{}: failed to validate.", crl_uri);
-            return Err(ValidationError)
+            return Ok(None)
         }
         if crl.is_stale() {
             //self.metrics.inc_stale_count();
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale CRL.", crl_uri);
-                    return Err(ValidationError)
+                    return Ok(None)
                 }
                 FilterPolicy::Warn => {
                     warn!("{}: stale CRL.", crl_uri);
@@ -914,11 +917,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 "{}: certificate has been revoked.",
                 self.cert.rpki_manifest()
             );
-            return Err(ValidationError)
+            return Ok(None)
         }
 
         // Phew: All good.
-        Ok((crl_uri, crl, crl_bytes))
+        Ok(Some((crl_uri, crl, crl_bytes)))
     }
 
     /// Tries to validate a stored manifest.

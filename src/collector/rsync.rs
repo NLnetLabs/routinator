@@ -243,7 +243,7 @@ pub struct Run<'a> {
     /// A reference to the underlying collector.
     collector: &'a Collector,
 
-    /// The set of modules that has been updated already.
+    /// The set of modules that have been updated already.
     updated: RwLock<HashSet<OwnedModule>>,
 
     /// The modules that are currently being updated.

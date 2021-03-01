@@ -181,11 +181,10 @@ impl Store {
                 }
             };
 
-            let keep = match StoredManifest::decode_not_after(&value) {
-                Ok(not_after) if not_after > now => true,
-                _ => false
-            };
-            if keep {
+            if matches!(
+                StoredManifest::decode_not_after(&value),
+                Ok(not_after) if not_after > now
+            ) {
                 // Try to register with the collector cleanup. If that works
                 // out, continue to the next item. Otherwise, fall through to
                 // deletion.
@@ -995,15 +994,32 @@ impl error::Error for ObjectError { }
 /// Otherwise, this is an error of the underlying database and should be
 /// considered fatal.
 #[derive(Clone, Debug)]
-pub struct UpdateError(ConflictableTransactionError<()>);
+pub struct UpdateError(ConflictableTransactionError<Result<(), Failed>>);
 
 impl UpdateError {
+    /// Abort the update.
     pub fn abort() -> Self {
-        UpdateError(ConflictableTransactionError::Abort(()))
+        UpdateError(ConflictableTransactionError::Abort(Ok(())))
     }
 
+    /// A fatal error has happened during processing.
+    pub fn failed() -> Self {
+        UpdateError(ConflictableTransactionError::Abort(Err(Failed)))
+    }
+
+    /// Returns whether the update was aborted.
     pub fn was_aborted(&self) -> bool {
-        matches!(self.0, ConflictableTransactionError::Abort(_))
+        matches!(self.0, ConflictableTransactionError::Abort(Ok(())))
+    }
+
+    pub fn has_failed(&self) -> bool {
+        !self.was_aborted()
+    }
+}
+
+impl From<Failed> for UpdateError {
+    fn from(_: Failed) -> Self {
+        Self::failed()
     }
 }
 
@@ -1013,30 +1029,14 @@ impl From<UnabortableTransactionError> for UpdateError {
     }
 }
 
-impl From<TransactionError<()>> for UpdateError {
-    fn from(err: TransactionError<()>) -> Self {
+impl From<TransactionError<Result<(), Failed>>> for UpdateError {
+    fn from(err: TransactionError<Result<(), Failed>>) -> Self {
         UpdateError(match err {
-            TransactionError::Abort(())
-                => ConflictableTransactionError::Abort(()),
+            TransactionError::Abort(abort)
+                => ConflictableTransactionError::Abort(abort),
             TransactionError::Storage(err)
                 => ConflictableTransactionError::Storage(err)
         })
-    }
-}
-
-
-//------------ Sled Failed Conversion -----------------------------------------
-
-impl From<sled::Error> for Failed {
-    fn from(err: sled::Error) -> Failed {
-        error!("RPKI storage error: {}", err);
-        if matches!(err, sled::Error::Io(_) | sled::Error::Corruption {..}) {
-            error!(
-                "Starting Routinator with the --fresh option \
-                may fix this issue"
-            );
-        }
-        Failed
     }
 }
 
