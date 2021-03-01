@@ -1000,7 +1000,9 @@ fn vrps(
         .header("Content-Length", stream.output_len());
 
     if let Some(done) = done {
-        builder = builder.header("Last-Modified", done.format_with_items(HTTP_DATE_ITEMS.iter().cloned()).to_string());
+        builder = builder.header("Last-Modified",
+            done.format_with_items(
+                HTTP_DATE_ITEMS.iter().cloned()).to_string());
     }
 
     builder.body(Body::wrap_stream(stream::iter(
