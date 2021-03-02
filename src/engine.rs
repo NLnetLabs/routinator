@@ -188,7 +188,7 @@ impl Engine {
     ) -> Result<Self, Failed> {
         let db = Self::open_db(&config.cache_dir, config.fresh)?;
         let collector = Collector::new(config, &db, update)?;
-        let store = Store::new(&db)?;
+        let store = Store::new(db.clone());
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
@@ -564,7 +564,7 @@ struct PubPoint<'a, P: ProcessRun> {
     collector: Option<collector::Repository<'a>>,
 
     /// The point’s repository in the store.
-    store: store::Repository<'a>,
+    store: store::Repository,
 }
 
 impl<'a, P: ProcessRun> PubPoint<'a, P> {
@@ -575,7 +575,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         processor: P::ProcessCa,
     ) -> Result<Self, Failed> {
         let collector = run.collector.repository(cert)?;
-        let store = run.store.repository(cert, collector.as_ref());
+        let store = run.store.repository(cert, collector.as_ref())?;
         Ok(PubPoint { run, cert, processor, collector, store })
     }
 
