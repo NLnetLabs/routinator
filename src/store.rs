@@ -217,8 +217,7 @@ impl Store {
         }
 
         // Cleanup collector.
-        collector.commit();
-        Ok(())
+        collector.commit()
     }
 }
 

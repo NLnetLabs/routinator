@@ -212,8 +212,8 @@ impl<'a> Run<'a> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                if rrdp.load_repository(rrdp_uri)? {
-                    return Ok(Some(Repository::rrdp(rrdp, rrdp_uri)))
+                if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
+                    return Ok(Some(Repository::rrdp(repository)))
                 }
                 warn!(
                     "RRDP repository {} unavailable. Falling back to rsync.",
@@ -257,11 +257,8 @@ pub struct Repository<'a>(RepoInner<'a>);
 enum RepoInner<'a> {
     /// The repository is accessed via RRDP.
     Rrdp {
-        /// The RRDP runner.
-        rrdp: &'a rrdp::Run<'a>,
-
-        /// The rpkiNotify URI of the repository.
-        rpki_notify: &'a uri::Https,
+        /// The repository.
+        repository: rrdp::Repository,
     },
 
     /// The repository is accessed via rsync.
@@ -273,10 +270,8 @@ enum RepoInner<'a> {
 
 impl<'a> Repository<'a> {
     /// Creates a RRDP repository.
-    fn rrdp(rrdp: &'a rrdp::Run<'a>, rpki_notify: &'a uri::Https) -> Self {
-        Repository(
-            RepoInner::Rrdp { rrdp, rpki_notify }
-        )
+    fn rrdp(repository: rrdp::Repository) -> Self {
+        Repository(RepoInner::Rrdp { repository })
     }
 
     /// Creates an rsync repository.
@@ -299,8 +294,8 @@ impl<'a> Repository<'a> {
         &self, uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Failed> {
         match self.0 {
-            RepoInner::Rrdp { rrdp, rpki_notify } => {
-                rrdp.load_file(rpki_notify, uri)
+            RepoInner::Rrdp { ref repository } => {
+                repository.load_file(uri)
             }
             RepoInner::Rsync { rsync } => {
                 Ok(rsync.load_file(uri))
@@ -357,13 +352,14 @@ impl<'a> Cleanup<'a> {
     }
 
     /// Performs the cleanup run.
-    pub fn commit(self) {
+    pub fn commit(self) -> Result<(), Failed> {
         if let Some(rsync) = self.collector.rsync.as_ref() {
             rsync.cleanup(&self.rsync)
         }
         if let Some(rrdp) = self.collector.rrdp.as_ref() {
-            rrdp.cleanup(&self.rrdp)
+            rrdp.cleanup(&self.rrdp)?
         }
+        Ok(())
     }
 }
 

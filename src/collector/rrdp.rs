@@ -5,7 +5,7 @@ use std::collections::{HashSet, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use chrono::{DateTime, Utc, TimeZone};
 use log::{debug, error, info, warn};
@@ -40,8 +40,8 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The local copy of RPKI repositories synchronized via RRDP.
 #[derive(Debug)]
 pub struct Collector {
-    /// The file tree of the database.
-    object_tree: sled::Tree,
+    /// The database.
+    db: sled::Db,
 
     /// A HTTP client.
     ///
@@ -75,17 +75,7 @@ impl Collector {
 
         Self::init(config)?;
         Ok(Some(Collector {
-            object_tree: match db.open_tree("rrdp-objects") {
-                Ok(tree) => tree,
-                Err(err) => {
-                    error!(
-                        "Database error: \
-                        failed to open RRDP data tree, {}",
-                        err
-                    );
-                    return Err(Failed)
-                }
-            },
+            db: db.clone(),
             http: if update {
                 Some(HttpClient::new(config)?)
             }
@@ -108,8 +98,15 @@ impl Collector {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn cleanup(&self, _retain: &HashSet<uri::Https>) {
-        unimplemented!()
+    pub fn cleanup(&self, retain: &HashSet<uri::Https>) -> Result<(), Failed> {
+        for tree_name in self.db.tree_names() {
+            if let Some(tree_uri) = Repository::tree_uri(&tree_name) {
+                if !retain.contains(&tree_uri) {
+                    self.db.drop_tree(tree_name)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -124,8 +121,9 @@ pub struct Run<'a> {
 
     /// A set of the repositories we have updated already.
     ///
-    /// The value of the map is whether we consider the repository current.
-    updated: RwLock<HashMap<uri::Https, bool>>,
+    /// If there is some value for a repository, it is available and current.
+    /// If there is a `None`, the repository is not available or outdated.
+    updated: RwLock<HashMap<uri::Https, Option<Repository>>>,
 
     /// The modules that are currently being updated.
     ///
@@ -133,6 +131,9 @@ pub struct Run<'a> {
     /// attempts to update the module. Only the thread that has the mutex is
     /// allowed to actually run rsync.
     running: RwLock<HashMap<uri::Https, Arc<Mutex<()>>>>,
+
+    /// The server metrics.
+    metrics: Mutex<Vec<RrdpServerMetrics>>,
 }
 
 impl<'a> Run<'a> {
@@ -142,6 +143,7 @@ impl<'a> Run<'a> {
             collector,
             updated: Default::default(),
             running: Default::default(),
+            metrics: Mutex::new(Vec::new()),
         }
     }
 
@@ -189,21 +191,24 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// Returns whether the repository can be used..
+    /// If a repository is available and current, returns it.
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
-    ) -> Result<bool, Failed> {
-        // If we don’t update, just return whether we have a current copy.
-        let http = match self.collector.http.as_ref() {
-            Some(http) => http,
-            None => return self.is_repository_current(rpki_notify)
-        };
-
-        // If we already tried updating, we can return already.
-        if let Some(current) = self.updated.read().unwrap().get(rpki_notify) {
-            return Ok(*current)
+    ) -> Result<Option<Repository>, Failed> {
+        match self.collector.http.as_ref() {
+            Some(http) => self.load_repository_updated(http, rpki_notify),
+            None => self.load_repository_no_update(rpki_notify)
         }
-        //
+    }
+
+    fn load_repository_updated(
+        &self, http: &HttpClient, rpki_notify: &uri::Https
+    ) -> Result<Option<Repository>, Failed> {
+        // If we already tried updating, we can return already.
+        if let Some(repo) = self.updated.read().unwrap().get(rpki_notify) {
+            return Ok(repo.clone())
+        }
+
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
         // yet.
         let mutex = {
@@ -216,7 +221,7 @@ impl<'a> Run<'a> {
         // up-to-date which happens if someone else had it first.
         let _lock = mutex.lock().unwrap();
         if let Some(res) = self.updated.read().unwrap().get(rpki_notify) {
-            return Ok(*res)
+            return Ok(res.clone())
         }
 
         // Check if the repository URI is dubious. If so, skip updating and
@@ -235,7 +240,9 @@ impl<'a> Run<'a> {
             let mut update = RepositoryUpdate::new(
                 self.collector, http, rpki_notify
             );
-            update.update()?
+            let updated = update.update()?;
+            self.metrics.lock().unwrap().push(update.metrics);
+            updated
         };
 
         // If we have updated successfully, we are current. Otherwise it
@@ -245,48 +252,118 @@ impl<'a> Run<'a> {
             true
         }
         else {
-            match self.collector.object_tree.get(rpki_notify)? {
-                Some(data) => {
-                    let duration = Utc::now().signed_duration_since(
-                        RepositoryState::try_from(data)?.updated
-                    );
-                    match duration.to_std() {
-                        Ok(duration) => {
-                            duration < self.collector.fallback_time
-                        }
-                        Err(_) => false
-                    }
-                }
-                None => false
-            }
+            self.is_repository_current(rpki_notify)?
         };
 
         // Remove from running.
         self.running.write().unwrap().remove(rpki_notify);
 
+        let repository = if current {
+            Some(Repository::new(
+                self.collector, rpki_notify
+            )?)
+        }
+        else {
+            None
+        };
+        
         // Insert into updated map and also return.
-        self.updated.write().unwrap().insert(rpki_notify.clone(), current);
-        Ok(current)
+        self.updated.write().unwrap().insert(
+            rpki_notify.clone(), repository.clone()
+        );
+        Ok(repository)
+    }
+
+    fn load_repository_no_update(
+        &self, rpki_notify: &uri::Https
+    ) -> Result<Option<Repository>, Failed> {
+        if let Some(repo) = self.updated.read().unwrap().get(rpki_notify) {
+            return Ok(repo.clone())
+        }
+        let repository = if self.is_repository_current(rpki_notify)? {
+            Some(Repository::new(
+                self.collector, rpki_notify
+            )?)
+        }
+        else {
+            None
+        };
+        
+        // Insert into updated map and also return.
+        self.updated.write().unwrap().insert(
+            rpki_notify.clone(), repository.clone()
+        );
+        Ok(repository)
     }
 
     fn is_repository_current(
-        &self, _rpki_notify: &uri::Https
+        &self, rpki_notify: &uri::Https
     ) -> Result<bool, Failed> {
-        unimplemented!()
+        let tree = self.collector.db.open_tree(
+            Repository::tree_name(rpki_notify)
+        )?;
+        match tree.get("")? {
+            Some(data) => {
+                let duration = Utc::now().signed_duration_since(
+                    RepositoryState::try_from(data)?.updated
+                );
+                match duration.to_std() {
+                    Ok(duration) => {
+                        Ok(duration < self.collector.fallback_time)
+                    }
+                    Err(_) => Ok(false)
+                }
+            }
+            None => Ok(false)
+        }
     }
 
-    /// Loads the file for the given URI from the given repository.
+    /// Finishes the validation run.
     ///
-    /// Does _not_ attempt to update the repository first but rather just
-    /// returns whatever it has.
+    /// Updates `metrics` with the collector run’s metrics.
+    ///
+    /// If you are not interested in the metrics, you can simple drop the
+    /// value, instead.
+    pub fn done(self, metrics: &mut Metrics) {
+        metrics.set_rrdp(self.metrics.into_inner().unwrap())
+    }
+}
+
+
+//------------ Repository ----------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Repository {
+    tree: sled::Tree,
+}
+
+impl Repository {
+    fn new(
+        collector: &Collector, rpki_notify: &uri::Https
+    ) -> Result<Self, Failed> {
+        Ok(Repository {
+            tree: collector.db.open_tree(Repository::tree_name(rpki_notify))?,
+        })
+    }
+
+    fn tree_name(rpki_notify: &uri::Https) -> Vec<u8> {
+        format!("rrdp:{}", rpki_notify).into()
+    }
+
+    fn tree_uri(tree_name: &[u8]) -> Option<uri::Https> {
+        if tree_name.starts_with(b"rrdp:") {
+            uri::Https::from_slice(&tree_name[5..]).ok()
+        }
+        else {
+            None
+        }
+    }
+
     pub fn load_file(
         &self,
-        rpki_notify: &uri::Https,
-        uri: &uri::Rsync,
+        uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Failed> {
-        match self.collector.object_tree.get(
-            &ObjectKey::new(rpki_notify, uri).into_key()
-        )? {
+        match self.tree.get(uri.as_str())? {
             Some(value) => {
                 StoredObject::try_from(value).map(|obj| {
                     Some(obj.content)
@@ -297,16 +374,6 @@ impl<'a> Run<'a> {
             }
             None => Ok(None)
         }
-    }
-
-    /// Finishes the validation run.
-    ///
-    /// Updates `metrics` with the collector run’s metrics.
-    ///
-    /// If you are not interested in the metrics, you can simple drop the
-    /// value, instead.
-    pub fn done(self, _metrics: &mut Metrics) {
-        unimplemented!()
     }
 }
 
@@ -333,6 +400,13 @@ impl<'a> RepositoryUpdate<'a> {
     }
 
     fn update(&mut self) -> Result<bool, Failed> {
+        let start_time = SystemTime::now();
+        let res = self._update();
+        self.metrics.duration = SystemTime::now().duration_since(start_time);
+        res
+    }
+
+    fn _update(&mut self) -> Result<bool, Failed> {
         debug!("RRDP {}: Updating repository", self.rpki_notify);
         self.metrics.serial = None;
         let notify = self.http.notification_file(
@@ -344,6 +418,9 @@ impl<'a> RepositoryUpdate<'a> {
         self.snapshot_update(&notify)
     }
 
+
+    //--- Snapshot Update
+
     fn snapshot_update(
         &self,
         notify: &NotificationFile,
@@ -351,43 +428,36 @@ impl<'a> RepositoryUpdate<'a> {
         // We wipe the old repository data first. This may leave us with no
         // data at all, but that doesn’t matter since we have the last good
         // data in the store.
-        for key in self.collector.object_tree.scan_prefix(
-            ObjectKey::prefix(self.rpki_notify).into_key()
-        ).keys() {
-            let key = key?;
-            self.collector.object_tree.remove(key)?;
-        }
+        self.collector.db.drop_tree(Repository::tree_name(self.rpki_notify))?;
 
-        let res = self.collector.object_tree.transaction(|tree| {
-            self.snapshot_update_tran(notify, tree)?;
-            Ok(())
-        });
-
-        match res {
+        match self.try_snapshot_update(
+            notify,
+            self.collector.db.open_tree(
+                Repository::tree_name(self.rpki_notify)
+            )?
+        ) {
             Ok(()) => Ok(true),
-            Err(TransactionError::Abort(err)) => {
+            Err(SnapshotError::Db(err)) => {
+                Err(err.into())
+            }
+            Err(err) => {
                 warn!(
                     "RRDP {}: failed to process snapshot file {}: {}",
                     self.rpki_notify, notify.snapshot.uri(), err
                 );
                 Ok(false)
             }
-            Err(TransactionError::Storage(err)) => {
-                Err(err.into())
-            }
         }
     }
 
-    fn snapshot_update_tran(
+    fn try_snapshot_update(
         &self,
         notify: &NotificationFile,
-        tree: &sled::transaction::TransactionalTree
+        tree: sled::Tree
     ) -> Result<(), SnapshotError> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
         
-        let mut processor = SnapshotProcessor::new(
-            &notify, self.rpki_notify, tree
-        );
+        let mut processor = SnapshotProcessor::new(&notify, &tree);
         let mut reader = io::BufReader::new(HashRead::new(
             self.http.response(notify.snapshot.uri())?
         ));
@@ -400,21 +470,23 @@ impl<'a> RepositoryUpdate<'a> {
             return Err(SnapshotError::HashMismatch)
         }
 
-        tree.insert(
-            self.rpki_notify.as_str(),
-            &RepositoryState::from_notify(notify),
-        )?;
+        tree.insert("", &RepositoryState::from_notify(notify))?;
 
         Ok(())
     }
+
+
+    //--- Delta Update
 
     fn delta_update(
         &self,
         notify: &NotificationFile,
     ) -> Result<bool, Failed> {
-        let state = match self.collector.object_tree.get(
-            self.rpki_notify.as_str()
-        )? {
+        let tree = self.collector.db.open_tree(
+            Repository::tree_name(self.rpki_notify)
+        )?;
+
+        let state = match tree.get("")? {
             Some(state) => match RepositoryState::try_from(state) {
                 Ok(state) => state,
                 Err(_) => {
@@ -437,7 +509,8 @@ impl<'a> RepositoryUpdate<'a> {
 
         for (serial, uri_and_hash) in deltas {
             if !self.delta_update_step(
-                notify, *serial, uri_and_hash.uri(), uri_and_hash.hash()
+                &tree, notify, *serial,
+                uri_and_hash.uri(), uri_and_hash.hash()
             )? {
                 info!(
                     "RRDP {}: Delta update failed, falling back to snapshot.",
@@ -509,12 +582,13 @@ impl<'a> RepositoryUpdate<'a> {
     /// delta was faulty, and `Err(Failed)` if things have gone badly.
     fn delta_update_step(
         &self,
+        tree: &sled::Tree,
         notify: &NotificationFile,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
-        let res = self.collector.object_tree.transaction(|tree| {
+        let res = tree.transaction(|tree| {
             self.delta_update_tran(notify, serial, uri, hash, tree)?;
             Ok(())
         });
@@ -544,7 +618,7 @@ impl<'a> RepositoryUpdate<'a> {
         tree: &'a sled::transaction::TransactionalTree,
     ) -> Result<(), DeltaError> {
         let mut processor = DeltaProcessor::new(
-            self.rpki_notify, notify.session_id, serial, tree
+            notify.session_id, serial, tree
         );
         let mut reader = io::BufReader::new(HashRead::new(
             self.http.response(uri)?
@@ -719,17 +793,15 @@ impl HttpClient {
 
 struct SnapshotProcessor<'a> {
     notify: &'a NotificationFile,
-    rpki_notify: &'a uri::Https,
-    tree: &'a sled::transaction::TransactionalTree,
+    tree: &'a sled::Tree,
 }
 
 impl<'a> SnapshotProcessor<'a> {
     fn new(
         notify: &'a NotificationFile,
-        rpki_notify: &'a uri::Https,
-        tree: &'a sled::transaction::TransactionalTree,
+        tree: &'a sled::Tree,
     ) -> Self {
-        SnapshotProcessor { notify, rpki_notify, tree }
+        SnapshotProcessor { notify, tree }
     }
 }
 
@@ -762,10 +834,7 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
         let data = StoredObject::read_into_ivec(data)?;
-        self.tree.insert(
-            ObjectKey::new(self.rpki_notify, &uri).into_key(),
-            data
-        )?;
+        self.tree.insert(&uri, data)?;
         Ok(())
     }
 }
@@ -774,7 +843,6 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
 //------------ DeltaProcessor ------------------------------------------------
 
 struct DeltaProcessor<'a> {
-    rpki_notify: &'a uri::Https,
     session_id: Uuid,
     serial: u64,
     tree: &'a sled::transaction::TransactionalTree,
@@ -782,12 +850,11 @@ struct DeltaProcessor<'a> {
 
 impl<'a> DeltaProcessor<'a> {
     fn new(
-        rpki_notify: &'a uri::Https,
         session_id: Uuid,
         serial: u64,
         tree: &'a sled::transaction::TransactionalTree,
     ) -> Self {
-        DeltaProcessor { rpki_notify, session_id, serial, tree }
+        DeltaProcessor { session_id, serial, tree }
     }
 
     fn check_hash(
@@ -795,9 +862,7 @@ impl<'a> DeltaProcessor<'a> {
         uri: &uri::Rsync,
         hash: rrdp::Hash,
     ) -> Result<(), DeltaError> {
-        let data = match self.tree.get(
-            ObjectKey::new(self.rpki_notify, uri).into_key()
-        )? {
+        let data = match self.tree.get(&uri)? {
             Some(data) => data,
             None => {
                 return Err(DeltaError::MissingObject { uri: uri.clone() })
@@ -816,9 +881,7 @@ impl<'a> DeltaProcessor<'a> {
         &self,
         uri: &uri::Rsync
     ) -> Result<(), DeltaError> {
-        if self.tree.get(
-            ObjectKey::new(self.rpki_notify, uri).into_key()
-        )?.is_some() {
+        if self.tree.get(&uri)?.is_some() {
             Err(DeltaError::ObjectAlreadyPresent { uri: uri.clone() })
         }
         else {
@@ -863,10 +926,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
             None => self.check_new(&uri)?
         }
         let data = StoredObject::read_into_ivec(data)?;
-        self.tree.insert(
-            ObjectKey::new(self.rpki_notify, &uri).into_key(),
-            data
-        )?;
+        self.tree.insert(uri.as_slice(), data)?;
         Ok(())
     }
 
@@ -876,9 +936,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
         hash: rrdp::Hash
     ) -> Result<(), Self::Err> {
         self.check_hash(&uri, hash)?;
-        self.tree.remove(
-            ObjectKey::new(self.rpki_notify, &uri).into_key()
-        )?;
+        self.tree.remove(uri.as_slice())?;
         Ok(())
     }
 }
@@ -970,35 +1028,6 @@ impl TryFrom<IVec> for RepositoryState {
         );
         
         Ok(RepositoryState { session, serial, updated })
-    }
-}
-
-
-//------------ ObjectKey -----------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-struct ObjectKey<'a> {
-    rpki_notify: &'a str,
-    uri: &'a str
-}
-
-impl<'a> ObjectKey<'a> {
-    fn new(rpki_notify: &'a uri::Https, uri: &'a uri::Rsync) -> Self {
-        ObjectKey {
-            rpki_notify: rpki_notify.as_str(),
-            uri: uri.as_str()
-        }
-    }
-
-    fn prefix(rpki_notify: &'a uri::Https) -> Self {
-        ObjectKey {
-            rpki_notify: rpki_notify.as_str(),
-            uri: ""
-        }
-    }
-
-    fn into_key(self) -> Vec<u8> {
-        format!("{}\0{}", self.rpki_notify, self.uri).into()
     }
 }
 
@@ -1155,7 +1184,7 @@ enum SnapshotError {
         received: u64,
     },
     HashMismatch,
-    Db(sled::transaction::UnabortableTransactionError),
+    Db(sled::Error),
 }
 
 impl From<reqwest::Error> for SnapshotError {
@@ -1176,20 +1205,9 @@ impl From<io::Error> for SnapshotError {
     }
 }
 
-impl From<sled::transaction::UnabortableTransactionError> for SnapshotError {
-    fn from(err: sled::transaction::UnabortableTransactionError) -> Self {
+impl From<sled::Error> for SnapshotError {
+    fn from(err: sled::Error) -> Self {
         SnapshotError::Db(err)
-    }
-}
-
-impl From<SnapshotError> for ConflictableTransactionError<SnapshotError> {
-    fn from(
-        err: SnapshotError
-    ) -> ConflictableTransactionError<SnapshotError> {
-        match err {
-            SnapshotError::Db(err) => err.into(),
-            _ => ConflictableTransactionError::Abort(err),
-        }
     }
 }
 
