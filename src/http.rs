@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use chrono::{Duration, Utc};
+use chrono::format::{Item, Fixed, Numeric, Pad};
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
@@ -950,6 +951,23 @@ fn version() -> Response<Body> {
     .unwrap()
 }
 
+const HTTP_DATE_ITEMS: &[Item<'static>] = &[
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Literal(", "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Literal(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Literal(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Literal(" GMT"),
+];
+
 fn vrps(
     origins: &OriginsHistory,
     query: Option<&str>,
@@ -966,6 +984,8 @@ fn vrps(
         }
     };
 
+    let (_start, done, _duration) = origins.update_times();
+
     let filters = match output_filters(query) {
         Ok(filters) => filters,
         Err(_) => return bad_request(),
@@ -974,10 +994,18 @@ fn vrps(
         current, filters, metrics
     );
 
-    Response::builder()
-    .header("Content-Type", format.content_type())
-    .header("content-length", stream.output_len())
-    .body(Body::wrap_stream(stream::iter(
+    let mut builder = Response::builder();
+
+    builder = builder.header("Content-Type", format.content_type())
+        .header("Content-Length", stream.output_len());
+
+    if let Some(done) = done {
+        builder = builder.header("Last-Modified",
+            done.format_with_items(
+                HTTP_DATE_ITEMS.iter().cloned()).to_string());
+    }
+
+    builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
     )))
     .unwrap()
