@@ -20,6 +20,9 @@ New
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
   a path name instead of an array of strings. ([#471])
+* The HTTP endpoints that supply the current VRP set now include a
+  Last-Modified header in their response. ([#474], contributed by
+  [@reschke])
 
 Bug Fixes
 
@@ -37,9 +40,11 @@ Other Changes
 [#463]: https://github.com/NLnetLabs/routinator/pull/463
 [#471]: https://github.com/NLnetLabs/routinator/pull/471
 [#470]: https://github.com/NLnetLabs/routinator/pull/470
+[#474]: https://github.com/NLnetLabs/routinator/pull/474
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
+[@reschke]: https://github.com/reschke
 
 
 ## 0.8.2 ‘Once More, with Feeling’
