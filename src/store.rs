@@ -65,7 +65,7 @@ use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
 use sled::Transactional;
 use sled::transaction::{
-    ConflictableTransactionError, TransactionalTree, TransactionError,
+    ConflictableTransactionError, TransactionError,
     UnabortableTransactionError
 };
 use crate::collector;
@@ -124,11 +124,24 @@ impl Store {
         mut collector: collector::Cleanup,
     ) -> Result<(), Failed> {
         // Cleanup RRDP repositories
-        for tree_name in self.db.tree_names() {
-            if let Ok(rpki_notify) = uri::Https::from_slice(&tree_name) {
-                let names = TreeNames::rrdp(&rpki_notify);
+        for name in self.db.tree_names() {
+            if let Some(names) = TreeNames::from_manifest_tree_name(&name) {
+                if names.repository_name == b"rsync" {
+                    continue
+                }
+
+                let uri = match uri::Https::from_slice(
+                    names.repository_name
+                ) {
+                    Ok(uri) => uri,
+                    Err(_) => {
+                        names.drop_trees(&self.db)?;
+                        continue
+                    }
+                };
+
                 if Repository::new(self, &names)?.cleanup_rrdp()? {
-                    collector.retain_rrdp_repository(&rpki_notify);
+                    collector.retain_rrdp_repository(&uri);
                 }
                 else {
                     names.drop_trees(&self.db)?;
@@ -353,12 +366,20 @@ impl Repository {
     /// returned. If it fails, it was either aborted by the closure or there
     /// was a database error. You can check whether it was indeed aborted by
     /// calling [`was_aborted`](UpdateError::was_aborted) on the error.
-    pub fn update_point<T, F: Fn(RepositoryUpdate) -> Result<T, UpdateError>>(
+    pub fn update_point<T, F: Fn(&mut RepositoryUpdate) -> Result<T, UpdateError>>(
         &self, manifest: &uri::Rsync, op: F
     ) -> Result<T, UpdateError> {
+        let mut update = RepositoryUpdate::new(manifest);
+        let res = op(&mut update)?;
         (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
-            op(RepositoryUpdate::new(manifest, mt, ot)).map_err(|err| err.0)
-        }).map_err(Into::into)
+            if let Some(ref new_manifest) = update.new_manifest {
+                mt.insert(
+                    manifest.as_str(), new_manifest
+                )?;
+            }
+            ot.apply_batch(&update.objects).map_err(Into::into)
+        })?;
+        Ok(res)
     }
 
     /// Completely removes a publication point.
@@ -512,59 +533,46 @@ pub struct RepositoryUpdate<'a> {
     /// The signedObject URI of the point’s manifest.
     manifest: &'a uri::Rsync,
 
-    /// The transaction for updating the manifest.
-    manifest_tran: &'a TransactionalTree,
+    /// The updated manifest, if any.
+    new_manifest: Option<StoredManifest>,
 
-    /// The transaction for updating the objects.
-    object_tran: &'a TransactionalTree,
+    /// A batch of the changed objects.
+    objects: sled::Batch,
 }
 
 impl<'a> RepositoryUpdate<'a> {
     /// Creates an update from the manifest URI and the transactions.
     fn new(
         manifest: &'a uri::Rsync,
-        manifest_tran: &'a TransactionalTree,
-        object_tran: &'a TransactionalTree
     ) -> Self {
-        RepositoryUpdate { manifest, manifest_tran, object_tran }
+        RepositoryUpdate {
+            manifest,
+            new_manifest: None,
+            objects: sled::Batch::default(),
+        }
     }
 
     /// Updates the manifest for the publication point.
-    ///
-    /// If the publication point is new and has no manifest stored for it yet,
-    /// the manifest will be inserted. The method returns whether that was
-    /// indeed the case.
-    pub fn update_manifest(
-        &self, object: &StoredManifest
-    ) -> Result<bool, UpdateError> {
-        self.manifest_tran.insert(
-            self.manifest.as_str(), object
-        ).map(|res| res.is_some()).map_err(Into::into)
+    pub fn update_manifest(&mut self, object: StoredManifest) {
+        self.new_manifest = Some(object)
     }
 
     /// ‘Upserts’ an object of the publication point.
     ///
-    /// The object is identified by its name on the manifest. If an object
-    /// by that name is already stored, that object will be updated. If there
-    /// is no object yet by that name, the object will be inserted. The method
-    /// returns whether the object was indeed newly inserted.
-    pub fn insert_object(
-        &self, file: &str, object: &StoredObject
-    ) -> Result<bool, UpdateError> {
-        self.object_tran.insert(
+    /// The object is identified by its name on the manifest.
+    pub fn insert_object(&mut self, file: &str, object: &StoredObject) {
+        self.objects.insert(
             Repository::object_key(self.manifest, file),
             object
-        ).map(|res| res.is_some()).map_err(Into::into)
+        )
     }
 
     /// Removes an object from the publication point.
     ///
     /// The object is identified by its name on the manifest. Returns whether
     /// the object existed and was actually removed.
-    pub fn remove_object(&self, file: &str) -> Result<bool, UpdateError> {
-        self.object_tran.remove(
-            Repository::object_key(self.manifest, file)
-        ).map(|res| res.is_some()).map_err(Into::into)
+    pub fn remove_object(&mut self, file: &str) {
+        self.objects.remove(Repository::object_key(self.manifest, file))
     }
 }
 
@@ -885,27 +893,44 @@ impl TryFrom<sled::IVec> for StoredObject {
 ///
 /// This type exists so we are guaranteed to always use the same names.
 struct TreeNames<'a> {
-    /// The name of the repository.
-    repository_name: &'a str,
+    /// The RRDP notification URI if this is for an RRDP repository.
+    repository_name: &'a [u8],
 }
 
 impl<'a> TreeNames<'a> {
     /// Returns the tree names for a RRDP repository.
     pub fn rrdp(rpki_notify: &'a uri::Https) -> Self {
-        TreeNames { repository_name: rpki_notify.as_str() }
+        TreeNames { repository_name: rpki_notify.as_ref() }
     }
 
     /// Returns the tree names for the rsync repository.
     pub fn rsync() -> Self {
-        TreeNames { repository_name: "rsync" }
+        TreeNames { repository_name: b"rsync" }
+    }
+
+    pub fn from_manifest_tree_name(
+        tree_name: &'a [u8]
+    ) -> Option<Self> {
+        if tree_name.starts_with(b"store:manifests:") {
+            Some(TreeNames { repository_name: &tree_name[16..] })
+        }
+        else {
+            None
+        }
     }
 
     pub fn manifest_tree_name(&self) -> Vec<u8> {
-        format!("store:manifests:{}", self.repository_name).into()
+        let mut res = Vec::with_capacity(16 + self.repository_name.len());
+        res.extend_from_slice(b"store:manifests:");
+        res.extend_from_slice(self.repository_name);
+        res
     }
 
     pub fn object_tree_name(&self) -> Vec<u8> {
-        format!("store:objects:{}", self.repository_name).into()
+        let mut res = Vec::with_capacity(14 + self.repository_name.len());
+        res.extend_from_slice(b"store:objects:");
+        res.extend_from_slice(self.repository_name);
+        res
     }
 
     /// Opens the manifest tree referenced by `self` on the given database.

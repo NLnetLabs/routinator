@@ -18,7 +18,7 @@
 /// the accompanying trait [`ProcessCa`] dealing with individual publication
 /// points.
 
-use std::{fs, io, str};
+use std::{fmt, fs, io, str};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -421,6 +421,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             for _ in 0..self.validation.validation_threads {
                 scope.spawn(|_| {
                     while let Some(task) = tasks.pop() {
+                        debug!("Running task {:?}", task);
                         if self.process_task(task, &tasks).is_err() {
                             had_err.store(true, Ordering::Relaxed);
                             break;
@@ -710,19 +711,19 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     update.insert_object(
                         file,
                         &store::StoredObject::new(content, Some(hash))
-                    )?;
+                    );
 
                     files.insert(item.file().clone());
                 }
 
                 update.update_manifest(
-                    &store::StoredManifest::new(
+                    store::StoredManifest::new(
                         self.cert.cert.validity().not_after(),
                         self.cert.ca_repository().clone(),
                         collected.manifest_bytes.clone(),
                         collected.crl_bytes.clone(),
                     )
-                )?;
+                );
                 Ok(files)
             }
         );
@@ -1201,7 +1202,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
-        let defer = self.point.run.collector.is_current(&cert);
+        let defer = !self.point.run.collector.is_current(&cert);
 
         self.child_cas.push(CaTask { cert, processor, defer });
         Ok(())
@@ -1308,6 +1309,22 @@ enum Task<'a, P> {
 
     /// The task is to process a CA.
     Ca(CaTask<P>),
+}
+
+impl<'a, P> fmt::Debug for Task<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Task::Tal(ref inner) => {
+                write!(f, "TalTask {{ tal: {} }}", inner.tal.info().name())
+            }
+            Task::Ca(ref inner) => {
+                write!(
+                    f, "CaTask {{ ca_repository: {} }}",
+                    inner.cert.ca_repository
+                )
+            }
+        }
+    }
 }
 
 

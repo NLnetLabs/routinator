@@ -16,7 +16,6 @@ use ring::constant_time::verify_slices_are_equal;
 use rpki::{rrdp, uri};
 use rpki::rrdp::{NotificationFile, ProcessDelta, ProcessSnapshot, UriAndHash};
 use sled::IVec;
-use sled::transaction::{ConflictableTransactionError, TransactionError};
 use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
@@ -102,7 +101,17 @@ impl Collector {
         for tree_name in self.db.tree_names() {
             if let Some(tree_uri) = Repository::tree_uri(&tree_name) {
                 if !retain.contains(&tree_uri) {
+                    debug!(
+                        "RRDP {}: dropping tree.",
+                        String::from_utf8_lossy(&tree_name)
+                    ); 
                     self.db.drop_tree(tree_name)?;
+                }
+                else {
+                    debug!(
+                        "RRDP {}: keeping tree.",
+                        String::from_utf8_lossy(&tree_name)
+                    ); 
                 }
             }
         }
@@ -342,7 +351,7 @@ impl Repository {
         collector: &Collector, rpki_notify: &uri::Https
     ) -> Result<Self, Failed> {
         Ok(Repository {
-            tree: collector.db.open_tree(Repository::tree_name(rpki_notify))?,
+            tree: collector.db.open_tree(Repository::tree_name(rpki_notify))?
         })
     }
 
@@ -407,7 +416,6 @@ impl<'a> RepositoryUpdate<'a> {
     }
 
     fn _update(&mut self) -> Result<bool, Failed> {
-        debug!("RRDP {}: Updating repository", self.rpki_notify);
         self.metrics.serial = None;
         let notify = self.http.notification_file(
             &self.rpki_notify, &mut self.metrics.notify_status
@@ -472,6 +480,10 @@ impl<'a> RepositoryUpdate<'a> {
 
         tree.insert("", &RepositoryState::from_notify(notify))?;
 
+        tree.flush()?;
+
+        debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
+
         Ok(())
     }
 
@@ -486,8 +498,11 @@ impl<'a> RepositoryUpdate<'a> {
             Repository::tree_name(self.rpki_notify)
         )?;
 
+        debug!("RRDP {}: Tree has {} entries.", self.rpki_notify, tree.len());
+
         let state = match tree.get("")? {
-            Some(state) => match RepositoryState::try_from(state) {
+            Some(state) => {
+                match RepositoryState::try_from(state) {
                 Ok(state) => state,
                 Err(_) => {
                     error!(
@@ -497,8 +512,9 @@ impl<'a> RepositoryUpdate<'a> {
                     );
                     return Err(Failed)
                 }
+                }
             }
-            None => return Ok(false)
+            None => return Ok(false),
         };
 
         let deltas = match Self::calc_deltas(notify, &state) {
@@ -520,7 +536,9 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        debug!("RRDP {}: Delta update succeeded.", self.rpki_notify);
+        tree.flush()?;
+
+        debug!("RRDP {}: Delta update completed.", self.rpki_notify);
         Ok(true)
     }
 
@@ -588,42 +606,42 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
-        let res = tree.transaction(|tree| {
-            self.delta_update_tran(notify, serial, uri, hash, tree)?;
-            Ok(())
-        });
-
-        match res {
-            Ok(()) => Ok(true),
-            Err(TransactionError::Abort(err)) => {
+        let batch = match self.try_delta_update_step(
+            tree, notify, serial, uri, hash
+        ) {
+            Ok(batch) => batch, 
+            Err(DeltaError::Db(err)) => {
+                return Err(err.into())
+            }
+            Err(err) => {
                 warn!(
                     "RRDP {}: failed to process delta: {}",
                     self.rpki_notify, err
                 );
-                Ok(false)
+                return Ok(false)
             }
-            Err(TransactionError::Storage(err)) => {
-                Err(err.into())
-            }
-        }
-        
+        };
+        tree.apply_batch(batch)?;
+        Ok(true)
     }
 
-    fn delta_update_tran(
+    fn try_delta_update_step(
         &self,
+        tree: &sled::Tree,
         notify: &NotificationFile,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
-        tree: &'a sled::transaction::TransactionalTree,
-    ) -> Result<(), DeltaError> {
+    ) -> Result<sled::Batch, DeltaError> {
         let mut processor = DeltaProcessor::new(
             notify.session_id, serial, tree
         );
         let mut reader = io::BufReader::new(HashRead::new(
             self.http.response(uri)?
         ));
+
         processor.process(&mut reader)?;
+        
         let remote_hash = reader.into_inner().into_hash();
         if verify_slices_are_equal(
             remote_hash.as_ref(),
@@ -632,12 +650,12 @@ impl<'a> RepositoryUpdate<'a> {
             return Err(DeltaError::DeltaHashMismatch)
         }
 
-        tree.insert(
+        processor.batch.insert(
             self.rpki_notify.as_str(),
             &RepositoryState::new(notify.session_id, serial),
-        )?;
+        );
 
-        Ok(())
+        Ok(processor.batch)
     }
 }
 
@@ -845,16 +863,20 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
 struct DeltaProcessor<'a> {
     session_id: Uuid,
     serial: u64,
-    tree: &'a sled::transaction::TransactionalTree,
+    tree: &'a sled::Tree,
+    batch: sled::Batch,
 }
 
 impl<'a> DeltaProcessor<'a> {
     fn new(
         session_id: Uuid,
         serial: u64,
-        tree: &'a sled::transaction::TransactionalTree,
+        tree: &'a sled::Tree,
     ) -> Self {
-        DeltaProcessor { session_id, serial, tree }
+        DeltaProcessor {
+            session_id, serial, tree,
+            batch: sled::Batch::default(),
+        }
     }
 
     fn check_hash(
@@ -926,7 +948,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
             None => self.check_new(&uri)?
         }
         let data = StoredObject::read_into_ivec(data)?;
-        self.tree.insert(uri.as_slice(), data)?;
+        self.batch.insert(uri.as_slice(), data);
         Ok(())
     }
 
@@ -936,7 +958,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
         hash: rrdp::Hash
     ) -> Result<(), Self::Err> {
         self.check_hash(&uri, hash)?;
-        self.tree.remove(uri.as_slice())?;
+        self.batch.remove(uri.as_slice());
         Ok(())
     }
 }
@@ -1048,10 +1070,10 @@ impl StoredObject<()> {
         reader: &mut impl io::Read
     ) -> Result<IVec, io::Error> {
         let mut reader = HashRead::new(reader);
-        let mut res = vec![0; mem::size_of::<rrdp::Hash>()];
+        let mut res = vec![0; mem::size_of::<rrdp::Hash>() + 1];
         io::copy(&mut reader, &mut res)?;
         let hash = reader.into_hash();
-        res[..hash.as_slice().len()].copy_from_slice(hash.as_slice());
+        res[1..hash.as_slice().len() + 1].copy_from_slice(hash.as_slice());
         Ok(res.into())
     }
 
@@ -1268,7 +1290,7 @@ enum DeltaError {
     },
     DeltaHashMismatch,
     ObjectError,
-    Db(sled::transaction::UnabortableTransactionError),
+    Db(sled::Error),
 }
 
 impl From<reqwest::Error> for DeltaError {
@@ -1295,20 +1317,9 @@ impl From<ObjectError> for DeltaError {
     }
 }
 
-impl From<sled::transaction::UnabortableTransactionError> for DeltaError {
-    fn from(err: sled::transaction::UnabortableTransactionError) -> Self {
+impl From<sled::Error> for DeltaError {
+    fn from(err: sled::Error) -> Self {
         DeltaError::Db(err)
-    }
-}
-
-impl From<DeltaError> for ConflictableTransactionError<DeltaError> {
-    fn from(
-        err: DeltaError
-    ) -> ConflictableTransactionError<DeltaError> {
-        match err {
-            DeltaError::Db(err) => err.into(),
-            _ => ConflictableTransactionError::Abort(err),
-        }
     }
 }
 
