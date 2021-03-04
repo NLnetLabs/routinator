@@ -26,6 +26,9 @@ New
 
 Bug Fixes
 
+* The `csvcompat` output format that was introduced in 0.7.0 is now
+  actually accepted by the `--format` command line option.
+
 Other Changes
 
 * Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
