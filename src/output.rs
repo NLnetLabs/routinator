@@ -76,7 +76,8 @@ pub enum OutputFormat {
 impl OutputFormat {
     /// A list of the known output formats.
     pub const VALUES: &'static [&'static str] = &[
-        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl", "summary", "none"
+        "csv", "csvcompat", "csvext", "json", "openbgpd", "bird1", "bird2",
+        "rpsl", "summary", "none"
     ];
 
     /// The default output format.
