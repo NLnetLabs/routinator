@@ -1212,7 +1212,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.11.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rrdp-hash-as-array#6d9d6f830a55646d5e02c671d945e58b68d6731a"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rrdp-hash-as-array#6c3b70a29b9a5d37bea1f6618770eeffc7218bca"
 dependencies = [
  "base64",
  "bcder",

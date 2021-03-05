@@ -68,7 +68,6 @@ impl Collector {
             }
             return Err(Failed)
         }
-        rrdp::Collector::init(config)?;
         rsync::Collector::init(config)?;
         Ok(())
     }
@@ -232,15 +231,15 @@ impl<'a> Run<'a> {
         Ok(None)
     }
 
-    /// Returns whether the repository for the provided PRKI CA is up-to-date.
-    pub fn is_current(&self, ca: &CaCert) -> bool {
+    /// Returns whether the repository for the PRKI CA has been updated.
+    pub fn was_updated(&self, ca: &CaCert) -> bool {
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                return rrdp.is_current(rrdp_uri);
+                return rrdp.was_updated(rrdp_uri);
             }
         }
         if let Some(ref rsync) = self.rsync {
-            return rsync.is_current(ca.ca_repository());
+            return rsync.was_updated(ca.ca_repository());
         }
         true
     }

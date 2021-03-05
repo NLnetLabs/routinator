@@ -1202,7 +1202,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
-        let defer = !self.point.run.collector.is_current(&cert);
+        let defer = !self.point.run.collector.was_updated(&cert);
 
         self.child_cas.push(CaTask { cert, processor, defer });
         Ok(())

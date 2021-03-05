@@ -1,4 +1,17 @@
-/// Local repository copy synchronized with RRDP.
+//! Local repository copy synchronized with RRDP.
+//!
+//! The RRDP collector works as follows:
+//!
+//! Data is kept in a sled database. This is normally the same database that
+//! is by the store. Each RRDP repository has one tree in that database whose
+//! name is the repository’s rpkiNotify URI prefixed by `"rrdp:"`. The items
+//! in that tree are the objects currently published keyed by their rsync URI.
+//! The stored values contain both the raw content as well as the SHA-256
+//! hash of the object so that we can quickly check the hash on update or
+//! deletion.
+//!
+//! In addition, the current state of the repository is stored under the empty
+//! key in its tree.
 
 use std::{cmp, error, fmt, fs, io, mem};
 use std::collections::{HashSet, HashMap};
@@ -42,7 +55,7 @@ pub struct Collector {
     /// The database.
     db: sled::Db,
 
-    /// A HTTP client.
+    /// The HTTP client.
     ///
     /// If this is `None`, we don’t actually do updates.
     http: Option<HttpClient>,
@@ -52,18 +65,12 @@ pub struct Collector {
 
     /// RRDP repository fallback timeout.
     ///
-    /// This is the time since last an RRDP repository was last update 
+    /// This is the time since the last known update of an RRDP repository
+    /// before it is considered non-existant.
     fallback_time: Duration,
 }
 
 impl Collector {
-    /// Initializes the RRDP collector without creating a value.
-    ///
-    /// This function is called implicitely by [`new`][Self::new].
-    pub fn init(_config: &Config) -> Result<(), Failed> {
-        Ok(())
-    }
-
     /// Creates a new RRDP collector.
     pub fn new(
         config: &Config, db: &sled::Db, update: bool
@@ -72,7 +79,6 @@ impl Collector {
             return Ok(None)
         }
 
-        Self::init(config)?;
         Ok(Some(Collector {
             db: db.clone(),
             http: if update {
@@ -96,6 +102,9 @@ impl Collector {
         Run::new(self)
     }
 
+    /// Cleans up the RRDP collector.
+    ///
+    /// Deletes all RRDP repository trees that are not included in `retain`.
     #[allow(clippy::mutable_key_type)]
     pub fn cleanup(&self, retain: &HashSet<uri::Https>) -> Result<(), Failed> {
         for tree_name in self.db.tree_names() {
@@ -157,6 +166,9 @@ impl<'a> Run<'a> {
     }
 
     /// Loads a trust anchor certificate identified by an HTTPS URI.
+    ///
+    /// This just downloads the file. It is not cached since that is done
+    /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
         let http = match self.collector.http {
             Some(ref http) => http,
@@ -187,7 +199,7 @@ impl<'a> Run<'a> {
     /// This does not mean the repository is actually up-to-date or even
     /// available
     /// as an update may have failed.
-    pub fn is_current(&self, notify_uri: &uri::Https) -> bool {
+    pub fn was_updated(&self, notify_uri: &uri::Https) -> bool {
         // If updating is disabled, everything is already current.
         if self.collector.http.is_none() {
             return true
