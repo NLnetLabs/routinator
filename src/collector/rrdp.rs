@@ -197,10 +197,9 @@ impl<'a> Run<'a> {
     /// Returns whether an RRDP repository has been updated already.
     ///
     /// This does not mean the repository is actually up-to-date or even
-    /// available
-    /// as an update may have failed.
+    /// available as an update may have failed.
     pub fn was_updated(&self, notify_uri: &uri::Https) -> bool {
-        // If updating is disabled, everything is already current.
+        // If updating is disabled, everything is considered as updated.
         if self.collector.http.is_none() {
             return true
         }
@@ -212,7 +211,10 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If a repository is available and current, returns it.
+    /// If a repository is has been successfully updated during this run,
+    /// returns it. Otherwise returns it if it is cached and that cached data
+    /// is newer than the fallback time. Thus, if the method returns
+    /// `Ok(None)`, you can fall back to rsync.
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
     ) -> Result<Option<Repository>, Failed> {
@@ -222,6 +224,7 @@ impl<'a> Run<'a> {
         }
     }
 
+    /// Accesses an RRDP repository if updates are enabled.
     fn load_repository_updated(
         &self, http: &HttpClient, rpki_notify: &uri::Https
     ) -> Result<Option<Repository>, Failed> {
@@ -295,6 +298,7 @@ impl<'a> Run<'a> {
         Ok(repository)
     }
 
+    /// Accesses an RRDP repository if updates are disabled.
     fn load_repository_no_update(
         &self, rpki_notify: &uri::Https
     ) -> Result<Option<Repository>, Failed> {
@@ -317,6 +321,10 @@ impl<'a> Run<'a> {
         Ok(repository)
     }
 
+    /// Returns whether a repository should be considered current.
+    ///
+    /// It is current if we have a copy of the repository and that copy was
+    /// last updated less than the fallback time ago.
     fn is_repository_current(
         &self, rpki_notify: &uri::Https
     ) -> Result<bool, Failed> {
@@ -353,12 +361,15 @@ impl<'a> Run<'a> {
 
 //------------ Repository ----------------------------------------------------
 
+/// Access to a single RRDP repository.
 #[derive(Clone, Debug)]
 pub struct Repository {
+    /// The sled tree for the repository.
     tree: sled::Tree,
 }
 
 impl Repository {
+    /// Creates a new value for the given rpkiNotify URI.
     fn new(
         collector: &Collector, rpki_notify: &uri::Https
     ) -> Result<Self, Failed> {
@@ -367,10 +378,15 @@ impl Repository {
         })
     }
 
+    /// Returns the tree name for the given rpkiNotify URI.
     fn tree_name(rpki_notify: &uri::Https) -> Vec<u8> {
         format!("rrdp:{}", rpki_notify).into()
     }
 
+    /// Returns the rpkiNotify for a given RRDP tree name.
+    ///
+    /// If the tree name isn’t actually for an RRDP collector tree, returns
+    /// `None`.
     fn tree_uri(tree_name: &[u8]) -> Option<uri::Https> {
         if tree_name.starts_with(b"rrdp:") {
             uri::Https::from_slice(&tree_name[5..]).ok()
@@ -380,6 +396,10 @@ impl Repository {
         }
     }
 
+    /// Loads an object from the repository.
+    ///
+    /// The object is identified by its rsync URI. If the object doesn’t
+    /// exist, returns `None`.
     pub fn load_file(
         &self,
         uri: &uri::Rsync
@@ -401,14 +421,26 @@ impl Repository {
 
 //------------ RepositoryUpdate ----------------------------------------------
 
+/// Updating an RRDP repository.
+///
+/// This type collects all the data necessary for updating a repository and
+/// provides all the methods that actually do it.
 struct RepositoryUpdate<'a> {
+    /// A reference to the RRDP collector the update is done on.
     collector: &'a Collector,
+
+    /// The HTTP client to use for downloading things.
     http: &'a HttpClient,
+
+    /// The rpkiNotify URI identifying the repository.
     rpki_notify: &'a uri::Https,
+
+    /// The update metrics.
     metrics: RrdpServerMetrics,
 }
 
 impl<'a> RepositoryUpdate<'a> {
+    /// Creates a new update.
     fn new(
         collector: &'a Collector,
         http: &'a HttpClient,
@@ -420,6 +452,9 @@ impl<'a> RepositoryUpdate<'a> {
         }
     }
 
+    /// Performs an update and returns whether that succeeeded.
+    ///
+    /// This method wraps `_update` and times how long that takes.
     fn update(&mut self) -> Result<bool, Failed> {
         let start_time = SystemTime::now();
         let res = self._update();
@@ -427,6 +462,7 @@ impl<'a> RepositoryUpdate<'a> {
         res
     }
 
+    /// Actually performs an update and returns whether that succeeeded.
     fn _update(&mut self) -> Result<bool, Failed> {
         self.metrics.serial = None;
         let notify = self.http.notification_file(
@@ -441,20 +477,16 @@ impl<'a> RepositoryUpdate<'a> {
 
     //--- Snapshot Update
 
+    /// Performs a snapshot update and returns whether that succeeded.
+    ///
+    /// The URI and expected meta-data of the snapshot file are taken from
+    /// `notify`.
     fn snapshot_update(
         &self,
         notify: &NotificationFile,
     ) -> Result<bool, Failed> {
-        // We wipe the old repository data first. This may leave us with no
-        // data at all, but that doesn’t matter since we have the last good
-        // data in the store.
-        self.collector.db.drop_tree(Repository::tree_name(self.rpki_notify))?;
-
         match self.try_snapshot_update(
             notify,
-            self.collector.db.open_tree(
-                Repository::tree_name(self.rpki_notify)
-            )?
         ) {
             Ok(()) => Ok(true),
             Err(SnapshotError::Db(err)) => {
@@ -473,11 +505,10 @@ impl<'a> RepositoryUpdate<'a> {
     fn try_snapshot_update(
         &self,
         notify: &NotificationFile,
-        tree: sled::Tree
     ) -> Result<(), SnapshotError> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
         
-        let mut processor = SnapshotProcessor::new(&notify, &tree);
+        let mut processor = SnapshotProcessor::new(&notify);
         let mut reader = io::BufReader::new(HashRead::new(
             self.http.response(notify.snapshot.uri())?
         ));
@@ -490,8 +521,14 @@ impl<'a> RepositoryUpdate<'a> {
             return Err(SnapshotError::HashMismatch)
         }
 
-        tree.insert("", &RepositoryState::from_notify(notify))?;
+        self.collector.db.drop_tree(Repository::tree_name(self.rpki_notify))?;
 
+        let tree = self.collector.db.open_tree(
+            Repository::tree_name(self.rpki_notify)
+        )?;
+
+        tree.apply_batch(processor.batch)?;
+        tree.insert("", &RepositoryState::from_notify(notify))?;
         tree.flush()?;
 
         debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
@@ -823,15 +860,17 @@ impl HttpClient {
 
 struct SnapshotProcessor<'a> {
     notify: &'a NotificationFile,
-    tree: &'a sled::Tree,
+    batch: sled::Batch,
 }
 
 impl<'a> SnapshotProcessor<'a> {
     fn new(
         notify: &'a NotificationFile,
-        tree: &'a sled::Tree,
     ) -> Self {
-        SnapshotProcessor { notify, tree }
+        SnapshotProcessor {
+            notify,
+            batch: sled::Batch::default()
+        }
     }
 }
 
@@ -864,7 +903,7 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
         let data = StoredObject::read_into_ivec(data)?;
-        self.tree.insert(&uri, data)?;
+        self.batch.insert(uri.as_str(), data);
         Ok(())
     }
 }
