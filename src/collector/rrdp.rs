@@ -465,9 +465,12 @@ impl<'a> RepositoryUpdate<'a> {
     /// Actually performs an update and returns whether that succeeeded.
     fn _update(&mut self) -> Result<bool, Failed> {
         self.metrics.serial = None;
-        let notify = self.http.notification_file(
+        let notify = match self.http.notification_file(
             &self.rpki_notify, &mut self.metrics.notify_status
-        )?;
+        ) {
+            Some(notify) => notify,
+            None => return Ok(false)
+        };
         if self.delta_update(&notify)? {
             return Ok(true)
         }
@@ -502,6 +505,10 @@ impl<'a> RepositoryUpdate<'a> {
         }
     }
 
+    /// Try performing a snapshot update.
+    ///
+    /// This is basically the snapshot update except that it returns an error
+    /// whenever anything goes wrong whether that is fatal or not.
     fn try_snapshot_update(
         &self,
         notify: &NotificationFile,
@@ -539,6 +546,12 @@ impl<'a> RepositoryUpdate<'a> {
 
     //--- Delta Update
 
+    /// Performs a delta update of the RRDP repository.
+    ///
+    /// Takes information of the available deltas from `notify`. May not do
+    /// anything at all if the repository is up-to-date. Returns whether the
+    /// update succeeded. If `Ok(false)` is returned, a snapshot update
+    /// should be tried next.
     fn delta_update(
         &self,
         notify: &NotificationFile,
@@ -655,7 +668,7 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
-        let batch = match self.try_delta_update_step(
+        let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
             Ok(batch) => batch, 
@@ -674,7 +687,10 @@ impl<'a> RepositoryUpdate<'a> {
         Ok(true)
     }
 
-    fn try_delta_update_step(
+    /// Collects the changes to be done for a delta update step.
+    ///
+    /// Upon success, returns a batch with the changes. 
+    fn collect_delta_update_step(
         &self,
         tree: &sled::Tree,
         notify: &NotificationFile,
@@ -711,12 +727,18 @@ impl<'a> RepositoryUpdate<'a> {
 
 //------------ HttpClient ----------------------------------------------------
 
+/// The HTTP client for updating RRDP repositories.
 #[derive(Debug)]
 struct HttpClient {
+    /// The (blocking) reqwest client.
+    ///
+    /// This will be of the error variant until `ignite` has been called. Yes,
+    /// that is not ideal but 
     client: Result<Client, Option<ClientBuilder>>,
 }
 
 impl HttpClient {
+    /// Creates a new, not-yet-ignited client based on the config.
     pub fn new(config: &Config) -> Result<Self, Failed> {
         let mut builder = Client::builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
@@ -758,6 +780,11 @@ impl HttpClient {
         })
     }
 
+    /// Ignites the client.
+    ///
+    /// This _must_ be called before any other methods can be called. It must
+    /// be called after any potential fork on Unix systems because it spawns
+    /// threads.
     pub fn ignite(&mut self) -> Result<(), Failed> {
         let builder = match self.client.as_mut() {
             Ok(_) => return Ok(()),
@@ -780,10 +807,7 @@ impl HttpClient {
         Ok(())
     }
 
-    fn client(&self) -> &Client {
-        self.client.as_ref().unwrap()
-    }
-
+    /// Loads a WebPKI trusted certificate.
     fn load_cert(path: &Path) -> Result<Certificate, Failed> {
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
@@ -812,6 +836,16 @@ impl HttpClient {
         })
     }
 
+    /// Returns a reference to the reqwest client.
+    ///
+    /// # Panics
+    ///
+    /// The method panics if the client hasn’t been ignited yet.
+    fn client(&self) -> &Client {
+        self.client.as_ref().unwrap()
+    }
+
+    /// Performs an HTTP GET request for the given URI.
     pub fn response(
         &self,
         uri: &uri::Https
@@ -819,11 +853,17 @@ impl HttpClient {
         self.client().get(uri.as_str()).send()
     }
 
+    /// Requests, parses, and returns the given RRDP notification file.
+    ///
+    /// The value referred to by `status` will be updated to the received
+    /// status code or `None` if the request failed for other reasons.
+    ///
+    /// Returns the notification file on success.
     pub fn notification_file(
         &self,
         uri: &uri::Https,
         status: &mut Option<StatusCode>,
-    ) -> Result<NotificationFile, Failed> {
+    ) -> Option<NotificationFile> {
         let response = match self.response(uri) {
             Ok(response) => {
                 *status = Some(response.status());
@@ -832,7 +872,7 @@ impl HttpClient {
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
                 *status = None;
-                return Err(Failed);
+                return None;
             }
         };
         if !response.status().is_success() {
@@ -840,16 +880,16 @@ impl HttpClient {
                 "RRDP {}: Getting notification file failed with status {}",
                 uri, response.status()
             );
-            return Err(Failed);
+            return None;
         }
         match NotificationFile::parse(io::BufReader::new(response)) {
             Ok(mut res) => {
                 res.deltas.sort_by_key(|delta| delta.0);
-                Ok(res)
+                Some(res)
             }
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
-                Err(Failed)
+                None
             }
         }
     }
@@ -1219,15 +1259,6 @@ impl<R> HashRead<R> {
     pub fn into_hash(self) -> rrdp::Hash {
         rrdp::Hash::try_from(self.context.finish()).unwrap()
     }
-
-    /*
-    pub fn read_all(mut self) -> Result<rrdp::Hash, io::Error>
-    where R: io::Read {
-        let mut buf = [0u8; 4096];
-        while io::Read::read(&mut self, &mut buf)? > 0 { }
-        Ok(self.into_hash())
-    }
-    */
 }
 
 
