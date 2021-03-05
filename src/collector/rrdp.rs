@@ -1180,6 +1180,7 @@ struct RepositoryObject<Octets> {
 }
 
 impl RepositoryObject<()> {
+    /// Reads an object’s content directly into a database vec.
     pub fn read_into_ivec(
         reader: &mut impl io::Read
     ) -> Result<IVec, io::Error> {
@@ -1191,6 +1192,7 @@ impl RepositoryObject<()> {
         Ok(res.into())
     }
 
+    /// Decodes only the object hash from the database representation.
     pub fn decode_hash(stored: &[u8]) -> Result<rrdp::Hash, ObjectError> {
         const MIN_LEN: usize = {
             mem::size_of::<u8>() + mem::size_of::<rrdp::Hash>()
@@ -1266,12 +1268,17 @@ impl TryFrom<IVec> for RepositoryObject<Bytes> {
 
 //------------ HashRead ------------------------------------------------------
 
-pub struct HashRead<R> {
+/// A reader wrapper that calculates the SHA-256 hash of all read data.
+struct HashRead<R> {
+    /// The wrapped reader.
     reader: R,
+
+    /// The context for hash calculation.
     context: digest::Context,
 }
 
 impl<R> HashRead<R> {
+    /// Creates a new hash reader.
     pub fn new(reader: R) -> Self {
         HashRead {
             reader,
@@ -1279,6 +1286,7 @@ impl<R> HashRead<R> {
         }
     }
 
+    /// Converts the reader into the hash.
     pub fn into_hash(self) -> rrdp::Hash {
         rrdp::Hash::try_from(self.context.finish()).unwrap()
     }
@@ -1298,6 +1306,11 @@ impl<R: io::Read> io::Read for HashRead<R> {
 
 //------------ SnapshotError -------------------------------------------------
 
+/// An error happened during snapshot processing.
+///
+/// This is an internal error type only necessary for error handling during
+/// RRDP processing. Values will be logged and converted into failures or
+/// negative results as necessary.
 #[derive(Debug)]
 enum SnapshotError {
     Http(reqwest::Error),
@@ -1372,6 +1385,11 @@ impl error::Error for SnapshotError { }
 
 //------------ DeltaError ----------------------------------------------------
 
+/// An error happened during delta processing.
+///
+/// This is an internal error type only necessary for error handling during
+/// RRDP processing. Values will be logged and converted into failures or
+/// negative results as necessary.
 #[derive(Debug)]
 enum DeltaError {
     Http(reqwest::Error),
@@ -1487,6 +1505,8 @@ impl error::Error for DeltaError { }
 //------------ StateError ----------------------------------------------------
 
 /// Repository state cannot be decoded correctly.
+///
+/// This is treated as a database error leading to a failure.
 #[derive(Clone, Copy, Debug)]
 pub struct StateError;
 
@@ -1509,7 +1529,9 @@ impl error::Error for StateError { }
 
 //------------ ObjectError ---------------------------------------------------
 
-/// A cached object cannot be decoded correctly.
+/// A repository object cannot be decoded correctly.
+///
+/// This is treated as a database error leading to a failure.
 #[derive(Clone, Copy, Debug)]
 struct ObjectError;
 
