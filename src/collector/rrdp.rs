@@ -406,7 +406,7 @@ impl Repository {
     ) -> Result<Option<Bytes>, Failed> {
         match self.tree.get(uri.as_str())? {
             Some(value) => {
-                StoredObject::try_from(value).map(|obj| {
+                RepositoryObject::try_from(value).map(|obj| {
                     Some(obj.content)
                 }).map_err(|_| {
                     error!("Encountered invalid object in RRDP database.");
@@ -898,12 +898,17 @@ impl HttpClient {
 
 //------------ SnapshotProcessor ---------------------------------------------
 
+/// The processor for an RRDP snapshot.
 struct SnapshotProcessor<'a> {
+    /// A reference to the notification file pointing to the snapshot.
     notify: &'a NotificationFile,
+
+    /// The batch to add all objects to.
     batch: sled::Batch,
 }
 
 impl<'a> SnapshotProcessor<'a> {
+    /// Creates a new processor.
     fn new(
         notify: &'a NotificationFile,
     ) -> Self {
@@ -942,7 +947,7 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
         uri: uri::Rsync,
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
-        let data = StoredObject::read_into_ivec(data)?;
+        let data = RepositoryObject::read_into_ivec(data)?;
         self.batch.insert(uri.as_str(), data);
         Ok(())
     }
@@ -951,14 +956,23 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
 
 //------------ DeltaProcessor ------------------------------------------------
 
+/// The processor for RRDP delta updates.
 struct DeltaProcessor<'a> {
+    /// The session ID of the RRDP session.
     session_id: Uuid,
+
+    /// The expected serial number of the delta.
     serial: u64,
+
+    /// The database tree of the RRDP repository.
     tree: &'a sled::Tree,
+
+    /// The batch to add all updates to.
     batch: sled::Batch,
 }
 
 impl<'a> DeltaProcessor<'a> {
+    /// Creates a new processor.
     fn new(
         session_id: Uuid,
         serial: u64,
@@ -970,6 +984,7 @@ impl<'a> DeltaProcessor<'a> {
         }
     }
 
+    /// Checks the hash of an object that should be present.
     fn check_hash(
         &self,
         uri: &uri::Rsync,
@@ -981,7 +996,7 @@ impl<'a> DeltaProcessor<'a> {
                 return Err(DeltaError::MissingObject { uri: uri.clone() })
             }
         };
-        let stored_hash = StoredObject::decode_hash(&data)?;
+        let stored_hash = RepositoryObject::decode_hash(&data)?;
         if stored_hash != hash {
             Err(DeltaError::ObjectHashMismatch { uri: uri.clone() })
         }
@@ -990,6 +1005,7 @@ impl<'a> DeltaProcessor<'a> {
         }
     }
 
+    /// Checks that a new object isn’t present yet.
     fn check_new(
         &self,
         uri: &uri::Rsync
@@ -1038,7 +1054,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
             Some(hash) => self.check_hash(&uri, hash)?,
             None => self.check_new(&uri)?
         }
-        let data = StoredObject::read_into_ivec(data)?;
+        let data = RepositoryObject::read_into_ivec(data)?;
         self.batch.insert(uri.as_slice(), data);
         Ok(())
     }
@@ -1057,6 +1073,10 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
 
 //------------ RepositoryState -----------------------------------------------
 
+/// The current state of an RRDP repository.
+///
+/// A value of this type is stored under the empty key with each repository
+/// and is updated on each … update.
 #[derive(Clone, Debug)]
 struct RepositoryState {
     /// The UUID of the current session of repository.
@@ -1070,10 +1090,12 @@ struct RepositoryState {
 }
 
 impl RepositoryState {
+    /// Create the state based on the notification file.
     pub fn from_notify(notify: &NotificationFile) -> Self {
         Self::new(notify.session_id, notify.serial)
     }
 
+    /// Create new state with given values.
     pub fn new(session: Uuid, serial: u64) -> Self {
         RepositoryState {
             session, serial,
@@ -1145,10 +1167,11 @@ impl TryFrom<IVec> for RepositoryState {
 }
 
 
-//------------ StoredObject --------------------------------------------------
+//------------ RepositoryObject ----------------------------------------------
 
+/// A repository object stored in the database.
 #[derive(Clone, Debug)]
-struct StoredObject<Octets> {
+struct RepositoryObject<Octets> {
     /// The RRDP hash of the object.
     hash: rrdp::Hash,
 
@@ -1156,7 +1179,7 @@ struct StoredObject<Octets> {
     content: Octets,
 }
 
-impl StoredObject<()> {
+impl RepositoryObject<()> {
     pub fn read_into_ivec(
         reader: &mut impl io::Read
     ) -> Result<IVec, io::Error> {
@@ -1194,8 +1217,8 @@ impl StoredObject<()> {
 
 //--- From and TryFrom
 
-impl<'a, Octets: AsRef<[u8]>> From<&'a StoredObject<Octets>> for IVec {
-    fn from(src: &'a StoredObject<Octets>) -> Self {
+impl<'a, Octets: AsRef<[u8]>> From<&'a RepositoryObject<Octets>> for IVec {
+    fn from(src: &'a RepositoryObject<Octets>) -> Self {
         let mut vec = Vec::new();
 
         // Version. 0u8
@@ -1211,7 +1234,7 @@ impl<'a, Octets: AsRef<[u8]>> From<&'a StoredObject<Octets>> for IVec {
     }
 }
 
-impl TryFrom<IVec> for StoredObject<Bytes> {
+impl TryFrom<IVec> for RepositoryObject<Bytes> {
     type Error = ObjectError;
 
     fn try_from(stored: IVec) -> Result<Self, Self::Error> {
@@ -1236,7 +1259,7 @@ impl TryFrom<IVec> for StoredObject<Bytes> {
         // Content
         let content = Bytes::copy_from_slice(stored);
 
-        Ok(StoredObject { hash, content })
+        Ok(RepositoryObject { hash, content })
     }
 }
 
