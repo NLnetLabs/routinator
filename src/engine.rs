@@ -421,7 +421,6 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             for _ in 0..self.validation.validation_threads {
                 scope.spawn(|_| {
                     while let Some(task) = tasks.pop() {
-                        debug!("Running task {:?}", task);
                         if self.process_task(task, &tasks).is_err() {
                             had_err.store(true, Ordering::Relaxed);
                             break;
