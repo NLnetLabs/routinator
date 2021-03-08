@@ -311,7 +311,7 @@ impl Repository {
     /// Loads the manifest of a publication point in the repository.
     ///
     /// The manifest is identified via its signedObject URI. If present, it is
-    /// return as a [`StoredManifest`].
+    /// returned as a [`StoredManifest`].
     pub fn load_manifest(
         &self, uri: &uri::Rsync
     ) -> Result<Option<StoredManifest>, Failed> {
