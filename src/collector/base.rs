@@ -36,7 +36,7 @@ pub struct Collector {
     /// The collector for RRDP transport.
     ///
     /// If this is `None`, use of RRDP has been disabled entirely.
-    rrdp: Option<rrdp::Cache>,
+    rrdp: Option<rrdp::Collector>,
 
     /// The collector for rsync transport.
     ///
@@ -68,7 +68,6 @@ impl Collector {
             }
             return Err(Failed)
         }
-        rrdp::Cache::init(config)?;
         rsync::Collector::init(config)?;
         Ok(())
     }
@@ -77,17 +76,18 @@ impl Collector {
     ///
     /// Takes all necessary information from `config`. If `update` is `false`,
     /// the collector will not be updated from upstream and only data that has
-    /// been collected previosuly will be used. This differs from disabling
+    /// been collected previously will be used. This differs from disabling
     /// transports as it will still use whatever is present on disk as
     /// potentially updated data.
     pub fn new(
         config: &Config,
+        db: &sled::Db,
         update: bool
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
             cache_dir: config.cache_dir.clone(),
-            rrdp: rrdp::Cache::new(config, update)?,
+            rrdp: rrdp::Collector::new(config, db, update)?,
             rsync: rsync::Collector::new(config, update)?,
         })
     }
@@ -97,13 +97,13 @@ impl Collector {
     /// This needs to be done after a possible fork as the collector may spawn
     /// a set of worker threads.
     pub fn ignite(&mut self) -> Result<(), Failed> {
-        self.rrdp.as_mut().map_or(Ok(()), rrdp::Cache::ignite)?;
+        self.rrdp.as_mut().map_or(Ok(()), rrdp::Collector::ignite)?;
         self.rsync.as_mut().map_or(Ok(()), rsync::Collector::ignite)?;
         Ok(())
     }
 
     /// Starts a new validation run using this collector.
-    pub fn start(&self) -> Result<Run, Failed> {
+    pub fn start(&self) -> Run {
         Run::new(self)
     }
 
@@ -142,8 +142,8 @@ pub struct Run<'a> {
 
 impl<'a> Run<'a> {
     /// Creates a new validation run for the given collector.
-    fn new(collector: &'a Collector) -> Result<Self, Failed> {
-        Ok(Run {
+    fn new(collector: &'a Collector) -> Self {
+        Run {
             collector,
             rsync: if let Some(ref rsync) = collector.rsync {
                 Some(rsync.start())
@@ -152,12 +152,12 @@ impl<'a> Run<'a> {
                 None
             },
             rrdp: if let Some(ref rrdp) = collector.rrdp {
-                Some(rrdp.start()?)
+                Some(rrdp.start())
             }
             else {
                 None
             }
-        })
+        }
     }
 
     /// Finishes the validation run.
@@ -206,13 +206,13 @@ impl<'a> Run<'a> {
     /// If the repository is definitely unavailable, logs diagnositic
     /// information and returns `None`.
     pub fn repository<'s>(
-        &'s self, ca: &CaCert
-    ) -> Option<Repository<'s>> {
+        &'s self, ca: &'s CaCert
+    ) -> Result<Option<Repository<'s>>, Failed> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                if let Some(server) = rrdp.load_server(rrdp_uri) {
-                    return Some(Repository(RepoInner::Rrdp { rrdp, server }))
+                if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
+                    return Ok(Some(Repository::rrdp(repository)))
                 }
                 warn!(
                     "RRDP repository {} unavailable. Falling back to rsync.",
@@ -224,22 +224,22 @@ impl<'a> Run<'a> {
         // Well, okay, then. How about rsync?
         if let Some(ref rsync) = self.rsync {
             rsync.load_module(ca.ca_repository());
-            return Some(Repository(RepoInner::Rsync { rsync }))
+            return Ok(Some(Repository::rsync(rsync)))
         }
 
         // All is lost.
-        None
+        Ok(None)
     }
 
-    /// Returns whether the repository for the provided PRKI CA is up-to-date.
-    pub fn is_current(&self, ca: &CaCert) -> bool {
+    /// Returns whether the repository for the PRKI CA has been updated.
+    pub fn was_updated(&self, ca: &CaCert) -> bool {
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                return rrdp.is_current(rrdp_uri);
+                return rrdp.was_updated(rrdp_uri);
             }
         }
         if let Some(ref rsync) = self.rsync {
-            return rsync.is_current(ca.ca_repository());
+            return rsync.was_updated(ca.ca_repository());
         }
         true
     }
@@ -256,11 +256,8 @@ pub struct Repository<'a>(RepoInner<'a>);
 enum RepoInner<'a> {
     /// The repository is accessed via RRDP.
     Rrdp {
-        /// The RRDP runner.
-        rrdp: &'a rrdp::Run<'a>,
-
-        /// The server ID for the RRDP server.
-        server: rrdp::ServerId,
+        /// The repository.
+        repository: rrdp::Repository,
     },
 
     /// The repository is accessed via rsync.
@@ -271,6 +268,18 @@ enum RepoInner<'a> {
 }
 
 impl<'a> Repository<'a> {
+    /// Creates a RRDP repository.
+    fn rrdp(repository: rrdp::Repository) -> Self {
+        Repository(RepoInner::Rrdp { repository })
+    }
+
+    /// Creates an rsync repository.
+    fn rsync(rsync: &'a rsync::Run<'a>) -> Self {
+        Repository(
+            RepoInner::Rsync { rsync }
+        )
+    }
+
     /// Returns whether the repository was accessed via RRDP.
     pub fn is_rrdp(&self) -> bool {
         matches!(self.0, RepoInner::Rrdp { .. })
@@ -280,13 +289,15 @@ impl<'a> Repository<'a> {
     ///
     /// If the object is unavailable for some reason, logs diagnostic
     /// information and returns `None`.
-    pub fn load_object(&self, uri: &uri::Rsync) -> Option<Bytes> {
+    pub fn load_object(
+        &self, uri: &uri::Rsync
+    ) -> Result<Option<Bytes>, Failed> {
         match self.0 {
-            RepoInner::Rrdp { rrdp, server } => {
-                rrdp.load_file(server, uri).unwrap_or(None)
+            RepoInner::Rrdp { ref repository } => {
+                repository.load_file(uri)
             }
             RepoInner::Rsync { rsync } => {
-                rsync.load_file(uri)
+                Ok(rsync.load_file(uri))
             }
         }
     }
@@ -340,13 +351,14 @@ impl<'a> Cleanup<'a> {
     }
 
     /// Performs the cleanup run.
-    pub fn commit(self) {
+    pub fn commit(self) -> Result<(), Failed> {
         if let Some(rsync) = self.collector.rsync.as_ref() {
             rsync.cleanup(&self.rsync)
         }
         if let Some(rrdp) = self.collector.rrdp.as_ref() {
-            rrdp.cleanup(&self.rrdp)
+            rrdp.cleanup(&self.rrdp)?
         }
+        Ok(())
     }
 }
 

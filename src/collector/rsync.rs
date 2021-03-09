@@ -1,17 +1,17 @@
-/// Local repository copy synchronized with rsync.
-//
-//  The rsync collector works as follows:
-//
-//  Data is kept in the directory given via the cache_dir attribute using the
-//  rsync URI without the scheme as the path. We assume that data is published
-//  in rsync modules identified by the first two components of this path. This
-//  corresponds with the way the rsync daemon works.
-//
-//  During a valiation run, we keep track of the modules we already have
-//  updated. When access to a module that has not yet been updated is
-//  requested, we spawn rsync and block until it returns. If during that time
-//  another thread requests access to the same module, that thread is blocked,
-//  too.
+//! Local repository copy synchronized with rsync.
+//!
+//! The rsync collector works as follows:
+//!
+//! Data is kept in the directory given via the cache_dir attribute using the
+//! rsync URI without the scheme as the path. We assume that data is published
+//! in rsync modules identified by the first two components of this path. This
+//! corresponds to the way the rsync daemon works.
+//!
+//! During a valiation run, we keep track of the modules we already have
+//! updated. When access to a module that has not yet been updated is
+//! requested, we spawn rsync and block until it returns. If during that time
+//! another thread requests access to the same module, that thread is blocked,
+//! too.
 
 use std::{fmt, fs, io, ops, process};
 use std::borrow::{Borrow, Cow, ToOwned};
@@ -243,7 +243,7 @@ pub struct Run<'a> {
     /// A reference to the underlying collector.
     collector: &'a Collector,
 
-    /// The set of modules that has been updated already.
+    /// The set of modules that have been updated already.
     updated: RwLock<HashSet<OwnedModule>>,
 
     /// The modules that are currently being updated.
@@ -273,7 +273,7 @@ impl<'a> Run<'a> {
     ///
     /// This does not mean the module is actually up-to-date or even available
     /// as an update may have failed.
-    pub fn is_current(&self, uri: &uri::Rsync) -> bool {
+    pub fn was_updated(&self, uri: &uri::Rsync) -> bool {
         self.updated.read().unwrap().contains(Module::from_uri(uri).as_ref())
     }
 

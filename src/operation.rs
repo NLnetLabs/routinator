@@ -28,7 +28,6 @@ use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
-use crate::collector::Collector;
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
@@ -39,7 +38,6 @@ use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
-use crate::store::Store;
 use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -388,8 +386,6 @@ impl Server {
     /// just runs the server forever.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
         Engine::init(process.config())?;
-        Collector::init(process.config())?;
-        Store::init(process.config())?;
         let log = process.switch_logging(
             self.detach,
             !process.config().http_listen.is_empty()
@@ -404,11 +400,7 @@ impl Server {
 
         process.drop_privileges()?;
 
-        let mut validation = Engine::new(
-            process.config(),
-            Collector::new(process.config(), true)?,
-            Store::new(process.config())?,
-        )?;
+        let mut validation = Engine::new(process.config(), true)?;
         let runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
         let mut http = runtime.spawn(http);
@@ -655,11 +647,7 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(
-            process.config(),
-            Collector::new(process.config(), !self.noupdate)?,
-            Store::new(process.config())?,
-        )?;
+        let mut validation = Engine::new(process.config(), !self.noupdate)?;
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
@@ -798,11 +786,7 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(
-            process.config(),
-            Collector::new(process.config(), !self.noupdate)?,
-            Store::new(process.config())?,
-        )?;
+        let mut validation = Engine::new(process.config(), !self.noupdate)?;
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
@@ -892,11 +876,7 @@ impl ValidateDocument {
     /// Returns successfully if validation is successful or with an
     /// appropriate error otherwise.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(
-            process.config(),
-            Collector::new(process.config(), !self.noupdate)?,
-            Store::new(process.config())?,
-        )?;
+        let mut validation = Engine::new(process.config(), !self.noupdate)?;
         validation.ignite()?;
         process.switch_logging(false, false)?;
 
@@ -1016,11 +996,7 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(
-            process.config(),
-            Collector::new(process.config(), true)?,
-            Store::new(process.config())?,
-        )?;
+        let mut validation = Engine::new(process.config(), true)?;
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (_, metrics) = validation.process_origins()?;

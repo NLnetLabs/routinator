@@ -11,6 +11,8 @@
 /// Secondly, [`ExitError`] is used when the program should be terminated. It
 /// provides enough information to determine the exit code of the program.
 
+use log::error;
+
 
 //------------ Failed --------------------------------------------------------
 
@@ -21,6 +23,19 @@
 /// really do anything to recover.
 #[derive(Clone, Copy, Debug)]
 pub struct Failed;
+
+impl From<sled::Error> for Failed {
+    fn from(err: sled::Error) -> Failed {
+        error!("RPKI storage error: {}", err);
+        if matches!(err, sled::Error::Io(_) | sled::Error::Corruption {..}) {
+            error!(
+                "Starting Routinator with the --fresh option \
+                may fix this issue"
+            );
+        }
+        Failed
+    }
+}
 
 
 //------------ ExitError -----------------------------------------------------

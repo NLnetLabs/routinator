@@ -43,6 +43,9 @@ const DEFAULT_EXPIRE: u64 = 7200;
 /// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
+/// The default for the RRDP fallback time.
+const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(600);
+
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 
@@ -158,6 +161,9 @@ pub struct Config {
 
     /// Whether to disable RRDP.
     pub disable_rrdp: bool,
+
+    /// Time since last update of an RRDP repository before fallback to rsync.
+    pub rrdp_fallback_time: Duration,
 
     /// Optional RRDP timeout in seconds.
     ///
@@ -632,6 +638,13 @@ impl Config {
             self.disable_rrdp = true
         }
 
+        // rrdp_fallback_time
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-fallback-time"
+        )? {
+            self.rrdp_fallback_time = Duration::from_secs(value)
+        }
+
         // rrdp_timeout
         if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
             self.rrdp_timeout = match value {
@@ -935,6 +948,11 @@ impl Config {
                 )
             },
             disable_rrdp: file.take_bool("disable-rrdp")?.unwrap_or(false),
+            rrdp_fallback_time: {
+                file.take_u64("rrdp-fallback-time")?
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_RRDP_FALLBACK_TIME)
+            },
             rrdp_timeout: {
                 file.take_u64("rrdp-timeout")?
                 .map(|secs| {
@@ -1122,6 +1140,7 @@ impl Config {
             rsync_args: None,
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
+            rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
             rrdp_timeout: None,
             rrdp_connect_timeout: None,
             rrdp_local_addr: None,
@@ -1258,6 +1277,10 @@ impl Config {
             (self.rsync_timeout.as_secs() as i64).into()
         );
         res.insert("disable-rrdp".into(), self.disable_rrdp.into());
+        res.insert(
+            "rrdp-fallback-time".into(),
+            (self.rrdp_fallback_time.as_secs() as i64).into()
+        );
         if let Some(timeout) = self.rrdp_timeout {
             res.insert(
                 "rrdp-timeout".into(),
