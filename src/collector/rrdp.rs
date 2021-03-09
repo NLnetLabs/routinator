@@ -3,7 +3,7 @@
 //! The RRDP collector works as follows:
 //!
 //! Data is kept in a sled database. This is normally the same database that
-//! is by the store. Each RRDP repository has one tree in that database whose
+//! is used by the store. Each RRDP repository has one tree in that database whose
 //! name is the repository’s rpkiNotify URI prefixed by `"rrdp:"`. The items
 //! in that tree are the objects currently published keyed by their rsync URI.
 //! The stored values contain both the raw content as well as the SHA-256
