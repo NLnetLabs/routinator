@@ -5,13 +5,17 @@
 
 Breaking Changes
 
+* Routinator now keeps the last valid data from a publication point and
+  falls back to using that if an update to the publication point does not
+  have a valid manifest or the data does not match the manifest. This data
+  is stored in a [sled] key-value database rather than directly in the file
+  system. ([#456])
+* RRDP data is now collected into the same key-value database. ([#473],
+  [#480])
 * The minimal supported Rust version is now 1.44.0. [(#444)]
 
 New
 
-* Routinator now keeps the last valid data from a publication point and
-  falls back to using that if an update to the publication point does not
-  have a valid manifest or the data does not match the manifest. ([#456]).
 * The new option `--fresh` causes Routinator to delete all cached data
   before starting. This can be used when data corruption is reported. ([#470])
 * Status information is now available in JSON format at `/api/v1/status`.
@@ -43,7 +47,9 @@ Other Changes
 [#463]: https://github.com/NLnetLabs/routinator/pull/463
 [#471]: https://github.com/NLnetLabs/routinator/pull/471
 [#470]: https://github.com/NLnetLabs/routinator/pull/470
+[#473]: https://github.com/NLnetLabs/routinator/pull/473
 [#474]: https://github.com/NLnetLabs/routinator/pull/474
+[#480]: https://github.com/NLnetLabs/routinator/pull/480
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker

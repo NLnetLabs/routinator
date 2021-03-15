@@ -46,6 +46,8 @@ const MAX_TA_SIZE: u64 = 64 * 1024;
 /// This is mentioned in the man page. If you change it, also change it there.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The key to store the repository state under.
+const REPOSITORY_STATE_KEY: &[u8] = b"";
 
 //------------ Collector -----------------------------------------------------
 
@@ -331,7 +333,7 @@ impl<'a> Run<'a> {
         let tree = self.collector.db.open_tree(
             Repository::tree_name(rpki_notify)
         )?;
-        match tree.get("")? {
+        match tree.get(REPOSITORY_STATE_KEY)? {
             Some(data) => {
                 let duration = Utc::now().signed_duration_since(
                     RepositoryState::try_from(data)?.updated
@@ -535,7 +537,9 @@ impl<'a> RepositoryUpdate<'a> {
         )?;
 
         tree.apply_batch(processor.batch)?;
-        tree.insert("", &RepositoryState::from_notify(notify))?;
+        tree.insert(
+            REPOSITORY_STATE_KEY, &RepositoryState::from_notify(notify)
+        )?;
         tree.flush()?;
 
         debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
@@ -668,6 +672,7 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
+        debug!("RRDP {}: Delta update step.", uri);
         let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
@@ -716,7 +721,7 @@ impl<'a> RepositoryUpdate<'a> {
         }
 
         processor.batch.insert(
-            self.rpki_notify.as_str(),
+            REPOSITORY_STATE_KEY,
             &RepositoryState::new(notify.session_id, serial),
         );
 
@@ -1542,4 +1547,34 @@ impl fmt::Display for ObjectError {
 }
 
 impl error::Error for ObjectError { }
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rpki::repository::crypto::digest::DigestAlgorithm;
+
+    #[test]
+    fn encoded_repository_object() {
+        let data = b"foobar".as_ref();
+        let expected_hash =
+            "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2";
+        let digest = DigestAlgorithm::sha256().digest(data);
+        let encoded = RepositoryObject::read_into_ivec(
+            &mut data.clone()
+        ).unwrap();
+
+        let hash = RepositoryObject::decode_hash(
+            encoded.as_ref()
+        ).unwrap();
+        assert_eq!(hash.as_slice(), digest.as_ref());
+        assert_eq!(format!("{}", hash), expected_hash);
+
+        let decoded = RepositoryObject::try_from(encoded).unwrap();
+        assert_eq!(decoded.content.as_ref(), data);
+        assert_eq!(decoded.hash.as_slice(), digest.as_ref());
+    }
+}
 
