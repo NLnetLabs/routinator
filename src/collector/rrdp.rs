@@ -1548,3 +1548,33 @@ impl fmt::Display for ObjectError {
 
 impl error::Error for ObjectError { }
 
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rpki::repository::crypto::digest::DigestAlgorithm;
+
+    #[test]
+    fn encoded_repository_object() {
+        let data = b"foobar".as_ref();
+        let expected_hash =
+            "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2";
+        let digest = DigestAlgorithm::sha256().digest(data);
+        let encoded = RepositoryObject::read_into_ivec(
+            &mut data.clone()
+        ).unwrap();
+
+        let hash = RepositoryObject::decode_hash(
+            encoded.as_ref()
+        ).unwrap();
+        assert_eq!(hash.as_slice(), digest.as_ref());
+        assert_eq!(format!("{}", hash), expected_hash);
+
+        let decoded = RepositoryObject::try_from(encoded).unwrap();
+        assert_eq!(decoded.content.as_ref(), data);
+        assert_eq!(decoded.hash.as_slice(), digest.as_ref());
+    }
+}
+
