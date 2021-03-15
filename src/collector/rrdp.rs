@@ -46,6 +46,8 @@ const MAX_TA_SIZE: u64 = 64 * 1024;
 /// This is mentioned in the man page. If you change it, also change it there.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The key to store the repository state under.
+const REPOSITORY_STATE_KEY: &[u8] = b"";
 
 //------------ Collector -----------------------------------------------------
 
@@ -331,7 +333,7 @@ impl<'a> Run<'a> {
         let tree = self.collector.db.open_tree(
             Repository::tree_name(rpki_notify)
         )?;
-        match tree.get("")? {
+        match tree.get(REPOSITORY_STATE_KEY)? {
             Some(data) => {
                 let duration = Utc::now().signed_duration_since(
                     RepositoryState::try_from(data)?.updated
@@ -535,7 +537,9 @@ impl<'a> RepositoryUpdate<'a> {
         )?;
 
         tree.apply_batch(processor.batch)?;
-        tree.insert("", &RepositoryState::from_notify(notify))?;
+        tree.insert(
+            REPOSITORY_STATE_KEY, &RepositoryState::from_notify(notify)
+        )?;
         tree.flush()?;
 
         debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
@@ -668,6 +672,7 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
+        debug!("RRDP {}: Delta update step.", uri);
         let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
@@ -716,7 +721,7 @@ impl<'a> RepositoryUpdate<'a> {
         }
 
         processor.batch.insert(
-            self.rpki_notify.as_str(),
+            REPOSITORY_STATE_KEY,
             &RepositoryState::new(notify.session_id, serial),
         );
 
