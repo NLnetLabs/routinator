@@ -272,6 +272,12 @@ enough except for very slow networks.
 If this option is present, RRDP is disabled and only rsync will be used.
 
 .TP
+.BI --rrdp-fallback-time= seconds
+Sets the time in seconds since a last successful update of an RRDP
+repository before Routinator falls back to using rsync. The default is
+3600 seconds.
+
+.TP
 .BI --rrdp-timeout= seconds
 Sets the timeout in seconds for any RRDP-related network operation, i.e.,
 connects, reads, and writes. If this option is omitted, the default timeout
@@ -839,6 +845,12 @@ run before it is being terminated. The default if the value is missing is
 .TP
 .B disable-rrdp
 A boolean value that, if present and true, turns off the use of RRDP.
+
+.TP
+.BI rrdp-fallback-time
+An integer value specifying the number of seconds since a last successful
+update of an RRDP repository before Routinator falls back to using rsync. The
+default in case the value is missing is 3600 seconds.
 
 .TP
 .B rrdp-timeout
