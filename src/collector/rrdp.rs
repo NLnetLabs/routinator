@@ -33,7 +33,7 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpServerMetrics};
-use crate::utils::UriExt;
+use crate::utils::{JsonBuilder, UriExt};
 
 
 ///----------- Configuration Constants ---------------------------------------
@@ -125,6 +125,132 @@ impl Collector {
                     ); 
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Dumps the content of the RRDP collector.
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        let dir = dir.join("rrdp");
+
+        if let Err(err)  = fs::remove_dir_all(&dir) {
+            if err.kind() != io::ErrorKind::NotFound {
+                error!(
+                    "Failed to delete directory {}: {}",
+                    dir.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+
+        let mut repos = HashMap::new();
+
+        for name in self.db.tree_names() {
+            if !name.starts_with(b"rrdp:") {
+                continue
+            }
+
+            let uri = match uri::Https::from_slice(&name[5..]) {
+                Ok(uri) => uri,
+                Err(_) => {
+                    warn!(
+                        "Invalid RRDP collector tree {}. Skipping.",
+                        String::from_utf8_lossy(&name)
+                    );
+                    return Err(Failed);
+                }
+            };
+
+            let repo_dir_name = if !repos.contains_key(uri.authority()) {
+                String::from(uri.authority())
+            }
+            else {
+                let mut i = 1;
+                loop {
+                    let name = format!("{}-{}", uri.authority(), i);
+                    if !repos.contains_key(&name) {
+                        break name
+                    }
+                    i += 1
+                }
+            };
+            let repo_dir = dir.join(&repo_dir_name);
+            repos.insert( repo_dir_name, uri.clone());
+
+            if let Err(err) = fs::create_dir_all(&repo_dir) {
+                error!(
+                    "Failed to create directory {}: {}",
+                    repo_dir.display(),
+                    err
+                );
+                return Err(Failed)
+            }
+
+            self.dump_repository(&uri, &repo_dir)?;
+        }
+
+        let mut repos: Vec<_> = repos.into_iter().collect();
+        repos.sort_by(|left, right| left.0.cmp(&right.0));
+
+        let json_path = dir.join("repositories.json");
+        if let Err(err) = fs::write(
+            &json_path, 
+            &JsonBuilder::build(|builder| {
+                builder.member_array("repositories", |builder| {
+                    for (key, value) in repos.iter() {
+                        builder.array_object(|builder| {
+                            builder.member_str(
+                                "path",
+                                key
+                            );
+                            builder.member_str("rpkiNotify", value);
+                        })
+                    }
+                })
+            })
+        ) {
+            error!( "Failed to write {}: {}", json_path.display(), err);
+            return Err(Failed)
+        }
+
+        Ok(())
+    }
+
+    fn dump_repository(
+        &self, uri: &uri::Https, dir: &Path
+    ) -> Result<(), Failed> {
+        let repository = Repository::new(self, uri)?;
+
+        for (uri, content) in repository.iter_files() {
+            self.dump_object(dir, &uri, &content)?;
+        }
+
+        Ok(())
+    }
+
+    fn dump_object(
+        &self, base_dir: &Path, uri: &uri::Rsync, data: &[u8]
+    ) -> Result<(), Failed> {
+        let path = base_dir.join(
+            uri.canonical_authority().as_ref()
+        ).join(uri.module_name()).join(uri.path());
+        if let Some(path) = path.parent() {
+            if let Err(err) = fs::create_dir_all(path) {
+                error!(
+                    "Failed to create directory {}: {}",
+                    path.display(),
+                    err
+                );
+                return Err(Failed)
+            }
+        }
+        if let Err(err) = fs::write(&path, data) {
+            error!(
+                "Failed to write file {}: {}",
+                path.display(),
+                err
+            );
+            return Err(Failed)
         }
         Ok(())
     }
@@ -417,6 +543,51 @@ impl Repository {
             }
             None => Ok(None)
         }
+    }
+
+    /// Iterators over all the objects in the repository.
+    ///
+    /// Warns about broken objects but continues.
+    pub fn iter_files(
+        &self
+    ) -> impl Iterator<Item = (uri::Rsync, Bytes)> {
+        let mut failed = false;
+        self.tree.iter().map(move |item| {
+            let (key, value) = match item {
+                Ok(item) => item,
+                Err(err) => {
+                    if !failed { 
+                        warn!("Database error: {}", err);
+                        failed = true;
+                    }
+                    return None
+                }
+            };
+            if key == REPOSITORY_STATE_KEY {
+                return None
+            }
+            let uri = match uri::Rsync::from_slice(&key) {
+                Ok(uri) => uri,
+                Err(_) => {
+                    warn!(
+                        "Object with bad URI '{}' in RRDP collector.",
+                        String::from_utf8_lossy(&key)
+                    );
+                    return None
+                }
+            };
+            let object = match RepositoryObject::try_from(value) {
+                Ok(object) => object,
+                Err(_) => {
+                    warn!(
+                        "Broken object for URI {} in RRDP collector.",
+                        uri
+                    );
+                    return None
+                }
+            };
+            Some((uri, object.content))
+        }).filter_map(|item| item)
     }
 }
 

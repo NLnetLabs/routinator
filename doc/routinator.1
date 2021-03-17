@@ -686,6 +686,47 @@ If any of the rsync commands needed to update the repository failed, complete
 the operation but provide exit status 2. If this option is not given, the
 operation will complete with exit status 0 in this case.
 
+.SS dump
+Writes the content of all stored data to the file system. This is primarily
+intended for debugging but can be used to get access to the view of the RPKI
+data that Routinator currently sees.
+
+.TP
+.BI \-o \ dir\fR,\ \-\-output= dir
+Write the output to the given directory. If the option is omitted, the current
+directory is used.
+
+.PP
+Three directories will be created in the output directory:
+
+.PP
+The
+.I rrdp
+directory will contain all the files collected via RRDP from the various
+repositories. Each repository is stored in its own directory. The mapping
+between rpkiNotify URI and path is provided in the
+.I repositories.json
+file. For each repositories, the files are stored in a directory structure
+based on the components of the file’s rsync URI.
+
+.PP
+The
+.I rsync
+directory contains all the files collected via rsync. The files are stored
+in a directory structure based on the components of the file’s rsync URI.
+
+.PP
+The
+.I store
+directory contains all the files used for validation. Files collected via
+RRDP or rsync are copied to the store if they are correctly referenced by
+a valid manifest. This part contains one directory for each RRDP repository
+similarly structured to the
+.I rrdp
+directory and one additional directory
+.I rsync
+that contains files collected via rsync.
+
 .SS man
 Displays the manual page, i.e., this page.
 .TP

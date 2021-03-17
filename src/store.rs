@@ -53,13 +53,15 @@
 //!
 //! [sled]: https://github.com/spacejam/sled
 
-use std::{error, fmt, mem, str};
+use std::{error, fmt, fs, io, mem, str};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::path::Path;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
-use log::error;
+use log::{error, warn};
 use rpki::repository::crypto::digest::DigestAlgorithm;
-use rpki::repository::manifest::ManifestHash;
+use rpki::repository::manifest::{Manifest, ManifestHash};
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
@@ -72,6 +74,7 @@ use crate::collector;
 use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
+use crate::utils::JsonBuilder;
 
 
 //------------ Store ---------------------------------------------------------
@@ -158,6 +161,200 @@ impl Store {
         collector.commit()
     }
 
+    /// Dumps the content of the store.
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        let dir = dir.join("store");
+
+        if let Err(err) = fs::remove_dir_all(&dir) {
+            if err.kind() != io::ErrorKind::NotFound {
+                error!(
+                    "Failed to delete directory {}: {}",
+                    dir.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+
+        let mut repos = HashMap::new();
+
+        for name in self.db.tree_names() {
+            let tree_names = match TreeNames::from_manifest_tree_name(&name) {
+                Some(names) => names,
+                None => continue,
+            };
+            
+            // Determine the directory name for the repository dump. If this
+            // is an RRDP repository, we use the authority part of the URI
+            // and add a number if necessary. For rsync, we use rsync.
+            // Everything else we ignore.
+            let repo_dir_name = if tree_names.repository_name() == b"rsync" {
+                String::from("rsync")
+            }
+            else if let Ok(uri) = uri::Https::from_slice(
+                tree_names.repository_name()
+            ) {
+                if !repos.contains_key(uri.authority()) {
+                    String::from(uri.authority())
+                }
+                else {
+                    let mut i = 1;
+                    loop {
+                        let name = format!("{}-{}", uri.authority(), i);
+                        if !repos.contains_key(&name) {
+                            break name
+                        }
+                        i += 1
+                    }
+                }
+            }
+            else {
+                continue
+            };
+
+            let repo_dir = dir.join(&repo_dir_name);
+            repos.insert(
+                repo_dir_name,
+                Vec::from(tree_names.repository_name())
+            );
+
+            if let Err(err) = fs::create_dir_all(&repo_dir) {
+                error!(
+                    "Failed to create directory {}: {}",
+                    repo_dir.display(),
+                    err
+                );
+                return Err(Failed)
+            }
+
+            self.dump_repository(tree_names, &repo_dir)?;
+        }
+
+        let mut repos: Vec<_> = repos.into_iter().collect();
+        repos.sort_by(|left, right| left.0.cmp(&right.0));
+
+        let json_path = dir.join("repositories.json");
+        if let Err(err) = fs::write(
+            &json_path, 
+            &JsonBuilder::build(|builder| {
+                builder.member_array("repositories", |builder| {
+                    for (key, value) in repos.iter() {
+                        builder.array_object(|builder| {
+                            builder.member_str(
+                                "path",
+                                key
+                            );
+                            if value == b"rsync" {
+                                builder.member_str("type", "rsync");
+                            }
+                            else {
+                                builder.member_str("type", "rrdp");
+                                builder.member_str(
+                                    "rpkiNotify",
+                                    String::from_utf8_lossy(value)
+                                );
+                            }
+                        })
+                    }
+                })
+            })
+        ) {
+            error!( "Failed to write {}: {}", json_path.display(), err);
+            return Err(Failed)
+        }
+
+        Ok(())
+    }
+
+    fn dump_repository(
+        &self, tree_names: TreeNames, dir: &Path
+    ) -> Result<(), Failed> {
+        let repository = Repository::new(self, &tree_names)?;
+        for (uri, stored) in repository.iter_manifests() {
+            self.dump_object(dir, &uri, stored.manifest())?;
+
+            let manifest = match Manifest::decode(
+                stored.manifest().clone(), false
+            ) {
+                Ok(manifest) => manifest,
+                Err(_) => {
+                    warn!(
+                        "Failed to decode manifest {}. Skipping", uri
+                    );
+                    continue
+                }
+            };
+
+            for item in manifest.content().iter() {
+                let file = match str::from_utf8(item.file()) {
+                    Ok(file) => file,
+                    Err(_) => {
+                        warn!(
+                            "Bad file name '{}' in manifest {} in store.",
+                            String::from_utf8_lossy(item.file()),
+                            uri
+                        );
+                        continue
+                    }
+                };
+
+                let object = match repository.load_object(&uri, file)? {
+                    Some(object) => object,
+                    None => {
+                        warn!(
+                            "Missing object {} for manifest {} in store.",
+                            String::from_utf8_lossy(item.file()),
+                            uri
+                        );
+                        continue
+                    }
+                };
+
+                let object_uri = match stored.ca_repository().join(
+                    item.file()
+                ) {
+                    Ok(uri) => uri,
+                    Err(_) => {
+                        warn!(
+                            "Bad file name '{}' in manifest {} in store.",
+                            String::from_utf8_lossy(item.file()),
+                            uri
+                        );
+                        continue
+                    }
+                };
+
+                self.dump_object(dir, &object_uri, object.content())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn dump_object(
+        &self, base_dir: &Path, uri: &uri::Rsync, data: &[u8]
+    ) -> Result<(), Failed> {
+        let path = base_dir.join(
+            uri.canonical_authority().as_ref()
+        ).join(uri.module_name()).join(uri.path());
+        if let Some(path) = path.parent() {
+            if let Err(err) = fs::create_dir_all(path) {
+                error!(
+                    "Failed to create directory {}: {}",
+                    path.display(),
+                    err
+                );
+                return Err(Failed)
+            }
+        }
+        if let Err(err) = fs::write(&path, data) {
+            error!(
+                "Failed to write file {}: {}",
+                path.display(),
+                err
+            );
+            return Err(Failed)
+        }
+        Ok(())
+    }
 }
 
 
@@ -366,9 +563,12 @@ impl Repository {
     /// returned. If it fails, it was either aborted by the closure or there
     /// was a database error. You can check whether it was indeed aborted by
     /// calling [`was_aborted`](UpdateError::was_aborted) on the error.
-    pub fn update_point<T, F: Fn(&mut RepositoryUpdate) -> Result<T, UpdateError>>(
+    pub fn update_point<T, F> (
         &self, manifest: &uri::Rsync, op: F
-    ) -> Result<T, UpdateError> {
+    ) -> Result<T, UpdateError>
+    where
+        F: Fn(&mut RepositoryUpdate) -> Result<T, UpdateError>
+    {
         let mut update = RepositoryUpdate::new(manifest);
         let res = op(&mut update)?;
         (&self.manifest_tree, &self.object_tree).transaction(|(mt, ot)| {
@@ -459,6 +659,22 @@ impl Repository {
             }
         }
         Ok(())
+    }
+
+    /// Iterates over all the manifests.
+    ///
+    /// Skips those that cannot be decoded.
+    fn iter_manifests(
+        &self
+    ) -> impl Iterator<Item = (uri::Rsync, StoredManifest)> {
+        self.manifest_tree.iter().map(|item|
+            item.ok().and_then(|(uri, stored)| {
+                uri::Rsync::from_slice(&uri).ok().map(|uri| (uri, stored))
+            }).and_then(|(uri, stored)| {
+                StoredManifest::try_from(stored).ok().map(|stored|
+                    (uri, stored))
+            })
+        ).filter_map(|item| item)
     }
 
     /// Cleans the repository assuming it is the rsync repository.
@@ -811,6 +1027,11 @@ impl StoredObject {
         hash.verify(&self.content)
     }
 
+    /// Returns the stored object’s content.
+    pub fn content(&self) -> &Bytes {
+        &self.content
+    }
+
     /// Converts the stored object into the object’s raw bytes.
     pub fn into_content(self) -> Bytes {
         self.content
@@ -897,6 +1118,14 @@ struct TreeNames<'a> {
     repository_name: &'a [u8],
 }
 
+impl TreeNames<'static> {
+    /// The prefix for manifest trees.
+    const MANIFEST_TREE_PREFIX: &'static [u8] = b"store:manifests:";
+
+    /// The prefix for object trees.
+    const OBJECT_TREE_PREFIX: &'static [u8] = b"store:objects:";
+}
+
 impl<'a> TreeNames<'a> {
     /// Returns the tree names for a RRDP repository.
     pub fn rrdp(rpki_notify: &'a uri::Https) -> Self {
@@ -908,10 +1137,11 @@ impl<'a> TreeNames<'a> {
         TreeNames { repository_name: b"rsync" }
     }
 
+    /// Returns the tree names for a given manifest tree name.
     pub fn from_manifest_tree_name(
         tree_name: &'a [u8]
     ) -> Option<Self> {
-        if tree_name.starts_with(b"store:manifests:") {
+        if tree_name.starts_with(TreeNames::MANIFEST_TREE_PREFIX) {
             Some(TreeNames { repository_name: &tree_name[16..] })
         }
         else {
@@ -919,16 +1149,23 @@ impl<'a> TreeNames<'a> {
         }
     }
 
+    /// Returns the repository name.
+    pub fn repository_name(&self) -> &[u8] {
+        self.repository_name
+    }
+
+    /// Returns the manifest tree name for this repository.
     pub fn manifest_tree_name(&self) -> Vec<u8> {
         let mut res = Vec::with_capacity(16 + self.repository_name.len());
-        res.extend_from_slice(b"store:manifests:");
+        res.extend_from_slice(TreeNames::MANIFEST_TREE_PREFIX);
         res.extend_from_slice(self.repository_name);
         res
     }
 
+    /// Returns the object tree name for this repository.
     pub fn object_tree_name(&self) -> Vec<u8> {
         let mut res = Vec::with_capacity(14 + self.repository_name.len());
-        res.extend_from_slice(b"store:objects:");
+        res.extend_from_slice(TreeNames::OBJECT_TREE_PREFIX);
         res.extend_from_slice(self.repository_name);
         res
     }
@@ -969,6 +1206,17 @@ impl fmt::Display for ObjectError {
 }
 
 impl error::Error for ObjectError { }
+
+impl From<ObjectError> for Failed {
+    fn from(err: ObjectError) -> Failed {
+        error!("RPKI storage error: {}", err);
+        error!(
+            "Starting Routinator with the --fresh option \
+            may fix this issue"
+        );
+        Failed
+    }
+}
 
 
 //------------ UpdateError ---------------------------------------------------

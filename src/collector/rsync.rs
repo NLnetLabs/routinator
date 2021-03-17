@@ -232,6 +232,80 @@ impl Collector {
 
         keep_host
     }
+
+    /// Dumps the content of the RRDP collector.
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        let target = dir.join("rsync");
+
+        if let Err(err) = fs::remove_dir_all(&target) {
+            if err.kind() != io::ErrorKind::NotFound {
+                error!(
+                    "Failed to delete directory {}: {}",
+                    dir.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+        self.dump_dir(&self.working_dir.base, &target)
+    }
+
+    /// Recursively copies the content of `source` to `target`.
+    fn dump_dir(&self, source: &Path, target: &Path) -> Result<(), Failed> {
+        let read_dir = match fs::read_dir(source) {
+            Ok(read_dir) => read_dir,
+            Err(err) => {
+                error!(
+                    "Failed to open directory {}: {}", source.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        for item in read_dir {
+            let item = match item {
+                Ok(item) => item,
+                Err(err) => {
+                    error!(
+                        "Failed to read directory {}: {}",
+                        source.display(), err
+                    );
+                    return Err(Failed)
+                }
+            };
+            let file_type = match item.file_type() {
+                Ok(file_type) => file_type,
+                Err(err) => {
+                    error!(
+                        "Failed to read directory {}: {}",
+                        source.display(), err
+                    );
+                    return Err(Failed)
+                }
+            };
+
+            if file_type.is_dir() {
+                let target = target.join(item.file_name());
+                if let Err(err) = fs::create_dir_all(&target) {
+                    error!(
+                        "Failed to create directory {}: {}",
+                        target.display(), err
+                    );
+                    return Err(Failed);
+                }
+                self.dump_dir(&item.path(), &target)?;
+            }
+            else if file_type.is_file() {
+                let target = target.join(item.file_name());
+                if let Err(err) = fs::copy( &item.path(), &target) {
+                    error!(
+                        "Failed to copy {} to {}: {}",
+                        item.path().display(), target.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 

@@ -146,6 +146,7 @@ impl<'a> JsonBuilder<'a> {
 
     pub fn array_object<F: FnOnce(&mut JsonBuilder)>(&mut self, op: F) {
         self.append_array_head();
+        self.append_indent();
         self.target.push_str("{\n");
         op(&mut JsonBuilder {
             target: self.target,
@@ -159,6 +160,7 @@ impl<'a> JsonBuilder<'a> {
 
     pub fn array_array<F: FnOnce(&mut JsonBuilder)>(&mut self, op: F) {
         self.append_array_head();
+        self.append_indent();
         self.target.push_str("[\n");
         op(&mut JsonBuilder {
             target: self.target,
@@ -172,6 +174,7 @@ impl<'a> JsonBuilder<'a> {
 
     pub fn array_str(&mut self, value: impl fmt::Display) {
         self.append_array_head();
+        self.append_indent();
         self.target.push('"');
         write!(JsonString { target: self.target }, "{}", value).unwrap();
         self.target.push('"');
@@ -179,6 +182,7 @@ impl<'a> JsonBuilder<'a> {
 
     pub fn array_raw(&mut self, value: impl fmt::Display) {
         self.append_array_head();
+        self.append_indent();
         write!(JsonString { target: self.target }, "{}", value).unwrap();
     }
 
