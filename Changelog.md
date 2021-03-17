@@ -10,8 +10,9 @@ Breaking Changes
   have a valid manifest or the data does not match the manifest. This data
   is stored in a [sled] key-value database rather than directly in the file
   system. ([#456])
-* RRDP data is now collected into the same key-value database. ([#473],
-  [#480])
+* RRDP data is now collected into the same key-value database. The new
+  command `dump` allows copying the data from the database to the file
+  system. ([#473], [#480], [#484])
 * The minimal supported Rust version is now 1.44.0. [(#444)]
 
 New
@@ -50,6 +51,7 @@ Other Changes
 [#473]: https://github.com/NLnetLabs/routinator/pull/473
 [#474]: https://github.com/NLnetLabs/routinator/pull/474
 [#480]: https://github.com/NLnetLabs/routinator/pull/480
+[#484]: https://github.com/NLnetLabs/routinator/pull/484
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
