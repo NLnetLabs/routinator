@@ -44,7 +44,7 @@ const DEFAULT_EXPIRE: u64 = 7200;
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
 /// The default for the RRDP fallback time.
-const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(600);
+const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
 
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
