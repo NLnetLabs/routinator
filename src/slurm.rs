@@ -6,10 +6,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
 use serde::Deserialize;
 use crate::config::Config;
-use crate::operation::Error;
+use crate::error::Failed;
 use crate::origins::{AddressOrigin, AddressPrefix, OriginInfo};
 
 
@@ -29,7 +29,7 @@ impl LocalExceptions {
         }
     }
 
-    pub fn load(config: &Config, extra_info: bool) -> Result<Self, Error> {
+    pub fn load(config: &Config, extra_info: bool) -> Result<Self, Failed> {
         let mut res = LocalExceptions::empty();
         let mut ok = true;
         for path in &config.exceptions {
@@ -45,7 +45,7 @@ impl LocalExceptions {
             Ok(res)
         }
         else {
-            Err(Error)
+            Err(Failed)
         }
     }
 

@@ -1,13 +1,17 @@
 //! Output of lists of VRPs.
 
+// Some functions here have unnecessarily wrapped return types for
+// consisitency.
+#![allow(clippy::unnecessary_wraps)]
+
 use std::io;
 use std::str::FromStr;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::error;
-use rpki::resources::AsId;
+use rpki::repository::resources::AsId;
+use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::operation::Error;
 use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
 
 
@@ -72,7 +76,8 @@ pub enum OutputFormat {
 impl OutputFormat {
     /// A list of the known output formats.
     pub const VALUES: &'static [&'static str] = &[
-        "csv", "csvext", "json", "openbgpd", "bird1", "bird2", "rpsl", "summary", "none"
+        "csv", "csvcompat", "csvext", "json", "openbgpd", "bird1", "bird2",
+        "rpsl", "summary", "none"
     ];
 
     /// The default output format.
@@ -80,9 +85,9 @@ impl OutputFormat {
 }
 
 impl FromStr for OutputFormat {
-    type Err = Error;
+    type Err = Failed;
 
-    fn from_str(value: &str) -> Result<Self, Error> {
+    fn from_str(value: &str) -> Result<Self, Failed> {
         match value {
             "csv" => Ok(OutputFormat::Csv),
             "csvcompat" => Ok(OutputFormat::CompatCsv),
@@ -96,7 +101,7 @@ impl FromStr for OutputFormat {
             "none" => Ok(OutputFormat::None),
             _ => {
                 error!("Unknown output format '{}'", value);
-                Err(Error)
+                Err(Failed)
             }
         }
     }

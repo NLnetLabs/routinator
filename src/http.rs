@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use chrono::{Duration, Utc};
+use chrono::format::{Item, Fixed, Numeric, Pad};
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
@@ -25,14 +26,13 @@ use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
-use rpki::resources::AsId;
-use tokio::io::{AsyncRead, AsyncWrite};
+use rpki::repository::resources::AsId;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::stream::Stream;
 use crate::output;
 use crate::config::Config;
+use crate::error::{Failed, ExitError};
 use crate::metrics::{Metrics, ServerMetrics};
-use crate::operation::{Error, ExitError};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::JsonBuilder;
@@ -56,13 +56,18 @@ pub fn http_listener(
     for addr in &config.http_listen {
         // Binding needs to have happened before dropping privileges
         // during detach. So we do this here synchronously.
-        match StdListener::bind(addr) {
-            Ok(listener) => listeners.push(listener),
+        let listener = match StdListener::bind(addr) {
+            Ok(listener) => listener,
             Err(err) => {
                 error!("Fatal: error listening on {}: {}", addr, err);
                 return Err(ExitError::Generic);
             }
         };
+        if let Err(err) = listener.set_nonblocking(true) {
+            error!("Fatal: error switching {} to nonblocking: {}", addr, err);
+            return Err(ExitError::Generic);
+        }
+        listeners.push(listener);
     }
     Ok(_http_listener(origins.clone(), listeners))
 }
@@ -103,7 +108,7 @@ async fn single_http_listener(
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Error on HTTP listener: {}", err);
+                error!("Failed on HTTP listener: {}", err);
                 return
             }
         },
@@ -526,7 +531,7 @@ fn status_active(
     writeln!(res, "last-update-start-at:  {}", now - start).unwrap();
     writeln!(res, "last-update-start-ago: {}", start).unwrap();
 
-    // last-update-dona-at and -ago
+    // last-update-done-at and -ago
     if let Some(done) = done {
         writeln!(res, "last-update-done-at:   {}", now - done).unwrap();
         writeln!(res, "last-update-done-ago:  {}", done).unwrap();
@@ -949,6 +954,23 @@ fn version() -> Response<Body> {
     .unwrap()
 }
 
+const HTTP_DATE_ITEMS: &[Item<'static>] = &[
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Literal(", "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Literal(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Literal(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Literal(" GMT"),
+];
+
 fn vrps(
     origins: &OriginsHistory,
     query: Option<&str>,
@@ -965,6 +987,8 @@ fn vrps(
         }
     };
 
+    let (_start, done, _duration) = origins.update_times();
+
     let filters = match output_filters(query) {
         Ok(filters) => filters,
         Err(_) => return bad_request(),
@@ -973,10 +997,18 @@ fn vrps(
         current, filters, metrics
     );
 
-    Response::builder()
-    .header("Content-Type", format.content_type())
-    .header("content-length", stream.output_len())
-    .body(Body::wrap_stream(stream::iter(
+    let mut builder = Response::builder();
+
+    builder = builder.header("Content-Type", format.content_type())
+        .header("Content-Length", stream.output_len());
+
+    if let Some(done) = done {
+        builder = builder.header("Last-Modified",
+            done.format_with_items(
+                HTTP_DATE_ITEMS.iter().cloned()).to_string());
+    }
+
+    builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
     )))
     .unwrap()
@@ -1009,7 +1041,7 @@ fn not_found() -> Response<Body> {
 /// Produces the output filters from a query string.
 fn output_filters(
     query: Option<&str>
-) -> Result<Option<Vec<output::Filter>>, Error> {
+) -> Result<Option<Vec<output::Filter>>, Failed> {
     let mut query = match query {
         Some(query) => query,
         None => return Ok(None)
@@ -1026,7 +1058,7 @@ fn output_filters(
         // Split the pair.
         let equals = match part.find('=') {
             Some(equals) => equals,
-            None => return Err(Error)
+            None => return Err(Failed)
         };
         let key = &part[..equals];
         let value = &part[equals + 1..];
@@ -1034,7 +1066,7 @@ fn output_filters(
         if key == "filter-prefix" {
             match AddressPrefix::from_str(value) {
                 Ok(some) => res.push(output::Filter::Prefix(some)),
-                Err(_) => return Err(Error)
+                Err(_) => return Err(Failed)
             }
         }
         else if key == "filter-asn" {
@@ -1042,13 +1074,13 @@ fn output_filters(
                 Ok(asn) => asn,
                 Err(_) => match u32::from_str(value) {
                     Ok(asn) => asn.into(),
-                    Err(_) => return Err(Error)
+                    Err(_) => return Err(Failed)
                 }
             };
             res.push(output::Filter::As(asn))
         }
         else {
-            return Err(Error)
+            return Err(Failed)
         }
     }
     if res.is_empty() {
@@ -1090,13 +1122,19 @@ impl Accept for HttpAccept {
     ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
         let sock = &mut self.sock;
         pin_mut!(sock);
-        sock.poll_next(cx).map(|sock| sock.map(|sock| sock.map(|sock| {
-            self.metrics.inc_http_conn_open();
-            HttpStream {
-                sock,
-                metrics: self.metrics.clone()
+        match sock.poll_accept(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok((sock, _addr))) => {
+                self.metrics.inc_http_conn_open();
+                Poll::Ready(Some(Ok(HttpStream {
+                    sock,
+                    metrics: self.metrics.clone()
+                })))
             }
-        })))
+            Poll::Ready(Err(err)) => {
+                Poll::Ready(Some(Err(err)))
+            }
+        }
     }
 }
 
@@ -1108,13 +1146,16 @@ struct HttpStream {
 
 impl AsyncRead for HttpStream {
     fn poll_read(
-        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]
-    ) -> Poll<Result<usize, io::Error>> {
+        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut ReadBuf
+    ) -> Poll<Result<(), io::Error>> {
+        let len = buf.filled().len();
         let sock = &mut self.sock;
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
-        if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_http_bytes_read(n as u64)
+        if let Poll::Ready(Ok(())) = res {
+            self.metrics.inc_http_bytes_read(
+                (buf.filled().len().saturating_sub(len)) as u64
+            )    
         }
         res
     }

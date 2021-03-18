@@ -16,7 +16,12 @@
 # service unit installation and activation.
 
 name: Packaging
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
 
 defaults:
   run:
@@ -38,9 +43,9 @@ jobs:
           - "debian:bullseye" # debian/11
     env:
       CARGO_DEB_VER: 1.28.0
-      # A Routinator version of the form 'x.y.z-bis' denotes a dev build that is
+      # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
-      NEXT_VER_LABEL: bis
+      NEXT_VER_LABEL: dev
     name: deb-pkg
     runs-on: ubuntu-latest
     # Build on the oldest platform we are targeting in order to avoid

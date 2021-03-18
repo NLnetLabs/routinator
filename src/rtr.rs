@@ -9,14 +9,14 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
-use tokio::stream::Stream;
+use tokio_stream::Stream;
 use log::error;
-use rpki_rtr::server::{NotifySender, Server};
-use tokio::io::{AsyncRead, AsyncWrite};
+use rpki::rtr::server::{NotifySender, Server};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
+use crate::error::ExitError;
 use crate::metrics::ServerMetrics;
-use crate::operation::ExitError;
 use crate::origins::OriginsHistory;
 
 
@@ -30,13 +30,18 @@ pub fn rtr_listener(
     for addr in &config.rtr_listen {
         // Binding needs to have happened before dropping privileges
         // during detach. So we do this here synchronously.
-        match StdListener::bind(addr) {
-            Ok(listener) => listeners.push(listener),
+        let listener = match StdListener::bind(addr) {
+            Ok(listener) => listener,
             Err(err) => {
                 error!("Fatal error listening on {}: {}", addr, err);
                 return Err(ExitError::Generic);
             }
         };
+        if let Err(err) = listener.set_nonblocking(true) {
+            error!("Fatal: error switching {} to nonblocking: {}", addr, err);
+            return Err(ExitError::Generic);
+        }
+        listeners.push(listener);
     }
     Ok((sender.clone(), _rtr_listener(
         history, sender, listeners, config.rtr_tcp_keepalive,
@@ -67,7 +72,7 @@ async fn single_rtr_listener(
     listener: StdListener,
     origins: OriginsHistory,
     sender: NotifySender,
-    keepalive: Option<Duration>,
+    _keepalive: Option<Duration>,
 ) {
     let listener = RtrListener {
         sock: match TcpListener::from_std(listener) {
@@ -78,7 +83,7 @@ async fn single_rtr_listener(
             }
         },
         metrics: origins.server_metrics(),
-        keepalive,
+        //keepalive,
     };
     if Server::new(listener, sender, origins.clone()).run().await.is_err() {
         error!("Fatal error listening for RTR connections.");
@@ -89,7 +94,9 @@ async fn single_rtr_listener(
 struct RtrListener {
     sock: TcpListener,
     metrics: Arc<ServerMetrics>,
-    keepalive: Option<Duration>,
+
+    // XXX Regression in Tokio 1.0: no more setting keepalive times.
+    //keepalive: Option<Duration>,
 }
 
 impl Stream for RtrListener {
@@ -100,16 +107,20 @@ impl Stream for RtrListener {
     ) -> Poll<Option<Self::Item>> {
         let sock = &mut self.sock;
         pin_mut!(sock);
-        sock.poll_next(cx).map(|sock| sock.map(|sock| sock.map(|sock| {
-            self.metrics.inc_rtr_conn_open();
-            if let Err(err) = sock.set_keepalive(self.keepalive) {
-                error!("Failed to set keepalive on RTR connection: {}", err);
+
+        match sock.poll_accept(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok((sock, _addr))) => {
+                self.metrics.inc_http_conn_open();
+                Poll::Ready(Some(Ok(RtrStream {
+                    sock,
+                    metrics: self.metrics.clone()
+                })))
             }
-            RtrStream {
-                sock,
-                metrics: self.metrics.clone()
+            Poll::Ready(Err(err)) => {
+                Poll::Ready(Some(Err(err)))
             }
-        })))
+        }
     }
 }
 
@@ -120,13 +131,16 @@ struct RtrStream {
 
 impl AsyncRead for RtrStream {
     fn poll_read(
-        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]
-    ) -> Poll<Result<usize, io::Error>> {
+        mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut ReadBuf
+    ) -> Poll<Result<(), io::Error>> {
+        let len = buf.filled().len();
         let sock = &mut self.sock;
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
-        if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_rtr_bytes_read(n as u64)
+        if let Poll::Ready(Ok(())) = res {
+            self.metrics.inc_rtr_bytes_read(
+                (buf.filled().len().saturating_sub(len)) as u64
+            )    
         }
         res
     }

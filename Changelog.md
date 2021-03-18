@@ -1,7 +1,70 @@
 # Change Log
 
+## Unreleased next version
 
-## Unreleased future version
+Breaking Changes
+
+* Routinator now keeps the last valid data from a publication point and
+  falls back to using that if an update to the publication point does not
+  have a valid manifest or the data does not match the manifest. This data
+  is stored in a [sled] key-value database rather than directly in the file
+  system. ([#456])
+* RRDP data is now collected into the same key-value database. ([#473],
+  [#480])
+* The minimal supported Rust version is now 1.44.0. [(#444)]
+
+New
+
+* The new option `--fresh` causes Routinator to delete all cached data
+  before starting. This can be used when data corruption is reported. ([#470])
+* Status information is now available in JSON format at `/api/v1/status`.
+  ([#437])
+* The RRDP client now supports the gzip transfer encoding for HTTPs.
+  ([#463], contributed by [@bjpbakker])
+* The `exception` config file value now also accepts a single string with
+  a path name instead of an array of strings. ([#471])
+* The HTTP endpoints that supply the current VRP set now include a
+  Last-Modified header in their response. ([#474], contributed by
+  [@reschke])
+
+Bug Fixes
+
+* The `csvcompat` output format that was introduced in 0.7.0 is now
+  actually accepted by the `--format` command line option.
+
+Other Changes
+
+* Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
+  to [rpki-rtr]. ([#443])
+* Upgrade Tokio-related dependencies to new version based on Tokio 1.0.
+  ([#444])
+
+[#437]: https://github.com/NLnetLabs/routinator/pull/437
+[#443]: https://github.com/NLnetLabs/routinator/pull/443
+[#444]: https://github.com/NLnetLabs/routinator/pull/444
+[#456]: https://github.com/NLnetLabs/routinator/pull/456
+[#463]: https://github.com/NLnetLabs/routinator/pull/463
+[#471]: https://github.com/NLnetLabs/routinator/pull/471
+[#470]: https://github.com/NLnetLabs/routinator/pull/470
+[#473]: https://github.com/NLnetLabs/routinator/pull/473
+[#474]: https://github.com/NLnetLabs/routinator/pull/474
+[#480]: https://github.com/NLnetLabs/routinator/pull/480
+[rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
+[rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
+[@bjpbakker]: https://github.com/bjpbakker
+[@reschke]: https://github.com/reschke
+
+
+## 0.8.3 ‘Like and Subscribe’
+
+Released 2021-02-02.
+
+There have been no changes since 0.8.3-rc1.
+
+
+## 0.8.3-rc1
+
+Released 2021-01-28.
 
 New
 

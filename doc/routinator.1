@@ -241,6 +241,11 @@ explicit port.
 This option allows to disable this filtering.
 
 .TP
+.B --fresh
+Delete and re-initialize all cached before starting. This option should be
+provided when Routinator fails after reporting corrupt data storage.
+
+.TP
 .B --disable-rsync
 If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -265,6 +270,12 @@ enough except for very slow networks.
 .TP
 .B --disable-rrdp
 If this option is present, RRDP is disabled and only rsync will be used.
+
+.TP
+.BI --rrdp-fallback-time= seconds
+Sets the time in seconds since a last successful update of an RRDP
+repository before Routinator falls back to using rsync. The default is
+3600 seconds.
 
 .TP
 .BI --rrdp-timeout= seconds
@@ -743,8 +754,8 @@ A string containing the path to the directory that contains the Trust Anchor
 Locators. This entry is mandatory.
 .TP
 .B exceptions
-A list of strings, each containing the path to a file with local exceptions.
-If missing, no local exception files are used.
+A string or a list of strings, each containing the path to a file with local
+exceptions. If missing, no local exception files are used.
 .TP
 .B strict
 A boolean specifying whether strict validation should be employed. If missing,
@@ -834,6 +845,12 @@ run before it is being terminated. The default if the value is missing is
 .TP
 .B disable-rrdp
 A boolean value that, if present and true, turns off the use of RRDP.
+
+.TP
+.BI rrdp-fallback-time
+An integer value specifying the number of seconds since a last successful
+update of an RRDP repository before Routinator falls back to using rsync. The
+default in case the value is missing is 3600 seconds.
 
 .TP
 .B rrdp-timeout
@@ -1010,6 +1027,9 @@ Returns the current status of the Routinator instance. This is similar to
 the output of the
 .B /metrics
 endpoint but in a more human friendly format.
+.TP
+.B /api/v1/status
+Returns the current status in JSON format.
 .TP
 .B /log
 Returns the logging output of the last validation run. The log level matches
