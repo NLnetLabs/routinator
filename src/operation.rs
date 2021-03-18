@@ -500,8 +500,9 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
-        validation.cleanup()
+        validation.cleanup()?;
         history.mark_update_done();
+        Ok(())
     }
 }
 
