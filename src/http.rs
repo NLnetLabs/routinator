@@ -386,6 +386,23 @@ fn metrics_active(
         }
     }
 
+    // rrdp_serial
+    writeln!(res,
+        "\n\
+        # HELP routinator_rrdp_serial serial number of last RRDP update\n\
+        # TYPE routinator_rrdp_serial gauge"
+    ).unwrap();
+    for metrics in metrics.rrdp() {
+        if let Some(serial) = metrics.serial {
+            writeln!(
+                res,
+                "routinator_rrdp_serial{{uri=\"{}\"}} {}",
+                metrics.notify_uri,
+                serial
+            ).unwrap();
+        }
+    }
+
     // rtr_connections
     writeln!(res,
         "\n\
@@ -662,16 +679,17 @@ fn status_active(
             }).unwrap_or(-1),
         ).unwrap();
         if let Ok(duration) = metrics.duration {
-            writeln!(
+            write!(
                 res,
                 ", duration={:.3}s",
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
             ).unwrap();
         }
-        else {
-            writeln!(res).unwrap()
+        if let Some(serial) = metrics.serial {
+            write!(res, ", serial={}", serial).unwrap()
         }
+        writeln!(res).unwrap()
     }
 
     // rtr
@@ -804,6 +822,22 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
                         }
                         Err(_) => target.member_raw("duration", "none")
                     }
+                    match metrics.serial {
+                        Some(serial) => {
+                            target.member_raw("serial", serial);
+                        }
+                        None => target.member_raw("serial", "none")
+                    }
+                    match metrics.session {
+                        Some(session) => {
+                            target.member_str("session", session);
+                        }
+                        None => target.member_raw("session", "none")
+                    }
+                    target.member_raw("delta",
+                        if metrics.delta { "true" }
+                        else { "false" }
+                    );
                 })
             }
         });

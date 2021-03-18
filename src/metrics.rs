@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
+use uuid::Uuid;
 
 
 //------------ Metrics -------------------------------------------------------
@@ -23,7 +24,7 @@ pub struct Metrics {
     rsync: Vec<RsyncModuleMetrics>,
 
     /// RRDP metrics.
-    rrdp: Vec<RrdpServerMetrics>,
+    rrdp: Vec<RrdpRepositoryMetrics>,
 
     /// Number of stale objects.
     stale_count: AtomicU64,
@@ -69,7 +70,7 @@ impl Metrics {
 
     pub fn set_rrdp(
         &mut self,
-        rrdp: Vec<RrdpServerMetrics>
+        rrdp: Vec<RrdpRepositoryMetrics>
     ) {
         self.rrdp = rrdp
     }
@@ -94,7 +95,7 @@ impl Metrics {
         &self.rsync
     }
 
-    pub fn rrdp(&self) -> &[RrdpServerMetrics] {
+    pub fn rrdp(&self) -> &[RrdpRepositoryMetrics] {
         &self.rrdp
     }
 
@@ -188,22 +189,37 @@ impl TalMetrics {
 }
 
 
-//------------ RrdpServerMetrics ---------------------------------------------
+//------------ RrdpRepositoryMetrics -----------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct RrdpServerMetrics {
+pub struct RrdpRepositoryMetrics {
+    /// The rpkiNotify URI of the RRDP repository.
     pub notify_uri: uri::Https,
+
+    /// The status code of requesting the notification file.
     pub notify_status: Option<reqwest::StatusCode>,
+
+    /// The session ID of the last update.
+    pub session: Option<Uuid>,
+
+    /// The serial number of the last update.
     pub serial: Option<u64>,
+
+    /// Was the last update attempt from a delta?
+    pub delta: bool,
+
+    /// The duration of the last update.
     pub duration: Result<Duration, SystemTimeError>,
 }
 
-impl RrdpServerMetrics {
+impl RrdpRepositoryMetrics {
     pub fn new(notify_uri: uri::Https) -> Self {
-        RrdpServerMetrics {
+        RrdpRepositoryMetrics {
             notify_uri,
             notify_status: None,
+            session: None,
             serial: None,
+            delta: false,
             duration: Ok(Duration::from_secs(0))
         }
     }
