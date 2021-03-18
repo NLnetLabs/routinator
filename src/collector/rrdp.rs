@@ -161,6 +161,23 @@ impl Collector {
                 }
             };
 
+            let repository = Repository::new(self, &uri)?;
+
+            let state = repository.tree.get(
+                REPOSITORY_STATE_KEY
+            )?.and_then(|data| {
+                match RepositoryState::try_from(data) {
+                    Ok(state) => Some(state),
+                    Err(_) => {
+                        warn!(
+                            "Failed to decode RRDP repository state for {}",
+                            uri
+                        );
+                        None
+                    }
+                }
+            });
+
             let repo_dir_name = if !repos.contains_key(uri.authority()) {
                 String::from(uri.authority())
             }
@@ -175,7 +192,7 @@ impl Collector {
                 }
             };
             let repo_dir = dir.join(&repo_dir_name);
-            repos.insert( repo_dir_name, uri.clone());
+            repos.insert(repo_dir_name, (uri, state));
 
             if let Err(err) = fs::create_dir_all(&repo_dir) {
                 error!(
@@ -186,7 +203,9 @@ impl Collector {
                 return Err(Failed)
             }
 
-            self.dump_repository(&uri, &repo_dir)?;
+            for (uri, content) in repository.iter_files() {
+                self.dump_object(&repo_dir, &uri, &content)?;
+            }
         }
 
         let mut repos: Vec<_> = repos.into_iter().collect();
@@ -197,13 +216,21 @@ impl Collector {
             &json_path, 
             &JsonBuilder::build(|builder| {
                 builder.member_array("repositories", |builder| {
-                    for (key, value) in repos.iter() {
+                    for (key, (uri, state)) in repos.iter() {
                         builder.array_object(|builder| {
                             builder.member_str(
                                 "path",
                                 key
                             );
-                            builder.member_str("rpkiNotify", value);
+                            builder.member_str("rpkiNotify", uri);
+                            if let Some(state) = state {
+                                builder.member_raw("serial", state.serial);
+                                builder.member_str("session", state.session);
+                                builder.member_str(
+                                    "updated",
+                                    state.updated.to_rfc3339()
+                                );
+                            }
                         })
                     }
                 })
@@ -211,18 +238,6 @@ impl Collector {
         ) {
             error!( "Failed to write {}: {}", json_path.display(), err);
             return Err(Failed)
-        }
-
-        Ok(())
-    }
-
-    fn dump_repository(
-        &self, uri: &uri::Https, dir: &Path
-    ) -> Result<(), Failed> {
-        let repository = Repository::new(self, uri)?;
-
-        for (uri, content) in repository.iter_files() {
-            self.dump_object(dir, &uri, &content)?;
         }
 
         Ok(())
