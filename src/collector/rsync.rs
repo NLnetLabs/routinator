@@ -233,7 +233,7 @@ impl Collector {
         keep_host
     }
 
-    /// Dumps the content of the RRDP collector.
+    /// Dumps the content of the rsync collector.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         let target = dir.join("rsync");
 
@@ -275,8 +275,8 @@ impl Collector {
                 Ok(file_type) => file_type,
                 Err(err) => {
                     error!(
-                        "Failed to read directory {}: {}",
-                        source.display(), err
+                        "Failed to file type for {}: {}",
+                        item.path().display(), err
                     );
                     return Err(Failed)
                 }

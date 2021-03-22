@@ -1156,7 +1156,9 @@ impl<'a> TreeNames<'a> {
 
     /// Returns the manifest tree name for this repository.
     pub fn manifest_tree_name(&self) -> Vec<u8> {
-        let mut res = Vec::with_capacity(16 + self.repository_name.len());
+        let mut res = Vec::with_capacity(
+            TreeNames::MANIFEST_TREE_PREFIX.len() + self.repository_name.len()
+        );
         res.extend_from_slice(TreeNames::MANIFEST_TREE_PREFIX);
         res.extend_from_slice(self.repository_name);
         res
@@ -1164,7 +1166,9 @@ impl<'a> TreeNames<'a> {
 
     /// Returns the object tree name for this repository.
     pub fn object_tree_name(&self) -> Vec<u8> {
-        let mut res = Vec::with_capacity(14 + self.repository_name.len());
+        let mut res = Vec::with_capacity(
+            TreeNames::OBJECT_TREE_PREFIX.len() + self.repository_name.len()
+        );
         res.extend_from_slice(TreeNames::OBJECT_TREE_PREFIX);
         res.extend_from_slice(self.repository_name);
         res
