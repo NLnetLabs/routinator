@@ -32,7 +32,7 @@ use sled::IVec;
 use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
-use crate::metrics::{Metrics, RrdpServerMetrics};
+use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::{JsonBuilder, UriExt};
 
 
@@ -296,7 +296,7 @@ pub struct Run<'a> {
     running: RwLock<HashMap<uri::Https, Arc<Mutex<()>>>>,
 
     /// The server metrics.
-    metrics: Mutex<Vec<RrdpServerMetrics>>,
+    metrics: Mutex<Vec<RrdpRepositoryMetrics>>,
 }
 
 impl<'a> Run<'a> {
@@ -626,7 +626,7 @@ struct RepositoryUpdate<'a> {
     rpki_notify: &'a uri::Https,
 
     /// The update metrics.
-    metrics: RrdpServerMetrics,
+    metrics: RrdpRepositoryMetrics,
 }
 
 impl<'a> RepositoryUpdate<'a> {
@@ -638,7 +638,7 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Self {
         RepositoryUpdate {
             collector, http, rpki_notify,
-            metrics: RrdpServerMetrics::new(rpki_notify.clone())
+            metrics: RrdpRepositoryMetrics::new(rpki_notify.clone())
         }
     }
 
@@ -652,16 +652,18 @@ impl<'a> RepositoryUpdate<'a> {
         res
     }
 
-    /// Actually performs an update and returns whether that succeeeded.
+    /// Actually performs an update and returns whether that succeeded.
     fn _update(&mut self) -> Result<bool, Failed> {
-        self.metrics.serial = None;
         let notify = match self.http.notification_file(
             &self.rpki_notify, &mut self.metrics.notify_status
         ) {
             Some(notify) => notify,
             None => return Ok(false)
         };
+        self.metrics.serial = Some(notify.serial);
+        self.metrics.session = Some(notify.session_id);
         if self.delta_update(&notify)? {
+            self.metrics.delta = true;
             return Ok(true)
         }
         self.snapshot_update(&notify)

@@ -20,6 +20,9 @@ New
   before starting. This can be used when data corruption is reported. ([#470])
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
+* The metrics of RRDP repositories now also include the serial number of
+  the last update. The JSON status information also includes the session
+  ID and whether the last update was via a delta. ([#487])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
@@ -51,6 +54,7 @@ Other Changes
 [#474]: https://github.com/NLnetLabs/routinator/pull/474
 [#480]: https://github.com/NLnetLabs/routinator/pull/480
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
+[#487]: https://github.com/NLnetLabs/routinator/pull/487
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
