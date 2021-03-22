@@ -178,8 +178,8 @@ impl Collector {
                 }
             });
 
-            /// Use the URI’s authority as the directory name, possibly
-            /// append a number to make it unique.
+            // Use the URI’s authority as the directory name, possibly
+            // append a number to make it unique.
             let repo_dir_name = if !repos.contains_key(uri.authority()) {
                 String::from(uri.authority())
             }
