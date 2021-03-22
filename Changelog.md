@@ -12,6 +12,10 @@ Breaking Changes
 * RRDP data is now collected into the same key-value database. The new
   command `dump` allows copying the data from the database to the file
   system. ([#473], [#480], [#484])
+* If an RRDP repository is unavailable for a certain time, Routinator will
+  now fall back to rsync. The time since last successful update before
+  this fallback happens is configurable via the `rrdp-fallback-time`
+  option and defaults to one hour. ([#473], [#482])
 * The minimal supported Rust version is now 1.44.0. [(#444)]
 
 New
@@ -53,6 +57,7 @@ Other Changes
 [#473]: https://github.com/NLnetLabs/routinator/pull/473
 [#474]: https://github.com/NLnetLabs/routinator/pull/474
 [#480]: https://github.com/NLnetLabs/routinator/pull/480
+[#482]: https://github.com/NLnetLabs/routinator/pull/482
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
