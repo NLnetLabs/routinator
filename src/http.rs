@@ -682,7 +682,7 @@ fn status_active(
             write!(
                 res,
                 ", duration={:.3}s",
-                duration.as_secs() as f64
+                duration.as_secs_f64()
                 + f64::from(duration.subsec_millis()) / 1000.
             ).unwrap();
         }

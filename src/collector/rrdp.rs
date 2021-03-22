@@ -464,7 +464,7 @@ impl<'a> RepositoryUpdate<'a> {
         res
     }
 
-    /// Actually performs an update and returns whether that succeeeded.
+    /// Actually performs an update and returns whether that succeeded.
     fn _update(&mut self) -> Result<bool, Failed> {
         let notify = match self.http.notification_file(
             &self.rpki_notify, &mut self.metrics.notify_status
