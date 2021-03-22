@@ -69,6 +69,7 @@ pub enum Operation {
     ValidateDocument(ValidateDocument),
     Update(Update),
     PrintConfig(PrintConfig),
+    Dump(Dump),
     Man(Man),
 }
 
@@ -92,6 +93,7 @@ impl Operation {
 
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
+        let app = Dump::config_args(app);
         Man::config_args(app)
     }
 
@@ -130,6 +132,9 @@ impl Operation {
                     PrintConfig::from_arg_matches(matches, cur_dir, config)?
                 )
             }
+            ("dump", Some(matches)) => {
+                Operation::Dump( Dump::from_arg_matches(matches, cur_dir)?)
+            }
             ("man", Some(matches)) => {
                 Operation::Man(Man::from_arg_matches(matches)?)
             }
@@ -167,6 +172,7 @@ impl Operation {
             Operation::ValidateDocument(cmd) => cmd.run(process),
             Operation::Update(cmd) => cmd.run(process),
             Operation::PrintConfig(cmd) => cmd.run(process),
+            Operation::Dump(cmd) => cmd.run(process),
             Operation::Man(cmd) => cmd.run(process),
         }
     }
@@ -500,8 +506,9 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
+        validation.cleanup()?;
         history.mark_update_done();
-        validation.cleanup()
+        Ok(())
     }
 }
 
@@ -1039,6 +1046,54 @@ impl PrintConfig {
     /// Prints the current configuration to stdout and exits.
     fn run(self, process: Process) -> Result<(), ExitError> {
         println!("{}", process.config());
+        Ok(())
+    }
+}
+
+
+//------------ Dump ----------------------------------------------------------
+
+/// Dumps the database content.
+pub struct Dump {
+    /// The output directory.
+    output: PathBuf,
+}
+
+impl Dump {
+    /// Adds the command configuration to a clap app.
+    pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+        // config
+        app.subcommand(SubCommand::with_name("dump")
+            .about("Writes the cache content to disk")
+            .arg(Arg::with_name("output")
+                .short("o")
+                .long("output")
+                .value_name("DIR")
+                .help("Output directory")
+                .takes_value(true)
+            )
+        )
+    }
+
+    /// Creates a command from clap matches.
+    pub fn from_arg_matches(
+        matches: &ArgMatches,
+        cur_dir: &Path,
+    ) -> Result<Self, Failed> {
+        Ok(Dump {
+            output: {
+                matches.value_of("output").map(|path| {
+                    cur_dir.join(path)
+                }).unwrap_or_else(|| cur_dir.into())
+            }
+        })
+    }
+
+    /// Prints the current configuration to stdout and exits.
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        let engine = Engine::new(process.config(), false)?;
+        process.switch_logging(false, false)?;
+        engine.dump(&self.output)?;
         Ok(())
     }
 }

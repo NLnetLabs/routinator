@@ -343,9 +343,16 @@ impl Engine {
         Ok((report, metrics))
     }
 
-    /// Cleans the collector and store owned by the validation.
+    /// Cleans the collector and store owned by the engine.
     pub fn cleanup(&self) -> Result<(), Failed> {
         self.store.cleanup(self.collector.cleanup())
+    }
+
+    /// Dumps the content of the collector and store owned by the engine.
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        self.store.dump(dir)?;
+        self.collector.dump(dir)?;
+        Ok(())
     }
 }
 

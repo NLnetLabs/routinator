@@ -4,7 +4,7 @@
 
 use std::{fs, io};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use log::{error, warn};
 use rpki::repository::tal::TalUri;
@@ -113,6 +113,17 @@ impl Collector {
     /// those repositories that should be kept around.
     pub fn cleanup(&self) -> Cleanup {
         Cleanup::new(self)
+    }
+
+    /// Dumps the content of the collector and store owned by the engine.
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        if let Some(rrdp) = self.rrdp.as_ref() {
+            rrdp.dump(dir)?;
+        }
+        if let Some(rsync) = self.rsync.as_ref() {
+            rsync.dump(dir)?;
+        }
+        Ok(())
     }
 }
 
