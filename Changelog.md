@@ -1,6 +1,5 @@
 # Change Log
 
-
 ## Unreleased next version
 
 Breaking Changes
@@ -56,6 +55,28 @@ Other Changes
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
 [@reschke]: https://github.com/reschke
+
+
+## 0.8.3 ‘Like and Subscribe’
+
+Released 2021-02-02.
+
+There have been no changes since 0.8.3-rc1.
+
+
+## 0.8.3-rc1
+
+Released 2021-01-28.
+
+New
+
+* Status information is now available in JSON format at `/api/v1/status`
+  ([#449]).
+* Includes version 0.1.0 of [routinator-ui], a UI for Route Origin Validation
+  and Routinator status ([#449]).
+
+[#449]: https://github.com/NLnetLabs/routinator/pull/449
+[routinator-ui]: https://github.com/NLnetLabs/routinator-ui/
 
 
 ## 0.8.2 ‘Once More, with Feeling’
