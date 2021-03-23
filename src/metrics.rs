@@ -236,6 +236,20 @@ impl RrdpRepositoryMetrics {
             duration: Ok(Duration::from_secs(0))
         }
     }
+
+    pub fn status(&self) -> Option<reqwest::StatusCode> {
+        if let Some(status) = self.notify_status {
+            if status.is_success() {
+                self.payload_status
+            }
+            else {
+                Some(status)
+            }
+        }
+        else {
+            self.notify_status
+        }
+    }
 }
 
 

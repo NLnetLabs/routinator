@@ -365,7 +365,7 @@ fn metrics_active(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
-            metrics.notify_status.map(|code| {
+            metrics.status().map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
         ).unwrap();
@@ -677,7 +677,7 @@ fn status_active(
             res,
             "   {}: status={}",
             metrics.notify_uri,
-            metrics.notify_status.map(|code| {
+            metrics.status().map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
         ).unwrap();
@@ -812,22 +812,24 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         target.member_object("rrdp", |target| {
             for metrics in metrics.rrdp() {
                 target.member_object(&metrics.notify_uri, |target| {
-                    let notify_status = metrics.notify_status.map(|code| {
-                        code.as_u16() as i16
-                    }).unwrap_or(-1);
-                    let payload_status = metrics.payload_status.map(|code| {
-                        code.as_u16() as i16
-                    }).unwrap_or(-1);
-                    target.member_raw("status",
-                        if notify_status == 200 {
-                            payload_status
-                        }
-                        else {
-                            notify_status
-                        }
+                    target.member_raw(
+                        "status",
+                        metrics.status().map(|code| {
+                            code.as_u16() as i16
+                        }).unwrap_or(-1)
                     );
-                    target.member_raw("notifyStatus", notify_status);
-                    target.member_raw("payloadStatus",payload_status);
+                    target.member_raw(
+                        "notifyStatus",
+                        metrics.notify_status.map(|code| {
+                            code.as_u16() as i16
+                        }).unwrap_or(-1)
+                    );
+                    target.member_raw(
+                        "payloadStatus",
+                        metrics.notify_status.map(|code| {
+                            code.as_u16() as i16
+                        }).unwrap_or(-1)
+                    );
                     match metrics.duration {
                         Ok(duration) => {
                             target.member_raw("duration",
