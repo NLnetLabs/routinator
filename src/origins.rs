@@ -52,11 +52,6 @@ impl OriginsReport {
         }
     }
 
-    #[deprecated]
-    pub fn with_capacity(_capacity: usize, _tals: Vec<Arc<TalInfo>>) -> Self {
-        Self::new()
-    }
-
     pub fn push_origins(&self, origins: RouteOrigins) {
         self.origins.push(origins)
     }
@@ -326,7 +321,7 @@ struct HistoryInner {
     server_metrics: Arc<ServerMetrics>,
 
     /// The session ID.
-    session: u16,
+    session: u64,
 
     /// The number of diffs to keep.
     keep: usize,
@@ -372,7 +367,7 @@ impl OriginsHistory {
                 session: {
                     SystemTime::now()
                         .duration_since(SystemTime::UNIX_EPOCH).unwrap()
-                        .as_secs() as u16
+                        .as_secs()
                 },
                 keep: config.history_size,
                 refresh: config.refresh,
@@ -443,13 +438,13 @@ impl OriginsHistory {
         })
     }
     
-    pub fn current_and_metrics(
+    /// Returns status information of the current update.
+    ///
+    /// Returns `None` if there is no update yet.
+    pub fn current_status(
         &self
-    ) -> Option<(Arc<AddressOrigins>, Arc<Metrics>)> {
-        let history = self.0.read().unwrap();
-        let current = history.current.clone()?;
-        let metrics = history.metrics.clone()?;
-        Some((current, metrics))
+    ) -> Option<AddressOriginsStatus> {
+        AddressOriginsStatus::from_history(&self.0.read().unwrap())
     }
 
     pub fn metrics(&self) -> Option<Arc<Metrics>> {
@@ -568,13 +563,13 @@ impl VrpSource for OriginsHistory {
 
     fn notify(&self) -> State {
         let history = self.0.read().unwrap();
-        State::from_parts(history.session, history.serial())
+        State::from_parts(history.rtr_session(), history.serial())
     }
 
     fn full(&self) -> (State, Self::FullIter) {
         let history = self.0.read().unwrap();
         (
-            State::from_parts(history.session, history.serial()),
+            State::from_parts(history.rtr_session(), history.serial()),
             AddressOriginsIter::new(
                 history.current.clone().unwrap_or_default()
             )
@@ -585,12 +580,12 @@ impl VrpSource for OriginsHistory {
         &self, state: State
     ) -> Option<(State, Self::DiffIter)> {
         let history = self.0.read().unwrap();
-        if history.session != state.session() {
+        if history.rtr_session() != state.session() {
             return None
         }
         history.get(state.serial()).map(|diff| {
             (
-                State::from_parts(history.session, history.serial()),
+                State::from_parts(history.rtr_session(), history.serial()),
                 DiffIter::new(diff)
             )
         })
@@ -614,6 +609,18 @@ impl HistoryInner {
             Some(diff) => diff.serial(),
             None => Serial(0)
         }
+    }
+
+    /// Returns the session ID.
+    pub fn session(&self) -> u64 {
+        self.session
+    }
+
+    /// Returns the RTR version of the session ID.
+    ///
+    /// This is the last 16 bits of the full session ID.
+    pub fn rtr_session(&self) -> u16 {
+        self.session as u16
     }
 
     /// Appends a new diff dropping old ones if necessary.
@@ -965,6 +972,66 @@ impl Iterator for AddressOriginsIter {
         let res = self.origins.origins.get(self.pos)?;
         self.pos += 1;
         Some(res.payload())
+    }
+}
+
+
+//------------ AddressOriginsStatus ------------------------------------------
+
+/// All the data you need for serving the current address origins.
+#[derive(Clone, Debug)]
+pub struct AddressOriginsStatus {
+    /// The session ID.
+    session: u64,
+
+    /// The serial number.
+    serial: Serial,
+
+    /// The date when creating this set was completed.
+    created: DateTime<Utc>,
+
+    /// The address origins.
+    origins: Arc<AddressOrigins>,
+
+    /// The metrics.
+    metrics: Arc<Metrics>,
+}
+
+impl AddressOriginsStatus {
+    /// Creates a new value from the history.
+    fn from_history(history: &HistoryInner) -> Option<Self> {
+        Some(AddressOriginsStatus {
+            session: history.session(),
+            serial: history.serial(),
+            created: history.last_update_done?,
+            origins: history.current.clone()?,
+            metrics: history.metrics.clone()?,
+        })
+    }
+
+    /// Returns the session ID.
+    pub fn session(&self) -> u64 {
+        self.session
+    }
+
+    /// Returns the serial number of this update.
+    pub fn serial(&self) -> Serial {
+        self.serial
+    }
+
+    /// Returns the time this set was created.
+    pub fn created(&self) -> DateTime<Utc> {
+        self.created
+    }
+
+    /// Returns the origins.
+    pub fn origins(&self) -> &Arc<AddressOrigins> {
+        &self.origins
+    }
+
+    /// Returns the metrics.
+    pub fn metrics(&self) -> &Arc<Metrics> {
+        &self.metrics
     }
 }
 

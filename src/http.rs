@@ -16,13 +16,14 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use chrono::format::{Item, Fixed, Numeric, Pad};
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::header::HeaderValue;
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
@@ -128,33 +129,26 @@ async fn handle_request(
     if *req.method() != Method::GET {
         return Ok(method_not_allowed())
     }
-    Ok(match req.uri().path() {
-        "/bird" => vrps(origins, req.uri().query(), OutputFormat::Bird1),
-        "/bird2" => vrps(origins, req.uri().query(), OutputFormat::Bird2),
-        "/csv" => vrps(origins, req.uri().query(), OutputFormat::Csv),
-        "/csvcompat"
-            => vrps(origins, req.uri().query(), OutputFormat::CompatCsv),
-        "/csvext"
-            => vrps(origins, req.uri().query(), OutputFormat::ExtendedCsv),
-        "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
-        "/log" => log(origins),
-        "/metrics" => metrics(origins),
-        "/openbgpd" => {
-            vrps(origins, req.uri().query(), OutputFormat::Openbgpd)
-        }
-        "/rpsl" => vrps(origins, req.uri().query(), OutputFormat::Rpsl),
-        "/status" => status(origins),
-        "/api/v1/status" => api_status(origins),
-        "/validity" => validity_query(origins, req.uri().query()),
-        "/version" => version(),
-        path if path.starts_with("/api/v1/validity/") => {
-            validity_path(origins, &path[17..])
-        }
-        #[cfg(feature = "ui")]
-        _ => self::ui::process_request(req),
-        #[cfg(not(feature = "ui"))]
-        _ => not_found()
-    })
+    if let Some(format) = OutputFormat::from_path(req.uri().path()) {
+        Ok(vrps(&req, origins, format))
+    }
+    else {
+        Ok(match req.uri().path() {
+            "/log" => log(origins),
+            "/metrics" => metrics(origins),
+            "/status" => status(origins),
+            "/api/v1/status" => api_status(origins),
+            "/validity" => validity_query(origins, req.uri().query()),
+            "/version" => version(),
+            path if path.starts_with("/api/v1/validity/") => {
+                validity_path(origins, &path[17..])
+            }
+            #[cfg(feature = "ui")]
+            _ => self::ui::process_request(req),
+            #[cfg(not(feature = "ui"))]
+            _ => not_found()
+        })
+    }
 }
 
 
@@ -988,29 +982,16 @@ fn version() -> Response<Body> {
     .unwrap()
 }
 
-const HTTP_DATE_ITEMS: &[Item<'static>] = &[
-    Item::Fixed(Fixed::ShortWeekdayName),
-    Item::Literal(", "),
-    Item::Numeric(Numeric::Day, Pad::Zero),
-    Item::Literal(" "),
-    Item::Fixed(Fixed::ShortMonthName),
-    Item::Literal(" "),
-    Item::Numeric(Numeric::Year, Pad::Zero),
-    Item::Literal(" "),
-    Item::Numeric(Numeric::Hour, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Minute, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Second, Pad::Zero),
-    Item::Literal(" GMT"),
-];
 
+//------------ vrps ----------------------------------------------------------
+
+/// Produces a response listing VRPs.
 fn vrps(
+    req: &Request<Body>,
     origins: &OriginsHistory,
-    query: Option<&str>,
-    format: OutputFormat
+    format: OutputFormat,
 ) -> Response<Body> {
-    let (current, metrics) = match origins.current_and_metrics() {
+    let status = match origins.current_status() {
         Some(some) => some, 
         None => {
             return Response::builder()
@@ -1021,26 +1002,25 @@ fn vrps(
         }
     };
 
-    let (_start, done, _duration) = origins.update_times();
+    let etag = format!("\"{:x}-{}\"", status.session(), status.serial());
 
-    let filters = match output_filters(query) {
+    if let Some(response) = maybe_not_modified(req, &etag, status.created()) {
+        return response
+    }
+
+    let filters = match output_filters(req.uri().query()) {
         Ok(filters) => filters,
         Err(_) => return bad_request(),
     };
     let stream = format.stream(
-        current, filters, metrics
+        status.origins().clone(), filters, status.metrics().clone()
     );
 
-    let mut builder = Response::builder();
-
-    builder = builder.header("Content-Type", format.content_type())
-        .header("Content-Length", stream.output_len());
-
-    if let Some(done) = done {
-        builder = builder.header("Last-Modified",
-            done.format_with_items(
-                HTTP_DATE_ITEMS.iter().cloned()).to_string());
-    }
+    let builder = Response::builder()
+        .header("Content-Type", format.content_type())
+        .header("Content-Length", stream.output_len())
+        .header("ETag", etag)
+        .header("Last-Modified", format_http_date(&status.created()));
 
     builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
@@ -1048,28 +1028,54 @@ fn vrps(
     .unwrap()
 }
 
-fn bad_request() -> Response<Body> {
-    Response::builder()
-    .status(StatusCode::BAD_REQUEST)
-    .header("Content-Type", "text/plain")
-    .body("Bad Request".into())
-    .unwrap()
+/// Returns a 304 Not Modified response if appropriate.
+///
+/// If either the etag or the completion time are referred to by the request,
+/// returns the reponse. If a new response needs to be generated, returns
+/// `None`.
+fn maybe_not_modified(
+    req: &Request<Body>,
+    etag: &str,
+    done: DateTime<Utc>,
+) -> Option<Response<Body>> {
+    // First, check If-None-Match.
+    for value in req.headers().get_all("If-None-Match").iter() {
+        // Skip ill-formatted values. By being lazy here we may falsely
+        // return a full response, so this should fine.
+        let value = match value.to_str() {
+            Ok(value) => value,
+            Err(_) => continue
+        };
+        let value = value.trim();
+        if value == "*" {
+            return Some(not_modified(etag, done))
+        }
+        for tag in value.split(',') {
+            if tag.trim() == etag {
+                return Some(not_modified(etag, done))
+            }
+        }
+    }
+
+    // Now, the If-Modified-Since header.
+    if let Some(value) = req.headers().get("If-Modified-Since") {
+        if let Some(date) = parse_http_date(value) {
+            if date >= done {
+                return Some(not_modified(etag, done))
+            }
+        }
+    }
+
+    None
 }
 
-fn method_not_allowed() -> Response<Body> {
+/// Returns the 304 Not Modified response.
+fn not_modified(etag: &str, done: DateTime<Utc>) -> Response<Body> {
     Response::builder()
-    .status(StatusCode::METHOD_NOT_ALLOWED)
-    .header("Content-Type", "text/plain")
-    .body("Method Not Allowed".into())
-    .unwrap()
-}
-
-fn not_found() -> Response<Body> {
-    Response::builder()
-    .status(StatusCode::NOT_FOUND)
-    .header("Content-Type", "text/plain")
-    .body("Not Found".into())
-    .unwrap()
+    .status(304)
+    .header("ETag", etag)
+    .header("Last-Modified", format_http_date(&done))
+    .body(Body::empty()).unwrap()
 }
 
 /// Produces the output filters from a query string.
@@ -1136,6 +1142,33 @@ fn query_iter(
         let value = item.next();
         (key, value)
     })
+}
+
+
+//------------ Error Responses -----------------------------------------------
+
+fn bad_request() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::BAD_REQUEST)
+    .header("Content-Type", "text/plain")
+    .body("Bad Request".into())
+    .unwrap()
+}
+
+fn method_not_allowed() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::METHOD_NOT_ALLOWED)
+    .header("Content-Type", "text/plain")
+    .body("Method Not Allowed".into())
+    .unwrap()
+}
+
+fn not_found() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::NOT_FOUND)
+    .header("Content-Type", "text/plain")
+    .body("Not Found".into())
+    .unwrap()
 }
 
 
@@ -1229,6 +1262,102 @@ impl Drop for HttpStream {
     fn drop(&mut self) {
         self.metrics.inc_http_conn_close()
     }
+}
+
+
+//------------ Parsing and Constructing HTTP Dates ---------------------------
+
+/// Definition of the preferred date format (aka IMF-fixedate).
+///
+/// The definition allows for relaxed parsing: It accepts additional white
+/// space and ignored case for textual representations. It does, however,
+/// construct the correct representation when formatting.
+const IMF_FIXDATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Space(""),
+    Item::Literal(","),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Space(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Literal("GMT"),
+    Item::Space(""),
+];
+
+/// Definition of the obsolete RFC850 date format..
+const RFC850_DATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::LongWeekdayName),
+    Item::Space(""),
+    Item::Literal(","),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal("-"),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::YearMod100, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Literal("GMT"),
+    Item::Space(""),
+];
+
+/// Definition of the obsolete asctime date format.
+const ASCTIME_DATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Space(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Space),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Space(""),
+];
+
+fn parse_http_date(date: &HeaderValue) -> Option<DateTime<Utc>> {
+    use chrono::format::{Parsed, parse};
+
+    // All formats are ASCII-only, so if we can’t turn the value into a
+    // string, it ain’t a valid date.
+    let date = date.to_str().ok()?;
+
+    let mut parsed = Parsed::new();
+    if parse(&mut parsed, date, IMF_FIXDATE.iter()).is_err() {
+        parsed = Parsed::new();
+        if parse(&mut parsed, date, RFC850_DATE.iter()).is_err() {
+            parsed = Parsed::new();
+            if parse(&mut parsed, date, ASCTIME_DATE.iter()).is_err() {
+                return None
+            }
+        }
+    }
+    parsed.to_datetime_with_timezone(&Utc).ok()
+}
+
+fn format_http_date(date: &DateTime<Utc>) -> String {
+    date.format_with_items(IMF_FIXDATE.iter()).to_string()
 }
 
 
@@ -1327,6 +1456,24 @@ mod ui {
         pub const ttf: &[u8] = b"font/ttf";
         pub const woff: &[u8] = b"font/woff";
         pub const woff2: &[u8] = b"font/woff2";
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parse_http_date() {
+        let date = Datetime::<Utc>::from_utc(
+            chrono::naive::NaiveDate::from_ymd(
+                1994, 11, 6
+            ).and_hms(8, 49, 37),
+            Utc
+        );
     }
 }
 
