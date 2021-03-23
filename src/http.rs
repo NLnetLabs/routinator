@@ -1467,12 +1467,31 @@ mod test {
     use super::*;
 
     #[test]
-    fn parse_http_date() {
-        let date = Datetime::<Utc>::from_utc(
+    fn test_parse_http_date() {
+        let date = DateTime::<Utc>::from_utc(
             chrono::naive::NaiveDate::from_ymd(
                 1994, 11, 6
             ).and_hms(8, 49, 37),
             Utc
+        );
+
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sun, 06 Nov 1994 08:49:37 GMT")
+            ),
+            Some(date)
+        );
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sunday, 06-Nov-94 08:49:37 GMT")
+            ),
+            Some(date)
+        );
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sun Nov  6 08:49:37 1994")
+            ),
+            Some(date)
         );
     }
 }
