@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
 use uuid::Uuid;
+use crate::collector::SnapshotReason;
 
 
 //------------ Metrics -------------------------------------------------------
@@ -205,8 +206,19 @@ pub struct RrdpRepositoryMetrics {
     /// The serial number of the last update.
     pub serial: Option<u64>,
 
-    /// Was the last update attempt from a delta?
-    pub delta: bool,
+    /// Was there a reason to fall back to using a snapshot?
+    pub snapshot_reason: Option<SnapshotReason>,
+
+    /// The status code of requesting the last payload file.
+    ///
+    /// If multiple payload files had to be requested, for instance because
+    /// multiple deltas needed applying, all the other ones had to have ended
+    /// in a 200.
+    ///
+    /// A value of `None` means an error happened before getting a status
+    /// code. If `notify_status` is `None`, then it means nothing because
+    /// no payload request was ever tried.
+    pub payload_status: Option<reqwest::StatusCode>,
 
     /// The duration of the last update.
     pub duration: Result<Duration, SystemTimeError>,
@@ -219,7 +231,8 @@ impl RrdpRepositoryMetrics {
             notify_status: None,
             session: None,
             serial: None,
-            delta: false,
+            snapshot_reason: None,
+            payload_status: None,
             duration: Ok(Duration::from_secs(0))
         }
     }

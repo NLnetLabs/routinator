@@ -25,6 +25,7 @@
 //  `Collector`, `Run`, and `Repository` types.
 //
 pub use self::base::{Collector, Cleanup, Run, Repository};
+pub use self::rrdp::SnapshotReason;
 
 mod base;
 mod rrdp;

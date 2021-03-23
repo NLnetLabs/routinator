@@ -812,11 +812,22 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         target.member_object("rrdp", |target| {
             for metrics in metrics.rrdp() {
                 target.member_object(&metrics.notify_uri, |target| {
+                    let notify_status = metrics.notify_status.map(|code| {
+                        code.as_u16() as i16
+                    }).unwrap_or(-1);
+                    let payload_status = metrics.payload_status.map(|code| {
+                        code.as_u16() as i16
+                    }).unwrap_or(-1);
                     target.member_raw("status",
-                        metrics.notify_status.map(|code| {
-                            code.as_u16() as i16
-                        }).unwrap_or(-1),
+                        if notify_status == 200 {
+                            payload_status
+                        }
+                        else {
+                            notify_status
+                        }
                     );
+                    target.member_raw("notifyStatus", notify_status);
+                    target.member_raw("payloadStatus",payload_status);
                     match metrics.duration {
                         Ok(duration) => {
                             target.member_raw("duration",
@@ -838,9 +849,15 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
                         None => target.member_raw("session", "none")
                     }
                     target.member_raw("delta",
-                        if metrics.delta { "true" }
+                        if metrics.snapshot_reason.is_none() { "true" }
                         else { "false" }
                     );
+                    if let Some(reason) = metrics.snapshot_reason {
+                        target.member_str("snapshot_reason", reason.code())
+                    }
+                    else {
+                        target.member_raw("snapshot_reason", "none");
+                    }
                 })
             }
         });
