@@ -1189,7 +1189,7 @@ impl io::Read for HttpResponse {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
         let res = self.response.read(buf)?;
         if let Some(file) = self.file.as_mut() {
-            file.write(&buf[..res])?;
+            file.write_all(&buf[..res])?;
         }
         Ok(res)
     }
