@@ -16,7 +16,8 @@
 use std::{cmp, error, fmt, fs, io, mem};
 use std::collections::{HashSet, HashMap};
 use std::convert::{TryFrom, TryInto};
-use std::path::Path;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
 use bytes::Bytes;
@@ -319,7 +320,7 @@ impl<'a> Run<'a> {
             Some(ref http) => http,
             None => return None,
         };
-        let mut response = match http.response(uri) {
+        let mut response = match http.response(uri, false) {
             Ok(response) => response,
             Err(_) => return None,
         };
@@ -709,7 +710,7 @@ impl<'a> RepositoryUpdate<'a> {
         
         let mut processor = SnapshotProcessor::new(&notify);
         let mut reader = io::BufReader::new(HashRead::new(
-            self.http.response(notify.snapshot.uri())?
+            self.http.response(notify.snapshot.uri(), false)?
         ));
         processor.process(&mut reader)?;
         let hash = reader.into_inner().into_hash();
@@ -897,7 +898,7 @@ impl<'a> RepositoryUpdate<'a> {
             notify.session_id, serial, tree
         );
         let mut reader = io::BufReader::new(HashRead::new(
-            self.http.response(uri)?
+            self.http.response(uri, false)?
         ));
 
         processor.process(&mut reader)?;
@@ -930,6 +931,9 @@ struct HttpClient {
     /// This will be of the error variant until `ignite` has been called. Yes,
     /// that is not ideal but 
     client: Result<Client, Option<ClientBuilder>>,
+
+    /// The base directory for storing copies of responses if that is enabled.
+    response_dir: Option<PathBuf>,
 }
 
 impl HttpClient {
@@ -972,6 +976,7 @@ impl HttpClient {
         }
         Ok(HttpClient {
             client: Err(Some(builder)),
+            response_dir: config.rrdp_keep_responses.clone(),
         })
     }
 
@@ -1041,11 +1046,19 @@ impl HttpClient {
     }
 
     /// Performs an HTTP GET request for the given URI.
+    ///
+    /// If keeping responses is enabled, the response is written to a file
+    /// corresponding to the URI. If this would not result in a unique file
+    /// name, set `multi` to `true` to also include the current time in
+    /// the name.
     pub fn response(
         &self,
-        uri: &uri::Https
-    ) -> Result<Response, reqwest::Error> {
-        self.client().get(uri.as_str()).send()
+        uri: &uri::Https,
+        multi: bool,
+    ) -> Result<HttpResponse, reqwest::Error> {
+        self.client().get(uri.as_str()).send().map(|response| {
+            HttpResponse::create(response, uri, &self.response_dir, multi)
+        })
     }
 
     /// Requests, parses, and returns the given RRDP notification file.
@@ -1059,7 +1072,7 @@ impl HttpClient {
         uri: &uri::Https,
         status: &mut Option<StatusCode>,
     ) -> Option<NotificationFile> {
-        let response = match self.response(uri) {
+        let response = match self.response(uri, true) {
             Ok(response) => {
                 *status = Some(response.status());
                 response
@@ -1087,6 +1100,98 @@ impl HttpClient {
                 None
             }
         }
+    }
+}
+
+
+//------------ HttpResponse --------------------------------------------------
+
+/// Wraps a reqwest response for added features.
+struct HttpResponse {
+    /// The wrapped reqwest response.
+    response: Response,
+
+    /// A file to also store read data into.
+    file: Option<fs::File>,
+}
+
+impl HttpResponse {
+    pub fn create(
+        response: Response,
+        uri: &uri::Https,
+        response_dir: &Option<PathBuf>,
+        multi: bool
+    ) -> Self {
+        HttpResponse {
+            response,
+            file: response_dir.as_ref().and_then(|base| {
+                Self::open_file(base, uri, multi).ok()
+            })
+        }
+    }
+
+    fn open_file(
+        base: &Path, uri: &uri::Https, multi: bool
+    ) -> Result<fs::File, Failed> {
+        let path = base.join(&uri.as_str()[8..]);
+        let path = if multi {
+            path.join(Utc::now().to_rfc3339())
+        }
+        else {
+            path
+        };
+
+        let parent = match path.parent() {
+            Some(parent) => parent,
+            None => {
+                warn!(
+                    "Cannot keep HTTP response; \
+                    URI translated into a bad path '{}'",
+                    path.display()
+                );
+                return Err(Failed)
+            }
+        };
+        if let Err(err) = fs::create_dir_all(&parent) {
+            warn!(
+                "Cannot keep HTTP response; \
+                creating director {} failed: {}",
+                parent.display(), err
+            );
+            return Err(Failed)
+        }
+        fs::File::create(&path).map_err(|err| {
+            warn!(
+                "Cannot keep HTTP response; \
+                creating file {} failed: {}",
+                path.display(), err
+            );
+            Failed
+        })
+    }
+
+    pub fn content_length(&self) -> Option<u64> {
+        self.response.content_length()
+    }
+
+    pub fn copy_to<W: io::Write + ?Sized>(
+        &mut self, w: &mut W
+    ) -> Result<u64, io::Error> {
+        io::copy(self, w)
+    }
+
+    pub fn status(&self) -> StatusCode {
+        self.response.status()
+    }
+}
+
+impl io::Read for HttpResponse {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        let res = self.response.read(buf)?;
+        if let Some(file) = self.file.as_mut() {
+            file.write(&buf[..res])?;
+        }
+        Ok(res)
     }
 }
 
