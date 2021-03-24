@@ -344,6 +344,14 @@ struct HistoryInner {
     /// The instant when we are scheduled to start the next update.
     next_update_start: SystemTime,
 
+    /// The creation time of the current data set.
+    ///
+    /// This is the same as last_update_done, except when that would be
+    /// within the same second as the previous update, in which case we
+    /// move it to the next second. This is necessary as the time used in
+    /// conditional HTTP requests only has second-resolution.
+    created: Option<DateTime<Utc>>,
+
     /// Default RTR timing.
     timing: Timing,
 
@@ -375,6 +383,7 @@ impl OriginsHistory {
                 last_update_start: Utc::now(),
                 last_update_done: None,
                 last_update_duration: None,
+                created: None,
                 timing: Timing {
                     refresh: config.refresh.as_secs() as u32,
                     retry: config.retry.as_secs() as u32,
@@ -547,6 +556,21 @@ impl OriginsHistory {
                 locked.next_update_start = refresh;
             }
         }
+        locked.created = {
+            if let Some(created) = locked.created {
+                // Since we increase the time, the created time may
+                // actually have moved into the future.
+                if now.timestamp() <= created.timestamp() {
+                    Some(created + chrono::Duration::seconds(1))
+                }
+                else {
+                    Some(now)
+                }
+            }
+            else {
+                Some(now)
+            }
+        };
         if let Some(log) = locked.log.as_mut() {
             log.flush();
         }
@@ -1003,7 +1027,7 @@ impl AddressOriginsStatus {
         Some(AddressOriginsStatus {
             session: history.session(),
             serial: history.serial(),
-            created: history.last_update_done?,
+            created: history.created?,
             origins: history.current.clone()?,
             metrics: history.metrics.clone()?,
         })
