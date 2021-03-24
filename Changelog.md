@@ -34,6 +34,8 @@ New
 * The HTTP endpoints that supply the current VRP set now include a
   Last-Modified header in their response. ([#474], contributed by
   [@reschke])
+* The new `rrdp-keep-responses` option allows optionally storing the XML
+  content of all received RRDP responses in the file system. ([#490])
 
 Bug Fixes
 
@@ -60,6 +62,7 @@ Other Changes
 [#482]: https://github.com/NLnetLabs/routinator/pull/482
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
+[#490]: https://github.com/NLnetLabs/routinator/pull/490
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
