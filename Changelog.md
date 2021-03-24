@@ -26,7 +26,10 @@ New
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
   the last update. The JSON status information also includes the session
-  ID and whether the last update was via a delta. ([#487])
+  ID and whether the last update was via a delta and if it wasn’t why a
+  snapshot had to be used. It also separately provides the status codes
+  for the request of the notification file and the snapshot or last
+  requested delta file. ([#487], [#489])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
@@ -60,6 +63,7 @@ Other Changes
 [#482]: https://github.com/NLnetLabs/routinator/pull/482
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
+[#489]: https://github.com/NLnetLabs/routinator/pull/489
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
