@@ -1050,7 +1050,7 @@ fn maybe_not_modified(
         if value == "*" {
             return Some(not_modified(etag, done))
         }
-        for tag in value.split(',') {
+        for tag in EtagsIter(value) {
             if tag.trim() == etag {
                 return Some(not_modified(etag, done))
             }
@@ -1265,6 +1265,60 @@ impl Drop for HttpStream {
 }
 
 
+//------------ Parsing Etags -------------------------------------------------
+
+/// An iterator over the etags in an If-Not-Match header value.
+///
+/// This does not handle the "*" value.
+///
+/// One caveat: The iterator stops when it encounters bad formatting which
+/// makes this indistinguishable from reaching the end of a correctly
+/// formatted value. As a consequence, we will 304 a request that has the
+/// right tag followed by garbage.
+struct EtagsIter<'a>(&'a str);
+
+impl<'a> Iterator for EtagsIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Skip white space and check with if we are done.
+        self.0 = self.0.trim_start();
+        if self.0.is_empty() {
+            return None
+        }
+
+        // We either have to have a lone DQUOTE or one prefixed by W/
+        let prefix_len = if self.0.starts_with('"') {
+            1
+        }
+        else if self.0.starts_with("W/\"") {
+            3
+        }
+        else {
+            return None
+        };
+
+        // Find the end of the tag which is after the next DQUOTE.
+        let end = match self.0[prefix_len..].find('"') {
+            Some(index) => index + prefix_len + 1,
+            None => return None
+        };
+
+        let res = &self.0[0..end];
+
+        // Move past the second DQUOTE and any space.
+        self.0 = self.0[end..].trim_start();
+
+        // If we have a comma, skip over that and any space.
+        if self.0.starts_with(',') {
+            self.0 = self.0[1..].trim_start();
+        }
+
+        Some(res)
+    }
+}
+
+
 //------------ Parsing and Constructing HTTP Dates ---------------------------
 
 /// Definition of the preferred date format (aka IMF-fixedate).
@@ -1465,6 +1519,18 @@ mod ui {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn etags_iter() {
+        assert_eq!(
+            EtagsIter("\"foo\", \"bar\", \"ba,zz\"").collect::<Vec<_>>(),
+            ["\"foo\"", "\"bar\"", "\"ba,zz\""]
+        );
+        assert_eq!(
+            EtagsIter("\"foo\", W/\"bar\" , \"ba,zz\", ").collect::<Vec<_>>(),
+            ["\"foo\"", "W/\"bar\"", "\"ba,zz\""]
+        );
+    }
 
     #[test]
     fn test_parse_http_date() {
