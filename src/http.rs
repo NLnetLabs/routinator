@@ -365,9 +365,7 @@ fn metrics_active(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
-            metrics.status().map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.status().into_i16()
         ).unwrap();
     }
 
@@ -383,9 +381,7 @@ fn metrics_active(
             res,
             "routinator_rrdp_notification_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
-            metrics.notify_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.notify_status.into_i16(),
         ).unwrap();
     }
 
@@ -401,9 +397,9 @@ fn metrics_active(
             res,
             "routinator_rrdp_payload_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
-            metrics.payload_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.payload_status.map(|status| {
+                status.into_i16()
+            }).unwrap_or(0),
         ).unwrap();
     }
 
@@ -713,15 +709,11 @@ fn status_active(
             res,
             "   {}: status={}, notification-status={}, payload-status={}",
             metrics.notify_uri,
-            metrics.status().map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
-            metrics.notify_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
-            metrics.payload_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.status().into_i16(),
+            metrics.notify_status.into_i16(),
+            metrics.payload_status.map(|status| {
+                status.into_i16()
+            }).unwrap_or(0),
         ).unwrap();
         if let Ok(duration) = metrics.duration {
             write!(
@@ -856,21 +848,17 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
                 target.member_object(&metrics.notify_uri, |target| {
                     target.member_raw(
                         "status",
-                        metrics.status().map(|code| {
-                            code.as_u16() as i16
-                        }).unwrap_or(-1)
+                        metrics.status().into_i16(),
                     );
                     target.member_raw(
                         "notifyStatus",
-                        metrics.notify_status.map(|code| {
-                            code.as_u16() as i16
-                        }).unwrap_or(-1)
+                        metrics.notify_status.into_i16(),
                     );
                     target.member_raw(
                         "payloadStatus",
-                        metrics.notify_status.map(|code| {
-                            code.as_u16() as i16
-                        }).unwrap_or(-1)
+                        metrics.payload_status.map(|status| {
+                            status.into_i16()
+                        }).unwrap_or(0)
                     );
                     match metrics.duration {
                         Ok(duration) => {

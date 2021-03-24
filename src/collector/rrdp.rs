@@ -713,11 +713,11 @@ impl<'a> RepositoryUpdate<'a> {
 
         let response = match self.http.response(notify.snapshot.uri()) {
             Ok(response) => {
-                self.metrics.payload_status = Some(response.status());
+                self.metrics.payload_status = Some(response.status().into());
                 response
             }
             Err(err) => {
-                self.metrics.payload_status = None;
+                self.metrics.payload_status = Some(HttpStatus::Error);
                 return Err(err.into())
             }
         };
@@ -907,11 +907,11 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<sled::Batch, DeltaError> {
         let response = match self.http.response(uri) {
             Ok(response) => {
-                self.metrics.payload_status = Some(response.status());
+                self.metrics.payload_status = Some(response.status().into());
                 response
             }
             Err(err) => {
-                self.metrics.payload_status = None;
+                self.metrics.payload_status = Some(HttpStatus::Error);
                 return Err(err.into())
             }
         };
@@ -1077,16 +1077,16 @@ impl HttpClient {
     pub fn notification_file(
         &self,
         uri: &uri::Https,
-        status: &mut Option<StatusCode>,
+        status: &mut HttpStatus,
     ) -> Option<NotificationFile> {
         let response = match self.response(uri) {
             Ok(response) => {
-                *status = Some(response.status());
+                *status = response.status().into();
                 response
             }
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
-                *status = None;
+                *status = HttpStatus::Error;
                 return None;
             }
         };
@@ -1796,6 +1796,41 @@ impl SnapshotReason {
             OutdatedLocal => "outdate-local",
             ConflictingDelta => "conflicting-delta",
         }
+    }
+}
+
+
+//------------ HttpStatus ----------------------------------------------------
+
+/// The result of an HTTP request.
+#[derive(Clone, Copy, Debug)]
+pub enum HttpStatus {
+    /// A response was received with the given status code.
+    Response(StatusCode),
+
+    /// An error happened.
+    Error
+}
+
+impl HttpStatus {
+    pub fn into_i16(self) -> i16 {
+        match self {
+            HttpStatus::Response(code) => code.as_u16() as i16,
+            HttpStatus::Error => -1
+        }
+    }
+
+    pub fn is_success(self) -> bool {
+        matches!(
+            self,
+            HttpStatus::Response(code) if code.is_success()
+        )
+    }
+}
+
+impl From<StatusCode> for HttpStatus {
+    fn from(code: StatusCode) -> Self {
+        HttpStatus::Response(code)
     }
 }
 

@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
 use uuid::Uuid;
-use crate::collector::SnapshotReason;
+use crate::collector::{HttpStatus, SnapshotReason};
 
 
 //------------ Metrics -------------------------------------------------------
@@ -197,8 +197,8 @@ pub struct RrdpRepositoryMetrics {
     /// The rpkiNotify URI of the RRDP repository.
     pub notify_uri: uri::Https,
 
-    /// The status code of requesting the notification file.
-    pub notify_status: Option<reqwest::StatusCode>,
+    /// The status of requesting the notification file.
+    pub notify_status: HttpStatus,
 
     /// The session ID of the last update.
     pub session: Option<Uuid>,
@@ -209,16 +209,15 @@ pub struct RrdpRepositoryMetrics {
     /// Was there a reason to fall back to using a snapshot?
     pub snapshot_reason: Option<SnapshotReason>,
 
-    /// The status code of requesting the last payload file.
+    /// The status of requesting the last payload file.
     ///
     /// If multiple payload files had to be requested, for instance because
     /// multiple deltas needed applying, all the other ones had to have ended
-    /// in a 200.
+    /// in a response with a 200 status code.
     ///
-    /// A value of `None` means an error happened before getting a status
-    /// code. If `notify_status` is `None`, then it means nothing because
-    /// no payload request was ever tried.
-    pub payload_status: Option<reqwest::StatusCode>,
+    /// A value of `None` means that no payload was requested because the
+    /// repository was up-to-date.
+    pub payload_status: Option<HttpStatus>,
 
     /// The duration of the last update.
     pub duration: Result<Duration, SystemTimeError>,
@@ -228,7 +227,7 @@ impl RrdpRepositoryMetrics {
     pub fn new(notify_uri: uri::Https) -> Self {
         RrdpRepositoryMetrics {
             notify_uri,
-            notify_status: None,
+            notify_status: HttpStatus::Error,
             session: None,
             serial: None,
             snapshot_reason: None,
@@ -237,17 +236,17 @@ impl RrdpRepositoryMetrics {
         }
     }
 
-    pub fn status(&self) -> Option<reqwest::StatusCode> {
-        if let Some(status) = self.notify_status {
-            if status.is_success() {
-                self.payload_status
+    pub fn status(&self) -> HttpStatus {
+        if self.notify_status.is_success() {
+            if let Some(status) = self.payload_status {
+                status
             }
             else {
-                Some(status)
+                self.notify_status
             }
         }
         else {
-            None
+            self.notify_status
         }
     }
 }
