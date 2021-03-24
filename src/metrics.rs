@@ -247,7 +247,7 @@ impl RrdpRepositoryMetrics {
             }
         }
         else {
-            self.notify_status
+            None
         }
     }
 }

@@ -356,8 +356,8 @@ fn metrics_active(
     // rrdp_status
     writeln!(res,
         "\n\
-        # HELP routinator_rrdp_status status code for getting \
-            notification file\n\
+        # HELP routinator_rrdp_status combined status code for repository \
+            update requests\n\
         # TYPE routinator_rrdp_status gauge"
     ).unwrap();
     for metrics in metrics.rrdp() {
@@ -366,6 +366,42 @@ fn metrics_active(
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
             metrics.status().map(|code| {
+                code.as_u16() as i16
+            }).unwrap_or(-1),
+        ).unwrap();
+    }
+
+    // rrdp_notification_status
+    writeln!(res,
+        "\n\
+        # HELP routinator_rrdp_notification_status status code for getting \
+            notification file\n\
+        # TYPE routinator_rrdp_notification_status gauge"
+    ).unwrap();
+    for metrics in metrics.rrdp() {
+        writeln!(
+            res,
+            "routinator_rrdp_notification_status{{uri=\"{}\"}} {}",
+            metrics.notify_uri,
+            metrics.notify_status.map(|code| {
+                code.as_u16() as i16
+            }).unwrap_or(-1),
+        ).unwrap();
+    }
+
+    // rrdp_payload_status
+    writeln!(res,
+        "\n\
+        # HELP routinator_rrdp_payload_status status code(s) for getting \
+            payload file(s)\n\
+        # TYPE routinator_rrdp_payload_status gauge"
+    ).unwrap();
+    for metrics in metrics.rrdp() {
+        writeln!(
+            res,
+            "routinator_rrdp_payload_status{{uri=\"{}\"}} {}",
+            metrics.notify_uri,
+            metrics.payload_status.map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
         ).unwrap();
@@ -675,9 +711,15 @@ fn status_active(
     for metrics in metrics.rrdp() {
         write!(
             res,
-            "   {}: status={}",
+            "   {}: status={}, notification-status={}, payload-status={}",
             metrics.notify_uri,
             metrics.status().map(|code| {
+                code.as_u16() as i16
+            }).unwrap_or(-1),
+            metrics.notify_status.map(|code| {
+                code.as_u16() as i16
+            }).unwrap_or(-1),
+            metrics.payload_status.map(|code| {
                 code.as_u16() as i16
             }).unwrap_or(-1),
         ).unwrap();
