@@ -31,9 +31,11 @@ New
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
   a path name instead of an array of strings. ([#471])
-* The HTTP endpoints that supply the current VRP set now include a
-  Last-Modified header in their response. ([#474], contributed by
-  [@reschke])
+* The HTTP endpoints that supply the current VRP set now support
+  conditional request handling. They include Etag and
+  Last-Modified headers in their response and process If-None-Match and
+  If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
+  [#488])
 
 Bug Fixes
 
@@ -60,6 +62,7 @@ Other Changes
 [#482]: https://github.com/NLnetLabs/routinator/pull/482
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
+[#488]: https://github.com/NLnetLabs/routinator/pull/488
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
