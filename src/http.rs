@@ -1041,7 +1041,7 @@ fn maybe_not_modified(
     // First, check If-None-Match.
     for value in req.headers().get_all("If-None-Match").iter() {
         // Skip ill-formatted values. By being lazy here we may falsely
-        // return a full response, so this should fine.
+        // return a full response, so this should be fine.
         let value = match value.to_str() {
             Ok(value) => value,
             Err(_) => continue
@@ -1281,7 +1281,7 @@ impl<'a> Iterator for EtagsIter<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Skip white space and check with if we are done.
+        // Skip white space and check if we are done.
         self.0 = self.0.trim_start();
         if self.0.is_empty() {
             return None
@@ -1321,10 +1321,10 @@ impl<'a> Iterator for EtagsIter<'a> {
 
 //------------ Parsing and Constructing HTTP Dates ---------------------------
 
-/// Definition of the preferred date format (aka IMF-fixedate).
+/// Definition of the preferred date format (aka IMF-fixdate).
 ///
 /// The definition allows for relaxed parsing: It accepts additional white
-/// space and ignored case for textual representations. It does, however,
+/// space and ignores case for textual representations. It does, however,
 /// construct the correct representation when formatting.
 const IMF_FIXDATE: &[Item<'static>] = &[
     Item::Space(""),
