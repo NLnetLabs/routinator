@@ -499,7 +499,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.set_rrdp(self.metrics.into_inner().unwrap())
+        metrics.rrdp = self.metrics.into_inner().unwrap()
     }
 }
 

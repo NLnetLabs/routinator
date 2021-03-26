@@ -32,7 +32,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
 use crate::error::{Failed, ExitError};
-use crate::metrics::{Metrics, ServerMetrics};
+use crate::metrics::{Metrics, ServerMetrics, PublicationMetrics, VrpMetrics};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::JsonBuilder;
@@ -120,6 +120,8 @@ async fn single_http_listener(
 }
 
 
+//------------ handle_request ------------------------------------------------
+
 async fn handle_request(
     req: Request<Body>,
     origins: &OriginsHistory,
@@ -158,6 +160,8 @@ async fn handle_request(
 }
 
 
+//------------ metrics -------------------------------------------------------
+
 fn metrics(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
         Some(metrics) => metrics_active(origins, &metrics),
@@ -183,10 +187,10 @@ fn metrics_active(
         "# HELP routinator_valid_roas number of valid ROAs seen\n\
          # TYPE routinator_valid_roas gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_valid_roas{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.roas
+            tal.name(), tal.publication.valid_roas
         ).unwrap();
     }
 
@@ -196,10 +200,10 @@ fn metrics_active(
          # HELP routinator_vrps_total number of valid VRPs per TAL\n\
          # TYPE routinator_vrps_total gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_total{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.total_valid_vrps
+            tal.name(), tal.vrps.valid
         ).unwrap();
     }
 
@@ -209,7 +213,7 @@ fn metrics_active(
         # HELP routinator_vrps_final final number of valid VRPs\n\
         # TYPE routinator_vrps_final gauge\n\
         routinator_vrps_final {}",
-        metrics.final_vrps(),
+        metrics.vrps.contributed,
     ).unwrap();
 
     // vrps_unsafe
@@ -219,10 +223,10 @@ fn metrics_active(
                 VRPs overlapping with rejected CAs\n\
          # TYPE routinator_vrps_unsafe gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_unsafe{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.unsafe_vrps
+            tal.name(), tal.vrps.marked_unsafe
         ).unwrap();
     }
 
@@ -233,10 +237,10 @@ fn metrics_active(
                 VRPs filtered based on local exceptions\n\
          # TYPE routinator_vrps_filtered_locally gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_filtered_locally{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.locally_filtered_vrps
+            tal.name(), tal.vrps.locally_filtered
         ).unwrap();
     }
 
@@ -246,10 +250,10 @@ fn metrics_active(
          # HELP routinator_vrps_duplicate number of duplicate VRPs per TAL\n\
          # TYPE routinator_vrps_duplicate gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_duplicate{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.duplicate_vrps
+            tal.name(), tal.vrps.duplicate
         ).unwrap();
     }
 
@@ -262,7 +266,7 @@ fn metrics_active(
     ).unwrap();
     writeln!(res,
         "routinator_vrps_added_locally {}",
-        metrics.local_vrps()
+        metrics.local.contributed
     ).unwrap();
 
     // stale_objects
@@ -271,7 +275,7 @@ fn metrics_active(
         # HELP routinator_stale_count number of stale manifests and CRLs\n\
         # TYPE routinator_stale_count gauge\n\
         routinator_stale_count {}",
-        metrics.stale_count(),
+        metrics.publication.stale_objects(),
     ).unwrap();
 
     // last_update_start, last_update_done, last_update_duration
@@ -323,7 +327,7 @@ fn metrics_active(
         # HELP routinator_rsync_status exit status of rsync command\n\
         # TYPE routinator_rsync_status gauge"
     ).unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         writeln!(
             res,
             "routinator_rsync_status{{uri=\"{}\"}} {}",
@@ -341,7 +345,7 @@ fn metrics_active(
         # HELP routinator_rsync_duration duration of rsync in seconds\n\
         # TYPE routinator_rsync_duration gauge"
     ).unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         if let Ok(duration) = metrics.duration {
             writeln!(
                 res,
@@ -360,7 +364,7 @@ fn metrics_active(
             notification file\n\
         # TYPE routinator_rrdp_status gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         writeln!(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
@@ -377,7 +381,7 @@ fn metrics_active(
         # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
         # TYPE routinator_rrdp_duration gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         if let Ok(duration) = metrics.duration {
             writeln!(
                 res,
@@ -395,7 +399,7 @@ fn metrics_active(
         # HELP routinator_rrdp_serial serial number of last RRDP update\n\
         # TYPE routinator_rrdp_serial gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         if let Some(serial) = metrics.serial {
             writeln!(
                 res,
@@ -507,6 +511,9 @@ fn metrics_active(
         .unwrap()
 }
 
+
+//------------ status --------------------------------------------------------
+
 fn status(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
         Some(metrics) => status_active(origins, &metrics),
@@ -567,87 +574,81 @@ fn status_active(
     }
 
     // valid-roas
-    writeln!(res, "valid-roas: {}",
-        metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
+    writeln!(
+        res, "valid-roas: {}", metrics.publication.valid_roas
     ).unwrap();
 
     // valid-roas-per-tal
     write!(res, "valid-roas-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.roas).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.publication.valid_roas).unwrap();
     }
     writeln!(res).unwrap();
 
     // vrps
-    writeln!(res, "vrps: {}",
-        metrics.tals().iter().map(|tal| tal.total_valid_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "vrps: {}", metrics.vrps.valid).unwrap();
 
     // vrps-per-tal
     write!(res, "vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.total_valid_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.valid).unwrap();
     }
     writeln!(res).unwrap();
 
     // unsafe-filtered-vrps
-    writeln!(res, "unsafe-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.unsafe_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "unsafe-vrps: {}", metrics.vrps.marked_unsafe).unwrap();
 
     // unsafe-vrps-per-tal
     write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ",
-            tal.tal.name(), tal.unsafe_vrps
-        ).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ",tal.name(), tal.vrps.marked_unsafe).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-filtered-vrps
     writeln!(res, "locally-filtered-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.locally_filtered_vrps).sum::<u32>()
+        metrics.vrps.locally_filtered
     ).unwrap();
 
     // locally-filtered-vrps-per-tal
     write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         write!(res, "{}={} ",
-            tal.tal.name(), tal.locally_filtered_vrps
+            tal.name(), tal.vrps.locally_filtered
         ).unwrap();
     }
     writeln!(res).unwrap();
 
     // duplicate-vrps-per-tal
     write!(res, "duplicate-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.duplicate_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.duplicate).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-added-vrps
-    writeln!(res, "locally-added-vrps: {}", metrics.local_vrps()).unwrap();
+    writeln!(
+        res, "locally-added-vrps: {}", metrics.local.contributed
+    ).unwrap();
 
     // final-vrps
-    writeln!(res, "final-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.final_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "final-vrps: {}", metrics.vrps.contributed).unwrap();
 
     // final-vrps-per-tal
     write!(res, "final-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.final_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.contributed).unwrap();
     }
     writeln!(res).unwrap();
 
     // stale-count
-    writeln!(res,
-        "stale-count: {}", metrics.stale_count()
+    writeln!(
+        res, "stale-count: {}", metrics.publication.stale_objects()
     ).unwrap();
 
     // rsync_status
     writeln!(res, "rsync-durations:").unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         write!(
             res,
             "   {}: status={}",
@@ -672,7 +673,7 @@ fn status_active(
 
     // rrdp_status
     writeln!(res, "rrdp-durations:").unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         write!(
             res,
             "   {}: status={}",
@@ -729,6 +730,9 @@ fn status_active(
     .unwrap()
 }
 
+
+//------------ api_status ----------------------------------------------------
+
 fn api_status(origins: &OriginsHistory) -> Response<Body> {
     let metrics = match origins.metrics() {
         Some(metrics) => metrics,
@@ -769,27 +773,40 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         }
 
         target.member_object("tals", |target| {
-            for tal in metrics.tals() {
+            for tal in &metrics.tals {
                 target.member_object(tal.tal.name(), |target| {
-                    target.member_raw("validROAs", tal.roas);
-                    target.member_raw("vrpsTotal", tal.total_valid_vrps);
-                    target.member_raw("vrpsFinal", tal.final_vrps);
-                    target.member_raw("vrpsUnsafe", tal.unsafe_vrps);
-                    target.member_raw(
-                        "vrpsFilteredLocally", tal.locally_filtered_vrps
+                    json_vrp_metrics(target, &tal.vrps);
+                    json_publication_metrics(
+                        target, &tal.publication
                     );
-                    target.member_raw("vrpsDuplicate", tal.duplicate_vrps);
-
-
                 });
             }
         });
 
-        target.member_raw("vrpsAddedLocally", metrics.local_vrps());
-        target.member_raw("staleObjects", metrics.stale_count());
+        target.member_object("repositories", |target| {
+            for repo in &metrics.repositories {
+                target.member_object(&repo.uri, |target| {
+                    if repo.uri.starts_with("https://") {
+                        target.member_str("type", "RRDP");
+                    }
+                    else if repo.uri.starts_with("rsync://") {
+                        target.member_str("type", "rsync");
+                    }
+                    else {
+                        target.member_str("type", "other");
+                    }
+                    json_vrp_metrics(target, &repo.vrps);
+                    json_publication_metrics(
+                        target, &repo.publication
+                    );
+                })
+            }
+        });
+
+        target.member_raw("vrpsAddedLocally", metrics.local.contributed);
 
         target.member_object("rsync", |target| {
-            for metrics in metrics.rsync() {
+            for metrics in &metrics.rsync {
                 target.member_object(&metrics.module, |target| {
                     target.member_raw("status", 
                         match metrics.status {
@@ -810,7 +827,7 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         });
 
         target.member_object("rrdp", |target| {
-            for metrics in metrics.rrdp() {
+            for metrics in &metrics.rrdp {
                 target.member_object(&metrics.notify_uri, |target| {
                     target.member_raw("status",
                         metrics.notify_status.map(|code| {
@@ -888,12 +905,49 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         .unwrap()
 }
 
+fn json_publication_metrics(
+    target: &mut JsonBuilder, metrics: &PublicationMetrics
+) {
+    target.member_raw("validPublicationPoints", metrics.valid_points);
+    target.member_raw("rejectedPublicationPoints", metrics.rejected_points);
+    target.member_raw("validManifests", metrics.valid_manifests);
+    target.member_raw("invalidManifests", metrics.invalid_manifests);
+    target.member_raw("staleManifests", metrics.stale_manifests);
+    target.member_raw("missingManifests", metrics.missing_manifests);
+    target.member_raw("validCRLs", metrics.valid_crls);
+    target.member_raw("invalidCRLs", metrics.invalid_crls);
+    target.member_raw("staleCRLs", metrics.stale_crls);
+    target.member_raw("strayCRLs", metrics.stray_crls);
+    target.member_raw("validCACerts", metrics.valid_ca_certs);
+    target.member_raw("validEECerts", metrics.valid_ee_certs);
+    target.member_raw("invalidCerts", metrics.invalid_certs);
+    target.member_raw("validROAs", metrics.valid_roas);
+    target.member_raw("invalidROAs", metrics.invalid_roas);
+    target.member_raw("validGBRs", metrics.valid_gbrs);
+    target.member_raw("invalidGBRs", metrics.invalid_gbrs);
+    target.member_raw("otherObjects", metrics.others);
+}
+
+fn json_vrp_metrics(target: &mut JsonBuilder, vrps: &VrpMetrics) {
+    target.member_raw("vrpsTotal", vrps.valid);
+    target.member_raw("vrpsUnsafe", vrps.marked_unsafe);
+    target.member_raw("vrpsLocallyFiltered", vrps.locally_filtered);
+    target.member_raw("vrpsDuplicate", vrps.duplicate);
+    target.member_raw("vrpsFinal", vrps.contributed);
+}
+
+
+//------------ log -----------------------------------------------------------
+
 fn log(origins: &OriginsHistory) -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain;charset=UTF-8")
     .body(origins.log().into())
     .unwrap()
 }
+
+
+//------------ validity_path -------------------------------------------------
 
 fn validity_path(origins: &OriginsHistory, path: &str) -> Response<Body> {
     let current = match validity_check(origins) {
@@ -980,6 +1034,9 @@ fn validity(
         .into()
     ).unwrap()
 }
+
+
+//------------ version -------------------------------------------------------
 
 fn version() -> Response<Body> {
     Response::builder()

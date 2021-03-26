@@ -27,7 +27,7 @@ use rpki::rtr::state::{Serial, State};
 use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
 use crate::error::Failed;
-use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
+use crate::metrics::{Metrics, ServerMetrics};
 use crate::process::LogOutput;
 use crate::engine::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -66,18 +66,14 @@ impl<'a> ProcessRun for &'a OriginsReport {
     type ProcessCa = ProcessRouteOrigins<'a>;
 
     fn process_ta(
-        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
+        &self, _tal: &Tal, _uri: &TalUri, _cert: &ResourceCert,
+        tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed> {
-        let tal = {
-            let mut tals = self.tals.lock().unwrap();
-            let len = tals.len();
-            tals.push(tal.info().clone());
-            len
-        };
         Ok(Some(ProcessRouteOrigins {
             report: self,
             origins: RouteOrigins::new(),
-            tal
+            tal_index,
+            repository_index: None,
         }))
     }
 }
@@ -115,8 +111,11 @@ impl RouteOrigins {
         &mut self,
         attestation: RouteOriginAttestation,
         tal_index: usize,
+        repository_index: Option<usize>,
     ) {
-        self.origins.push(RouteOrigin::new(attestation, tal_index));
+        self.origins.push(RouteOrigin::new(
+            attestation, tal_index, repository_index,
+        ));
     }
 
     /// Updates the refresh time.
@@ -177,10 +176,15 @@ impl<'a> IntoIterator for &'a RouteOrigins {
 pub struct ProcessRouteOrigins<'a> {
     report: &'a OriginsReport,
     origins: RouteOrigins,
-    tal: usize,
+    tal_index: usize,
+    repository_index: Option<usize>,
 }
 
 impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
+    fn repository_index(&mut self, repository_index: usize) {
+        self.repository_index = Some(repository_index)
+    }
+
     fn update_refresh(&mut self, not_after: Time) {
         match self.origins.refresh {
             Some(current) => {
@@ -195,12 +199,13 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
     }
 
     fn process_ca(
-        &mut self, _uri: &uri::Rsync, _cert: &ResourceCert
+        &mut self, _uri: &uri::Rsync, _cert: &ResourceCert,
     ) -> Result<Option<Self>, Failed> {
         Ok(Some(ProcessRouteOrigins {
             report: self.report,
             origins: RouteOrigins::new(),
-            tal: self.tal,
+            tal_index: self.tal_index,
+            repository_index: None,
         }))
     }
 
@@ -210,7 +215,7 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
         if let RoaStatus::Valid { ref cert } = *route.status() {
             self.update_refresh(cert.validity().not_after());
         }
-        self.origins.push(route, self.tal);
+        self.origins.push(route, self.tal_index, self.repository_index);
         Ok(())
     }
 
@@ -700,20 +705,26 @@ pub struct RouteOrigin {
     /// The ROA information for the ROA.
     info: OriginInfo,
 
-    /// The index of the TAL the ROA is derived from.
-    ///
-    /// We keep this for quicker calculations of TAL metrics.
+    /// The index of the TAL in the metrics.
     tal_index: usize,
+
+    /// The index of the repository in the metrics.
+    repository_index: Option<usize>,
 }
 
 impl RouteOrigin {
     /// Creates a new value from the ROA itself and the TAL index.
-    pub fn new(mut roa: RouteOriginAttestation, tal_index: usize) -> Self {
+    pub fn new(
+        mut roa: RouteOriginAttestation,
+        tal_index: usize,
+        repository_index: Option<usize>,
+    ) -> Self {
         RouteOrigin {
             as_id: roa.as_id(),
             addrs: roa.iter().collect(),
             info: OriginInfo::from_roa(&mut roa),
-            tal_index
+            tal_index,
+            repository_index,
         }
     }
 
@@ -752,7 +763,7 @@ impl AddressOriginSet {
     /// Creates a set from the raw route origins and exceptions.
     ///
     /// The function will take all the address origins in `origins`, drop
-    /// duplicates, drop the origins filtered in `execptions` and add the
+    /// duplicates, drop the origins filtered in `exceptions` and add the
     /// assertions from `exceptions`.
     pub fn from_report(
         report: OriginsReport,
@@ -762,11 +773,6 @@ impl AddressOriginSet {
     ) -> Self {
         let mut origins = HashSet::new();
         let mut refresh = None;
-
-        let tals = report.tals.into_inner().unwrap();
-        let mut tal_metrics_vec: Vec<_> = tals.iter().map(|tal| {
-            TalMetrics::new(tal.clone())
-        }).collect();
 
         let filter = report.filter.into_inner().unwrap().finalize();
 
@@ -779,13 +785,20 @@ impl AddressOriginSet {
                 }
             }
             for origin in item {
-                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
-                tal_metrics.roas += 1;
+                let tal_metrics = &mut metrics.tals[origin.tal_index].vrps;
+                let mut repo_metrics = match origin.repository_index {
+                    Some(index) => Some(&mut metrics.repositories[index].vrps),
+                    None => None,
+                };
                 for addr in origin.addrs {
-                    tal_metrics.total_valid_vrps += 1;
+                    tal_metrics.valid += 1;
+                    repo_metrics.as_mut().map(|vrps| vrps.valid += 1);
+                    metrics.vrps.valid += 1;
 
                     if !filter.keep_address(&addr) {
-                        tal_metrics.unsafe_vrps += 1;
+                        tal_metrics.marked_unsafe += 1;
+                        repo_metrics.as_mut().map(|v| v.marked_unsafe += 1);
+                        metrics.vrps.marked_unsafe += 1;
                         match unsafe_vrps {
                             FilterPolicy::Reject => {
                                 warn!(
@@ -794,7 +807,6 @@ impl AddressOriginSet {
                                     addr.address(), addr.address_length(),
                                     addr.max_length(), origin.as_id
                                 );
-                                tal_metrics.unsafe_vrps += 1;
                                 continue;
                             }
                             FilterPolicy::Warn => {
@@ -815,29 +827,36 @@ impl AddressOriginSet {
                         origin.info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
-                        tal_metrics.locally_filtered_vrps += 1;
+                        tal_metrics.locally_filtered += 1;
+                        repo_metrics.as_mut().map(|v| v.locally_filtered += 1);
+                        metrics.vrps.locally_filtered += 1;
                         continue;
                     }
 
                     if origins.insert(addr) {
-                        tal_metrics.final_vrps += 1;
+                        tal_metrics.contributed += 1;
+                        repo_metrics.as_mut().map(|v| v.contributed += 1);
+                        metrics.vrps.contributed += 1;
                     }
                     else {
-                        tal_metrics.duplicate_vrps += 1;
+                        tal_metrics.duplicate += 1;
+                        repo_metrics.as_mut().map(|v| v.duplicate += 1);
+                        metrics.vrps.duplicate += 1;
                     }
                 }
             }
         }
         for addr in exceptions.assertions() {
             if origins.insert(addr.clone()) {
-                metrics.inc_local_vrps();
+                metrics.local.contributed += 1;
+            }
+            else {
+                metrics.local.duplicate += 1;
             }
         }
-        metrics.set_tals(tal_metrics_vec);
         let res = AddressOriginSet {
             origins, refresh
         };
-        metrics.set_final_vrps(res.origins.len() as u32);
         res
     }
 }
@@ -1446,32 +1465,49 @@ pub enum OriginInfo {
     None,
 
     /// The resource certificate of a ROA.
-    RoaInfo(Arc<RoaInfo>),
+    Roa(Arc<RoaInfo>),
+
+    /// The resource certificate of multiple ROAs.
+    MultipleRoas(Vec<Arc<RoaInfo>>),
 
     /// The path of a local exceptions file.
     Exception(ExceptionInfo),
 }
 
 impl OriginInfo {
-    fn from_roa(roa: &mut RouteOriginAttestation) -> Self {
+    fn from_roa(
+        roa: &mut RouteOriginAttestation
+    ) -> Self {
         if let Some(cert) = roa.take_cert() {
-            OriginInfo::RoaInfo(Arc::new(RoaInfo::from_ee_cert(cert)))
+            OriginInfo::Roa(Arc::new(RoaInfo::from_ee_cert(cert)))
         }
         else {
             OriginInfo::None
         }
     }
 
+    /*
+    fn add_roa(
+        &mut self,
+        roa: &mut RouteOriginAttestation
+    ) {
+        if let OriginInfo::MultipleRoas(mut ref vec) = self {
+            vec.push
+        let old = mem::replace(self, OriginInfo::None);
+        *self = Origin
+    }
+    */
+
     fn roa_info(&self) -> Option<&RoaInfo> {
         match *self {
-            OriginInfo::RoaInfo(ref info) => Some(info),
+            OriginInfo::Roa(ref info) => Some(info),
             _ => None
         }
     }
 
     fn tal_name(&self) -> &str {
         match *self {
-            OriginInfo::RoaInfo(ref info) => info.tal.name(),
+            OriginInfo::Roa(ref info) => info.tal.name(),
             _ => "N/A"
         }
     }

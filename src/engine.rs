@@ -19,13 +19,14 @@
 /// points.
 
 use std::{fmt, fs, io, str};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
-use crossbeam_queue::SegQueue;
+use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
 use log::{debug, error, warn};
 use rpki::repository::cert::{Cert, KeyUsage, ResourceCert};
@@ -41,7 +42,9 @@ use crate::{collector, store};
 use crate::collector::Collector;
 use crate::config::{Config, FilterPolicy};
 use crate::error::Failed;
-use crate::metrics::Metrics;
+use crate::metrics::{
+    Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
+};
 use crate::origins::OriginsReport;
 use crate::store::{Store, StoredManifest};
 use crate::utils::str_from_ascii;
@@ -337,7 +340,7 @@ impl Engine {
         &self
     ) -> Result<(OriginsReport, Metrics), Failed> {
         let report = OriginsReport::new();
-        let run = self.start(&report)?;
+        let mut run = self.start(&report)?;
         run.process()?;
         let metrics = run.done();
         Ok((report, metrics))
@@ -355,7 +358,6 @@ impl Engine {
         Ok(())
     }
 }
-
 
 
 //------------ Run -----------------------------------------------------------
@@ -393,7 +395,7 @@ impl<'a, P> Run<'a, P> {
     ) -> Self {
         Run {
             validation, collector, store, processor,
-            metrics: Metrics::new()
+            metrics: Default::default()
         }
     }
 
@@ -401,34 +403,45 @@ impl<'a, P> Run<'a, P> {
     ///
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
-    pub fn done(mut self) -> Metrics {
-        self.collector.done(&mut self.metrics);
-        self.store.done(&mut self.metrics);
-        self.metrics
+    pub fn done(self) -> Metrics {
+        let mut metrics = self.metrics;
+        self.collector.done(&mut metrics);
+        self.store.done(&mut metrics);
+        metrics
     }
 }
 
 impl<'a, P: ProcessRun> Run<'a, P> {
     /// Performs the validation run.
-    pub fn process(&self) -> Result<(), Failed> {
+    pub fn process(&mut self) -> Result<(), Failed> {
         // If we don’t have any TALs, we ain’t got nothing to do.
         if self.validation.tals.is_empty() {
             return Ok(())
         }
 
         // Initialize our task queue with all the TALs.
+        let metrics = RunMetrics::default();
         let tasks = SegQueue::new();
         for (index, tal) in self.validation.tals.iter().enumerate() {
             tasks.push(Task::Tal(TalTask { tal, index }));
+            self.metrics.tals.push(TalMetrics::new(tal.info().clone()));
         }
 
         // And off we trot.
+
+        // Keep a flag to cancel everything if something goes wrong.
         let had_err = AtomicBool::new(false);
+        let thread_metrics = ArrayQueue::new(
+            self.validation.validation_threads
+        );
         let res = thread::scope(|scope| {
-            for _ in 0..self.validation.validation_threads {
+            for _ in 0 .. self.validation.validation_threads {
                 scope.spawn(|_| {
+                    let mut metrics = metrics.fork();
                     while let Some(task) = tasks.pop() {
-                        if self.process_task(task, &tasks).is_err() {
+                        if self.process_task(
+                            task, &tasks, &mut metrics
+                        ).is_err() {
                             had_err.store(true, Ordering::Relaxed);
                             break;
                         }
@@ -436,6 +449,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                             break;
                         }
                     }
+                    thread_metrics.push(metrics).unwrap();
                 });
             }
         });
@@ -449,22 +463,30 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             return Err(Failed);
         }
 
+        metrics.prepare_final(&mut self.metrics);
+        while let Some(metrics) = thread_metrics.pop() {
+            metrics.collapse(&mut self.metrics);
+        }
+
         Ok(())
     }
 
     /// Process a task. Any task.
     fn process_task(
-        &self, task: Task<P::ProcessCa>, tasks: &SegQueue<Task<P::ProcessCa>>
+        &self,
+        task: Task<P::ProcessCa>, tasks: &SegQueue<Task<P::ProcessCa>>,
+        metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         match task {
-            Task::Tal(task) => self.process_tal_task(task, tasks),
-            Task::Ca(task) => self.process_ca_task(task, tasks)
+            Task::Tal(task) => self.process_tal_task(task, tasks, metrics),
+            Task::Ca(task) => self.process_ca_task(task, tasks, metrics)
         }
     }
 
     /// Processes a trust anchor.
     fn process_tal_task(
-        &self, task: TalTask, tasks: &SegQueue<Task<P::ProcessCa>>
+        &self, task: TalTask, tasks: &SegQueue<Task<P::ProcessCa>>,
+        metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
             let cert = match self.load_ta(uri, task.tal.info())? {
@@ -493,10 +515,16 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             };
             debug!("Found valid trust anchor {}. Processing.", uri);
 
-            match self.processor.process_ta(task.tal, uri, cert.cert())? {
+            match self.processor.process_ta(
+                task.tal, uri, cert.cert(), cert.tal
+            )? {
                 Some(processor) => {
                     return self.process_ca_task(
-                        CaTask { cert, processor, defer: false, }, tasks
+                        CaTask {
+                            cert, processor,
+                            repository_index: None,
+                            defer: false,
+                        }, tasks, metrics
                     )
                 }
                 None => {
@@ -537,16 +565,17 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         &self,
         task: CaTask<P::ProcessCa>,
         tasks: &SegQueue<Task<P::ProcessCa>>,
+        metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         let more_tasks = PubPoint::new(
-            self, &task.cert, task.processor
-        )?.process()?;
+            self, &task.cert, task.processor, task.repository_index,
+        )?.process(metrics)?;
         for task in more_tasks {
             if task.defer {
                 tasks.push(Task::Ca(task))
             }
             else {
-                self.process_ca_task(task, tasks)?;
+                self.process_ca_task(task, tasks, metrics)?;
             }
         }
         Ok(())
@@ -572,6 +601,12 @@ struct PubPoint<'a, P: ProcessRun> {
 
     /// The point’s repository in the store.
     store: store::Repository,
+
+    /// The index of this point’s repository in the run’s metrics.
+    repository_index: Option<usize>,
+
+    /// The publication metrics for this publication point.
+    metrics: PublicationMetrics,
 }
 
 impl<'a, P: ProcessRun> PubPoint<'a, P> {
@@ -580,19 +615,31 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         run: &'a Run<'a, P>,
         cert: &'a Arc<CaCert>,
         processor: P::ProcessCa,
+        repository_index: Option<usize>,
     ) -> Result<Self, Failed> {
         let collector = run.collector.repository(cert)?;
         let store = run.store.repository(cert, collector.as_ref())?;
-        Ok(PubPoint { run, cert, processor, collector, store })
+        Ok(PubPoint {
+            run, cert, processor, collector, store,
+            repository_index,
+            metrics: Default::default(),
+        })
     }
 
     /// Performs validation of the publication point.
     ///
     /// Upon success, returns a list of all the child CAs of this publication
     /// point as CA processing tasks.
-    pub fn process(self) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
+    pub fn process(
+        mut self,
+        metrics: &mut RunMetrics,
+    ) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
         let manifest = match self.update_stored()? {
-            PointManifest::Valid(manifest) => manifest,
+            PointManifest::Valid(manifest) => {
+                self.metrics.valid_manifests += 1;
+                self.metrics.valid_crls += 1;
+                manifest
+            }
             PointManifest::Unverified(stored) => {
                 match self.validate_stored_manifest(stored) {
                     Ok(manifest) => manifest,
@@ -604,11 +651,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     "{}: No valid manifest found.",
                     self.cert.rpki_manifest()
                 );
+                self.metrics.missing_manifests += 1;
                 return Ok(Vec::new())
             }
         };
 
-        ValidPubPoint::new(self, manifest).process()
+        ValidPubPoint::new(self, manifest).process(metrics)
     }
 
     /// Tries to update the stored data for the publication point.
@@ -767,7 +815,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// collector, validates that against the CA and checks that the manifest
     /// has not been revoked.
     fn validate_collected_manifest(
-        &self, manifest_bytes: Bytes, repository: &collector::Repository
+        &self,
+        manifest_bytes: Bytes,
+        repository: &collector::Repository,
     ) -> Result<Option<ValidPointManifest>, Failed> {
         let manifest = match Manifest::decode(
             manifest_bytes.clone(), self.run.validation.strict
@@ -938,7 +988,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// but has less hassle with the CRL because that is actually included in
     /// the stored manifest.
     fn validate_stored_manifest(
-        &self, stored_manifest: StoredManifest
+        &mut self,
+        stored_manifest: StoredManifest,
     ) -> Result<ValidPointManifest, ValidationError> {
         // Decode and validate the manifest.
         let manifest = match Manifest::decode(
@@ -947,6 +998,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(manifest) => manifest,
             Err(_) => {
                 warn!("{}: failed to decode", self.cert.rpki_manifest());
+                self.metrics.invalid_manifests += 1;
                 return Err(ValidationError);
             }
         };
@@ -956,14 +1008,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(some) => some,
             Err(_) => {
                 warn!("{}: failed to validate", self.cert.rpki_manifest());
+                self.metrics.invalid_manifests += 1;
                 return Err(ValidationError);
             }
         };
         if content.is_stale() {
-            //self.metrics.inc_stale_count();
+            self.metrics.stale_manifests += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
+                    self.metrics.invalid_manifests += 1;
                     return Err(ValidationError);
                 }
                 FilterPolicy::Warn => {
@@ -982,6 +1036,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     "{}: manifest without CRL URI.",
                     self.cert.rpki_manifest()
                 );
+                self.metrics.invalid_manifests += 1;
                 return Err(ValidationError)
             }
         };
@@ -991,18 +1046,24 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(crl) => crl,
             Err(_) => {
                 warn!("{}: failed to decode.", crl_uri);
+                self.metrics.invalid_manifests += 1;
+                self.metrics.invalid_crls += 1;
                 return Err(ValidationError)
             }
         };
         if crl.validate(self.cert.cert().subject_public_key_info()).is_err() {
             warn!("{}: failed to validate.", crl_uri);
+            self.metrics.invalid_manifests += 1;
+            self.metrics.invalid_crls += 1;
             return Err(ValidationError)
         }
         if crl.is_stale() {
-            //self.metrics.inc_stale_count();
+            self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale CRL.", crl_uri);
+                    self.metrics.invalid_manifests += 1;
+                    self.metrics.invalid_crls += 1;
                     return Err(ValidationError)
                 }
                 FilterPolicy::Warn => {
@@ -1026,9 +1087,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 "{}: certificate has been revoked.",
                 self.cert.rpki_manifest()
             );
+            self.metrics.invalid_manifests += 1;
             return Err(ValidationError)
         }
 
+        self.metrics.valid_manifests += 1;
+        self.metrics.valid_crls += 1;
         Ok(ValidPointManifest {
             ee_cert, content, crl_uri, crl,
             manifest_bytes: stored_manifest.manifest().clone(),
@@ -1062,8 +1126,25 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     }
 
     /// Processes the point returning the child CAs.
-    pub fn process(mut self) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
+    pub fn process(
+        mut self,
+        metrics: &mut RunMetrics,
+    ) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
+        let repository_index = match self.point.repository_index {
+            Some(index) => index,
+            None => {
+                let index = metrics.repository_index(
+                    self.point.cert, self.point.store.is_rrdp()
+                );
+                self.point.repository_index = Some(index);
+                index
+            }
+        };
+        self.point.processor.repository_index(repository_index);
         if self._process()? {
+            metrics.apply(
+                &self.point.metrics, repository_index, self.point.cert.tal
+            );
             self.point.processor.commit();
             Ok(self.child_cas)
         }
@@ -1077,7 +1158,9 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     ///
     /// If the processor votes to abort processing of the entire point, this
     /// will return `Ok(false)`.
-    pub fn _process(&mut self) -> Result<bool, Failed> {
+    pub fn _process(
+        &mut self,
+    ) -> Result<bool, Failed> {
         for item in self.manifest.content.iter() {
             let (file, hash) = item.into_pair();
             let file = match str_from_ascii(&file) {
@@ -1110,7 +1193,8 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// Returns whether processing should continue or whether the entire (!)
     /// publication point should be disregarded.
     fn process_object(
-        &mut self, uri: uri::Rsync, file: &str, hash: ManifestHash,
+        &mut self,
+        uri: uri::Rsync, file: &str, hash: ManifestHash,
     ) -> Result<bool, Failed> {
         let object = match self.point.store.load_object(
             self.point.cert.rpki_manifest(), file
@@ -1122,6 +1206,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             }
         };
 
+        // This shouldn’t actually happen?
         if object.verify_hash(&hash).is_err() {
             warn!("{}: file has wrong manifest hash.", uri);
             return Ok(false)
@@ -1138,12 +1223,16 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             self.process_roa(uri, object)?;
         }
         else if uri.ends_with(".crl") {
-            // CRLs have already been processed.
+            if uri != self.manifest.crl_uri {
+                warn!("{}: stray CRL.", uri);
+                self.point.metrics.stray_crls += 1;
+            }
         }
         else if uri.ends_with(".gbr") {
             self.process_gbr(uri, object)?;
         }
         else {
+            self.point.metrics.others += 1;
             warn!("{}: unknown object type.", uri);
         }
         Ok(true)
@@ -1157,6 +1246,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             Ok(cert) => cert,
             Err(_) => {
                 warn!("{}: failed to decode.", uri);
+                self.point.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
@@ -1176,6 +1266,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     ) -> Result<(), Failed> {
         if self.point.cert.check_loop(&cert).is_err() {
             warn!("{}: certificate loop detected.", uri);
+            self.point.metrics.invalid_certs += 1;
             return Ok(())
         }
         let cert = match cert.validate_ca(
@@ -1184,10 +1275,12 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             Ok(cert) => cert,
             Err(_) => {
                 warn!("{}: CA certificate failed to validate.", uri);
+                self.point.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
         if self.check_crl(&uri, &cert).is_err() {
+            self.point.metrics.invalid_certs += 1;
             return Ok(())
         }
 
@@ -1195,8 +1288,13 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             &self.point.cert, uri.clone(), cert
         ) {
             Ok(cert) => cert,
-            Err(_) => return Ok(())
+            Err(_) => {
+                self.point.metrics.invalid_certs += 1;
+                return Ok(())
+            }
         };
+
+        self.point.metrics.valid_ca_certs += 1;
 
         let mut processor = match self.point.processor.process_ca(
             &uri, &cert.cert
@@ -1210,7 +1308,17 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         // the CA lives.
         let defer = !self.point.run.collector.was_updated(&cert);
 
-        self.child_cas.push(CaTask { cert, processor, defer });
+        // If we switch repositories, we need to apply our metrics.
+        let repository_index = if cert.repository_switch() {
+            None
+        }
+        else {
+            self.point.repository_index
+        };
+
+        self.child_cas.push(CaTask {
+            cert, processor, repository_index, defer
+        });
         Ok(())
     }
 
@@ -1222,11 +1330,14 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             &self.point.cert.cert, self.point.run.validation.strict
         ).is_err() {
             warn!("{}: router certificate failed to validate.", uri);
+            self.point.metrics.invalid_certs += 1;
             return Ok(())
         };
         if self.check_crl(&uri, &cert).is_err() {
+            self.point.metrics.invalid_certs += 1;
             return Ok(())
         }
+        self.point.metrics.valid_ee_certs += 1;
         self.point.processor.process_ee_cert(&uri, cert)?;
         Ok(())
     }
@@ -1241,6 +1352,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             Ok(roa) => roa,
             Err(_) => {
                 warn!("{}: decoding failed.", uri);
+                self.point.metrics.invalid_roas += 1;
                 return Ok(())
             }
         };
@@ -1249,8 +1361,14 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             self.point.run.validation.strict,
             |cert| self.check_crl(&uri, &cert)
         ) {
-            Ok(route) => self.point.processor.process_roa(&uri, route)?,
-            Err(_) => warn!("{}: validation failed.", uri)
+            Ok(route) => {
+                self.point.metrics.valid_roas += 1;
+                self.point.processor.process_roa(&uri, route)?
+            }
+            Err(_) => {
+                self.point.metrics.invalid_roas += 1;
+                warn!("{}: validation failed.", uri)
+            }
         }
         Ok(())
     }
@@ -1265,6 +1383,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             Ok(obj) => obj,
             Err(_) => {
                 warn!("{}: decoding failed.", uri);
+                self.point.metrics.invalid_gbrs += 1;
                 return Ok(())
             }
         };
@@ -1273,8 +1392,14 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             self.point.run.validation.strict,
             |cert| self.check_crl(&uri, &cert)
         ) {
-            Ok(content) => self.point.processor.process_gbr(&uri, content)?,
-            Err(_) => warn!("{}: validation failed.", uri),
+            Ok(content) => {
+                self.point.metrics.valid_gbrs += 1;
+                self.point.processor.process_gbr(&uri, content)?
+            }
+            Err(_) => {
+                self.point.metrics.invalid_gbrs += 1;
+                warn!("{}: validation failed.", uri)
+            }
         }
         Ok(())
     }
@@ -1355,6 +1480,9 @@ struct CaTask<P> {
 
     /// The processor for this CA.
     processor: P,
+
+    /// The repository index of we know it already.
+    repository_index: Option<usize>,
 
     /// Defer processing?
     ///
@@ -1486,6 +1614,26 @@ impl CaCert {
     pub fn rpki_notify(&self) -> Option<&uri::Https> {
         self.cert.rpki_notify()
     }
+
+    /// Returns whether the CA is in a different repository from its parent.
+    ///
+    /// This is just a quick check and may report a switch when in fact there
+    /// isn’t one.
+    fn repository_switch(&self) -> bool {
+        let parent = match self.parent.as_ref() {
+            Some(parent) => parent,
+            None => return true,
+        };
+
+        match self.rpki_notify() {
+            Some(rpki_notify) => {
+                Some(rpki_notify) != parent.rpki_notify()
+            }
+            None => {
+                self.ca_repository.module() != parent.ca_repository.module()
+            }
+        }
+    }
 } 
 
 
@@ -1559,6 +1707,111 @@ struct ValidPointManifest {
 }
 
 
+//------------ RunMetrics ----------------------------------------------------
+
+/// The metrics collected during a engine run.
+#[derive(Debug, Default)]
+struct RunMetrics {
+    /// The per-TAL metrics.
+    tals: Vec<PublicationMetrics>,
+
+    /// The per-repository metrics.
+    repositories: Vec<PublicationMetrics>,
+
+    /// The overall metrics.
+    publication: PublicationMetrics,
+
+    /// The indexes of repositories in the repository metrics vec.
+    ///
+    /// The key is the string representation of the rpkiNotify or rsync
+    /// module URI.
+    repository_indexes: Arc<Mutex<HashMap<String, usize>>>,
+}
+
+impl RunMetrics {
+    /// Creates a new value that shares indexes with the current one.
+    pub fn fork(&self) -> Self {
+        RunMetrics {
+            tals: Default::default(),
+            repositories: Default::default(),
+            publication: Default::default(),
+            repository_indexes: self.repository_indexes.clone(),
+        }
+    }
+
+    /// Returns the index of a repository in the metrics.
+    ///
+    /// Adds a new repository if necessary.
+    pub fn repository_index(&self, cert: &CaCert, rrdp: bool) -> usize {
+        let uri = cert.rpki_notify().and_then(|uri| {
+            if rrdp {
+                Some(Cow::Borrowed(uri.as_str()))
+            }
+            else {
+                None
+            }
+        }).unwrap_or_else(|| cert.ca_repository.canonical_module());
+
+        let mut repository_indexes = self.repository_indexes.lock().unwrap();
+        if let Some(index) = repository_indexes.get(uri.as_ref()) {
+            return *index
+        }
+
+        let index = repository_indexes.len();
+        repository_indexes.insert(uri.into_owned(), index);
+        index
+    }
+
+    /// Apply publication metrics.
+    pub fn apply(
+        &mut self, metrics: &PublicationMetrics,
+        repository_index: usize, tal_index: usize
+    ) {
+        while self.repositories.len() <= repository_index {
+            self.repositories.push(Default::default())
+        }
+        self.repositories[repository_index] += metrics;
+
+        while self.tals.len() <= tal_index {
+            self.tals.push(Default::default())
+        }
+        self.tals[tal_index] += metrics;
+
+        self.publication += metrics;
+    }
+
+    /// Prepares the final metrics.
+    pub fn prepare_final(&self, target: &mut Metrics) {
+        let mut indexes: Vec<_>
+            = self.repository_indexes.lock().unwrap().iter().map(|item| {
+                (item.0.clone(), *item.1)
+            }).collect();
+        indexes.sort_by_key(|(_, idx)| *idx);
+        target.repositories = indexes.into_iter().map(|(uri, _)| {
+            RepositoryMetrics::new(uri.clone())
+        }).collect();
+    }
+
+    /// Collapse into the final metrics.
+    ///
+    /// Assumes that the target has been extended to fit all TALs and
+    /// repositories.
+    pub fn collapse(self, target: &mut Metrics) {
+        for (target, metric) in target.tals.iter_mut().zip(
+            self.tals.into_iter()
+        ) {
+            target.publication += metric
+        }
+        for (target, metric) in target.repositories.iter_mut().zip(
+            self.repositories.into_iter()
+        ) {
+            target.publication += metric
+        }
+        target.publication += self.publication;
+    }
+}
+
+
 //------------ ProcessRun ----------------------------------------------------
 
 /// A type that can process the valid data from the RPKI.
@@ -1572,8 +1825,13 @@ pub trait ProcessRun: Send + Sync {
     /// and processed, it returns a processor for it as some success value.
     /// If it rather wishes to skip this trust anchor, it returns `Ok(None)`.
     /// If it wishes to abort processing, it returns an error.
+    ///
+    /// The `tal_index` argument indicates the index of the TAL in the
+    /// metrics produced by the processing run. Similarly, the
+    /// `repository_index` argument refers to the index of the repository 
+    /// publishing the trust anchor CA’s publication point in the metrics.
     fn process_ta(
-        &self, tal: &Tal, uri: &TalUri, cert: &ResourceCert
+        &self, tal: &Tal, uri: &TalUri, cert: &ResourceCert, tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed>;
 }
 
@@ -1582,8 +1840,15 @@ pub trait ProcessRun: Send + Sync {
 
 /// A type that can process the valid data from an RPKI publication point.
 pub trait ProcessCa: Sized + Send + Sync {
+    /// Sets the index of repository in the processing run metrics.
+    fn repository_index(&mut self, repository_index: usize) {
+        let _ = repository_index;
+    }
+
     /// Updates the refresh time for this publication poont.
-    fn update_refresh(&mut self, _not_after: Time) { }
+    fn update_refresh(&mut self, not_after: Time) {
+        let _ = not_after;
+    }
 
     /// Determines whether an object with the given URI should be processed.
     ///
@@ -1598,8 +1863,12 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// it returns `Ok(Some(value))` with a new processor to be used for this
     /// CA. If it wishes to skip this CA, it returns `Ok(None)`. And if it
     /// wishes to abort processing, it returns an error.
+    ///
+    /// The `repository_index` argument indicates the indes of the repository
+    /// publishing the CA’s publication point in the metrics produced by the
+    /// processing run.
     fn process_ca(
-        &mut self, uri: &uri::Rsync, cert: &ResourceCert
+        &mut self, uri: &uri::Rsync, cert: &ResourceCert,
     ) -> Result<Option<Self>, Failed>;
 
     /// Process the content of a validated EE certificate.

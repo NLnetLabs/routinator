@@ -652,25 +652,21 @@ fn summary_header<M: AsRef<Metrics>, W: io::Write>(
     output: &mut W,
 ) -> Result<(), io::Error> {
     let metrics = metrics.as_ref();
-    let mut roas = 0;
-    let mut valid_vrps = 0;
-    let mut unsafe_vrps = 0;
-    writeln!(output, "Summary at {}", metrics.time())?;
-    for tal in metrics.tals() {
+    writeln!(output, "Summary at {}", metrics.time)?;
+    for tal in &metrics.tals {
         writeln!(output,
             "{}: {} verified ROAs, {} verified VRPs, \
              {} unsafe VRPs, {} final VRPs.",
-            tal.tal.name(), tal.roas, tal.total_valid_vrps,
-            tal.unsafe_vrps, tal.final_vrps
+            tal.name(), tal.publication.valid_roas, tal.vrps.valid,
+            tal.vrps.marked_unsafe, tal.vrps.contributed
         )?;
-        roas += tal.roas;
-        valid_vrps += tal.total_valid_vrps;
-        unsafe_vrps += tal.unsafe_vrps;
     }
     writeln!(output,
         "total: {} verified ROAs, {} verified VRPs, \
          {} unsafe VRPs, {} final VRPs.",
-        roas, valid_vrps, unsafe_vrps, metrics.final_vrps(),
+        metrics.publication.valid_roas,
+        metrics.vrps.valid, metrics.vrps.marked_unsafe,
+        metrics.vrps.contributed,
     )
 }
 
