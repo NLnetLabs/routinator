@@ -792,12 +792,16 @@ impl AddressOriginSet {
                 };
                 for addr in origin.addrs {
                     tal_metrics.valid += 1;
-                    repo_metrics.as_mut().map(|vrps| vrps.valid += 1);
+                    if let Some(vrps) = repo_metrics.as_mut() {
+                        vrps.valid += 1
+                    }
                     metrics.vrps.valid += 1;
 
                     if !filter.keep_address(&addr) {
                         tal_metrics.marked_unsafe += 1;
-                        repo_metrics.as_mut().map(|v| v.marked_unsafe += 1);
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.marked_unsafe += 1;
+                        }
                         metrics.vrps.marked_unsafe += 1;
                         match unsafe_vrps {
                             FilterPolicy::Reject => {
@@ -828,19 +832,25 @@ impl AddressOriginSet {
                     );
                     if !exceptions.keep_origin(&addr) {
                         tal_metrics.locally_filtered += 1;
-                        repo_metrics.as_mut().map(|v| v.locally_filtered += 1);
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.locally_filtered += 1;
+                        }
                         metrics.vrps.locally_filtered += 1;
                         continue;
                     }
 
                     if origins.insert(addr) {
                         tal_metrics.contributed += 1;
-                        repo_metrics.as_mut().map(|v| v.contributed += 1);
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.contributed += 1;
+                        }
                         metrics.vrps.contributed += 1;
                     }
                     else {
                         tal_metrics.duplicate += 1;
-                        repo_metrics.as_mut().map(|v| v.duplicate += 1);
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.duplicate += 1;
+                        }
                         metrics.vrps.duplicate += 1;
                     }
                 }
@@ -854,10 +864,7 @@ impl AddressOriginSet {
                 metrics.local.duplicate += 1;
             }
         }
-        let res = AddressOriginSet {
-            origins, refresh
-        };
-        res
+        AddressOriginSet { origins, refresh }
     }
 }
 

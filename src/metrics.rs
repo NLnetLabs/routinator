@@ -270,10 +270,9 @@ impl PublicationMetrics {
 impl ops::Add for PublicationMetrics {
     type Output = Self;
 
-    fn add(self, other: Self) -> Self::Output {
-        let mut res = self.clone();
-        res += other;
-        res
+    fn add(mut self, other: Self) -> Self::Output {
+        self += other;
+        self
     }
 }
 
@@ -340,10 +339,9 @@ pub struct VrpMetrics {
 impl ops::Add for VrpMetrics {
     type Output = Self;
 
-    fn add(self, other: Self) -> Self::Output {
-        let mut res = self.clone();
-        res += other;
-        res
+    fn add(mut self, other: Self) -> Self::Output {
+        self += other;
+        self
     }
 }
 

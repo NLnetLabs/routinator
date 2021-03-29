@@ -1788,7 +1788,7 @@ impl RunMetrics {
             }).collect();
         indexes.sort_by_key(|(_, idx)| *idx);
         target.repositories = indexes.into_iter().map(|(uri, _)| {
-            RepositoryMetrics::new(uri.clone())
+            RepositoryMetrics::new(uri)
         }).collect();
     }
 

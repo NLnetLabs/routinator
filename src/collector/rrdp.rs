@@ -780,7 +780,7 @@ impl<'a> RepositoryUpdate<'a> {
         };
 
         let count = deltas.len();
-        for (i, (serial, uri_and_hash)) in deltas.into_iter().enumerate() {
+        for (i, (serial, uri_and_hash)) in deltas.iter().enumerate() {
             debug!(
                 "RRDP {}: Delta update step ({}/{}).",
                 uri_and_hash.uri(), i + 1, count
@@ -1308,7 +1308,7 @@ impl RepositoryState {
 
 impl<'a> From<&'a RepositoryState> for IVec {
     fn from(state: &'a RepositoryState) -> IVec {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(state.session.as_bytes().len() + 17);
 
         // Version. 0u8
         vec.push(0u8);
@@ -1420,7 +1420,9 @@ impl RepositoryObject<()> {
 
 impl<'a, Octets: AsRef<[u8]>> From<&'a RepositoryObject<Octets>> for IVec {
     fn from(src: &'a RepositoryObject<Octets>) -> Self {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            src.hash.as_ref().len() + src.content.as_ref().len() + 1
+        );
 
         // Version. 0u8
         vec.push(0u8);

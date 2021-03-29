@@ -941,7 +941,10 @@ impl<'a> From<&'a StoredManifest> for sled::IVec {
         // The caRepository URI and manifest bytes are encoded as its bytes
         // preceeded by the length as a u32 in network byte order. the CRL
         // bytes are just the bytes until the end of the buffer.
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            manifest.ca_repository.as_slice().len() + manifest.manifest.len()
+            + manifest.crl.len() + 17
+        );
 
         vec.push(0u8);
         vec.extend_from_slice(&manifest.not_after.timestamp().to_be_bytes());
@@ -1053,7 +1056,10 @@ impl StoredObject {
 
 impl<'a> From<&'a StoredObject> for sled::IVec {
     fn from(object: &'a StoredObject) -> sled::IVec {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            object.hash.as_ref().map(|hash| hash.as_slice().len()).unwrap_or(0)
+            + object.content.as_ref().len() + 2
+        );
 
         // Version. 0u8.
         vec.push(0u8);
