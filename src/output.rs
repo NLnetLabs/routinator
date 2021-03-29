@@ -88,26 +88,39 @@ impl FromStr for OutputFormat {
     type Err = Failed;
 
     fn from_str(value: &str) -> Result<Self, Failed> {
-        match value {
-            "csv" => Ok(OutputFormat::Csv),
-            "csvcompat" => Ok(OutputFormat::CompatCsv),
-            "csvext" => Ok(OutputFormat::ExtendedCsv),
-            "json" => Ok(OutputFormat::Json),
-            "openbgpd" => Ok(OutputFormat::Openbgpd),
-            "bird1" => Ok(OutputFormat::Bird1),
-            "bird2" => Ok(OutputFormat::Bird2),
-            "rpsl" => Ok(OutputFormat::Rpsl),
-            "summary" => Ok(OutputFormat::Summary),
-            "none" => Ok(OutputFormat::None),
-            _ => {
-                error!("Unknown output format '{}'", value);
-                Err(Failed)
-            }
-        }
+        Self::try_from_str(value).ok_or_else(|| {
+            error!("Unknown output format: {}", value);
+            Failed
+        })
     }
 }
 
 impl OutputFormat {
+    /// Returns the output format for a string if any.
+    pub fn try_from_str(value: &str) -> Option<Self> {
+        match value {
+            "csv" => Some(OutputFormat::Csv),
+            "csvcompat" => Some(OutputFormat::CompatCsv),
+            "csvext" => Some(OutputFormat::ExtendedCsv),
+            "json" => Some(OutputFormat::Json),
+            "openbgpd" => Some(OutputFormat::Openbgpd),
+            "bird1" => Some(OutputFormat::Bird1),
+            "bird2" => Some(OutputFormat::Bird2),
+            "rpsl" => Some(OutputFormat::Rpsl),
+            "summary" => Some(OutputFormat::Summary),
+            "none" => Some(OutputFormat::None),
+            _ => None,
+        }
+    }
+
+    /// Returns the output format for a given request path.
+    pub fn from_path(path: &str) -> Option<Self> {
+        if !path.starts_with('/') {
+            return None
+        }
+        Self::try_from_str(&path[1..])
+    }
+
     /// Returns whether this output format requires extra output.
     pub fn extra_output(self) -> bool {
         matches!(self, OutputFormat::ExtendedCsv)
