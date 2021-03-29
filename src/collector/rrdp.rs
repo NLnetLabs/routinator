@@ -779,7 +779,12 @@ impl<'a> RepositoryUpdate<'a> {
             None => return Ok(false),
         };
 
-        for (serial, uri_and_hash) in deltas {
+        let count = deltas.len();
+        for (i, (serial, uri_and_hash)) in deltas.into_iter().enumerate() {
+            debug!(
+                "RRDP {}: Delta update step ({}/{}).",
+                uri_and_hash.uri(), i + 1, count
+            );
             if !self.delta_update_step(
                 &tree, notify, *serial,
                 uri_and_hash.uri(), uri_and_hash.hash()
@@ -862,7 +867,6 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
-        debug!("RRDP {}: Delta update step.", uri);
         let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
