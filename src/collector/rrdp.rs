@@ -499,7 +499,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.set_rrdp(self.metrics.into_inner().unwrap())
+        metrics.rrdp = self.metrics.into_inner().unwrap()
     }
 }
 
@@ -779,7 +779,12 @@ impl<'a> RepositoryUpdate<'a> {
             None => return Ok(false),
         };
 
-        for (serial, uri_and_hash) in deltas {
+        let count = deltas.len();
+        for (i, (serial, uri_and_hash)) in deltas.iter().enumerate() {
+            debug!(
+                "RRDP {}: Delta update step ({}/{}).",
+                uri_and_hash.uri(), i + 1, count
+            );
             if !self.delta_update_step(
                 &tree, notify, *serial,
                 uri_and_hash.uri(), uri_and_hash.hash()
@@ -862,7 +867,6 @@ impl<'a> RepositoryUpdate<'a> {
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<bool, Failed> {
-        debug!("RRDP {}: Delta update step.", uri);
         let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
@@ -1304,7 +1308,7 @@ impl RepositoryState {
 
 impl<'a> From<&'a RepositoryState> for IVec {
     fn from(state: &'a RepositoryState) -> IVec {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(state.session.as_bytes().len() + 17);
 
         // Version. 0u8
         vec.push(0u8);
@@ -1416,7 +1420,9 @@ impl RepositoryObject<()> {
 
 impl<'a, Octets: AsRef<[u8]>> From<&'a RepositoryObject<Octets>> for IVec {
     fn from(src: &'a RepositoryObject<Octets>) -> Self {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            src.hash.as_ref().len() + src.content.as_ref().len() + 1
+        );
 
         // Version. 0u8
         vec.push(0u8);

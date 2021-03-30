@@ -36,7 +36,7 @@ impl<'a> ValidationReport<'a> {
         &self,
         engine: &Engine,
     ) -> Result<(), Failed> {
-        let run = engine.start(self)?;
+        let mut run = engine.start(self)?;
         run.process()
     }
 
@@ -49,7 +49,8 @@ impl<'a, 's> ProcessRun for &'s ValidationReport<'a> {
     type ProcessCa = ValidateCa<'a, 's>;
 
     fn process_ta(
-        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
+        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert,
+        _tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed> {
         let mut validation = self.validation.lock().unwrap();
         match validation.supply_tal(tal) {
@@ -87,7 +88,7 @@ impl<'a, 's> ProcessCa for ValidateCa<'a, 's> {
     }
 
     fn process_ca(
-        &mut self, _uri: &uri::Rsync, cert: &ResourceCert
+        &mut self, _uri: &uri::Rsync, cert: &ResourceCert,
     ) -> Result<Option<Self>, Failed> {
         if self.report.complete.load(Ordering::Relaxed) {
             return Ok(None)
