@@ -16,7 +16,7 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
-* The minimal supported Rust version is now 1.45.0. ([#444], [#???])
+* The minimal supported Rust version is now 1.45.0. ([#444], [#498])
 
 New
 
@@ -63,7 +63,7 @@ Other Changes
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
-[#???]: https://github.com/NLnetLabs/routinator/pull/???
+[#???]: https://github.com/NLnetLabs/routinator/pull/498
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
