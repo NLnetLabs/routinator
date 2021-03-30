@@ -16,10 +16,10 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
-* The minimal supported Rust version is now 1.44.0. [(#444)]
 * Deprecated configuration items have been removed: `unknown-objects`
   cannot be spelled with a underscore anymore and string values are not
   accepted anymore for `rtr-tcp-keepalive`. ([#496])
+* The minimal supported Rust version is now 1.44.0. [(#444)]
 
 New
 
