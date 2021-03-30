@@ -201,7 +201,7 @@ impl RepositoryMetrics {
 /// Metrics regarding publication points and published objects.
 #[derive(Clone, Debug, Default)]
 pub struct PublicationMetrics {
-    /// The number of publication points.
+    /// The number of valid publication points.
     pub valid_points: u32,
 
     /// The number of rejected publication points.
@@ -213,7 +213,7 @@ pub struct PublicationMetrics {
     /// The number of invalid manifests.
     pub invalid_manifests: u32,
 
-    /// The number of stale manifest.
+    /// The number of stale manifests.
     pub stale_manifests: u32,
 
     /// The number of missing manifests.
@@ -325,9 +325,10 @@ pub struct VrpMetrics {
     /// The number of duplicate VRPs.
     ///
     /// This number is only calculated after local filtering. If duplicates
-    /// come from different entitites, who get’s to contribute their VRP and
-    /// whose gets filtered depends on the order of processing. This number
-    /// therefore has to be taken with a grain of salt.
+    /// come from different publication points, the decision which are
+    /// counted as valid and which are counted as duplicate depends on the
+    /// order of processing. This number therefore has to be taken with a
+    /// grain of salt.
     pub duplicate: u32,
 
     /// The total number of VRPs contributed to the final set.

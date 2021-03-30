@@ -1796,6 +1796,9 @@ impl RunMetrics {
     ///
     /// Assumes that the target has been extended to fit all TALs and
     /// repositories.
+    ///
+    /// This only collapses the publication metrics since those are the ones
+    /// collected by the engine.
     pub fn collapse(self, target: &mut Metrics) {
         for (target, metric) in target.tals.iter_mut().zip(
             self.tals.into_iter()
@@ -1864,7 +1867,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// CA. If it wishes to skip this CA, it returns `Ok(None)`. And if it
     /// wishes to abort processing, it returns an error.
     ///
-    /// The `repository_index` argument indicates the indes of the repository
+    /// The `repository_index` argument indicates the index of the repository
     /// publishing the CA’s publication point in the metrics produced by the
     /// processing run.
     fn process_ca(
