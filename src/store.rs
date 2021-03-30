@@ -143,7 +143,7 @@ impl Store {
                     }
                 };
 
-                if Repository::new(self, &names)?.cleanup_rrdp()? {
+                if Repository::new(self, &names, true)?.cleanup_rrdp()? {
                     collector.retain_rrdp_repository(&uri);
                 }
                 else {
@@ -154,7 +154,7 @@ impl Store {
 
         // Cleanup rsync modules
         Repository::new(
-            self, &TreeNames::rsync()
+            self, &TreeNames::rsync(), false,
         )?.cleanup_rsync(&mut collector)?;
 
         // Cleanup collector.
@@ -268,7 +268,7 @@ impl Store {
     fn dump_repository(
         &self, tree_names: TreeNames, dir: &Path
     ) -> Result<(), Failed> {
-        let repository = Repository::new(self, &tree_names)?;
+        let repository = Repository::new(self, &tree_names, false)?;
         for (uri, stored) in repository.iter_manifests() {
             self.dump_object(dir, &uri, stored.manifest())?;
 
@@ -448,7 +448,7 @@ impl<'a> Run<'a> {
     pub fn rrdp_repository(
         &self, rpki_notify: &uri::Https,
     ) -> Result<Repository, Failed> {
-        Repository::new(self.store, &TreeNames::rrdp(rpki_notify))
+        Repository::new(self.store, &TreeNames::rrdp(rpki_notify), true)
     }
 
     /// Accesses the rsync repository.
@@ -458,7 +458,7 @@ impl<'a> Run<'a> {
     ///
     /// The repository is created if it is not yet present.
     pub fn rsync_repository(&self) -> Result<Repository, Failed> {
-        Repository::new(self.store, &TreeNames::rsync())
+        Repository::new(self.store, &TreeNames::rsync(), false)
     }
 }
 
@@ -491,6 +491,9 @@ pub struct Repository {
 
     /// The database tree holding the repository’s objects.
     object_tree: sled::Tree,
+
+    /// Are we using an rrdp tree?
+    is_rrdp: bool,
 }
 
 impl Repository {
@@ -498,11 +501,18 @@ impl Repository {
     fn new(
         store: &Store,
         names: &TreeNames,
+        is_rrdp: bool
     ) -> Result<Self, Failed> {
         Ok(Repository {
             manifest_tree: names.open_manifest_tree(&store.db)?,
             object_tree: names.open_object_tree(&store.db)?,
+            is_rrdp
         })
+    }
+
+    /// Returns whether this is an RRDP repository.
+    pub fn is_rrdp(&self) -> bool {
+        self.is_rrdp
     }
 
     /// Loads the manifest of a publication point in the repository.
@@ -931,7 +941,10 @@ impl<'a> From<&'a StoredManifest> for sled::IVec {
         // The caRepository URI and manifest bytes are encoded as its bytes
         // preceeded by the length as a u32 in network byte order. the CRL
         // bytes are just the bytes until the end of the buffer.
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            manifest.ca_repository.as_slice().len() + manifest.manifest.len()
+            + manifest.crl.len() + 17
+        );
 
         vec.push(0u8);
         vec.extend_from_slice(&manifest.not_after.timestamp().to_be_bytes());
@@ -1043,7 +1056,10 @@ impl StoredObject {
 
 impl<'a> From<&'a StoredObject> for sled::IVec {
     fn from(object: &'a StoredObject) -> sled::IVec {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            object.hash.as_ref().map(|hash| hash.as_slice().len()).unwrap_or(0)
+            + object.content.as_ref().len() + 2
+        );
 
         // Version. 0u8.
         vec.push(0u8);

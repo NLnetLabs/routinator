@@ -16,13 +16,14 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use chrono::format::{Item, Fixed, Numeric, Pad};
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::header::HeaderValue;
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
@@ -32,7 +33,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
 use crate::error::{Failed, ExitError};
-use crate::metrics::{Metrics, ServerMetrics};
+use crate::metrics::{Metrics, ServerMetrics, PublicationMetrics, VrpMetrics};
 use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
 use crate::output::OutputFormat;
 use crate::utils::JsonBuilder;
@@ -120,6 +121,8 @@ async fn single_http_listener(
 }
 
 
+//------------ handle_request ------------------------------------------------
+
 async fn handle_request(
     req: Request<Body>,
     origins: &OriginsHistory,
@@ -128,35 +131,30 @@ async fn handle_request(
     if *req.method() != Method::GET {
         return Ok(method_not_allowed())
     }
-    Ok(match req.uri().path() {
-        "/bird" => vrps(origins, req.uri().query(), OutputFormat::Bird1),
-        "/bird2" => vrps(origins, req.uri().query(), OutputFormat::Bird2),
-        "/csv" => vrps(origins, req.uri().query(), OutputFormat::Csv),
-        "/csvcompat"
-            => vrps(origins, req.uri().query(), OutputFormat::CompatCsv),
-        "/csvext"
-            => vrps(origins, req.uri().query(), OutputFormat::ExtendedCsv),
-        "/json" => vrps(origins, req.uri().query(), OutputFormat::Json),
-        "/log" => log(origins),
-        "/metrics" => metrics(origins),
-        "/openbgpd" => {
-            vrps(origins, req.uri().query(), OutputFormat::Openbgpd)
-        }
-        "/rpsl" => vrps(origins, req.uri().query(), OutputFormat::Rpsl),
-        "/status" => status(origins),
-        "/api/v1/status" => api_status(origins),
-        "/validity" => validity_query(origins, req.uri().query()),
-        "/version" => version(),
-        path if path.starts_with("/api/v1/validity/") => {
-            validity_path(origins, &path[17..])
-        }
-        #[cfg(feature = "ui")]
-        _ => self::ui::process_request(req),
-        #[cfg(not(feature = "ui"))]
-        _ => not_found()
-    })
+    if let Some(format) = OutputFormat::from_path(req.uri().path()) {
+        Ok(vrps(&req, origins, format))
+    }
+    else {
+        Ok(match req.uri().path() {
+            "/log" => log(origins),
+            "/metrics" => metrics(origins),
+            "/status" => status(origins),
+            "/api/v1/status" => api_status(origins),
+            "/validity" => validity_query(origins, req.uri().query()),
+            "/version" => version(),
+            path if path.starts_with("/api/v1/validity/") => {
+                validity_path(origins, &path[17..])
+            }
+            #[cfg(feature = "ui")]
+            _ => self::ui::process_request(req),
+            #[cfg(not(feature = "ui"))]
+            _ => not_found()
+        })
+    }
 }
 
+
+//------------ metrics -------------------------------------------------------
 
 fn metrics(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
@@ -183,10 +181,10 @@ fn metrics_active(
         "# HELP routinator_valid_roas number of valid ROAs seen\n\
          # TYPE routinator_valid_roas gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_valid_roas{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.roas
+            tal.name(), tal.publication.valid_roas
         ).unwrap();
     }
 
@@ -196,10 +194,10 @@ fn metrics_active(
          # HELP routinator_vrps_total number of valid VRPs per TAL\n\
          # TYPE routinator_vrps_total gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_total{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.total_valid_vrps
+            tal.name(), tal.vrps.valid
         ).unwrap();
     }
 
@@ -209,7 +207,7 @@ fn metrics_active(
         # HELP routinator_vrps_final final number of valid VRPs\n\
         # TYPE routinator_vrps_final gauge\n\
         routinator_vrps_final {}",
-        metrics.final_vrps(),
+        metrics.vrps.contributed,
     ).unwrap();
 
     // vrps_unsafe
@@ -219,10 +217,10 @@ fn metrics_active(
                 VRPs overlapping with rejected CAs\n\
          # TYPE routinator_vrps_unsafe gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_unsafe{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.unsafe_vrps
+            tal.name(), tal.vrps.marked_unsafe
         ).unwrap();
     }
 
@@ -233,10 +231,10 @@ fn metrics_active(
                 VRPs filtered based on local exceptions\n\
          # TYPE routinator_vrps_filtered_locally gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_filtered_locally{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.locally_filtered_vrps
+            tal.name(), tal.vrps.locally_filtered
         ).unwrap();
     }
 
@@ -246,10 +244,10 @@ fn metrics_active(
          # HELP routinator_vrps_duplicate number of duplicate VRPs per TAL\n\
          # TYPE routinator_vrps_duplicate gauge"
     ).unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         writeln!(res,
             "routinator_vrps_duplicate{{tal=\"{}\"}} {}",
-            tal.tal.name(), tal.duplicate_vrps
+            tal.name(), tal.vrps.duplicate
         ).unwrap();
     }
 
@@ -262,7 +260,7 @@ fn metrics_active(
     ).unwrap();
     writeln!(res,
         "routinator_vrps_added_locally {}",
-        metrics.local_vrps()
+        metrics.local.contributed
     ).unwrap();
 
     // stale_objects
@@ -271,7 +269,7 @@ fn metrics_active(
         # HELP routinator_stale_count number of stale manifests and CRLs\n\
         # TYPE routinator_stale_count gauge\n\
         routinator_stale_count {}",
-        metrics.stale_count(),
+        metrics.publication.stale_objects(),
     ).unwrap();
 
     // last_update_start, last_update_done, last_update_duration
@@ -323,7 +321,7 @@ fn metrics_active(
         # HELP routinator_rsync_status exit status of rsync command\n\
         # TYPE routinator_rsync_status gauge"
     ).unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         writeln!(
             res,
             "routinator_rsync_status{{uri=\"{}\"}} {}",
@@ -341,7 +339,7 @@ fn metrics_active(
         # HELP routinator_rsync_duration duration of rsync in seconds\n\
         # TYPE routinator_rsync_duration gauge"
     ).unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         if let Ok(duration) = metrics.duration {
             writeln!(
                 res,
@@ -360,7 +358,7 @@ fn metrics_active(
             notification file\n\
         # TYPE routinator_rrdp_status gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         writeln!(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
@@ -377,7 +375,7 @@ fn metrics_active(
         # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
         # TYPE routinator_rrdp_duration gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         if let Ok(duration) = metrics.duration {
             writeln!(
                 res,
@@ -395,7 +393,7 @@ fn metrics_active(
         # HELP routinator_rrdp_serial serial number of last RRDP update\n\
         # TYPE routinator_rrdp_serial gauge"
     ).unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         if let Some(serial) = metrics.serial {
             writeln!(
                 res,
@@ -507,6 +505,9 @@ fn metrics_active(
         .unwrap()
 }
 
+
+//------------ status --------------------------------------------------------
+
 fn status(origins: &OriginsHistory) -> Response<Body> {
     match origins.metrics() {
         Some(metrics) => status_active(origins, &metrics),
@@ -567,87 +568,81 @@ fn status_active(
     }
 
     // valid-roas
-    writeln!(res, "valid-roas: {}",
-        metrics.tals().iter().map(|tal| tal.roas).sum::<u32>()
+    writeln!(
+        res, "valid-roas: {}", metrics.publication.valid_roas
     ).unwrap();
 
     // valid-roas-per-tal
     write!(res, "valid-roas-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.roas).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.publication.valid_roas).unwrap();
     }
     writeln!(res).unwrap();
 
     // vrps
-    writeln!(res, "vrps: {}",
-        metrics.tals().iter().map(|tal| tal.total_valid_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "vrps: {}", metrics.vrps.valid).unwrap();
 
     // vrps-per-tal
     write!(res, "vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.total_valid_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.valid).unwrap();
     }
     writeln!(res).unwrap();
 
     // unsafe-filtered-vrps
-    writeln!(res, "unsafe-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.unsafe_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "unsafe-vrps: {}", metrics.vrps.marked_unsafe).unwrap();
 
     // unsafe-vrps-per-tal
     write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ",
-            tal.tal.name(), tal.unsafe_vrps
-        ).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ",tal.name(), tal.vrps.marked_unsafe).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-filtered-vrps
     writeln!(res, "locally-filtered-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.locally_filtered_vrps).sum::<u32>()
+        metrics.vrps.locally_filtered
     ).unwrap();
 
     // locally-filtered-vrps-per-tal
     write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
+    for tal in &metrics.tals {
         write!(res, "{}={} ",
-            tal.tal.name(), tal.locally_filtered_vrps
+            tal.name(), tal.vrps.locally_filtered
         ).unwrap();
     }
     writeln!(res).unwrap();
 
     // duplicate-vrps-per-tal
     write!(res, "duplicate-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.duplicate_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.duplicate).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-added-vrps
-    writeln!(res, "locally-added-vrps: {}", metrics.local_vrps()).unwrap();
+    writeln!(
+        res, "locally-added-vrps: {}", metrics.local.contributed
+    ).unwrap();
 
     // final-vrps
-    writeln!(res, "final-vrps: {}",
-        metrics.tals().iter().map(|tal| tal.final_vrps).sum::<u32>()
-    ).unwrap();
+    writeln!(res, "final-vrps: {}", metrics.vrps.contributed).unwrap();
 
     // final-vrps-per-tal
     write!(res, "final-vrps-per-tal: ").unwrap();
-    for tal in metrics.tals() {
-        write!(res, "{}={} ", tal.tal.name(), tal.final_vrps).unwrap();
+    for tal in &metrics.tals {
+        write!(res, "{}={} ", tal.name(), tal.vrps.contributed).unwrap();
     }
     writeln!(res).unwrap();
 
     // stale-count
-    writeln!(res,
-        "stale-count: {}", metrics.stale_count()
+    writeln!(
+        res, "stale-count: {}", metrics.publication.stale_objects()
     ).unwrap();
 
     // rsync_status
     writeln!(res, "rsync-durations:").unwrap();
-    for metrics in metrics.rsync() {
+    for metrics in &metrics.rsync {
         write!(
             res,
             "   {}: status={}",
@@ -672,7 +667,7 @@ fn status_active(
 
     // rrdp_status
     writeln!(res, "rrdp-durations:").unwrap();
-    for metrics in metrics.rrdp() {
+    for metrics in &metrics.rrdp {
         write!(
             res,
             "   {}: status={}",
@@ -729,6 +724,9 @@ fn status_active(
     .unwrap()
 }
 
+
+//------------ api_status ----------------------------------------------------
+
 fn api_status(origins: &OriginsHistory) -> Response<Body> {
     let metrics = match origins.metrics() {
         Some(metrics) => metrics,
@@ -769,27 +767,40 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         }
 
         target.member_object("tals", |target| {
-            for tal in metrics.tals() {
+            for tal in &metrics.tals {
                 target.member_object(tal.tal.name(), |target| {
-                    target.member_raw("validROAs", tal.roas);
-                    target.member_raw("vrpsTotal", tal.total_valid_vrps);
-                    target.member_raw("vrpsFinal", tal.final_vrps);
-                    target.member_raw("vrpsUnsafe", tal.unsafe_vrps);
-                    target.member_raw(
-                        "vrpsFilteredLocally", tal.locally_filtered_vrps
+                    json_vrp_metrics(target, &tal.vrps);
+                    json_publication_metrics(
+                        target, &tal.publication
                     );
-                    target.member_raw("vrpsDuplicate", tal.duplicate_vrps);
-
-
                 });
             }
         });
 
-        target.member_raw("vrpsAddedLocally", metrics.local_vrps());
-        target.member_raw("staleObjects", metrics.stale_count());
+        target.member_object("repositories", |target| {
+            for repo in &metrics.repositories {
+                target.member_object(&repo.uri, |target| {
+                    if repo.uri.starts_with("https://") {
+                        target.member_str("type", "RRDP");
+                    }
+                    else if repo.uri.starts_with("rsync://") {
+                        target.member_str("type", "rsync");
+                    }
+                    else {
+                        target.member_str("type", "other");
+                    }
+                    json_vrp_metrics(target, &repo.vrps);
+                    json_publication_metrics(
+                        target, &repo.publication
+                    );
+                })
+            }
+        });
+
+        target.member_raw("vrpsAddedLocally", metrics.local.contributed);
 
         target.member_object("rsync", |target| {
-            for metrics in metrics.rsync() {
+            for metrics in &metrics.rsync {
                 target.member_object(&metrics.module, |target| {
                     target.member_raw("status", 
                         match metrics.status {
@@ -810,7 +821,7 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         });
 
         target.member_object("rrdp", |target| {
-            for metrics in metrics.rrdp() {
+            for metrics in &metrics.rrdp {
                 target.member_object(&metrics.notify_uri, |target| {
                     target.member_raw("status",
                         metrics.notify_status.map(|code| {
@@ -888,12 +899,49 @@ fn api_status(origins: &OriginsHistory) -> Response<Body> {
         .unwrap()
 }
 
+fn json_publication_metrics(
+    target: &mut JsonBuilder, metrics: &PublicationMetrics
+) {
+    target.member_raw("validPublicationPoints", metrics.valid_points);
+    target.member_raw("rejectedPublicationPoints", metrics.rejected_points);
+    target.member_raw("validManifests", metrics.valid_manifests);
+    target.member_raw("invalidManifests", metrics.invalid_manifests);
+    target.member_raw("staleManifests", metrics.stale_manifests);
+    target.member_raw("missingManifests", metrics.missing_manifests);
+    target.member_raw("validCRLs", metrics.valid_crls);
+    target.member_raw("invalidCRLs", metrics.invalid_crls);
+    target.member_raw("staleCRLs", metrics.stale_crls);
+    target.member_raw("strayCRLs", metrics.stray_crls);
+    target.member_raw("validCACerts", metrics.valid_ca_certs);
+    target.member_raw("validEECerts", metrics.valid_ee_certs);
+    target.member_raw("invalidCerts", metrics.invalid_certs);
+    target.member_raw("validROAs", metrics.valid_roas);
+    target.member_raw("invalidROAs", metrics.invalid_roas);
+    target.member_raw("validGBRs", metrics.valid_gbrs);
+    target.member_raw("invalidGBRs", metrics.invalid_gbrs);
+    target.member_raw("otherObjects", metrics.others);
+}
+
+fn json_vrp_metrics(target: &mut JsonBuilder, vrps: &VrpMetrics) {
+    target.member_raw("vrpsTotal", vrps.valid);
+    target.member_raw("vrpsUnsafe", vrps.marked_unsafe);
+    target.member_raw("vrpsLocallyFiltered", vrps.locally_filtered);
+    target.member_raw("vrpsDuplicate", vrps.duplicate);
+    target.member_raw("vrpsFinal", vrps.contributed);
+}
+
+
+//------------ log -----------------------------------------------------------
+
 fn log(origins: &OriginsHistory) -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain;charset=UTF-8")
     .body(origins.log().into())
     .unwrap()
 }
+
+
+//------------ validity_path -------------------------------------------------
 
 fn validity_path(origins: &OriginsHistory, path: &str) -> Response<Body> {
     let current = match validity_check(origins) {
@@ -981,6 +1029,9 @@ fn validity(
     ).unwrap()
 }
 
+
+//------------ version -------------------------------------------------------
+
 fn version() -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain")
@@ -988,29 +1039,16 @@ fn version() -> Response<Body> {
     .unwrap()
 }
 
-const HTTP_DATE_ITEMS: &[Item<'static>] = &[
-    Item::Fixed(Fixed::ShortWeekdayName),
-    Item::Literal(", "),
-    Item::Numeric(Numeric::Day, Pad::Zero),
-    Item::Literal(" "),
-    Item::Fixed(Fixed::ShortMonthName),
-    Item::Literal(" "),
-    Item::Numeric(Numeric::Year, Pad::Zero),
-    Item::Literal(" "),
-    Item::Numeric(Numeric::Hour, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Minute, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Second, Pad::Zero),
-    Item::Literal(" GMT"),
-];
 
+//------------ vrps ----------------------------------------------------------
+
+/// Produces a response listing VRPs.
 fn vrps(
+    req: &Request<Body>,
     origins: &OriginsHistory,
-    query: Option<&str>,
-    format: OutputFormat
+    format: OutputFormat,
 ) -> Response<Body> {
-    let (current, metrics) = match origins.current_and_metrics() {
+    let status = match origins.current_status() {
         Some(some) => some, 
         None => {
             return Response::builder()
@@ -1021,26 +1059,25 @@ fn vrps(
         }
     };
 
-    let (_start, done, _duration) = origins.update_times();
+    let etag = format!("\"{:x}-{}\"", status.session(), status.serial());
 
-    let filters = match output_filters(query) {
+    if let Some(response) = maybe_not_modified(req, &etag, status.created()) {
+        return response
+    }
+
+    let filters = match output_filters(req.uri().query()) {
         Ok(filters) => filters,
         Err(_) => return bad_request(),
     };
     let stream = format.stream(
-        current, filters, metrics
+        status.origins().clone(), filters, status.metrics().clone()
     );
 
-    let mut builder = Response::builder();
-
-    builder = builder.header("Content-Type", format.content_type())
-        .header("Content-Length", stream.output_len());
-
-    if let Some(done) = done {
-        builder = builder.header("Last-Modified",
-            done.format_with_items(
-                HTTP_DATE_ITEMS.iter().cloned()).to_string());
-    }
+    let builder = Response::builder()
+        .header("Content-Type", format.content_type())
+        .header("Content-Length", stream.output_len())
+        .header("ETag", etag)
+        .header("Last-Modified", format_http_date(&status.created()));
 
     builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
@@ -1048,28 +1085,54 @@ fn vrps(
     .unwrap()
 }
 
-fn bad_request() -> Response<Body> {
-    Response::builder()
-    .status(StatusCode::BAD_REQUEST)
-    .header("Content-Type", "text/plain")
-    .body("Bad Request".into())
-    .unwrap()
+/// Returns a 304 Not Modified response if appropriate.
+///
+/// If either the etag or the completion time are referred to by the request,
+/// returns the reponse. If a new response needs to be generated, returns
+/// `None`.
+fn maybe_not_modified(
+    req: &Request<Body>,
+    etag: &str,
+    done: DateTime<Utc>,
+) -> Option<Response<Body>> {
+    // First, check If-None-Match.
+    for value in req.headers().get_all("If-None-Match").iter() {
+        // Skip ill-formatted values. By being lazy here we may falsely
+        // return a full response, so this should be fine.
+        let value = match value.to_str() {
+            Ok(value) => value,
+            Err(_) => continue
+        };
+        let value = value.trim();
+        if value == "*" {
+            return Some(not_modified(etag, done))
+        }
+        for tag in EtagsIter(value) {
+            if tag.trim() == etag {
+                return Some(not_modified(etag, done))
+            }
+        }
+    }
+
+    // Now, the If-Modified-Since header.
+    if let Some(value) = req.headers().get("If-Modified-Since") {
+        if let Some(date) = parse_http_date(value) {
+            if date >= done {
+                return Some(not_modified(etag, done))
+            }
+        }
+    }
+
+    None
 }
 
-fn method_not_allowed() -> Response<Body> {
+/// Returns the 304 Not Modified response.
+fn not_modified(etag: &str, done: DateTime<Utc>) -> Response<Body> {
     Response::builder()
-    .status(StatusCode::METHOD_NOT_ALLOWED)
-    .header("Content-Type", "text/plain")
-    .body("Method Not Allowed".into())
-    .unwrap()
-}
-
-fn not_found() -> Response<Body> {
-    Response::builder()
-    .status(StatusCode::NOT_FOUND)
-    .header("Content-Type", "text/plain")
-    .body("Not Found".into())
-    .unwrap()
+    .status(304)
+    .header("ETag", etag)
+    .header("Last-Modified", format_http_date(&done))
+    .body(Body::empty()).unwrap()
 }
 
 /// Produces the output filters from a query string.
@@ -1136,6 +1199,33 @@ fn query_iter(
         let value = item.next();
         (key, value)
     })
+}
+
+
+//------------ Error Responses -----------------------------------------------
+
+fn bad_request() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::BAD_REQUEST)
+    .header("Content-Type", "text/plain")
+    .body("Bad Request".into())
+    .unwrap()
+}
+
+fn method_not_allowed() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::METHOD_NOT_ALLOWED)
+    .header("Content-Type", "text/plain")
+    .body("Method Not Allowed".into())
+    .unwrap()
+}
+
+fn not_found() -> Response<Body> {
+    Response::builder()
+    .status(StatusCode::NOT_FOUND)
+    .header("Content-Type", "text/plain")
+    .body("Not Found".into())
+    .unwrap()
 }
 
 
@@ -1229,6 +1319,156 @@ impl Drop for HttpStream {
     fn drop(&mut self) {
         self.metrics.inc_http_conn_close()
     }
+}
+
+
+//------------ Parsing Etags -------------------------------------------------
+
+/// An iterator over the etags in an If-Not-Match header value.
+///
+/// This does not handle the "*" value.
+///
+/// One caveat: The iterator stops when it encounters bad formatting which
+/// makes this indistinguishable from reaching the end of a correctly
+/// formatted value. As a consequence, we will 304 a request that has the
+/// right tag followed by garbage.
+struct EtagsIter<'a>(&'a str);
+
+impl<'a> Iterator for EtagsIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Skip white space and check if we are done.
+        self.0 = self.0.trim_start();
+        if self.0.is_empty() {
+            return None
+        }
+
+        // We either have to have a lone DQUOTE or one prefixed by W/
+        let prefix_len = if self.0.starts_with('"') {
+            1
+        }
+        else if self.0.starts_with("W/\"") {
+            3
+        }
+        else {
+            return None
+        };
+
+        // Find the end of the tag which is after the next DQUOTE.
+        let end = match self.0[prefix_len..].find('"') {
+            Some(index) => index + prefix_len + 1,
+            None => return None
+        };
+
+        let res = &self.0[0..end];
+
+        // Move past the second DQUOTE and any space.
+        self.0 = self.0[end..].trim_start();
+
+        // If we have a comma, skip over that and any space.
+        if self.0.starts_with(',') {
+            self.0 = self.0[1..].trim_start();
+        }
+
+        Some(res)
+    }
+}
+
+
+//------------ Parsing and Constructing HTTP Dates ---------------------------
+
+/// Definition of the preferred date format (aka IMF-fixdate).
+///
+/// The definition allows for relaxed parsing: It accepts additional white
+/// space and ignores case for textual representations. It does, however,
+/// construct the correct representation when formatting.
+const IMF_FIXDATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Space(""),
+    Item::Literal(","),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Space(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Literal("GMT"),
+    Item::Space(""),
+];
+
+/// Definition of the obsolete RFC850 date format..
+const RFC850_DATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::LongWeekdayName),
+    Item::Space(""),
+    Item::Literal(","),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal("-"),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::YearMod100, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Literal("GMT"),
+    Item::Space(""),
+];
+
+/// Definition of the obsolete asctime date format.
+const ASCTIME_DATE: &[Item<'static>] = &[
+    Item::Space(""),
+    Item::Fixed(Fixed::ShortWeekdayName),
+    Item::Space(" "),
+    Item::Fixed(Fixed::ShortMonthName),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Day, Pad::Space),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Space(" "),
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Space(""),
+];
+
+fn parse_http_date(date: &HeaderValue) -> Option<DateTime<Utc>> {
+    use chrono::format::{Parsed, parse};
+
+    // All formats are ASCII-only, so if we can’t turn the value into a
+    // string, it ain’t a valid date.
+    let date = date.to_str().ok()?;
+
+    let mut parsed = Parsed::new();
+    if parse(&mut parsed, date, IMF_FIXDATE.iter()).is_err() {
+        parsed = Parsed::new();
+        if parse(&mut parsed, date, RFC850_DATE.iter()).is_err() {
+            parsed = Parsed::new();
+            if parse(&mut parsed, date, ASCTIME_DATE.iter()).is_err() {
+                return None
+            }
+        }
+    }
+    parsed.to_datetime_with_timezone(&Utc).ok()
+}
+
+fn format_http_date(date: &DateTime<Utc>) -> String {
+    date.format_with_items(IMF_FIXDATE.iter()).to_string()
 }
 
 
@@ -1327,6 +1567,55 @@ mod ui {
         pub const ttf: &[u8] = b"font/ttf";
         pub const woff: &[u8] = b"font/woff";
         pub const woff2: &[u8] = b"font/woff2";
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn etags_iter() {
+        assert_eq!(
+            EtagsIter("\"foo\", \"bar\", \"ba,zz\"").collect::<Vec<_>>(),
+            ["\"foo\"", "\"bar\"", "\"ba,zz\""]
+        );
+        assert_eq!(
+            EtagsIter("\"foo\", W/\"bar\" , \"ba,zz\", ").collect::<Vec<_>>(),
+            ["\"foo\"", "W/\"bar\"", "\"ba,zz\""]
+        );
+    }
+
+    #[test]
+    fn test_parse_http_date() {
+        let date = DateTime::<Utc>::from_utc(
+            chrono::naive::NaiveDate::from_ymd(
+                1994, 11, 6
+            ).and_hms(8, 49, 37),
+            Utc
+        );
+
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sun, 06 Nov 1994 08:49:37 GMT")
+            ),
+            Some(date)
+        );
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sunday, 06-Nov-94 08:49:37 GMT")
+            ),
+            Some(date)
+        );
+        assert_eq!(
+            parse_http_date(
+                &HeaderValue::from_static("Sun Nov  6 08:49:37 1994")
+            ),
+            Some(date)
+        );
     }
 }
 
