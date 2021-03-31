@@ -21,7 +21,10 @@ crossbeam-utils = "0.8.1"
 dirs            = "3.0.1"
 fern            = "0.6.0"
 futures         = "0.3.4"
-hyper           = { version = "0.14.2", features = [ "server", "stream" ] }
+
+# Pin hyper to 0.14.4 for compatibility with Rust 1.45.
+hyper           = { version = "=0.14.4", features = [ "server", "stream" ] }
+
 log             = "0.4.8"
 log-reroute     = "0.1.5"
 num_cpus        = "1.12.0"
