@@ -59,7 +59,7 @@ pub enum Category {
 //------------ All Bundled TALs ----------------------------------------------
 
 /// All TALs bundled with Routinators.
-pub static BUNDLED_TALS: &'static [BundledTal] = &[
+pub static BUNDLED_TALS: &[BundledTal] = &[
 
     //--- Production RIR TALs.
     //
