@@ -16,6 +16,10 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
+* Routinator now includes additional TALs for various commonly used
+  RPKI testbeds. The `init` command has been restructured to make it
+  possible to select the TALs for installation. The default is still to
+  install the five production RIR TALs. ([#500])
 * The minimal supported Rust version is now 1.44.0. ([#444])
 
 New
@@ -63,6 +67,7 @@ Other Changes
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
+[#500]: https://github.com/NLnetLabs/routinator/pull/500
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
