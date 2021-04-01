@@ -68,6 +68,7 @@ pub mod rtr;
 pub mod rta;
 pub mod slurm;
 pub mod store;
+pub mod tals;
 pub mod utils;
 pub mod validity;
 
