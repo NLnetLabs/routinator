@@ -20,7 +20,7 @@ Breaking Changes
   RPKI testbeds. The `init` command has been restructured to make it
   possible to select the TALs for installation. The default is still to
   install the five production RIR TALs. ([#500])
-* The minimal supported Rust version is now 1.44.0. ([#444])
+* The minimal supported Rust version is now 1.45.0. ([#444], [#498])
 
 New
 
@@ -67,6 +67,7 @@ Other Changes
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
+[#498]: https://github.com/NLnetLabs/routinator/pull/498
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
