@@ -27,7 +27,7 @@ use rpki::rtr::state::{Serial, State};
 use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
 use crate::error::Failed;
-use crate::metrics::{Metrics, ServerMetrics, TalMetrics};
+use crate::metrics::{Metrics, ServerMetrics};
 use crate::process::LogOutput;
 use crate::engine::{ProcessCa, ProcessRun};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -52,11 +52,6 @@ impl OriginsReport {
         }
     }
 
-    #[deprecated]
-    pub fn with_capacity(_capacity: usize, _tals: Vec<Arc<TalInfo>>) -> Self {
-        Self::new()
-    }
-
     pub fn push_origins(&self, origins: RouteOrigins) {
         self.origins.push(origins)
     }
@@ -66,18 +61,14 @@ impl<'a> ProcessRun for &'a OriginsReport {
     type ProcessCa = ProcessRouteOrigins<'a>;
 
     fn process_ta(
-        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert
+        &self, _tal: &Tal, _uri: &TalUri, _cert: &ResourceCert,
+        tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed> {
-        let tal = {
-            let mut tals = self.tals.lock().unwrap();
-            let len = tals.len();
-            tals.push(tal.info().clone());
-            len
-        };
         Ok(Some(ProcessRouteOrigins {
             report: self,
             origins: RouteOrigins::new(),
-            tal
+            tal_index,
+            repository_index: None,
         }))
     }
 }
@@ -115,8 +106,11 @@ impl RouteOrigins {
         &mut self,
         attestation: RouteOriginAttestation,
         tal_index: usize,
+        repository_index: Option<usize>,
     ) {
-        self.origins.push(RouteOrigin::new(attestation, tal_index));
+        self.origins.push(RouteOrigin::new(
+            attestation, tal_index, repository_index,
+        ));
     }
 
     /// Updates the refresh time.
@@ -177,10 +171,15 @@ impl<'a> IntoIterator for &'a RouteOrigins {
 pub struct ProcessRouteOrigins<'a> {
     report: &'a OriginsReport,
     origins: RouteOrigins,
-    tal: usize,
+    tal_index: usize,
+    repository_index: Option<usize>,
 }
 
 impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
+    fn repository_index(&mut self, repository_index: usize) {
+        self.repository_index = Some(repository_index)
+    }
+
     fn update_refresh(&mut self, not_after: Time) {
         match self.origins.refresh {
             Some(current) => {
@@ -195,12 +194,13 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
     }
 
     fn process_ca(
-        &mut self, _uri: &uri::Rsync, _cert: &ResourceCert
+        &mut self, _uri: &uri::Rsync, _cert: &ResourceCert,
     ) -> Result<Option<Self>, Failed> {
         Ok(Some(ProcessRouteOrigins {
             report: self.report,
             origins: RouteOrigins::new(),
-            tal: self.tal,
+            tal_index: self.tal_index,
+            repository_index: None,
         }))
     }
 
@@ -210,7 +210,7 @@ impl<'a> ProcessCa for ProcessRouteOrigins<'a> {
         if let RoaStatus::Valid { ref cert } = *route.status() {
             self.update_refresh(cert.validity().not_after());
         }
-        self.origins.push(route, self.tal);
+        self.origins.push(route, self.tal_index, self.repository_index);
         Ok(())
     }
 
@@ -326,7 +326,7 @@ struct HistoryInner {
     server_metrics: Arc<ServerMetrics>,
 
     /// The session ID.
-    session: u16,
+    session: u64,
 
     /// The number of diffs to keep.
     keep: usize,
@@ -348,6 +348,14 @@ struct HistoryInner {
 
     /// The instant when we are scheduled to start the next update.
     next_update_start: SystemTime,
+
+    /// The creation time of the current data set.
+    ///
+    /// This is the same as last_update_done, except when that would be
+    /// within the same second as the previous update, in which case we
+    /// move it to the next second. This is necessary as the time used in
+    /// conditional HTTP requests only has second-resolution.
+    created: Option<DateTime<Utc>>,
 
     /// Default RTR timing.
     timing: Timing,
@@ -372,7 +380,7 @@ impl OriginsHistory {
                 session: {
                     SystemTime::now()
                         .duration_since(SystemTime::UNIX_EPOCH).unwrap()
-                        .as_secs() as u16
+                        .as_secs()
                 },
                 keep: config.history_size,
                 refresh: config.refresh,
@@ -380,6 +388,7 @@ impl OriginsHistory {
                 last_update_start: Utc::now(),
                 last_update_done: None,
                 last_update_duration: None,
+                created: None,
                 timing: Timing {
                     refresh: config.refresh.as_secs() as u32,
                     retry: config.retry.as_secs() as u32,
@@ -443,13 +452,13 @@ impl OriginsHistory {
         })
     }
     
-    pub fn current_and_metrics(
+    /// Returns status information of the current update.
+    ///
+    /// Returns `None` if there is no update yet.
+    pub fn current_status(
         &self
-    ) -> Option<(Arc<AddressOrigins>, Arc<Metrics>)> {
-        let history = self.0.read().unwrap();
-        let current = history.current.clone()?;
-        let metrics = history.metrics.clone()?;
-        Some((current, metrics))
+    ) -> Option<AddressOriginsStatus> {
+        AddressOriginsStatus::from_history(&self.0.read().unwrap())
     }
 
     pub fn metrics(&self) -> Option<Arc<Metrics>> {
@@ -552,6 +561,21 @@ impl OriginsHistory {
                 locked.next_update_start = refresh;
             }
         }
+        locked.created = {
+            if let Some(created) = locked.created {
+                // Since we increase the time, the created time may
+                // actually have moved into the future.
+                if now.timestamp() <= created.timestamp() {
+                    Some(created + chrono::Duration::seconds(1))
+                }
+                else {
+                    Some(now)
+                }
+            }
+            else {
+                Some(now)
+            }
+        };
         if let Some(log) = locked.log.as_mut() {
             log.flush();
         }
@@ -568,13 +592,13 @@ impl VrpSource for OriginsHistory {
 
     fn notify(&self) -> State {
         let history = self.0.read().unwrap();
-        State::from_parts(history.session, history.serial())
+        State::from_parts(history.rtr_session(), history.serial())
     }
 
     fn full(&self) -> (State, Self::FullIter) {
         let history = self.0.read().unwrap();
         (
-            State::from_parts(history.session, history.serial()),
+            State::from_parts(history.rtr_session(), history.serial()),
             AddressOriginsIter::new(
                 history.current.clone().unwrap_or_default()
             )
@@ -585,12 +609,12 @@ impl VrpSource for OriginsHistory {
         &self, state: State
     ) -> Option<(State, Self::DiffIter)> {
         let history = self.0.read().unwrap();
-        if history.session != state.session() {
+        if history.rtr_session() != state.session() {
             return None
         }
         history.get(state.serial()).map(|diff| {
             (
-                State::from_parts(history.session, history.serial()),
+                State::from_parts(history.rtr_session(), history.serial()),
                 DiffIter::new(diff)
             )
         })
@@ -614,6 +638,18 @@ impl HistoryInner {
             Some(diff) => diff.serial(),
             None => Serial(0)
         }
+    }
+
+    /// Returns the session ID.
+    pub fn session(&self) -> u64 {
+        self.session
+    }
+
+    /// Returns the RTR version of the session ID.
+    ///
+    /// This is the last 16 bits of the full session ID.
+    pub fn rtr_session(&self) -> u16 {
+        self.session as u16
     }
 
     /// Appends a new diff dropping old ones if necessary.
@@ -700,20 +736,26 @@ pub struct RouteOrigin {
     /// The ROA information for the ROA.
     info: OriginInfo,
 
-    /// The index of the TAL the ROA is derived from.
-    ///
-    /// We keep this for quicker calculations of TAL metrics.
+    /// The index of the TAL in the metrics.
     tal_index: usize,
+
+    /// The index of the repository in the metrics.
+    repository_index: Option<usize>,
 }
 
 impl RouteOrigin {
     /// Creates a new value from the ROA itself and the TAL index.
-    pub fn new(mut roa: RouteOriginAttestation, tal_index: usize) -> Self {
+    pub fn new(
+        mut roa: RouteOriginAttestation,
+        tal_index: usize,
+        repository_index: Option<usize>,
+    ) -> Self {
         RouteOrigin {
             as_id: roa.as_id(),
             addrs: roa.iter().collect(),
             info: OriginInfo::from_roa(&mut roa),
-            tal_index
+            tal_index,
+            repository_index,
         }
     }
 
@@ -752,7 +794,7 @@ impl AddressOriginSet {
     /// Creates a set from the raw route origins and exceptions.
     ///
     /// The function will take all the address origins in `origins`, drop
-    /// duplicates, drop the origins filtered in `execptions` and add the
+    /// duplicates, drop the origins filtered in `exceptions` and add the
     /// assertions from `exceptions`.
     pub fn from_report(
         report: OriginsReport,
@@ -762,11 +804,6 @@ impl AddressOriginSet {
     ) -> Self {
         let mut origins = HashSet::new();
         let mut refresh = None;
-
-        let tals = report.tals.into_inner().unwrap();
-        let mut tal_metrics_vec: Vec<_> = tals.iter().map(|tal| {
-            TalMetrics::new(tal.clone())
-        }).collect();
 
         let filter = report.filter.into_inner().unwrap().finalize();
 
@@ -779,13 +816,24 @@ impl AddressOriginSet {
                 }
             }
             for origin in item {
-                let tal_metrics = &mut tal_metrics_vec[origin.tal_index];
-                tal_metrics.roas += 1;
+                let tal_metrics = &mut metrics.tals[origin.tal_index].vrps;
+                let mut repo_metrics = match origin.repository_index {
+                    Some(index) => Some(&mut metrics.repositories[index].vrps),
+                    None => None,
+                };
                 for addr in origin.addrs {
-                    tal_metrics.total_valid_vrps += 1;
+                    tal_metrics.valid += 1;
+                    if let Some(vrps) = repo_metrics.as_mut() {
+                        vrps.valid += 1
+                    }
+                    metrics.vrps.valid += 1;
 
                     if !filter.keep_address(&addr) {
-                        tal_metrics.unsafe_vrps += 1;
+                        tal_metrics.marked_unsafe += 1;
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.marked_unsafe += 1;
+                        }
+                        metrics.vrps.marked_unsafe += 1;
                         match unsafe_vrps {
                             FilterPolicy::Reject => {
                                 warn!(
@@ -794,7 +842,6 @@ impl AddressOriginSet {
                                     addr.address(), addr.address_length(),
                                     addr.max_length(), origin.as_id
                                 );
-                                tal_metrics.unsafe_vrps += 1;
                                 continue;
                             }
                             FilterPolicy::Warn => {
@@ -815,30 +862,40 @@ impl AddressOriginSet {
                         origin.info.clone()
                     );
                     if !exceptions.keep_origin(&addr) {
-                        tal_metrics.locally_filtered_vrps += 1;
+                        tal_metrics.locally_filtered += 1;
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.locally_filtered += 1;
+                        }
+                        metrics.vrps.locally_filtered += 1;
                         continue;
                     }
 
                     if origins.insert(addr) {
-                        tal_metrics.final_vrps += 1;
+                        tal_metrics.contributed += 1;
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.contributed += 1;
+                        }
+                        metrics.vrps.contributed += 1;
                     }
                     else {
-                        tal_metrics.duplicate_vrps += 1;
+                        tal_metrics.duplicate += 1;
+                        if let Some(vrps) = repo_metrics.as_mut() {
+                            vrps.duplicate += 1;
+                        }
+                        metrics.vrps.duplicate += 1;
                     }
                 }
             }
         }
         for addr in exceptions.assertions() {
             if origins.insert(addr.clone()) {
-                metrics.inc_local_vrps();
+                metrics.local.contributed += 1;
+            }
+            else {
+                metrics.local.duplicate += 1;
             }
         }
-        metrics.set_tals(tal_metrics_vec);
-        let res = AddressOriginSet {
-            origins, refresh
-        };
-        metrics.set_final_vrps(res.origins.len() as u32);
-        res
+        AddressOriginSet { origins, refresh }
     }
 }
 
@@ -965,6 +1022,66 @@ impl Iterator for AddressOriginsIter {
         let res = self.origins.origins.get(self.pos)?;
         self.pos += 1;
         Some(res.payload())
+    }
+}
+
+
+//------------ AddressOriginsStatus ------------------------------------------
+
+/// All the data you need for serving the current address origins.
+#[derive(Clone, Debug)]
+pub struct AddressOriginsStatus {
+    /// The session ID.
+    session: u64,
+
+    /// The serial number.
+    serial: Serial,
+
+    /// The date when creating this set was completed.
+    created: DateTime<Utc>,
+
+    /// The address origins.
+    origins: Arc<AddressOrigins>,
+
+    /// The metrics.
+    metrics: Arc<Metrics>,
+}
+
+impl AddressOriginsStatus {
+    /// Creates a new value from the history.
+    fn from_history(history: &HistoryInner) -> Option<Self> {
+        Some(AddressOriginsStatus {
+            session: history.session(),
+            serial: history.serial(),
+            created: history.created?,
+            origins: history.current.clone()?,
+            metrics: history.metrics.clone()?,
+        })
+    }
+
+    /// Returns the session ID.
+    pub fn session(&self) -> u64 {
+        self.session
+    }
+
+    /// Returns the serial number of this update.
+    pub fn serial(&self) -> Serial {
+        self.serial
+    }
+
+    /// Returns the time this set was created.
+    pub fn created(&self) -> DateTime<Utc> {
+        self.created
+    }
+
+    /// Returns the origins.
+    pub fn origins(&self) -> &Arc<AddressOrigins> {
+        &self.origins
+    }
+
+    /// Returns the metrics.
+    pub fn metrics(&self) -> &Arc<Metrics> {
+        &self.metrics
     }
 }
 
@@ -1446,32 +1563,49 @@ pub enum OriginInfo {
     None,
 
     /// The resource certificate of a ROA.
-    RoaInfo(Arc<RoaInfo>),
+    Roa(Arc<RoaInfo>),
+
+    /// The resource certificate of multiple ROAs.
+    MultipleRoas(Vec<Arc<RoaInfo>>),
 
     /// The path of a local exceptions file.
     Exception(ExceptionInfo),
 }
 
 impl OriginInfo {
-    fn from_roa(roa: &mut RouteOriginAttestation) -> Self {
+    fn from_roa(
+        roa: &mut RouteOriginAttestation
+    ) -> Self {
         if let Some(cert) = roa.take_cert() {
-            OriginInfo::RoaInfo(Arc::new(RoaInfo::from_ee_cert(cert)))
+            OriginInfo::Roa(Arc::new(RoaInfo::from_ee_cert(cert)))
         }
         else {
             OriginInfo::None
         }
     }
 
+    /*
+    fn add_roa(
+        &mut self,
+        roa: &mut RouteOriginAttestation
+    ) {
+        if let OriginInfo::MultipleRoas(mut ref vec) = self {
+            vec.push
+        let old = mem::replace(self, OriginInfo::None);
+        *self = Origin
+    }
+    */
+
     fn roa_info(&self) -> Option<&RoaInfo> {
         match *self {
-            OriginInfo::RoaInfo(ref info) => Some(info),
+            OriginInfo::Roa(ref info) => Some(info),
             _ => None
         }
     }
 
     fn tal_name(&self) -> &str {
         match *self {
-            OriginInfo::RoaInfo(ref info) => info.tal.name(),
+            OriginInfo::Roa(ref info) => info.tal.name(),
             _ => "N/A"
         }
     }

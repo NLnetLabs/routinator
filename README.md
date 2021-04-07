@@ -19,11 +19,12 @@ Validation to connect to it to fetch verified RPKI data. The built-in HTTP
 server offers a user interface and endpoints for the various file formats, as
 well as logging, status and Prometheus monitoring. 
 
-If you have feedback, we would love to hear from you. Don’t hesitate to
-[create an issue on Github](https://github.com/NLnetLabs/routinator/issues/new)
-or post a message on our [RPKI mailing
-list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki). You can learn more
-about Routinator and RPKI technology by reading our documentation on [Read the
+If you have feedback, we would love to hear from you. Don’t hesitate to [create
+an issue on Github](https://github.com/NLnetLabs/routinator/issues/new) or post
+a message on our [RPKI mailing
+list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki) or [Discord
+server](https://discord.gg/8dvKB5Ykhy). You can learn more about Routinator and
+RPKI technology by reading our documentation on [Read the
 Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
 
 ## Quick Start with Debian and Ubuntu Packages
@@ -190,7 +191,7 @@ Support](https://doc.rust-lang.org/nightly/rustc/platform-support.html) page
 provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages, Routinator
-relies on a relatively new version of Rust, currently 1.44 or newer. We
+relies on a relatively new version of Rust, currently 1.45 or newer. We
 therefore suggest to use the canonical Rust installation via a tool called
 `rustup`.
 
