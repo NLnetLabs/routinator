@@ -16,6 +16,9 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
+* Deprecated configuration items have been removed: `unknown-objects`
+  cannot be spelled with a underscore anymore and string values are not
+  accepted anymore for `rtr-tcp-keepalive`. ([#496])
 * The minimal supported Rust version is now 1.45.0. ([#444], [#498])
 
 New
@@ -67,6 +70,7 @@ Other Changes
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
 [#489]: https://github.com/NLnetLabs/routinator/pull/489
+[#496]: https://github.com/NLnetLabs/routinator/pull/496
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
