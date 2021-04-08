@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
@@ -31,9 +32,10 @@ use tokio::sync::oneshot;
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
-use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
+use crate::metrics::ServerMetrics;
 use crate::output;
 use crate::output::OutputFormat;
+use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
@@ -397,12 +399,16 @@ impl Server {
             !process.config().http_listen.is_empty()
         )?;
         process.setup_service(self.detach)?;
+        let log = log.map(Arc::new);
+        let metrics = Arc::new(ServerMetrics::default());
 
-        let history = OriginsHistory::new(process.config(), log);
+        let history = SharedHistory::from_config(process.config());
         let (mut notify, rtr) = rtr_listener(
-            history.clone(), process.config()
+            history.clone(), metrics.clone(), process.config()
         )?;
-        let http = http_listener(&history, process.config())?;
+        let http = http_listener(
+            history.clone(), metrics.clone(), log.clone(), process.config()
+        )?;
 
         process.drop_privileges()?;
 
@@ -426,7 +432,7 @@ impl Server {
                         ).is_err() {
                             break;
                         }
-                        history.refresh_wait()
+                        history.read().refresh_wait()
                     }
                     Err(_) => {
                         error!(
@@ -489,18 +495,18 @@ impl Server {
 
     fn process_once(
         validation: &Engine,
-        history: &OriginsHistory,
+        history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Failed> {
         history.mark_update_start();
         let (report, metrics) = validation.process_origins()?;
         let must_notify = history.update(
-            report, metrics, &exceptions
+            report, &exceptions, metrics,
         );
         info!(
             "Validation completed. New serial is {}.",
-            history.serial()
+            history.read().serial()
         );
         if must_notify {
             info!("Sending out notifications.");
@@ -659,7 +665,7 @@ impl Vrps {
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = validation.process_origins()?;
-        let vrps = AddressOrigins::from_report(
+        let vrps = PayloadSnapshot::from_report(
             report,
             &exceptions,
             &mut metrics,
@@ -798,7 +804,7 @@ impl Validate {
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
         validation.cleanup()?;
-        let vrps = AddressOrigins::from_report(
+        let vrps = PayloadSnapshot::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
             &mut metrics,

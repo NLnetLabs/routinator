@@ -7,7 +7,7 @@ use rpki::repository::rta::{ResourceTaggedAttestation, Rta};
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::ValidationError;
 use crate::config::Config;
-use crate::engine::{ProcessCa, ProcessRun, Engine};
+use crate::engine::{CaCert, ProcessCa, ProcessRun, Engine};
 use crate::error::Failed;
 
 
@@ -49,7 +49,7 @@ impl<'a, 's> ProcessRun for &'s ValidationReport<'a> {
     type ProcessCa = ValidateCa<'a, 's>;
 
     fn process_ta(
-        &self, tal: &Tal, _uri: &TalUri, _cert: &ResourceCert,
+        &self, tal: &Tal, _uri: &TalUri, _cert: &CaCert,
         _tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed> {
         let mut validation = self.validation.lock().unwrap();
@@ -88,12 +88,12 @@ impl<'a, 's> ProcessCa for ValidateCa<'a, 's> {
     }
 
     fn process_ca(
-        &mut self, _uri: &uri::Rsync, cert: &ResourceCert,
+        &mut self, _uri: &uri::Rsync, cert: &CaCert,
     ) -> Result<Option<Self>, Failed> {
         if self.report.complete.load(Ordering::Relaxed) {
             return Ok(None)
         }
-        self.certs.push(cert.clone());
+        self.certs.push(cert.cert().clone());
         Ok(Some(Self::new(self.report)))
     }
 

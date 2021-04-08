@@ -12,7 +12,7 @@ use log::error;
 use rpki::repository::resources::AsId;
 use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
+use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
 
 
 //------------ OutputFormat --------------------------------------------------
@@ -146,7 +146,7 @@ impl OutputFormat {
     /// This method loggs error messages.
     pub fn output<W: io::Write>(
         self,
-        vrps: &AddressOrigins,
+        vrps: &PayloadSnapshot,
         filters: Option<&[Filter]>,
         metrics: &Metrics,
         target: &mut W,
@@ -173,7 +173,7 @@ impl OutputFormat {
 //------------ OutputStream --------------------------------------------------
 
 pub struct OutputStream<T, F, M> {
-    origins: T,
+    snapshot: T,
     next_id: usize,
     format: OutputFormat,
     filters: Option<F>,
@@ -182,13 +182,13 @@ pub struct OutputStream<T, F, M> {
 
 impl<T, F, M> OutputStream<T, F, M> {
     fn new(
-        origins: T,
+        snapshot: T,
         format: OutputFormat,
         filters: Option<F>,
         metrics: M,
     ) -> Self {
         Self {
-            origins,
+            snapshot,
             next_id: 0,
             format,
             filters,
@@ -199,7 +199,7 @@ impl<T, F, M> OutputStream<T, F, M> {
 
 impl<T, F, M> OutputStream<T, F, M>
 where
-    T: AsRef<AddressOrigins>,
+    T: AsRef<PayloadSnapshot>,
     F: AsRef<[Filter]>,
     M: AsRef<Metrics>
 {
@@ -209,8 +209,8 @@ where
     ) -> Result<(), io::Error> {
         self.output_header(target)?;
         let mut first = true;
-        for vrp in self.origins.as_ref().iter() {
-            if self.output_origin(vrp, first, target)? {
+        for item in self.snapshot.as_ref().origins() {
+            if self.output_origin(item.0, &item.1, first, target)? {
                 first = false;
             }
         }
@@ -230,7 +230,7 @@ where
     }
 
     fn has_next_batch(&self) -> bool {
-        self.next_id < self.origins.as_ref().len()
+        self.next_id < self.snapshot.as_ref().origins().len()
     }
 
     fn next_batch<W: io::Write>(
@@ -238,11 +238,11 @@ where
         mut first: bool,
         target: &mut W 
     ) -> Result<(), io::Error> {
-        let origins = self.origins.as_ref();
+        let origins = self.snapshot.as_ref().origins();
         let mut len = 0;
         while self.next_id < origins.len() && len < 1000 {
-            if self.output_origin(
-                &origins[self.next_id], first, target
+            let item = &origins[self.next_id];
+            if self.output_origin(item.0, &item.1, first, target
             )? {
                 first = false;
                 len += 1;
@@ -259,7 +259,7 @@ where
         &self,
         target: &mut W
     ) -> Result<(), io::Error> {
-        let vrps = self.origins.as_ref();
+        let vrps = self.snapshot.as_ref();
         match self.format {
             OutputFormat::Csv => csv_header(vrps, target),
             OutputFormat::CompatCsv => compat_csv_header(vrps, target),
@@ -276,7 +276,8 @@ where
 
     pub fn output_origin<W: io::Write>(
         &self,
-        vrp: &AddressOrigin,
+        vrp: RouteOrigin,
+        info: &OriginInfo,
         first: bool,
         target: &mut W
     ) -> Result<bool, io::Error> {
@@ -284,14 +285,20 @@ where
             return Ok(false)
         }
         match self.format {
-            OutputFormat::Csv => csv_origin(vrp, first, target)?,
-            OutputFormat::CompatCsv => compat_csv_origin(vrp, first, target)?,
-            OutputFormat::ExtendedCsv => ext_csv_origin(vrp, first, target)?,
-            OutputFormat::Json => json_origin(vrp, first, target)?,
-            OutputFormat::Openbgpd => openbgpd_origin(vrp, first, target)?,
-            OutputFormat::Bird1 => bird1_origin(vrp, first, target)?,
-            OutputFormat::Bird2 => bird2_origin(vrp, first, target)?,
-            OutputFormat::Rpsl => rpsl_origin(vrp, first, target)?,
+            OutputFormat::Csv => csv_origin(vrp, info, first, target)?,
+            OutputFormat::CompatCsv => {
+                compat_csv_origin(vrp, info, first, target)?
+            }
+            OutputFormat::ExtendedCsv => {
+                ext_csv_origin(vrp, info, first, target)?
+            }
+            OutputFormat::Json => json_origin(vrp, info, first, target)?,
+            OutputFormat::Openbgpd => {
+                openbgpd_origin(vrp, info, first, target)?
+            }
+            OutputFormat::Bird1 => bird1_origin(vrp, info, first, target)?,
+            OutputFormat::Bird2 => bird2_origin(vrp, info, first, target)?,
+            OutputFormat::Rpsl => rpsl_origin(vrp, info, first, target)?,
             _ => { }
         }
         Ok(true)
@@ -299,7 +306,7 @@ where
 
     fn skip_origin(
         &self, 
-        origin: &AddressOrigin,
+        origin: RouteOrigin,
     ) -> bool {
         match self.filters.as_ref() {
             Some(filters) => {
@@ -318,7 +325,7 @@ where
         &self,
         target: &mut W
     ) -> Result<(), io::Error> {
-        let vrps = self.origins.as_ref();
+        let vrps = self.snapshot.as_ref();
         match self.format {
             OutputFormat::Csv => csv_footer(vrps, target),
             OutputFormat::CompatCsv => compat_csv_footer(vrps, target),
@@ -336,7 +343,7 @@ where
 
 impl<T, F, M> Iterator for OutputStream<T, F, M>
 where
-    T: AsRef<AddressOrigins>,
+    T: AsRef<PayloadSnapshot>,
     F: AsRef<[Filter]>,
     M: AsRef<Metrics>
 {
@@ -363,14 +370,15 @@ where
 //------------ csv -----------------------------------------------------------
 
 fn csv_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "ASN,IP Prefix,Max Length,Trust Anchor")
 }
 
 fn csv_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -378,12 +386,12 @@ fn csv_origin<W: io::Write>(
         addr.as_id(),
         addr.address(), addr.address_length(),
         addr.max_length(),
-        addr.tal_name(),
+        info.tal_name().unwrap_or("N/A"),
     )
 }
 
 fn csv_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -393,14 +401,15 @@ fn csv_footer<W: io::Write>(
 //------------ compat_csv ----------------------------------------------------
 
 fn compat_csv_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\"")
 }
 
 fn compat_csv_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -408,12 +417,12 @@ fn compat_csv_origin<W: io::Write>(
         u32::from(addr.as_id()),
         addr.address(), addr.address_length(),
         addr.max_length(),
-        addr.tal_name(),
+        info.tal_name().unwrap_or("N/A"),
     )
 }
 
 fn compat_csv_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -438,50 +447,41 @@ const EXT_CSV_TIME_ITEMS: &[Item<'static>] = &[
 ];
 
 fn ext_csv_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "URI,ASN,IP Prefix,Max Length,Not Before,Not After")
 }
 
 fn ext_csv_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
-    match addr.roa_info() {
-        Some(info) => {
-            match info.uri.as_ref() {
-                Some(uri) => {
-                    write!(output, "{}", uri)?;
-                }
-                None => write!(output, "N/A")?
-            }
-            let val = info.validity;
-            writeln!(output, ",{},{}/{},{},{},{}",
-                addr.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length(),
-                val.not_before().format_with_items(
+    write!(output, "{},{},{}/{},{},",
+        info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
+        addr.as_id(),
+        addr.address(), addr.address_length(),
+        addr.max_length(),
+    )?;
+    match info.validity() {
+        Some(validity) => {
+            writeln!(output, "{},{}",
+                validity.not_before().format_with_items(
                     EXT_CSV_TIME_ITEMS.iter().cloned()
                 ),
-                val.not_after().format_with_items(
+                validity.not_after().format_with_items(
                     EXT_CSV_TIME_ITEMS.iter().cloned()
-                ),
+                )
             )
         }
-        None => {
-            writeln!(output, "N/A,{},{}/{},{},N/A,N/A",
-                addr.as_id(),
-                addr.address(), addr.address_length(),
-                addr.max_length(),
-            )
-        }
+        None => writeln!(output, "N/A,N/A"),
     }
 }
 
 fn ext_csv_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -491,14 +491,15 @@ fn ext_csv_footer<W: io::Write>(
 //------------ json ----------------------------------------------------------
 
 fn json_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "{{\n  \"roas\": [")
 }
 
 fn json_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    info: &OriginInfo,
     first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -511,12 +512,12 @@ fn json_origin<W: io::Write>(
         addr.as_id(),
         addr.address(), addr.address_length(),
         addr.max_length(),
-        addr.tal_name(),
+        info.tal_name().unwrap_or("N/A"),
     )
 }
 
 fn json_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "\n  ]\n}}")
@@ -526,14 +527,15 @@ fn json_footer<W: io::Write>(
 //------------ openbgpd ------------------------------------------------------
 
 fn openbgpd_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "roa-set {{")
 }
 
 fn openbgpd_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    _info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -545,7 +547,7 @@ fn openbgpd_origin<W: io::Write>(
 }
 
 fn openbgpd_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     output: &mut W,
 ) -> Result<(), io::Error> {
     writeln!(output, "}}")
@@ -555,14 +557,15 @@ fn openbgpd_footer<W: io::Write>(
 //------------ bird1 ------------------------------------------------------
 
 fn bird1_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
 
 fn bird1_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    _info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -573,7 +576,7 @@ fn bird1_origin<W: io::Write>(
 }
 
 fn bird1_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -583,14 +586,15 @@ fn bird1_footer<W: io::Write>(
 //------------ bird2 ------------------------------------------------------
 
 fn bird2_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
 
 fn bird2_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    _info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -601,7 +605,7 @@ fn bird2_origin<W: io::Write>(
 }
 
 fn bird2_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -627,14 +631,15 @@ const RPSL_TIME_ITEMS: &[Item<'static>] = &[
 ];
 
 fn rpsl_header<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
 }
 
 fn rpsl_origin<W: io::Write>(
-    addr: &AddressOrigin,
+    addr: RouteOrigin,
+    info: &OriginInfo,
     _first: bool,
     output: &mut W,
 ) -> Result<(), io::Error> {
@@ -646,12 +651,13 @@ fn rpsl_origin<W: io::Write>(
         if addr.address().is_ipv4() { "route" }
         else { "route6" },
         addr.address(), addr.address_length(),
-        addr.as_id(), now, now, addr.tal_name().to_uppercase()
+        addr.as_id(), now, now,
+        info.tal_name().map(|name| name.to_uppercase()).unwrap_or("N/A".into())
     )
 }
 
 fn rpsl_footer<W: io::Write>(
-    _vrps: &AddressOrigins,
+    _vrps: &PayloadSnapshot,
     _output: &mut W,
 ) -> Result<(), io::Error> {
     Ok(())
@@ -694,7 +700,7 @@ pub enum Filter {
 
 impl Filter {
     /// Returns whether this filter covers this origin.
-    fn covers(self, origin: &AddressOrigin) -> bool {
+    fn covers(self, origin: RouteOrigin) -> bool {
         match self {
             Filter::As(as_id) => origin.as_id() == as_id,
             Filter::Prefix(prefix) => origin.prefix().covers(prefix)

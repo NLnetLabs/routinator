@@ -36,7 +36,7 @@ use rpki::repository::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::repository::roa::{Roa, RouteOriginAttestation};
 use rpki::repository::sigobj::SignedObject;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
-use rpki::repository::x509::{Time, ValidationError};
+use rpki::repository::x509::{Time, Validity, ValidationError};
 use rpki::uri;
 use crate::{collector, store};
 use crate::collector::Collector;
@@ -45,7 +45,7 @@ use crate::error::Failed;
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
-use crate::origins::OriginsReport;
+use crate::payload::ValidationReport;
 use crate::store::{Store, StoredManifest};
 use crate::utils::str_from_ascii;
 
@@ -338,8 +338,8 @@ impl Engine {
     /// Returns the result of the run and the run’s metrics.
     pub fn process_origins(
         &self
-    ) -> Result<(OriginsReport, Metrics), Failed> {
-        let report = OriginsReport::new();
+    ) -> Result<(ValidationReport, Metrics), Failed> {
+        let report = ValidationReport::new();
         let mut run = self.start(&report)?;
         run.process()?;
         let metrics = run.done();
@@ -516,7 +516,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             debug!("Found valid trust anchor {}. Processing.", uri);
 
             match self.processor.process_ta(
-                task.tal, uri, cert.cert(), cert.tal
+                task.tal, uri, &cert, cert.tal
             )? {
                 Some(processor) => {
                     return self.process_ca_task(
@@ -1149,7 +1149,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             Ok(self.child_cas)
         }
         else {
-            self.point.processor.cancel(&self.point.cert.cert());
+            self.point.processor.cancel(&self.point.cert);
             Ok(Vec::new())
         }
     }
@@ -1297,7 +1297,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
         self.point.metrics.valid_ca_certs += 1;
 
         let mut processor = match self.point.processor.process_ca(
-            &uri, &cert.cert
+            &uri, &cert
         )? {
             Some(processor) => processor,
             None => return Ok(())
@@ -1361,9 +1361,9 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             self.point.run.validation.strict,
             |cert| self.check_crl(&uri, &cert)
         ) {
-            Ok(route) => {
+            Ok((cert, route)) => {
                 self.point.metrics.valid_roas += 1;
-                self.point.processor.process_roa(&uri, route)?
+                self.point.processor.process_roa(&uri, cert, route)?
             }
             Err(_) => {
                 self.point.metrics.invalid_roas += 1;
@@ -1392,9 +1392,9 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             self.point.run.validation.strict,
             |cert| self.check_crl(&uri, &cert)
         ) {
-            Ok(content) => {
+            Ok((cert, content)) => {
                 self.point.metrics.valid_gbrs += 1;
-                self.point.processor.process_gbr(&uri, content)?
+                self.point.processor.process_gbr(&uri, cert, content)?
             }
             Err(_) => {
                 self.point.metrics.invalid_gbrs += 1;
@@ -1516,6 +1516,12 @@ pub struct CaCert {
 
     /// The index of the TAL in the metrics.
     tal: usize,
+
+    /// The combined validity of the certificate.
+    ///
+    /// This is derived from the validity of all the parents and the
+    /// certificate itself.
+    combined_validity: Validity,
 }
 
 impl CaCert {
@@ -1540,8 +1546,12 @@ impl CaCert {
         cert: ResourceCert,
         uri: TalUri, 
         parent: Option<Arc<Self>>,
-        tal: usize
+        tal: usize,
     ) -> Result<Arc<Self>, Failed> {
+        let combined_validity = match parent.as_ref() {
+            Some(ca) => cert.validity().trim(ca.combined_validity()),
+            None => cert.validity()
+        };
         let ca_repository = match cert.ca_repository() {
             Some(uri) => uri.clone(),
             None => {
@@ -1570,7 +1580,8 @@ impl CaCert {
             }
         };
         Ok(Arc::new(CaCert {
-            cert, uri, ca_repository, rpki_manifest, parent, tal
+            cert, uri, ca_repository, rpki_manifest, parent, tal,
+            combined_validity,
         }))
     }
 
@@ -1613,6 +1624,11 @@ impl CaCert {
     /// Returns a reference to the rpkiNotify URI of the certificate.
     pub fn rpki_notify(&self) -> Option<&uri::Https> {
         self.cert.rpki_notify()
+    }
+
+    /// Returns the combined validaty of the whole CA.
+    pub fn combined_validity(&self) -> Validity {
+        self.combined_validity
     }
 
     /// Returns whether the CA is in a different repository from its parent.
@@ -1834,7 +1850,7 @@ pub trait ProcessRun: Send + Sync {
     /// `repository_index` argument refers to the index of the repository 
     /// publishing the trust anchor CA’s publication point in the metrics.
     fn process_ta(
-        &self, tal: &Tal, uri: &TalUri, cert: &ResourceCert, tal_index: usize
+        &self, tal: &Tal, uri: &TalUri, cert: &CaCert, tal_index: usize
     ) -> Result<Option<Self::ProcessCa>, Failed>;
 }
 
@@ -1871,7 +1887,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// publishing the CA’s publication point in the metrics produced by the
     /// processing run.
     fn process_ca(
-        &mut self, uri: &uri::Rsync, cert: &ResourceCert,
+        &mut self, uri: &uri::Rsync, cert: &CaCert,
     ) -> Result<Option<Self>, Failed>;
 
     /// Process the content of a validated EE certificate.
@@ -1890,9 +1906,12 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// The method is given both the URI and the content of the ROA. If it
     /// returns an error, the entire processing run will be aborted.
     fn process_roa(
-        &mut self, uri: &uri::Rsync, route: RouteOriginAttestation
+        &mut self,
+        uri: &uri::Rsync,
+        cert: ResourceCert,
+        route: RouteOriginAttestation
     ) -> Result<(), Failed> {
-        let _ = (uri, route);
+        let _ = (uri, cert, route);
         Ok(())
     }
  
@@ -1904,9 +1923,12 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// If the method returns an error, the entire processing run will be
     /// aborted.
     fn process_gbr(
-        &mut self, uri: &uri::Rsync, content: Bytes
+        &mut self,
+        uri: &uri::Rsync,
+        cert: ResourceCert,
+        content: Bytes
     ) -> Result<(), Failed> {
-        let _ = (uri, content);
+        let _ = (uri, cert, content);
         Ok(())
     }
 
@@ -1922,8 +1944,7 @@ pub trait ProcessCa: Sized + Send + Sync {
     /// CA is invalid.
     ///
     /// The default implementation does nothing at all.
-    fn cancel(self, _cert: &ResourceCert) {
+    fn cancel(self, _cert: &CaCert) {
     }
 }
-
 

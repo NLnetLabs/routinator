@@ -10,7 +10,7 @@ use rpki::repository::resources::AsId;
 use serde::Deserialize;
 use crate::config::Config;
 use crate::error::Failed;
-use crate::origins::{AddressOrigin, AddressPrefix, OriginInfo};
+use crate::payload::{AddressPrefix, RouteOrigin};
 
 
 //------------ LocalExceptions -----------------------------------------------
@@ -18,22 +18,23 @@ use crate::origins::{AddressOrigin, AddressPrefix, OriginInfo};
 #[derive(Clone, Debug)]
 pub struct LocalExceptions {
     filters: Vec<PrefixFilter>,
-    assertions: Vec<AddressOrigin>,
+
+    origin_assertions: Vec<(RouteOrigin, Arc<ExceptionInfo>)>,
 }
 
 impl LocalExceptions {
     pub fn empty() -> Self {
         LocalExceptions {
             filters: Vec::new(),
-            assertions: Vec::new(),
+            origin_assertions: Vec::new(),
         }
     }
 
-    pub fn load(config: &Config, extra_info: bool) -> Result<Self, Failed> {
+    pub fn load(config: &Config, keep_comments: bool) -> Result<Self, Failed> {
         let mut res = LocalExceptions::empty();
         let mut ok = true;
         for path in &config.exceptions {
-            if let Err(err) = res.extend_from_file(path, extra_info) {
+            if let Err(err) = res.extend_from_file(path, keep_comments) {
                 error!(
                     "Failed to load exceptions file {}: {}",
                     path.display(), err
@@ -49,82 +50,95 @@ impl LocalExceptions {
         }
     }
 
-    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+    pub fn from_json(
+        json: &str,
+        keep_comments: bool
+    ) -> Result<Self, serde_json::Error> {
         let mut res = LocalExceptions::empty();
-        res.extend_from_json(json, None)?;
+        res.extend_from_json(json, keep_comments)?;
         Ok(res)
     }
 
     pub fn from_file<P: AsRef<Path>>(
         path: P,
-        extra_info: bool
+        keep_comments: bool
     ) -> Result<Self, LoadError> {
         let mut res = Self::empty();
-        res.extend_from_file(path, extra_info)?;
+        res.extend_from_file(path, keep_comments)?;
         Ok(res)
+    }
+
+    pub fn extend_from_json(
+        &mut self,
+        json: &str,
+        keep_comments: bool
+    ) -> Result<(), serde_json::Error> {
+        self.extend_from_parsed(
+            SlurmFile::from_str(json)?, None, keep_comments
+        );
+        Ok(())
     }
 
     pub fn extend_from_file<P: AsRef<Path>>(
         &mut self,
         path: P,
-        extra_info: bool
+        keep_comments: bool
     ) -> Result<(), LoadError> {
         let buf = fs::read_to_string(&path)?;
-        self.extend_from_json(&buf, Self::info_from_path(path, extra_info))?;
+        self.extend_from_parsed(
+            SlurmFile::from_str(&buf)?,
+            Some(path.as_ref().into()), keep_comments
+        );
         Ok(())
     }
 
-    #[allow(clippy::option_option)]
-    fn info_from_path<P: AsRef<Path>>(
-        path: P, extra: bool
-    ) -> Option<Option<Arc<Path>>> {
-        if extra {
-            Some(Some(path.as_ref().to_path_buf().into()))
-        }
-        else {
-            None
-        }
-    }
-
-    #[allow(clippy::option_option)]
-    pub fn extend_from_json(
+    fn extend_from_parsed(
         &mut self,
-        json: &str,
-        info: Option<Option<Arc<Path>>>,
-    ) -> Result<(), serde_json::Error> {
-        let json = SlurmFile::from_str(json)?;
+        json: SlurmFile,
+        path: Option<Arc<Path>>,
+        keep_comments: bool,
+    ) {
         self.filters.extend(json.filters.prefix.into_iter().map(Into::into));
-        self.assertions.extend(json.assertions.prefix.into_iter().map(|item| {
-            AddressOrigin::new(
-                item.asn.into(), item.prefix,
-                item.max_prefix_len.map(|len| {
-                    cmp::min(len, if item.prefix.is_v4() { 32 } else { 128 })
-                }).unwrap_or_else(|| item.prefix.address_length()),
-                match info.as_ref() {
-                    Some(path) => {
-                        OriginInfo::Exception(ExceptionInfo {
-                            path: path.clone(),
-                            comment: item.comment,
-                        })
-                    }
-                    None => OriginInfo::None,
-                }
-            )
-        }));
-        Ok(())
+        self.origin_assertions.extend(
+            json.assertions.prefix.into_iter().map(|item| {
+                (
+                    RouteOrigin::new(
+                        item.asn.into(), item.prefix,
+                        item.max_prefix_len.map(|len| {
+                            cmp::min(
+                                len, if item.prefix.is_v4() { 32 } else { 128 }
+                            )
+                        }).unwrap_or_else(|| item.prefix.address_length())
+                    ),
+                    Arc::new(ExceptionInfo {
+                        path: path.clone(),
+                        comment: if keep_comments {
+                            item.comment
+                        }
+                        else {
+                            None
+                        }
+                    })
+                )
+            })
+        );
     }
 
-    pub fn keep_origin(&self, addr: &AddressOrigin) -> bool {
+    pub fn keep_origin(&self, origin: RouteOrigin) -> bool {
         for filter in &self.filters {
-            if filter.filter_origin(addr) {
+            if filter.filter_origin(origin) {
                 return false
             }
         }
         true
     }
 
-    pub fn assertions(&self) -> &[AddressOrigin] {
-        self.assertions.as_ref()
+    pub fn origin_assertions(
+        &self
+    ) -> impl Iterator<Item = (RouteOrigin, Arc<ExceptionInfo>)> + '_ {
+        self.origin_assertions.iter().map(|(origin, info)| {
+            (*origin, info.clone())
+        })
     }
 }
 
@@ -138,7 +152,7 @@ pub struct PrefixFilter {
 }
 
 impl PrefixFilter {
-    fn filter_origin(&self, addr: &AddressOrigin) -> bool {
+    fn filter_origin(&self, addr: RouteOrigin) -> bool {
         match (self.prefix, self.asn) {
             (Some(prefix), Some(asn)) => {
                 prefix.covers(addr.prefix()) && asn == addr.as_id()

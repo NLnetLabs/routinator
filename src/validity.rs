@@ -2,7 +2,7 @@
 
 use std::{fmt, io};
 use rpki::repository::resources::AsId;
-use crate::origins::{AddressOrigin, AddressOrigins, AddressPrefix};
+use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
 
 
 //------------ RouteValidity -------------------------------------------------
@@ -16,34 +16,34 @@ pub struct RouteValidity<'a> {
     asn: AsId,
 
     /// Indexes of the matched VRPs in `origins`.
-    matched: Vec<&'a AddressOrigin>,
+    matched: Vec<&'a (RouteOrigin, OriginInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the ´asn`.
-    bad_asn: Vec<&'a AddressOrigin>,
+    bad_asn: Vec<&'a (RouteOrigin, OriginInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the prefix length.
-    bad_len: Vec<&'a AddressOrigin>,
+    bad_len: Vec<&'a (RouteOrigin, OriginInfo)>,
 }
 
 impl<'a> RouteValidity<'a> {
     pub fn new(
         prefix: AddressPrefix,
         asn: AsId,
-        origins: &'a AddressOrigins
+        snapshot: &'a PayloadSnapshot
     ) -> Self {
         let mut matched = Vec::new();
         let mut bad_asn = Vec::new();
         let mut bad_len = Vec::new();
-        for origin in origins.iter() {
-            if origin.prefix().covers(prefix) {
-                if prefix.address_length() > origin.max_length() {
-                    bad_len.push(origin);
+        for item in snapshot.origins().iter() {
+            if item.0.prefix().covers(prefix) {
+                if prefix.address_length() > item.0.max_length() {
+                    bad_len.push(item);
                 }
-                else if origin.as_id() != asn {
-                    bad_asn.push(origin);
+                else if item.0.as_id() != asn {
+                    bad_asn.push(item);
                 }
                 else {
-                    matched.push(origin)
+                    matched.push(item)
                 }
             }
         }
@@ -106,15 +106,15 @@ impl<'a> RouteValidity<'a> {
         }
     }
 
-    pub fn matched(&self) -> &[&'a AddressOrigin] {
+    pub fn matched(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
         &self.matched
     }
 
-    pub fn bad_asn(&self) -> &[&'a AddressOrigin] {
+    pub fn bad_asn(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
         &self.bad_asn
     }
 
-    pub fn bad_len(&self) -> &[&'a AddressOrigin] {
+    pub fn bad_len(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
         &self.bad_len
     }
 
@@ -160,7 +160,7 @@ impl<'a> RouteValidity<'a> {
 
     fn write_vrps_json<W: io::Write>(
         category: &str,
-        vrps: &[&'a AddressOrigin],
+        vrps: &[&'a (RouteOrigin, OriginInfo)],
         target: &mut W
     ) -> Result<(), io::Error> {
         write!(target, "        \"{}\": [", category)?;
@@ -172,9 +172,9 @@ impl<'a> RouteValidity<'a> {
                 \"asn\": \"{}\",\n            \
                 \"prefix\": \"{}\",\n            \
                 \"max_length\": \"{}\"\n          }}",
-                item.as_id(),
-                item.prefix(),
-                item.max_length()
+                item.0.as_id(),
+                item.0.prefix(),
+                item.0.max_length()
             )?
         }
         for item in iter {
@@ -184,9 +184,9 @@ impl<'a> RouteValidity<'a> {
                 \"asn\": \"{}\",\n            \
                 \"prefix\": \"{}\",\n            \
                 \"max_length\": \"{}\"\n          }}",
-                item.as_id(),
-                item.prefix(),
-                item.max_length()
+                item.0.as_id(),
+                item.0.prefix(),
+                item.0.max_length()
             )?
         }
         write!(target, "\n        ]")
@@ -260,3 +260,4 @@ const DESCRIPTION_BAD_LEN: &str = "At least one VRP Covers the Route Prefix, \
                                    than the maximum length allowed by VRP(s) \
                                    matching this route origin ASN";
 const DESCRIPTION_NOT_FOUND: &str = "No VRP Covers the Route Prefix";
+
