@@ -49,6 +49,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The key to store the repository state under.
 const REPOSITORY_STATE_KEY: &[u8] = b"";
 
+
 //------------ Collector -----------------------------------------------------
 
 /// The local copy of RPKI repositories synchronized via RRDP.
@@ -959,7 +960,20 @@ struct HttpClient {
 impl HttpClient {
     /// Creates a new, not-yet-ignited client based on the config.
     pub fn new(config: &Config) -> Result<Self, Failed> {
-        let mut builder = Client::builder();
+
+        // Deal with the reqwest’s TLS features by defining a creator
+        // function for the two cases.
+        #[cfg(not(feature = "native-tls"))]
+        fn create_builder() -> ClientBuilder {
+            Client::builder().use_rustls_tls()
+        }
+
+        #[cfg(feature = "native-tls")]
+        fn create_builder() -> ClientBuilder {
+            Client::builder().use_native_tls()
+        }
+
+        let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.gzip(true);
         match config.rrdp_timeout {
