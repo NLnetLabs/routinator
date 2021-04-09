@@ -652,7 +652,9 @@ fn rpsl_origin<W: io::Write>(
         else { "route6" },
         addr.address(), addr.address_length(),
         addr.as_id(), now, now,
-        info.tal_name().map(|name| name.to_uppercase()).unwrap_or("N/A".into())
+        info.tal_name().map(|name| {
+            name.to_uppercase()
+        }).unwrap_or_else(|| "N/A".into())
     )
 }
 

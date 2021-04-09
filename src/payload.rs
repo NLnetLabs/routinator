@@ -1097,7 +1097,7 @@ impl DeltaMerger {
             None => return Self::default()
         };
 
-        while let Some(delta) = iter.next() {
+        for delta in iter {
             res.merge(delta)
         }
 

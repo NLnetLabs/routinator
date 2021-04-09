@@ -407,7 +407,7 @@ impl Server {
             history.clone(), metrics.clone(), process.config()
         )?;
         let http = http_listener(
-            history.clone(), metrics.clone(), log.clone(), process.config()
+            history.clone(), metrics, log, process.config()
         )?;
 
         process.drop_privileges()?;
