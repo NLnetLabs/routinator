@@ -374,8 +374,8 @@ fn handle_metrics(
     // rrdp_status
     writeln!(res,
         "\n\
-        # HELP routinator_rrdp_status status code for getting \
-            notification file\n\
+        # HELP routinator_rrdp_status combined status code for repository \
+            update requests\n\
         # TYPE routinator_rrdp_status gauge"
     ).unwrap();
     for metrics in &metrics.rrdp {
@@ -383,9 +383,41 @@ fn handle_metrics(
             res,
             "routinator_rrdp_status{{uri=\"{}\"}} {}",
             metrics.notify_uri,
-            metrics.notify_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.status().into_i16()
+        ).unwrap();
+    }
+
+    // rrdp_notification_status
+    writeln!(res,
+        "\n\
+        # HELP routinator_rrdp_notification_status status code for getting \
+            notification file\n\
+        # TYPE routinator_rrdp_notification_status gauge"
+    ).unwrap();
+    for metrics in &metrics.rrdp {
+        writeln!(
+            res,
+            "routinator_rrdp_notification_status{{uri=\"{}\"}} {}",
+            metrics.notify_uri,
+            metrics.notify_status.into_i16(),
+        ).unwrap();
+    }
+
+    // rrdp_payload_status
+    writeln!(res,
+        "\n\
+        # HELP routinator_rrdp_payload_status status code(s) for getting \
+            payload file(s)\n\
+        # TYPE routinator_rrdp_payload_status gauge"
+    ).unwrap();
+    for metrics in &metrics.rrdp {
+        writeln!(
+            res,
+            "routinator_rrdp_payload_status{{uri=\"{}\"}} {}",
+            metrics.notify_uri,
+            metrics.payload_status.map(|status| {
+                status.into_i16()
+            }).unwrap_or(0),
         ).unwrap();
     }
 
@@ -694,11 +726,13 @@ fn handle_status(
     for metrics in &metrics.rrdp {
         write!(
             res,
-            "   {}: status={}",
+            "   {}: status={}, notification-status={}, payload-status={}",
             metrics.notify_uri,
-            metrics.notify_status.map(|code| {
-                code.as_u16() as i16
-            }).unwrap_or(-1),
+            metrics.status().into_i16(),
+            metrics.notify_status.into_i16(),
+            metrics.payload_status.map(|status| {
+                status.into_i16()
+            }).unwrap_or(0),
         ).unwrap();
         if let Ok(duration) = metrics.duration {
             write!(
@@ -787,7 +821,7 @@ fn handle_api_status(
             target.member_str("lastUpdateDone", done.format("%+"));
         }
         else {
-            target.member_raw("lastUpdateDone", "none");
+            target.member_raw("lastUpdateDone", "null");
         }
         if let Some(duration) = duration {
             target.member_raw("lastUpdateDuration",
@@ -846,7 +880,7 @@ fn handle_api_status(
                                 format_args!("{:.3}", duration.as_secs_f32())
                             );
                         }
-                        Err(_) => target.member_raw("duration", "none")
+                        Err(_) => target.member_raw("duration", "null")
                     }
                 })
             }
@@ -855,10 +889,19 @@ fn handle_api_status(
         target.member_object("rrdp", |target| {
             for metrics in &metrics.rrdp {
                 target.member_object(&metrics.notify_uri, |target| {
-                    target.member_raw("status",
-                        metrics.notify_status.map(|code| {
-                            code.as_u16() as i16
-                        }).unwrap_or(-1),
+                    target.member_raw(
+                        "status",
+                        metrics.status().into_i16(),
+                    );
+                    target.member_raw(
+                        "notifyStatus",
+                        metrics.notify_status.into_i16(),
+                    );
+                    target.member_raw(
+                        "payloadStatus",
+                        metrics.payload_status.map(|status| {
+                            status.into_i16()
+                        }).unwrap_or(0)
                     );
                     match metrics.duration {
                         Ok(duration) => {
@@ -866,24 +909,30 @@ fn handle_api_status(
                                 format_args!("{:.3}", duration.as_secs_f32())
                             );
                         }
-                        Err(_) => target.member_raw("duration", "none")
+                        Err(_) => target.member_raw("duration", "null")
                     }
                     match metrics.serial {
                         Some(serial) => {
                             target.member_raw("serial", serial);
                         }
-                        None => target.member_raw("serial", "none")
+                        None => target.member_raw("serial", "null")
                     }
                     match metrics.session {
                         Some(session) => {
                             target.member_str("session", session);
                         }
-                        None => target.member_raw("session", "none")
+                        None => target.member_raw("session", "null")
                     }
                     target.member_raw("delta",
-                        if metrics.delta { "true" }
+                        if metrics.snapshot_reason.is_none() { "true" }
                         else { "false" }
                     );
+                    if let Some(reason) = metrics.snapshot_reason {
+                        target.member_str("snapshot_reason", reason.code())
+                    }
+                    else {
+                        target.member_raw("snapshot_reason", "null");
+                    }
                 })
             }
         });
