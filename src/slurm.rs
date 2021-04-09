@@ -18,7 +18,6 @@ use crate::payload::{AddressPrefix, RouteOrigin};
 #[derive(Clone, Debug)]
 pub struct LocalExceptions {
     filters: Vec<PrefixFilter>,
-
     origin_assertions: Vec<(RouteOrigin, Arc<ExceptionInfo>)>,
 }
 
@@ -346,22 +345,21 @@ impl error::Error for LoadError { }
 pub mod tests {
 
     use super::*;
-    use crate::origins::AddressPrefix;
+    use crate::payload::AddressPrefix;
 
     fn address_origin(
         asn: u32,
         ip_string: &str,
         length: u8,
         max_length: u8
-    ) -> AddressOrigin {
-        AddressOrigin::new(
+    ) -> RouteOrigin {
+        RouteOrigin::new(
             AsId::from(asn),
             AddressPrefix::new(
                 ip_string.parse().unwrap(),
                 length
             ),
             max_length,
-            OriginInfo::None,
         )
     }
 
@@ -384,27 +382,25 @@ pub mod tests {
     #[test]
     fn should_parse_empty_slurm_file() {
         let json = include_str!("../test/slurm/empty.json");
-        let exceptions = LocalExceptions::from_json(json).unwrap();
+        let exceptions = LocalExceptions::from_json(json, false).unwrap();
 
-        assert_eq!(0, exceptions.assertions.len());
+        assert_eq!(0, exceptions.origin_assertions.len());
         assert_eq!(0, exceptions.filters.len());
     }
 
     #[test]
     fn should_parse_full_slurm_file() {
         let json = include_str!("../test/slurm/full.json");
-        let exceptions = LocalExceptions::from_json(json).unwrap();
+        let exceptions = LocalExceptions::from_json(json, false).unwrap();
 
-        assert_eq!(2, exceptions.assertions.len());
-        assert!(
-            exceptions.assertions.contains(
-                &address_origin(64496, "198.51.100.0", 24, 24)
-            )
+        assert_eq!(2, exceptions.origin_assertions.len());
+        assert_eq!(
+            exceptions.origin_assertions[0].0, 
+            address_origin(64496, "198.51.100.0", 24, 24)
         );
-        assert!(
-            exceptions.assertions.contains(
-                &address_origin(64496, "2001:DB8::", 32, 48)
-            )
+        assert_eq!(
+            exceptions.origin_assertions[1].0,
+            address_origin(64496, "2001:DB8::", 32, 48)
         );
 
         assert_eq!(3, exceptions.filters.len());
