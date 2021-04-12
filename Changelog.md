@@ -16,6 +16,10 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
+* Routinator now includes additional TALs for various commonly used
+  RPKI testbeds. The `init` command has been restructured to make it
+  possible to select the TALs for installation. The default is still to
+  install the five production RIR TALs. ([#500])
 * Deprecated configuration items have been removed: `unknown-objects`
   cannot be spelled with a underscore anymore and string values are not
   accepted anymore for `rtr-tcp-keepalive`. ([#496])
@@ -75,6 +79,7 @@ Other Changes
 [#490]: https://github.com/NLnetLabs/routinator/pull/490
 [#496]: https://github.com/NLnetLabs/routinator/pull/496
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
+[#500]: https://github.com/NLnetLabs/routinator/pull/500
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
