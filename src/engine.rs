@@ -15,8 +15,8 @@
 ///
 /// Engine runs are generic over what exactly should be done with valid
 /// RPKI data. The trait [`ProcessRun`] represents a full validation run with
-/// the accompanying trait [`ProcessCa`] dealing with individual publication
-/// points.
+/// the accompanying trait [`ProcessPubPoint`] dealing with individual
+/// publication points.
 
 use std::{fmt, fs, io, str};
 use std::borrow::Cow;
@@ -474,7 +474,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Process a task. Any task.
     fn process_task(
         &self,
-        task: Task<P::ProcessCa>, tasks: &SegQueue<Task<P::ProcessCa>>,
+        task: Task<P::PubPoint>,
+        tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         match task {
@@ -485,7 +486,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
 
     /// Processes a trust anchor.
     fn process_tal_task(
-        &self, task: TalTask, tasks: &SegQueue<Task<P::ProcessCa>>,
+        &self, task: TalTask, tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
@@ -563,8 +564,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
     /// Processes a CA.
     fn process_ca_task(
         &self,
-        task: CaTask<P::ProcessCa>,
-        tasks: &SegQueue<Task<P::ProcessCa>>,
+        task: CaTask<P::PubPoint>,
+        tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         let more_tasks = PubPoint::new(
@@ -594,7 +595,7 @@ struct PubPoint<'a, P: ProcessRun> {
     cert: &'a Arc<CaCert>,
 
     /// The processor for valid data at this publication point.
-    processor: P::ProcessCa,
+    processor: P::PubPoint,
 
     /// The point’s repository in the collector if available.
     collector: Option<collector::Repository<'a>>,
@@ -614,7 +615,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     pub fn new(
         run: &'a Run<'a, P>,
         cert: &'a Arc<CaCert>,
-        processor: P::ProcessCa,
+        processor: P::PubPoint,
         repository_index: Option<usize>,
     ) -> Result<Self, Failed> {
         let collector = run.collector.repository(cert)?;
@@ -633,7 +634,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     pub fn process(
         mut self,
         metrics: &mut RunMetrics,
-    ) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
+    ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
         let manifest = match self.update_stored()? {
             PointManifest::Valid(manifest) => {
                 self.metrics.valid_manifests += 1;
@@ -1113,7 +1114,7 @@ struct ValidPubPoint<'a, P: ProcessRun> {
     manifest: ValidPointManifest,
 
     /// The list of child CA processing tasks we want to return eventually.
-    child_cas: Vec<CaTask<P::ProcessCa>>,
+    child_cas: Vec<CaTask<P::PubPoint>>,
 }
 
 impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
@@ -1129,7 +1130,7 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     pub fn process(
         mut self,
         metrics: &mut RunMetrics,
-    ) -> Result<Vec<CaTask<P::ProcessCa>>, Failed> {
+    ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
         let repository_index = match self.point.repository_index {
             Some(index) => index,
             None => {
@@ -1836,7 +1837,7 @@ impl RunMetrics {
 /// A type that can process the valid data from the RPKI.
 pub trait ProcessRun: Send + Sync {
     /// The type processing the valid data of a single publication point.
-    type ProcessCa: ProcessCa;
+    type PubPoint: ProcessPubPoint;
 
     /// Processes the given trust anchor.
     ///
@@ -1851,14 +1852,14 @@ pub trait ProcessRun: Send + Sync {
     /// publishing the trust anchor CA’s publication point in the metrics.
     fn process_ta(
         &self, tal: &Tal, uri: &TalUri, cert: &CaCert, tal_index: usize
-    ) -> Result<Option<Self::ProcessCa>, Failed>;
+    ) -> Result<Option<Self::PubPoint>, Failed>;
 }
 
 
-//------------ ProcessCa -----------------------------------------------------
+//------------ ProcessPubPoint -----------------------------------------------
 
 /// A type that can process the valid data from an RPKI publication point.
-pub trait ProcessCa: Sized + Send + Sync {
+pub trait ProcessPubPoint: Sized + Send + Sync {
     /// Sets the index of repository in the processing run metrics.
     fn repository_index(&mut self, repository_index: usize) {
         let _ = repository_index;

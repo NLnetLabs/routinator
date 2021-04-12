@@ -32,7 +32,7 @@ use rpki::rtr::state::{Serial, State};
 use rpki::uri;
 use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
-use crate::engine::{CaCert, ProcessCa, ProcessRun};
+use crate::engine::{CaCert, ProcessPubPoint, ProcessRun};
 use crate::error::Failed;
 use crate::metrics::{Metrics, VrpMetrics};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -70,13 +70,13 @@ impl ValidationReport {
 }
 
 impl<'a> ProcessRun for &'a ValidationReport {
-    type ProcessCa = PubPointProcessor<'a>;
+    type PubPoint = PubPointProcessor<'a>;
 
     fn process_ta(
         &self,
         _tal: &Tal, _uri: &TalUri, cert: &CaCert,
         tal_index: usize,
-    ) -> Result<Option<Self::ProcessCa>, Failed> {
+    ) -> Result<Option<Self::PubPoint>, Failed> {
         Ok(Some(
             PubPointProcessor {
                 report: self,
@@ -107,7 +107,7 @@ pub struct PubPointProcessor<'a> {
     validity: Validity,
 }
 
-impl<'a> ProcessCa for PubPointProcessor<'a> {
+impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
     fn repository_index(&mut self, repository_index: usize) {
         self.pub_point.repository_index = Some(repository_index)
     }
@@ -1297,7 +1297,7 @@ impl AddressPrefix {
         self.len
     }
 
-    /// Returns whether the prefix `self` covers  the prefix`other`.
+    /// Returns whether the prefix `self` covers  the prefix `other`.
     pub fn covers(self, other: Self) -> bool {
         match (self.addr, other.addr) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {
@@ -1529,19 +1529,19 @@ fn key_difference<K: Copy + Hash + Eq, V>(
 mod test {
     use super::*;
 
-    fn make_pfx(s: &str, l: u8) -> AddressPrefix {
+    fn make_prefix(s: &str, l: u8) -> AddressPrefix {
         AddressPrefix::new(s.parse().unwrap(), l)
     }
 
     #[test]
-    fn should_find_covered_prefixes_v4() {
-        let outer = make_pfx("10.0.0.0", 16);
-        let host_roa = make_pfx("10.0.0.0", 32);
-        let sibling = make_pfx("10.1.0.0", 16);
-        let inner_low = make_pfx("10.0.0.0", 24);
-        let inner_mid = make_pfx("10.0.61.0", 24);
-        let inner_hi = make_pfx("10.0.255.0", 24);
-        let supernet = make_pfx("10.0.0.0", 8);
+    fn address_prefix_covers_v4() {
+        let outer = make_prefix("10.0.0.0", 16);
+        let host_roa = make_prefix("10.0.0.0", 32);
+        let sibling = make_prefix("10.1.0.0", 16);
+        let inner_low = make_prefix("10.0.0.0", 24);
+        let inner_mid = make_prefix("10.0.61.0", 24);
+        let inner_hi = make_prefix("10.0.255.0", 24);
+        let supernet = make_prefix("10.0.0.0", 8);
 
         // Does not cover a sibling/neighbor prefix.
         assert!(!outer.covers(sibling));
@@ -1559,14 +1559,14 @@ mod test {
     }
 
     #[test]
-    fn should_find_covered_prefixes_v6() {
-        let outer = make_pfx("2001:db8::", 32);
-        let host_roa = make_pfx("2001:db8::", 128);
-        let sibling = make_pfx("2001:db9::", 32);
-        let inner_low = make_pfx("2001:db8::", 48);
-        let inner_mid = make_pfx("2001:db8:8000::", 48);
-        let inner_hi = make_pfx("2001:db8:FFFF::", 48);
-        let supernet = make_pfx("2001::", 24);
+    fn address_prefix_covers_v6() {
+        let outer = make_prefix("2001:db8::", 32);
+        let host_roa = make_prefix("2001:db8::", 128);
+        let sibling = make_prefix("2001:db9::", 32);
+        let inner_low = make_prefix("2001:db8::", 48);
+        let inner_mid = make_prefix("2001:db8:8000::", 48);
+        let inner_hi = make_prefix("2001:db8:FFFF::", 48);
+        let supernet = make_prefix("2001::", 24);
 
         // Does not cover a sibling/neighbor prefix.
         assert!(!outer.covers(sibling));
