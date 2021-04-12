@@ -1048,9 +1048,9 @@ impl HttpClient {
     /// Performs an HTTP GET request for the given URI.
     ///
     /// If keeping responses is enabled, the response is written to a file
-    /// corresponding to the URI. If this would not result in a unique file
-    /// name, set `multi` to `true` to also include the current time in
-    /// the name.
+    /// corresponding to the URI. If resource behind the URI changes over
+    /// time and this change should be tracked, set `multi` to `true` to
+    /// include the current time in the file name.
     pub fn response(
         &self,
         uri: &uri::Https,
@@ -1116,6 +1116,14 @@ struct HttpResponse {
 }
 
 impl HttpResponse {
+    /// Creates a new response wrapping a reqwest reponse.
+    ///
+    /// If `response_dir` is some path, the response will also be written to
+    /// a file under this directory based on `uri`. Each URI component
+    /// starting with the authority will be a directory name. If `multi` is
+    /// `false` the last component will be the file name. If `multi` is
+    /// `true` the last component will be a directory, too, and the file name
+    /// will be the ISO timestamp of the current time.
     pub fn create(
         response: Response,
         uri: &uri::Https,
@@ -1130,6 +1138,9 @@ impl HttpResponse {
         }
     }
 
+    /// Opens the file mirroring file.
+    ///
+    /// See [`create`][Self::create] for the rules.
     fn open_file(
         base: &Path, uri: &uri::Https, multi: bool
     ) -> Result<fs::File, Failed> {
@@ -1170,20 +1181,29 @@ impl HttpResponse {
         })
     }
 
+    /// Returns the value of the content length header of present.
     pub fn content_length(&self) -> Option<u64> {
         self.response.content_length()
     }
 
+    /// Copies the full content of the response to the given writer.
     pub fn copy_to<W: io::Write + ?Sized>(
         &mut self, w: &mut W
     ) -> Result<u64, io::Error> {
+        // We cannot use the reqwest response’s `copy_to` impl because we need
+        // to use our own `io::Read` impl which sneaks in the copying to file
+        // if necessary.
         io::copy(self, w)
     }
 
+    /// Returns the status code of the response.
     pub fn status(&self) -> StatusCode {
         self.response.status()
     }
 }
+
+
+//--- Read
 
 impl io::Read for HttpResponse {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
