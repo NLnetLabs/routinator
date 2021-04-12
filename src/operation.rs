@@ -220,7 +220,6 @@ impl Init {
                 .help("Install all RIR testbed TALs")
             )
             .arg(Arg::with_name("tal")
-                .short("t")
                 .long("tal")
                 .help("Name a TAL to be installed")
                 .takes_value(true)
