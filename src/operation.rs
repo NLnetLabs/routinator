@@ -348,9 +348,6 @@ impl Init {
     /// `config.tal_dir` if it doesn’t exist and installs the bundled TALs.
     /// It also does the latter if the directory exists and `force` is
     /// `true`.
-    ///
-    /// We will, however, refuse to install any TALs until `accept_arin_rpa`
-    /// is `true`. If it isn’t we just print a friendly reminder instead.
     pub fn run(self, process: Process) -> Result<(), ExitError> {
         let (force, tals) = match self {
             Init::ListTals => {
