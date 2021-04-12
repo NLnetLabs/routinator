@@ -221,7 +221,10 @@ impl Init {
             )
             .arg(Arg::with_name("tal")
                 .long("tal")
-                .help("Name a TAL to be installed")
+                .help(
+                    "Name a TAL to be installed \
+                     (--list-tals shows available TALs)"
+                )
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
