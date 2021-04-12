@@ -234,6 +234,10 @@ impl Init {
                 .multiple(true)
                 .number_of_values(1)
             )
+            .arg(Arg::with_name("decline-arin-rpa")
+                .long("decline-arin-rpa")
+                .help("Same as '--skip-tal arin' (deprecated)")
+            )
             .arg(Arg::with_name("list-tals")
                 .long("list-tals")
                 .help("List available TALs and exit")
@@ -293,6 +297,18 @@ impl Init {
                     eprintln!("Attempt to skip non-included TAL '{}'", tal);
                     return Err(Failed)
                 }
+            }
+        }
+
+        // Remove ARIN Tal.
+        if matches.is_present("decline-arin-rpa") {
+            eprintln!(
+                "Warning: '--decline-arin-rpa' has been replaced \
+                 by '--skip-tal arin' and \n         will be removed."
+            );
+            if !requested.remove("arin") {
+                eprintln!("Attempt to skip non-included TAL 'arin'");
+                return Err(Failed)
             }
         }
 
