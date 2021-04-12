@@ -20,6 +20,9 @@ Breaking Changes
   RPKI testbeds. The `init` command has been restructured to make it
   possible to select the TALs for installation. The default is still to
   install the five production RIR TALs. ([#500])
+* Deprecated configuration items have been removed: `unknown-objects`
+  cannot be spelled with a underscore anymore and string values are not
+  accepted anymore for `rtr-tcp-keepalive`. ([#496])
 * The minimal supported Rust version is now 1.45.0. ([#444], [#498])
 
 New
@@ -30,7 +33,10 @@ New
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
   the last update. The JSON status information also includes the session
-  ID and whether the last update was via a delta. ([#487])
+  ID and whether the last update was via a delta and if it wasn’t why a
+  snapshot had to be used. It also separately provides the status codes
+  for the request of the notification file and the snapshot or last
+  requested delta file. ([#487], [#489])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
@@ -67,6 +73,8 @@ Other Changes
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
+[#489]: https://github.com/NLnetLabs/routinator/pull/489
+[#496]: https://github.com/NLnetLabs/routinator/pull/496
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
