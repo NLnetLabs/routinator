@@ -923,14 +923,8 @@ impl Config {
                     .unwrap_or(DEFAULT_UNSAFE_VRPS_POLICY)
             },
             unknown_objects: {
-                // XXX Remove check for unknown_objectes in 0.9.
-                match file.take_from_str("unknown-objects")? {
-                    Some(value) => value,
-                    None => {
-                        file.take_from_str("unknown_objects")?
-                            .unwrap_or(DEFAULT_UNKNOWN_OBJECTS_POLICY)
-                    }
-                }
+                file.take_from_str("unknown-objects")?
+                    .unwrap_or(DEFAULT_UNKNOWN_OBJECTS_POLICY)
             },
             allow_dubious_hosts:
                 file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
@@ -1012,8 +1006,7 @@ impl Config {
             },
             systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
             rtr_tcp_keepalive: {
-                // XXX Change this to take_u64 in the next major release.
-                match file.take_u64_maybe_str("rtr-tcp-keepalive")? {
+                match file.take_u64("rtr-tcp-keepalive")? {
                     Some(0) => None,
                     Some(keep) => Some(Duration::from_secs(keep)),
                     None => DEFAULT_RTR_TCP_KEEPALIVE,
@@ -1675,53 +1668,6 @@ impl ConfigFile {
                         self.path.display(), key
                     );
                     Err(Failed)
-                }
-            }
-            None => Ok(None)
-        }
-    }
-
-    /// Takes an unsigned integer which may also be a string.
-    ///
-    /// This is a temporary function to help with a compatibility issue.
-    fn take_u64_maybe_str(&mut self, key: &str) -> Result<Option<u64>, Failed> {
-        match self.content.remove(key) {
-            Some(value) => {
-                match value {
-                    toml::Value::Integer(res) => {
-                        if res < 0 {
-                            error!(
-                                "Failed in config file {}: \
-                                '{}' expected to be a positive integer.",
-                                self.path.display(), key
-                            );
-                            Err(Failed)
-                        }
-                        else {
-                            Ok(Some(res as u64))
-                        }
-                    }
-                    toml::Value::String(res) => {
-                        match u64::from_str(&res) {
-                            Ok(some) => Ok(Some(some)),
-                            Err(_) => {
-                                error!(
-                                    "Failed in config file {}: \
-                                    '{}' expected to be a positive integer.",
-                                    self.path.display(), key
-                                );
-                                Err(Failed)
-                            }
-                        }
-                    }
-                    _ => {
-                        error!(
-                            "Failed in config file {}: \
-                             '{}' expected to be an integer.",
-                            self.path.display(), key
-                        );
-                        Err(Failed)
-                    }
                 }
             }
             None => Ok(None)

@@ -1174,9 +1174,19 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
                     return Ok(false)
                 }
             };
-            let uri = self.point.cert.ca_repository().join(
+            let uri = match self.point.cert.ca_repository().join(
                 file.as_ref()
-            ).unwrap();
+            ) {
+                Ok(uri) => uri,
+                Err(_) => {
+                    warn!(
+                        "{}: illegal file name {} in manifest.",
+                        self.point.cert.rpki_manifest(),
+                        file
+                    );
+                    return Ok(false)
+                }
+            };
             let hash = ManifestHash::new(
                 hash, self.manifest.content.file_hash_alg()
             );
