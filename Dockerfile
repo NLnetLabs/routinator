@@ -1,5 +1,5 @@
 # -- stage 1: build static routinator with musl libc for alpine
-FROM alpine:3.12.0 as build
+FROM alpine:3.13.3 as build
 
 RUN apk add rust cargo
 

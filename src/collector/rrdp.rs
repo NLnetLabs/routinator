@@ -50,6 +50,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The key to store the repository state under.
 const REPOSITORY_STATE_KEY: &[u8] = b"";
 
+
 //------------ Collector -----------------------------------------------------
 
 /// The local copy of RPKI repositories synchronized via RRDP.
@@ -500,7 +501,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.set_rrdp(self.metrics.into_inner().unwrap())
+        metrics.rrdp = self.metrics.into_inner().unwrap()
     }
 }
 
@@ -663,9 +664,13 @@ impl<'a> RepositoryUpdate<'a> {
         };
         self.metrics.serial = Some(notify.serial);
         self.metrics.session = Some(notify.session_id);
-        if self.delta_update(&notify)? {
-            self.metrics.delta = true;
-            return Ok(true)
+        match self.delta_update(&notify)? {
+            None => {
+                return Ok(true)
+            }
+            Some(reason) => {
+                self.metrics.snapshot_reason = Some(reason)
+            }
         }
         self.snapshot_update(&notify)
     }
@@ -678,7 +683,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// The URI and expected meta-data of the snapshot file are taken from
     /// `notify`.
     fn snapshot_update(
-        &self,
+        &mut self,
         notify: &NotificationFile,
     ) -> Result<bool, Failed> {
         match self.try_snapshot_update(
@@ -703,15 +708,25 @@ impl<'a> RepositoryUpdate<'a> {
     /// This is basically the snapshot update except that it returns an error
     /// whenever anything goes wrong whether that is fatal or not.
     fn try_snapshot_update(
-        &self,
+        &mut self,
         notify: &NotificationFile,
     ) -> Result<(), SnapshotError> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
-        
+
+        let response = match self.http.response(
+            notify.snapshot.uri(), false
+        ) {
+            Ok(response) => {
+                self.metrics.payload_status = Some(response.status().into());
+                response
+            }
+            Err(err) => {
+                self.metrics.payload_status = Some(HttpStatus::Error);
+                return Err(err.into())
+            }
+        };
         let mut processor = SnapshotProcessor::new(&notify);
-        let mut reader = io::BufReader::new(HashRead::new(
-            self.http.response(notify.snapshot.uri(), false)?
-        ));
+        let mut reader = io::BufReader::new(HashRead::new(response));
         processor.process(&mut reader)?;
         let hash = reader.into_inner().into_hash();
         if verify_slices_are_equal(
@@ -745,12 +760,12 @@ impl<'a> RepositoryUpdate<'a> {
     ///
     /// Takes information of the available deltas from `notify`. May not do
     /// anything at all if the repository is up-to-date. Returns whether the
-    /// update succeeded. If `Ok(false)` is returned, a snapshot update
-    /// should be tried next.
+    /// update succeeded. If `Ok(Some(reason))` is returned, a snapshot update
+    /// should be tried next because of the reason given.
     fn delta_update(
-        &self,
+        &mut self,
         notify: &NotificationFile,
-    ) -> Result<bool, Failed> {
+    ) -> Result<Option<SnapshotReason>, Failed> {
         let tree = self.collector.db.open_tree(
             Repository::tree_name(self.rpki_notify)
         )?;
@@ -771,17 +786,22 @@ impl<'a> RepositoryUpdate<'a> {
                 }
                 }
             }
-            None => return Ok(false),
+            None => return Ok(Some(SnapshotReason::NewRepository)),
         };
 
         let deltas = match Self::calc_deltas(notify, &state) {
-            Some([]) => return Ok(true),
-            Some(deltas) => deltas,
-            None => return Ok(false),
+            Ok([]) => return Ok(None),
+            Ok(deltas) => deltas,
+            Err(reason) => return Ok(Some(reason)),
         };
 
-        for (serial, uri_and_hash) in deltas {
-            if !self.delta_update_step(
+        let count = deltas.len();
+        for (i, (serial, uri_and_hash)) in deltas.iter().enumerate() {
+            debug!(
+                "RRDP {}: Delta update step ({}/{}).",
+                uri_and_hash.uri(), i + 1, count
+            );
+            if let Some(reason) = self.delta_update_step(
                 &tree, notify, *serial,
                 uri_and_hash.uri(), uri_and_hash.hash()
             )? {
@@ -789,14 +809,14 @@ impl<'a> RepositoryUpdate<'a> {
                     "RRDP {}: Delta update failed, falling back to snapshot.",
                     self.rpki_notify
                 );
-                return Ok(false)
+                return Ok(Some(reason))
             }
         }
 
         tree.flush()?;
 
         debug!("RRDP {}: Delta update completed.", self.rpki_notify);
-        Ok(true)
+        Ok(None)
     }
 
     /// Calculates the slice of deltas to follow for updating.
@@ -807,14 +827,14 @@ impl<'a> RepositoryUpdate<'a> {
     fn calc_deltas<'b>(
         notify: &'b NotificationFile,
         state: &RepositoryState
-    ) -> Option<&'b [(u64, UriAndHash)]> {
+    ) -> Result<&'b [(u64, UriAndHash)], SnapshotReason> {
         if notify.session_id != state.session {
             debug!("New session. Need to get snapshot.");
-            return None
+            return Err(SnapshotReason::NewSession)
         }
         debug!("Serials: us {}, them {}", state.serial, notify.serial);
         if notify.serial == state.serial {
-            return Some(&[]);
+            return Ok(&[]);
         }
 
         // If there is no last delta (remember, we have a different
@@ -823,47 +843,46 @@ impl<'a> RepositoryUpdate<'a> {
         // bail out.
         if notify.deltas.last().map(|delta| delta.0) != Some(notify.serial) {
             debug!("Last delta serial differs from current serial.");
-            return None
+            return Err(SnapshotReason::BadDeltaSet)
         }
 
         let mut deltas = notify.deltas.as_slice();
         let serial = match state.serial.checked_add(1) {
             Some(serial) => serial,
-            None => return None
+            None => return Err(SnapshotReason::LargeSerial)
         };
         loop {
             let first = match deltas.first() {
                 Some(first) => first,
                 None => {
                     debug!("Ran out of deltas.");
-                    return None
+                    return Err(SnapshotReason::BadDeltaSet)
                 }
             };
             match first.0.cmp(&serial) {
                 cmp::Ordering::Greater => {
                     debug!("First delta is too new ({})", first.0);
-                    return None
+                    return Err(SnapshotReason::OutdatedLocal)
                 }
                 cmp::Ordering::Equal => break,
                 cmp::Ordering::Less => deltas = &deltas[1..]
             }
         }
-        Some(deltas)
+        Ok(deltas)
     }
 
     /// Performs the update for a single delta.
     ///
-    /// Returns `Ok(true)` if the update step succeeded, `Ok(false)` if the
-    /// delta was faulty, and `Err(Failed)` if things have gone badly.
+    /// Returns `Ok(None)` if the update step succeeded, `Ok(Some(reason))`
+    /// if the delta was faulty, and `Err(Failed)` if things have gone badly.
     fn delta_update_step(
-        &self,
+        &mut self,
         tree: &sled::Tree,
         notify: &NotificationFile,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
-    ) -> Result<bool, Failed> {
-        debug!("RRDP {}: Delta update step.", uri);
+    ) -> Result<Option<SnapshotReason>, Failed> {
         let batch = match self.collect_delta_update_step(
             tree, notify, serial, uri, hash
         ) {
@@ -876,30 +895,38 @@ impl<'a> RepositoryUpdate<'a> {
                     "RRDP {}: failed to process delta: {}",
                     self.rpki_notify, err
                 );
-                return Ok(false)
+                return Ok(Some(SnapshotReason::ConflictingDelta))
             }
         };
         tree.apply_batch(batch)?;
-        Ok(true)
+        Ok(None)
     }
 
     /// Collects the changes to be done for a delta update step.
     ///
     /// Upon success, returns a batch with the changes. 
     fn collect_delta_update_step(
-        &self,
+        &mut self,
         tree: &sled::Tree,
         notify: &NotificationFile,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
     ) -> Result<sled::Batch, DeltaError> {
+        let response = match self.http.response(uri, false) {
+            Ok(response) => {
+                self.metrics.payload_status = Some(response.status().into());
+                response
+            }
+            Err(err) => {
+                self.metrics.payload_status = Some(HttpStatus::Error);
+                return Err(err.into())
+            }
+        };
         let mut processor = DeltaProcessor::new(
             notify.session_id, serial, tree
         );
-        let mut reader = io::BufReader::new(HashRead::new(
-            self.http.response(uri, false)?
-        ));
+        let mut reader = io::BufReader::new(HashRead::new(response));
 
         processor.process(&mut reader)?;
         
@@ -939,7 +966,20 @@ struct HttpClient {
 impl HttpClient {
     /// Creates a new, not-yet-ignited client based on the config.
     pub fn new(config: &Config) -> Result<Self, Failed> {
-        let mut builder = Client::builder();
+
+        // Deal with the reqwest’s TLS features by defining a creator
+        // function for the two cases.
+        #[cfg(not(feature = "native-tls"))]
+        fn create_builder() -> ClientBuilder {
+            Client::builder().use_rustls_tls()
+        }
+
+        #[cfg(feature = "native-tls")]
+        fn create_builder() -> ClientBuilder {
+            Client::builder().use_native_tls()
+        }
+
+        let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.gzip(true);
         match config.rrdp_timeout {
@@ -1070,16 +1110,16 @@ impl HttpClient {
     pub fn notification_file(
         &self,
         uri: &uri::Https,
-        status: &mut Option<StatusCode>,
+        status: &mut HttpStatus,
     ) -> Option<NotificationFile> {
         let response = match self.response(uri, true) {
             Ok(response) => {
-                *status = Some(response.status());
+                *status = response.status().into();
                 response
             }
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
-                *status = None;
+                *status = HttpStatus::Error;
                 return None;
             }
         };
@@ -1429,7 +1469,7 @@ impl RepositoryState {
 
 impl<'a> From<&'a RepositoryState> for IVec {
     fn from(state: &'a RepositoryState) -> IVec {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(state.session.as_bytes().len() + 17);
 
         // Version. 0u8
         vec.push(0u8);
@@ -1541,7 +1581,9 @@ impl RepositoryObject<()> {
 
 impl<'a, Octets: AsRef<[u8]>> From<&'a RepositoryObject<Octets>> for IVec {
     fn from(src: &'a RepositoryObject<Octets>) -> Self {
-        let mut vec = Vec::new();
+        let mut vec = Vec::with_capacity(
+            src.hash.as_ref().len() + src.content.as_ref().len() + 1
+        );
 
         // Version. 0u8
         vec.push(0u8);
@@ -1862,6 +1904,82 @@ impl fmt::Display for ObjectError {
 }
 
 impl error::Error for ObjectError { }
+
+
+//------------ SnapshotReason ------------------------------------------------
+
+/// The reason why a snapshot was used.
+#[derive(Clone, Copy, Debug)]
+pub enum SnapshotReason {
+    /// The respository is new.
+    NewRepository,
+
+    /// A new session was encountered.
+    NewSession,
+
+    /// The delta set in the notification file is inconsistent.
+    BadDeltaSet,
+
+    /// A larger-than-supported serial number was encountered.
+    LargeSerial,
+
+    /// The local copy is outdated and cannot be updated via deltas.
+    OutdatedLocal,
+
+    /// A delta file was conflicting with locally stored data.
+    ConflictingDelta,
+}
+
+impl SnapshotReason {
+    /// Returns a shorthand code for the reason.
+    pub fn code(self) -> &'static str {
+        use SnapshotReason::*;
+
+        match self {
+            NewRepository => "new-repository",
+            NewSession => "new-session",
+            BadDeltaSet => "inconsistent-delta-set",
+            LargeSerial => "large-serial",
+            OutdatedLocal => "outdate-local",
+            ConflictingDelta => "conflicting-delta",
+        }
+    }
+}
+
+
+//------------ HttpStatus ----------------------------------------------------
+
+/// The result of an HTTP request.
+#[derive(Clone, Copy, Debug)]
+pub enum HttpStatus {
+    /// A response was received with the given status code.
+    Response(StatusCode),
+
+    /// An error happened.
+    Error
+}
+
+impl HttpStatus {
+    pub fn into_i16(self) -> i16 {
+        match self {
+            HttpStatus::Response(code) => code.as_u16() as i16,
+            HttpStatus::Error => -1
+        }
+    }
+
+    pub fn is_success(self) -> bool {
+        matches!(
+            self,
+            HttpStatus::Response(code) if code.is_success()
+        )
+    }
+}
+
+impl From<StatusCode> for HttpStatus {
+    fn from(code: StatusCode) -> Self {
+        HttpStatus::Response(code)
+    }
+}
 
 
 //============ Tests =========================================================

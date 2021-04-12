@@ -16,7 +16,10 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
-* The minimal supported Rust version is now 1.44.0. [(#444)]
+* Deprecated configuration items have been removed: `unknown-objects`
+  cannot be spelled with a underscore anymore and string values are not
+  accepted anymore for `rtr-tcp-keepalive`. ([#496])
+* The minimal supported Rust version is now 1.45.0. ([#444], [#498])
 
 New
 
@@ -26,16 +29,21 @@ New
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
   the last update. The JSON status information also includes the session
-  ID and whether the last update was via a delta. ([#487])
+  ID and whether the last update was via a delta and if it wasn’t why a
+  snapshot had to be used. It also separately provides the status codes
+  for the request of the notification file and the snapshot or last
+  requested delta file. ([#487], [#489])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
   a path name instead of an array of strings. ([#471])
-* The HTTP endpoints that supply the current VRP set now include a
-  Last-Modified header in their response. ([#474], contributed by
-  [@reschke])
 * The new `rrdp-keep-responses` option allows optionally storing the XML
   content of all received RRDP responses in the file system. ([#490])
+* The HTTP endpoints that supply the current VRP set now support
+  conditional request handling. They include Etag and
+  Last-Modified headers in their response and process If-None-Match and
+  If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
+  [#488])
 
 Bug Fixes
 
@@ -62,7 +70,11 @@ Other Changes
 [#482]: https://github.com/NLnetLabs/routinator/pull/482
 [#484]: https://github.com/NLnetLabs/routinator/pull/484
 [#487]: https://github.com/NLnetLabs/routinator/pull/487
+[#488]: https://github.com/NLnetLabs/routinator/pull/488
+[#489]: https://github.com/NLnetLabs/routinator/pull/489
 [#490]: https://github.com/NLnetLabs/routinator/pull/490
+[#496]: https://github.com/NLnetLabs/routinator/pull/496
+[#498]: https://github.com/NLnetLabs/routinator/pull/498
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker

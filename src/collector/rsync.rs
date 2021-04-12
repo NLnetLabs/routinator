@@ -455,7 +455,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.set_rsync(self.metrics.into_inner().unwrap())
+        metrics.rsync = self.metrics.into_inner().unwrap();
     }
 }
 
