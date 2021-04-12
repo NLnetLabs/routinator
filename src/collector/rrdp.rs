@@ -1088,7 +1088,7 @@ impl HttpClient {
     /// Performs an HTTP GET request for the given URI.
     ///
     /// If keeping responses is enabled, the response is written to a file
-    /// corresponding to the URI. If resource behind the URI changes over
+    /// corresponding to the URI. If the resource behind the URI changes over
     /// time and this change should be tracked, set `multi` to `true` to
     /// include the current time in the file name.
     pub fn response(
