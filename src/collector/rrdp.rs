@@ -1221,7 +1221,7 @@ impl HttpResponse {
         })
     }
 
-    /// Returns the value of the content length header of present.
+    /// Returns the value of the content length header if present.
     pub fn content_length(&self) -> Option<u64> {
         self.response.content_length()
     }
