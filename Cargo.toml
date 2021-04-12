@@ -20,6 +20,7 @@ crossbeam-queue = "0.3.1"
 crossbeam-utils = "0.8.1"
 dirs            = "3.0.1"
 fern            = "0.6.0"
+form_urlencoded = "1.0"
 futures         = "0.3.4"
 
 # Pin hyper to 0.14.4 for compatibility with Rust 1.45.

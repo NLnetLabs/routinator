@@ -1017,14 +1017,19 @@ fn validity_query(
         Ok(current) => current,
         Err(resp) => return resp
     };
+    let query = match query {
+        Some(query) => query.as_bytes(),
+        None => return bad_request()
+    };
+
     let mut asn = None;
     let mut prefix = None;
-    for (key, value) in query_iter(query) {
+    for (key, value) in form_urlencoded::parse(query) {
         if key == "asn" {
-            asn = value
+            asn = Some(value)
         }
         else if key == "prefix" {
-            prefix = value
+            prefix = Some(value)
         }
         else {
             return bad_request()
@@ -1038,7 +1043,7 @@ fn validity_query(
         Some(prefix) => prefix,
         None => return bad_request()
     };
-    validity(asn, prefix, current)
+    validity(&asn, &prefix, current)
 }
 
 fn validity_check(
@@ -1235,19 +1240,6 @@ fn output_filters(
     else {
         Ok(Some(res))
     }
-}
-
-
-fn query_iter(
-    query: Option<&str>
-) -> impl Iterator<Item=(&str, Option<&str>)> + '_ {
-    let query = query.unwrap_or("");
-    query.split('&').map(|item| {
-        let mut item = item.splitn(2, '=');
-        let key = item.next().unwrap();
-        let value = item.next();
-        (key, value)
-    })
 }
 
 

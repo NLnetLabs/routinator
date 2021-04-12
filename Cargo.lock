@@ -1119,6 +1119,7 @@ dependencies = [
  "crossbeam-utils",
  "dirs",
  "fern",
+ "form_urlencoded",
  "futures",
  "hyper",
  "log",
