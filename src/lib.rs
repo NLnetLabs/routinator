@@ -61,13 +61,14 @@ pub mod error;
 pub mod http;
 pub mod metrics;
 pub mod operation;
-pub mod origins;
 pub mod output;
+pub mod payload;
 pub mod process;
 pub mod rtr;
 pub mod rta;
 pub mod slurm;
 pub mod store;
+pub mod tals;
 pub mod utils;
 pub mod validity;
 

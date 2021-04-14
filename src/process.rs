@@ -1,12 +1,12 @@
 //! Managing the process Routinator runs in.
 
-use std::{fs, io, mem};
+use std::{fs, io};
 use std::future::Future;
 use std::path::Path;
 use std::sync::mpsc;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use bytes::Bytes;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use log::{error, LevelFilter};
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
@@ -279,8 +279,7 @@ impl Process {
 #[derive(Debug)]
 pub struct LogOutput {
     queue: Mutex<mpsc::Receiver<String>>,
-    header: String,
-    current: Bytes,
+    current: RwLock<(Bytes, DateTime<Utc>)>,
 }
 
 impl LogOutput {
@@ -288,30 +287,33 @@ impl LogOutput {
         let (tx, rx) = mpsc::channel();
         let res = LogOutput {
             queue: Mutex::new(rx),
-            header: String::new(),
-            current: "Initial validation ongoing. Please wait.".into(),
+            current: RwLock::new((
+                "Initial validation ongoing. Please wait.".into(),
+                Utc::now()
+            ))
         };
         (tx, res)
     }
 
     pub fn start(&mut self) {
-        self.header = format!(
-            "Log from validation run started at {}\n\n",
-            Utc::now()
-        );
+        self.current.write().expect("Log lock got poisoned").1 = Utc::now();
     }
 
     pub fn flush(&mut self) {
-        let queue = self.queue.lock().unwrap();
-        let mut current = mem::replace(&mut self.header, String::new());
+        let queue = self.queue.lock().expect("Log queue lock got poisoned");
+        let started = self.current.read().expect("Log lock got poisoned").1;
+
+        let mut content = format!(
+            "Log from validation run started at {}\n\n", started
+        );
         for item in queue.try_iter() {
-            current.push_str(&item)
+            content.push_str(&item)
         }
-        self.current = current.into();
+        self.current.write().expect("Log lock got poisoned").0 = content.into();
     }
 
     pub fn get_output(&self) -> Bytes {
-        self.current.clone()
+        self.current.read().expect("Log lock got poisoned").0.clone()
     }
 }
 

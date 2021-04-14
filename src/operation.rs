@@ -12,11 +12,13 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use std::{fs, io, thread};
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
@@ -31,13 +33,15 @@ use tokio::sync::oneshot;
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
-use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
+use crate::metrics::ServerMetrics;
 use crate::output;
 use crate::output::OutputFormat;
+use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
+use crate::tals;
 use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -182,55 +186,161 @@ impl Operation {
 //------------ Init ----------------------------------------------------------
 
 /// Initialize the local repository.
-pub struct Init {
-    /// Force installation of TALs.
-    ///
-    /// If the TAL directory is present, we will not touch it unless this
-    /// flag is `true`.
-    force: bool,
+pub enum Init {
+    /// Only list TALs and exit.
+    ListTals,
 
-    /// Accept the ARIN Relying Party Agreement.
-    ///
-    /// We can only install the ARIN TAL if this flag is `true`.
-    accept_arin_rpa: bool,
+    /// Actually do an initialization.
+    Init {
+        /// Force installation of TALs.
+        ///
+        /// If the TAL directory is present, we will not touch it unless this
+        /// flag is `true`.
+        force: bool,
 
-    /// Decline the ARIN Relying Party Agreement.
-    ///
-    /// If this is `true`, we won’t install the ARIN TAL at all.
-    decline_arin_rpa: bool,
+        /// The set of TALs to install.
+        tals: Vec<&'static tals::BundledTal>,
+    }
 }
 
 impl Init {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-        app.subcommand(SubCommand::with_name("init")
+        let mut cmd = SubCommand::with_name("init")
             .about("Initializes the local repository")
             .arg(Arg::with_name("force")
                 .short("f")
                 .long("force")
-                .help("Force creation of TALs")
+                .help("Overwrite an existing TAL directory")
             )
-            .arg(Arg::with_name("accept-arin-rpa")
-                .long("accept-arin-rpa")
-                .help("You have read and accept \
-                       https://www.arin.net/resources/manage/rpki/rpa.pdf")
+            .arg(Arg::with_name("rir-tals")
+                .long("rir-tals")
+                .help("Install all RIR production TALs")
+            )
+            .arg(Arg::with_name("rir-test-tals")
+                .long("rir-test-tals")
+                .help("Install all RIR testbed TALs")
+            )
+            .arg(Arg::with_name("tal")
+                .long("tal")
+                .help(
+                    "Name a TAL to be installed \
+                     (--list-tals shows available TALs)"
+                )
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)
+            )
+            .arg(Arg::with_name("skip-tal")
+                .long("skip-tal")
+                .help("Name a TAL not to be in installed")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)
             )
             .arg(Arg::with_name("decline-arin-rpa")
                 .long("decline-arin-rpa")
-                .conflicts_with("accept-arin-rpa")
-                .help("You have read and declined the ARIN RPA")
+                .help("Same as '--skip-tal arin' (deprecated)")
             )
-        )
+            .arg(Arg::with_name("list-tals")
+                .long("list-tals")
+                .help("List available TALs and exit")
+            )
+            .after_help(
+                "If none of --rir-tals, --rir-test-tals, or --tal is \
+                given, assumes --rir-tals."
+            );
+
+        for tal in tals::BUNDLED_TALS {
+            if let Some(opt_in) = tal.opt_in.as_ref() {
+                cmd = cmd.arg(
+                    Arg::with_name(opt_in.option_name)
+                    .long(opt_in.option_name)
+                    .help(opt_in.option_help)
+                );
+            }
+        }
+
+        app.subcommand(cmd)
     }
 
     /// Creates a command from clap matches.
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
-        Ok(Init {
+        // Easy out for --list-tals
+        if matches.is_present("list-tals") {
+            return Ok(Init::ListTals)
+        }
+
+        // Collect the names of all requested TALs.
+        let mut requested: HashSet<_> = matches.values_of("tal").map(|tals| {
+            tals.collect()
+        }).unwrap_or_default();
+        if matches.is_present("rir-test-tals") {
+            for tal in tals::BUNDLED_TALS {
+                if tal.category == tals::Category::RirTest {
+                    requested.insert(tal.name);
+                }
+            }
+        }
+        // --rir-tals or lack of other TAL commands includes all RIR TALs.
+        if matches.is_present("rir-tals") || requested.is_empty() {
+            for tal in tals::BUNDLED_TALS {
+                if tal.category == tals::Category::Production {
+                    requested.insert(tal.name);
+                }
+            }
+        }
+
+        // Removed --skip-tal TALs.
+        if let Some(values) = matches.values_of("skip-tal") {
+            for tal in values {
+                // Be strict to avoid accidents.
+                if !requested.remove(tal) {
+                    eprintln!("Attempt to skip non-included TAL '{}'", tal);
+                    return Err(Failed)
+                }
+            }
+        }
+
+        // Remove ARIN Tal.
+        if matches.is_present("decline-arin-rpa") {
+            eprintln!(
+                "Warning: '--decline-arin-rpa' has been replaced \
+                 by '--skip-tal arin' and \n         will be removed."
+            );
+            if !requested.remove("arin") {
+                eprintln!("Attempt to skip non-included TAL 'arin'");
+                return Err(Failed)
+            }
+        }
+
+        let mut tals = Vec::new();
+
+        for tal in tals::BUNDLED_TALS {
+            if !requested.remove(tal.name) {
+                continue
+            }
+            tals.push(tal);
+            if let Some(opt_in) = tal.opt_in.as_ref() {
+                if !matches.is_present(opt_in.option_name) {
+                    eprintln!("{}", opt_in.message);
+                    return Err(Failed)
+                }
+            }
+        }
+
+        if !requested.is_empty() {
+            for name in requested {
+                eprintln!("Unknown TAL '{}'", name);
+            }
+            return Err(Failed)
+        }
+
+        Ok(Init::Init {
             force: matches.is_present("force"),
-            accept_arin_rpa: matches.is_present("accept-arin-rpa"),
-            decline_arin_rpa: matches.is_present("decline-arin-rpa"),
+            tals,
         })
     }
 
@@ -240,16 +350,21 @@ impl Init {
     /// `config.tal_dir` if it doesn’t exist and installs the bundled TALs.
     /// It also does the latter if the directory exists and `force` is
     /// `true`.
-    ///
-    /// We will, however, refuse to install any TALs until `accept_arin_rpa`
-    /// is `true`. If it isn’t we just print a friendly reminder instead.
     pub fn run(self, process: Process) -> Result<(), ExitError> {
+        let (force, tals) = match self {
+            Init::ListTals => {
+                Self::list_tals();
+                return Ok(())
+            }
+            Init::Init { force, tals } => (force, tals)
+        };
+
         process.create_cache_dir()?;
 
         // Check if TAL directory exists and error out if needed.
         if let Ok(metadata) = fs::metadata(&process.config().tal_dir) {
             if metadata.is_dir() {
-                if !self.force {
+                if !force {
                     error!(
                         "TAL directory {} exists.\n\
                         Use -f to force installation of TALs.",
@@ -267,23 +382,6 @@ impl Init {
             }
         }
 
-        // Do the ARIN thing. We need to do this before trying to create
-        // the directory or it will be there already next time and confuse
-        // people.
-        if !self.accept_arin_rpa && !self.decline_arin_rpa {
-            error!(
-                "Before we can install the ARIN TAL, you must have read\n\
-                 and agree to the ARIN Relying Party Agreement (RPA).\n\
-                 It is available at\n\
-                 \n\
-                 https://www.arin.net/resources/manage/rpki/rpa.pdf\n\
-                 \n\
-                 If you agree to the RPA, please run the command\n\
-                 again with the --accept-arin-rpa option."
-            );
-            return Err(Failed.into())
-        }
-
         // Try to create the TAL directory and error out if that fails.
         if let Err(err) = fs::create_dir_all(&process.config().tal_dir) {
             error!(
@@ -294,11 +392,8 @@ impl Init {
         }
 
         // Now write all the TALs. Overwrite existing ones.
-        for (name, content) in &DEFAULT_TALS {
-            Self::write_tal(&process.config().tal_dir, name, content)?;
-        }
-        if self.accept_arin_rpa {
-            Self::write_tal(&process.config().tal_dir, ARIN_TAL.0, ARIN_TAL.1)?;
+        for tal in &tals {
+            Self::write_tal(&process.config().tal_dir, tal.name, tal.content)?;
         }
 
         // Not really an error, but that’s our log level right now.
@@ -308,12 +403,7 @@ impl Init {
         );
         error!(
             "Installed {} TALs in {}",
-            if self.accept_arin_rpa {
-                DEFAULT_TALS.as_ref().len() + 1
-            }
-            else {
-                DEFAULT_TALS.as_ref().len()
-            },
+            tals.len(),
             process.config().tal_dir.display()
         );
 
@@ -324,7 +414,7 @@ impl Init {
     fn write_tal(
         tal_dir: &Path,
         name: &str,
-        content: &[u8]
+        content: &str,
     ) -> Result<(), Failed> {
         let mut file = match fs::File::create(tal_dir.join(name)) {
             Ok(file) => file,
@@ -336,7 +426,7 @@ impl Init {
                 return Err(Failed);
             }
         };
-        if let Err(err) = file.write_all(content) {
+        if let Err(err) = file.write_all(content.as_ref()) {
             error!(
                 "Can't create TAL file {}: {}.\n Aborting.",
                 tal_dir.join(name).display(), err
@@ -346,6 +436,27 @@ impl Init {
         Ok(())
     }
 
+    /// Lists all the bundled TALs and exits.
+    fn list_tals() {
+        let max_len = tals::BUNDLED_TALS.iter().map(|tal| 
+            tal.name.len()
+        ).max().unwrap_or(0) + 2;
+
+        println!(" .---- --rir-tals");
+        println!(" |  .- --rir-test-tals");
+        println!(" V  V\n");
+
+        for tal in tals::BUNDLED_TALS {
+            match tal.category {
+                tals::Category::Production => print!(" X      "),
+                tals::Category::RirTest => print!("    X   "),
+                _ => print!("        "),
+            }
+            println!(
+                "{:width$} {}", tal.name, tal.description, width = max_len
+            );
+        }
+    }
 }
 
 
@@ -397,12 +508,16 @@ impl Server {
             !process.config().http_listen.is_empty()
         )?;
         process.setup_service(self.detach)?;
+        let log = log.map(Arc::new);
+        let metrics = Arc::new(ServerMetrics::default());
 
-        let history = OriginsHistory::new(process.config(), log);
+        let history = SharedHistory::from_config(process.config());
         let (mut notify, rtr) = rtr_listener(
-            history.clone(), process.config()
+            history.clone(), metrics.clone(), process.config()
         )?;
-        let http = http_listener(&history, process.config())?;
+        let http = http_listener(
+            history.clone(), metrics, log, process.config()
+        )?;
 
         process.drop_privileges()?;
 
@@ -426,7 +541,7 @@ impl Server {
                         ).is_err() {
                             break;
                         }
-                        history.refresh_wait()
+                        history.read().refresh_wait()
                     }
                     Err(_) => {
                         error!(
@@ -489,18 +604,18 @@ impl Server {
 
     fn process_once(
         validation: &Engine,
-        history: &OriginsHistory,
+        history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Failed> {
         history.mark_update_start();
         let (report, metrics) = validation.process_origins()?;
         let must_notify = history.update(
-            report, metrics, &exceptions
+            report, &exceptions, metrics,
         );
         info!(
             "Validation completed. New serial is {}.",
-            history.serial()
+            history.read().serial()
         );
         if must_notify {
             info!("Sending out notifications.");
@@ -659,7 +774,7 @@ impl Vrps {
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = validation.process_origins()?;
-        let vrps = AddressOrigins::from_report(
+        let vrps = PayloadSnapshot::from_report(
             report,
             &exceptions,
             &mut metrics,
@@ -798,7 +913,7 @@ impl Validate {
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
         validation.cleanup()?;
-        let vrps = AddressOrigins::from_report(
+        let vrps = PayloadSnapshot::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
             &mut metrics,
@@ -1279,17 +1394,4 @@ impl SignalListener {
 
 /// The raw bytes of the manual page.
 const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
-
-
-//------------ DEFAULT_TALS --------------------------------------------------
-
-const DEFAULT_TALS: [(&str, &[u8]); 4] = [
-    ("afrinic.tal", include_bytes!("../tals/afrinic.tal")),
-    ("apnic.tal", include_bytes!("../tals/apnic.tal")),
-    ("lacnic.tal", include_bytes!("../tals/lacnic.tal")),
-    ("ripe.tal", include_bytes!("../tals/ripe.tal")),
-];
-const ARIN_TAL: (&str, &[u8]) =
-    ("arin.tal", include_bytes!("../tals/arin.tal"))
-;
 

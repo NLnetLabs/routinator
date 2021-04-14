@@ -17,11 +17,12 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
 use crate::error::ExitError;
 use crate::metrics::ServerMetrics;
-use crate::origins::OriginsHistory;
+use crate::payload::SharedHistory;
 
 
 pub fn rtr_listener(
-    history: OriginsHistory,
+    history: SharedHistory,
+    metrics: Arc<ServerMetrics>,
     config: &Config
 ) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
     let sender = NotifySender::new();
@@ -44,12 +45,13 @@ pub fn rtr_listener(
         listeners.push(listener);
     }
     Ok((sender.clone(), _rtr_listener(
-        history, sender, listeners, config.rtr_tcp_keepalive,
+        history, metrics, sender, listeners, config.rtr_tcp_keepalive,
     )))
 }
 
 async fn _rtr_listener(
-    origins: OriginsHistory,
+    origins: SharedHistory,
+    metrics: Arc<ServerMetrics>,
     sender: NotifySender,
     listeners: Vec<StdListener>,
     keepalive: Option<Duration>,
@@ -61,7 +63,8 @@ async fn _rtr_listener(
         let _ = select_all(
             listeners.into_iter().map(|listener| {
                 tokio::spawn(single_rtr_listener(
-                    listener, origins.clone(), sender.clone(), keepalive,
+                    listener, origins.clone(), metrics.clone(),
+                    sender.clone(), keepalive,
                 ))
             })
         ).await;
@@ -70,7 +73,8 @@ async fn _rtr_listener(
 
 async fn single_rtr_listener(
     listener: StdListener,
-    origins: OriginsHistory,
+    origins: SharedHistory,
+    metrics: Arc<ServerMetrics>,
     sender: NotifySender,
     _keepalive: Option<Duration>,
 ) {
@@ -82,7 +86,7 @@ async fn single_rtr_listener(
                 return;
             }
         },
-        metrics: origins.server_metrics(),
+        metrics,
         //keepalive,
     };
     if Server::new(listener, sender, origins.clone()).run().await.is_err() {

@@ -189,6 +189,9 @@ pub struct Config {
     /// RRDP HTTP User Agent.
     pub rrdp_user_agent: String,
 
+    /// Should we keep RRDP responses and if so where?
+    pub rrdp_keep_responses: Option<PathBuf>,
+
     /// Wether to not cleanup the repository directory after a validation run.
     ///
     /// If this is `false` and update has not been disabled otherwise, all
@@ -379,6 +382,12 @@ impl Config {
             .takes_value(true)
             .multiple(true)
             .number_of_values(1)
+        )
+        .arg(Arg::with_name("rrdp-keep-responses")
+            .long("rrdp-keep-responses")
+            .value_name("DIR")
+            .help("Keep RRDP responses in the given directory")
+            .takes_value(true)
         )
         .arg(Arg::with_name("dirty-repository")
             .long("dirty")
@@ -682,6 +691,11 @@ impl Config {
             self.rrdp_proxies = list.map(Into::into).collect();
         }
 
+        // rrdp_keep_responses
+        if let Some(path) = matches.value_of("rrdp-keep-responses") {
+            self.rrdp_keep_responses = Some(path.into())
+        }
+
         // dirty_repository
         if matches.is_present("dirty-repository") {
             self.dirty_repository = true
@@ -972,6 +986,7 @@ impl Config {
                 )
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
+            rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1140,6 +1155,7 @@ impl Config {
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
+            rrdp_keep_responses: None,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1303,6 +1319,12 @@ impl Config {
                 self.rrdp_proxies.iter().map(|s| s.clone().into()).collect()
             )
         );
+        if let Some(path) = self.rrdp_keep_responses.as_ref() {
+            res.insert(
+                "rrdp-keep-responses".into(),
+                format!("{}", path.display()).into()
+            );
+        }
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
             "validation-threads".into(),
@@ -1502,7 +1524,7 @@ pub enum FilterPolicy {
     /// Reject objects matched by the filter.
     Reject,
 
-    /// Accept objects matched by the filter  but log a warning.
+    /// Accept objects matched by the filter but log a warning.
     Warn,
 
     /// Quietly accept objects matched by the filter.
