@@ -684,7 +684,7 @@ impl Repository {
                 StoredManifest::try_from(stored).ok().map(|stored|
                     (uri, stored))
             })
-        ).filter_map(|item| item)
+        ).flatten()
     }
 
     /// Cleans the repository assuming it is the rsync repository.

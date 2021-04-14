@@ -1524,7 +1524,7 @@ pub enum FilterPolicy {
     /// Reject objects matched by the filter.
     Reject,
 
-    /// Accept objects matched by the filter  but log a warning.
+    /// Accept objects matched by the filter but log a warning.
     Warn,
 
     /// Quietly accept objects matched by the filter.

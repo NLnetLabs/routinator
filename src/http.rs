@@ -33,9 +33,10 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
 use crate::error::{Failed, ExitError};
-use crate::metrics::{Metrics, ServerMetrics, PublicationMetrics, VrpMetrics};
-use crate::origins::{AddressOrigins, AddressPrefix, OriginsHistory};
+use crate::metrics::{ServerMetrics, PublicationMetrics, VrpMetrics};
 use crate::output::OutputFormat;
+use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
+use crate::process::LogOutput;
 use crate::utils::JsonBuilder;
 use crate::validity::RouteValidity;
 
@@ -43,14 +44,10 @@ use crate::validity::RouteValidity;
 //------------ http_listener -------------------------------------------------
 
 /// Returns a future for all HTTP server listeners.
-///
-/// Which servers these are, if any, is determined by `config`. The data 
-/// is taken from `history`. As a consequence, if you need new
-/// data to be exposed, add it to [`OriginsHistory`] somehow.
-///
-/// [`OriginsHistory`]: ../origins/struct.OriginsHistory.html
 pub fn http_listener(
-    origins: &OriginsHistory,
+    origins: SharedHistory,
+    metrics: Arc<ServerMetrics>,
+    log: Option<Arc<LogOutput>>,
     config: &Config,
 ) -> Result<impl Future<Output = ()>, ExitError> {
     let mut listeners = Vec::new();
@@ -70,17 +67,24 @@ pub fn http_listener(
         }
         listeners.push(listener);
     }
-    Ok(_http_listener(origins.clone(), listeners))
+    Ok(_http_listener(origins, metrics, log, listeners))
 }
 
-async fn _http_listener(origins: OriginsHistory, listeners: Vec<StdListener>) {
+async fn _http_listener(
+    origins: SharedHistory,
+    metrics: Arc<ServerMetrics>,
+    log: Option<Arc<LogOutput>>,
+    listeners: Vec<StdListener>
+) {
     if listeners.is_empty() {
         pending::<()>().await;
     }
     else {
         let _ = select_all(
             listeners.into_iter().map(|listener| {
-                tokio::spawn(single_http_listener(listener, origins.clone()))
+                tokio::spawn(single_http_listener(
+                    listener, origins.clone(), metrics.clone(), log.clone()
+                ))
             })
         ).await;
     }
@@ -94,14 +98,25 @@ async fn _http_listener(origins: OriginsHistory, listeners: Vec<StdListener>) {
 /// served from `origins`.
 async fn single_http_listener(
     listener: StdListener,
-    origins: OriginsHistory,
+    origins: SharedHistory,
+    metrics: Arc<ServerMetrics>,
+    log: Option<Arc<LogOutput>>,
 ) {
     let make_service = make_service_fn(|_conn| {
         let origins = origins.clone();
+        let metrics = metrics.clone();
+        let log = log.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let origins = origins.clone();
-                async move { handle_request(req, &origins).await }
+                let metrics = metrics.clone();
+                let log = log.clone();
+                async move {
+                    handle_request(
+                        req, &origins, &metrics,
+                        log.as_ref().map(|x| x.as_ref())
+                    ).await
+                }
             }))
         }
     });
@@ -113,7 +128,7 @@ async fn single_http_listener(
                 return
             }
         },
-        metrics: origins.server_metrics()
+        metrics: metrics.clone(),
     };
     if let Err(err) = Server::builder(listener).serve(make_service).await {
         error!("HTTP server error: {}", err);
@@ -125,9 +140,11 @@ async fn single_http_listener(
 
 async fn handle_request(
     req: Request<Body>,
-    origins: &OriginsHistory,
+    origins: &SharedHistory,
+    metrics: &ServerMetrics,
+    log: Option<&LogOutput>,
 ) -> Result<Response<Body>, Infallible> {
-    origins.server_metrics().inc_http_requests();
+    metrics.inc_http_requests();
     if *req.method() != Method::GET {
         return Ok(method_not_allowed())
     }
@@ -136,14 +153,14 @@ async fn handle_request(
     }
     else {
         Ok(match req.uri().path() {
-            "/log" => log(origins),
-            "/metrics" => metrics(origins),
-            "/status" => status(origins),
-            "/api/v1/status" => api_status(origins),
-            "/validity" => validity_query(origins, req.uri().query()),
-            "/version" => version(),
+            "/log" => handle_log(log),
+            "/metrics" => handle_metrics(origins, metrics),
+            "/status" => handle_status(origins, metrics),
+            "/api/v1/status" => handle_api_status(origins, metrics),
+            "/validity" => handle_validity_query(origins, req.uri().query()),
+            "/version" => handle_version(),
             path if path.starts_with("/api/v1/validity/") => {
-                validity_path(origins, &path[17..])
+                handle_validity_path(origins, &path[17..])
             }
             #[cfg(feature = "ui")]
             _ => self::ui::process_request(req),
@@ -154,27 +171,31 @@ async fn handle_request(
 }
 
 
-//------------ metrics -------------------------------------------------------
+//------------ handle_metrics ------------------------------------------------
 
-fn metrics(origins: &OriginsHistory) -> Response<Body> {
-    match origins.metrics() {
-        Some(metrics) => metrics_active(origins, &metrics),
-        None => {
-            Response::builder()
-            .status(503)
-            .header("Content-Type", "text/plain")
-            .body("Initial validation ongoing. Please wait.".into())
-            .unwrap()
-        }
-    }
-}
-
-fn metrics_active(
-    origins: &OriginsHistory,
-    metrics: &Metrics
+fn handle_metrics(
+    history: &SharedHistory,
+    server_metrics: &ServerMetrics,
 ) -> Response<Body> {
+    let (metrics, serial, start, done, duration) = {
+        let history = history.read();
+        (
+            match history.metrics() {
+                Some(metrics) => metrics,
+                None => {
+                    return Response::builder()
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                    .unwrap()
+                }
+            },
+            history.serial(),
+            history.last_update_start(),
+            history.last_update_done(),
+            history.last_update_duration(),
+        )
+    };
     let mut res = String::new();
-    let server_metrics = origins.server_metrics();
 
     // valid_roas 
     writeln!(res,
@@ -273,7 +294,6 @@ fn metrics_active(
     ).unwrap();
 
     // last_update_start, last_update_done, last_update_duration
-    let (start, done, duration) = origins.update_times();
     let now = Utc::now();
     write!(res,
         "\n\
@@ -293,7 +313,7 @@ fn metrics_active(
         routinator_last_update_done ",
 
         now.signed_duration_since(start).num_seconds(),
-        duration.map(|duration| duration.as_secs()).unwrap_or(0),
+        duration.map(|duration| { duration.as_secs() }).unwrap_or(0),
     ).unwrap();
     match done {
         Some(instant) => {
@@ -312,7 +332,7 @@ fn metrics_active(
         # HELP routinator_serial current RTR serial number\n\
         # TYPE routinator_serial gauge\n\
         routinator_serial {}",
-        origins.serial()
+        serial
     ).unwrap();
 
     // rsync_status
@@ -538,27 +558,31 @@ fn metrics_active(
 }
 
 
-//------------ status --------------------------------------------------------
+//------------ handle_status -------------------------------------------------
 
-fn status(origins: &OriginsHistory) -> Response<Body> {
-    match origins.metrics() {
-        Some(metrics) => status_active(origins, &metrics),
-        None => {
-            Response::builder()
-            .header("Content-Type", "text/plain")
-            .body("Initial validation ongoing. Please wait.".into())
-            .unwrap()
-        }
-    }
-}
-
-fn status_active(
-    origins: &OriginsHistory,
-    metrics: &Metrics
+fn handle_status(
+    history: &SharedHistory,
+    server_metrics: &ServerMetrics,
 ) -> Response<Body> {
-    let server_metrics = origins.server_metrics();
+    let (metrics, serial, start, done, duration) = {
+        let history = history.read();
+        (
+            match history.metrics() {
+                Some(metrics) => metrics,
+                None => {
+                    return Response::builder()
+                    .header("Content-Type", "text/plain")
+                    .body("Initial validation ongoing. Please wait.".into())
+                    .unwrap()
+                }
+            },
+            history.serial(),
+            history.last_update_start(),
+            history.last_update_done(),
+            history.last_update_duration(),
+        )
+    };
     let mut res = String::new();
-    let (start, done, duration) = origins.update_times();
     let now = Utc::now();
     let start = now.signed_duration_since(start);
     let done = done.map(|done|
@@ -575,7 +599,7 @@ fn status_active(
     ).unwrap();
 
     // serial
-    writeln!(res, "serial: {}", origins.serial()).unwrap();
+    writeln!(res, "serial: {}", serial).unwrap();
 
     // last-update-start-at and -ago
     writeln!(res, "last-update-start-at:  {}", now - start).unwrap();
@@ -759,30 +783,38 @@ fn status_active(
 }
 
 
-//------------ api_status ----------------------------------------------------
+//------------ handle_api_status ---------------------------------------------
 
-fn api_status(origins: &OriginsHistory) -> Response<Body> {
-    let metrics = match origins.metrics() {
-        Some(metrics) => metrics,
-        None => {
-            return Response::builder()
-                .status(503)
-                .header("Content-Type", "text/plain")
-                .body("Initial validation ongoing. Please wait.".into())
-                .unwrap()
-        }
+fn handle_api_status(
+    history: &SharedHistory,
+    server_metrics: &ServerMetrics,
+) -> Response<Body> {
+    let (metrics, serial, start, done, duration) = {
+        let history = history.read();
+        (
+            match history.metrics() {
+                Some(metrics) => metrics,
+                None => {
+                    return Response::builder()
+                        .status(503)
+                        .header("Content-Type", "text/plain")
+                        .body("Initial validation ongoing. Please wait.".into())
+                        .unwrap()
+                }
+            },
+            history.serial(),
+            history.last_update_start(),
+            history.last_update_done(),
+            history.last_update_duration(),
+        )
     };
-
-    let server_metrics = origins.server_metrics();
-    let (start, done, duration) = origins.update_times();
     let now = Utc::now();
-
 
     let res = JsonBuilder::build(|target| {
         target.member_str("version",
             concat!(crate_name!(), "/", crate_version!())
         );
-        target.member_raw("serial", origins.serial());
+        target.member_raw("serial", serial);
         target.member_str("now", now.format("%+"));
         target.member_str("lastUpdateStart", start.format("%+"));
         if let Some(done) = done {
@@ -980,19 +1012,28 @@ fn json_vrp_metrics(target: &mut JsonBuilder, vrps: &VrpMetrics) {
 }
 
 
-//------------ log -----------------------------------------------------------
+//------------ handle_log ----------------------------------------------------
 
-fn log(origins: &OriginsHistory) -> Response<Body> {
+fn handle_log(log: Option<&LogOutput>) -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain;charset=UTF-8")
-    .body(origins.log().into())
+    .body(
+        if let Some(log) = log {
+            log.get_output().into()
+        }
+        else {
+            Body::empty()
+        }
+    )
     .unwrap()
 }
 
 
-//------------ validity_path -------------------------------------------------
+//------------ handle_validity_path and handle_validity_query ----------------
 
-fn validity_path(origins: &OriginsHistory, path: &str) -> Response<Body> {
+fn handle_validity_path(
+    origins: &SharedHistory, path: &str
+) -> Response<Body> {
     let current = match validity_check(origins) {
         Ok(current) => current,
         Err(resp) => return resp
@@ -1009,8 +1050,8 @@ fn validity_path(origins: &OriginsHistory, path: &str) -> Response<Body> {
     validity(asn, prefix, current)
 }
 
-fn validity_query(
-    origins: &OriginsHistory,
+fn handle_validity_query(
+    origins: &SharedHistory,
     query: Option<&str>
 ) -> Response<Body> {
     let current = match validity_check(origins) {
@@ -1042,10 +1083,10 @@ fn validity_query(
 }
 
 fn validity_check(
-    origins: &OriginsHistory
-) -> Result<Arc<AddressOrigins>, Response<Body>> {
-    match origins.current() {
-        Some(origins) => Ok(origins),
+    history: &SharedHistory
+) -> Result<Arc<PayloadSnapshot>, Response<Body>> {
+    match history.read().current() {
+        Some(history) => Ok(history),
         None => {
             Err(
                 Response::builder()
@@ -1059,7 +1100,7 @@ fn validity_check(
 }
 
 fn validity(
-    asn: &str, prefix: &str, current: Arc<AddressOrigins>
+    asn: &str, prefix: &str, current: Arc<PayloadSnapshot>
 ) -> Response<Body> {
     let asn = match AsId::from_str(asn) {
         Ok(asn) => asn,
@@ -1079,9 +1120,9 @@ fn validity(
 }
 
 
-//------------ version -------------------------------------------------------
+//------------ handle_version ------------------------------------------------
 
-fn version() -> Response<Body> {
+fn handle_version() -> Response<Body> {
     Response::builder()
     .header("Content-Type", "text/plain")
     .body(crate_version!().into())
@@ -1089,17 +1130,29 @@ fn version() -> Response<Body> {
 }
 
 
-//------------ vrps ----------------------------------------------------------
+//------------ handle_vrps ---------------------------------------------------
 
 /// Produces a response listing VRPs.
 fn vrps(
     req: &Request<Body>,
-    origins: &OriginsHistory,
+    history: &SharedHistory,
     format: OutputFormat,
 ) -> Response<Body> {
-    let status = match origins.current_status() {
-        Some(some) => some, 
-        None => {
+    let (session, serial, created, snapshot, metrics) = {
+        let history = history.read();
+        (
+            history.session(),
+            history.serial(),
+            history.created(),
+            history.current(),
+            history.metrics()
+        )
+    };
+    let (snapshot, metrics, created) = match (snapshot, metrics, created) {
+        (Some(snapshot), Some(metrics), Some(created)) => {
+            (snapshot, metrics, created)
+        }
+        _ => {
             return Response::builder()
                 .status(503)
                 .header("Content-Type", "text/plain")
@@ -1108,9 +1161,9 @@ fn vrps(
         }
     };
 
-    let etag = format!("\"{:x}-{}\"", status.session(), status.serial());
+    let etag = format!("\"{:x}-{}\"", session, serial);
 
-    if let Some(response) = maybe_not_modified(req, &etag, status.created()) {
+    if let Some(response) = maybe_not_modified(req, &etag, created) {
         return response
     }
 
@@ -1118,15 +1171,13 @@ fn vrps(
         Ok(filters) => filters,
         Err(_) => return bad_request(),
     };
-    let stream = format.stream(
-        status.origins().clone(), filters, status.metrics().clone()
-    );
+    let stream = format.stream(snapshot, filters, metrics);
 
     let builder = Response::builder()
         .header("Content-Type", format.content_type())
         .header("Content-Length", stream.output_len())
         .header("ETag", etag)
-        .header("Last-Modified", format_http_date(&status.created()));
+        .header("Last-Modified", format_http_date(&created));
 
     builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)

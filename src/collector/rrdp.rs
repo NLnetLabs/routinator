@@ -606,7 +606,7 @@ impl Repository {
                 }
             };
             Some((uri, object.content))
-        }).filter_map(|item| item)
+        }).flatten()
     }
 }
 

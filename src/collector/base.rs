@@ -156,18 +156,8 @@ impl<'a> Run<'a> {
     fn new(collector: &'a Collector) -> Self {
         Run {
             collector,
-            rsync: if let Some(ref rsync) = collector.rsync {
-                Some(rsync.start())
-            }
-            else {
-                None
-            },
-            rrdp: if let Some(ref rrdp) = collector.rrdp {
-                Some(rrdp.start())
-            }
-            else {
-                None
-            }
+            rsync: collector.rsync.as_ref().map(|rsync| rsync.start()),
+            rrdp: collector.rrdp.as_ref().map(|rrdp| rrdp.start()),
         }
     }
 
