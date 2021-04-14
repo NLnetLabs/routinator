@@ -53,6 +53,8 @@ Bug Fixes
 
 * The `csvcompat` output format that was introduced in 0.7.0 is now
   actually accepted by the `--format` command line option.
+* The `/validity` HTTP endpoint now accepts percent-encoded characters in
+  the query parameters. ([#505])
 
 Other Changes
 
@@ -80,6 +82,7 @@ Other Changes
 [#496]: https://github.com/NLnetLabs/routinator/pull/496
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
+[#505]: https://github.com/NLnetLabs/routinator/pull/505
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
