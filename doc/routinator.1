@@ -465,6 +465,7 @@ not-before date and not-after date of the validity of the ROA.
 This format was used in the RIPE NCC RPKI Validator version 1. That version
 produces one file per trust anchor. This is not currently supported by
 Routinator -- all entries will be in one single output file.
+
 .TP
 .B json
 The list is placed into a JSON object with a single element
@@ -483,6 +484,48 @@ except for different naming of the trust anchor. Routinator uses the name
 of the TAL file without the extension
 .IR ".tal"
 whereas the RIPE NCC Validator has a dedicated name for each.
+
+.TP
+.B jsonext
+The list is placed into a JSON object with a single element
+.I "roas"
+which contains an array of objects with four elements each: The autonomous
+system number of the network authorized to originate a prefix in
+.IR "asn" ,
+the prefix in slash notation in
+.IR "prefix" ,
+the maximum prefix length of the announced route in
+.IR "maxLength" .
+.IP
+Extensive information about the source of the object is given the array
+.IR "source". Each item in that array is an object providing details of
+a source of the VRP. The object will have a
+.I "type"
+of
+.I "roa"
+if it was derived from a valid ROA object or
+.I "exception"
+if it was an assertion in a local exception file.
+.IP
+For ROAs,
+.I "uri"
+provides the rsync URI of the ROA,
+.I "validity"
+provides the validity of the ROA itself, and
+.I "chainValidity"
+the validity considering the validity of the certificates along the validation
+chain.
+.IP
+For assertions from local exceptions,
+.I "path"
+will provide the path of the local exceptions file and, optionally,
+.I "comment"
+will provide the comment if given for the assertion.
+.IP
+Please note that because of this additional information, output in
+.B jsonext
+format will be quite large.
+
 .TP
 .B openbgpd
 Choosing this format causes Routinator to produce a
@@ -532,13 +575,13 @@ If any of the rsync commands needed to update the repository failed, complete
 the operation but provide exit status 2. If this option is not given, the
 operation will complete with exit status 0 in this case.
 .TP
-.BI \-a \ asn\fR,\  \-\-filter\-asn= asn
+.BI \-a \ asn\fR,\  \-\-select\-asn= asn
 Only output VRPs for the given ASN. The option can be given multiple times,
 in which case VRPs for all provided ASNs are provided. ASNs can be given with
 or without the prefix
 .IR AS .
 .TP
-.BI \-p \ prefix\fR,\  \-\-filter\-prefix= prefix
+.BI \-p \ prefix\fR,\  \-\-select\-prefix= prefix
 Only output VRPs with an address prefix that covers the given prefix, i.e.,
 whose prefix is equal to or less specific than the given prefix. This will
 include VRPs regardless of their ASN and max length. In other words, the
@@ -546,8 +589,8 @@ output will include all VRPs that need to be considered when deciding whether
 an announcement for the prefix is RPKI valid or invalid.
 .IP
 The option can be given multiple times, in which case VRPs for all prefixes
-are provided. It can also be combined with one or more ASN filters. Then all
-matching VRPs are included. That is, filters combine as "or" not "and."
+are provided. It can also be combined with one or more ASN selections. Then
+all matching VRPs are included. That is, selectors combine as "or" not "and."
 
 .SS validate
 This command can be used to perform RPKI route origin validation for a route
@@ -1114,12 +1157,12 @@ at a path with the same name as the output format. E.g., the CSV output is
 available at
 .BR /csv .
 .P
-These paths accept filter expressions to
+These paths accept selector expressions to
 limit the VRPs returned in the form of a query string. The field
-.B filter-asn
-can be used to filter for ASNs and the field
-.B filter-prefix
-can be used to filter for prefixes. The fields can be repeated multiple
+.B select-asn
+can be used to select ASNs and the field
+.B select-prefix
+can be used to select prefixes. The fields can be repeated multiple
 times.
 .P
 This works in the same way as the options of the same name to the
