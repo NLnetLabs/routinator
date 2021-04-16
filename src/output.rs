@@ -40,6 +40,9 @@ pub enum OutputFormat {
     /// and `"ta"`.
     Json,
 
+    /// JSON format with extended information.
+    ExtendedJson,
+
     /// OpenBGPD configuration format.
     ///
     /// Specifically, this produces as `roa-set`.
@@ -78,6 +81,7 @@ impl OutputFormat {
         ("csvcompat", OutputFormat::CompatCsv),
         ("csvext", OutputFormat::ExtendedCsv),
         ("json", OutputFormat::Json),
+        ("jsonext", OutputFormat::ExtendedJson),
         ("openbgpd", OutputFormat::Openbgpd),
         ("bird1", OutputFormat::Bird1),
         ("bird2", OutputFormat::Bird2),
@@ -115,7 +119,8 @@ impl OutputFormat {
             OutputFormat::Csv | OutputFormat::CompatCsv |
             OutputFormat::ExtendedCsv
                 => "text/csv;charset=utf-8;header=present",
-            OutputFormat::Json => "application/json",
+            OutputFormat::Json | OutputFormat::ExtendedJson
+                => "application/json",
             _ => "text/plain;charset=utf-8",
         }
     }
@@ -151,6 +156,7 @@ impl OutputFormat {
             OutputFormat::CompatCsv => Box::new(CompatCsv),
             OutputFormat::ExtendedCsv => Box::new(ExtendedCsv),
             OutputFormat::Json => Box::new(Json),
+            OutputFormat::ExtendedJson => Box::new(ExtendedJson),
             OutputFormat::Openbgpd => Box::new(Openbgpd),
             OutputFormat::Bird1 => Box::new(Bird1),
             OutputFormat::Bird2 => Box::new(Bird2),
@@ -557,6 +563,115 @@ impl<W: io::Write> Formatter<W> for Json {
             origin.max_length(),
             info.tal_name().unwrap_or("N/A"),
         )
+    }
+
+    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+}
+
+
+//------------ ExtendedJson --------------------------------------------------
+
+struct ExtendedJson;
+
+impl ExtendedJson {
+    // 2017-08-25T13:12:19Z
+    const TIME_ITEMS: &'static [Item<'static>] = &[
+        Item::Numeric(Numeric::Year, Pad::Zero),
+        Item::Literal("-"),
+        Item::Numeric(Numeric::Month, Pad::Zero),
+        Item::Literal("-"),
+        Item::Numeric(Numeric::Day, Pad::Zero),
+        Item::Literal("T"),
+        Item::Numeric(Numeric::Hour, Pad::Zero),
+        Item::Literal(":"),
+        Item::Numeric(Numeric::Minute, Pad::Zero),
+        Item::Literal(":"),
+        Item::Numeric(Numeric::Second, Pad::Zero),
+        Item::Literal("Z"),
+    ];
+}
+
+impl<W: io::Write> Formatter<W> for ExtendedJson {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "{{\n  \"roas\": [")
+    }
+
+    fn footer(
+        &self, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "\n  ]\n}}")
+    }
+
+    fn origin(
+        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+            \"maxLength\": {}, \"source\": [",
+            origin.as_id(),
+            origin.address(), origin.address_length(),
+            origin.max_length(),
+        )?;
+
+        let mut first = true;
+        for item in info {
+            if let Some(roa) = item.roa_info() {
+                if !first {
+                    write!(target, ", ")?;
+                }
+                else {
+                    first = false;
+                }
+                write!(target, " {{ \"type\": \"roa\", \"uri\": ")?;
+                match roa.uri.as_ref() {
+                    Some(uri) => write!(target, "\"{}\"", uri)?,
+                    None => write!(target, "null")?
+                }
+
+                write!(target,
+                    ", \"validity\": {{ \"notBefore\": \"{}\", \
+                    \"notAfter\": \"{}\" }}, \
+                    \"chainValidity\": {{ \"notBefore\": \"{}\", \
+                    \"notAfter\": \"{}\" }} \
+                    }}",
+                    roa.roa_validity.not_before().format_with_items(
+                        Self::TIME_ITEMS.iter().cloned()
+                    ),
+                    roa.roa_validity.not_after().format_with_items(
+                        Self::TIME_ITEMS.iter().cloned()
+                    ),
+                    roa.chain_validity.not_before().format_with_items(
+                        Self::TIME_ITEMS.iter().cloned()
+                    ),
+                    roa.chain_validity.not_after().format_with_items(
+                        Self::TIME_ITEMS.iter().cloned()
+                    )
+                )?;
+            }
+            if let Some(exc) = item.exception_info() {
+                if !first {
+                    write!(target, ", ")?;
+                }
+                else {
+                    first = false;
+                }
+                write!(target, " {{ \"type\": \"exception\", \"path\": ")?;
+                match exc.path.as_ref() {
+                    Some(path) => write!(target, "\"{}\"", path.display())?,
+                    None => write!(target, "null")?,
+                }
+                if let Some(comment) = exc.comment.as_ref() {
+                    write!(target, ", \"comment\": \"{}\"", comment)?
+                }
+                write!(target, " }}")?;
+            }
+        }
+
+        write!(target, "] }}")
     }
 
     fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {

@@ -181,8 +181,8 @@ impl From<RawPrefixFilter> for PrefixFilter {
 
 #[derive(Clone, Debug, Default)]
 pub struct ExceptionInfo {
-    path: Option<Arc<Path>>,
-    comment: Option<String>,
+    pub path: Option<Arc<Path>>,
+    pub comment: Option<String>,
 }
 
 
