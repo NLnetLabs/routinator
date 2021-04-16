@@ -30,10 +30,10 @@ use log::error;
 use rpki::repository::resources::AsId;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
-use crate::output;
 use crate::config::Config;
-use crate::error::{Failed, ExitError};
+use crate::error::ExitError;
 use crate::metrics::{ServerMetrics, PublicationMetrics, VrpMetrics};
+use crate::output;
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::LogOutput;
@@ -1172,15 +1172,14 @@ fn vrps(
         return response
     }
 
-    let filters = match output_filters(req.uri().query()) {
-        Ok(filters) => filters,
+    let selection = match output::Selection::from_query(req.uri().query()) {
+        Ok(selection) => selection,
         Err(_) => return bad_request(),
     };
-    let stream = format.stream(snapshot, filters, metrics);
+    let stream = format.stream(snapshot, selection, metrics);
 
     let builder = Response::builder()
         .header("Content-Type", format.content_type())
-        .header("Content-Length", stream.output_len())
         .header("ETag", etag)
         .header("Last-Modified", format_http_date(&created));
 
@@ -1238,59 +1237,6 @@ fn not_modified(etag: &str, done: DateTime<Utc>) -> Response<Body> {
     .header("ETag", etag)
     .header("Last-Modified", format_http_date(&done))
     .body(Body::empty()).unwrap()
-}
-
-/// Produces the output filters from a query string.
-fn output_filters(
-    query: Option<&str>
-) -> Result<Option<Vec<output::Filter>>, Failed> {
-    let mut query = match query {
-        Some(query) => query,
-        None => return Ok(None)
-    };
-    let mut res = Vec::new();
-    while !query.is_empty() {
-        // Take out one pair.
-        let (part, rest) = match query.find('&') {
-            Some(idx) => (&query[..idx], &query[idx + 1..]),
-            None => (query, "")
-        };
-        query = rest;
-
-        // Split the pair.
-        let equals = match part.find('=') {
-            Some(equals) => equals,
-            None => return Err(Failed)
-        };
-        let key = &part[..equals];
-        let value = &part[equals + 1..];
-
-        if key == "filter-prefix" {
-            match AddressPrefix::from_str(value) {
-                Ok(some) => res.push(output::Filter::Prefix(some)),
-                Err(_) => return Err(Failed)
-            }
-        }
-        else if key == "filter-asn" {
-            let asn = match AsId::from_str(value) {
-                Ok(asn) => asn,
-                Err(_) => match u32::from_str(value) {
-                    Ok(asn) => asn.into(),
-                    Err(_) => return Err(Failed)
-                }
-            };
-            res.push(output::Filter::As(asn))
-        }
-        else {
-            return Err(Failed)
-        }
-    }
-    if res.is_empty() {
-        Ok(None)
-    }
-    else {
-        Ok(Some(res))
-    }
 }
 
 
