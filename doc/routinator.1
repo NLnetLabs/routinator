@@ -550,24 +550,71 @@ are provided. It can also be combined with one or more ASN filters. Then all
 matching VRPs are included. That is, filters combine as "or" not "and."
 
 .SS validate
-This command can be used to perform RPKI route origin validation for a route
-announcement. Routinator will determine whether the provided announcement is
-RPKI valid, invalid, or not found.
+This command can be used to perform RPKI route origin validation for one or
+more route announcement. Routinator will determine whether the provided announcements are RPKI valid, invalid, or not found.
+
+.SP
+A single route announcement can be given directly on the command line:
+
 .TP
 .BI \-a \ asn\fR,\  \-\-asn= asn
 The AS number of the autonomous system that originated the route
 announcement. ASNs can be given with
 or without the prefix
 .IR AS .
+
 .TP
 .BI \-p \ prefix\fR,\  \-\-prefix= prefix
 The address prefix the route announcement is for.
+
 .TP
 .BR \-j ,\  \-\-json
 A detailed analysis on the reasoning behind the validation is printed in
 JSON format including lists of the VRPs that caused the particular result.
 If this option is omitted, Routinator will only print the determined
 state.
+
+.SP
+Alternatively, a list of route announcements can be read from a file or
+standard input.
+
+.TP
+.BI -i\ file\fR,\ --input file
+If present, input is read from the given file. If the file is given is a
+single dash, input is read from standard output.
+
+.TP
+.BR --j ,\ --json
+If this option is provided, the input is assumed to be JSON format. It should
+consist of a single object with one member
+.I  routes
+which contains an array of objects. Each object describes one route
+announcement through its
+.I prefix
+and
+.I asn
+members which contain a prefix and originating AS number as strings,
+respectively.
+
+.IP
+If the option is not provided, the input is assumed to consist of simple
+plain text with one route announcement per line, provided as a prefix followed
+by an ASCII-art arrow
+.I =>
+surrounded by white space and followed by the AS number of originating
+autonomous system.
+
+.SP
+The following additional options are available independently of the input
+method.
+
+.TP
+.BI -o\ file\fR,\ --output file
+Output is written to the provided file. If the option is omitted or
+.I file
+is given as a single dash, output is written to standard output.
+
+
 .TP
 .BR \-n ,\  \-\-noupdate
 The repository will not be updated before performing validation.
