@@ -4,9 +4,6 @@ Monitoring
 ==========
 
 The HTTP server in Routinator provides endpoints for monitoring the application.
-This means it may be a good idea to run the HTTP server alongside the RTR
-server.
-
 To launch Routinator in server mode on 192.0.2.13 with RTR running on port 3323
 and HTTP on 9556, use the following command:
 
@@ -49,6 +46,7 @@ Object metrics
   - The number of valid ROAs per Trust Anchor
   - The number of Validated ROA Payloads (VRPs) per Trust Anchor
   - The number of stale objects found
+  - The number of VRPs added locally
 
 RTR server
   - The current RTR serial number
