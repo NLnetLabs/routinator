@@ -4,8 +4,8 @@ Running as a Daemon
 ===================
 
 Routinator can run as a service that periodically fetches RPKI data, verifies it
-and makes the resulting data set available via the RPKI-RTR protocol and through
-the built-in HTTP server. You can start the Routinator service using the
+and makes the resulting data set available through the built-in HTTP server and
+via the RTR protocol. You can start the Routinator service using the
 :subcmd:`server` subcommand.
 
 The HTTP Service
@@ -29,8 +29,12 @@ run:
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
 The application will stay attached to your terminal unless you provide the
-:option:`--detach` option. After fetching and validating the data set, the
-following paths are available:
+:option:`--detach` option. 
+
+Output Formats
+""""""""""""""
+
+After fetching and verifying all RPKI data, the following paths are available:
 
 :command:`/csv`
      Returns the current set of VRPs in **csv** output format
@@ -53,6 +57,30 @@ following paths are available:
 :command:`/rpsl`
      Returns the current set of VRPs in **RPSL** output format
 
+API Endpoints
+"""""""""""""
+
+The service supports GET requests with the following paths:
+
+:command:`/metrics`
+     Returns a set of :ref:`monitoring <doc_routinator_monitoring>` metrics in 
+     the format used by Prometheus.
+
+:command:`/status`
+     Returns the current status of the Routinator instance. This is similar to 
+     the output of the :command:`/metrics` endpoint but in a more human friendly
+     format.
+
+:command:`/log`
+     Returns the logging output of the last validation run. The log level 
+     matches that set upon start.
+
+     Note that the output is collected after each validation run and is 
+     therefore only available after the initial run has concluded.
+
+:command:`/version`
+     Returns the version of the Routinator instance.
+
 :command:`/api/v1/validity/as-number/prefix`
      Returns a JSON object describing whether the route announcement given by 
      its origin AS number and address prefix is RPKI valid, invalid, or not 
@@ -61,14 +89,10 @@ following paths are available:
 :command:`/validity?asn=as-number&prefix=prefix`
      Same as above but with a more form-friendly calling convention.
 
-Please note that this server is intended to run on your internal network and
-doesn't offer HTTPS natively. If this is a requirement, you can for example run
-Routinator  behind an `NGINX <https://www.nginx.com>`_ reverse proxy.
-
-Lastly, the HTTP server provides paths that allow you to monitor Routinator
-itself and the data it processes, so it may be desirable to have HTTP running
-alongside the RTR server. For more information, please refer to the
-:ref:`doc_routinator_monitoring` section.
+These paths accept filter expressions to limit the VRPs returned in the form of
+a query string. The field ``filter-asn`` can be used to filter for ASNs and the
+field ``filter-prefix`` can be used to filter for prefixes. The fields can be
+repeated multiple times.
 
 The RTR Service
 ---------------
@@ -86,9 +110,7 @@ hardware  routers such as `Juniper
 <https://infocenter.alcatel-lucent.com/public/7750SR160R4A/index.jsp?topic=%
 2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_, as well as
 software solutions like `BIRD <https://bird.network.cz/>`_, `GoBGP
-<https://osrg.github.io/gobgp/>`_ and :ref:`others <doc_rpki_rtr>`. The
-processed  data is also available in a number of useful output formats, such as
-CSV, JSON, RPSL and a format specifically for `OpenBGPD <http://openbgpd.org>`_.
+<https://osrg.github.io/gobgp/>`_ and :ref:`others <doc_rpki_rtr>`.
 
 Like the HTTP server, the RTR server is not started by default, nor does it have
 a default host or port. Thus, in order to start the RTR server at 192.0.2.13 and
@@ -104,9 +126,9 @@ to be running Routinator as root when otherwise there is no reason to do that.
 The application will stay attached to your terminal unless you provide the
 :option:`--detach` option.
 
-By default, the repository will be updated and re-validated every 10 minutes.
-You  can change this via the :option:`--refresh` option and specify the interval
-between re-validations in seconds. That is, if you rather have Routinator
+By default, the repository will be updated and verified every 10 minutes.
+You can change this via the :option:`--refresh` option and specify the interval
+between verification in seconds. That is, if you rather have Routinator
 validate every 15 minutes, the above command becomes:
 
 .. code-block:: bash
@@ -124,9 +146,8 @@ Secure Transports
 
 These instructions were contributed by `wk on Github <https://github.com/NLnetLabs/routinator/blob/master/doc/transports.md>`_.
 
-:rfc:`6810#section-7` defines a number of
-secure transports for RPKI-RTR that can be used to secure communication
-between a router and a RPKI relying party.
+:rfc:`6810#section-7` defines a number of secure transports for RPKI-RTR that
+can be used to secure communication between a router and a RPKI relying party.
 
 However, the RPKI Router Implementation Report documented in
 :rfc:`7128#section-5` suggests these secure transports have not been widely
