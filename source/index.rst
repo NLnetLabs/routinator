@@ -46,6 +46,7 @@ AXNn9GkpQ4a-q5skG1yiYQ>`_.
    initialisation
    interactive
    daemon
+   user-interface
    configuration
    monitoring
    manual-page
