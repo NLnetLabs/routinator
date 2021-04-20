@@ -3,6 +3,13 @@
 Routinator
 ==========
 
+|lastupdated| |discord|
+
+.. |lastupdated| image:: https://img.shields.io/github/last-commit/NLnetLabs/routinator-manual.svg?label=last%20updated&style=flat-square
+
+.. |discord| image:: https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord&style=flat-square
+            :target: https://discord.gg/8dvKB5Ykhy
+
 Routinator 3000 is free, open source RPKI Relying Party software written by
 `NLnet Labs <https://nlnetlabs.nl>`_ in the `Rust programming language
 <https://www.rust-lang.org>`_.
