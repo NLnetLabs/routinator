@@ -233,7 +233,7 @@ The available options are:
 
       This option allows to disable this filtering.
 
-.. option:: --disable-rsync
+.. option:: --nc
 
       If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -779,6 +779,11 @@ unknown-objects
 allow-dubious-hosts
       A boolean value that, if present and true, disables Routinator's filtering
       of dubious host names in rsync and HTTPS URIs from RPKI data.
+
+fresh
+      Delete and re-initialize all local data storage before starting. This
+      option should be provided when Routinator fails after reporting corrupt
+      data storage.
 
 disable-rsync
       A boolean value that, if present and true, turns off the use of rsync.
