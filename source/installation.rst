@@ -6,44 +6,8 @@ Installation
 Getting started with Routinator is really easy either building from Cargo,
 installing a Debian and Ubuntu package or using Docker.
 
-Quick Start with Cargo
-----------------------
-
-Assuming you have a newly installed Debian or Ubuntu machine, you will
-need to install rsync, the C toolchain and Rust. You can then install
-Routinator and start it up as an RTR server listening on 127.0.0.1 port
-3323 and HTTP on port 9556:
-
-.. code-block:: bash
-
-   apt install rsync build-essential
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   source ~/.cargo/env
-   cargo install --locked routinator
-   routinator init
-   # Follow instructions provided
-   routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
-
-If you have an older version of Rust and Routinator, you can update via:
-
-.. code-block:: bash
-
-   rustup update
-   cargo install --locked --force routinator
-
-If you want to try the main branch from the repository instead of a
-release version, you can run:
-
-.. code-block:: bash
-
-   cargo install --git https://github.com/NLnetLabs/routinator.git  --branch main
-
 Quick Start with Debian and Ubuntu Packages
 -------------------------------------------
-
-.. note:: These packages are provided on a best effort basis as a convenience 
-          for our community until such time as equivalent official operating 
-          system repository provided packages become available.
 
 Assuming you have a machine running a recent Debian or Ubuntu distribution, you
 can install Routinator from our `software package repository
@@ -107,6 +71,38 @@ into a mounted volume that is later reused for the server:
    sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
         -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
         nlnetlabs/routinator
+
+Quick Start with Cargo
+----------------------
+
+Assuming you have a newly installed Debian or Ubuntu machine, you will need to
+install rsync, the C toolchain and Rust. You can then install Routinator and
+start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on port
+9556:
+
+.. code-block:: bash
+
+   apt install rsync build-essential
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source ~/.cargo/env
+   cargo install --locked routinator
+   routinator init
+   # Follow instructions provided
+   routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
+
+If you have an older version of Rust and Routinator, you can update via:
+
+.. code-block:: bash
+
+   rustup update
+   cargo install --locked --force routinator
+
+If you want to try the main branch from the repository instead of a release
+version, you can run:
+
+.. code-block:: bash
+
+   cargo install --git https://github.com/NLnetLabs/routinator.git  --branch main
 
 System Requirements
 -------------------
