@@ -126,6 +126,8 @@ Here are some examples filtering for an ASN and prefix in CSV and JSON format:
      ]
    }
 
+.. _doc_routinator_validity_checker:
+
 Validity Checker
 ----------------
 
