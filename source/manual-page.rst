@@ -5,7 +5,7 @@ Manual Page
 
 :command:`routinator` - RPKI relying party software
 
-:Date:       2021-02-02
+:Date:       2021-04-XX
 :Author:     Martin Hoffmann
 :Copyright:  2019-2021 - NLnet Labs
 :Version:    0.9.0
@@ -202,7 +202,7 @@ The available options are:
 
       Defines how to deal with unknown types  of  RPKI  objects.  Currently,
       only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
-      Ghostbuster  Records  (.gbr) are allowed to appear in the RPKI repository.
+      Ghostbuster Records (.gbr) are allowed to appear in the RPKI repository.
 
       There are, once more, three policies for dealing with an object of any
       other type:
@@ -214,14 +214,14 @@ The available options are:
       The policy of *warn* will log a warning, ignore the object, and accept all
       known objects issued by the CA.
 
-      The  similar policy of *accept* will quietly ignore the object and accept
+      The similar policy of *accept* will quietly ignore the object and accept
       all known objects issued by the CA.
 
       The default policy if the option is missing is *warn*.
 
       Note that even if unknown objects are accepted, they must appear in  the
       manifest and the hash over their content must match the one given in the
-      manifest. If the hash does not  match, the CA and all its objects are
+      manifest. If the hash does not match, the CA and all its objects are
       still rejected.
 
 .. option:: --allow-dubious-hosts
@@ -233,7 +233,11 @@ The available options are:
 
       This option allows to disable this filtering.
 
-.. option:: --nc
+.. option:: fresh
+      Delete and re-initialize all cached before starting. This option should be
+      provided when Routinator fails after reporting corrupt data storage.
+
+.. option:: --disable-rsync
 
       If this option is present, rsync is disabled and only RRDP will be used.
 
@@ -256,6 +260,12 @@ The available options are:
 .. option:: --disable-rrdp
 
       If this option is present, RRDP is disabled and only rsync will be used.
+
+.. option:: --rrdp-fallback-time=seconds
+
+      Sets  the  time  in seconds since a last successful update of an RRDP
+      repository before Routinator falls back to using rsync. The default is
+      3600 seconds.
 
 .. option:: --rrdp-timeout=seconds
 
@@ -360,6 +370,29 @@ These can be requested by providing different commands on the command line.
            Forces installation of the TALs even if the TAL directory already
            exists.
 
+    .. option:: --rir-tals
+    
+           Selects  the  production TALs of the five RIRs for installation. If
+           no other TAL selection options are provided, this option is assumed.
+
+    .. option:: --rir-test-tals
+    
+           Selects the bundled TALs for RIR testbeds for installation.
+
+    .. option:: --tal=name
+    
+           Selects the bundled TAL with the provided name for installation.
+
+    .. option:: --skip-tal=name
+
+           Deselects the bundled TAL with the given name.
+
+    .. option:: --list-tals
+    
+           List all bundled TALs and exit. The list also shows which TALs are
+           selected by the :option:`--rir-tals` and :option:`--rir-test-tals` 
+           options.
+
     .. option:: --accept-arin-rpa
 
            Before you can use the ARIN TAL, you need to agree to the ARIN
@@ -367,15 +400,6 @@ These can be requested by providing different commands on the command line.
            https://www.arin.net/resources/manage/rpki/rpa.pdf and explicitly
            agree to it via this option. This explicit agreement is necessary in
            order to install the ARIN TAL.
-
-    .. option:: --decline-arin-rpa
-
-           If, after reading the ARIN Relying Party Agreement, you decide you do
-           not or cannot agree to it, this option allows you to skip
-           installation of the ARIN TAL. Note that this means Routinator will
-           not have access to any information published for resources assigned
-           under ARIN.
-
 
 .. subcmd:: vrps
 
@@ -584,6 +608,13 @@ These can be requested by providing different commands on the command line.
               Currently, all TCP listener sockets handed over by systemd will
               be used for the RTR protocol.
 
+       .. option:: --rtr-tcp-keepalive=seconds
+       
+              The amount of seconds the server should wait after having finished
+              updating and validating the local repository before starting to
+              update again. The next update will earlier if objects in the
+              repository expire earlier. The default value is 600 seconds.
+
        .. option:: --refresh=seconds
 
               The amount of seconds the server should wait after having finished
@@ -673,6 +704,36 @@ These can be requested by providing different commands on the command line.
               failed, Routinator completes the operation and exits with status
               code 2. Normally, it would exit with status code 0 indicating
               success.
+
+.. subcmd:: dump
+
+       Writes the content of all stored data to the file system. This is
+       primarily intended for debugging but can be used to get access to the
+       view of the RPKI data that Routinator currently sees.
+       
+       .. option:: -o dir, --output=dir
+       
+              Write the output to the given directory. If the option is omitted,
+              the current directory is used.
+              
+       Three directories will be created in the output directory:
+       
+       The *rrdp* directory will contain all the files collected via RRDP from
+       the various repositories. Each repository is stored in its own directory.
+       The mapping between rpkiNotify URI and path is provided in the
+       *repositories.json* file. For each repository, the files are stored in
+       a directory structure based on the components of the fileas rsync URI.
+       
+       The *rsync* directory contains all the files collected via rsync. The
+       files are stored in a directory structure based on the components of the
+       file's rsync URI.
+
+       The *store* directory contains all the files used for validation. Files
+       collected  via  RRDP  or rsync are copied to the store if they are
+       correctly referenced by a valid manifest. This part contains one
+       directory for each RRDP repository similarly structured to the *rrdp*
+       directory and one additional directory *rsync*q that contains files
+       collected via rsync.
 
 .. subcmd:: man
 
