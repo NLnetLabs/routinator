@@ -11,14 +11,18 @@ the built-in HTTP server. You can start the Routinator service using the
 The HTTP Service
 ----------------
 
-The CSV, JSON, OpenBGPD and RPSL formats that Routinator can produce in
-interactive mode are available via HTTP if the application is running as a
-service. You can also check the RPKI origin validation status of a specific BGP
-announcement at the ``/validity`` endpoint by supplying the ASN and prefix.
+In addition to the various VRP output formats, Routinator's HTTP server also
+provides an API, a :ref:`user interface <doc_routinator_ui>` and
+:ref:`monitoring endpoints <doc_routinator_monitoring>`. The server is not
+enabled by default for security reasons, nor does it have a default host or
+port.
 
-The HTTP server is not enabled by default for security reasons, nor does it have
-a default host or port. In order to start the HTTP server at 192.0.2.13 and
-2001:0DB8::13 on port 8323, run this command:
+Please note that the HTTP server is intended to run on your internal network and
+doesn't offer HTTPS natively. If this is a requirement, you can for example run
+Routinator behind an `NGINX <https://www.nginx.com>`_ reverse proxy.
+
+In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port 8323,
+run:
 
 .. code-block:: bash
 
