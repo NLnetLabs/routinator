@@ -7,8 +7,8 @@ Manual Page
 
 :Date:       2021-02-02
 :Author:     Martin Hoffmann
-:Copyright:  2019-2020 - NLnet Labs
-:Version:    0.8.3
+:Copyright:  2019-2021 - NLnet Labs
+:Version:    0.9.0
 
 Synopsis
 --------
