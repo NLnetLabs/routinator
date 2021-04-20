@@ -189,3 +189,23 @@ epub_exclude_files = ['search.html']
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
+
+# -- Extension interface --------------------------------------------------
+from sphinx import addnodes
+def parse_cmd_args_node(env, sig, signode):
+    try:
+        cmd, args = sig.strip().split(' ', 1)
+    except ValueError:
+        cmd, args = sig, None
+    # distinguish cmd from its args
+    signode += addnodes.desc_name(cmd, cmd)
+    if args:
+        args = ' ' + args
+        signode += addnodes.desc_addname(args, args)
+    return cmd
+# define new directive/role that can be used as .. subcmd::/:subcmd:
+def setup(app):
+    app.add_object_type('subcmd', 'subcmd',
+                        objname='module sub-command',
+                        indextemplate='pair: %s; module sub-command',
+                        parse_node=parse_cmd_args_node)
