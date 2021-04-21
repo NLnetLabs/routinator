@@ -233,7 +233,8 @@ The available options are:
 
       This option allows to disable this filtering.
 
-.. option:: fresh
+.. option:: --fresh
+
       Delete and re-initialize all cached before starting. This option should be
       provided when Routinator fails after reporting corrupt data storage.
 
