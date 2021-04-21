@@ -111,8 +111,8 @@ When choosing a system to run Routinator on, make sure you have 1GB of
 available memory and 1GB of disk space. This will give you ample margin for
 the RPKI repositories to grow over time, as adoption increases.
 
-Getting Started
----------------
+Installing From Source
+----------------------
 
 There are three things you need to install and run Routinator: rsync, a C
 toolchain and Rust. You can install Routinator on any system where you can
