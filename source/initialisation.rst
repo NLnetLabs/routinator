@@ -27,7 +27,7 @@ Both the production and testbed TALs are bundled with Routinator and can be
 installed with the :subcmd:`init` command. To get an overview of all available
 TALs, run:
 
-..code-block:: text
+.. code-block:: text
 
     routinator init --list-tals
      .---- --rir-tals
