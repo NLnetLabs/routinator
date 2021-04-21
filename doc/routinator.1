@@ -636,6 +636,12 @@ established RTR connection. By default, TCP keepalive is enable on all RTR
 connections with an idle time of 60 seconds. Set this option to 0 to disable
 keepalives.
 .TP
+.BI --rtr-client-metrics
+If provided, the server metrics will include separate metrics for every RTR
+client. Clients are identified by their RTR source IP address. This is
+disabled by default to avoid accidentally leaking information about the
+local network topology.
+.TP
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
 and validating the local repository before starting to update again. The
@@ -1016,6 +1022,11 @@ TCP keepalive on an established RTR connection. If this option is missing,
 TCP keepalive will be enabled on all RTR connections with an idle time of 60
 seconds. If this option is present and set to zero, TCP keepalives are
 disabled.
+.TP
+.BI rtr-client-metrics
+A boolean value specifying whether server metrics should include separate
+metrics for every RTR client. If the value is missing, no RTR client
+metrics will be provided.
 .TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
