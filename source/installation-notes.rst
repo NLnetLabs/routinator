@@ -3,23 +3,23 @@
 Installation Notes
 ==================
 
-In certain scenarios and on some platforms specific steps are needed in
-order to get Routinator working as desired.
+In certain scenarios and on some platforms specific steps are needed in order to
+get Routinator working as desired.
 
 Statically Linked Routinator
 ----------------------------
 
 While Rust binaries are mostly statically linked, they depend on :command:`libc`
-which, as least as :command:`glibc` that is standard on Linux systems, is somewhat
-difficult to link statically. This is why Routinator binaries are actually
-dynamically linked on :command:`glibc` systems and can only be transferred between
-systems with the same :command:`glibc` versions.
+which, as least as :command:`glibc` that is standard on Linux systems, is
+somewhat difficult to link statically. This is why Routinator binaries are
+actually dynamically linked on :command:`glibc` systems and can only be
+transferred between systems with the same :command:`glibc` versions.
 
-However, Rust can build binaries based on the alternative implementation
-named musl that can easily be statically linked. Building such binaries is
-easy with :command:`rustup`. You need to install musl and the correct musl target
-such as ``x86_64-unknown-linux-musl`` for x86\_64 Linux systems. Then you
-can just build Routinator for that target.
+However, Rust can build binaries based on the alternative implementation named
+:command:`musl` that can easily be statically linked. Building such binaries is
+easy with :command:`rustup`. You need to install :command:`musl` and the correct
+:command:`musl` target such as ``x86_64-unknown-linux-musl`` for x86\_64 Linux
+systems. Then you can just build Routinator for that target.
 
 On a Debian (and presumably Ubuntu) system, enter the following:
 
@@ -38,11 +38,11 @@ Platform Specific Instructions
 
 For some platforms, :command:`rustup` cannot provide binary releases to install
 directly. The `Rust Platform Support
-<https://forge.rust-lang.org/platform-support.html>`_ page lists
-several platforms where official binary releases are not available,
-but Rust is still guaranteed to build. For these platforms, automated
-tests are not run so it’s not guaranteed to produce a working build, but
-they often work to quite a good degree.
+<https://forge.rust-lang.org/platform-support.html>`_ page lists several
+platforms where official binary releases are not available, but Rust is still
+guaranteed to build. For these platforms, automated tests are not run so it’s
+not guaranteed to produce a working build, but they often work to quite a good
+degree.
 
 OpenBSD
 """""""
@@ -61,7 +61,7 @@ Rust can be installed on OpenBSD by running:
 CentOS 6
 """"""""
 
-The standard installation method does not work when using  CentOS 6. Here, you
+The standard installation method does not work when using CentOS 6. Here, you
 will end up with a long list of error messages about missing assembler
 instructions. This is because the assembler shipped with CentOS 6 is too old.
 
