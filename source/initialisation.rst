@@ -57,7 +57,7 @@ To see if Routinator has been initialised correctly and your firewall allows the
 required connections, it is recommended to perform an initial test run. You can
 do this by having Routinator print a validated ROA payload (VRP) list with the
 :subcmd:`vrps` subcommand, and using :option:`-v` to increase the log level so
-you can verify if Routinator establishes rsync and RRDP connections as expected.
+you can verify if Routinator establishes connections as expected.
 
 .. code-block:: bash
 
@@ -68,33 +68,41 @@ the the contents of the repositories to your machine, verifies it and produces a
 list of validated ROA payloads in the default CSV format to standard output.
 Because it is expected that the state of the entire RPKI is not perfect as all
 times, you may see several warnings during the process about objects that are
-either stale or failed cryptographic verification. From a cold start, this
-process will take a couple of minutes.
+either stale or failed cryptographic verification, or repositories that are
+temporarily unavailable. 
+
+From a cold start, this process will take a couple of minutes. Subsequent runs
+will be much faster, because only the changes between the repositories and the 
+local cache need to be processed.
 
 .. code-block:: text
 
     routinator -vv vrps
-    rsyncing from rsync://repository.lacnic.net/rpki/.
-    rsync://repository.lacnic.net/rpki: Running command "rsync" "--timeout=300" "-rltz" "--delete" "rsync://repository.lacnic.net/rpki/" "/Users/alex/.rpki-cache/repository/rsync/repository.lacnic.net/rpki/"
-    Found valid trust anchor https://rpki.ripe.net/ta/ripe-ncc-ta.cer. Processing.
-    RRDP https://rrdp.ripe.net/notification.xml: Updating server
+    RRDP https://rrdp.ripe.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.ripe.net/notification.xml: updating from snapshot.
     Found valid trust anchor https://rpki.afrinic.net/repository/AfriNIC.cer. Processing.
-    RRDP https://rrdp.afrinic.net/notification.xml: Updating server
+    Found valid trust anchor https://rpki.apnic.net/repository/apnic-rpki-root-iana-origin.cer. Processing.
+    RRDP https://rrdp.afrinic.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.afrinic.net/notification.xml: updating from snapshot.
-    Found valid trust anchor https://tal.apnic.net/apnic.cer. Processing.
-    RRDP https://rrdp.apnic.net/notification.xml: Updating server
+    RRDP https://rrdp.apnic.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.apnic.net/notification.xml: updating from snapshot.
+    RRDP https://rrdp.afrinic.net/notification.xml: snapshot update completed.
     Found valid trust anchor https://rrdp.arin.net/arin-rpki-ta.cer. Processing.
-    RRDP https://rrdp.arin.net/notification.xml: Updating server
+    RRDP https://rrdp.arin.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.arin.net/notification.xml: updating from snapshot.
-    rsync://repository.lacnic.net/rpki: successfully completed.
+    rsync://repository.lacnic.net/rpki/: successfully completed.
     Found valid trust anchor rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer. Processing.
-    rsyncing from rsync://rpki-repo.registro.br/repo/.
-    rsync://rpki-repo.registro.br/repo: Running command "rsync" "--timeout=300" "-rltz" "--delete" "rsync://rpki-repo.registro.br/repo/" "/Users/alex/.rpki-cache/repository/rsync/rpki-repo.registro.br/repo/"
-    rsync://rpki-repo.registro.br/repo: successfully completed.
-    RRDP https://rrdp.rpki.nlnetlabs.nl/rrdp/notification.xml: Updating server
-    RRDP https://rrdp.rpki.nlnetlabs.nl/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.lacnic.net/rrdp/notification.xml: Tree has 0 entries.
+    RRDP https://rrdp.lacnic.net/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.arin.net/notification.xml: snapshot update completed.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: Tree has 0 entries.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: updating from snapshot.
+    RRDP https://rrdp.ripe.net/notification.xml: snapshot update completed.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: snapshot update completed.
+    RRDP https://rpki-repo.registro.br/rrdp/notification.xml: Tree has 0 entries.
+    RRDP https://rpki-repo.registro.br/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.twnic.tw/rrdp/notify.xml: Tree has 0 entries.
+    RRDP https://rrdp.twnic.tw/rrdp/notify.xml: updating from snapshot.
     ...
     ASN,IP Prefix,Max Length,Trust Anchor
     AS137884,103.116.116.0/23,23,apnic
