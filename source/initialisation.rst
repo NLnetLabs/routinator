@@ -5,10 +5,10 @@ Initialisation
 
 Before running Routinator for the first time, you must prepare its working
 environment. You do this using the :subcmd:`init` command. This will prepare
-both the directory for the local RPKI cache, as well as the Trust Anchor Locator
-directory.
+both the directory for the local RPKI cache, as well as the directory where the
+Trust Anchor Locator (TAL) files reside.
 
-By default, both directories will be located under ``$HOME/.rpki-cache``, but
+By default, both directories will be located under ``$HOME/.rpki-cache`` but
 you can change their locations via the command line options
 :option:`--repository-dir` and :option:`--tal-dir`.
 
@@ -18,14 +18,14 @@ Trust Anchor Locators
 Trust Anchor Locators (TALs) provide hints for the trust anchor certificates to
 be used both to discover and validate all RPKI content. There are five TALs, one
 for each Regional Internet Registry (RIR). For production environments these are
-the only ones you will ever need to fetch and validate all available RPKI data.
+the only five you will ever need to fetch and validate all available RPKI data.
 
 Some RIRs and third parties also provide separate TALs for testing purposes,
 allowing operators to gain experience with using RPKI in a safe environment.
-
 Both the production and testbed TALs are bundled with Routinator and can be
-installed with the :subcmd:`init` command. To get an overview of all available
-TALs, run:
+installed with the :subcmd:`init` command. 
+
+To get an overview of all available TALs use the :option:`--list-tals` option:
 
 .. code-block:: text
 
@@ -54,8 +54,8 @@ Preparing for Production Environments
              use it. Running the :subcmd:`init` command will provide you with
              instructions.
 
-In the most common scenario, you will simply want to install the TALs of the
-five RIRs. To do this, simply run the following command:
+In the most common scenario, you will want to install the TALs of the five RIRs.
+To do this, run the following command:
 
 .. code-block:: text
 
@@ -77,11 +77,10 @@ into it.
 
    routinator init --rir-tals --accept-arin-rpa
 
-If you decide you cannot agree to the ARIN RPA terms, the
-:option:`--skip-tal arin` option will install all TALs except the one for
-ARIN. If, at a later point, you wish to use the ARIN TAL anyway, you can add it
-to your current installation using the :option:`--force` option, to force the
-installation of all TALs.
+If you decide you cannot agree to the ARIN RPA terms, you can use the
+:option:`--skip-tal` option to exclude the TAL. If, at a later point, you wish
+to use the ARIN TAL anyway, you can add it to your current installation using
+the :option:`--force` option, to force the installation of all TALs.
 
 Preparing for Test Environments
 """""""""""""""""""""""""""""""
