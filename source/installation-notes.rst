@@ -6,6 +6,35 @@ Installation Notes
 In certain scenarios and on some platforms specific steps are needed in order to
 get Routinator working as desired.
 
+Using Native TLS Instead of Rustls
+----------------------------------
+
+Routinator by default uses `Rustls <https://github.com/ctz/rustls>`_ which in
+most cases is fine. However, if needed you can instead use your system native
+TLS implementation with Routinator like so:
+
+Cargo
+"""""
+
+Build Routinator with the ``native-tls`` feature enabled
+
+.. code-block:: text
+
+   git clone --branch vX.Y.Z --depth 1 https://github.com/NLnetLabs/routinator.git
+   cd routinator
+   cargo build --release --features socks,native-tls
+
+Docker
+""""""
+
+Specify a ``native-tls`` image tag when running the container
+
+.. code-block:: text
+
+    sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
+         -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
+         nlnetlabs/routinator:native-tls
+
 Statically Linked Routinator
 ----------------------------
 
