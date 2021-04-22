@@ -553,9 +553,11 @@ These can be requested by providing different commands on the command line.
 
 .. subcmd:: validate
 
-       This command can be used to perform RPKI route origin validation for a
-       route announcement.  Routinator will determine whether the provided
-       announcement is RPKI valid, invalid, or not found.
+       This command can be used to perform RPKI route origin validation for one
+       or more route announcements. Routinator will determine whether the
+       provided announcements are RPKI valid, invalid, or not found.
+       
+       A single route announcement can be given directly on the command line:
 
        .. option:: -a asn, --asn=asn
 
@@ -573,6 +575,35 @@ These can be requested by providing different commands on the command line.
               the particular result.   If this option is omitted, Routinator
               will only print the determined state.
 
+       .. option:: -i file, --inputfile
+       
+              If present, input is read from the given file. If the file is
+              given is a single dash, input is read from standard output.
+              
+       .. option:: --j, --json
+
+              If this option is provided, the input is assumed to be JSON
+              format. It should consist of a single object with one  member
+              *routes*  which contains an array of objects. Each object
+              describes one route announcement through its *prefix* and *asn*
+              members which contain a prefix and originating AS number as
+              strings, respectively.
+
+              If the option is not provided, the input is assumed to consist of
+              simple plain text with one route announcement per line, provided
+              as a prefix followed by an ASCII-art arrow => surrounded by white
+              space and followed by the AS number of originating autonomous
+              system.
+
+              The following additional options are available independently of
+              the input method.
+
+       .. option:: -o file, --outputfile
+       
+              Output is written to the provided file. If the option is omitted
+              or *file* is given as a single dash, output is written to standard
+              output.
+
        .. option:: -n, --noupdate
 
               The repository will not be updated before performing validation.
@@ -583,7 +614,6 @@ These can be requested by providing different commands on the command line.
               failed, Routinator completes the operation and exits with status
               code 2. Normally, it would exit with status code 0 indicating
               success.
-
 
 .. subcmd:: server
 
