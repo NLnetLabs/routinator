@@ -576,7 +576,7 @@ These can be requested by providing different commands on the command line.
               the particular result.   If this option is omitted, Routinator
               will only print the determined state.
 
-       .. option:: -i file, --inputfile
+       .. option:: -i file, --input=file
        
               If present, input is read from the given file. If the file is
               given is a single dash, input is read from standard output.
@@ -599,7 +599,7 @@ These can be requested by providing different commands on the command line.
               The following additional options are available independently of
               the input method.
 
-       .. option:: -o file, --outputfile
+       .. option:: -o file, --output=file
        
               Output is written to the provided file. If the option is omitted
               or *file* is given as a single dash, output is written to standard
