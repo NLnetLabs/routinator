@@ -2,7 +2,7 @@
 
 [![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![](https://img.shields.io/docker/cloud/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
-[![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=latest)](https://routinator.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.readthedocs.io/en/stable/?badge=stable)
 [![](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
