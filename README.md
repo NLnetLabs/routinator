@@ -2,7 +2,7 @@
 
 [![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![](https://img.shields.io/docker/cloud/build/nlnetlabs/routinator.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
-[![Documentation Status](https://readthedocs.org/projects/rpki/badge/?version=latest)](https://rpki.readthedocs.io/en/latest/routinator/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=latest)](https://routinator.readthedocs.io/en/latest/?badge=latest)
 [![](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
@@ -23,9 +23,9 @@ If you have feedback, we would love to hear from you. Don’t hesitate to [creat
 an issue on Github](https://github.com/NLnetLabs/routinator/issues/new) or post
 a message on our [RPKI mailing
 list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki) or [Discord
-server](https://discord.gg/8dvKB5Ykhy). You can learn more about Routinator and
-RPKI technology by reading our documentation on [Read the
-Docs](https://rpki.readthedocs.io/en/latest/routinator/index.html).
+server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the 
+[Routinator documentation](https://routinator.readthedocs.io/) and the
+[RPKI technology documentation](https://rpki.readthedocs.io/) on Read the Docs.
 
 ## Quick Start with Debian and Ubuntu Packages
 
@@ -317,7 +317,7 @@ routinator man
 ```
 
 The man page is also available online in the
-[documentation](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html).
+[documentation](https://routinator.readthedocs.io/en/latest/manual-page.html).
 
 ## Feeding a Router with RPKI-RTR
 
@@ -365,7 +365,7 @@ exist and there is no `-c` option, default values are used.
 The configuration file is a TOML file. Its entries are named similarly to the
 command line options. Details about the available entries and there meaning can
 be found in the [manual
-page](https://rpki.readthedocs.io/en/latest/routinator/manual-page.html). In
+page](https://routinator.readthedocs.io/en/latest/manual-page.html). In
 addition, a complete sample configuration file showing all the default values
 can be found in the repository at
 [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/main/etc/routinator.conf.example).
@@ -400,9 +400,9 @@ available to get started.
 
 ## User Interface
 
-The [user interface](https://rpki.readthedocs.io/en/latest/routinator/user-interface.html)
+The [user interface](https://routinator.readthedocs.io/en/latest/user-interface.html)
 displays statistics from the last validation run Routinator has performed.
 It can also be used to verify the RPKI origin validation status of an AS
 Number and IP Prefix combination.
 
-![Routinator validity checker](https://rpki.readthedocs.io/en/latest/_images/routinator-ui-validity-checker.png)
+![Routinator validity checker](https://routinator.readthedocs.io/en/latest/_images/routinator-ui-validity-checker.png)

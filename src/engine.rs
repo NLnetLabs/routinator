@@ -440,12 +440,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                     let mut metrics = metrics.fork();
                     while let Some(task) = tasks.pop() {
                         if self.process_task(
-                            task, &tasks, &mut metrics
+                            task, &tasks, &mut metrics, &had_err,
                         ).is_err() {
-                            had_err.store(true, Ordering::Relaxed);
-                            break;
-                        }
-                        else if had_err.load(Ordering::Relaxed) {
                             break;
                         }
                     }
@@ -463,6 +459,10 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             return Err(Failed);
         }
 
+        if had_err.load(Ordering::Relaxed) {
+            return Err(Failed);
+        }
+
         metrics.prepare_final(&mut self.metrics);
         while let Some(metrics) = thread_metrics.pop() {
             metrics.collapse(&mut self.metrics);
@@ -477,17 +477,24 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         task: Task<P::PubPoint>,
         tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
+        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         match task {
-            Task::Tal(task) => self.process_tal_task(task, tasks, metrics),
-            Task::Ca(task) => self.process_ca_task(task, tasks, metrics)
+            Task::Tal(task) => {
+                self.process_tal_task(task, tasks, metrics, had_err)
+            }
+            Task::Ca(task) => {
+                self.process_ca_task(task, tasks, metrics, had_err)
+            }
         }
     }
 
     /// Processes a trust anchor.
     fn process_tal_task(
-        &self, task: TalTask, tasks: &SegQueue<Task<P::PubPoint>>,
+        &self, task: TalTask,
+        tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
+        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
             let cert = match self.load_ta(uri, task.tal.info())? {
@@ -525,7 +532,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                             cert, processor,
                             repository_index: None,
                             defer: false,
-                        }, tasks, metrics
+                        },
+                        tasks, metrics, had_err
                     )
                 }
                 None => {
@@ -567,16 +575,25 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         task: CaTask<P::PubPoint>,
         tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
+        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         let more_tasks = PubPoint::new(
             self, &task.cert, task.processor, task.repository_index,
-        )?.process(metrics)?;
+        ).and_then(|point| {
+            point.process(metrics)
+        }).map_err(|_| {
+            had_err.store(true, Ordering::Relaxed);
+            Failed
+        })?;
         for task in more_tasks {
+            if had_err.load(Ordering::Relaxed) {
+                return Err(Failed)
+            }
             if task.defer {
                 tasks.push(Task::Ca(task))
             }
             else {
-                self.process_ca_task(task, tasks, metrics)?;
+                self.process_ca_task(task, tasks, metrics, had_err)?;
             }
         }
         Ok(())
