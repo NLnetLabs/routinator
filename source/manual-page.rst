@@ -1171,55 +1171,50 @@ debug
 
 Validation
 ----------
-      In :subcmd:`vrps` and :subcmd:`server` mode, Routinator will produce a set
-      of VRPs from the data published in the RPKI repository. It will walk over
-      all certfication authorities (CAs) starting with those referred to in the
-      configured TALs.
+In :subcmd:`vrps` and :subcmd:`server` mode, Routinator will produce a set of
+VRPs from the data published in the RPKI repository. It will walk over all
+certification authorities (CAs) starting with those referred to in the
+configured TALs.
 
-      Each CA is checked whether all its published objects are present,
-      correctly  encoded, and have been signed by the CA. If any of the objects
-      fail this check, the entire CA will be rejected. If an object of an
-      unknown  type  is encountered, the  behaviour depends on the
-      ``unknown-objects`` policy. If this policy has a value of *reject* the
-      entire CA will be rejected. In this case, only certificates (.cer), CRLs
-      (.crl), manifestes (.mft), ROAs (.roa), and Ghostbuster records (.gbr)
-      will be accepted.
+Each CA is checked whether all its published objects are present, correctly
+encoded, and have been signed by the CA. If any of the objects fail this check,
+the entire CA will be rejected. If an object of an unknown  type  is
+encountered, the  behaviour depends on the ``unknown-objects`` policy. If this
+policy has a value of *reject* the entire CA will be rejected. In this case,
+only certificates (.cer), CRLs (.crl), manifestes (.mft), ROAs (.roa), and
+Ghostbuster records (.gbr) will be accepted.
 
-      If  a CA is rejected, none of its ROAs will be added to the VRP set but
-      also none of its child CAs will be considered at all; their published data
-      will not be fetched or validated.
+If  a CA is rejected, none of its ROAs will be added to the VRP set but also
+none of its child CAs will be considered at all; their published data will not
+be fetched or validated.
 
-      If  a prefix has its ROAs published by different CAs, this will lead to
-      some of its VRPs being dropped while others are still added. If the VRP
-      for the  legitimately announced route is among those having been dropped,
-      the route becomes RPKI invalid. This can happen both by operator error or
-      through an active attack.
+If  a prefix has its ROAs published by different CAs, this will lead to some of
+its VRPs being dropped while others are still added. If the VRP for the
+legitimately announced route is among those having been dropped, the route
+becomes RPKI invalid. This can happen both by operator error or through an
+active attack.
 
-      In addition, if a VRP for a less specific prefix exists that covers the
-      prefix of the dropped VRP, the route will be invalidated by the less
-      specific VRP.
+In addition, if a VRP for a less specific prefix exists that covers the prefix
+of the dropped VRP, the route will be invalidated by the less specific VRP.
 
-      Because  of  this  risk  of  accidentally  or  maliciously invalidating
-      routes, VRPs that have address prefixes overlapping with resources of
-      rejected CAs are called *unsafe VRPs*.
+Because of this risk of accidentally or maliciously invalidating routes, VRPs
+that have address prefixes overlapping with resources of rejected CAs are called
+*unsafe VRPs*.
 
-      In  order  to  avoid  these situations and instead fall back to an RPKI
-      unknown state for such routes, Routinator allows to filter out these
-      unsafe  VRPs. This can be enabled via the :option:`--unsafe-vrps=reject`
-      command line option or setting :option:`unsafe-vrps=reject` in the config
-      file.
+In  order to avoid these situations and instead fall back to an RPKI unknown
+state for such routes, Routinator allows to filter out these unsafe  VRPs. This
+can be enabled via the :option:`--unsafe-vrps=reject` command line option or
+setting :option:`unsafe-vrps=reject` in the config file.
 
-      By default, this filter is currently disabled but warnings  are  logged
-      about unsafe VPRs. This allows to assess the operation impact of such a
-      filter. Depending on this assessment, the default may change in future
-      version.
+By default, this filter is currently disabled but warnings are logged about
+unsafe VPRs. This allows to assess the operation impact of such a filter.
+Depending on this assessment, the default may change in future version.
 
-      One exception from this rule are CAs that have the full address space
-      assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe
-      out all VRPs. These prefixes are used by the RIR trust anchors to avoid
-      having to update these often. However, each RIR has its own address space
-      so losing all VRPs should something happen to a trust anchor is
-      unnecessary.
+One exception from this rule are CAs that have the full address space assigned,
+i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out all VRPs.
+These prefixes are used by the RIR trust anchors to avoid having to update these
+often. However, each RIR has its own address space so losing all VRPs should
+something happen to a trust anchor is unnecessary.
 
 Relaxed Decoding
 ----------------
