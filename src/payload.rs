@@ -1606,8 +1606,8 @@ mod test {
                 &HashMap::from_iter(
                     vec![(2, ()), (4, ()), (5, ())].into_iter()
                 )
-            ),
-            vec!(1, 3),
+            ).into_iter().collect::<HashSet<_>>(),
+            HashSet::from_iter(vec![1, 3].into_iter()),
         );
     }
 }
