@@ -416,7 +416,9 @@ impl Init {
         name: &str,
         content: &str,
     ) -> Result<(), Failed> {
-        let mut file = match fs::File::create(tal_dir.join(name)) {
+        let mut file = match fs::File::create(tal_dir.join(
+            format!("{}.tal", name)
+        )) {
             Ok(file) => file,
             Err(err) => {
                 error!(
