@@ -235,8 +235,9 @@ The available options are:
 
 .. option:: --fresh
 
-      Delete and re-initialize all cached before starting. This option should be
-      provided when Routinator fails after reporting corrupt data storage.
+      Delete and re-initialize the local data storage before starting. This
+      option should be provided when Routinator fails after reporting corrupt
+      data storage.
 
 .. option:: --disable-rsync
 
@@ -909,7 +910,7 @@ allow-dubious-hosts
       of dubious host names in rsync and HTTPS URIs from RPKI data.
 
 fresh
-      Delete and re-initialize all local data storage before starting. This
+      Delete and re-initialize the local data storage before starting. This
       option should be provided when Routinator fails after reporting corrupt
       data storage.
 
