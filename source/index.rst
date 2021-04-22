@@ -24,12 +24,12 @@ Registries (RIRs) — APNIC, AFRINIC, ARIN, LACNIC and RIPE NCC — downloads al
 the certificates and ROAs in the various repositories, verifies the signatures
 and makes the result available for use in the BGP workflow. 
 
-It is a full featured software package that can perform RPKI validation
-as a one-time operation and store the result on disk in formats such as CSV, JSON
-and RPSL, or run as a service that periodically downloads and verifies RPKI data. 
-Routers can connect to Routinator to fetch verified RPKI data via the RTR protocol.
-The built-in HTTP server offers a user interface and endpoints for the various file 
-formats, as well as logging, status and Prometheus monitoring. 
+It is a full featured software package that can perform RPKI validation as a
+one-time operation and store the result on disk in formats such as CSV, JSON and
+RPSL, or run as a service that periodically downloads and verifies RPKI data.
+Routers can connect to Routinator to fetch verified RPKI data via the RTR
+protocol. The built-in HTTP server offers a user interface and endpoints for the
+various file  formats, as well as logging, status and Prometheus monitoring. 
 
 If you run into a problem with Routinator or you have a feature request, please
 `create an issue on Github <https://github.com/NLnetLabs/routinator/issues>`_.

@@ -13,14 +13,14 @@ command line via the following sub-commands:
      specified format.
 
 :subcmd:`validate`
-     Outputs the RPKI validity for a specific announcement by supplying Routinator
-     with an ASN and a prefix.
+     Outputs the RPKI validity for a specific announcement by supplying
+     Routinator with an ASN and a prefix.
 
 Printing a List of VRPs
 -----------------------
 
-Routinator can produce a Validated ROA Payload (VRP) list in many different formats,
-which are either printed to standard output or saved to a file:
+Routinator can produce a Validated ROA Payload (VRP) list in many different
+formats, which are either printed to standard output or saved to a file:
 
 csv
       The list is formatted as lines of comma-separated values of the prefix in
@@ -30,26 +30,27 @@ csv
       the default format used if the :option:`--format` or :option:`-f` option
       is missing.
 csvcompat
-       The same as csv except that all fields are embedded in double
-       quotes and the autonomous system number is given without the
-       prefix AS. This format is pretty much identical to the CSV
-       produced by the RIPE NCC Validator.
+       The same as csv except that all fields are embedded in double quotes and
+       the autonomous system number is given without the prefix AS. This format
+       is pretty much identical to the CSV produced by the RIPE NCC Validator.
 csvext
-      This is an extended version of the *csv* format, which was used by the RIPE
-      NCC RPKI Validator 1.x. Each line contains these comma-separated values: the
-      rsync URI of the ROA the line is taken from (or "N/A" if it isn't from a ROA),
-      the autonomous system number, the prefix in slash notation, the maximum prefix
-      length, and lastly the not-before and not-after date of the validity of the ROA.
+      This is an extended version of the *csv* format, which was used by the
+      RIPE NCC RPKI Validator 1.x. Each line contains these comma-separated
+      values: the rsync URI of the ROA the line is taken from (or "N/A" if it
+      isn't from a ROA), the autonomous system number, the prefix in slash
+      notation, the maximum prefix length, and lastly the not-before and
+      not-after date of the validity of the ROA.
 json
-      The list is placed into a JSON object with a single  element *roas* which
-      contains an array of objects with four elements each: The autonomous system
-      number of  the  network  authorised to originate a prefix in *asn*, the prefix
-      in slash notation in *prefix*, the maximum prefix length of the announced route
-      in *maxLength*, and the trust anchor from which the authorisation was derived
-      in *ta*. This format is identical to that produced by the RIPE NCC Validator
-      except for different naming of the trust anchor. Routinator uses the name
-      of the TAL file without the extension *.tal* whereas the RIPE NCC Validator
-      has a dedicated name for each.
+      The list is placed into a JSON object with a single element *roas* which
+      contains an array of objects with four elements each: The autonomous
+      system number of the network authorised to originate a prefix in *asn*,
+      the prefix in slash notation in *prefix*, the maximum prefix length of the
+      announced route in *maxLength*, and the trust anchor from which the
+      authorisation was derived in *ta*. This format is identical to that
+      produced by the RIPE NCC Validator except for different naming of the
+      trust anchor. Routinator uses the name of the TAL file without the
+      extension *.tal* whereas the RIPE NCC Validator has a dedicated name for
+      each.
 jsonext
       The list is placed into a JSON object with a single element *roas* which
       contains an array of objects with four elements each: The autonomous
@@ -57,24 +58,24 @@ jsonext
       the prefix in slash notation  in *prefix*, the maximum prefix length of
       the announced route  in *maxLength*.
 
-      Extensive information about the source of the object is given  in the
-      array *source*. Each item in that array is an object  providing details of
+      Extensive information about the source of the object is given in the
+      array *source*. Each item in that array is an object providing details of
       a source of the VRP. The object will have a type of roa if it was derived
-      from a valid ROA object or  exception if it was an assertion in a local
+      from a valid ROA object or exception if it was an assertion in a local
       exception file.
 
       For ROAs, *uri* provides the rsync URI of the ROA, *validity* provides the
       validity of the ROA itself, and *chainValidity* the validity considering
-      the validity of the certificates  along the validation chain.
+      the validity of the certificates along the validation chain.
 
-      For  assertions from local exceptions, *path* will provide the  path of
+      For assertions from local exceptions, *path* will provide the path of
       the local exceptions file and, optionally, *comment* will provide the
       comment if given for the assertion.
 
-      Please note that because of this additional information,  output in
+      Please note that because of this additional information, output in
       :option:`jsonext` format will be quite large.
 openbgpd
-      Choosing  this format causes Routinator to produce a *roa-set*
+      Choosing this format causes Routinator to produce a *roa-set*
       configuration item for the OpenBGPD configuration.
 bird
       Choosing this format causes Routinator to produce a roa table
@@ -90,9 +91,9 @@ rpsl
       meaningful values.
 summary
       This format produces a summary of the content of the RPKI repository. For
-      each trust anchor, it will print the number of verified ROAs and VRPs. Note
-      that this format does not take filters into account. It will always provide
-      numbers for the complete repository.
+      each trust anchor, it will print the number of verified ROAs and VRPs.
+      Note that this format does not take filters into account. It will always
+      provide numbers for the complete repository.
 
 For example, to get the validated ROA payloads in CSV format, run:
 
@@ -158,7 +159,7 @@ You can check the RPKI origin validation status of one or more BGP announcements
 using the :subcmd:`validate` subcommand and by supplying the ASN and prefix. A
 validation run will be started before returning the result, making sure you get
 the latest information. If you would like a result from the current cache, you
-can use the :option:`--noupdate` or :option:`-n` option.
+can use the :option:`--noupdate` option.
 
 .. code-block:: bash
 
@@ -213,6 +214,28 @@ Routinator can also read input to validate from a file using the
 read from standard input. You can also save the results to a file using the
 :option:`--output` option.
 
+You can provide a simple plain text file with the routes you would like to have
+verified by Routinator. The input file should have one route announcement per
+line, provided as a prefix followed by an ASCII-art arrow => surrounded by white
+space and followed by the AS number of the originating autonomous system.
+
+For example, let's provide Routinator with this file, saved as ``beacons.txt``:
+
+.. code-block:: text
+
+   93.175.147.0/24 => 12654
+   2001:7fb:fd02::/48 => 12654
+
+When referring to the file with the :option:`--input` option Routinator
+provides the RPKI validity state in the output:
+
+.. code-block:: text
+
+   routinator validate --input beacons.txt 
+   93.175.147.0/24 => AS12654: invalid
+   2001:7fb:fd02::/48 => AS12654: valid
+
+
 With the :option:`--json` option you can provide a file in JSON format. It
 should consist of a single object with one member *routes*  which contains an
 array of objects. Each object describes one route announcement through its
@@ -235,9 +258,9 @@ For example, let's provide Routinator with this ``beacons.json`` JSON file:
     ]
   }
 
-When referring to the file with the :option:`--json` and :option:`--input` 
-options, Routinator will perform a full validation run before providing the
-result, ensuring you have the latest data.
+When referring to the file with the :option:`--json` and :option:`--input`
+options, Routinator produces a JSON object that includes the validity state and
+a detailed analysis of the reasoning behind the outcome of each route.
 
 .. code-block:: json
 
@@ -294,24 +317,3 @@ result, ensuring you have the latest data.
     ]
   }
 
-You can also provide a simple plain text file with the routes you would like to
-have verified by Routinator. The input file should have one route announcement
-per line, provided as a prefix followed by an ASCII-art arrow => surrounded by
-white space and followed by the AS number of the originating autonomous system.
-
-For example, let's provide Routinator with this file and save it as
-``beacons.txt``:
-
-.. code-block:: text
-
-   93.175.147.0/24 => 12654
-   2001:7fb:fd02::/48 => 12654
-
-When referring to the file with the :option:`--input` option Routinator simply
-provide the RPKI validity state:
-
-.. code-block:: text
-
-   routinator validate --input beacons.txt 
-   93.175.147.0/24 => AS12654: invalid
-   2001:7fb:fd02::/48 => AS12654: valid

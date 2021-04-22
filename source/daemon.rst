@@ -19,7 +19,7 @@ port.
 
 Please note that the HTTP server is intended to run on your internal network and
 doesn't offer HTTPS natively. If this is a requirement, you can for example run
-Routinator behind an `NGINX <https://www.nginx.com>`_ reverse proxy.
+Routinator behind a :ref:`reverse proxy <doc_routinator_reverse_proxy>`.
 
 In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port 8323,
 run:
@@ -89,28 +89,18 @@ The service supports GET requests with the following paths:
 :command:`/validity?asn=as-number&prefix=prefix`
      Same as above but with a more form-friendly calling convention.
 
-These paths accept filter expressions to limit the VRPs returned in the form of
-a query string. The field ``filter-asn`` can be used to filter for ASNs and the
-field ``filter-prefix`` can be used to filter for prefixes. The fields can be
+These paths accept selector expressions to limit the VRPs returned in the form
+of a query string. The field ``select-asn`` can be used to select ASNs and
+the field ``select-prefix`` can be used to select prefixes. The fields can be
 repeated multiple times.
 
 The RTR Service
 ---------------
 
-Routinator supports RPKI-RTR as specified in :RFC:`8210` as well as
-the older version described in :RFC:`6810`.
-
-When launched as an RTR server, routers with support for route origin validation
-(ROV) can connect to Routinator to fetch the processed data. This includes
-hardware  routers such as `Juniper
-<https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin
--as-validation.html>`_, `Cisco
-<https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/
-15-s/irg-15-s-book/irg-origin-as.html>`_ and `Nokia
-<https://infocenter.alcatel-lucent.com/public/7750SR160R4A/index.jsp?topic=%
-2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_, as well as
-software solutions like `BIRD <https://bird.network.cz/>`_, `GoBGP
-<https://osrg.github.io/gobgp/>`_ and :ref:`others <doc_rpki_rtr>`.
+Routinator supports RPKI-RTR as specified in :RFC:`8210` as well as the older
+version described in :RFC:`6810`. When launched as an RTR server, routers with
+support for route origin validation (ROV) can connect to Routinator to fetch the
+processed data. 
 
 Like the HTTP server, the RTR server is not started by default, nor does it have
 a default host or port. Thus, in order to start the RTR server at 192.0.2.13 and
@@ -126,10 +116,10 @@ to be running Routinator as root when otherwise there is no reason to do that.
 The application will stay attached to your terminal unless you provide the
 :option:`--detach` option.
 
-By default, the repository will be updated and verified every 10 minutes.
-You can change this via the :option:`--refresh` option and specify the interval
-between verification in seconds. That is, if you rather have Routinator
-validate every 15 minutes, the above command becomes:
+By default, the repository will be updated and verified every 10 minutes. You
+can change this via the :option:`--refresh` option and specify the interval
+between verification in seconds. That is, if you rather have Routinator validate
+every 15 minutes, the above command becomes:
 
 .. code-block:: bash
 
@@ -144,7 +134,8 @@ using either SSH or TLS.
 Secure Transports
 """""""""""""""""
 
-These instructions were contributed by `wk on Github <https://github.com/NLnetLabs/routinator/blob/master/doc/transports.md>`_.
+These instructions were contributed by `wk on Github
+<https://github.com/NLnetLabs/routinator/blob/master/doc/transports.md>`_.
 
 :rfc:`6810#section-7` defines a number of secure transports for RPKI-RTR that
 can be used to secure communication between a router and a RPKI relying party.

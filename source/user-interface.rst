@@ -34,6 +34,8 @@ announcement you're planning to do. The returned RPKI validity state will be
 ROA Payloads (VRPs) in the cache. Routinator will provide an overview of all
 VRPs that led to the result, along with the reason for the outcome.
 
+.. _doc_routinator_reverse_proxy:
+
 Reverse Proxy with NGINX
 ------------------------
 

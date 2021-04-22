@@ -45,8 +45,8 @@ optional configuration file, which will be largely similar to this:
     validation-threads = 4
 
 You can override these defaults, as well as configure a great number of
-additional options using either command line arguments or via the
-configuration file.
+additional options using either command line arguments or via the configuration
+file.
 
 To get an overview of all available options, please refer to the
 :ref:`configuration file <doc_routinator_manpage_configfile>` section of the

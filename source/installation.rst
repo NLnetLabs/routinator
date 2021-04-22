@@ -102,7 +102,7 @@ version, you can run:
 
 .. code-block:: bash
 
-   cargo install --git https://github.com/NLnetLabs/routinator.git  --branch main
+   cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
 System Requirements
 -------------------
@@ -118,7 +118,7 @@ There are three things you need to install and run Routinator: rsync, a C
 toolchain and Rust. You can install Routinator on any system where you can
 fulfil these requirements.
 
-You need rsync because most RPKI repositories currently use it as its main
+You need rsync because some RPKI repositories still use it as its main
 means of distribution. Some of the cryptographic primitives used by
 Routinator require a C toolchain. Lastly, you need Rust because that’s the
 programming language that Routinator has been written in.
@@ -185,20 +185,19 @@ The easiest way to get Routinator is to leave it to cargo by saying:
 
    cargo install --locked routinator
 
-If you want to try the main branch from the repository instead of a
-release version, you can run:
+If you want to try the main branch from the repository instead of a release
+version, you can run:
 
 .. code-block:: bash
 
    cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
-If you want to update an installed version, you run the same command but
-add the ``-f`` flag, a.k.a. force, to approve overwriting the installed
-version.
+If you want to update an installed version, you run the same command but add the
+``-f`` flag, a.k.a. force, to approve overwriting the installed version.
 
-The command will build Routinator and install it in the same directory
-that cargo itself lives in, likely ``$HOME/.cargo/bin``. This means
-Routinator will be in your path, too.
+The command will build Routinator and install it in the same directory that
+cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
+be in your path, too.
 
 Notes
 -----

@@ -20,7 +20,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
-copyright = '2021, NLnet Labs'
+copyright = '2018-2021, NLnet Labs'
 author = 'NLnet Labs (CC-BY 3.0)'
 
 # The short X.Y version
@@ -78,6 +78,7 @@ pygments_style = 'sphinx'
 #
 html_theme = 'sphinx_rtd_theme'
 html_logo = 'img/Routinator_Wordmark.png'
+html_favicon = 'img/favicon.ico'
 html_theme_options = {
     'logo_only': True,
     'display_version': True,
