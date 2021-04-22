@@ -7,7 +7,7 @@ The HTTP server in Routinator provides endpoints for monitoring the application.
 To launch Routinator in server mode on 192.0.2.13 with RTR running on port 3323
 and HTTP on 9556, use the following command:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
 
@@ -52,7 +52,8 @@ RTR server
   - The current RTR serial number
   - The current and total number of RTR connections
   - The total amount of bytes sent and received over the RTR connection
-
+  - Metrics for each RTR client is available if the :option:`--rtr-client-metrics` option is provided
+  
 HTTP server
   - The current and total number of HTTP connections
   - The total amount of bytes sent and received over the HTTP connection

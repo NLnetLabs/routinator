@@ -5,10 +5,10 @@ Manual Page
 
 :command:`routinator` - RPKI relying party software
 
-:Date:       2021-02-02
+:Date:       2021-04-XX
 :Author:     Martin Hoffmann
 :Copyright:  2019-2021 - NLnet Labs
-:Version:    0.8.3
+:Version:    0.9.0
 
 Synopsis
 --------
@@ -202,7 +202,7 @@ The available options are:
 
       Defines how to deal with unknown types  of  RPKI  objects.  Currently,
       only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
-      Ghostbuster  Records  (.gbr) are allowed to appear in the RPKI repository.
+      Ghostbuster Records (.gbr) are allowed to appear in the RPKI repository.
 
       There are, once more, three policies for dealing with an object of any
       other type:
@@ -214,14 +214,14 @@ The available options are:
       The policy of *warn* will log a warning, ignore the object, and accept all
       known objects issued by the CA.
 
-      The  similar policy of *accept* will quietly ignore the object and accept
+      The similar policy of *accept* will quietly ignore the object and accept
       all known objects issued by the CA.
 
       The default policy if the option is missing is *warn*.
 
       Note that even if unknown objects are accepted, they must appear in  the
       manifest and the hash over their content must match the one given in the
-      manifest. If the hash does not  match, the CA and all its objects are
+      manifest. If the hash does not match, the CA and all its objects are
       still rejected.
 
 .. option:: --allow-dubious-hosts
@@ -232,6 +232,12 @@ The available options are:
       contains an explicit port.
 
       This option allows to disable this filtering.
+
+.. option:: --fresh
+
+      Delete and re-initialize the local data storage before starting. This
+      option should be used when Routinator fails after reporting corrupt
+      data storage.
 
 .. option:: --disable-rsync
 
@@ -256,6 +262,16 @@ The available options are:
 .. option:: --disable-rrdp
 
       If this option is present, RRDP is disabled and only rsync will be used.
+
+.. option:: --rrdp-fallback-time=seconds
+
+      Sets the maximum time in seconds since a last successful update of an RRDP
+      repository before Routinator falls back to using rsync. The default is
+      3600 seconds. If the given value is smaller than twice the refresh time,
+      it is silently increased to that value.
+      
+      The actual time is chosen at random between the refresh time and this
+      value in order to spread out load on the rsync server.
 
 .. option:: --rrdp-timeout=seconds
 
@@ -360,6 +376,29 @@ These can be requested by providing different commands on the command line.
            Forces installation of the TALs even if the TAL directory already
            exists.
 
+    .. option:: --rir-tals
+    
+           Selects  the  production TALs of the five RIRs for installation. If
+           no other TAL selection options are provided, this option is assumed.
+
+    .. option:: --rir-test-tals
+    
+           Selects the bundled TALs for RIR testbeds for installation.
+
+    .. option:: --tal=name
+    
+           Selects the bundled TAL with the provided name for installation.
+
+    .. option:: --skip-tal=name
+
+           Deselects the bundled TAL with the given name.
+
+    .. option:: --list-tals
+    
+           List all bundled TALs and exit. The list also shows which TALs are
+           selected by the :option:`--rir-tals` and :option:`--rir-test-tals` 
+           options.
+
     .. option:: --accept-arin-rpa
 
            Before you can use the ARIN TAL, you need to agree to the ARIN
@@ -367,15 +406,6 @@ These can be requested by providing different commands on the command line.
            https://www.arin.net/resources/manage/rpki/rpa.pdf and explicitly
            agree to it via this option. This explicit agreement is necessary in
            order to install the ARIN TAL.
-
-    .. option:: --decline-arin-rpa
-
-           If, after reading the ARIN Relying Party Agreement, you decide you do
-           not or cannot agree to it, this option allows you to skip
-           installation of the ARIN TAL. Note that this means Routinator will
-           not have access to any information published for resources assigned
-           under ARIN.
-
 
 .. subcmd:: vrps
 
@@ -437,6 +467,32 @@ These can be requested by providing different commands on the command line.
                   without the extension *.tal* whereas the RIPE NCC Validator
                   has a dedicated name for each.
 
+           jsonext
+                  The list is placed into a JSON object with a single element
+                  *roas* which contains an array of objects with four elements
+                  each: The autonomous system number of the network authorized
+                  to originate a prefix in *asn*, the prefix in slash notation 
+                  in *prefix*, the maximum prefix length of the announced route 
+                  in *maxLength*.
+
+                  Extensive information about the source of the object is given 
+                  in the array *source*. Each item in that array is an object 
+                  providing details of a source of the VRP. The object will have
+                  a type of roa if it was derived from a valid ROA object or 
+                  exception if it was an assertion in a local exception file.
+
+                  For ROAs, *uri* provides the rsync URI of the ROA, *validity*
+                  provides the validity of the ROA itself, and *chainValidity*
+                  the validity considering the validity of the certificates 
+                  along the validation chain.
+
+                  For  assertions from local exceptions, *path* will provide the 
+                  path of the local exceptions file and, optionally, *comment*
+                  will provide the comment if given for the assertion.
+                  
+                  Please note that because of this additional information, 
+                  output in :option:`jsonext` format will be quite large.
+
            openbgpd
                   Choosing this format causes Routinator to produce a roa-
                   set configuration item for the OpenBGPD configuration.
@@ -476,32 +532,33 @@ These can be requested by providing different commands on the command line.
            Routinator completes the operation and exits with status code 2.
            Normally, it would exit with status code 0 indicating success.
 
-    .. option:: -a asn, --filter-asn=asn
+    .. option:: -a asn, --select-asn=asn
 
            Only output VRPs for the given ASN. The option can be given multiple
            times, in which case VRPs for all provided ASNs are provided. ASNs
            can be given with or without the prefix AS.
 
-    .. option:: -p prefix, --filter-prefix=prefix
+    .. option:: -p prefix, --select-prefix=prefix
 
            Only output VRPs with an address prefix that covers the given
            prefix, i.e., whose prefix is equal to or less specific than the
            given prefix. This will include VRPs regardless of their ASN and
-           max length.  In other words, the output will include all VRPs
+           max length. In other words, the output will include all VRPs
            that need to be considered when deciding whether an announcement
            for the prefix is RPKI valid or invalid.
 
-           The option can be given multiple times, in which case VRPs for
-           all prefixes are provided. It can also be combined with one or
-           more ASN filters. Then all matching VRPs are included. That is,
-           filters combine as "or" not "and."
-
+           The option can be given multiple times, in which case VRPs for all 
+           prefixes are provided. It can also be combined with one or more ASN
+           selections. Then all matching VRPs are included. That is, selectors
+           combine as "or" not "and".
 
 .. subcmd:: validate
 
-       This command can be used to perform RPKI route origin validation for a
-       route announcement.  Routinator will determine whether the provided
-       announcement is RPKI valid, invalid, or not found.
+       This command can be used to perform RPKI route origin validation for one
+       or more route announcements. Routinator will determine whether the
+       provided announcements are RPKI valid, invalid, or not found.
+       
+       A single route announcement can be given directly on the command line:
 
        .. option:: -a asn, --asn=asn
 
@@ -519,6 +576,35 @@ These can be requested by providing different commands on the command line.
               the particular result.   If this option is omitted, Routinator
               will only print the determined state.
 
+       .. option:: -i file, --input=file
+       
+              If present, input is read from the given file. If the file is
+              given is a single dash, input is read from standard output.
+              
+       .. option:: --j, --json
+
+              If this option is provided, the input is assumed to be JSON
+              format. It should consist of a single object with one  member
+              *routes*  which contains an array of objects. Each object
+              describes one route announcement through its *prefix* and *asn*
+              members which contain a prefix and originating AS number as
+              strings, respectively.
+
+              If the option is not provided, the input is assumed to consist of
+              simple plain text with one route announcement per line, provided
+              as a prefix followed by an ASCII-art arrow => surrounded by white
+              space and followed by the AS number of originating autonomous
+              system.
+
+              The following additional options are available independently of
+              the input method.
+
+       .. option:: -o file, --output=file
+       
+              Output is written to the provided file. If the option is omitted
+              or *file* is given as a single dash, output is written to standard
+              output.
+
        .. option:: -n, --noupdate
 
               The repository will not be updated before performing validation.
@@ -529,7 +615,6 @@ These can be requested by providing different commands on the command line.
               failed, Routinator completes the operation and exits with status
               code 2. Normally, it would exit with status code 0 indicating
               success.
-
 
 .. subcmd:: server
 
@@ -583,6 +668,20 @@ These can be requested by providing different commands on the command line.
 
               Currently, all TCP listener sockets handed over by systemd will
               be used for the RTR protocol.
+
+       .. option:: --rtr-tcp-keepalive=seconds
+       
+              The amount of seconds the server should wait after having finished
+              updating and validating the local repository before starting to
+              update again. The next update will earlier if objects in the
+              repository expire earlier. The default value is 600 seconds.
+
+       .. option:: --rtr-client-metrics
+       
+              If provided, the server metrics will include separate metrics for
+              every RTR client. Clients are identified by their RTR source IP
+              address. This is disabled by default to avoid accidentally leaking
+              information about the local network topology.
 
        .. option:: --refresh=seconds
 
@@ -673,6 +772,36 @@ These can be requested by providing different commands on the command line.
               failed, Routinator completes the operation and exits with status
               code 2. Normally, it would exit with status code 0 indicating
               success.
+
+.. subcmd:: dump
+
+       Writes the content of all stored data to the file system. This is
+       primarily intended for debugging but can be used to get access to the
+       view of the RPKI data that Routinator currently sees.
+       
+       .. option:: -o dir, --output=dir
+       
+              Write the output to the given directory. If the option is omitted,
+              the current directory is used.
+              
+       Three directories will be created in the output directory:
+       
+       The *rrdp* directory will contain all the files collected via RRDP from
+       the various repositories. Each repository is stored in its own directory.
+       The mapping between rpkiNotify URI and path is provided in the
+       *repositories.json* file. For each repository, the files are stored in
+       a directory structure based on the components of the fileas rsync URI.
+       
+       The *rsync* directory contains all the files collected via rsync. The
+       files are stored in a directory structure based on the components of the
+       file's rsync URI.
+
+       The *store* directory contains all the files used for validation. Files
+       collected  via  RRDP  or rsync are copied to the store if they are
+       correctly referenced by a valid manifest. This part contains one
+       directory for each RRDP repository similarly structured to the *rrdp*
+       directory and one additional directory *rsync*q that contains files
+       collected via rsync.
 
 .. subcmd:: man
 
@@ -780,6 +909,11 @@ allow-dubious-hosts
       A boolean value that, if present and true, disables Routinator's filtering
       of dubious host names in rsync and HTTPS URIs from RPKI data.
 
+fresh
+      Delete and re-initialize the local data storage before starting. This
+      option should be used when Routinator fails after reporting corrupt
+      data storage.
+
 disable-rsync
       A boolean value that, if present and true, turns off the use of rsync.
 
@@ -809,6 +943,13 @@ rrdp-timeout
       RRDP-related network operations, i.e., connects, reads, and writes. If the
       value is missing, a default timeout of 30 seconds will be used. Set the
       value to 0 to turn the timeout off.
+
+rrdp-fallback-time
+      An integer value specifying the maximum number of seconds since a last
+      successful update of an RRDP repository before Routinator falls back to
+      using rsync. The default in case the value is missing is 3600 seconds. If
+      the value provided is smaller than twice the refresh time, it is silently
+      increased to that value.
 
 rrdp-connect-timeout
       An integer value that, if present, sets a separate timeout in seconds for
@@ -889,6 +1030,18 @@ listen-systemd
       activation. Use this option together with systemd's socket units to allow
       Routinator running as a regular user to bind to the default RTR port
       323.
+
+rtr-tcp-keepalive
+      An integer value specifying the number of seconds to wait before sending a
+      TCP keepalive on an established RTR connection. If this option is missing,
+      TCP keepalive will be enabled on all RTR connections with an idle time of
+      60 seconds. If this option is present and set to zero, TCP keepalives are
+      disabled.
+
+rtr-client-metrics
+      A boolean value specifying whether server metrics should include separate
+      metrics for every RTR client. If the value is missing, no RTR client
+      metrics will be provided.
 
 refresh
       An integer value specifying the number of seconds Routinator should wait
@@ -980,10 +1133,10 @@ In addition, the current set of VRPs is available for each output format
 at a path with the same name as the output format. E.g., the CSV output is
 available at ``/csv``.
 
-These paths accept filter expressions to limit the VRPs returned in the form of
-a query string. The field ``filter-asn`` can be used to filter for ASNs and the
-field ``filter-prefix`` can be used to filter for prefixes. The fields can be
-repeated multiple times.
+These paths accept selector expressions to limit the VRPs returned in the form
+of a query string. The field ``select-asn`` can be used to filter for ASNs and
+the field ``select-prefix`` can be used to filter for prefixes. The fields can
+be repeated multiple times.
 
 This works in the same way as the options of the same name to the
 :subcmd:`vrps` command.
@@ -1018,55 +1171,50 @@ debug
 
 Validation
 ----------
-      In :subcmd:`vrps` and :subcmd:`server` mode, Routinator will produce a set
-      of VRPs from the data published in the RPKI repository. It will walk over
-      all certfication authorities (CAs) starting with those referred to in the
-      configured TALs.
+In :subcmd:`vrps` and :subcmd:`server` mode, Routinator will produce a set of
+VRPs from the data published in the RPKI repository. It will walk over all
+certification authorities (CAs) starting with those referred to in the
+configured TALs.
 
-      Each CA is checked whether all its published objects are present,
-      correctly  encoded, and have been signed by the CA. If any of the objects
-      fail this check, the entire CA will be rejected. If an object of an
-      unknown  type  is encountered, the  behaviour depends on the
-      ``unknown-objects`` policy. If this policy has a value of *reject* the
-      entire CA will be rejected. In this case, only certificates (.cer), CRLs
-      (.crl), manifestes (.mft), ROAs (.roa), and Ghostbuster records (.gbr)
-      will be accepted.
+Each CA is checked whether all its published objects are present, correctly
+encoded, and have been signed by the CA. If any of the objects fail this check,
+the entire CA will be rejected. If an object of an unknown  type  is
+encountered, the  behaviour depends on the ``unknown-objects`` policy. If this
+policy has a value of *reject* the entire CA will be rejected. In this case,
+only certificates (.cer), CRLs (.crl), manifestes (.mft), ROAs (.roa), and
+Ghostbuster records (.gbr) will be accepted.
 
-      If  a CA is rejected, none of its ROAs will be added to the VRP set but
-      also none of its child CAs will be considered at all; their published data
-      will not be fetched or validated.
+If  a CA is rejected, none of its ROAs will be added to the VRP set but also
+none of its child CAs will be considered at all; their published data will not
+be fetched or validated.
 
-      If  a prefix has its ROAs published by different CAs, this will lead to
-      some of its VRPs being dropped while others are still added. If the VRP
-      for the  legitimately announced route is among those having been dropped,
-      the route becomes RPKI invalid. This can happen both by operator error or
-      through an active attack.
+If  a prefix has its ROAs published by different CAs, this will lead to some of
+its VRPs being dropped while others are still added. If the VRP for the
+legitimately announced route is among those having been dropped, the route
+becomes RPKI invalid. This can happen both by operator error or through an
+active attack.
 
-      In addition, if a VRP for a less specific prefix exists that covers the
-      prefix of the dropped VRP, the route will be invalidated by the less
-      specific VRP.
+In addition, if a VRP for a less specific prefix exists that covers the prefix
+of the dropped VRP, the route will be invalidated by the less specific VRP.
 
-      Because  of  this  risk  of  accidentally  or  maliciously invalidating
-      routes, VRPs that have address prefixes overlapping with resources of
-      rejected CAs are called *unsafe VRPs*.
+Because of this risk of accidentally or maliciously invalidating routes, VRPs
+that have address prefixes overlapping with resources of rejected CAs are called
+*unsafe VRPs*.
 
-      In  order  to  avoid  these situations and instead fall back to an RPKI
-      unknown state for such routes, Routinator allows to filter out these
-      unsafe  VRPs. This can be enabled via the :option:`--unsafe-vrps=reject`
-      command line option or setting :option:`unsafe-vrps=reject` in the config
-      file.
+In  order to avoid these situations and instead fall back to an RPKI unknown
+state for such routes, Routinator allows to filter out these unsafe  VRPs. This
+can be enabled via the :option:`--unsafe-vrps=reject` command line option or
+setting :option:`unsafe-vrps=reject` in the config file.
 
-      By default, this filter is currently disabled but warnings  are  logged
-      about unsafe VPRs. This allows to assess the operation impact of such a
-      filter. Depending on this assessment, the default may change in future
-      version.
+By default, this filter is currently disabled but warnings are logged about
+unsafe VPRs. This allows to assess the operation impact of such a filter.
+Depending on this assessment, the default may change in future version.
 
-      One exception from this rule are CAs that have the full address space
-      assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe
-      out all VRPs. These prefixes are used by the RIR trust anchors to avoid
-      having to update these often. However, each RIR has its own address space
-      so losing all VRPs should something happen to a trust anchor is
-      unnecessary.
+One exception from this rule are CAs that have the full address space assigned,
+i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out all VRPs.
+These prefixes are used by the RIR trust anchors to avoid having to update these
+often. However, each RIR has its own address space so losing all VRPs should
+something happen to a trust anchor is unnecessary.
 
 Relaxed Decoding
 ----------------

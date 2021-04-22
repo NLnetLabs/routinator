@@ -5,17 +5,47 @@ Initialisation
 
 Before running Routinator for the first time, you must prepare its working
 environment. You do this using the :subcmd:`init` command. This will prepare
-both the directory for the local RPKI cache, as well as the Trust Anchor Locator
-(TAL) directory.
+both the directory for the local RPKI cache, as well as the directory where the
+Trust Anchor Locator (TAL) files reside.
 
-By default, both directories will be located under ``$HOME/.rpki-cache``, but
+By default, both directories will be located under ``$HOME/.rpki-cache`` but
 you can change their locations via the command line options
 :option:`--repository-dir` and :option:`--tal-dir`.
 
-TALs provide hints for the trust anchor certificates to be used both to discover
-and validate all RPKI content. The five TALs — one for each Regional Internet
-Registry (RIR) — are bundled with Routinator and installed by the :subcmd:`init`
-command.
+Trust Anchor Locators
+---------------------
+
+Trust Anchor Locators (TALs) provide hints for the trust anchor certificates to
+be used both to discover and validate all RPKI content. There are five TALs, one
+for each Regional Internet Registry (RIR). For production environments these are
+the only five you will ever need to fetch and validate all available RPKI data.
+
+Some RIRs and third parties also provide separate TALs for testing purposes,
+allowing operators to gain experience with using RPKI in a safe environment.
+Both the production and testbed TALs are bundled with Routinator and can be
+installed with the :subcmd:`init` command. 
+
+To get an overview of all available TALs use the :option:`--list-tals` option:
+
+.. code-block:: text
+
+    routinator init --list-tals
+     .---- --rir-tals
+     |  .- --rir-test-tals
+     V  V
+     
+     X      afrinic             AFRINIC production TAL
+     X      apnic               APNIC production TAL
+     X      arin                ARIN production TAL
+     X      lacnic              LACNIC production TAL
+     X      ripe                RIPE production TAL
+        X   apnic-testbed       APNIC RPKI Testbed
+        X   arin-ote            ARIN Operational Test and Evaluation Environment
+        X   ripe-pilot          RIPE NCC RPKI Test Environment
+            nlnetlabs-testbed   NLnet Labs RPKI Testbed
+
+Preparing for Production Environments
+"""""""""""""""""""""""""""""""""""""
 
 .. WARNING:: Using the TAL from ARIN, the RIR for the United States, Canada as
              well as many Caribbean and North Atlantic islands, requires you to
@@ -24,9 +54,12 @@ command.
              use it. Running the :subcmd:`init` command will provide you with
              instructions.
 
+In the most common scenario, you will want to install the TALs of the five RIRs.
+To do this, run the following command:
+
 .. code-block:: text
 
-   routinator init
+   routinator init --rir-tals
    Before we can install the ARIN TAL, you must have read
    and agree to the ARIN Relying Party Agreement (RPA).
    It is available at
@@ -37,18 +70,31 @@ command.
    again with the --accept-arin-rpa option.
 
 Running the :subcmd:`init` command with the :option:`--accept-arin-rpa` option
-will create the TAL directory and copy the five Trust Anchor Locator files into
-it.
+added will create the TAL directory and copy the five Trust Anchor Locator files
+into it.
 
 .. code-block:: bash
 
-   routinator init --accept-arin-rpa
+   routinator init --rir-tals --accept-arin-rpa
 
-If you decide you cannot agree to the ARIN RPA terms, the
-:option:`--decline-arin-rpa` option will install all TALs except the one for
-ARIN. If, at a later point, you wish to use the ARIN TAL anyway, you can add it
-to your current installation using the :option:`--force` option, to force the
-installation of all TALs.
+If you decide you cannot agree to the ARIN RPA terms, you can use the
+:option:`--skip-tal` option to exclude the TAL. If, at a later point, you wish
+to use the ARIN TAL anyway, you can add it to your current installation using
+the :option:`--force` option, to force the installation of all TALs.
+
+Preparing for Test Environments
+"""""""""""""""""""""""""""""""
+
+To install all of the TALs for the various test environments, you can use the
+:option:`--rir-test-tals` option. However, in most cases you will want to
+install a specific one, using the :option:`--tal` option. 
+
+For example, to add the TAL for the ARIN Operational Test and Evaluation 
+Environment to an already initialised Routinator, enter
+
+.. code-block:: bash
+
+   routinator init --force --tal arin-ote
 
 Performing a Test Run
 ---------------------
@@ -57,7 +103,7 @@ To see if Routinator has been initialised correctly and your firewall allows the
 required connections, it is recommended to perform an initial test run. You can
 do this by having Routinator print a validated ROA payload (VRP) list with the
 :subcmd:`vrps` subcommand, and using :option:`-v` to increase the log level so
-you can verify if Routinator establishes rsync and RRDP connections as expected.
+you can verify if Routinator establishes connections as expected.
 
 .. code-block:: bash
 
@@ -68,33 +114,41 @@ the the contents of the repositories to your machine, verifies it and produces a
 list of validated ROA payloads in the default CSV format to standard output.
 Because it is expected that the state of the entire RPKI is not perfect as all
 times, you may see several warnings during the process about objects that are
-either stale or failed cryptographic verification. From a cold start, this
-process will take a couple of minutes.
+either stale or failed cryptographic verification, or repositories that are
+temporarily unavailable. 
+
+From a cold start, this process will take a couple of minutes. Subsequent runs
+will be much faster, because only the changes between the repositories and the 
+local cache need to be processed.
 
 .. code-block:: text
 
     routinator -vv vrps
-    rsyncing from rsync://repository.lacnic.net/rpki/.
-    rsync://repository.lacnic.net/rpki: Running command "rsync" "--timeout=300" "-rltz" "--delete" "rsync://repository.lacnic.net/rpki/" "/Users/alex/.rpki-cache/repository/rsync/repository.lacnic.net/rpki/"
-    Found valid trust anchor https://rpki.ripe.net/ta/ripe-ncc-ta.cer. Processing.
-    RRDP https://rrdp.ripe.net/notification.xml: Updating server
+    RRDP https://rrdp.ripe.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.ripe.net/notification.xml: updating from snapshot.
     Found valid trust anchor https://rpki.afrinic.net/repository/AfriNIC.cer. Processing.
-    RRDP https://rrdp.afrinic.net/notification.xml: Updating server
+    Found valid trust anchor https://rpki.apnic.net/repository/apnic-rpki-root-iana-origin.cer. Processing.
+    RRDP https://rrdp.afrinic.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.afrinic.net/notification.xml: updating from snapshot.
-    Found valid trust anchor https://tal.apnic.net/apnic.cer. Processing.
-    RRDP https://rrdp.apnic.net/notification.xml: Updating server
+    RRDP https://rrdp.apnic.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.apnic.net/notification.xml: updating from snapshot.
+    RRDP https://rrdp.afrinic.net/notification.xml: snapshot update completed.
     Found valid trust anchor https://rrdp.arin.net/arin-rpki-ta.cer. Processing.
-    RRDP https://rrdp.arin.net/notification.xml: Updating server
+    RRDP https://rrdp.arin.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.arin.net/notification.xml: updating from snapshot.
-    rsync://repository.lacnic.net/rpki: successfully completed.
+    rsync://repository.lacnic.net/rpki/: successfully completed.
     Found valid trust anchor rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer. Processing.
-    rsyncing from rsync://rpki-repo.registro.br/repo/.
-    rsync://rpki-repo.registro.br/repo: Running command "rsync" "--timeout=300" "-rltz" "--delete" "rsync://rpki-repo.registro.br/repo/" "/Users/alex/.rpki-cache/repository/rsync/rpki-repo.registro.br/repo/"
-    rsync://rpki-repo.registro.br/repo: successfully completed.
-    RRDP https://rrdp.rpki.nlnetlabs.nl/rrdp/notification.xml: Updating server
-    RRDP https://rrdp.rpki.nlnetlabs.nl/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.lacnic.net/rrdp/notification.xml: Tree has 0 entries.
+    RRDP https://rrdp.lacnic.net/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.arin.net/notification.xml: snapshot update completed.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: Tree has 0 entries.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: updating from snapshot.
+    RRDP https://rrdp.ripe.net/notification.xml: snapshot update completed.
+    RRDP https://rrdp.sub.apnic.net/notification.xml: snapshot update completed.
+    RRDP https://rpki-repo.registro.br/rrdp/notification.xml: Tree has 0 entries.
+    RRDP https://rpki-repo.registro.br/rrdp/notification.xml: updating from snapshot.
+    RRDP https://rrdp.twnic.tw/rrdp/notify.xml: Tree has 0 entries.
+    RRDP https://rrdp.twnic.tw/rrdp/notify.xml: updating from snapshot.
     ...
     ASN,IP Prefix,Max Length,Trust Anchor
     AS137884,103.116.116.0/23,23,apnic

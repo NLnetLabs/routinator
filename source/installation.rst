@@ -3,8 +3,8 @@
 Installation
 ============
 
-Getting started with Routinator is really easy either building from Cargo,
-installing a Debian and Ubuntu package or using Docker.
+Getting started with Routinator is really easy by either installing a Debian
+and Ubuntu package, using Docker, or building from Cargo.
 
 Quick Start with Debian and Ubuntu Packages
 -------------------------------------------
@@ -111,8 +111,8 @@ When choosing a system to run Routinator on, make sure you have 1GB of
 available memory and 1GB of disk space. This will give you ample margin for
 the RPKI repositories to grow over time, as adoption increases.
 
-Getting Started
----------------
+Installing From Source
+----------------------
 
 There are three things you need to install and run Routinator: rsync, a C
 toolchain and Rust. You can install Routinator on any system where you can
@@ -157,7 +157,7 @@ Platform Support <https://forge.rust-lang.org/platform-support.html>`_
 page provides an overview of the various support levels.
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.42 or
+Routinator relies on a relatively new version of Rust, currently 1.45 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called :command:`rustup`.
 
