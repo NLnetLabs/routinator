@@ -527,26 +527,25 @@ These can be requested by providing different commands on the command line.
            Routinator completes the operation and exits with status code 2.
            Normally, it would exit with status code 0 indicating success.
 
-    .. option:: -a asn, --filter-asn=asn
+    .. option:: -a asn, --select-asn=asn
 
            Only output VRPs for the given ASN. The option can be given multiple
            times, in which case VRPs for all provided ASNs are provided. ASNs
            can be given with or without the prefix AS.
 
-    .. option:: -p prefix, --filter-prefix=prefix
+    .. option:: -p prefix, --select-prefix=prefix
 
            Only output VRPs with an address prefix that covers the given
            prefix, i.e., whose prefix is equal to or less specific than the
            given prefix. This will include VRPs regardless of their ASN and
-           max length.  In other words, the output will include all VRPs
+           max length. In other words, the output will include all VRPs
            that need to be considered when deciding whether an announcement
            for the prefix is RPKI valid or invalid.
 
-           The option can be given multiple times, in which case VRPs for
-           all prefixes are provided. It can also be combined with one or
-           more ASN filters. Then all matching VRPs are included. That is,
-           filters combine as "or" not "and."
-
+           The option can be given multiple times, in which case VRPs for all 
+           prefixes are provided. It can also be combined with one or more ASN
+           selections. Then all matching VRPs are included. That is, selectors
+           combine as "or" not "and".
 
 .. subcmd:: validate
 
@@ -1073,10 +1072,10 @@ In addition, the current set of VRPs is available for each output format
 at a path with the same name as the output format. E.g., the CSV output is
 available at ``/csv``.
 
-These paths accept filter expressions to limit the VRPs returned in the form of
-a query string. The field ``filter-asn`` can be used to filter for ASNs and the
-field ``filter-prefix`` can be used to filter for prefixes. The fields can be
-repeated multiple times.
+These paths accept selector expressions to limit the VRPs returned in the form
+of a query string. The field ``select-asn`` can be used to filter for ASNs and
+the field ``select-prefix`` can be used to filter for prefixes. The fields can
+be repeated multiple times.
 
 This works in the same way as the options of the same name to the
 :subcmd:`vrps` command.
