@@ -1660,7 +1660,7 @@ impl FallbackTime {
     pub fn from_config(config: &Config) -> Self {
         FallbackTime {
             min: config.refresh,
-            max: cmp::min(2 * config.refresh, config.rrdp_fallback_time)
+            max: cmp::max(2 * config.refresh, config.rrdp_fallback_time)
         }
     }
 
