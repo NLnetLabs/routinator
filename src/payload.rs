@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
-use log::warn;
+use log::{info, warn};
 use rpki::repository::cert::ResourceCert;
 use rpki::repository::resources::{
     AsId, IpBlock, IpBlocks, IpBlocksBuilder, Prefix
@@ -365,16 +365,26 @@ impl SharedHistory {
         });
 
         let mut history = self.write();
-        history.current = Some(snapshot.into_snapshot().into());
         history.metrics = Some(metrics.into());
         if let Some(delta) = delta {
+            // Data hase changed.
+            info!(
+                "Delta with {} announced and {} withdrawn origins.",
+                delta.announced_origins.len(),
+                delta.withdrawn_origins.len(),
+            );
+            history.current = Some(snapshot.into_snapshot().into());
             history.push_delta(delta);
             true
         }
+        else if current.is_none() {
+            // This is the first snapshot ever.
+            history.current = Some(snapshot.into_snapshot().into());
+            true
+        }
         else {
-            // If we didn’t have a snapshot before, we added a version even
-            // if there is no delta.
-            current.is_none()
+            // Nothing has changed.
+            false
         }
     }
 
@@ -983,7 +993,7 @@ impl PayloadDelta {
         let withdraw = key_difference(&current.origins, &next.origins);
         if !announce.is_empty() || !withdraw.is_empty() {
             Some(PayloadDelta {
-                serial,
+                serial: serial.add(1),
                 announced_origins: announce,
                 withdrawn_origins: withdraw,
             })
@@ -1519,7 +1529,7 @@ impl RoaInfo {
 fn key_difference<K: Copy + Hash + Eq, V>(
     current: &HashMap<K, V>, next: &HashMap<K, V>
 ) -> Vec<K> {
-    current.keys().filter(|key| next.contains_key(key)).cloned().collect()
+    current.keys().filter(|key| !next.contains_key(key)).cloned().collect()
 }
 
 
@@ -1582,6 +1592,23 @@ mod test {
 
         // Does not cover supernet (2001:db8::/32 does not cover 2001::/24).
         assert!(!outer.covers(supernet));
+    }
+
+    #[test]
+    fn fn_key_difference() {
+        use std::iter::FromIterator;
+
+        assert_eq!(
+            key_difference(
+                &HashMap::from_iter(
+                    vec![(1, ()), (2, ()), (3, ()), (4, ())].into_iter()
+                ),
+                &HashMap::from_iter(
+                    vec![(2, ()), (4, ()), (5, ())].into_iter()
+                )
+            ),
+            vec!(1, 3),
+        );
     }
 }
 
