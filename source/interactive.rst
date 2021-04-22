@@ -133,7 +133,7 @@ you can use the :option:`--noupdate` or :option:`-n` option.
 
 Here are some examples selecting an ASN and prefix in CSV and JSON format:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator vrps --format csv --select-asn 196615
    ASN,IP Prefix,Max Length,Trust Anchor
@@ -171,7 +171,7 @@ state, whether this because the announcement is originated by an unauthorised
 AS, or if the prefix is more specific than the maximum prefix length allows.
 Lastly, a complete list of VRPs that caused the result is included.
 
-.. code-block:: json
+.. code-block:: text
 
    routinator validate --json --asn 12654 --prefix 93.175.147.0/24
    {
@@ -219,8 +219,7 @@ array of objects. Each object describes one route announcement through its
 *prefix* and *asn* members which contain a prefix and originating AS number as
 strings, respectively.
 
-For example, let's provide Routinator with this JSON file and save it as
-``beacons.json``:
+For example, let's provide Routinator with this ``beacons.json`` JSON file:
 
 .. code-block:: json
 
@@ -295,10 +294,10 @@ result, ensuring you have the latest data.
     ]
   }
 
-If the :option:`--json` option is not provided, the input should consist of
-simple plain text with one route announcement per line, provided as a prefix
-followed by an ASCII-art arrow => surrounded by white space and followed by the
-AS number of the originating autonomous system.
+You can also provide a simple plain text file with the routes you would like to
+have verified by Routinator. The input file should have one route announcement
+per line, provided as a prefix followed by an ASCII-art arrow => surrounded by
+white space and followed by the AS number of the originating autonomous system.
 
 For example, let's provide Routinator with this file and save it as
 ``beacons.txt``:
