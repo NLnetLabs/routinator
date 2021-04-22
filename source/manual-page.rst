@@ -236,7 +236,7 @@ The available options are:
 .. option:: --fresh
 
       Delete and re-initialize the local data storage before starting. This
-      option should be provided when Routinator fails after reporting corrupt
+      option should be used when Routinator fails after reporting corrupt
       data storage.
 
 .. option:: --disable-rsync
@@ -911,7 +911,7 @@ allow-dubious-hosts
 
 fresh
       Delete and re-initialize the local data storage before starting. This
-      option should be provided when Routinator fails after reporting corrupt
+      option should be used when Routinator fails after reporting corrupt
       data storage.
 
 disable-rsync
