@@ -264,9 +264,13 @@ The available options are:
 
 .. option:: --rrdp-fallback-time=seconds
 
-      Sets  the  time  in seconds since a last successful update of an RRDP
+      Sets the maximum time in seconds since a last successful update of an RRDP
       repository before Routinator falls back to using rsync. The default is
-      3600 seconds.
+      3600 seconds. If the given value is smaller than twice the refresh time,
+      it is silently increased to that value.
+      
+      The actual time is chosen at random between the refresh time and this
+      value in order to spread out load on the rsync server.
 
 .. option:: --rrdp-timeout=seconds
 
@@ -901,6 +905,13 @@ rrdp-timeout
       RRDP-related network operations, i.e., connects, reads, and writes. If the
       value is missing, a default timeout of 30 seconds will be used. Set the
       value to 0 to turn the timeout off.
+
+rrdp-fallback-time
+      An integer value specifying the maximum number of seconds since a last
+      successful update of an RRDP repository before Routinator falls back to
+      using rsync. The default in case the value is missing is 3600 seconds. If
+      the value provided is smaller than twice the refresh time, it is silently
+      increased to that value.
 
 rrdp-connect-timeout
       An integer value that, if present, sets a separate timeout in seconds for
