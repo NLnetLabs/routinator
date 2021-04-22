@@ -154,7 +154,7 @@ Here are some examples selecting an ASN and prefix in CSV and JSON format:
 Validity Checker
 ----------------
 
-You can check the RPKI origin validation status of a specific BGP announcement
+You can check the RPKI origin validation status of one or more BGP announcements
 using the :subcmd:`validate` subcommand and by supplying the ASN and prefix. A
 validation run will be started before returning the result, making sure you get
 the latest information. If you would like a result from the current cache, you
@@ -165,13 +165,13 @@ can use the :option:`--noupdate` or :option:`-n` option.
    routinator validate --asn 12654 --prefix 93.175.147.0/24
    Invalid
 
-A detailed analysis of the reasoning behind the validation outcome is printed in
-JSON format. In case of an Invalid state, whether this because the announcement
-is originated by an unauthorised AS, or if the prefix is more specific than the
-maximum prefix length allows. Lastly, a complete list of VRPs that caused the
-result is included.
+When providing the :option:`--json` option, a detailed analysis of the reasoning
+behind the validation outcome is printed in JSON format. In case of an Invalid
+state, whether this because the announcement is originated by an unauthorised
+AS, or if the prefix is more specific than the maximum prefix length allows.
+Lastly, a complete list of VRPs that caused the result is included.
 
-.. code-block:: text
+.. code-block:: json
 
    routinator validate --json --asn 12654 --prefix 93.175.147.0/24
    {
@@ -201,6 +201,118 @@ result is included.
      }
    }
 
-If you run the HTTP service in daemon mode, this information is also available
-via the :ref:`user interface <doc_routinator_ui>` and at the ``/validity`` API
-endpoint.
+If you run the HTTP service in daemon mode, validation information is also
+available via the :ref:`user interface <doc_routinator_ui>` and at the
+``/validity`` API endpoint.
+
+Reading Input From a File
+"""""""""""""""""""""""""
+
+Routinator can also read input to validate from a file using the
+:option:`--input` option. If the file is given as a single dash, input is
+read from standard input. You can also save the results to a file using the
+:option:`--output` option.
+
+With the :option:`--json` option you can provide a file in JSON format. It
+should consist of a single object with one member *routes*  which contains an
+array of objects. Each object describes one route announcement through its
+*prefix* and *asn* members which contain a prefix and originating AS number as
+strings, respectively.
+
+For example, let's provide Routinator with this JSON file and save it as
+``beacons.json``:
+
+.. code-block:: json
+
+  {
+    "routes": [{
+        "asn": "AS12654",
+        "prefix": "93.175.147.0/24"
+      },
+      {
+        "asn": "AS12654",
+        "prefix": "2001:7fb:fd02::/48"
+      }
+    ]
+  }
+
+When referring to the file with the :option:`--json` and :option:`--input` 
+options, Routinator will perform a full validation run before providing the
+result, ensuring you have the latest data.
+
+.. code-block:: json
+
+  routinator validate --json --input beacons.json
+  {
+    "validated_routes": [
+      {
+        "route": {
+          "origin_asn": "AS12654",
+          "prefix": "93.175.147.0/24"
+        },
+        "validity": {
+          "state": "invalid",
+          "reason": "as",
+          "description": "At least one VRP Covers the Route Prefix, but no VRP ASN matches the route origin ASN",
+          "VRPs": {
+            "matched": [
+            ],
+            "unmatched_as": [
+              {
+                "asn": "AS196615",
+                "prefix": "93.175.147.0/24",
+                "max_length": "24"
+              }
+            ],
+            "unmatched_length": [
+            ]
+          }
+        }
+      },
+      {
+        "route": {
+          "origin_asn": "AS12654",
+          "prefix": "2001:7fb:fd02::/48"
+        },
+        "validity": {
+          "state": "valid",
+          "description": "At least one VRP Matches the Route Prefix",
+          "VRPs": {
+            "matched": [
+              {
+                "asn": "AS12654",
+                "prefix": "2001:7fb:fd02::/48",
+                "max_length": "48"
+              }
+            ],
+            "unmatched_as": [
+            ],
+            "unmatched_length": [
+            ]
+          }
+        }
+      }
+    ]
+  }
+
+If the :option:`--json` option is not provided, the input should consist of
+simple plain text with one route announcement per line, provided as a prefix
+followed by an ASCII-art arrow => surrounded by white space and followed by the
+AS number of the originating autonomous system.
+
+For example, let's provide Routinator with this file and save it as
+``beacons.txt``:
+
+.. code-block:: text
+
+   93.175.147.0/24 => 12654
+   2001:7fb:fd02::/48 => 12654
+
+When referring to the file with the :option:`--input` option Routinator simply
+provide the RPKI validity state:
+
+.. code-block:: text
+
+   routinator validate --input beacons.txt 
+   93.175.147.0/24 => AS12654: invalid
+   2001:7fb:fd02::/48 => AS12654: valid
