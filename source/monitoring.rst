@@ -52,7 +52,8 @@ RTR server
   - The current RTR serial number
   - The current and total number of RTR connections
   - The total amount of bytes sent and received over the RTR connection
-
+  - Metrics for each RTR client is available if the :option:`--rtr-client-metrics` option is provided
+  
 HTTP server
   - The current and total number of HTTP connections
   - The total amount of bytes sent and received over the HTTP connection
