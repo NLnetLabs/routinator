@@ -114,35 +114,35 @@ To generate a file with with the validated ROA payloads in JSON format, run:
 
    routinator vrps --format json --output authorisedroutes.json
 
-Filtering
-"""""""""
+ASN and Prefix Selection
+""""""""""""""""""""""""
 
 In case you are looking for specific information in the output, Routinator
-allows filtering to see if a prefix or ASN is covered or matched by a VRP. You
-can do this using the :option:`--filter-asn` and :option:`--filter-prefix`
-options.
+allows you to add selectors to see if a prefix or ASN is covered or matched by a
+VRP. You can do this using the :option:`--select-asn` and
+:option:`--select-prefix` options.
 
-When using :option:`--filter-asn`, you can use both ``AS64511`` and ``64511`` as
-the notation. With :option:`--filter-prefix`, the result will include VRPs
-regardless of their ASN and MaxLength. Both filter flags can be combined and
+When using :option:`--select-asn`, you can use both ``AS64511`` and ``64511`` as
+the notation. With :option:`--select-prefix`, the result will include VRPs
+regardless of their ASN and MaxLength. Both selector flags can be combined and
 used multiple times in a single query and will be treated as a logical *"or"*.
 
 A validation run will be started before returning the result, making sure you
 get the latest information. If you would like a result from the current cache,
 you can use the :option:`--noupdate` or :option:`-n` option.
 
-Here are some examples filtering for an ASN and prefix in CSV and JSON format:
+Here are some examples selecting an ASN and prefix in CSV and JSON format:
 
 .. code-block:: bash
 
-   routinator vrps --format csv --filter-asn 196615
+   routinator vrps --format csv --select-asn 196615
    ASN,IP Prefix,Max Length,Trust Anchor
    AS196615,2001:7fb:fd03::/48,48,ripe
    AS196615,93.175.147.0/24,24,ripe
 
 .. code-block:: text
 
-   routinator vrps --format json --filter-prefix 93.175.146.0/24
+   routinator vrps --format json --select-prefix 93.175.146.0/24
    {
      "roas": [
        { "asn": "AS12654", "prefix": "93.175.146.0/24", "maxLength": 24, "ta": "ripe" }
