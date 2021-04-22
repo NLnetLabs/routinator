@@ -462,6 +462,32 @@ These can be requested by providing different commands on the command line.
                   without the extension *.tal* whereas the RIPE NCC Validator
                   has a dedicated name for each.
 
+           jsonext
+                  The list is placed into a JSON object with a single element
+                  *roas* which contains an array of objects with four elements
+                  each: The autonomous system number of the network authorized
+                  to originate a prefix in *asn*, the prefix in slash notation 
+                  in *prefix*, the maximum prefix length of the announced route 
+                  in *maxLength*.
+
+                  Extensive information about the source of the object is given 
+                  in the array *source*. Each item in that array is an object 
+                  providing details of a source of the VRP. The object will have
+                  a type of roa if it was derived from a valid ROA object or 
+                  exception if it was an assertion in a local exception file.
+
+                  For ROAs, *uri* provides the rsync URI of the ROA, *validity*
+                  provides the validity of the ROA itself, and *chainValidity*
+                  the validity considering the validity of the certificates 
+                  along the validation chain.
+
+                  For  assertions from local exceptions, *path* will provide the 
+                  path of the local exceptions file and, optionally, *comment*
+                  will provide the comment if given for the assertion.
+                  
+                  Please note that because of this additional information, 
+                  output in :option:`jsonext` format will be quite large.
+
            openbgpd
                   Choosing this format causes Routinator to produce a roa-
                   set configuration item for the OpenBGPD configuration.
