@@ -645,6 +645,13 @@ These can be requested by providing different commands on the command line.
               update again. The next update will earlier if objects in the
               repository expire earlier. The default value is 600 seconds.
 
+       .. option:: --rtr-client-metrics
+       
+              If provided, the server metrics will include separate metrics for
+              every RTR client. Clients are identified by their RTR source IP
+              address. This is disabled by default to avoid accidentally leaking
+              information about the local network topology.
+
        .. option:: --refresh=seconds
 
               The amount of seconds the server should wait after having finished
@@ -992,6 +999,18 @@ listen-systemd
       activation. Use this option together with systemd's socket units to allow
       Routinator running as a regular user to bind to the default RTR port
       323.
+
+rtr-tcp-keepalive
+      An integer value specifying the number of seconds to wait before sending a
+      TCP keepalive on an established RTR connection. If this option is missing,
+      TCP keepalive will be enabled on all RTR connections with an idle time of
+      60 seconds. If this option is present and set to zero, TCP keepalives are
+      disabled.
+
+rtr-client-metrics
+      A boolean value specifying whether server metrics should include separate
+      metrics for every RTR client. If the value is missing, no RTR client
+      metrics will be provided.
 
 refresh
       An integer value specifying the number of seconds Routinator should wait
