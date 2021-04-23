@@ -679,28 +679,28 @@ impl RtrServerMetrics {
 #[derive(Debug)]
 pub struct RtrClientMetrics {
     /// The socket address of the client.
-    pub addr: IpAddr,
+    addr: IpAddr,
 
     /// Is this client currently connected?
-    pub open: AtomicBool,
+    open: AtomicBool,
 
     /// The serial number of the last successful update.
     ///
     /// This is actually an option with the value of `u32::MAX` serving as
     /// `None`.
-    pub serial: AtomicU32,
+    serial: AtomicU32,
 
     /// The time the last successful update finished.
     ///
     /// This is an option of the unix timestamp. The value of `i64::MIN`
     /// serves as a `None`.
-    pub updated: AtomicI64,
+    updated: AtomicI64,
 
     /// The number of bytes read.
-    pub bytes_read: AtomicU64,
+    bytes_read: AtomicU64,
 
     /// The number of bytes written.
-    pub bytes_written: AtomicU64,
+    bytes_written: AtomicU64,
 }
 
 impl RtrClientMetrics {
