@@ -449,6 +449,10 @@ impl HttpServerMetrics {
 
 //------------ SharedRtrServerMetrics ----------------------------------------
 
+/// A shareable wrapper around RTR server metrics.
+///
+/// This type provides access to a [`RtrServerMetrics`] object via a
+/// reference counter and lock for concurrent access.
 #[derive(Clone, Debug)]
 pub struct SharedRtrServerMetrics {
     /// The actual metrics behind a thick, safe wall.
@@ -459,6 +463,10 @@ pub struct SharedRtrServerMetrics {
 }
 
 impl SharedRtrServerMetrics {
+    /// Creates a new shareable value.
+    ///
+    /// If `detailed` is `true` per-client statistics should be produced when
+    /// presenting the metrics.
     pub fn new(detailed: bool) -> Self {
         SharedRtrServerMetrics {
             metrics: Default::default(),
@@ -466,15 +474,23 @@ impl SharedRtrServerMetrics {
         }
     }
 
+    /// Add a new client to the metrics.
+    ///
+    /// This method locks the underlying metrics. The lock is acquired
+    /// asynchronously. The method can thus be spawned as a new task.
     pub async fn add_client(&self, client: Arc<RtrClientMetrics>) {
         let mut metrics = self.metrics.lock().await;
         metrics.insert_client(client);
     }
 
+    /// Returns whether detailed per-client statistics should be presented.
     pub fn detailed(&self) -> bool {
         self.detailed
     }
 
+    /// Provides read access to the underlying server metrics.
+    ///
+    /// This method acquires the lock asynchronously.
     pub async fn read(
         &self
     ) -> impl ops::Deref<Target = RtrServerMetrics> + '_ {
@@ -485,6 +501,23 @@ impl SharedRtrServerMetrics {
 
 //------------ RtrServerMetrics ----------------------------------------------
 
+/// Metrics regarding the operation of the RTR server.
+///
+/// This keeps a list of [`RtrClientMetrics`]. There is one element for each
+/// currently open connection and at least one element for each address for
+/// which there previously was a connection. Elements for recently closed
+/// connections are only collected into single items for each address when a
+/// new item is added (typically, when a new connection is opened), so there
+/// may be multiple ‘closed’ elements for an address. There may be multiple
+/// open elements for an address if there are multiple open connections from
+/// the address.
+///
+/// The list is always ordered by address. Thus, if you iterate over the
+/// list via [`iter_clients`][Self::iter_clients], all elements with the same
+/// address will appear in an uninterrupted sequence. The
+/// [`fold_clients`][Self::fold_clients] method can be used to produce an
+/// iterator that walks over all addresses and creates a collated value for
+/// each.
 #[derive(Clone, Debug, Default)]
 pub struct RtrServerMetrics {
     /// A list of client metrics.
@@ -494,8 +527,6 @@ pub struct RtrServerMetrics {
     /// will be collapsed into a single value ever so often.
     clients: Vec<Arc<RtrClientMetrics>>,
 }
-
-
 
 impl RtrServerMetrics {
     /// Returns the number of current connections.
@@ -515,7 +546,7 @@ impl RtrServerMetrics {
 
     /// Returns an iterator over all clients.
     ///
-    /// There can be multiple element for an address. However, these are
+    /// There can be multiple elements for an address. However, these are
     /// guaranteed to be clustered together.
     pub fn iter_clients(
         &self
@@ -523,7 +554,11 @@ impl RtrServerMetrics {
         self.clients.iter().map(AsRef::as_ref)
     }
 
-    /// Returns an iterated over folded values for clients with same address.
+    /// Returns an iterator over folded values for clients with same address.
+    ///
+    /// For each group of clients with the same address, the closure `fold`
+    /// is run providing access to the client and the result of type `B`
+    /// which will initialized with `init` for each group.
     pub fn fold_clients<'a, B, F>(
         &'a self, init: B, fold: F
     ) -> impl Iterator<Item = (IpAddr, B)> + 'a
@@ -543,8 +578,8 @@ impl RtrServerMetrics {
         // XXX This can be optimised within the same vec. But this is a bit
         //     scary and I rather get it right for now.
 
-        // See if we need to collapse the vec. This is true if in a sequence
-        // of more than one addr all items are closed.
+        // See if we need to collapse the vec. This is true if there is more
+        // than one closed item for an address.
         let mut collapse = false;
         let mut slice = self.clients.as_slice();
         while let Some((first, tail)) = slice.split_first() {
@@ -567,9 +602,12 @@ impl RtrServerMetrics {
         }
 
         if collapse {
-            // Construct a new vec. Keep all open clients. Collapse closed
-            // clients with the same addr by adding them up. Insert the new
-            // client at the right point.
+            // Construct a new vec. Simply move all open clients over. For
+            // closed clients, only keep one item with a sum. This item is
+            // `pending` below. It is kept through the loop and moved to the
+            // new vec whenever a new addr is encountered.
+            // The new client is inserted when we encounter the first client
+            // with an addr larger than the new client’s.
             let mut new_clients = Vec::new();
             let mut pending: Option<Arc<RtrClientMetrics>> = None;
             let mut client = Some(client);
@@ -592,7 +630,7 @@ impl RtrServerMetrics {
                 if let Some(pending_item) = pending.take() {
                     if pending_item.addr == item.addr {
                         pending = Some(
-                            Arc::new(pending_item.collapse(&item))
+                            Arc::new(pending_item.collapse_closed(&item))
                         );
                     }
                     else {
@@ -626,6 +664,18 @@ impl RtrServerMetrics {
 
 //------------ RtrClientMetrics ----------------------------------------------
 
+/// Metrics about a single RTR client.
+///
+/// We consider all connections from a single IP address as a single client.
+/// This may not always be strictly correct (think NAT), but seems a good way
+/// to present information.
+///
+/// All information is stored in atomic values, so you can keep the metrics
+/// behind an arc. All load and store operations are done with relaxed
+/// ordering. This should be fine because in practice there is exactly one
+/// writer (the RTR connection) and possibly many readers that present
+/// information to the user only so there is no bad consequences if their
+/// value is a bit behind.
 #[derive(Debug)]
 pub struct RtrClientMetrics {
     /// The socket address of the client.
@@ -636,7 +686,7 @@ pub struct RtrClientMetrics {
 
     /// The serial number of the last successful update.
     ///
-    /// This is actually an option with the value of `u32::MAX` serves as
+    /// This is actually an option with the value of `u32::MAX` serving as
     /// `None`.
     pub serial: AtomicU32,
 
@@ -654,6 +704,7 @@ pub struct RtrClientMetrics {
 }
 
 impl RtrClientMetrics {
+    /// Create a new RTR client metrics value for the given address.
     pub fn new(addr: IpAddr) -> Self {
         RtrClientMetrics {
             addr,
@@ -665,30 +716,39 @@ impl RtrClientMetrics {
         }
     }
 
+    /// Returns whether this client is currently open.
     pub fn is_open(&self) -> bool {
         self.open.load(Ordering::Relaxed)
     }
 
+    /// Closes the client.
     pub fn close(&self) {
         self.open.store(false, Ordering::Relaxed)
     }
 
+    /// Returns the total number of bytes read from this client.
     pub fn bytes_read(&self) -> u64 {
         self.bytes_read.load(Ordering::Relaxed)
     }
 
+    /// Increases the number of bytes read from this client.
     pub fn inc_bytes_read(&self, count: u64) {
         self.bytes_read.fetch_add(count, Ordering::Relaxed);
     }
 
+    /// Returns the total number of bytes written to this client.
     pub fn bytes_written(&self) -> u64 {
         self.bytes_written.load(Ordering::Relaxed)
     }
 
+    /// Increases the number of bytes written to this client.
     pub fn inc_bytes_written(&self, count: u64) {
         self.bytes_written.fetch_add(count, Ordering::Relaxed);
     }
 
+    /// Returns the serial number of the last successful update.
+    ///
+    /// Returns `None` if there never was a successful update.
     pub fn serial(&self) -> Option<Serial> {
         let serial = self.serial.load(Ordering::Relaxed);
         if serial == u32::MAX {
@@ -699,6 +759,9 @@ impl RtrClientMetrics {
         }
     }
 
+    /// Returns the time of the last successful update.
+    ///
+    /// Returns `None` if there never was a successful update.
     pub fn updated(&self) -> Option<DateTime<Utc>> {
         let updated = self.updated.load(Ordering::Relaxed);
         if updated == i64::MIN {
@@ -709,12 +772,19 @@ impl RtrClientMetrics {
         }
     }
 
+    /// A successful update with the given serial number has finished now.
+    ///
+    /// Updates the serial number and update time accordingly.
     pub fn update_now(&self, serial: Serial) {
         self.serial.store(serial.into(), Ordering::Relaxed);
         self.updated.store(Utc::now().timestamp(), Ordering::Relaxed);
     }
 
-    fn collapse(&self, other: &Self) -> Self {
+    /// Collapses the metrics of two values into a new one.
+    ///
+    /// The returned value will use the addr of `self` and will always be
+    /// closed.
+    fn collapse_closed(&self, other: &Self) -> Self {
         let left_serial = self.serial.load(Ordering::Relaxed);
         let right_serial = other.serial.load(Ordering::Relaxed);
         RtrClientMetrics {
@@ -752,13 +822,23 @@ impl RtrClientMetrics {
 
 //------------ FoldedRtrClientsIter ------------------------------------------
 
+/// An iterator over groups of RTR clients in RTR server metrics.
+///
+/// A value to this type can be obtained via
+/// [`RtrServerMetrics::fold_clients`].
 struct FoldedRtrClientsIter<'a, B, F> {
+    /// An iterator over the clients.
     clients: Peekable<slice::Iter<'a, Arc<RtrClientMetrics>>>,
+
+    /// The initial value to use for each group.
     init: B,
+
+    /// The fold function run for each client.
     fold_fn: F
 }
 
 impl<'a, B, F> FoldedRtrClientsIter<'a, B, F> {
+    /// Creates a new value.
     fn new(metrics: &'a RtrServerMetrics, init: B, fold_fn: F) -> Self {
         FoldedRtrClientsIter {
             clients: metrics.clients.iter().peekable(),
