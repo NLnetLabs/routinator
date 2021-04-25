@@ -3,11 +3,12 @@
 Routinator
 ==========
 
-|lastupdated| |discord| |twitter|
+|docsupdated| |discord| |twitter|
 
-.. |lastupdated| image:: https://img.shields.io/github/last-commit/NLnetLabs/routinator-manual.svg?label=last%20updated&style=flat-square
+.. |docsupdated| image:: https://img.shields.io/github/last-commit/NLnetLabs/routinator-manual.svg?label=docs%20updated
+            :target: https://github.com/NLnetLabs/routinator-manual/commits/main
 
-.. |discord| image:: https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord&style=flat-square
+.. |discord| image:: https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord
             :target: https://discord.gg/8dvKB5Ykhy
 
 .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
