@@ -636,7 +636,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         repository_index: Option<usize>,
     ) -> Result<Self, Failed> {
         let collector = run.collector.repository(cert)?;
-        let store = run.store.repository(cert, collector.as_ref())?;
+        let store = run.store.repository(cert)?;
         Ok(PubPoint {
             run, cert, processor, collector, store,
             repository_index,
