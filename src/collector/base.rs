@@ -6,7 +6,7 @@ use std::{fs, io};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use log::{error, warn};
+use log::error;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::Config;
@@ -215,10 +215,6 @@ impl<'a> Run<'a> {
                 if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
                     return Ok(Some(Repository::rrdp(repository)))
                 }
-                warn!(
-                    "RRDP repository {} unavailable. Falling back to rsync.",
-                    rrdp_uri
-                );
             }
         }
 
