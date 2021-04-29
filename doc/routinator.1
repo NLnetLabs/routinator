@@ -314,6 +314,12 @@ by the RRDP client. It can be either an HTTP or a SOCKS URI. The option can
 be given multiple times in which case proxies are tried in the given order.
 
 .TP
+.BI --max-object-size= BYTES
+Limits the size of individual objects received via either rsync or RRDP to
+the given number of bytes. The default value if this option is not present
+is 20 MBytes. Use a value of 0 to disable the limit.
+
+.TP
 .B --dirty
 If this option is present, unused files and directories will not be deleted
 from the repository directory after each validation run.
@@ -948,6 +954,12 @@ certificates provided via this option, the system's own trust store is used.
 A list of string each providing the URI for a proxy for outgoing RRDP
 connections. The proxies are tried in order for each request. HTTP and SOCKS5
 proxies are supported.
+
+.TP
+.B max-object-size
+An integer value that provides a limit for the size of individual objects
+received via either rsync or RRDP to the given number of bytes. The default value if this option is not present is 20 MBytes. A value of 0 disables
+the limit.
 
 .TP
 .B dirty
