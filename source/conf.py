@@ -17,7 +17,6 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import sphinx_rtd_theme
-import versionwarning
 
 # -- Project information -----------------------------------------------------
 
@@ -216,14 +215,3 @@ def setup(app):
     app.add_css_file('css/dark.css')
     app.add_css_file('css/light.css')
     
-# sphinx-version-warning config
-versionwarning_messages = {
-    "latest": (
-        'This is the documentation for the latest development version, which may describe features that are not compatible with the <a href="/en/stable/">stable</a> version.'
-    ),
-}
-# Show warning at top of page
-# versionwarning_body_selector = "div.document"
-# versionwarning_banner_title = ""
-# For debugging locally
-# versionwarning_project_version = "latest"
