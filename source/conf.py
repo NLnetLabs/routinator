@@ -218,7 +218,7 @@ def setup(app):
 # sphinx-version-warning config
 versionwarning_messages = {
     "latest": (
-        "This is the documentation for the latest development version, which may describe features that are not compatible with the <a href="/en/stable/">stable</a> version."
+        'This is the documentation for the latest development version, which may describe features that are not compatible with the <a href="/en/stable/">stable</a> version.'
     ),
 }
 # Show warning at top of page
