@@ -17,13 +17,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use chrono::{DateTime, Duration, Utc};
-use chrono::format::{Item, Fixed, Numeric, Pad};
 use clap::{crate_name, crate_version};
 use futures::stream;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use hyper::header::HeaderValue;
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
@@ -39,7 +37,7 @@ use crate::metrics::{
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::LogOutput;
-use crate::utils::JsonBuilder;
+use crate::utils::{JsonBuilder, parse_http_date, format_http_date};
 use crate::validity::RouteValidity;
 
 
@@ -1408,7 +1406,7 @@ fn vrps(
         .header("Content-Type", format.content_type())
         .header("Content-Length", stream.output_len())
         .header("ETag", etag)
-        .header("Last-Modified", format_http_date(&created));
+        .header("Last-Modified", format_http_date(created));
 
     builder.body(Body::wrap_stream(stream::iter(
         stream.map(Result::<_, Infallible>::Ok)
@@ -1447,7 +1445,7 @@ fn maybe_not_modified(
 
     // Now, the If-Modified-Since header.
     if let Some(value) = req.headers().get("If-Modified-Since") {
-        if let Some(date) = parse_http_date(value) {
+        if let Some(date) = parse_http_date(value.to_str().ok()?) {
             if date >= done {
                 return Some(not_modified(etag, done))
             }
@@ -1462,7 +1460,7 @@ fn not_modified(etag: &str, done: DateTime<Utc>) -> Response<Body> {
     Response::builder()
     .status(304)
     .header("ETag", etag)
-    .header("Last-Modified", format_http_date(&done))
+    .header("Last-Modified", format_http_date(done))
     .body(Body::empty()).unwrap()
 }
 
@@ -1694,102 +1692,6 @@ impl<'a> Iterator for EtagsIter<'a> {
 }
 
 
-//------------ Parsing and Constructing HTTP Dates ---------------------------
-
-/// Definition of the preferred date format (aka IMF-fixdate).
-///
-/// The definition allows for relaxed parsing: It accepts additional white
-/// space and ignores case for textual representations. It does, however,
-/// construct the correct representation when formatting.
-const IMF_FIXDATE: &[Item<'static>] = &[
-    Item::Space(""),
-    Item::Fixed(Fixed::ShortWeekdayName),
-    Item::Space(""),
-    Item::Literal(","),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Day, Pad::Zero),
-    Item::Space(" "),
-    Item::Fixed(Fixed::ShortMonthName),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Year, Pad::Zero),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Hour, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Minute, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Second, Pad::Zero),
-    Item::Space(" "),
-    Item::Literal("GMT"),
-    Item::Space(""),
-];
-
-/// Definition of the obsolete RFC850 date format..
-const RFC850_DATE: &[Item<'static>] = &[
-    Item::Space(""),
-    Item::Fixed(Fixed::LongWeekdayName),
-    Item::Space(""),
-    Item::Literal(","),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Day, Pad::Zero),
-    Item::Literal("-"),
-    Item::Fixed(Fixed::ShortMonthName),
-    Item::Literal("-"),
-    Item::Numeric(Numeric::YearMod100, Pad::Zero),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Hour, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Minute, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Second, Pad::Zero),
-    Item::Space(" "),
-    Item::Literal("GMT"),
-    Item::Space(""),
-];
-
-/// Definition of the obsolete asctime date format.
-const ASCTIME_DATE: &[Item<'static>] = &[
-    Item::Space(""),
-    Item::Fixed(Fixed::ShortWeekdayName),
-    Item::Space(" "),
-    Item::Fixed(Fixed::ShortMonthName),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Day, Pad::Space),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Hour, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Minute, Pad::Zero),
-    Item::Literal(":"),
-    Item::Numeric(Numeric::Second, Pad::Zero),
-    Item::Space(" "),
-    Item::Numeric(Numeric::Year, Pad::Zero),
-    Item::Space(""),
-];
-
-fn parse_http_date(date: &HeaderValue) -> Option<DateTime<Utc>> {
-    use chrono::format::{Parsed, parse};
-
-    // All formats are ASCII-only, so if we can’t turn the value into a
-    // string, it ain’t a valid date.
-    let date = date.to_str().ok()?;
-
-    let mut parsed = Parsed::new();
-    if parse(&mut parsed, date, IMF_FIXDATE.iter()).is_err() {
-        parsed = Parsed::new();
-        if parse(&mut parsed, date, RFC850_DATE.iter()).is_err() {
-            parsed = Parsed::new();
-            if parse(&mut parsed, date, ASCTIME_DATE.iter()).is_err() {
-                return None
-            }
-        }
-    }
-    parsed.to_datetime_with_timezone(&Utc).ok()
-}
-
-fn format_http_date(date: &DateTime<Utc>) -> String {
-    date.format_with_items(IMF_FIXDATE.iter()).to_string()
-}
-
-
 //============ Routinator UI =================================================
 
 #[cfg(feature = "ui")]
@@ -1904,35 +1806,6 @@ mod test {
         assert_eq!(
             EtagsIter("\"foo\", W/\"bar\" , \"ba,zz\", ").collect::<Vec<_>>(),
             ["\"foo\"", "W/\"bar\"", "\"ba,zz\""]
-        );
-    }
-
-    #[test]
-    fn test_parse_http_date() {
-        let date = DateTime::<Utc>::from_utc(
-            chrono::naive::NaiveDate::from_ymd(
-                1994, 11, 6
-            ).and_hms(8, 49, 37),
-            Utc
-        );
-
-        assert_eq!(
-            parse_http_date(
-                &HeaderValue::from_static("Sun, 06 Nov 1994 08:49:37 GMT")
-            ),
-            Some(date)
-        );
-        assert_eq!(
-            parse_http_date(
-                &HeaderValue::from_static("Sunday, 06-Nov-94 08:49:37 GMT")
-            ),
-            Some(date)
-        );
-        assert_eq!(
-            parse_http_date(
-                &HeaderValue::from_static("Sun Nov  6 08:49:37 1994")
-            ),
-            Some(date)
         );
     }
 }
