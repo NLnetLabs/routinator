@@ -1,5 +1,10 @@
 .. _doc_routinator:
 
+.. Attention:: You are reading the ``latest`` (unstable) version of this 
+               documentation, which may describe features which are not
+               available in the `stable version
+               <https://routinator.readthedocs.io/en/stable/>`_.
+
 Routinator – *main* branch
 ==========================
 
