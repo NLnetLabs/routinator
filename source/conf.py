@@ -42,6 +42,7 @@ release = ''
 extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
+    'versionwarning.extension',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -213,3 +214,15 @@ def setup(app):
                         parse_node=parse_cmd_args_node)
     app.add_css_file('css/dark.css')
     app.add_css_file('css/light.css')
+    
+# sphinx-version-warning config
+versionwarning_messages = {
+    "latest": (
+        "This is the documentation for the latest development version, which may describe features that are not compatible with the <a href="/en/stable/">stable</a> version."
+    ),
+}
+# Show warning at top of page
+# versionwarning_body_selector = "div.document"
+# versionwarning_banner_title = ""
+# For debugging locally
+# versionwarning_project_version = "latest"
