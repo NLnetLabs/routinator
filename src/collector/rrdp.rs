@@ -26,6 +26,7 @@ use log::{debug, error, info, warn};
 use reqwest::header;
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
+use rand::Rng;
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::{rrdp, uri};
@@ -72,7 +73,7 @@ pub struct Collector {
     ///
     /// This is the time since the last known update of an RRDP repository
     /// before it is considered non-existant.
-    fallback_time: Duration,
+    fallback_time: FallbackTime,
 }
 
 impl Collector {
@@ -93,7 +94,7 @@ impl Collector {
                 None
             },
             filter_dubious: !config.allow_dubious_hosts,
-            fallback_time: config.rrdp_fallback_time,
+            fallback_time: FallbackTime::from_config(config),
         }))
     }
 
@@ -470,8 +471,8 @@ impl<'a> Run<'a> {
 
     /// Returns whether a repository should be considered current.
     ///
-    /// It is current if we have a copy of the repository and that copy was
-    /// last updated less than the fallback time ago.
+    /// It is current if we have a copy of the repository and that copy has
+    /// not yet expired.
     fn is_repository_current(
         &self, rpki_notify: &uri::Https
     ) -> Result<bool, Failed> {
@@ -479,17 +480,7 @@ impl<'a> Run<'a> {
             Repository::tree_name(rpki_notify)
         )?;
         match tree.get(REPOSITORY_STATE_KEY)? {
-            Some(data) => {
-                let duration = Utc::now().signed_duration_since(
-                    RepositoryState::try_from(data)?.updated()
-                );
-                match duration.to_std() {
-                    Ok(duration) => {
-                        Ok(duration < self.collector.fallback_time)
-                    }
-                    Err(_) => Ok(false)
-                }
-            }
+            Some(data) => Ok(!RepositoryState::try_from(data)?.is_expired()),
             None => Ok(false)
         }
     }
@@ -718,7 +709,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn not_modified(&mut self) -> Result<(), Failed> {
         debug!("RRDP {}: Not modified.", self.rpki_notify);
         if let Some(state) = self.state.as_mut() {
-            state.touch();
+            state.touch(self.collector.fallback_time);
             self.repository.store_state(state)?
         }
         Ok(())
@@ -793,7 +784,8 @@ impl<'a> RepositoryUpdate<'a> {
 
         tree.apply_batch(processor.batch)?;
         tree.insert(
-            REPOSITORY_STATE_KEY, &RepositoryState::from_notify(notify)
+            REPOSITORY_STATE_KEY,
+            &RepositoryState::from_notify(notify, self.collector.fallback_time)
         )?;
         tree.flush()?;
 
@@ -989,7 +981,9 @@ impl<'a> RepositoryUpdate<'a> {
 
         processor.batch.insert(
             REPOSITORY_STATE_KEY,
-            &RepositoryState::from_notify(notify),
+            &RepositoryState::from_notify(
+                notify, self.collector.fallback_time
+            ),
         );
 
         Ok(processor.batch)
@@ -1623,6 +1617,9 @@ struct RepositoryState {
     /// through the database as its sub-second portion is forced to zero.
     pub updated_ts: i64,
 
+    /// The time when we consider the stored data to be expired.
+    pub best_before_ts: i64,
+
     /// The value of the date header of the notification file if present.
     ///
     /// Given as the Unix timestamp in seconds.
@@ -1637,13 +1634,17 @@ struct RepositoryState {
 
 impl RepositoryState {
     /// Create the state based on the notification file.
-    pub fn from_notify(notify: &Notification) -> Self {
+    pub fn from_notify(
+        notify: &Notification,
+        fallback: FallbackTime,
+    ) -> Self {
         RepositoryState {
             session: notify.content.session_id,
             serial: notify.content.serial,
             updated_ts: Utc::now().timestamp(),
+            best_before_ts: fallback.best_before().timestamp(),
             last_modified_ts: notify.last_modified.map(|x| x.timestamp()),
-            etag: notify.etag.clone()
+            etag: notify.etag.clone(),
         }
     }
 
@@ -1652,9 +1653,21 @@ impl RepositoryState {
         Utc.timestamp(self.updated_ts, 0)
     }
 
+    /// Returns the best before time as a proper timestamp.
+    pub fn best_before(&self) -> DateTime<Utc> {
+        Utc.timestamp(self.best_before_ts, 0)
+    }
+
     /// Sets the update time to now.
-    pub fn touch(&mut self) {
-        self.updated_ts = Utc::now().timestamp()
+    pub fn touch(&mut self, fallback: FallbackTime) {
+        self.updated_ts = Utc::now().timestamp();
+        self.best_before_ts = fallback.best_before().timestamp();
+    }
+
+
+    /// Returns whether this repository should be considered expired.
+    pub fn is_expired(&self) -> bool {
+        Utc::now() > self.best_before()
     }
 }
 
@@ -1676,6 +1689,9 @@ impl<'a> From<&'a RepositoryState> for IVec {
 
         // The update timestamp in network byte order.
         vec.extend_from_slice(&state.updated_ts.to_be_bytes());
+
+        // The best-before time as the i64 timestamp in network byte order.
+        vec.extend_from_slice(&state.best_before_ts.to_be_bytes());
 
         // The notification date as a i64 timestamp in network byte order.
         // We use i64::MIN as a placeholder for `None`.
@@ -1733,6 +1749,12 @@ impl TryFrom<IVec> for RepositoryState {
             field.try_into().expect("Bug: slice of wrong length")
         );
 
+        // Best-before.
+        let (field, stored) = stored.split_at(mem::size_of::<i64>());
+        let best_before_ts = i64::from_be_bytes(
+            field.try_into().expect("Bug: slice of wrong length")
+        );
+
         // Notification Date.
         let (field, stored) = stored.split_at(mem::size_of::<i64>());
         let last_modified_ts = i64::from_be_bytes(
@@ -1755,8 +1777,8 @@ impl TryFrom<IVec> for RepositoryState {
         };
         
         Ok(RepositoryState {
-            session, serial, updated_ts, last_modified_ts,
-            etag
+            session, serial, updated_ts, best_before_ts,
+            last_modified_ts, etag
         })
     }
 }
@@ -1859,6 +1881,34 @@ impl TryFrom<IVec> for RepositoryObject<Bytes> {
         let content = Bytes::copy_from_slice(stored);
 
         Ok(RepositoryObject { hash, content })
+    }
+}
+
+
+//------------ FallbackTime --------------------------------------------------
+
+/// Parameters for calculating the best-before time of repositories.
+#[derive(Clone, Copy, Debug)]
+struct FallbackTime {
+    min: Duration,
+    max: Duration,
+}
+
+impl FallbackTime {
+    /// Creates a new value from the configuration.
+    pub fn from_config(config: &Config) -> Self {
+        FallbackTime {
+            min: config.refresh,
+            max: cmp::max(2 * config.refresh, config.rrdp_fallback_time)
+        }
+    }
+
+    /// Picks a best-before date for a repository updated around now.
+    pub fn best_before(self) -> DateTime<Utc> {
+        // Saturating conversion between std’s and chrono’s Duration types.
+        Utc::now() + chrono::Duration::from_std(
+            rand::thread_rng().gen_range(self.min..self.max)
+        ).unwrap_or_else(|_| chrono::Duration::milliseconds(i64::MAX))
     }
 }
 
@@ -2257,6 +2307,7 @@ mod test {
             session: Uuid::from_u128(12),
             serial: 933,
             updated_ts: 732,
+            best_before_ts: 3221,
             last_modified_ts: None,
             etag: None
         };

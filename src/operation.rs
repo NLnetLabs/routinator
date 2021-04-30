@@ -33,7 +33,7 @@ use tokio::sync::oneshot;
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
-use crate::metrics::ServerMetrics;
+use crate::metrics::{SharedRtrServerMetrics};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
@@ -509,14 +509,16 @@ impl Server {
         )?;
         process.setup_service(self.detach)?;
         let log = log.map(Arc::new);
-        let metrics = Arc::new(ServerMetrics::default());
+        let rtr_metrics = SharedRtrServerMetrics::new(
+            process.config().rtr_client_metrics
+        );
 
         let history = SharedHistory::from_config(process.config());
         let (mut notify, rtr) = rtr_listener(
-            history.clone(), metrics.clone(), process.config()
+            history.clone(), rtr_metrics.clone(), process.config()
         )?;
         let http = http_listener(
-            history.clone(), metrics, log, process.config()
+            history.clone(), rtr_metrics, log, process.config()
         )?;
 
         process.drop_privileges()?;

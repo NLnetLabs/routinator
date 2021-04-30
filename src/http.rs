@@ -7,7 +7,7 @@
 //!
 //! [`http_listener`]: fn.http_listener.html
 
-use std::io;
+use std::{cmp, io};
 use std::convert::Infallible;
 use std::fmt::Write;
 use std::future::Future;
@@ -31,7 +31,9 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::output;
 use crate::config::Config;
 use crate::error::{Failed, ExitError};
-use crate::metrics::{ServerMetrics, PublicationMetrics, VrpMetrics};
+use crate::metrics::{
+    HttpServerMetrics, PublicationMetrics, SharedRtrServerMetrics, VrpMetrics
+};
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::LogOutput;
@@ -44,10 +46,11 @@ use crate::validity::RouteValidity;
 /// Returns a future for all HTTP server listeners.
 pub fn http_listener(
     origins: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
     config: &Config,
 ) -> Result<impl Future<Output = ()>, ExitError> {
+    let metrics = Arc::new(HttpServerMetrics::default());
     let mut listeners = Vec::new();
     for addr in &config.http_listen {
         // Binding needs to have happened before dropping privileges
@@ -65,12 +68,13 @@ pub fn http_listener(
         }
         listeners.push(listener);
     }
-    Ok(_http_listener(origins, metrics, log, listeners))
+    Ok(_http_listener(origins, metrics, rtr_metrics, log, listeners))
 }
 
 async fn _http_listener(
     origins: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    metrics: Arc<HttpServerMetrics>,
+    rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
     listeners: Vec<StdListener>
 ) {
@@ -81,7 +85,8 @@ async fn _http_listener(
         let _ = select_all(
             listeners.into_iter().map(|listener| {
                 tokio::spawn(single_http_listener(
-                    listener, origins.clone(), metrics.clone(), log.clone()
+                    listener, origins.clone(), metrics.clone(),
+                    rtr_metrics.clone(), log.clone()
                 ))
             })
         ).await;
@@ -97,21 +102,24 @@ async fn _http_listener(
 async fn single_http_listener(
     listener: StdListener,
     origins: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    metrics: Arc<HttpServerMetrics>,
+    rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
 ) {
     let make_service = make_service_fn(|_conn| {
         let origins = origins.clone();
         let metrics = metrics.clone();
+        let rtr_metrics = rtr_metrics.clone();
         let log = log.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let origins = origins.clone();
                 let metrics = metrics.clone();
+                let rtr_metrics = rtr_metrics.clone();
                 let log = log.clone();
                 async move {
                     handle_request(
-                        req, &origins, &metrics,
+                        req, &origins, &metrics, &rtr_metrics,
                         log.as_ref().map(|x| x.as_ref())
                     ).await
                 }
@@ -139,10 +147,11 @@ async fn single_http_listener(
 async fn handle_request(
     req: Request<Body>,
     origins: &SharedHistory,
-    metrics: &ServerMetrics,
+    metrics: &HttpServerMetrics,
+    rtr_metrics: &SharedRtrServerMetrics,
     log: Option<&LogOutput>,
 ) -> Result<Response<Body>, Infallible> {
-    metrics.inc_http_requests();
+    metrics.inc_requests();
     if *req.method() != Method::GET {
         return Ok(method_not_allowed())
     }
@@ -152,9 +161,11 @@ async fn handle_request(
     else {
         Ok(match req.uri().path() {
             "/log" => handle_log(log),
-            "/metrics" => handle_metrics(origins, metrics),
-            "/status" => handle_status(origins, metrics),
-            "/api/v1/status" => handle_api_status(origins, metrics),
+            "/metrics" => handle_metrics(origins, metrics, rtr_metrics).await,
+            "/status" => handle_status(origins, metrics, rtr_metrics).await,
+            "/api/v1/status" => {
+                handle_api_status(origins, metrics, rtr_metrics).await
+            }
             "/validity" => handle_validity_query(origins, req.uri().query()),
             "/version" => handle_version(),
             path if path.starts_with("/api/v1/validity/") => {
@@ -171,9 +182,10 @@ async fn handle_request(
 
 //------------ handle_metrics ------------------------------------------------
 
-fn handle_metrics(
+async fn handle_metrics(
     history: &SharedHistory,
-    server_metrics: &ServerMetrics,
+    server_metrics: &HttpServerMetrics,
+    rtr_metrics: &SharedRtrServerMetrics,
 ) -> Response<Body> {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
@@ -454,15 +466,8 @@ fn handle_metrics(
         }
     }
 
-    // rtr_connections
-    writeln!(res,
-        "\n\
-        # HELP routinator_rtr_connections total number of RTR connections\n\
-        # TYPE routinator_rtr_connections counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_rtr_connections {}", server_metrics.rtr_conn_open()
-    ).unwrap();
+    let detailed_rtr = rtr_metrics.detailed();
+    let rtr_metrics = rtr_metrics.read().await;
 
     // rtr_current_connections
     writeln!(res,
@@ -473,7 +478,7 @@ fn handle_metrics(
     ).unwrap();
     writeln!(res,
         "routinator_rtr_current_connections {}",
-        server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close()
+        rtr_metrics.current_connections()
     ).unwrap();
 
     // rtr_bytes_read
@@ -483,7 +488,7 @@ fn handle_metrics(
         # TYPE routinator_rtr_bytes_read counter"
     ).unwrap();
     writeln!(res,
-        "routinator_rtr_bytes_read {}", server_metrics.rtr_bytes_read()
+        "routinator_rtr_bytes_read {}", rtr_metrics.bytes_read()
     ).unwrap();
 
     // rtr_bytes_written
@@ -493,8 +498,117 @@ fn handle_metrics(
         # TYPE routinator_rtr_bytes_written counter"
     ).unwrap();
     writeln!(res,
-        "routinator_rtr_bytes_written {}", server_metrics.rtr_bytes_written()
+        "routinator_rtr_bytes_written {}", rtr_metrics.bytes_written()
     ).unwrap();
+
+    if detailed_rtr {
+        // rtr_client_connections
+        writeln!(res,
+            "\n\
+            # HELP routinator_rtr_client_connections number of current \
+                connections per client\n\
+            # TYPE routinator_rtr_client_connections gauge"
+        ).unwrap();
+        rtr_metrics.fold_clients(0, |count, client| {
+            if client.is_open() {
+                *count += 1
+            }
+        }).for_each(|(addr, count)| {
+            writeln!(res,
+                "routinator_rtr_client_connections{{addr=\"{}\"}} {}",
+                addr, count
+            ).unwrap();
+        });
+
+        // rtr_client_serial
+        writeln!(res,
+            "\n\
+            # HELP routinator_rtr_client_serial \
+                last serial seen by a client\n\
+            # TYPE routinator_rtr_client_serial gauge"
+        ).unwrap();
+        rtr_metrics.fold_clients(None, |serial, client| {
+            *serial = match (*serial, client.serial().map(u32::from)) {
+                (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                (Some(left), None) => Some(left),
+                (None, Some(right)) => Some(right),
+                (None, None) => None
+            };
+        }).for_each(|(addr, count)| {
+            write!(res,
+                "routinator_rtr_client_serial{{addr=\"{}\"}} ",
+                addr,
+            ).unwrap();
+            match count {
+                Some(count) => writeln!(res, "{}", count).unwrap(),
+                None => writeln!(res, "-1").unwrap(),
+            }
+        });
+
+        // rtr_client_last_update_seconds
+        writeln!(res,
+            "\n\
+            # HELP routinator_rtr_last_update_seconds \
+                last serial seen by a client\n\
+            # TYPE routinator_rtr_last_update_seconds gauge"
+        ).unwrap();
+        rtr_metrics.fold_clients(None, |update, client| {
+            *update = match (*update, client.updated()) {
+                (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                (Some(left), None) => Some(left),
+                (None, Some(right)) => Some(right),
+                (None, None) => None
+            };
+        }).for_each(|(addr, update)| {
+            write!(res,
+                "routinator_rtr_last_update_seconds{{addr=\"{}\"}} ",
+                addr,
+            ).unwrap();
+            match update {
+                Some(update) => {
+                    let duration = Utc::now() - update;
+                    writeln!(res,
+                        "{}.{:03}",
+                        duration.num_seconds(),
+                        duration.num_milliseconds() % 1000,
+                    ).unwrap();
+                }
+                None => writeln!(res, "-1").unwrap(),
+            }
+        });
+
+        // rtr_client_read_bytes
+        writeln!(res,
+            "\n\
+            # HELP routinator_rtr_client_read_bytes \
+                number of bytes read per client\n\
+            # TYPE routinator_rtr_client_read_bytes counter"
+        ).unwrap();
+        rtr_metrics.fold_clients(0, |count, client| {
+            *count += client.bytes_read();
+        }).for_each(|(addr, count)| {
+            writeln!(res,
+                "routinator_rtr_client_read_bytes{{addr=\"{}\"}} {}",
+                addr, count
+            ).unwrap()
+        });
+
+        // rtr_client_written_bytes
+        writeln!(res,
+            "\n\
+            # HELP routinator_rtr_client_written_bytes \
+                number of bytes written per client\n\
+            # TYPE routinator_rtr_client_written_bytes counter"
+        ).unwrap();
+        rtr_metrics.fold_clients(0, |count, client| {
+            *count += client.bytes_written();
+        }).for_each(|(addr, count)| {
+            writeln!(res,
+                "routinator_rtr_client_bytes_written{{addr=\"{}\"}} {}",
+                addr, count
+            ).unwrap()
+        });
+    }
 
     // http_connections
     writeln!(res,
@@ -503,7 +617,7 @@ fn handle_metrics(
         # TYPE routinator_http_connections counter"
     ).unwrap();
     writeln!(res,
-        "routinator_http_connections {}", server_metrics.http_conn_open()
+        "routinator_http_connections {}", server_metrics.conn_open()
     ).unwrap();
 
     // http_current_connections
@@ -515,7 +629,7 @@ fn handle_metrics(
     ).unwrap();
     writeln!(res,
         "routinator_http_current_connections {}",
-        server_metrics.http_conn_open() - server_metrics.http_conn_close()
+        server_metrics.conn_open() - server_metrics.conn_close()
     ).unwrap();
 
     // http_bytes_read
@@ -525,7 +639,7 @@ fn handle_metrics(
         # TYPE routinator_http_bytes_read counter"
     ).unwrap();
     writeln!(res,
-        "routinator_http_bytes_read {}", server_metrics.http_bytes_read()
+        "routinator_http_bytes_read {}", server_metrics.bytes_read()
     ).unwrap();
 
     // http_bytes_written
@@ -535,7 +649,7 @@ fn handle_metrics(
         # TYPE routinator_http_bytes_written counter"
     ).unwrap();
     writeln!(res,
-        "routinator_http_bytes_written {}", server_metrics.http_bytes_written()
+        "routinator_http_bytes_written {}", server_metrics.bytes_written()
     ).unwrap();
 
     // http_requests
@@ -545,7 +659,7 @@ fn handle_metrics(
         # TYPE routinator_http_requests counter"
     ).unwrap();
     writeln!(res,
-        "routinator_http_requests {}", server_metrics.http_requests()
+        "routinator_http_requests {}", server_metrics.requests()
     ).unwrap();
 
 
@@ -558,9 +672,10 @@ fn handle_metrics(
 
 //------------ handle_status -------------------------------------------------
 
-fn handle_status(
+async fn handle_status(
     history: &SharedHistory,
-    server_metrics: &ServerMetrics,
+    server_metrics: &HttpServerMetrics,
+    rtr_metrics: &SharedRtrServerMetrics,
 ) -> Response<Body> {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
@@ -746,32 +861,84 @@ fn handle_status(
         writeln!(res).unwrap()
     }
 
+    let detailed_rtr = rtr_metrics.detailed();
+    let rtr_metrics = rtr_metrics.read().await;
+
     // rtr
     writeln!(res,
-        "rtr-connections: {} current, {} total",
-        server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close(),
-        server_metrics.rtr_conn_open()
+        "rtr-connections: {} current",
+        rtr_metrics.current_connections(),
     ).unwrap();
     writeln!(res,
         "rtr-data: {} bytes sent, {} bytes received",
-        server_metrics.rtr_bytes_written(),
-        server_metrics.rtr_bytes_read()
+        rtr_metrics.bytes_written(),
+        rtr_metrics.bytes_read()
     ).unwrap();
+
+    if detailed_rtr {
+        // rtr-clients
+        writeln!(res, "rtr-clients:").unwrap();
+        rtr_metrics.fold_clients(
+            // connections, serial, update, read, written
+            (0, None, None, 0, 0),
+            |data, client| {
+                if client.is_open() {
+                    data.0 += 1
+                }
+                data.1 = match (
+                    data.1, client.serial().map(u32::from)
+                ) {
+                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                    (Some(left), None) => Some(left),
+                    (None, Some(right)) => Some(right),
+                    (None, None) => None
+                };
+                data.2 = match (data.2, client.updated()) {
+                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                    (Some(left), None) => Some(left),
+                    (None, Some(right)) => Some(right),
+                    (None, None) => None
+                };
+                data.3 += client.bytes_read();
+                data.4 += client.bytes_written();
+            }
+        ).for_each(|(addr, (conns, serial, update, read, written))| {
+            write!(res, "    {}: connections={}, ", addr, conns).unwrap();
+            if let Some(serial) = serial {
+                write!(res, "serial={}, ", serial).unwrap();
+            }
+            else {
+                write!(res, "serial=N/A, ").unwrap();
+            }
+            if let Some(update) = update {
+                let update = Utc::now() - update;
+                write!(
+                    res,
+                    "updated-ago={}.{:03}s, ",
+                    update.num_seconds(), update.num_milliseconds() % 1000
+                ).unwrap();
+            }
+            else {
+                write!(res, "updated=N/A, ").unwrap();
+            }
+            writeln!(res, "read={}, written={}", read, written).unwrap();
+        });
+    }
 
     // http
     writeln!(res,
         "http-connections: {} current, {} total",
-        server_metrics.http_conn_open() - server_metrics.http_conn_close(),
-        server_metrics.http_conn_open()
+        server_metrics.conn_open() - server_metrics.conn_close(),
+        server_metrics.conn_open()
     ).unwrap();
     writeln!(res,
         "http-data: {} bytes sent, {} bytes received",
-        server_metrics.http_bytes_written(),
-        server_metrics.http_bytes_read()
+        server_metrics.bytes_written(),
+        server_metrics.bytes_read()
     ).unwrap();
     writeln!(res,
         "http-requests: {} ",
-        server_metrics.http_requests()
+        server_metrics.requests()
     ).unwrap();
 
     Response::builder()
@@ -783,9 +950,10 @@ fn handle_status(
 
 //------------ handle_api_status ---------------------------------------------
 
-fn handle_api_status(
+async fn handle_api_status(
     history: &SharedHistory,
-    server_metrics: &ServerMetrics,
+    server_metrics: &HttpServerMetrics,
+    rtr_metrics: &SharedRtrServerMetrics,
 ) -> Response<Body> {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
@@ -806,7 +974,10 @@ fn handle_api_status(
             history.last_update_duration(),
         )
     };
+
     let now = Utc::now();
+    let detailed_rtr = rtr_metrics.detailed();
+    let rtr_metrics = rtr_metrics.read().await;
 
     let res = JsonBuilder::build(|target| {
         target.member_str("version",
@@ -937,37 +1108,92 @@ fn handle_api_status(
 
         target.member_object("rtr", |target| {
             target.member_raw(
-                "totalConnections", server_metrics.rtr_conn_open()
-            );
-            target.member_raw(
                 "currentConnections",
-                server_metrics.rtr_conn_open() - server_metrics.rtr_conn_close()
+                rtr_metrics.current_connections()
             );
             target.member_raw(
-                "bytesRead", server_metrics.rtr_bytes_read()
+                "bytesRead", rtr_metrics.bytes_read()
             );
             target.member_raw(
-                "bytesWritten", server_metrics.rtr_bytes_written()
+                "bytesWritten", rtr_metrics.bytes_written()
             );
+
+            if detailed_rtr {
+                target.member_object("clients", |target| {
+                    rtr_metrics.fold_clients(
+                        // connections, serial, update, read, written
+                        (0, None, None, 0, 0),
+                        |data, client| {
+                            if client.is_open() {
+                                data.0 += 1
+                            }
+                            data.1 = match (
+                                data.1,
+                                client.serial().map(u32::from)
+                            ) {
+                                (Some(left), Some(right)) => {
+                                    Some(cmp::max(left, right))
+                                }
+                                (Some(left), None) => Some(left),
+                                (None, Some(right)) => Some(right),
+                                (None, None) => None
+                            };
+                            data.2 = match (data.2, client.updated()) {
+                                (Some(left), Some(right)) => {
+                                    Some(cmp::max(left, right))
+                                }
+                                (Some(left), None) => Some(left),
+                                (None, Some(right)) => Some(right),
+                                (None, None) => None
+                            };
+                            data.3 += client.bytes_read();
+                            data.4 += client.bytes_written();
+                        }
+                    ).for_each(
+                        |(addr, (conns, serial, update, read, written))| {
+                            target.member_object(addr, |target| {
+                                target.member_raw("connections", conns);
+                                if let Some(serial) = serial {
+                                    target.member_raw("serial", serial);
+                                }
+                                else {
+                                    target.member_raw("serial", "null");
+                                }
+                                if let Some(update) = update {
+                                    target.member_str(
+                                        "updated",
+                                        update.format("%+")
+                                    );
+                                }
+                                else {
+                                    target.member_raw("updated", "null");
+                                }
+                                target.member_raw("read", read);
+                                target.member_raw("written", written);
+                            })
+                        }
+                    );
+                });
+            }
         });
 
         target.member_object("http", |target| {
             target.member_raw(
-                "totalConnections", server_metrics.http_conn_open()
+                "totalConnections", server_metrics.conn_open()
             );
             target.member_raw(
                 "currentConnections",
-                server_metrics.http_conn_open()
-                - server_metrics.http_conn_close()
+                server_metrics.conn_open()
+                - server_metrics.conn_close()
             );
             target.member_raw(
-                "requests", server_metrics.http_requests()
+                "requests", server_metrics.requests()
             );
             target.member_raw(
-                "bytesRead", server_metrics.http_bytes_read()
+                "bytesRead", server_metrics.bytes_read()
             );
             target.member_raw(
-                "bytesWritten", server_metrics.http_bytes_written()
+                "bytesWritten", server_metrics.bytes_written()
             );
         });
     });
@@ -1323,7 +1549,7 @@ fn not_found() -> Response<Body> {
 
 struct HttpAccept {
     sock: TcpListener,
-    metrics: Arc<ServerMetrics>,
+    metrics: Arc<HttpServerMetrics>,
 }
 
 impl Accept for HttpAccept {
@@ -1339,7 +1565,7 @@ impl Accept for HttpAccept {
         match sock.poll_accept(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Ok((sock, _addr))) => {
-                self.metrics.inc_http_conn_open();
+                self.metrics.inc_conn_open();
                 Poll::Ready(Some(Ok(HttpStream {
                     sock,
                     metrics: self.metrics.clone()
@@ -1355,7 +1581,7 @@ impl Accept for HttpAccept {
 
 struct HttpStream {
     sock: TcpStream,
-    metrics: Arc<ServerMetrics>,
+    metrics: Arc<HttpServerMetrics>,
 }
 
 impl AsyncRead for HttpStream {
@@ -1367,7 +1593,7 @@ impl AsyncRead for HttpStream {
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
         if let Poll::Ready(Ok(())) = res {
-            self.metrics.inc_http_bytes_read(
+            self.metrics.inc_bytes_read(
                 (buf.filled().len().saturating_sub(len)) as u64
             )    
         }
@@ -1383,7 +1609,7 @@ impl AsyncWrite for HttpStream {
         pin_mut!(sock);
         let res = sock.poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_http_bytes_written(n as u64)
+            self.metrics.inc_bytes_written(n as u64)
         }
         res
     }
@@ -1407,7 +1633,7 @@ impl AsyncWrite for HttpStream {
 
 impl Drop for HttpStream {
     fn drop(&mut self) {
-        self.metrics.inc_http_conn_close()
+        self.metrics.inc_conn_close()
     }
 }
 
