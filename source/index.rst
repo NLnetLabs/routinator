@@ -1,7 +1,7 @@
 .. _doc_routinator:
 
-Routinator
-==========
+Routinator – *main* branch
+==========================
 
 |docsupdated| |discord| |twitter|
 
