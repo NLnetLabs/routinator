@@ -1637,8 +1637,6 @@ struct RepositoryState {
 
 impl RepositoryState {
     /// Create the state based on the notification file.
-    ///
-    /// Sets `last_modified_ts` and `etag` to `None`.
     pub fn from_notify(notify: &Notification) -> Self {
         RepositoryState {
             session: notify.content.session_id,
