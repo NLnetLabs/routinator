@@ -322,14 +322,17 @@ The available options are:
       Print more information. If given twice, even more information is printed.
 
       More specifically, a single :option:`-v` increases the log level from the
-      default of warn to info, specifying it more than once increases it to
-      debug.
+      default of warn to *info*, specifying it more than once increases it to
+      *debug*.
+      
+      See `Logging`_ below for more information on what information is logged at
+      the different levels.
 
 .. option:: -q, --quiet
 
       Print less information. Given twice, print nothing at all.
 
-      A single :option:`-q` will drop the log level to error. Repeating
+      A single :option:`-q` will drop the log level to *error*. Repeating
       :option:`-q` more than once turns logging off completely.
 
 .. option:: --syslog
@@ -342,7 +345,7 @@ The available options are:
 .. option:: --syslog-facility=facility
 
       If logging to syslog is used, this option can be used to specify the
-      syslog facility to use. The default is daemon.
+      syslog facility to use. The default is *daemon*.
 
 .. option:: --logfile=path
 
@@ -366,8 +369,7 @@ These can be requested by providing different commands on the command line.
 
     Prepares the local repository directories and the TAL directory for running
     Routinator.  Specifically,  makes sure the local repository directory
-    exists, and creates the TAL directory and fills it with the TALs of the five
-    RIRs.
+    exists, and creates the TAL directory and fills it with the desired TALs.
 
     For more information about TALs, see `Trust Anchor Locators`_ below.
 
@@ -429,7 +431,8 @@ These can be requested by providing different commands on the command line.
                   the prefix in slash notation, the maximum prefix length,
                   the autonomous system number, and an abbreviation for the
                   trust anchor the entry is derived from. The latter is the
-                  name of the TAL file without the extension *.tal*.
+                  name of the TAL file without the extension *.tal*. This can be
+                  overwritten with the *tal-labels* config file option.
 
                   This is the default format used if the :option:`-f` option
                   is missing.
@@ -536,7 +539,7 @@ These can be requested by providing different commands on the command line.
 
            Only output VRPs for the given ASN. The option can be given multiple
            times, in which case VRPs for all provided ASNs are provided. ASNs
-           can be given with or without the prefix AS.
+           can be given with or without the prefix *AS*.
 
     .. option:: -p prefix, --select-prefix=prefix
 
@@ -581,7 +584,7 @@ These can be requested by providing different commands on the command line.
               If present, input is read from the given file. If the file is
               given is a single dash, input is read from standard output.
               
-       .. option:: --j, --json
+       .. option:: -j, --json
 
               If this option is provided, the input is assumed to be JSON
               format. It should consist of a single object with one  member
@@ -822,8 +825,10 @@ in the TAL directory which can be set by the  :option:`-t` option. If the
 subdirectory *tals* under the directory specified in this option. The default
 location, if no options are used at all is :file:`$HOME/.rpki-cache/tals`.
 
-This directory can be created and populated with the TALs of the five Regional
-Internet Registries (RIRs) via the :command:`init` command.
+Routinator  comes  with a set of commonly used TALs that can be used to populate
+the TAL directory via the init command. By default,  the  command  will  install
+the TALs of the five Regional Internet Registries (RIRs) necessary for the 
+complete global RPKI repository.
 
 If the directory does exist, Routinator will use all files with an extension
 of *.tal* in this directory. This means that you can add and remove trust
@@ -908,11 +913,6 @@ unknown-objects
 allow-dubious-hosts
       A boolean value that, if present and true, disables Routinator's filtering
       of dubious host names in rsync and HTTPS URIs from RPKI data.
-
-fresh
-      Delete and re-initialize the local data storage before starting. This
-      option should be used when Routinator fails after reporting corrupt
-      data storage.
 
 disable-rsync
       A boolean value that, if present and true, turns off the use of rsync.
