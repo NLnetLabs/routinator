@@ -118,9 +118,9 @@ times, you may see several warnings during the process about objects that are
 either stale or failed cryptographic verification, or repositories that are
 temporarily unavailable. 
 
-From a cold start, this process will take a couple of minutes. Subsequent runs
-will be much faster, because only the changes between the repositories and the 
-local cache need to be processed.
+From a cold start, this process will take a couple of minutes. Subsequent
+verification runs will be much faster, because only the changes between the
+repositories and the local cache need to be processed. 
 
 .. code-block:: text
 
