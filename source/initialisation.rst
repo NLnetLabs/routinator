@@ -47,11 +47,10 @@ To get an overview of all available TALs use the :option:`--list-tals` option:
 Preparing for Production Environments
 """""""""""""""""""""""""""""""""""""
 
-.. WARNING:: Using the TAL from ARIN, the RIR for the United States, Canada as
-             well as many Caribbean and North Atlantic islands, requires you to
-             read and accept their `Relying Party Agreement
+.. WARNING:: Using the TAL from ARIN requires you to read and accept their 
+             `Relying Party Agreement
              <https://www.arin.net/resources/manage/rpki/tal/>`_ before you can
-             use it. Running the :subcmd:`init` command will provide you with
+             use it. Running the :subcmd:`init` subcommand will provide you with
              instructions.
 
 In the most common scenario, you will want to install the TALs of the five RIRs.
@@ -79,8 +78,8 @@ into it.
 
 If you decide you cannot agree to the ARIN RPA terms, you can use the
 :option:`--skip-tal` option to exclude the TAL. If, at a later point, you wish
-to use the ARIN TAL anyway, you can add it to your current installation using
-the :option:`--force` option, to force the installation of all TALs.
+to include the ARIN TAL you can add it to your current installation using the
+:option:`--force` option, to force the installation of all TALs.
 
 Preparing for Test Environments
 """""""""""""""""""""""""""""""
@@ -89,8 +88,9 @@ To install all of the TALs for the various test environments, you can use the
 :option:`--rir-test-tals` option. However, in most cases you will want to
 install a specific one, using the :option:`--tal` option. 
 
-For example, to add the TAL for the ARIN Operational Test and Evaluation 
-Environment to an already initialised Routinator, enter
+For example, to add the TAL for the `ARIN Operational Test and Evaluation
+Environment <https://www.arin.net/reference/tools/testing/#rpki>`_ to an already
+initialised Routinator, enter
 
 .. code-block:: bash
 
@@ -100,10 +100,11 @@ Performing a Test Run
 ---------------------
 
 To see if Routinator has been initialised correctly and your firewall allows the
-required connections, it is recommended to perform an initial test run. You can
-do this by having Routinator print a validated ROA payload (VRP) list with the
-:subcmd:`vrps` subcommand, and using :option:`-v` to increase the log level so
-you can verify if Routinator establishes connections as expected.
+required outbound connections on ports 443 and 873, it is recommended to perform
+an initial test run. You can do this by having Routinator print a validated ROA
+payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v` to
+increase the log level so you can verify if Routinator establishes connections
+as expected.
 
 .. code-block:: bash
 
