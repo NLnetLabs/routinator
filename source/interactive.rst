@@ -97,7 +97,7 @@ summary
 
 For example, to get the validated ROA payloads in CSV format, run:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator vrps --format csv
    ASN,IP Prefix,Max Length,Trust Anchor
@@ -111,7 +111,7 @@ For example, to get the validated ROA payloads in CSV format, run:
 
 To generate a file with with the validated ROA payloads in JSON format, run:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator vrps --format json --output authorisedroutes.json
 
@@ -161,7 +161,7 @@ validation run will be started before returning the result, making sure you get
 the latest information. If you would like a result from the current cache, you
 can use the :option:`--noupdate` option.
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator validate --asn 12654 --prefix 93.175.147.0/24
    Invalid
@@ -262,7 +262,7 @@ When referring to the file with the :option:`--json` and :option:`--input`
 options, Routinator produces a JSON object that includes the validity state and
 a detailed analysis of the reasoning behind the outcome of each route.
 
-.. code-block:: json
+.. code-block:: text
 
   routinator validate --json --input beacons.json
   {

@@ -6,7 +6,7 @@ User Interface
 Routinator offers a web based user interface. In order to start the HTTP
 server at 192.0.2.13 and 2001:0DB8::13 on port 8323, run this command:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
