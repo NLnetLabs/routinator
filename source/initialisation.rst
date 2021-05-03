@@ -19,6 +19,9 @@ Trust Anchor Locators
    :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
    :option:`--tal` and :option:`--skip-tal`
 
+.. deprecated:: 0.9
+   ``--decline-arin-rpa``, use :option:`--skip-tal` instead
+
 Trust Anchor Locators (TALs) provide hints for the trust anchor certificates to
 be used both to discover and validate all RPKI content. There are five TALs, one
 for each Regional Internet Registry (RIR). For production environments these are
