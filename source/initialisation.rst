@@ -18,7 +18,6 @@ Trust Anchor Locators
 .. versionadded:: 0.9
    :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
    :option:`--tal` and :option:`--skip-tal`
-
 .. deprecated:: 0.9
    ``--decline-arin-rpa``, use :option:`--skip-tal` instead
 
