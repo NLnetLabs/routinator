@@ -6,7 +6,7 @@ Running Interactively
 Routinator can perform RPKI validation as a one-time operation and print a
 Validated ROA Payload (VRP) list in various formats, or it can return the
 validity of a specific announcement. These functions are accessible on the
-command line via the following sub-commands:
+command line via the following subcommands:
 
 :subcmd:`vrps`
      Fetches RPKI data and produces a Validated ROA Payload (VRP) list in the
