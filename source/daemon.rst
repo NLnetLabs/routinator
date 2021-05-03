@@ -116,15 +116,6 @@ to be running Routinator as root when otherwise there is no reason to do that.
 The application will stay attached to your terminal unless you provide the
 :option:`--detach` option.
 
-By default, the repository will be updated and verified every 10 minutes. You
-can change this via the :option:`--refresh` option and specify the interval
-between verification in seconds. That is, if you rather have Routinator validate
-every 15 minutes, the above command becomes:
-
-.. code-block:: bash
-
-   routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --refresh=900
-
 Communication between Routinator and the router using the RPKI-RTR protocol is
 done via plain TCP. Below, there is an explanation how to secure the transport
 using either SSH or TLS.
