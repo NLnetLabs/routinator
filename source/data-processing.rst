@@ -35,7 +35,7 @@ Storing
 -------
 
 To be resistant against accidental or malicious errors in the data published by
-repositories, Routinator retains a two separate data sets: one that keeps the
+repositories, Routinator retains two separate data sets: one that keeps the
 data of all publication points as it was received from their remote repository,
 and another – which we call the *store* – keeps the most recent data of a given
 RPKI publication point that was found to be correctly published. 
