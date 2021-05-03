@@ -32,7 +32,8 @@ csv
 csvcompat
        The same as csv except that all fields are embedded in double quotes and
        the autonomous system number is given without the prefix AS. This format
-       is pretty much identical to the CSV produced by the RIPE NCC Validator.
+       is pretty much identical to the CSV produced by the RIPE NCC RPKI 
+       Validator.
 csvext
       This is an extended version of the *csv* format, which was used by the
       RIPE NCC RPKI Validator 1.x. Each line contains these comma-separated
