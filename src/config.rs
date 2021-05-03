@@ -229,6 +229,9 @@ pub struct Config {
     /// If this is `None`, TCP keep-alive will not be enabled.
     pub rtr_tcp_keepalive: Option<Duration>,
 
+    /// Should we publish detailed RTR client statistics?
+    pub rtr_client_metrics: bool,
+
     /// The log levels to be logged.
     pub log_level: LevelFilter,
 
@@ -487,6 +490,10 @@ impl Config {
             .value_name("SECONDS")
             .help("The TCP keep-alive timeout on RTR. [default 60, 0 for off]")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("rtr-client-metrics")
+            .long("rtr-client-metrics")
+            .help("Include RTR client information in metrics")
         )
         .arg(Arg::with_name("pid-file")
             .long("pid-file")
@@ -850,6 +857,11 @@ impl Config {
             }
         }
 
+        // rtr_client_metrics
+        if matches.is_present("rtr-client-metrics") {
+            self.rtr_client_metrics = true
+        }
+
         // pid_file
         if let Some(pid_file) = matches.value_of("pid-file") {
             self.pid_file = Some(cur_dir.join(pid_file))
@@ -1027,6 +1039,9 @@ impl Config {
                     None => DEFAULT_RTR_TCP_KEEPALIVE,
                 }
             },
+            rtr_client_metrics: {
+                file.take_bool("rtr-client-metrics")?.unwrap_or(false)
+            },
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -1166,6 +1181,7 @@ impl Config {
             http_listen: Vec::new(),
             systemd_listen: false,
             rtr_tcp_keepalive: DEFAULT_RTR_TCP_KEEPALIVE,
+            rtr_client_metrics: false,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             pid_file: None,
@@ -1352,6 +1368,10 @@ impl Config {
                 Some(keep) => (keep.as_secs() as i64).into(),
                 None => 0.into(),
             }
+        );
+        res.insert(
+            "rtr-client-metrics".into(),
+            self.rtr_client_metrics.into()
         );
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
