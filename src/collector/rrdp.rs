@@ -685,11 +685,14 @@ impl<'a> RepositoryUpdate<'a> {
             &self.rpki_notify,
             self.state.as_ref(),
             &mut self.metrics.notify_status
-        )? {
-            Some(notify) => notify,
-            None => {
+        ) {
+            Ok(Some(notify)) => notify,
+            Ok(None) => {
                 self.not_modified()?;
                 return Ok(true)
+            }
+            Err(Failed) => {
+                return Ok(false)
             }
         };
         self.metrics.serial = Some(notify.content.serial);
