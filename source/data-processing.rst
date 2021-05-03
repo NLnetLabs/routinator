@@ -28,7 +28,7 @@ ultimately expire.
 
 Routinator will fetch new RPKI data ten minutes after the last successful update
 has finished. The interval can be changed using the :option:`--refresh` option.
-It is possible that that it takes very long to update a repository due to
+It is possible that it takes very long to update a repository due to
 temporary network problems. To ensure a slow repository doesn't stop the entire
 update process from completing, Routinator has a timeout for stalled
 connections. For RRDP, this timeout is implemented as an HTTP request timeout.
