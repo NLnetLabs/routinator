@@ -23,10 +23,9 @@ Routinator 3000 is free, open source RPKI Relying Party software written by
 `NLnet Labs <https://nlnetlabs.nl>`_ in the `Rust programming language
 <https://www.rust-lang.org>`_.
 
-The application is designed to be lightweight and have great portability. This
-means it can run on any Unix-like operating system, but also works on Microsoft
-Windows. Due to its lean design, it can run effortlessly on minimalist hardware
-such as a Raspberry Pi. 
+The application is designed to be lightweight, secure and have great
+portability. Due to its lean design, it can run effortlessly on minimalist
+hardware such as a Raspberry Pi. 
 
 Routinator connects to the Trust Anchors of the five Regional Internet
 Registries (RIRs) — APNIC, AFRINIC, ARIN, LACNIC and RIPE NCC — downloads all of
