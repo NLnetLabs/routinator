@@ -50,7 +50,7 @@ if all files mentioned on the manifest are present and have the correct hash.
 Otherwise the data for the publication point already present in the store will
 be used for validation.
 
-If you ever want or need to clear all stored data, you use can the
+If you ever want or need to clear all stored data, you can use the
 :option:`--fresh` option. This will be like starting Routinator for the very
 first time.
 
