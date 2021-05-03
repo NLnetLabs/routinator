@@ -15,6 +15,10 @@ you can change their locations via the command line options
 Trust Anchor Locators
 ---------------------
 
+.. versionadded:: 0.9
+   :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
+   :option:`--tal` and :option:`--skip-tal`
+
 Trust Anchor Locators (TALs) provide hints for the trust anchor certificates to
 be used both to discover and validate all RPKI content. There are five TALs, one
 for each Regional Internet Registry (RIR). For production environments these are
@@ -26,8 +30,6 @@ Both the production and testbed TALs are bundled with Routinator and can be
 installed with the :subcmd:`init` command. 
 
 To get an overview of all available TALs use the :option:`--list-tals` option:
-
-.. versionadded:: 0.9
 
 .. code-block:: text
 
@@ -85,8 +87,6 @@ to include the ARIN TAL you can add it to your current installation using the
 
 Preparing for Test Environments
 """""""""""""""""""""""""""""""
-
-.. versionadded:: 0.9
 
 To install all of the TALs for the various test environments, you can use the
 :option:`--rir-test-tals` option. However, in most cases you will want to

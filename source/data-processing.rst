@@ -6,6 +6,9 @@ Data Processing
 Fetching
 --------
 
+.. versionadded:: 0.9
+   Fallback from RRDP to rsync with :option:`--rrdp-fallback-time`
+
 There are two protocols in use to transport RPKI data: rsync and the RPKI
 Repository Delta Protocol (RRDP), which relies on HTTPS. RRDP was designed to be
 the successor to rsync in the RPKI. As almost all RPKI repositories currently
@@ -15,8 +18,6 @@ When traversing the RPKI tree, Routinator will find several pointers to child
 publication points, such as the ones operated by National Internet Registries
 and organisations running delegated RPKI. Each pointer explicitly states if RRDP
 is supported in addition to rsync. 
-
-.. versionadded:: 0.9
 
 If an RRDP endpoint is unavailable but it has worked in the past, Routinator
 will assume this is a transient problem. It will retry using RRDP for up to 60
@@ -42,6 +43,7 @@ Storing
 -------
 
 .. versionadded:: 0.9
+   The *store* and the :option:`--fresh` option
 
 To be resistant against accidental or malicious errors in the data published by
 repositories, Routinator retains two separate data sets: one that keeps the data

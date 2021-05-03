@@ -19,6 +19,9 @@ command line via the following subcommands:
 Printing a List of VRPs
 -----------------------
 
+.. versionadded:: 0.9
+   The ``jsonext`` format
+
 Routinator can produce a Validated ROA Payload (VRP) list in many different
 formats, which are either printed to standard output or saved to a file:
 
@@ -53,8 +56,6 @@ json
       extension *.tal* whereas the RIPE NCC Validator has a dedicated name for
       each.
 jsonext
-      .. versionadded:: 0.9
-      
       The list is placed into a JSON object with a single element *roas* which
       contains an array of objects with four elements each: The autonomous
       system number of the network authorized to originate a prefix in *asn*,
@@ -122,8 +123,8 @@ To generate a file with with the validated ROA payloads in JSON format, run:
 ASN and Prefix Selection
 """"""""""""""""""""""""
 
-.. versionchanged:: 0.9
-   These options were previously named ``--filter-asn`` and ``--filter-prefix``
+.. deprecated:: 0.9
+   ``--filter-asn`` and ``--filter-prefix``
 
 In case you are looking for specific information in the output, Routinator
 allows you to add selectors to see if a prefix or ASN is covered or matched by a
