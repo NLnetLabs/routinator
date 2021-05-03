@@ -24,7 +24,7 @@ an issue on Github](https://github.com/NLnetLabs/routinator/issues/new) or post
 a message on our [RPKI mailing
 list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki) or [Discord
 server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the 
-[Routinator documentation](https://routinator.readthedocs.io/) and the
+[Routinator documentation](https://routinator.docs.nlnetlabs.nl/) and the
 [RPKI technology documentation](https://rpki.readthedocs.io/) on Read the Docs.
 
 ## Quick Start with Debian and Ubuntu Packages
@@ -317,7 +317,7 @@ routinator man
 ```
 
 The man page is also available online in the
-[documentation](https://routinator.readthedocs.io/en/latest/manual-page.html).
+[documentation](https://routinator.docs.nlnetlabs.nl/en/stable/manual-page.html).
 
 ## Feeding a Router with RPKI-RTR
 
@@ -365,7 +365,7 @@ exist and there is no `-c` option, default values are used.
 The configuration file is a TOML file. Its entries are named similarly to the
 command line options. Details about the available entries and there meaning can
 be found in the [manual
-page](https://routinator.readthedocs.io/en/latest/manual-page.html). In
+page](https://routinator.docs.nlnetlabs.nl/en/stable/manual-page.html). In
 addition, a complete sample configuration file showing all the default values
 can be found in the repository at
 [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/main/etc/routinator.conf.example).
@@ -400,9 +400,9 @@ available to get started.
 
 ## User Interface
 
-The [user interface](https://routinator.readthedocs.io/en/latest/user-interface.html)
+The [user interface](https://routinator.docs.nlnetlabs.nl/en/stable/user-interface.html)
 displays statistics from the last validation run Routinator has performed.
 It can also be used to verify the RPKI origin validation status of an AS
 Number and IP Prefix combination.
 
-![Routinator validity checker](https://routinator.readthedocs.io/en/latest/_images/routinator-ui-validity-checker.png)
+![Routinator validity checker](https://routinator.rdocs.nlnetlabs.nl/en/stable/_images/routinator-ui-validity-checker.png)
