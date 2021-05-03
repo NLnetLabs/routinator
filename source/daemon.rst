@@ -45,6 +45,9 @@ After fetching and verifying all RPKI data, the following paths are available:
 :command:`/json`
      Returns the current set of VRPs in **json** output format
 
+:command:`/jsonext`
+     Returns the current set of VRPs in **jsonext** output format
+
 :command:`/openbgpd`
      Returns the current set of VRPs in **OpenBGPD** output format
 
