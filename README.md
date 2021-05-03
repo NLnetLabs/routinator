@@ -1,5 +1,5 @@
 # Routinator User Manual
-The Official Routinator User Manual, published at [routinator.readthedocs.io](https://routinator.readthedocs.io)
+The Official Routinator User Manual, published at [routinator.docs.nlnetlabs.nl](https://routinator.docs.nlnetlabs.nl)
 
 
 ## Style Guide
