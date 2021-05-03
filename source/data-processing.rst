@@ -16,6 +16,8 @@ publication points, such as the ones operated by National Internet Registries
 and organisations running delegated RPKI. Each pointer explicitly states if RRDP
 is supported in addition to rsync. 
 
+.. versionadded:: 0.9
+
 If an RRDP endpoint is unavailable but it has worked in the past, Routinator
 will assume this is a transient problem. It will retry using RRDP for up to 60
 minutes since the last successful update, during which it will rely on the
@@ -38,6 +40,8 @@ minutes for both and can be changed via the :option:`--rsync-timeout` and
 
 Storing
 -------
+
+.. versionadded:: 0.9
 
 To be resistant against accidental or malicious errors in the data published by
 repositories, Routinator retains two separate data sets: one that keeps the data

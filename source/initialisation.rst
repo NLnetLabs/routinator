@@ -27,6 +27,8 @@ installed with the :subcmd:`init` command.
 
 To get an overview of all available TALs use the :option:`--list-tals` option:
 
+.. versionadded:: 0.9
+
 .. code-block:: text
 
     routinator init --list-tals
@@ -83,6 +85,8 @@ to include the ARIN TAL you can add it to your current installation using the
 
 Preparing for Test Environments
 """""""""""""""""""""""""""""""
+
+.. versionadded:: 0.9
 
 To install all of the TALs for the various test environments, you can use the
 :option:`--rir-test-tals` option. However, in most cases you will want to

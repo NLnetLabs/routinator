@@ -53,6 +53,8 @@ json
       extension *.tal* whereas the RIPE NCC Validator has a dedicated name for
       each.
 jsonext
+      .. versionadded:: 0.9
+      
       The list is placed into a JSON object with a single element *roas* which
       contains an array of objects with four elements each: The autonomous
       system number of the network authorized to originate a prefix in *asn*,
@@ -75,6 +77,7 @@ jsonext
 
       Please note that because of this additional information, output in
       :option:`jsonext` format will be quite large.
+      
 openbgpd
       Choosing this format causes Routinator to produce a *roa-set*
       configuration item for the OpenBGPD configuration.
@@ -118,6 +121,9 @@ To generate a file with with the validated ROA payloads in JSON format, run:
 
 ASN and Prefix Selection
 """"""""""""""""""""""""
+
+.. versionchanged:: 0.9
+   These options were previously named ``--filter-asn`` and ``--filter-prefix``
 
 In case you are looking for specific information in the output, Routinator
 allows you to add selectors to see if a prefix or ASN is covered or matched by a
@@ -209,6 +215,8 @@ available via the :ref:`user interface <doc_routinator_ui>` and at the
 
 Reading Input From a File
 """""""""""""""""""""""""
+
+.. versionadded:: 0.9
 
 Routinator can also read input to validate from a file using the
 :option:`--input` option. If the file is given as a single dash, input is
