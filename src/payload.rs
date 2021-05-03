@@ -746,6 +746,11 @@ impl PayloadSnapshot {
         &self.origins
     }
 
+    /// Converts a shared snapshot into a VRP iterator.
+    pub fn into_vrp_iter(self: Arc<Self>) -> SnapshotVrpIter {
+        SnapshotVrpIter::new(self)
+    }
+
     /// Returns a snapshot builder based in this snapshot.
     fn to_builder(&self) -> SnapshotBuilder {
         SnapshotBuilder {
@@ -1454,6 +1459,11 @@ impl OriginInfo {
         }));
     }
 
+    /// Returns an iterator over the chain of information.
+    pub fn iter(&self) -> OriginInfoIter {
+        OriginInfoIter { info: Some(self) }
+    }
+
     /// Returns the name of the first TAL if available.
     pub fn tal_name(&self) -> Option<&str> {
         self.head.as_ref().map(|info| info.tal.name()).ok()
@@ -1467,9 +1477,28 @@ impl OriginInfo {
     /// Returns the validity of the first ROA if available.
     ///
     pub fn validity(&self) -> Option<Validity> {
-        self.head.as_ref().map(|info| info.validity).ok()
+        self.head.as_ref().map(|info| info.roa_validity).ok()
+    }
+
+    /// Returns the ROA info if available.
+    pub fn roa_info(&self) -> Option<&RoaInfo> {
+        match self.head {
+            Ok(ref info) => Some(info),
+            Err(_) => None
+        }
+    }
+
+    /// Returns the exception info if available.
+    pub fn exception_info(&self) -> Option<&ExceptionInfo> {
+        match self.head {
+            Ok(_) => None,
+            Err(ref info) => Some(info),
+        }
     }
 }
+
+
+//--- From
 
 impl From<Arc<RoaInfo>> for OriginInfo {
     fn from(src: Arc<RoaInfo>) -> Self {
@@ -1480,6 +1509,36 @@ impl From<Arc<RoaInfo>> for OriginInfo {
 impl From<Arc<ExceptionInfo>> for OriginInfo {
     fn from(src: Arc<ExceptionInfo>) -> Self {
         OriginInfo { head: Err(src), tail: None }
+    }
+}
+
+//--- IntoIterator
+
+impl<'a> IntoIterator for &'a OriginInfo {
+    type Item = &'a OriginInfo;
+    type IntoIter = OriginInfoIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+
+//------------ OriginInfoIter ------------------------------------------------
+
+/// An iterator over origin information.
+#[derive(Clone, Debug)]
+pub struct OriginInfoIter<'a> {
+    info: Option<&'a OriginInfo>,
+}
+
+impl<'a> Iterator for OriginInfoIter<'a> {
+    type Item = &'a OriginInfo;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = self.info?;
+        self.info = res.tail.as_ref().map(AsRef::as_ref);
+        Some(res)
     }
 }
 
@@ -1495,8 +1554,11 @@ pub struct RoaInfo {
     /// The rsync URI identifying the ROA.
     pub uri: Option<uri::Rsync>,
 
-    /// The validity of the ROA.
-    pub validity: Validity,
+    /// The validity of the ROA itself.
+    pub roa_validity: Validity,
+
+    /// The validity of the validation chain.
+    pub chain_validity: Validity,
 }
 
 impl RoaInfo {
@@ -1507,7 +1569,8 @@ impl RoaInfo {
             uri: cert.signed_object().cloned().map(|mut uri| {
                 uri.unshare(); uri
             }),
-            validity: cert.validity().trim(ca_validity),
+            roa_validity: cert.validity(),
+            chain_validity: cert.validity().trim(ca_validity),
         }
     }
 }
