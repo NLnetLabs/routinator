@@ -15,20 +15,19 @@ via the RTR protocol. You can start the Routinator service using the
 The HTTP Service
 ----------------
 
-In addition to the various VRP output formats, Routinator's HTTP server also
-provides an API, a :ref:`user interface <doc_routinator_ui>` and
-:ref:`monitoring endpoints <doc_routinator_monitoring>`. The server is not
-enabled by default for security reasons, nor does it have a default host or
-port.
-
-Please note that the HTTP server is intended to run on your internal network and
-doesn't offer HTTPS natively. If this is a requirement, you can for example run
-Routinator behind a :ref:`reverse proxy <doc_routinator_reverse_proxy>`.
+In addition to the various :ref:`VRP output formats
+<doc_routinator_output_formats>`, Routinator's HTTP server also provides an API,
+a :ref:`user interface <doc_routinator_ui>` and :ref:`monitoring endpoints
+<doc_routinator_monitoring>`. The server is not enabled by default for security
+reasons, nor does it have a default host or port. This service is intended to
+run on your internal network and doesn't offer HTTPS natively. If this is a
+requirement, you can for example run Routinator behind a :ref:`reverse proxy
+<doc_routinator_reverse_proxy>`.
 
 In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port 8323,
 run:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
@@ -38,6 +37,22 @@ The application will stay attached to your terminal unless you provide the
 After fetching and verifying all RPKI data, paths are available for each 
 :ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
 ``/csv`` path you can fetch a list of all VRPs in CSV format.
+
+.. code-block:: text
+
+   curl http:///192.0.2.13:8323/csv
+
+These paths accept selector expressions to limit the VRPs returned in the form
+of a query string. The field ``select-asn`` can be used to select ASNs and
+the field ``select-prefix`` can be used to select prefixes. The fields can be
+repeated multiple times. 
+
+For example, to only show the VRPs authorising AS196615 use:
+
+.. code-block:: text
+
+   curl http:///192.0.2.13:8323/csv?select-asn=196615
+
 
 API Endpoints
 """""""""""""
@@ -71,16 +86,6 @@ The service supports GET requests with the following paths:
 :command:`/validity?asn=as-number&prefix=prefix`
      Same as above but with a more form-friendly calling convention.
 
-These paths accept selector expressions to limit the VRPs returned in the form
-of a query string. The field ``select-asn`` can be used to select ASNs and
-the field ``select-prefix`` can be used to select prefixes. The fields can be
-repeated multiple times. For example, to only show the VRPs from AS196615
-using the server from the earlier example, use:
-
-.. code-block:: text
-
-   http:///192.0.2.13:8323/csv?select-asn=196615
-
 The RTR Service
 ---------------
 
@@ -93,7 +98,7 @@ Like the HTTP server, the RTR server is not started by default, nor does it have
 a default host or port. Thus, in order to start the RTR server at 192.0.2.13 and
 2001:0DB8::13 on port 3323, run Routinator using the :subcmd:`server` command:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323
 
@@ -134,7 +139,7 @@ SSH transport for RPKI-RTR can be configured with the help of `netcat
 
 Make sure Routinator is running as an RTR server on localhost:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --rtr 127.0.0.1:3323
 
@@ -142,7 +147,7 @@ Make sure Routinator is running as an RTR server on localhost:
 
 3. Configure OpenSSH to expose an ``rpki-rtr`` subsystem that acts as a proxy into Routinator by editing the :file:`/etc/ssh/sshd_config` file or equivalent to include the following line:
 
-.. code-block:: text
+.. code-block:: bash
 
    # Define an `rpki-rtr` subsystem which is actually `netcat` used to
    # proxy STDIN/STDOUT to a running `routinator server --rtr 127.0.0.1:3323`
@@ -157,7 +162,7 @@ Make sure Routinator is running as an RTR server on localhost:
 
 5. Set up the router running IOS-XR using this example configuration:
 
-.. code-block:: bash
+.. code-block:: text
 
    router bgp 65534
     rpki server 192.168.0.100
@@ -176,7 +181,7 @@ TLS transport for RPKI-RTR can be configured with the help of `stunnel
 
 2. Make sure Routinator is running as an RTR server on localhost:
 
-.. code-block:: bash
+.. code-block:: text
 
    routinator server --rtr 127.0.0.1:3323
 

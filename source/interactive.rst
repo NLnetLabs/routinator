@@ -151,10 +151,11 @@ read from standard input. You can also save the results to a file using the
 
 You can provide a simple plain text file with the routes you would like to have
 verified by Routinator. The input file should have one route announcement per
-line, provided as a prefix followed by an ASCII-art arrow => surrounded by white
-space and followed by the AS number of the originating autonomous system.
+line, provided as a prefix followed by an ASCII-art arrow ``=>`` surrounded by
+white space and followed by the AS number of the originating autonomous system.
 
-For example, let's provide Routinator with this file, saved as ``beacons.txt``:
+For example, let's provide Routinator with this file, saved as
+:file:`beacons.txt`:
 
 .. code-block:: text
 
@@ -180,7 +181,7 @@ array of objects. Each object describes one route announcement through its
 *prefix* and *asn* members which contain a prefix and originating AS number as
 strings, respectively.
 
-For example, let's provide Routinator with this ``beacons.json`` JSON file:
+For example, let's provide Routinator with this :file:`beacons.json` file:
 
 .. code-block:: json
 

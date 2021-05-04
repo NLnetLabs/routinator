@@ -56,10 +56,11 @@ file.
 Using a Configuration File
 --------------------------
 
-Routinator can take its configuration from a file. You can specify such a
-config file via the :option:`-c` option. If you don’t, Routinator will check
-if there is a :file:`$HOME/.routinator.conf` and if it exists, use it. If it
-doesn’t exist and there is no :option:`-c` option, the default values are used.
+Routinator can take its configuration from a file. You can specify such a config
+file via the :option:`--config` option. If you don’t, Routinator will check if
+there is a :file:`$HOME/.routinator.conf` and if it exists, use it. If it
+doesn’t exist and there is no :option:`--config` option, the default values are
+used.
 
 For specifying configuration options, Routinator uses a `TOML file
 <https://github.com/toml-lang/toml>`_. Its entries are named similarly to the
@@ -194,6 +195,6 @@ available in the repository at `/test/slurm
      }
    }
 
-Use the :option:`-x` option to refer to your file with local exceptions.
-Routinator will re-read that file on every validation run, so you can simply
-update the file whenever your exceptions change.
+Use the :option:`--exceptions` option to refer to your file with local
+exceptions. Routinator will re-read that file on every validation run, so you
+can simply update the file whenever your exceptions change.
