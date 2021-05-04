@@ -851,7 +851,7 @@ A string specifying the policy for dealing with unsafe VRPs.
 .RS
 .TP
 .I reject
-Filter unsafe VPRs and add warning messages to the log.
+Filter unsafe VRPs and add warning messages to the log.
 .TP
 .I warn
 Warn about unsafe VRPs in the log but add them to the final set of VRPs.
@@ -1218,7 +1218,7 @@ command line option or setting
 in the config file.
 .P
 By default, this filter is currently disabled but warnings are logged about
-unsafe VPRs. This allows to assess the operation impact of such a filter.
+unsafe VRPs. This allows to assess the operation impact of such a filter.
 Depending on this assessment, the default may change in future version.
 .P
 One exception from this rule are CAs that have the full address space
