@@ -51,8 +51,8 @@ After fetching and verifying all RPKI data, the following paths are available:
 :command:`/openbgpd`
      Returns the current set of VRPs in **OpenBGPD** output format
 
-:command:`/bird`
-     Returns the current set of VRPs in **bird** output format
+:command:`/bird1`
+     Returns the current set of VRPs in **bird1** output format
 
 :command:`/bird2`
      Returns the current set of VRPs in **bird2** output format

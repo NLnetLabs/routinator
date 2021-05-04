@@ -30,8 +30,7 @@ csv
       slash notation, the maximum prefix length, the autonomous system number,
       and an abbreviation for the trust anchor the entry is derived from. The
       latter is the name of the TAL file  without the extension *.tal*. This is
-      the default format used if the :option:`--format` or :option:`-f` option
-      is missing.
+      the default format used if the :option:`--format` option is not provided.      
 csvcompat
        The same as csv except that all fields are embedded in double quotes and
        the autonomous system number is given without the prefix AS. This format
@@ -82,9 +81,9 @@ jsonext
 openbgpd
       Choosing this format causes Routinator to produce a *roa-set*
       configuration item for the OpenBGPD configuration.
-bird
+bird1
       Choosing this format causes Routinator to produce a roa table
-      configuration item for the BIRD configuration.
+      configuration item for the BIRD1 configuration.
 
 bird2
       Choosing this format causes Routinator to produce a route table
@@ -94,6 +93,17 @@ rpsl
       fields *route*, *origin*, and *source*. In addition, the fields *descr*,
       *mnt-by*, *created*, and *last-modified*, are present with more or less
       meaningful values.
+      
+      .. code-block:: text
+         
+         route: 93.175.146.0/24
+         origin: AS12654
+         descr: RPKI attestation
+         mnt-by: NA
+         created: 2021-05-03T20:53:20Z
+         last-modified: 2021-05-03T20:53:20Z
+         source: ROA-RIPE-RPKI-ROOT
+      
 summary
       This format produces a summary of the content of the RPKI repository. For
       each trust anchor, it will print the number of verified ROAs and VRPs.
