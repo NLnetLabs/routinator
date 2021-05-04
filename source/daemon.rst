@@ -33,38 +33,38 @@ The application will stay attached to your terminal unless you provide the
 
 After fetching and verifying all RPKI data, paths are available for each 
 :ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
-:command:`/csv` path you can fetch a list of all VRPs in CSV format.
+``/csv`` path you can fetch a list of all VRPs in CSV format.
 
 API Endpoints
 """""""""""""
 
 The service supports GET requests with the following paths:
 
-:command:`/metrics`
+/metrics
      Returns a set of :ref:`monitoring <doc_routinator_monitoring>` metrics in 
      the format used by Prometheus.
 
-:command:`/status`
+/status
      Returns the current status of the Routinator instance. This is similar to 
      the output of the :command:`/metrics` endpoint but in a more human friendly
      format.
 
-:command:`/log`
+/log
      Returns the logging output of the last validation run. The log level 
      matches that set upon start.
 
      Note that the output is collected after each validation run and is 
      therefore only available after the initial run has concluded.
 
-:command:`/version`
+/version
      Returns the version of the Routinator instance.
 
-:command:`/api/v1/validity/as-number/prefix`
+/api/v1/validity/as-number/prefix
      Returns a JSON object describing whether the route announcement given by 
      its origin AS number and address prefix is RPKI valid, invalid, or not 
      found. A complete list of VRPs that caused the result is included.
      
-:command:`/validity?asn=as-number&prefix=prefix`
+/validity?asn=as-number&prefix=prefix
      Same as above but with a more form-friendly calling convention.
 
 These paths accept selector expressions to limit the VRPs returned in the form
