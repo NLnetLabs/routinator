@@ -65,6 +65,11 @@ To do this, run the following command:
 .. code-block:: text
 
    routinator init --rir-tals
+   
+This will return the following message:
+   
+.. code-block:: text   
+   
    Before we can install the ARIN TAL, you must have read
    and agree to the ARIN Relying Party Agreement (RPA).
    It is available at
