@@ -17,7 +17,7 @@ command line via the following subcommands:
      Routinator with an ASN and a prefix.
 
 :subcmd:`dump`
-     Writes the content of all stored data to the file system.
+     Writes the contents of all stored data to the file system.
 
 Printing a List of VRPs
 -----------------------
@@ -254,7 +254,7 @@ a detailed analysis of the reasoning behind the outcome of each route.
 Dumping Stored Data
 -------------------
 
-The :subcmd:`dump` subcommand writes the content of all stored data to the file
+The :subcmd:`dump` subcommand writes the contents of all stored data to the file
 system. This is primarily intended for debugging but can be used to get access
 to the view of the RPKI data that Routinator currently sees. This subcommand has
 only one option, :option:`--output`, which specifies the directory where the
