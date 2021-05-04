@@ -76,7 +76,7 @@ To do this, run the following command:
 
 Running the :subcmd:`init` command with the :option:`--accept-arin-rpa` option
 added will create the TAL directory and copy the five Trust Anchor Locator files
-into it.
+into it:
 
 .. code-block:: bash
 
@@ -96,7 +96,7 @@ install a specific one, using the :option:`--tal` option.
 
 For example, to add the TAL for the `ARIN Operational Test and Evaluation
 Environment <https://www.arin.net/reference/tools/testing/#rpki>`_ to an already
-initialised Routinator, enter
+initialised Routinator, enter:
 
 .. code-block:: bash
 
@@ -110,7 +110,7 @@ required outbound connections on ports 443 and 873, it is recommended to perform
 an initial test run. You can do this by having Routinator print a validated ROA
 payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v` to
 increase the log level so you can verify if Routinator establishes connections
-as expected.
+as expected:
 
 .. code-block:: bash
 
@@ -126,7 +126,7 @@ temporarily unavailable.
 
 From a cold start, this process will take a couple of minutes. Subsequent
 verification runs will be much faster, because only the changes between the
-repositories and the local cache need to be processed. 
+repositories and the local cache need to be processed:
 
 .. code-block:: text
 

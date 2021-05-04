@@ -88,7 +88,7 @@ You can check the RPKI origin validation status of one or more BGP announcements
 using the :subcmd:`validate` subcommand and by supplying the ASN and prefix. A
 validation run will be started before returning the result, making sure you get
 the latest information. If you would like a result from the current cache, you
-can use the :option:`--noupdate` option.
+can use the :option:`--noupdate` option:
 
 .. code-block:: text
 
@@ -99,7 +99,7 @@ When providing the :option:`--json` option, a detailed analysis of the reasoning
 behind the validation outcome is printed in JSON format. In case of an Invalid
 state, whether this because the announcement is originated by an unauthorised
 AS, or if the prefix is more specific than the maximum prefix length allows.
-Lastly, a complete list of VRPs that caused the result is included.
+Lastly, a complete list of VRPs that caused the result is included:
 
 .. code-block:: text
 
@@ -167,7 +167,6 @@ provides the RPKI validity state in the output:
    93.175.147.0/24 => AS12654: invalid
    2001:7fb:fd02::/48 => AS12654: valid
 
-
 With the :option:`--json` option you can provide a file in JSON format. It
 should consist of a single object with one member *routes*  which contains an
 array of objects. Each object describes one route announcement through its
@@ -192,7 +191,7 @@ For example, let's provide Routinator with this ``beacons.json`` JSON file:
 
 When referring to the file with the :option:`--json` and :option:`--input`
 options, Routinator produces a JSON object that includes the validity state and
-a detailed analysis of the reasoning behind the outcome of each route.
+a detailed analysis of the reasoning behind the outcome of each route:
 
 .. code-block:: text
 

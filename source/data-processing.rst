@@ -58,7 +58,7 @@ be used for validation.
 
 If you ever want or need to clear all stored data, you can use the
 :option:`--fresh` option. This will be like starting Routinator for the very
-first time.
+first time:
 
 .. code-block:: text
 

@@ -13,7 +13,7 @@ Assuming you have a machine running a recent Debian or Ubuntu distribution, you
 can install Routinator from our `software package repository
 <https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
 that corresponds to your operating system to your ``/etc/apt/sources.list`` or
-``/etc/apt/sources.list.d/``.
+``/etc/apt/sources.list.d/``:
 
 .. code-block:: bash
 
@@ -23,7 +23,7 @@ that corresponds to your operating system to your ``/etc/apt/sources.list`` or
    deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
    deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
 
-Then run the following commands.
+Then run the following commands:
 
 .. code-block:: bash
 
@@ -33,7 +33,7 @@ Then run the following commands.
 
 You can then install, initialise, enable and start Routinator by running these
 commands. Note that ``routinator-init`` is slightly different than the command
-used with Cargo.
+used with Cargo:
 
 .. code-block:: bash
 
