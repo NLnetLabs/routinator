@@ -16,9 +16,6 @@ command line via the following subcommands:
      Outputs the RPKI validity for a specific announcement by supplying
      an ASN and an IP prefix.
 
-:subcmd:`dump`
-     Writes the contents of all stored data to the file system.
-
 Printing a List of VRPs
 -----------------------
 
