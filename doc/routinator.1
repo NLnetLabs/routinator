@@ -173,11 +173,11 @@ of a VRP overlaps with any resources assigned to a CA that has been rejected
 because if failed to validate completely, the VRP is said to be unsafe since
 using it may lead to legitimate routes being flagged as RPKI invalid.
 .IP
-There are three options how to deal with unsafe VRPS:
+There are three options how to deal with unsafe VRPs:
 .IP
 A policy of
 .I reject
-will filter out these VPRs. Warnings will be logged to indicate which VRPs
+will filter out these VRPs. Warnings will be logged to indicate which VRPs
 have been filtered
 .IP
 The
@@ -242,7 +242,7 @@ This option allows to disable this filtering.
 
 .TP
 .B --fresh
-Delete and re-initialize the local data storage before starting. This option
+Delete and reinitialize the local data storage before starting. This option
 should be used when Routinator fails after reporting corrupt data storage.
 
 .TP
@@ -454,7 +454,7 @@ The same as
 except that all fields are embedded in double quotes and the autonomous system
 number is given without the prefix
 .IR AS .
-This format is pretty much identical to the CSV produced by the RIPE NCC
+This format is pretty much identical to the CSV produced by the RIPE NCC RPKI
 Validator.
 
 .TP
@@ -636,7 +636,7 @@ the RTR protocol.
 .TP
 .BI \-\-rtr\-tcp\-keepalive= seconds
 The number of seconds to wait before sending a TCP keepalive on an
-established RTR connection. By default, TCP keepalive is enable on all RTR
+established RTR connection. By default, TCP keepalive is enabled on all RTR
 connections with an idle time of 60 seconds. Set this option to 0 to disable
 keepalives.
 .TP
@@ -649,13 +649,13 @@ local network topology.
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
 and validating the local repository before starting to update again. The
-next update will earlier if objects in the repository expire earlier. The
-default value is 600 seconds.
+next update will start earlier if objects in the repository expire earlier.
+The default value is 600 seconds.
 .TP
 .BI \-\-retry= seconds
 The amount of seconds to suggest to an RTR client to wait before trying to
-request data again if that failed. The default value is 600 seconds, the
-value recommended in RFC 8210.
+request data again if that failed. The default value is 600 seconds,
+as recommended in RFC 8210.
 .TP
 .BI \-\-expire= seconds
 The amount of seconds to an RTR client can keep using data if it cannot
@@ -792,7 +792,7 @@ of
 .I .tal
 in this directory. This means that you can add and remove trust anchors by
 adding and removing files in this directory. If you add files, make sure they
-are in the format described by RFC 7730 or the upcoming RFC 8630.
+are in the format described by RFC 7730 or RFC 8630.
 
 .SH CONFIGURATION FILE
 Instead of providing all options on the command line, they can also be
@@ -1176,7 +1176,7 @@ In
 and
 .B server
 mode, Routinator will produce a set of VRPs from the data published in the
-RPKI repository. It will walk over all certfication authorities (CAs)
+RPKI repository. It will walk over all certification authorities (CAs)
 starting with those referred to in the configured TALs.
 .P
 Each CA is checked whether all its published objects are present, correctly
@@ -1230,7 +1230,7 @@ VRPs should something happen to a trust anchor is unnecessary.
 .SH RELAXED DECODING
 The documents defining RPKI include a number of very strict rules
 regarding the formatting of the objects published in the RPKI repository.
-However, because PRKI reuses existing technology, real-world applications
+However, because RPKI reuses existing technology, real-world applications
 produce objects that do not follow these strict requirements.
 .PP
 As a consequence, a significant portion of the RPKI repository is actually
@@ -1275,11 +1275,11 @@ signed objects.
 .IP
 In relaxed mode, we will allow BER encoding.
 .IP
-Note that this isn't just nit-picking. In BER encoding, octet strings can
-be broken up into a sequence of sub-strings. Since those strings are in
+Note that this isn't just nitpicking. In BER encoding, octet strings can
+be broken up into a sequence of substrings. Since those strings are in
 some places used to carry encoded content themselves, such an encoding
 does make parsing significantly more difficult. At least one CA does
-produce such broken-up strings.
+produce such broken up strings.
 
 .SH SIGNALS
 .SS SIGUSR1: Reload TALs and restart validation
