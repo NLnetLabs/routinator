@@ -207,4 +207,4 @@ Notes
 
 In case you want to build a statically linked Routinator, or you have an
 Operating System where special care needs to be taken, such as OpenBSD and
-CentOS, please refer to the :ref:`doc_routinator_installation_notes` section.
+CentOS 6, please refer to the :ref:`doc_routinator_installation_notes` section.
