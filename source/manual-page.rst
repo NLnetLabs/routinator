@@ -793,7 +793,7 @@ These can be requested by providing different commands on the command line.
        the various repositories. Each repository is stored in its own directory.
        The mapping between rpkiNotify URI and path is provided in the
        *repositories.json* file. For each repository, the files are stored in
-       a directory structure based on the components of the fileas rsync URI.
+       a directory structure based on the components of the file as rsync URI.
        
        The *rsync* directory contains all the files collected via rsync. The
        files are stored in a directory structure based on the components of the

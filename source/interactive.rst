@@ -16,6 +16,9 @@ command line via the following subcommands:
      Outputs the RPKI validity for a specific announcement by supplying
      Routinator with an ASN and a prefix.
 
+:subcmd:`dump`
+     Writes the content of all stored data to the file system.
+
 Printing a List of VRPs
 -----------------------
 
@@ -247,4 +250,30 @@ a detailed analysis of the reasoning behind the outcome of each route.
       }
     ]
   }
+
+Dumping Stored Data
+-------------------
+
+The :subcmd:`dump` subcommand writes the content of all stored data to the file
+system. This is primarily intended for debugging but can be used to get access
+to the view of the RPKI data that Routinator currently sees. This subcommand has
+only one option :option:`--output=dir`, which specifies the directory where the
+output should be written.
+   
+Three directories will be created in the output directory:
+
+The *rrdp* directory will contain all the files collected via RRDP from the
+various repositories. Each repository is stored in its own directory. The
+mapping between rpkiNotify URI and path is provided in the *repositories.json*
+file. For each repository, the files are stored in a directory structure based
+on the components of the file as rsync URI.
+
+The *rsync* directory contains all the files collected via rsync. The files are
+stored in a directory structure based on the components of the file's rsync URI.
+
+The *store* directory contains all the files used for validation. Files
+collected  via  RRDP  or rsync are copied to the store if they are correctly
+referenced by a valid manifest. This part contains one directory for each RRDP
+repository similarly structured to the *rrdp* directory and one additional
+directory *rsync* that contains files collected via rsync.
 
