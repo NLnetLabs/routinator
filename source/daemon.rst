@@ -70,7 +70,12 @@ The service supports GET requests with the following paths:
 These paths accept selector expressions to limit the VRPs returned in the form
 of a query string. The field ``select-asn`` can be used to select ASNs and
 the field ``select-prefix`` can be used to select prefixes. The fields can be
-repeated multiple times.
+repeated multiple times. For example, to only show the VRPs from AS196615
+using the server from the earlier example, use:
+
+.. code-block:: text
+
+   http:///192.0.2.13:8323/csv?select-asn=196615
 
 The RTR Service
 ---------------
