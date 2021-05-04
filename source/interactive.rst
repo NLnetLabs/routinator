@@ -21,19 +21,11 @@ Printing a List of VRPs
 
 Routinator can print a list of VRPs by using the :subcmd:`vrps` subcommand and
 specifying the :ref:`desired format <doc_routinator_output_formats>`. For
-example, to get the VRPs in CSV format, run:
+example, to print the VRPs in CSV format to standard output, run:
 
 .. code-block:: text
 
    routinator vrps --format csv
-   ASN,IP Prefix,Max Length,Trust Anchor
-   AS55803,103.14.64.0/23,23,apnic
-   AS267868,45.176.192.0/24,24,lacnic
-   AS41152,82.115.18.0/23,23,ripe
-   AS28920,185.103.228.0/22,22,ripe
-   AS11845,209.203.0.0/18,24,afrinic
-   AS63297,23.179.0.0/24,24,arin
-   ...
 
 To generate a file with with the validated ROA payloads in JSON format, run:
 
