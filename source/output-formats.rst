@@ -10,11 +10,16 @@ Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be generated
 in a wide range of output formats for various use cases.
 
+.. Tip:: In many of the output formats, the name of the trust anchor from where
+         the VRP originated is provided. This name is derived from the file name
+         of the TAL, without  the *.tal* extension. The *tal-label* option in 
+         the :ref:`configuration file <doc_routinator_configuration>` lets you 
+         create a create a mapping between the file name and your desired label.
+
 csv
       The list is formatted as lines of comma-separated values of the prefix in
       slash notation, the maximum prefix length, the autonomous system number,
-      and an abbreviation for the trust anchor the entry is derived from. The
-      latter is the name of the TAL file  without the extension *.tal*. 
+      and an abbreviation for the trust anchor the entry is derived from. 
       
       .. code-block:: text
          
@@ -58,7 +63,7 @@ json
       the prefix in slash notation in *prefix*, the maximum prefix length of the
       announced route in *maxLength*, and the trust anchor from which the
       authorisation was derived in *ta*. This format is identical to that
-      produced by the RIPE NCC Validator except for different naming of the
+      produced by the RIPE NCC RPKI Validator except for different naming of the
       trust anchor. Routinator uses the name of the TAL file without the
       extension *.tal* whereas the RIPE NCC Validator has a dedicated name for
       each.
