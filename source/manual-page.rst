@@ -182,7 +182,7 @@ The available options are:
 
       There are three options how to deal with unsafe VRPS:
 
-      A policy of *reject* will filter out these VPRs. Warnings will be logged
+      A policy of *reject* will filter out these VRPs. Warnings will be logged
       to indicate which VRPs have been filtered
 
       The *warn* policy will log warnings for unsafe VRPs but will add them to
@@ -575,7 +575,7 @@ These can be requested by providing different commands on the command line.
        .. option:: -j, --json
 
               A detailed analysis on the reasoning behind the validation is
-              printed in JSON format including lists of the VPRs that caused
+              printed in JSON format including lists of the VRPs that caused
               the particular result.   If this option is omitted, Routinator
               will only print the determined state.
 
@@ -888,7 +888,7 @@ unsafe-vrps
       A string specifying the policy for dealing with unsafe VRPs.
 
       reject
-             Filter unsafe VPRs and add warning messages to the log.
+             Filter unsafe VRPs and add warning messages to the log.
 
       warn
              Warn about unsafe VRPs in the log but add them to the final set of
@@ -1207,7 +1207,7 @@ can be enabled via the :option:`--unsafe-vrps=reject` command line option or
 setting :option:`unsafe-vrps=reject` in the config file.
 
 By default, this filter is currently disabled but warnings are logged about
-unsafe VPRs. This allows to assess the operation impact of such a filter.
+unsafe VRPs. This allows to assess the operation impact of such a filter.
 Depending on this assessment, the default may change in future version.
 
 One exception from this rule are CAs that have the full address space assigned,
