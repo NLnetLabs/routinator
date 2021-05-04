@@ -31,34 +31,9 @@ run:
 The application will stay attached to your terminal unless you provide the
 :option:`--detach` option. 
 
-Output Formats
-""""""""""""""
-
-After fetching and verifying all RPKI data, the following paths are available:
-
-:command:`/csv`
-     Returns the current set of VRPs in **csv** output format
-
-:command:`/csvext`
-     Returns the current set of VRPs in **csvext** output format.
-
-:command:`/json`
-     Returns the current set of VRPs in **json** output format
-
-:command:`/jsonext`
-     Returns the current set of VRPs in **jsonext** output format
-
-:command:`/openbgpd`
-     Returns the current set of VRPs in **OpenBGPD** output format
-
-:command:`/bird1`
-     Returns the current set of VRPs in **bird1** output format
-
-:command:`/bird2`
-     Returns the current set of VRPs in **bird2** output format
-
-:command:`/rpsl`
-     Returns the current set of VRPs in **RPSL** output format
+After fetching and verifying all RPKI data, paths are available for each 
+:ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
+:command:`/csv` path you can fetch a list of all VRPs in CSV format.
 
 API Endpoints
 """""""""""""
