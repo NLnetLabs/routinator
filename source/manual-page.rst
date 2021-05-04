@@ -803,7 +803,7 @@ These can be requested by providing different commands on the command line.
        collected  via  RRDP  or rsync are copied to the store if they are
        correctly referenced by a valid manifest. This part contains one
        directory for each RRDP repository similarly structured to the *rrdp*
-       directory and one additional directory *rsync*q that contains files
+       directory and one additional directory *rsync* that contains files
        collected via rsync.
 
 .. subcmd:: man
