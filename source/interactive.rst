@@ -14,7 +14,7 @@ command line via the following subcommands:
 
 :subcmd:`validate`
      Outputs the RPKI validity for a specific announcement by supplying
-     Routinator with an ASN and a prefix.
+     an ASN and an IP prefix.
 
 :subcmd:`dump`
      Writes the contents of all stored data to the file system.
