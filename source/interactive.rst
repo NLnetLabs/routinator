@@ -113,7 +113,8 @@ Lastly, a complete list of VRPs that caused the result is included.
       "validity": {
         "state": "Invalid",
         "reason": "as",
-        "description": "At least one VRP Covers the Route Prefix, but no VRP ASN matches the route origin ASN",
+        "description": "At least one VRP Covers the Route Prefix, but no 
+         VRP ASN matches the route origin ASN",
         "VRPs": {
          "matched": [
          ],
@@ -206,7 +207,8 @@ a detailed analysis of the reasoning behind the outcome of each route.
         "validity": {
           "state": "invalid",
           "reason": "as",
-          "description": "At least one VRP Covers the Route Prefix, but no VRP ASN matches the route origin ASN",
+          "description": "At least one VRP Covers the Route Prefix, but no
+           VRP ASN matches the route origin ASN",
           "VRPs": {
             "matched": [
             ],
