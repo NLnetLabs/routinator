@@ -708,7 +708,7 @@ impl Vrps {
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
-        let format = matches.value_of("output").unwrap_or(
+        let format = matches.value_of("format").unwrap_or(
             OutputFormat::DEFAULT_VALUE
         );
         let format = match OutputFormat::from_str(format) {
