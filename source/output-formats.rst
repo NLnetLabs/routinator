@@ -14,7 +14,7 @@ in a wide range of output formats for various use cases.
          the VRP originated is provided. This name is derived from the file name
          of the TAL, without  the *.tal* extension. The *tal-label* option in 
          the :ref:`configuration file <doc_routinator_configuration>` lets you 
-         create a create a mapping between the file name and your desired label.
+         create a mapping between the file name and your desired label.
 
 csv
       The list is formatted as lines of comma-separated values of the prefix in
