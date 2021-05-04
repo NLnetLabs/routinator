@@ -60,6 +60,7 @@ AXNn9GkpQ4a-q5skG1yiYQ>`_.
    installation-notes
    initialisation
    data-processing
+   output-formats
    interactive
    daemon
    user-interface
