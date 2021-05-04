@@ -36,6 +36,11 @@ To get an overview of all available TALs use the :option:`--list-tals` option:
 .. code-block:: text
 
     routinator init --list-tals
+    
+This displays the following overview:
+    
+.. code-block:: text
+    
      .---- --rir-tals
      |  .- --rir-test-tals
      V  V
@@ -135,7 +140,6 @@ repositories and the local cache need to be processed:
 
 .. code-block:: text
 
-    routinator -vv vrps
     RRDP https://rrdp.ripe.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.ripe.net/notification.xml: updating from snapshot.
     Found valid trust anchor https://rpki.afrinic.net/repository/AfriNIC.cer. Processing.

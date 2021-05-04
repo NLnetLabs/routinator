@@ -51,25 +51,26 @@ used multiple times in a single query and will be treated as a logical *"or"*.
 
 A validation run will be started before returning the result, making sure you
 get the latest information. If you would like a result from the current cache,
-you can use the :option:`--noupdate` or :option:`-n` option.
+you can use the :option:`--noupdate` option.
 
-Here are some examples selecting an ASN and prefix in CSV and JSON format:
-
-.. code-block:: text
-
-   routinator vrps --format csv --select-asn 196615
-   ASN,IP Prefix,Max Length,Trust Anchor
-   AS196615,2001:7fb:fd03::/48,48,ripe
-   AS196615,93.175.147.0/24,24,ripe
+Here is an example selecting VRPs related to a specific ASN, produced in JSON
+format:
 
 .. code-block:: text
 
-   routinator vrps --format json --select-prefix 93.175.146.0/24
-   {
-     "roas": [
-       { "asn": "AS12654", "prefix": "93.175.146.0/24", "maxLength": 24, "ta": "ripe" }
-     ]
-   }
+   routinator vrps --format json --select-asn 196615
+   
+This results in:
+
+.. code-block:: json
+   
+    {
+      "roas": [
+        { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
+        { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
+        { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
+      ]
+    }
 
 .. _doc_routinator_validity_checker:
 
@@ -85,17 +86,27 @@ can use the :option:`--noupdate` option:
 .. code-block:: text
 
    routinator validate --asn 12654 --prefix 93.175.147.0/24
+
+This will simply return the RPKI validity state:
+   
+.. code-block:: text
+   
    Invalid
 
-When providing the :option:`--json` option, a detailed analysis of the reasoning
-behind the validation outcome is printed in JSON format. In case of an Invalid
-state, whether this because the announcement is originated by an unauthorised
-AS, or if the prefix is more specific than the maximum prefix length allows.
-Lastly, a complete list of VRPs that caused the result is included:
+You can also add the :option:`--json` option:
 
 .. code-block:: text
 
    routinator validate --json --asn 12654 --prefix 93.175.147.0/24
+   
+This will produce a detailed analysis of the reasoning behind the validation
+outcome is printed in JSON format. In case of an Invalid state, whether this
+because the announcement is originated by an unauthorised AS, or if the prefix
+is more specific than the maximum prefix length allows. Lastly, a complete list
+of VRPs that caused the result is included:
+   
+.. code-block:: json   
+   
    {
      "validated_route": {
       "route": {
@@ -150,12 +161,16 @@ For example, let's provide Routinator with this file, saved as ``beacons.txt``:
    93.175.147.0/24 => 12654
    2001:7fb:fd02::/48 => 12654
 
-When referring to the file with the :option:`--input` option Routinator
-provides the RPKI validity state in the output:
+Now we refer to the file with the :option:`--input` option:
 
 .. code-block:: text
 
    routinator validate --input beacons.txt 
+   
+Routinator provides the RPKI validity state in the output:   
+   
+.. code-block:: text   
+   
    93.175.147.0/24 => AS12654: invalid
    2001:7fb:fd02::/48 => AS12654: valid
 
@@ -181,13 +196,18 @@ For example, let's provide Routinator with this ``beacons.json`` JSON file:
     ]
   }
 
-When referring to the file with the :option:`--json` and :option:`--input`
-options, Routinator produces a JSON object that includes the validity state and
-a detailed analysis of the reasoning behind the outcome of each route:
+Then refer to the file with the :option:`--json` and :option:`--input`
+options:
 
 .. code-block:: text
 
   routinator validate --json --input beacons.json
+  
+Routinator produces a JSON object that includes the validity state and a
+detailed analysis of the reasoning behind the outcome of each route:  
+  
+.. code-block:: json  
+  
   {
     "validated_routes": [
       {

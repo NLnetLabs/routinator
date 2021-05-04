@@ -15,7 +15,7 @@ can install Routinator from our `software package repository
 that corresponds to your operating system to your ``/etc/apt/sources.list`` or
 ``/etc/apt/sources.list.d/``:
 
-.. code-block:: bash
+.. code-block:: text
 
    deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
    deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
@@ -25,7 +25,7 @@ that corresponds to your operating system to your ``/etc/apt/sources.list`` or
 
 Then run the following commands:
 
-.. code-block:: bash
+.. code-block:: text
 
    sudo apt update && apt-get install -y gnupg2
    wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
@@ -35,7 +35,7 @@ You can then install, initialise, enable and start Routinator by running these
 commands. Note that ``routinator-init`` is slightly different than the command
 used with Cargo:
 
-.. code-block:: bash
+.. code-block:: text
 
    sudo apt install routinator
    sudo routinator-init
@@ -92,7 +92,7 @@ start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on port
 
 If you have an older version of Rust and Routinator, you can update via:
 
-.. code-block:: bash
+.. code-block:: text
 
    rustup update
    cargo install --locked --force routinator
@@ -100,7 +100,7 @@ If you have an older version of Rust and Routinator, you can update via:
 If you want to try the main branch from the repository instead of a release
 version, you can run:
 
-.. code-block:: bash
+.. code-block:: text
 
    cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
@@ -166,7 +166,7 @@ tool called :command:`rustup`.
 
 To install :command:`rustup` and Rust, simply do:
 
-.. code-block:: bash
+.. code-block:: text
 
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
@@ -175,7 +175,7 @@ Alternatively, visit the `official Rust website
 
 You can update your Rust installation later by running:
 
-.. code-block:: bash
+.. code-block:: text
 
    rustup update
 
@@ -184,14 +184,14 @@ Building
 
 The easiest way to get Routinator is to leave it to cargo by saying:
 
-.. code-block:: bash
+.. code-block:: text
 
    cargo install --locked routinator
 
 If you want to try the main branch from the repository instead of a release
 version, you can run:
 
-.. code-block:: bash
+.. code-block:: text
 
    cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
