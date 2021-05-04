@@ -8,6 +8,10 @@ and makes the resulting data set available through the built-in HTTP server and
 via the RTR protocol. You can start the Routinator service using the
 :subcmd:`server` subcommand.
 
+.. Note:: Routinator will not reread the trust anchor locators after it has
+          started the service. Thus, if you add or change a TAL you must restart
+          Routinator or send it a :ref:`SIGUSR1 <manpage_signals>`.
+
 The HTTP Service
 ----------------
 

@@ -1267,6 +1267,8 @@ relaxed decoding mode.
               themselves, such an encoding does make parsing significantly more
               difficult. At least one CA does produce such broken-up strings.
 
+.. _manpage_signals:
+
 Signals
 -------
 SIGUSR1: Reload TALs and restart validation
