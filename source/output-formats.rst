@@ -20,7 +20,7 @@ in a wide range of output formats for various use cases.
 csv
       The list is formatted as lines of comma-separated values of the prefix in
       slash notation, the maximum prefix length, the autonomous system number,
-      and an abbreviation for the trust anchor the entry is derived from. 
+      and the name of the trust anchor the entry is derived from. 
       
       .. code-block:: text
          
@@ -30,10 +30,10 @@ csv
          AS196615,93.175.147.0/24,24,ripe
       
 csvcompat
-       The same as csv except that all fields are embedded in double quotes and
-       the autonomous system number is given without the prefix AS. This format
-       is pretty much identical to the CSV produced by the RIPE NCC RPKI 
-       Validator.
+       This is the same as the *csv* format except that all fields are embedded
+       in double quotes and the autonomous system number is given without the
+       prefix *AS*. This format is pretty much identical to the CSV format 
+       produced by the RIPE NCC RPKI Validator.
        
        .. code-block:: text
           
@@ -58,8 +58,8 @@ csvext
          rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
          
 json
-      The list is placed into a JSON object with a single element *roas* which
-      contains an array of objects with four elements each: The autonomous
+      The VRP list is placed into a JSON object with a single element *roas*
+      which contains an array of objects with four elements each: The autonomous
       system number of the network authorised to originate a prefix in *asn*,
       the prefix in slash notation in *prefix*, the maximum prefix length of the
       announced route in *maxLength*, and the trust anchor from which the
@@ -99,7 +99,7 @@ jsonext
       comment if given for the assertion.
 
       Please note that because of this additional information, output in
-      :option:`jsonext` format will be quite large.
+      ``jsonext`` format will be quite large.
       
       .. code-block:: text
          
@@ -118,8 +118,8 @@ openbgpd
          }
          
 bird1
-      Choosing this format causes Routinator to produce a roa table
-      configuration item for the BIRD1 configuration.
+      Choosing this format causes Routinator to produce a ROA table
+      configuration item for use with BIRD 1.6.
       
       .. code-block:: text
          
@@ -129,7 +129,7 @@ bird1
 
 bird2
       Choosing this format causes Routinator to produce a route table
-      configuration item for the BIRD2 configuration.
+      configuration item for BIRD 2.0 configuration.
       
       .. code-block:: text
          
