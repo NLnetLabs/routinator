@@ -40,31 +40,31 @@ API Endpoints
 
 The service supports GET requests with the following paths:
 
-/metrics
+:command:`/metrics`
      Returns a set of :ref:`monitoring <doc_routinator_monitoring>` metrics in 
      the format used by Prometheus.
 
-/status
+:command:`/status`
      Returns the current status of the Routinator instance. This is similar to 
      the output of the :command:`/metrics` endpoint but in a more human friendly
      format.
 
-/log
+:command:`/log`
      Returns the logging output of the last validation run. The log level 
      matches that set upon start.
 
      Note that the output is collected after each validation run and is 
      therefore only available after the initial run has concluded.
 
-/version
+:command:`/version`
      Returns the version of the Routinator instance.
 
-/api/v1/validity/as-number/prefix
+:command:`/api/v1/validity/as-number/prefix`
      Returns a JSON object describing whether the route announcement given by 
      its origin AS number and address prefix is RPKI valid, invalid, or not 
      found. A complete list of VRPs that caused the result is included.
      
-/validity?asn=as-number&prefix=prefix
+:command:`/validity?asn=as-number&prefix=prefix`
      Same as above but with a more form-friendly calling convention.
 
 These paths accept selector expressions to limit the VRPs returned in the form
