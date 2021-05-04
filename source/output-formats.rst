@@ -64,9 +64,7 @@ json
       announced route in *maxLength*, and the trust anchor from which the
       authorisation was derived in *ta*. This format is identical to that
       produced by the RIPE NCC RPKI Validator except for different naming of the
-      trust anchor. Routinator uses the name of the TAL file without the
-      extension *.tal* whereas the RIPE NCC Validator has a dedicated name for
-      each.
+      trust anchor. 
       
       .. code-block:: text
          
