@@ -155,7 +155,7 @@ summary
       Note that this format does not take filters into account. It will always
       provide numbers for the complete repository.
       
-      ..code-block:: text
+      .. code-block:: text
       
       Summary at 2021-05-04 08:16:17.979912 UTC
       afrinic: 1403 verified ROAs, 2072 verified VRPs, 0 unsafe VRPs, 2039 final VRPs.
