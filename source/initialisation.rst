@@ -153,7 +153,7 @@ repositories and the local cache need to be processed:
     RRDP https://rrdp.arin.net/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.arin.net/notification.xml: updating from snapshot.
     rsync://repository.lacnic.net/rpki/: successfully completed.
-    Found valid trust anchor rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer. Processing.
+    Found valid trust anchor https://rrdp.lacnic.net/ta/rta-lacnic-rpki.cer. Processing.
     RRDP https://rrdp.lacnic.net/rrdp/notification.xml: Tree has 0 entries.
     RRDP https://rrdp.lacnic.net/rrdp/notification.xml: updating from snapshot.
     RRDP https://rrdp.arin.net/notification.xml: snapshot update completed.
