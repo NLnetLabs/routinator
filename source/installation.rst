@@ -196,7 +196,7 @@ version, you can run:
    cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
 If you want to update an installed version, you run the same command but add the
-``-f`` flag, a.k.a. force, to approve overwriting the installed version.
+:option:`--force` option to approve overwriting the installed version.
 
 The command will build Routinator and install it in the same directory that
 cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
