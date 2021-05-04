@@ -9,9 +9,10 @@ get Routinator working as desired.
 Using Native TLS Instead of Rustls
 ----------------------------------
 
-Routinator by default uses `Rustls <https://github.com/ctz/rustls>`_ which in
-most cases is fine. However, if needed you can instead use your system native
-TLS implementation with Routinator like so:
+By default Routinator uses the TLS library `Rustls
+<https://github.com/ctz/rustls>`_, which in most cases is fine. However, if
+needed you can instead use your system native TLS implementation with Routinator
+like so:
 
 Cargo
 """""
