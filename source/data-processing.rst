@@ -17,7 +17,7 @@ support both protocols, Routinator will prefer RRDP if available.
 When traversing the RPKI tree, Routinator will find several pointers to child
 publication points, such as the ones operated by National Internet Registries
 and organisations running delegated RPKI. Each pointer explicitly states if RRDP
-is supported in addition to rsync. 
+is offered in addition to rsync. 
 
 If an RRDP endpoint is unavailable but it has worked in the past, Routinator
 will assume this is a transient problem. It will retry using RRDP for up to 60
