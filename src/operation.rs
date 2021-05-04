@@ -518,7 +518,7 @@ impl Server {
             history.clone(), rtr_metrics.clone(), process.config()
         )?;
         let http = http_listener(
-            history.clone(), rtr_metrics, log, process.config()
+            history.clone(), rtr_metrics, log.clone(), process.config()
         )?;
 
         process.drop_privileges()?;
@@ -534,6 +534,9 @@ impl Server {
 
         let join = thread::spawn(move || {
             loop {
+                if let Some(log) = log.as_ref() {
+                    log.start();
+                }
                 let timeout = match LocalExceptions::load(
                     process.config(), true
                 ) {
@@ -553,6 +556,9 @@ impl Server {
                         Duration::from_secs(10)
                     }
                 };
+                if let Some(log) = log.as_ref() {
+                    log.flush();
+                }
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
                         match validation.reload_tals() {
