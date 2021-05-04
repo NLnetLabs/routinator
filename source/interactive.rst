@@ -251,6 +251,8 @@ a detailed analysis of the reasoning behind the outcome of each route.
 Dumping Stored Data
 -------------------
 
+.. versionadded:: 0.9
+
 The :subcmd:`dump` subcommand writes the contents of all stored data to the file
 system. This is primarily intended for debugging but can be used to get access
 to the view of the RPKI data that Routinator currently sees. This subcommand has
