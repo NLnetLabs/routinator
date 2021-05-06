@@ -9,6 +9,7 @@
 
 pub use self::listener::http_listener;
 
+mod delta;
 mod errors;
 mod listener;
 mod log;
@@ -40,6 +41,9 @@ async fn handle_request(
     }
 
     if let Some(response) = payload::handle_get(&req, origins) {
+        return response
+    }
+    if let Some(response) = delta::handle_get(&req, origins) {
         return response
     }
     if let Some(response) = log::handle_get(&req, log) {
