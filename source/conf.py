@@ -30,14 +30,11 @@ version = ''
 # The full version, including alpha/beta/rc tags
 release = ''
 
-
-
 # -- Version Warning Banner configuration ------------------------------------
 versionwarning_messages = {
-    'latest': 'This is a custom message only for version "latest" of this documentation.',
+    'latest': 'You are reading the <code class="docutils literal notranslate"><span class="pre">latest</span></code> (unstable) version of this documentation, which may describe features which are not available in the <a href="/en/stable/">stable version</a>.',
 }
-versionwarning_admonition_type = 'tip'
-versionwarning_banner_title = 'Tip'
+versionwarning_banner_title = 'Attention'
 versionwarning_body_selector = 'div[itemprop="articleBody"]'
 
 # -- General configuration ---------------------------------------------------

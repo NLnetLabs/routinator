@@ -1,10 +1,5 @@
 .. _doc_routinator:
 
-.. Attention:: You are reading the ``latest`` (unstable) version of this 
-               documentation, which may describe features which are not
-               available in the `stable version
-               <https://routinator.docs.nlnetlabs.nl/en/stable/>`_.
-
 Routinator – *main* branch
 ==========================
 
