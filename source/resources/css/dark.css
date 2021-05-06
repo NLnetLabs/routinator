@@ -1562,6 +1562,25 @@
   .highlight .il {
       color: rgb(125, 222, 174);
   }
+  [role="tablist"] {
+      border-bottom-color: rgb(70, 76, 79);
+  }
+  .sphinx-tabs-tab {
+      color: rgb(119, 182, 226);
+      background-color: rgba(24, 26, 27, 0); border-color: initial; 
+  }
+  .sphinx-tabs-tab[aria-selected="true"] {
+      border-color: rgb(70, 76, 79) rgb(70, 76, 79) rgb(48, 52, 54);
+      background-color: rgb(24, 26, 27);
+  }
+  .sphinx-tabs-panel {
+      border-right-color: rgb(70, 76, 79);
+      border-bottom-color: rgb(70, 76, 79);
+      border-left-color: rgb(70, 76, 79);
+      border-top-color: initial;
+      background-image: initial;
+      background-color: rgb(24, 26, 27);
+  }
   .rst-other-versions a {
       border-color: initial;
   }

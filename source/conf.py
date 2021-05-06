@@ -49,6 +49,7 @@ versionwarning_body_selector = 'div[itemprop="articleBody"]'
 extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
+    'sphinx_tabs.tabs',
     'versionwarning.extension',
 ]
 
