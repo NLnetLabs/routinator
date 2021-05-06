@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
-use log::warn;
+use log::{info, warn};
 use rpki::repository::cert::ResourceCert;
 use rpki::repository::resources::{
     AsId, IpBlock, IpBlocks, IpBlocksBuilder, Prefix
@@ -365,16 +365,26 @@ impl SharedHistory {
         });
 
         let mut history = self.write();
-        history.current = Some(snapshot.into_snapshot().into());
         history.metrics = Some(metrics.into());
         if let Some(delta) = delta {
+            // Data has changed.
+            info!(
+                "Delta with {} announced and {} withdrawn origins.",
+                delta.announced_origins.len(),
+                delta.withdrawn_origins.len(),
+            );
+            history.current = Some(snapshot.into_snapshot().into());
             history.push_delta(delta);
             true
         }
+        else if current.is_none() {
+            // This is the first snapshot ever.
+            history.current = Some(snapshot.into_snapshot().into());
+            true
+        }
         else {
-            // If we didn’t have a snapshot before, we added a version even
-            // if there is no delta.
-            current.is_none()
+            // Nothing has changed.
+            false
         }
     }
 
@@ -984,11 +994,11 @@ impl PayloadDelta {
     fn construct(
         current: &SnapshotBuilder, next: &SnapshotBuilder, serial: Serial
     ) -> Option<Self> {
-        let announce = key_difference(&next.origins, &current.origins);
-        let withdraw = key_difference(&current.origins, &next.origins);
+        let announce = added_keys(&next.origins, &current.origins);
+        let withdraw = added_keys(&current.origins, &next.origins);
         if !announce.is_empty() || !withdraw.is_empty() {
             Some(PayloadDelta {
-                serial,
+                serial: serial.add(1),
                 announced_origins: announce,
                 withdrawn_origins: withdraw,
             })
@@ -1578,11 +1588,11 @@ impl RoaInfo {
 
 //============ Part Four. The Attic ==========================================
 
-/// Returns the difference in keys between the two hash maps as a vec.
-fn key_difference<K: Copy + Hash + Eq, V>(
-    current: &HashMap<K, V>, next: &HashMap<K, V>
+/// Returns the keys in `this` that are not in `other` as a vec.
+fn added_keys<K: Copy + Hash + Eq, V>(
+    this: &HashMap<K, V>, other: &HashMap<K, V>
 ) -> Vec<K> {
-    current.keys().filter(|key| next.contains_key(key)).cloned().collect()
+    this.keys().filter(|key| !other.contains_key(key)).cloned().collect()
 }
 
 
@@ -1645,6 +1655,68 @@ mod test {
 
         // Does not cover supernet (2001:db8::/32 does not cover 2001::/24).
         assert!(!outer.covers(supernet));
+    }
+
+    #[test]
+    fn payload_delta_construct() {
+        fn origin(as_id: u32, prefix: &str, max_len: u8) -> RouteOrigin {
+            RouteOrigin::new(
+                as_id.into(),
+                AddressPrefix::from_str(prefix).unwrap(),
+                max_len
+            )
+        }
+        let o0 = origin(10, "10.0.0.10/10", 10);
+        let o1 = origin(11, "10.0.0.10/11", 10);
+        let o2 = origin(12, "10.0.0.10/12", 10);
+        let o3 = origin(13, "10.0.0.10/13", 10);
+        let o4 = origin(14, "10.0.0.10/14", 10);
+
+        let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
+        let mut current = SnapshotBuilder::default();
+        current.origins.insert(o0, info.clone());
+        current.origins.insert(o1, info.clone());
+        current.origins.insert(o2, info.clone());
+        current.origins.insert(o3, info.clone());
+        let mut next = SnapshotBuilder::default();
+        next.origins.insert(o0, info.clone());
+        next.origins.insert(o2, info.clone());
+        next.origins.insert(o4, info.clone());
+        let delta = PayloadDelta::construct(
+            &current, &next, 12.into()
+        ).unwrap();
+
+        assert_eq!(delta.serial, Serial::from(13));
+        let mut add: HashSet<_> = delta.announced_origins.into_iter().collect();
+        let mut sub: HashSet<_> = delta.withdrawn_origins.into_iter().collect();
+
+        assert!(add.remove(&o4));
+        assert!(add.is_empty());
+
+        assert!(sub.remove(&o1));
+        assert!(sub.remove(&o3));
+        assert!(sub.is_empty());
+
+        assert!(
+            PayloadDelta::construct(&current, &current, 10.into()).is_none()
+        );
+    }
+
+    #[test]
+    fn fn_added_keys() {
+        use std::iter::FromIterator;
+
+        assert_eq!(
+            added_keys(
+                &HashMap::from_iter(
+                    vec![(1, ()), (2, ()), (3, ()), (4, ())].into_iter()
+                ),
+                &HashMap::from_iter(
+                    vec![(2, ()), (4, ()), (5, ())].into_iter()
+                )
+            ).into_iter().collect::<HashSet<_>>(),
+            HashSet::from_iter(vec![1, 3].into_iter()),
+        );
     }
 }
 
