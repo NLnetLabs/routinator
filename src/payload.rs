@@ -1627,8 +1627,6 @@ mod test {
         let mut add: HashSet<_> = delta.announced_origins.into_iter().collect();
         let mut sub: HashSet<_> = delta.withdrawn_origins.into_iter().collect();
 
-        eprintln!("{:?}", add);
-
         assert!(add.remove(&o4));
         assert!(add.is_empty());
 
