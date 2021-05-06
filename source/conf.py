@@ -17,6 +17,7 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import sphinx_rtd_theme
+import versionwarning
 
 # -- Project information -----------------------------------------------------
 
@@ -30,6 +31,15 @@ version = ''
 release = ''
 
 
+
+# -- Version Warning Banner configuration ------------------------------------
+versionwarning_messages = {
+    'latest': 'This is a custom message only for version "latest" of this documentation.',
+}
+versionwarning_admonition_type = 'tip'
+versionwarning_banner_title = 'Tip'
+versionwarning_body_selector = 'div[itemprop="articleBody"]'
+
 # -- General configuration ---------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -42,6 +52,7 @@ release = ''
 extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
+    'versionwarning.extension',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
