@@ -1410,12 +1410,13 @@ impl Notification {
     ) -> Result<Self, Failed> {
         let etag = response.etag();
         let last_modified = response.last_modified();
-        let content = NotificationFile::parse(
+        let mut content = NotificationFile::parse(
             io::BufReader::new(response)
         ).map_err(|err| {
             warn!("RRDP {}: {}", uri, err);
             Failed
         })?;
+        content.deltas.sort_by_key(|delta| delta.0);
         Ok(Notification { content, etag, last_modified })
     }
 }
