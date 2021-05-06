@@ -34,7 +34,7 @@ release = ''
 versionwarning_messages = {
     'latest': 'You are reading the <code class="docutils literal notranslate"><span class="pre">latest</span></code> (unstable) version of this documentation, which may describe features which are not available in the <a href="/en/stable/">stable version</a>.',
 }
-versionwarning_banner_title = 'Attention'
+versionwarning_banner_title = 'Note'
 versionwarning_body_selector = 'div[itemprop="articleBody"]'
 
 # -- General configuration ---------------------------------------------------
