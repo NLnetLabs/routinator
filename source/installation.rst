@@ -6,103 +6,104 @@ Installation
 Getting started with Routinator is really easy by either installing a Debian
 and Ubuntu package, using Docker, or building from Cargo.
 
-Quick Start with Debian and Ubuntu Packages
--------------------------------------------
+Quick Start
+-----------
 
-Assuming you have a machine running a recent Debian or Ubuntu distribution, you
-can install Routinator from our `software package repository
-<https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
-that corresponds to your operating system to your ``/etc/apt/sources.list`` or
-``/etc/apt/sources.list.d/``:
+.. tabs::
 
-.. code-block:: text
+   .. tab:: Packages
 
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
+       Assuming you have a machine running a recent Debian or Ubuntu distribution, you
+       can install Routinator from our `software package repository
+       <https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
+       that corresponds to your operating system to your ``/etc/apt/sources.list`` or
+       ``/etc/apt/sources.list.d/``:
 
-Then run the following commands:
+       .. code-block:: text
 
-.. code-block:: text
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
 
-   sudo apt update && apt-get install -y gnupg2
-   wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
-   sudo apt update
+       Then run the following commands:
 
-You can then install, initialise, enable and start Routinator by running these
-commands. Note that ``routinator-init`` is slightly different than the command
-used with Cargo:
+       .. code-block:: text
 
-.. code-block:: bash
+          sudo apt update && apt-get install -y gnupg2
+          wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
+          sudo apt update
 
-   sudo apt install routinator
-   sudo routinator-init
-   # Follow instructions provided
-   sudo systemctl enable --now routinator
+       You can then install, initialise, enable and start Routinator by running these
+       commands. Note that ``routinator-init`` is slightly different than the command
+       used with Cargo:
 
-By default, Routinator will start the RTR server on port 3323 and the HTTP
-server on port 8323. These, and other values can be changed in the
-configuration file located in ``/etc/routinator/routinator.conf``. You can check
-the status of Routinator with ``sudo systemctl status routinator`` and view the
-logs with ``sudo journalctl --unit=routinator``.
+       .. code-block:: bash
 
-Quick Start with Docker
------------------------
+          sudo apt install routinator
+          sudo routinator-init
+          # Follow instructions provided
+          sudo systemctl enable --now routinator
 
-Due to the impracticality of complying with the ARIN TAL distribution terms
-in an unsupervised Docker environment, before launching the container it
-is necessary to first review and agree to the `ARIN Relying Party Agreement
-(RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_. If you
-agree to the terms, you can let the Routinator Docker image install the TALs
-into a mounted volume that is later reused for the server:
+       By default, Routinator will start the RTR server on port 3323 and the HTTP
+       server on port 8323. These, and other values can be changed in the
+       configuration file located in ``/etc/routinator/routinator.conf``. You can check
+       the status of Routinator with ``sudo systemctl status routinator`` and view the
+       logs with ``sudo journalctl --unit=routinator``.
 
-.. code-block:: bash
+   .. tab:: Docker
 
-   # Create a Docker volume to persist TALs in
-   sudo docker volume create routinator-tals
-   # Review the ARIN terms.
-   # Run a disposable container to install TALs.
-   sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
-       nlnetlabs/routinator init -f --accept-arin-rpa
-   # Launch the final detached container named 'routinator' exposing RTR on
-   # port 3323 and HTTP on port 9556
-   sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-        -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
-        nlnetlabs/routinator
+       Due to the impracticality of complying with the ARIN TAL distribution terms
+       in an unsupervised Docker environment, before launching the container it
+       is necessary to first review and agree to the `ARIN Relying Party Agreement
+       (RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_. If you
+       agree to the terms, you can let the Routinator Docker image install the TALs
+       into a mounted volume that is later reused for the server:
 
-Quick Start with Cargo
-----------------------
+       .. code-block:: bash
 
-Assuming you have a newly installed Debian or Ubuntu machine, you will need to
-install rsync, the C toolchain and Rust. You can then install Routinator and
-start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on port
-9556:
+          # Create a Docker volume to persist TALs in
+          sudo docker volume create routinator-tals
+          # Review the ARIN terms.
+          # Run a disposable container to install TALs.
+          sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
+              nlnetlabs/routinator init -f --accept-arin-rpa
+          # Launch the final detached container named 'routinator' exposing RTR on
+          # port 3323 and HTTP on port 9556
+          sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
+               -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
+               nlnetlabs/routinator
+   .. tab:: Cargo
 
-.. code-block:: bash
+       Assuming you have a newly installed Debian or Ubuntu machine, you will need to
+       install rsync, the C toolchain and Rust. You can then install Routinator and
+       start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on port
+       9556:
 
-   apt install rsync build-essential
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   source ~/.cargo/env
-   cargo install --locked routinator
-   routinator init
-   # Follow instructions provided
-   routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
+       .. code-block:: bash
 
-If you have an older version of Rust and Routinator, you can update via:
+          apt install rsync build-essential
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+          source ~/.cargo/env
+          cargo install --locked routinator
+          routinator init
+          # Follow instructions provided
+          routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
 
-.. code-block:: text
+       If you have an older version of Rust and Routinator, you can update via:
 
-   rustup update
-   cargo install --locked --force routinator
+       .. code-block:: text
 
-If you want to try the main branch from the repository instead of a release
-version, you can run:
+          rustup update
+          cargo install --locked --force routinator
 
-.. code-block:: text
+       If you want to try the main branch from the repository instead of a release
+       version, you can run:
 
-   cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
+       .. code-block:: text
+
+          cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
 System Requirements
 -------------------
