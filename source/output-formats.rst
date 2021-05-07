@@ -102,9 +102,74 @@ jsonext
       ``jsonext`` format will be quite large.
       
       .. code-block:: text
-         
-         
-      
+
+          {
+            "roas": [
+              {
+                "asn": "AS7514",
+                "prefix": "2001:2f0::/32",
+                "maxLength": 128,
+                "source": [
+                  {
+                    "type": "roa",
+                    "uri": "rsync://rpki-repository.nic.ad.jp/ap/A91A73810000/30260/VwGj3JGh5HL_A2YGXUORLnGoTlY.roa",
+                    "validity": {
+                      "notBefore": "2021-01-28T08:45:23Z",
+                      "notAfter": "2022-01-15T01:30:02Z"
+                    },
+                    "chainValidity": {
+                      "notBefore": "2021-04-15T01:32:11Z",
+                      "notAfter": "2021-07-30T00:00:00Z"
+                    }
+                  }
+                ]
+              },
+              {
+                "asn": "AS64496",
+                "prefix": "2001:db8::/32",
+                "maxLength": 48,
+                "source": [
+                  {
+                    "type": "exception",
+                    "path": "/home/m/git/routinator/test/slurm/full.json",
+                    "comment": "My other important de-aggregated routes"
+                  }
+                ]
+              },
+              {
+                "asn": "AS136754",
+                "prefix": "2407:c280:1554::/48",
+                "maxLength": 48,
+                "source": [
+                  {
+                    "type": "roa",
+                    "uri": "rsync://rpki.apnic.net/member_repository/A91536B7/F1CD27B473AD11E7ACBD025EC4F9AE02/4075584092AA11EB8F582133C4F9AE02.roa",
+                    "validity": {
+                      "notBefore": "2021-04-01T17:22:34Z",
+                      "notAfter": "2021-08-01T00:00:00Z"
+                    },
+                    "chainValidity": {
+                      "notBefore": "2021-04-05T22:37:41Z",
+                      "notAfter": "2021-08-01T00:00:00Z"
+                    }
+                  },
+                  {
+                    "type": "roa",
+                    "uri": "rsync://rpki.apnic.net/member_repository/A91536B7/F1CD27B473AD11E7ACBD025EC4F9AE02/C567EE14822911EB9D339C3AC4F9AE02.roa",
+                    "validity": {
+                      "notBefore": "2021-03-11T05:22:28Z",
+                      "notAfter": "2021-05-01T00:00:00Z"
+                    },
+                    "chainValidity": {
+                      "notBefore": "2021-04-05T22:37:41Z",
+                      "notAfter": "2021-05-01T00:00:00Z"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+
 openbgpd
       Choosing this format causes Routinator to produce a *roa-set*
       configuration item for the OpenBGPD configuration.
