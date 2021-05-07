@@ -51,6 +51,7 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx_tabs.tabs',
     'versionwarning.extension',
+    'sphinx_togglebutton',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

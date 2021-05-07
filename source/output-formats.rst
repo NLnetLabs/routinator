@@ -98,76 +98,28 @@ jsonext
       the local exceptions file and, optionally, *comment* will provide the
       comment if given for the assertion.
 
-      Please note that because of this additional information, output in
-      ``jsonext`` format will be quite large.
+      Please note that the output in ``jsonext`` format will be quite large.
       
       .. code-block:: text
-
+      
           {
-            "roas": [
-              {
-                "asn": "AS7514",
-                "prefix": "2001:2f0::/32",
-                "maxLength": 128,
-                "source": [
-                  {
-                    "type": "roa",
-                    "uri": "rsync://rpki-repository.nic.ad.jp/ap/A91A73810000/30260/VwGj3JGh5HL_A2YGXUORLnGoTlY.roa",
-                    "validity": {
-                      "notBefore": "2021-01-28T08:45:23Z",
-                      "notAfter": "2022-01-15T01:30:02Z"
-                    },
-                    "chainValidity": {
-                      "notBefore": "2021-04-15T01:32:11Z",
-                      "notAfter": "2021-07-30T00:00:00Z"
-                    }
-                  }
-                ]
-              },
-              {
-                "asn": "AS64496",
-                "prefix": "2001:db8::/32",
-                "maxLength": 48,
-                "source": [
-                  {
-                    "type": "exception",
-                    "path": "/home/m/git/routinator/test/slurm/full.json",
-                    "comment": "My other important de-aggregated routes"
-                  }
-                ]
-              },
-              {
-                "asn": "AS136754",
-                "prefix": "2407:c280:1554::/48",
-                "maxLength": 48,
-                "source": [
-                  {
-                    "type": "roa",
-                    "uri": "rsync://rpki.apnic.net/member_repository/A91536B7/F1CD27B473AD11E7ACBD025EC4F9AE02/4075584092AA11EB8F582133C4F9AE02.roa",
-                    "validity": {
-                      "notBefore": "2021-04-01T17:22:34Z",
-                      "notAfter": "2021-08-01T00:00:00Z"
-                    },
-                    "chainValidity": {
-                      "notBefore": "2021-04-05T22:37:41Z",
-                      "notAfter": "2021-08-01T00:00:00Z"
-                    }
-                  },
-                  {
-                    "type": "roa",
-                    "uri": "rsync://rpki.apnic.net/member_repository/A91536B7/F1CD27B473AD11E7ACBD025EC4F9AE02/C567EE14822911EB9D339C3AC4F9AE02.roa",
-                    "validity": {
-                      "notBefore": "2021-03-11T05:22:28Z",
-                      "notAfter": "2021-05-01T00:00:00Z"
-                    },
-                    "chainValidity": {
-                      "notBefore": "2021-04-05T22:37:41Z",
-                      "notAfter": "2021-05-01T00:00:00Z"
-                    }
-                  }
-                ]
-              }
-            ]
+            "roas": [{
+              "asn": "AS196615",
+              "prefix": "93.175.147.0/24",
+              "maxLength": 24,
+              "source": [{
+                "type": "roa",
+                "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
+                "validity": {
+                  "notBefore": "2021-01-01T04:39:56Z",
+                  "notAfter": "2022-07-01T00:00:00Z"
+                },
+                "chainValidity": {
+                  "notBefore": "2021-05-06T12:51:30Z",
+                  "notAfter": "2022-07-01T00:00:00Z"
+                }
+              }]
+            }]
           }
 
 openbgpd
@@ -210,12 +162,12 @@ rpsl
       
       .. code-block:: text
          
-         route: 93.175.146.0/24
-         origin: AS12654
-         descr: RPKI attestation
+         route: 93.175.147.0/24
+         origin: AS196615
+         descr: RPKI attestation 
          mnt-by: NA
-         created: 2021-05-03T20:53:20Z
-         last-modified: 2021-05-03T20:53:20Z
+         created: 2021-05-07T14:28:17Z
+         last-modified: 2021-05-07T14:28:17Z
          source: ROA-RIPE-RPKI-ROOT
       
 summary
