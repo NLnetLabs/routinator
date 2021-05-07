@@ -1028,6 +1028,16 @@ impl PayloadDelta {
     pub fn serial(&self) -> Serial {
         self.serial
     }
+
+    /// Returns a slice with the route origins announced by this delta.
+    pub fn announced_origins(&self) ->  &[RouteOrigin] {
+        &self.announced_origins
+    }
+
+    /// Returns a slice with the route origins withdrawn by this delta.
+    pub fn withdrawn_origins(&self) ->  &[RouteOrigin] {
+        &self.withdrawn_origins
+    }
 }
 
 

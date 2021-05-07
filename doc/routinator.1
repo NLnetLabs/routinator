@@ -1165,9 +1165,42 @@ its origin AS number and address prefix is RPKI valid, invalid, or not found.
 The returned object is compatible with that provided by the RIPE NCC RPKI
 Validator. For more information, see
 .I https://www.ripe.net/support/documentation/developer-documentation/rpki-validator-api
+
 .TP
 .B /validity?asn=\fIas-number\fB&prefix=\fIprefix
 Same as above but with a more form-friendly calling convention.
+
+.TP
+.BR /json-delta ,\  /json-delta?session\fIsession\fB?serial=\fIserial
+Returns a JSON object with the changes since the dataset version identified
+by the
+.I session
+and
+.I serial
+query parameters. If a delta cannot be produced from that version, the full
+data set is returned and the member
+.I reset
+in the object will be set to
+.IR true .
+In either case, the members
+.I session
+and
+.I serial
+identify the version of the data set returned and their values should be
+passed as the query parameters in a future request.
+.IP
+The members
+.I announced
+and
+.I withdrawn
+contain arrays with route origins that have been announced and withdrawn,
+respectively, since the provided session and serial. If
+.I reset
+is
+.IR true ,
+the
+.I withdrawn
+member is not present.
 
 .P
 In addition, the current set of VRPs is available for each output format
