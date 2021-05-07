@@ -825,8 +825,8 @@ in the TAL directory which can be set by the  :option:`-t` option. If the
 subdirectory *tals* under the directory specified in this option. The default
 location, if no options are used at all is :file:`$HOME/.rpki-cache/tals`.
 
-Routinator  comes  with a set of commonly used TALs that can be used to populate
-the TAL directory via the init command. By default,  the  command  will  install
+Routinator comes with a set of commonly used TALs that can be used to populate
+the TAL directory via the init command. By default, the command will install
 the TALs of the five Regional Internet Registries (RIRs) necessary for the 
 complete global RPKI repository.
 
@@ -1128,6 +1128,19 @@ The service only supports GET requests with the following paths:
 
 :command:`/validity?asn=as-number&prefix=prefix`
       Same as above but with a more form-friendly calling convention.
+
+:command:`/json-delta, /json-delta?sessionsession?serial=serial`
+     Returns a JSON object with the changes since the dataset version identified
+     by the *session* and *serial* query parameters. If a delta cannot be
+     produced from that version, the full data set is returned and the member
+     *reset* in the object will be set to *true*. In either case, the members
+     *session* and *serial* identify the version of the data set returned and
+     their values should be passed as the query parameters in a future request.
+
+     The members *announced* and *withdrawn* contain arrays with route origins
+     that have been announced and withdrawn, respectively, since the provided
+     session and serial. If *reset* is *true*, the *withdrawn* member is not
+     present.
 
 In addition, the current set of VRPs is available for each output format
 at a path with the same name as the output format. E.g., the CSV output is

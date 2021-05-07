@@ -57,6 +57,9 @@ For example, to only show the VRPs authorising AS196615 use:
 API Endpoints
 """""""""""""
 
+.. versionadded:: 0.9
+   The ``/json-delta`` path
+
 The service supports GET requests with the following paths:
 
 :command:`/metrics`
@@ -85,6 +88,19 @@ The service supports GET requests with the following paths:
      
 :command:`/validity?asn=as-number&prefix=prefix`
      Same as above but with a more form-friendly calling convention.
+     
+:command:`/json-delta, /json-delta?sessionsession?serial=serial`
+     Returns a JSON object with the changes since the dataset version identified
+     by the *session* and *serial* query parameters. If a delta cannot be
+     produced from that version, the full data set is returned and the member
+     *reset* in the object will be set to *true*. In either case, the members
+     *session* and *serial* identify the version of the data set returned and
+     their values should be passed as the query parameters in a future request.
+
+     The members *announced* and *withdrawn* contain arrays with route origins
+     that have been announced and withdrawn, respectively, since the provided
+     session and serial. If *reset* is *true*, the *withdrawn* member is not
+     present.
 
 The RTR Service
 ---------------
