@@ -29,6 +29,8 @@ New
 
 * The new option `--fresh` causes Routinator to delete all cached data
   before starting. This can be used when data corruption is reported. ([#470])
+* The new HTTP server endpoint `/json-delta` provides an option to
+  retrieve updates to a previously received data set via deltas. ([#537])
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
@@ -86,6 +88,7 @@ Other Changes
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
+[#537]: https://github.com/NLnetLabs/routinator/pull/510
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
