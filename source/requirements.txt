@@ -1,2 +1,3 @@
 sphinx-version-warning==1.1.2
 sphinx-tabs==2.1.0
+sphinx-togglebutton==0.2.3
