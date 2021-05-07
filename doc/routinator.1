@@ -1172,12 +1172,24 @@ Same as above but with a more form-friendly calling convention.
 
 .TP
 .BR /json-delta ,\  /json-delta?session\fIsession\fB?serial=\fIserial
-Returns a JSON object with the changes since the given version. The object
-will contain the current session and serial in members by that name. The
-boolean
+Returns a JSON object with the changes since the dataset version identified
+by the
+.I session
+and
+.I serial
+query parameters. If a delta cannot be produced from that version, the full
+data set is returned and the member
 .I reset
-member states whether the returned data set is in fact a complete dataset
-rather than just a delta. The members
+in the object will be set to
+.IR true .
+In either case, the members
+.I session
+and
+.I serial
+identify the version of the data set returned and their values should be
+passed as the query parameters in a future request.
+.IP
+The members
 .I announced
 and
 .I withdrawn
