@@ -204,8 +204,7 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If the repository is definitely unavailable, logs diagnositic
-    /// information and returns `None`.
+    /// If the repository is definitely unavailable,  returns `Ok(None)`.
     pub fn repository<'s>(
         &'s self, ca: &'s CaCert
     ) -> Result<Option<Repository<'s>>, Failed> {
