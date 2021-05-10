@@ -436,6 +436,10 @@ impl<'a> Run<'a> {
             Some(Repository::new(self.collector, rpki_notify)?)
         }
         else {
+            warn!(
+                "RRDP repository {} unavailable. Falling back to rsync.",
+                rpki_notify
+            );
             None
         };
         
@@ -459,6 +463,10 @@ impl<'a> Run<'a> {
             )?)
         }
         else {
+            warn!(
+                "RRDP repository {} unavailable. Falling back to rsync.",
+                rpki_notify
+            );
             None
         };
         
