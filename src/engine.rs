@@ -348,7 +348,10 @@ impl Engine {
 
     /// Cleans the collector and store owned by the engine.
     pub fn cleanup(&self) -> Result<(), Failed> {
-        self.store.cleanup(self.collector.cleanup())
+        if !self.dirty_repository {
+            self.store.cleanup(self.collector.cleanup())?;
+        }
+        Ok(())
     }
 
     /// Dumps the content of the collector and store owned by the engine.
