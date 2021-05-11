@@ -167,9 +167,12 @@ policy will cause Routinator to quietly accept any stale object as valid.
 .IP
 In Routinator 0.8.0 and newer, 
 .I reject
-is the default policy if the option is not provided. In all previous 
-versions the default is 
-*I warn.
+is the default policy if the option is not provided. In version 0.7.0 the
+default for this option was 
+.I warn.
+In all previous versions
+.I warn
+was hard-wired.
 
 .TP
 .BI --unsafe-vrps= policy
