@@ -62,8 +62,8 @@ Bug Fixes
 
 Other Changes
 
-* Updated the bundled APNIC TAL. When upgrading, please re-install the
-  TALs in your system via `routinator init`. ([#510])
+* Updated the bundled APNIC and LACNIC TALs. When upgrading, please re-install
+  the TALs in your system via `routinator init`. ([#510], [#543])
 * Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
   to [rpki-rtr]. ([#443])
 * Upgrade Tokio-related dependencies to new version based on Tokio 1.0.
@@ -92,6 +92,7 @@ Other Changes
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
 [#528]: https://github.com/NLnetLabs/routinator/pull/528
 [#537]: https://github.com/NLnetLabs/routinator/pull/537
+[#543]: https://github.com/NLnetLabs/routinator/pull/543
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
