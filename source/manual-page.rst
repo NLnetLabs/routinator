@@ -162,9 +162,7 @@ The available options are:
 
       A policy of *reject* instructs Routinator to consider all stale objects
       invalid. This will result in all material published by the CA issuing this
-      manifest and CRL to be invalid including all material of any child CA. In
-      Routinator 0.8.0 and newer, this is the default policy if the option is 
-      not provided.
+      manifest and CRL to be invalid including all material of any child CA. 
 
       The *warn* policy will allow Routinator to consider any stale object to be
       valid. It will, however, print a warning in the log allowing an operator
@@ -172,6 +170,9 @@ The available options are:
 
       Finally, the *accept* policy will cause Routinator to quietly accept any
       stale object as valid.
+      
+      In Routinator 0.8.0 and newer, *reject* is the default policy if the 
+      option is not provided. In all previous versions the default is *warn*.
 
 .. option:: --unsafe-vrps=policy
 
