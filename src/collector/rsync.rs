@@ -593,7 +593,7 @@ impl RsyncCommand {
             }
             if !stdout.is_empty() {
                 String::from_utf8_lossy(&stdout).lines().for_each(|l| {
-                    info!("{}: {}", source, l)
+                    info!("{}: {}", source, l);
                 })
             }
             if let Err(ref err) = status {
