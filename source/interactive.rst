@@ -9,7 +9,7 @@ validity of a specific announcement. These functions are accessible on the
 command line via the following subcommands:
 
 :subcmd:`vrps`
-     Fetches RPKI data and produces a Validated ROA Payload (VRP) list in the
+     Fetches RPKI data and produces a validated ROA payload (VRP) list in the
      specified format.
 
 :subcmd:`validate`
