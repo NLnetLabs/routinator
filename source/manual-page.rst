@@ -172,7 +172,8 @@ The available options are:
       stale object as valid.
       
       In Routinator 0.8.0 and newer, *reject* is the default policy if the 
-      option is not provided. In all previous versions the default is *warn*.
+      option is not provided. In version 0.7.0 the default for this option 
+      was *warn*. In all previous versions *warn* was hard-wired.
 
 .. option:: --unsafe-vrps=policy
 
