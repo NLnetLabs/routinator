@@ -16,6 +16,8 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
+* The `rsync-timeout` now describes a hard timeout on the rsync process
+  for updating a repository. ([#528)]
 * Routinator now includes additional TALs for various commonly used
   RPKI testbeds. The `init` command has been restructured to make it
   possible to select the TALs for installation. The default is still to
@@ -88,7 +90,8 @@ Other Changes
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
-[#537]: https://github.com/NLnetLabs/routinator/pull/510
+[#528]: https://github.com/NLnetLabs/routinator/pull/528
+[#537]: https://github.com/NLnetLabs/routinator/pull/537
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
