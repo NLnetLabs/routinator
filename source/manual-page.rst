@@ -162,12 +162,13 @@ The available options are:
 
       A policy of *reject* instructs Routinator to consider all stale objects
       invalid. This will result in all material published by the CA issuing this
-      manifest and CRL to be invalid including all material of any child CA.
+      manifest and CRL to be invalid including all material of any child CA. In
+      Routinator 0.8.0 and newer, this is the default policy if the option is 
+      not provided.
 
       The *warn* policy will allow Routinator to consider any stale object to be
       valid. It will, however, print a warning in the log allowing an operator
-      to follow up on the issue. This is the default policy if the option is not
-      provided.
+      to follow up on the issue. 
 
       Finally, the *accept* policy will cause Routinator to quietly accept any
       stale object as valid.
