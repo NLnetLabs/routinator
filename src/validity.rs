@@ -1,13 +1,75 @@
 //! Checking for validity of route announcements.
 
 use std::{fmt, io};
+use std::str::FromStr;
 use rpki::repository::resources::AsId;
+use serde::Deserialize;
 use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
+
+
+//------------ RouteValidityList ---------------------------------------------
+
+/// Information about the RPKI validity of route announcements.
+#[derive(Clone, Debug)]
+pub struct RouteValidityList<'a> {
+    routes: Vec<RouteValidity<'a>>,
+}
+
+impl<'a> RouteValidityList<'a> {
+    /// Creates a value from requests and a snapshot.
+    fn from_requests(
+        requests: &RequestList, snapshot: &'a PayloadSnapshot
+    ) -> Self {
+        RouteValidityList {
+            routes: requests.routes.iter().map(|route| {
+                RouteValidity::new(route.prefix, route.asn, snapshot)
+            }).collect()
+        }
+    }
+
+    pub fn write_plain<W: io::Write>(
+        &self,
+        target: &mut W
+    ) -> Result<(), io::Error> {
+        for route in &self.routes {
+            route.write_plain(target)?;
+        }
+        Ok(())
+    }
+
+    pub fn write_json<W: io::Write>(
+        &self,
+        target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "{{\n  \"validated_routes\": [")?;
+        let mut first = true;
+        for route in &self.routes {
+            if first {
+                first = false;
+            }
+            else {
+                writeln!(target, ",")?;
+            }
+            write!(target, "    ")?;
+            route.write_single_json("    ", target)?;
+        }
+        writeln!(target, "\n  ]\n}}")
+    }
+
+    pub fn iter_state(
+        &self
+    ) -> impl Iterator<Item = (AddressPrefix, AsId, RouteState)> + '_ {
+        self.routes.iter().map(|route| {
+            (route.prefix, route.asn, route.state())
+        })
+    }
+}
 
 
 //------------ RouteValidity -------------------------------------------------
 
-/// Information about the RPKI validity of a route announcement.
+/// Information about the RPKI validity of a single route announcement.
+#[derive(Clone, Debug)]
 pub struct RouteValidity<'a> {
     /// The address prefix of the route announcement.
     prefix: AddressPrefix,
@@ -118,6 +180,13 @@ impl<'a> RouteValidity<'a> {
         &self.bad_len
     }
 
+    pub fn write_plain<W: io::Write>(
+        &self,
+        target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "{} => {}: {}", self.prefix, self.asn, self.state())
+    }
+
     pub fn into_json(self) -> Vec<u8> {
         let mut res = Vec::new();
         self.write_json(&mut res).unwrap();
@@ -128,68 +197,90 @@ impl<'a> RouteValidity<'a> {
         &self,
         target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "\
-            {{\n  \"validated_route\": {{\n    \
-            \"route\": {{\n      \
-            \"origin_asn\": \"{}\",\n      \
-            \"prefix\": \"{}\"\n    \
-            }},\n    \
-            \"validity\": {{\n      \
-            \"state\": \"{}\",",  
+        write!(target, "{{\n  \"validated_route\": ")?;
+        self.write_single_json("  ", target)?;
+        writeln!(target, "\n}}")
+    }
+
+    fn write_single_json<W: io::Write>(
+        &self,
+        indent: &str,
+        target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "{{\n\
+            {indent}  \"route\": {{\n\
+            {indent}    \"origin_asn\": \"{}\",\n\
+            {indent}    \"prefix\": \"{}\"\n\
+            {indent}  }},\n\
+            {indent}  \"validity\": {{\n\
+            {indent}    \"state\": \"{}\",",  
             self.asn,
             self.prefix,
-            self.state()
+            self.state(),
+            indent = indent,
         )?;
         if let Some(reason) = self.reason() {
-            writeln!(target, "      \"reason\": \"{}\",", reason)?;
+            writeln!(target, "{}    \"reason\": \"{}\",", indent, reason)?;
         }
         writeln!(
             target,
-            "      \"description\": \"{}\",\n      \"VRPs\": {{",
-            self.description()
+            "{indent}    \"description\": \"{}\",\n\
+             {indent}    \"VRPs\": {{",
+            self.description(), indent = indent
         )?;
 
-        Self::write_vrps_json("matched", &self.matched, target)?;
+        Self::write_vrps_json(
+            indent, "matched", &self.matched, target
+        )?;
         writeln!(target, ",")?;
-        Self::write_vrps_json("unmatched_as", &self.bad_asn, target)?;
+        Self::write_vrps_json(
+            indent, "unmatched_as", &self.bad_asn, target
+        )?;
         writeln!(target, ",")?;
-        Self::write_vrps_json("unmatched_length", &self.bad_len, target)?;
+        Self::write_vrps_json(
+            indent, "unmatched_length", &self.bad_len, target
+        )?;
 
-        writeln!( target, "      }}\n    }}\n  }}\n}}")
+        write!(
+            target, "\n\
+            {indent}    }}\n\
+            {indent}  }}\n\
+            {indent}}}",
+            indent = indent
+        )
     }
 
     fn write_vrps_json<W: io::Write>(
+        indent: &str,
         category: &str,
         vrps: &[&'a (RouteOrigin, OriginInfo)],
         target: &mut W
     ) -> Result<(), io::Error> {
-        write!(target, "        \"{}\": [", category)?;
-        let mut iter = vrps.iter();
-        if let Some(item) = iter.next() {
-            writeln!(
+        write!(target, "{}      \"{}\": [", indent, category)?;
+        let mut first = true;
+        for item in vrps.iter() {
+            if first {
+                first = false;
+            }
+            else {
+                write!(target, ",")?;
+            }
+
+            write!(
                 target,
-                "\n          {{\n            \
-                \"asn\": \"{}\",\n            \
-                \"prefix\": \"{}\",\n            \
-                \"max_length\": \"{}\"\n          }}",
+                "\n\
+                {indent}        {{\n\
+                {indent}          \"asn\": \"{}\",\n\
+                {indent}          \"prefix\": \"{}\",\n\
+                {indent}          \"max_length\": \"{}\"\n\
+                {indent}        }}",
                 item.0.as_id(),
                 item.0.prefix(),
-                item.0.max_length()
+                item.0.max_length(),
+                indent = indent
             )?
         }
-        for item in iter {
-            writeln!(
-                target,
-                ",\n          {{\n            \
-                \"asn\": \"{}\",\n            \
-                \"prefix\": \"{}\",\n            \
-                \"max_length\": \"{}\"\n          }}",
-                item.0.as_id(),
-                item.0.prefix(),
-                item.0.max_length()
-            )?
-        }
-        write!(target, "\n        ]")
+        write!(target, "\n{}      ]", indent)
     }
 
 }
@@ -244,6 +335,154 @@ impl fmt::Display for RouteState {
             RouteState::NotFound => "not-found",
         })
     }
+}
+
+
+//------------ RequestList ---------------------------------------------------
+
+/// A list of requests for route validity checks.
+///
+/// This type is intended to be used for deserialization of such a list from a
+/// file.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct RequestList {
+    /// All the requests.
+    routes: Vec<Request>,
+}
+
+impl RequestList {
+    /// Loads the request list from a plain text reader.
+    pub fn from_plain_reader<R: io::BufRead>(
+        reader: R
+    ) -> Result<Self, io::Error>
+    {
+        let mut res = Self::default();
+
+        for (line_no, line) in reader.lines().enumerate() {
+            let line = line?;
+            let mut tokens = line.split_whitespace();
+
+            // PREFIX => ASN [# anything ]
+
+            let prefix = match tokens.next() {
+                Some(prefix) => {
+                    match AddressPrefix::from_str(prefix) {
+                        Ok(prefix) => prefix,
+                        Err(_) => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!(
+                                    "line {}: expecting prefix, got '{}'",
+                                    line_no + 1, prefix
+                                )
+                            ))
+                        }
+                    }
+                }
+                None => continue
+            };
+
+            match tokens.next() {
+                Some("=>") => { }
+                Some(token) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "line {}: expecting '=>', got '{}'",
+                            line_no + 1, token
+                        )
+                    ))
+                }
+                None => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "line {}: expecting '=>', got end of line",
+                            line_no + 1
+                        )
+                    ))
+                }
+            }
+
+            let asn = match tokens.next() {
+                Some(asn) => {
+                    match AsId::from_str(asn) {
+                        Ok(asn) => asn,
+                        Err(_) => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!(
+                                    "line {}: expecting AS number, got '{}'",
+                                    line_no + 1, asn
+                                )
+                            ))
+                        }
+                    }
+                }
+                None => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "line {}: expecting AS number, got end of line",
+                            line_no + 1
+                        )
+                    ))
+                }
+            };
+
+            match tokens.next() {
+                Some("#") | None => { }
+                Some(token) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "line {}: expecting '#'  or end of line, got '{}'",
+                            line_no + 1, token
+                        )
+                    ))
+                }
+            }
+
+            res.routes.push(Request { prefix, asn });
+        }
+
+        Ok(res)
+    }
+
+    /// Loads the request list from a json-formatted reader.
+    pub fn from_json_reader<R: io::Read>(
+        reader: &mut R
+    ) -> Result<Self, serde_json::Error> {
+        serde_json::from_reader(reader)
+    }
+
+    /// Creates a request list with a single entry.
+    pub fn single(prefix: AddressPrefix, asn: AsId) -> Self {
+        RequestList {
+            routes: vec![Request { prefix, asn }]
+        }
+    }
+
+    /// Checks the validity of all routes and returns a vec with results.
+    pub fn validity<'a>(
+        &self,
+        snapshot: &'a PayloadSnapshot
+    ) -> RouteValidityList<'a> {
+        RouteValidityList::from_requests(self, snapshot)
+    }
+}
+
+
+//------------ Request -------------------------------------------------------
+
+/// A request for a route validity check.
+#[derive(Clone, Debug, Deserialize)]
+struct Request {
+    /// The address prefix of the route announcement.
+    prefix: AddressPrefix,
+
+    /// The origin AS number of the route announcement.
+    asn: AsId,
 }
 
 

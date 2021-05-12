@@ -361,7 +361,12 @@ impl Engine {
 
     /// Cleans the collector and store owned by the engine.
     pub fn cleanup(&self) -> Result<(), Failed> {
-        self.store.cleanup(self.collector.as_ref().map(Collector::cleanup))
+        if !self.dirty_repository {
+            self.store.cleanup(
+                self.collector.as_ref().map(Collector::cleanup)
+            )?;
+        }
+        Ok(())
     }
 
     /// Dumps the content of the collector and store owned by the engine.
@@ -660,7 +665,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         else {
             None
         };
-        let store = run.store.repository(cert, collector.as_ref())?;
+        let store = run.store.repository(cert)?;
         Ok(PubPoint {
             run, cert, processor, collector, store,
             repository_index,

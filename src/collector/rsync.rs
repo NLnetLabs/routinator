@@ -13,16 +13,19 @@
 //! another thread requests access to the same module, that thread is blocked,
 //! too.
 
-use std::{fmt, fs, io, ops, process};
+use std::{fmt, fs, io, ops};
 use std::borrow::{Borrow, Cow, ToOwned};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::process::{Command as StdCommand, ExitStatus, Stdio};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use bytes::Bytes;
+use futures::TryFutureExt;
 use log::{debug, error, info, warn};
 use rpki::uri;
+use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
@@ -41,7 +44,7 @@ pub struct Collector {
     ///
     /// If this is `None` actual rsyncing has been disabled and data
     /// present will be used as is.
-    command: Option<Command>,
+    command: Option<RsyncCommand>,
 
     /// Whether to filter dubious authorities in rsync URIs.
     filter_dubious: bool,
@@ -95,7 +98,7 @@ impl Collector {
                 working_dir: WorkingDir::new(
                     Self::create_working_dir(config)?
                 ),
-                command: Some(Command::new(config)?),
+                command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts
             }))
         }
@@ -454,11 +457,11 @@ impl<'a> Run<'a> {
 }
 
 
-//------------ Command -------------------------------------------------------
+//------------ RsyncCommand --------------------------------------------------
 
 /// The command to run rsync.
 #[derive(Debug)]
-struct Command {
+struct RsyncCommand {
     /// The actual command.
     command: String,
 
@@ -466,13 +469,16 @@ struct Command {
     ///
     /// We will always add a few more when actually running.
     args: Vec<String>,
+
+    /// The rsync timeout.
+    timeout: Duration,
 }
 
-impl Command {
+impl RsyncCommand {
     /// Creates a new rsync command from the config.
     pub fn new(config: &Config) -> Result<Self, Failed> {
         let command = config.rsync_command.clone();
-        let output = match process::Command::new(&command).arg("-h").output() {
+        let output = match StdCommand::new(&command).arg("-h").output() {
             Ok(output) => output,
             Err(err) => {
                 error!(
@@ -495,21 +501,18 @@ impl Command {
                 let has_contimeout =
                    output.stdout.windows(12)
                    .any(|window| window == b"--contimeout");
-                let timeout = format!(
-                    "--timeout={}",
-                    config.rsync_timeout.as_secs()
-                );
                 if has_contimeout {
-                    vec!["--contimeout=10".into(), timeout]
+                    vec!["--contimeout=10".into()]
                 }
                 else {
-                    vec![timeout]
+                    vec![]
                 }
             }
         };
-        Ok(Command {
+        Ok(RsyncCommand {
             command,
             args,
+            timeout: config.rsync_timeout,
         })
     }
 
@@ -520,15 +523,9 @@ impl Command {
         destination: &Path
     ) -> RsyncModuleMetrics {
         let start = SystemTime::now();
-        let status = {
-            match self.command(source, destination) {
-                Ok(mut command) => match command.output() {
-                    Ok(output) => Ok(Self::log_output(source, output)),
-                    Err(err) => Err(err)
-                }
-                Err(err) => Err(err)
-            }
-        };
+        let status = self.command(
+            source, destination
+        ).and_then(|cmd| self.run(source, cmd));
         RsyncModuleMetrics {
             module: source.to_uri(),
             status,
@@ -536,12 +533,76 @@ impl Command {
         }
     }
 
-    /// Actually runs rsync.
+    /// Actually runs the rsync command.
+    fn run(
+        &self,
+        source: &Module,
+        mut command: AsyncCommand
+    ) -> Result<ExitStatus, io::Error> {
+        // Because we can’t have a timeout on a child process with just std,
+        // we resort to Tokio here: We fire up a current-thread runtime and
+        // use Tokio’s async process handling.
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()?;
+
+        runtime.block_on(async {
+            command.stdout(Stdio::piped());
+            command.stderr(Stdio::piped());
+            command.kill_on_drop(true);
+            let mut child = command.spawn()?;
+            let stdout = child.stdout.take();
+            let stderr = child.stdout.take();
+            let (status, stdout, stderr) = tokio::try_join!(
+                tokio::time::timeout(
+                    self.timeout, child.wait()
+                ).map_err(|_| {
+                    warn!("{}: timed out.", source);
+                    io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "rsync process reached time out"
+                    )
+                }),
+                async {
+                    let mut target = Vec::new();
+                    if let Some(mut stdout) = stdout {
+                        tokio::io::copy(&mut stdout, &mut target).await?;
+                    }
+                    Ok(target)
+                },
+                async {
+                    let mut target = Vec::new();
+                    if let Some(mut stderr) = stderr {
+                        tokio::io::copy(&mut stderr, &mut target).await?;
+                    }
+                    Ok(target)
+                },
+            )?;
+            if !stderr.is_empty() {
+                String::from_utf8_lossy(&stderr).lines().for_each(|l| {
+                    warn!("{}: {}", source, l);
+                })
+            }
+            if !stdout.is_empty() {
+                String::from_utf8_lossy(&stdout).lines().for_each(|l| {
+                    info!("{}: {}", source, l);
+                })
+            }
+            if let Err(ref err) = status {
+                warn!("{}: {}", source, err);
+            }
+            status
+        })
+    }
+
+    /// Creates the rsync command.
     fn command(
         &self,
         source: &Module,
         destination: &Path
-    ) -> Result<process::Command, io::Error> {
+    ) -> Result<AsyncCommand, io::Error> {
         info!("rsyncing from {}.", source);
         fs::create_dir_all(destination)?;
         let destination = match Self::format_destination(destination) {
@@ -557,7 +618,7 @@ impl Command {
                 ));
             }
         };
-        let mut cmd = process::Command::new(&self.command);
+        let mut cmd = AsyncCommand::new(&self.command);
         for item in &self.args {
             cmd.arg(item);
         }
@@ -636,30 +697,6 @@ impl Command {
             destination.push('/');
         }
         Ok(destination)
-    }
-
-    /// Logs the output from the rsync command.
-    fn log_output(
-        source: &Module,
-        output: process::Output
-    ) -> process::ExitStatus {
-        if !output.status.success() {
-            warn!("{}: failed with status {}", source, output.status);
-        }
-        else {
-            info!("{}: successfully completed.", source);
-        }
-        if !output.stderr.is_empty() {
-            String::from_utf8_lossy(&output.stderr).lines().for_each(|l| {
-                warn!("{}: {}", source, l);
-            })
-        }
-        if !output.stdout.is_empty() {
-            String::from_utf8_lossy(&output.stdout).lines().for_each(|l| {
-                info!("{}: {}", source, l)
-            })
-        }
-        output.status
     }
 }
 
