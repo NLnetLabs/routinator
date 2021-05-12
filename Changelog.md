@@ -52,6 +52,9 @@ New
   Last-Modified headers in their response and process If-None-Match and
   If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
   [#488])
+* The `validate` command now accepts input from and can write its output
+  to files. Both are available in simple plain text and JSON formatting.
+  ([#514])
 
 Bug Fixes
 
@@ -90,6 +93,7 @@ Other Changes
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
+[#514]: https://github.com/NLnetLabs/routinator/pull/514
 [#528]: https://github.com/NLnetLabs/routinator/pull/528
 [#537]: https://github.com/NLnetLabs/routinator/pull/537
 [#543]: https://github.com/NLnetLabs/routinator/pull/543
