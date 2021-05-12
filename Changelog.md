@@ -18,6 +18,9 @@ Breaking Changes
   option and defaults to one hour. ([#473], [#482])
 * The `rsync-timeout` now describes a hard timeout on the rsync process
   for updating a repository. ([#528)]
+* The size of downloaded RPKI objects is now limited by the
+  `max-object-size` options which defaults to a limit of 20 MBytes. This
+  limit applies to both RRDP and rsync. ([#531])
 * Routinator now includes additional TALs for various commonly used
   RPKI testbeds. The `init` command has been restructured to make it
   possible to select the TALs for installation. The default is still to
@@ -95,6 +98,7 @@ Other Changes
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
 [#514]: https://github.com/NLnetLabs/routinator/pull/514
 [#528]: https://github.com/NLnetLabs/routinator/pull/528
+[#531]: https://github.com/NLnetLabs/routinator/pull/531
 [#537]: https://github.com/NLnetLabs/routinator/pull/537
 [#543]: https://github.com/NLnetLabs/routinator/pull/543
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
