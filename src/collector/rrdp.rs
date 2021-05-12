@@ -2010,7 +2010,7 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
                 Ok(res) => res,
                 Err(_) => {
                     // If the usize doesn’t fit into a u64, things are
-                    // definitiely way too big.
+                    // definitely way too big.
                     self.left = Some(0);
                     return Err(io::Error::new(
                         io::ErrorKind::Other, "size limit exceeded"

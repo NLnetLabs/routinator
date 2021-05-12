@@ -401,7 +401,7 @@ impl Config {
         .arg(Arg::with_name("max-object-size")
             .long("max-object-size")
             .value_name("BYTES")
-            .help("Maximum size of downloaded objects (0 .. no limit)")
+            .help("Maximum size of downloaded objects (0 for no limit)")
             .takes_value(true)
         )
         .arg(Arg::with_name("dirty-repository")
