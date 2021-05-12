@@ -503,9 +503,9 @@ These can be requested by providing different commands on the command line.
                   Choosing this format causes Routinator to produce a roa-
                   set configuration item for the OpenBGPD configuration.
 
-           bird
+           bird1
                   Choosing this format causes Routinator to produce a roa table
-                  configuration item for the BIRD configuration.
+                  configuration item for the BIRD1 configuration.
 
            bird2
                   Choosing this format causes Routinator to produce a roa table
