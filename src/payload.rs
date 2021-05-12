@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
-use log::warn;
+use log::{info, warn};
 use rpki::repository::cert::ResourceCert;
 use rpki::repository::resources::{
     AsId, IpBlock, IpBlocks, IpBlocksBuilder, Prefix
@@ -365,16 +365,26 @@ impl SharedHistory {
         });
 
         let mut history = self.write();
-        history.current = Some(snapshot.into_snapshot().into());
         history.metrics = Some(metrics.into());
         if let Some(delta) = delta {
+            // Data has changed.
+            info!(
+                "Delta with {} announced and {} withdrawn origins.",
+                delta.announced_origins.len(),
+                delta.withdrawn_origins.len(),
+            );
+            history.current = Some(snapshot.into_snapshot().into());
             history.push_delta(delta);
             true
         }
+        else if current.is_none() {
+            // This is the first snapshot ever.
+            history.current = Some(snapshot.into_snapshot().into());
+            true
+        }
         else {
-            // If we didn’t have a snapshot before, we added a version even
-            // if there is no delta.
-            current.is_none()
+            // Nothing has changed.
+            false
         }
     }
 
@@ -746,6 +756,11 @@ impl PayloadSnapshot {
         &self.origins
     }
 
+    /// Converts a shared snapshot into a VRP iterator.
+    pub fn into_vrp_iter(self: Arc<Self>) -> SnapshotVrpIter {
+        SnapshotVrpIter::new(self)
+    }
+
     /// Returns a snapshot builder based in this snapshot.
     fn to_builder(&self) -> SnapshotBuilder {
         SnapshotBuilder {
@@ -979,11 +994,11 @@ impl PayloadDelta {
     fn construct(
         current: &SnapshotBuilder, next: &SnapshotBuilder, serial: Serial
     ) -> Option<Self> {
-        let announce = key_difference(&next.origins, &current.origins);
-        let withdraw = key_difference(&current.origins, &next.origins);
+        let announce = added_keys(&next.origins, &current.origins);
+        let withdraw = added_keys(&current.origins, &next.origins);
         if !announce.is_empty() || !withdraw.is_empty() {
             Some(PayloadDelta {
-                serial,
+                serial: serial.add(1),
                 announced_origins: announce,
                 withdrawn_origins: withdraw,
             })
@@ -1012,6 +1027,16 @@ impl PayloadDelta {
     /// Returns the target serial number of the delta.
     pub fn serial(&self) -> Serial {
         self.serial
+    }
+
+    /// Returns a slice with the route origins announced by this delta.
+    pub fn announced_origins(&self) ->  &[RouteOrigin] {
+        &self.announced_origins
+    }
+
+    /// Returns a slice with the route origins withdrawn by this delta.
+    pub fn withdrawn_origins(&self) ->  &[RouteOrigin] {
+        &self.withdrawn_origins
     }
 }
 
@@ -1454,6 +1479,11 @@ impl OriginInfo {
         }));
     }
 
+    /// Returns an iterator over the chain of information.
+    pub fn iter(&self) -> OriginInfoIter {
+        OriginInfoIter { info: Some(self) }
+    }
+
     /// Returns the name of the first TAL if available.
     pub fn tal_name(&self) -> Option<&str> {
         self.head.as_ref().map(|info| info.tal.name()).ok()
@@ -1467,9 +1497,28 @@ impl OriginInfo {
     /// Returns the validity of the first ROA if available.
     ///
     pub fn validity(&self) -> Option<Validity> {
-        self.head.as_ref().map(|info| info.validity).ok()
+        self.head.as_ref().map(|info| info.roa_validity).ok()
+    }
+
+    /// Returns the ROA info if available.
+    pub fn roa_info(&self) -> Option<&RoaInfo> {
+        match self.head {
+            Ok(ref info) => Some(info),
+            Err(_) => None
+        }
+    }
+
+    /// Returns the exception info if available.
+    pub fn exception_info(&self) -> Option<&ExceptionInfo> {
+        match self.head {
+            Ok(_) => None,
+            Err(ref info) => Some(info),
+        }
     }
 }
+
+
+//--- From
 
 impl From<Arc<RoaInfo>> for OriginInfo {
     fn from(src: Arc<RoaInfo>) -> Self {
@@ -1480,6 +1529,36 @@ impl From<Arc<RoaInfo>> for OriginInfo {
 impl From<Arc<ExceptionInfo>> for OriginInfo {
     fn from(src: Arc<ExceptionInfo>) -> Self {
         OriginInfo { head: Err(src), tail: None }
+    }
+}
+
+//--- IntoIterator
+
+impl<'a> IntoIterator for &'a OriginInfo {
+    type Item = &'a OriginInfo;
+    type IntoIter = OriginInfoIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+
+//------------ OriginInfoIter ------------------------------------------------
+
+/// An iterator over origin information.
+#[derive(Clone, Debug)]
+pub struct OriginInfoIter<'a> {
+    info: Option<&'a OriginInfo>,
+}
+
+impl<'a> Iterator for OriginInfoIter<'a> {
+    type Item = &'a OriginInfo;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = self.info?;
+        self.info = res.tail.as_ref().map(AsRef::as_ref);
+        Some(res)
     }
 }
 
@@ -1495,8 +1574,11 @@ pub struct RoaInfo {
     /// The rsync URI identifying the ROA.
     pub uri: Option<uri::Rsync>,
 
-    /// The validity of the ROA.
-    pub validity: Validity,
+    /// The validity of the ROA itself.
+    pub roa_validity: Validity,
+
+    /// The validity of the validation chain.
+    pub chain_validity: Validity,
 }
 
 impl RoaInfo {
@@ -1507,7 +1589,8 @@ impl RoaInfo {
             uri: cert.signed_object().cloned().map(|mut uri| {
                 uri.unshare(); uri
             }),
-            validity: cert.validity().trim(ca_validity),
+            roa_validity: cert.validity(),
+            chain_validity: cert.validity().trim(ca_validity),
         }
     }
 }
@@ -1515,11 +1598,11 @@ impl RoaInfo {
 
 //============ Part Four. The Attic ==========================================
 
-/// Returns the difference in keys between the two hash maps as a vec.
-fn key_difference<K: Copy + Hash + Eq, V>(
-    current: &HashMap<K, V>, next: &HashMap<K, V>
+/// Returns the keys in `this` that are not in `other` as a vec.
+fn added_keys<K: Copy + Hash + Eq, V>(
+    this: &HashMap<K, V>, other: &HashMap<K, V>
 ) -> Vec<K> {
-    current.keys().filter(|key| next.contains_key(key)).cloned().collect()
+    this.keys().filter(|key| !other.contains_key(key)).cloned().collect()
 }
 
 
@@ -1582,6 +1665,68 @@ mod test {
 
         // Does not cover supernet (2001:db8::/32 does not cover 2001::/24).
         assert!(!outer.covers(supernet));
+    }
+
+    #[test]
+    fn payload_delta_construct() {
+        fn origin(as_id: u32, prefix: &str, max_len: u8) -> RouteOrigin {
+            RouteOrigin::new(
+                as_id.into(),
+                AddressPrefix::from_str(prefix).unwrap(),
+                max_len
+            )
+        }
+        let o0 = origin(10, "10.0.0.10/10", 10);
+        let o1 = origin(11, "10.0.0.10/11", 10);
+        let o2 = origin(12, "10.0.0.10/12", 10);
+        let o3 = origin(13, "10.0.0.10/13", 10);
+        let o4 = origin(14, "10.0.0.10/14", 10);
+
+        let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
+        let mut current = SnapshotBuilder::default();
+        current.origins.insert(o0, info.clone());
+        current.origins.insert(o1, info.clone());
+        current.origins.insert(o2, info.clone());
+        current.origins.insert(o3, info.clone());
+        let mut next = SnapshotBuilder::default();
+        next.origins.insert(o0, info.clone());
+        next.origins.insert(o2, info.clone());
+        next.origins.insert(o4, info.clone());
+        let delta = PayloadDelta::construct(
+            &current, &next, 12.into()
+        ).unwrap();
+
+        assert_eq!(delta.serial, Serial::from(13));
+        let mut add: HashSet<_> = delta.announced_origins.into_iter().collect();
+        let mut sub: HashSet<_> = delta.withdrawn_origins.into_iter().collect();
+
+        assert!(add.remove(&o4));
+        assert!(add.is_empty());
+
+        assert!(sub.remove(&o1));
+        assert!(sub.remove(&o3));
+        assert!(sub.is_empty());
+
+        assert!(
+            PayloadDelta::construct(&current, &current, 10.into()).is_none()
+        );
+    }
+
+    #[test]
+    fn fn_added_keys() {
+        use std::iter::FromIterator;
+
+        assert_eq!(
+            added_keys(
+                &HashMap::from_iter(
+                    vec![(1, ()), (2, ()), (3, ()), (4, ())].into_iter()
+                ),
+                &HashMap::from_iter(
+                    vec![(2, ()), (4, ()), (5, ())].into_iter()
+                )
+            ).into_iter().collect::<HashSet<_>>(),
+            HashSet::from_iter(vec![1, 3].into_iter()),
+        );
     }
 }
 

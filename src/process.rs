@@ -295,11 +295,11 @@ impl LogOutput {
         (tx, res)
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&self) {
         self.current.write().expect("Log lock got poisoned").1 = Utc::now();
     }
 
-    pub fn flush(&mut self) {
+    pub fn flush(&self) {
         let queue = self.queue.lock().expect("Log queue lock got poisoned");
         let started = self.current.read().expect("Log lock got poisoned").1;
 

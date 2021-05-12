@@ -23,8 +23,9 @@ use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use chrono::{DateTime, Utc, TimeZone};
 use log::{debug, error, info, warn};
+use reqwest::header;
 use reqwest::{Certificate, Proxy, StatusCode};
-use reqwest::blocking::{Client, ClientBuilder, Response};
+use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rand::Rng;
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
@@ -35,7 +36,7 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
-use crate::utils::{JsonBuilder, UriExt};
+use crate::utils::{JsonBuilder, UriExt, parse_http_date, format_http_date};
 
 
 ///----------- Configuration Constants ---------------------------------------
@@ -81,7 +82,7 @@ pub struct Collector {
 impl Collector {
     /// Creates a new RRDP collector.
     pub fn new(
-        config: &Config, db: &sled::Db, update: bool
+        config: &Config, db: &sled::Db,
     ) -> Result<Option<Self>, Failed> {
         if config.disable_rrdp {
             return Ok(None)
@@ -89,12 +90,7 @@ impl Collector {
 
         Ok(Some(Collector {
             db: db.clone(),
-            http: if update {
-                Some(HttpClient::new(config)?)
-            }
-            else {
-                None
-            },
+            http: Some(HttpClient::new(config)?),
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
@@ -237,7 +233,7 @@ impl Collector {
                                 builder.member_str("session", state.session);
                                 builder.member_str(
                                     "updated",
-                                    state.updated.to_rfc3339()
+                                    state.updated().to_rfc3339()
                                 );
                             }
                         })
@@ -363,7 +359,7 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If a repository is has been successfully updated during this run,
+    /// If a repository has been successfully updated during this run,
     /// returns it. Otherwise returns it if it is cached and that cached data
     /// is newer than the fallback time. Thus, if the method returns
     /// `Ok(None)`, you can fall back to rsync.
@@ -392,13 +388,14 @@ impl<'a> Run<'a> {
             .entry(rpki_notify.clone()).or_default()
             .clone()
         };
-        //
+
         // Acquire the mutex. Once we have it, see if the repository is
         // up-to-date which happens if someone else had it first.
         let _lock = mutex.lock().unwrap();
         if let Some(res) = self.updated.read().unwrap().get(rpki_notify) {
             return Ok(res.clone())
         }
+
 
         // Check if the repository URI is dubious. If so, skip updating and
         // reject the repository.
@@ -416,7 +413,7 @@ impl<'a> Run<'a> {
             let mut update = RepositoryUpdate::new(
                 self.collector, http, rpki_notify,
                 self.collector.max_object_size,
-            );
+            )?;
             let updated = update.update()?;
             self.metrics.lock().unwrap().push(update.metrics);
             updated
@@ -436,11 +433,13 @@ impl<'a> Run<'a> {
         self.running.write().unwrap().remove(rpki_notify);
 
         let repository = if current {
-            Some(Repository::new(
-                self.collector, rpki_notify
-            )?)
+            Some(Repository::new(self.collector, rpki_notify)?)
         }
         else {
+            warn!(
+                "RRDP repository {} unavailable. Falling back to rsync.",
+                rpki_notify
+            );
             None
         };
         
@@ -464,6 +463,10 @@ impl<'a> Run<'a> {
             )?)
         }
         else {
+            warn!(
+                "RRDP repository {} unavailable. Falling back to rsync.",
+                rpki_notify
+            );
             None
         };
         
@@ -604,6 +607,31 @@ impl Repository {
             Some((uri, object.content))
         }).flatten()
     }
+
+    /// Loads the repository state for the repository if it is available.
+    fn load_state(&self) -> Result<Option<RepositoryState>, Failed> {
+        match self.tree.get(REPOSITORY_STATE_KEY)? {
+            Some(state) => {
+                match RepositoryState::try_from(state) {
+                    Ok(state) => Ok(Some(state)),
+                    Err(_) => {
+                        error!(
+                            "RRDP Database error: \
+                            cannot decode repository state"
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Stores the repository state for the repository.
+    fn store_state(&self, state: &RepositoryState) -> Result<(), Failed> {
+        self.tree.insert(REPOSITORY_STATE_KEY, state)?;
+        Ok(())
+    }
 }
 
 
@@ -617,11 +645,17 @@ struct RepositoryUpdate<'a> {
     /// A reference to the RRDP collector the update is done on.
     collector: &'a Collector,
 
+    /// The repository itself.
+    repository: Repository,
+
     /// The HTTP client to use for downloading things.
     http: &'a HttpClient,
 
     /// The rpkiNotify URI identifying the repository.
     rpki_notify: &'a uri::Https,
+
+    /// The repository state of the last update if available.
+    state: Option<RepositoryState>,
 
     /// The update metrics.
     metrics: RrdpRepositoryMetrics,
@@ -637,12 +671,15 @@ impl<'a> RepositoryUpdate<'a> {
         http: &'a HttpClient,
         rpki_notify: &'a uri::Https,
         max_object_size: Option<u64>,
-    ) -> Self {
-        RepositoryUpdate {
-            collector, http, rpki_notify,
+    ) -> Result<Self, Failed> {
+        let repository = Repository::new(collector, rpki_notify)?;
+        let state = repository.load_state()?;
+
+        Ok(RepositoryUpdate {
+            collector, repository, http, rpki_notify, state,
             metrics: RrdpRepositoryMetrics::new(rpki_notify.clone()),
-            max_object_size
-        }
+            max_object_size,
+        })
     }
 
     /// Performs an update and returns whether that succeeeded.
@@ -658,13 +695,21 @@ impl<'a> RepositoryUpdate<'a> {
     /// Actually performs an update and returns whether that succeeded.
     fn _update(&mut self) -> Result<bool, Failed> {
         let notify = match self.http.notification_file(
-            &self.rpki_notify, &mut self.metrics.notify_status
+            &self.rpki_notify,
+            self.state.as_ref(),
+            &mut self.metrics.notify_status
         ) {
-            Some(notify) => notify,
-            None => return Ok(false)
+            Ok(Some(notify)) => notify,
+            Ok(None) => {
+                self.not_modified()?;
+                return Ok(true)
+            }
+            Err(Failed) => {
+                return Ok(false)
+            }
         };
-        self.metrics.serial = Some(notify.serial);
-        self.metrics.session = Some(notify.session_id);
+        self.metrics.serial = Some(notify.content.serial);
+        self.metrics.session = Some(notify.content.session_id);
         match self.delta_update(&notify)? {
             None => {
                 return Ok(true)
@@ -676,6 +721,16 @@ impl<'a> RepositoryUpdate<'a> {
         self.snapshot_update(&notify)
     }
 
+    /// Handle the case of a Not Modified response.
+    fn not_modified(&mut self) -> Result<(), Failed> {
+        debug!("RRDP {}: Not modified.", self.rpki_notify);
+        if let Some(state) = self.state.as_mut() {
+            state.touch(self.collector.fallback_time);
+            self.repository.store_state(state)?
+        }
+        Ok(())
+    }
+
 
     //--- Snapshot Update
 
@@ -685,7 +740,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// `notify`.
     fn snapshot_update(
         &mut self,
-        notify: &NotificationFile,
+        notify: &Notification,
     ) -> Result<bool, Failed> {
         match self.try_snapshot_update(
             notify,
@@ -697,7 +752,7 @@ impl<'a> RepositoryUpdate<'a> {
             Err(err) => {
                 warn!(
                     "RRDP {}: failed to process snapshot file {}: {}",
-                    self.rpki_notify, notify.snapshot.uri(), err
+                    self.rpki_notify, notify.content.snapshot.uri(), err
                 );
                 Ok(false)
             }
@@ -710,12 +765,12 @@ impl<'a> RepositoryUpdate<'a> {
     /// whenever anything goes wrong whether that is fatal or not.
     fn try_snapshot_update(
         &mut self,
-        notify: &NotificationFile,
+        notify: &Notification,
     ) -> Result<(), SnapshotError> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
 
         let response = match self.http.response(
-            notify.snapshot.uri(), false
+            notify.content.snapshot.uri(), false
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
@@ -727,14 +782,14 @@ impl<'a> RepositoryUpdate<'a> {
             }
         };
         let mut processor = SnapshotProcessor::new(
-            &notify, self.max_object_size
+            &notify.content, self.max_object_size
         );
         let mut reader = io::BufReader::new(HashRead::new(response));
         processor.process(&mut reader)?;
         let hash = reader.into_inner().into_hash();
         if verify_slices_are_equal(
             hash.as_ref(),
-            notify.snapshot.hash().as_ref()
+            notify.content.snapshot.hash().as_ref()
         ).is_err() {
             return Err(SnapshotError::HashMismatch)
         }
@@ -768,7 +823,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// should be tried next because of the reason given.
     fn delta_update(
         &mut self,
-        notify: &NotificationFile,
+        notify: &Notification,
     ) -> Result<Option<SnapshotReason>, Failed> {
         let tree = self.collector.db.open_tree(
             Repository::tree_name(self.rpki_notify)
@@ -779,21 +834,21 @@ impl<'a> RepositoryUpdate<'a> {
         let state = match tree.get("")? {
             Some(state) => {
                 match RepositoryState::try_from(state) {
-                Ok(state) => state,
-                Err(_) => {
-                    error!(
-                        "RRDP Database error: \
-                        cannot decode repository state for {}",
-                        self.rpki_notify
-                    );
-                    return Err(Failed)
-                }
+                    Ok(state) => state,
+                    Err(_) => {
+                        error!(
+                            "RRDP Database error: \
+                            cannot decode repository state for {}",
+                            self.rpki_notify
+                        );
+                        return Err(Failed)
+                    }
                 }
             }
             None => return Ok(Some(SnapshotReason::NewRepository)),
         };
 
-        let deltas = match Self::calc_deltas(notify, &state) {
+        let deltas = match Self::calc_deltas(&notify.content, &state) {
             Ok([]) => return Ok(None),
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
@@ -882,7 +937,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn delta_update_step(
         &mut self,
         tree: &sled::Tree,
-        notify: &NotificationFile,
+        notify: &Notification,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
@@ -912,7 +967,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn collect_delta_update_step(
         &mut self,
         tree: &sled::Tree,
-        notify: &NotificationFile,
+        notify: &Notification,
         serial: u64,
         uri: &uri::Https,
         hash: rrdp::Hash,
@@ -928,7 +983,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         };
         let mut processor = DeltaProcessor::new(
-            notify.session_id, serial, tree, self.max_object_size,
+            notify.content.session_id, serial, tree, self.max_object_size,
         );
         let mut reader = io::BufReader::new(HashRead::new(response));
 
@@ -944,8 +999,8 @@ impl<'a> RepositoryUpdate<'a> {
 
         processor.batch.insert(
             REPOSITORY_STATE_KEY,
-            &RepositoryState::new(
-                notify.session_id, serial, self.collector.fallback_time
+            &RepositoryState::from_notify(
+                notify, self.collector.fallback_time
             ),
         );
 
@@ -1102,23 +1157,49 @@ impl HttpClient {
         uri: &uri::Https,
         multi: bool,
     ) -> Result<HttpResponse, reqwest::Error> {
-        self.client().get(uri.as_str()).send().map(|response| {
+        self._response(uri, self.client().get(uri.as_str()), multi)
+    }
+
+    /// Creates a response from a request builder.
+    fn _response(
+        &self,
+        uri: &uri::Https,
+        request: RequestBuilder,
+        multi: bool
+    ) -> Result<HttpResponse, reqwest::Error> {
+        request.send().map(|response| {
             HttpResponse::create(response, uri, &self.response_dir, multi)
         })
     }
 
+
     /// Requests, parses, and returns the given RRDP notification file.
     ///
     /// The value referred to by `status` will be updated to the received
-    /// status code or `None` if the request failed for other reasons.
+    /// status code or `HttpStatus::Error` if the request failed.
     ///
     /// Returns the notification file on success.
     pub fn notification_file(
         &self,
         uri: &uri::Https,
+        state: Option<&RepositoryState>,
         status: &mut HttpStatus,
-    ) -> Option<NotificationFile> {
-        let response = match self.response(uri, true) {
+    ) -> Result<Option<Notification>, Failed> {
+        let mut request = self.client().get(uri.as_str());
+        if let Some(state) = state {
+            if let Some(etag) = state.etag.as_ref() {
+                request = request.header(
+                    header::IF_NONE_MATCH, etag.as_ref()
+                );
+            }
+            if let Some(ts) = state.last_modified_ts {
+                request = request.header(
+                    header::IF_MODIFIED_SINCE,
+                    format_http_date(Utc.timestamp(ts, 0))
+                );
+            }
+        }
+        let response = match self._response(uri, request, true) {
             Ok(response) => {
                 *status = response.status().into();
                 response
@@ -1126,25 +1207,22 @@ impl HttpClient {
             Err(err) => {
                 warn!("RRDP {}: {}", uri, err);
                 *status = HttpStatus::Error;
-                return None;
+                return Err(Failed)
             }
         };
-        if !response.status().is_success() {
+
+        if response.status() == StatusCode::NOT_MODIFIED {
+            Ok(None)
+        }
+        else if !response.status().is_success() {
             warn!(
                 "RRDP {}: Getting notification file failed with status {}",
                 uri, response.status()
             );
-            return None;
+            Err(Failed)
         }
-        match NotificationFile::parse(io::BufReader::new(response)) {
-            Ok(mut res) => {
-                res.deltas.sort_by_key(|delta| delta.0);
-                Some(res)
-            }
-            Err(err) => {
-                warn!("RRDP {}: {}", uri, err);
-                None
-            }
+        else {
+            Notification::from_response(uri, response).map(Some)
         }
     }
 }
@@ -1246,6 +1324,71 @@ impl HttpResponse {
     pub fn status(&self) -> StatusCode {
         self.response.status()
     }
+
+    /// Returns the value of the ETag header if present.
+    ///
+    /// The returned value is the complete content. That is, it includes the
+    /// quotation marks and a possible `W/` prefix.
+    ///
+    /// The method quietly returns `None` if the content of a header is
+    /// malformed or if there is more than one occurence of the header.
+    ///
+    /// The method returns a `Bytes` value as there is a good chance the
+    /// tag is short enough to be be inlined.
+    pub fn etag(&self) -> Option<Bytes> {
+        let mut etags = self.response.headers()
+            .get_all(header::ETAG)
+            .into_iter();
+        let etag = etags.next()?;
+        if etags.next().is_some() {
+            return None
+        }
+        Self::parse_etag(etag.as_bytes())
+    }
+
+    /// Parses the ETag value.
+    ///
+    /// This is a separate function to make testing easier.
+    fn parse_etag(etag: &[u8]) -> Option<Bytes> {
+        // The tag starts with an optional case-sensitive `W/` followed by
+        // `"`. Let’s remember where the actual tag starts.
+        let start = if etag.starts_with(b"W/\"") {
+            3
+        }
+        else if etag.get(0) == Some(&b'"') {
+            1
+        }
+        else {
+            return None
+        };
+
+        // We need at least one more character. Empty tags are allowed.
+        if etag.len() <= start {
+            return None
+        }
+
+        // The tag ends with a `"`.
+        if etag.last() != Some(&b'"') {
+            return None
+        }
+
+        Some(Bytes::copy_from_slice(etag))
+    }
+
+    /// Returns the value of the Last-Modified header if present.
+    ///
+    /// The method quietly returns `None` if the content of a header is
+    /// malformed or if there is more than one occurence of the header.
+    pub fn last_modified(&self) -> Option<DateTime<Utc>> {
+        let mut iter = self.response.headers()
+            .get_all(header::LAST_MODIFIED)
+            .into_iter();
+        let value = iter.next()?;
+        if iter.next().is_some() {
+            return None
+        }
+        parse_http_date(value.to_str().ok()?)
+    }
 }
 
 
@@ -1258,6 +1401,41 @@ impl io::Read for HttpResponse {
             file.write_all(&buf[..res])?;
         }
         Ok(res)
+    }
+}
+
+
+//------------ Notification --------------------------------------------------
+
+/// The notification file of an RRDP repository.
+struct Notification {
+    /// The content of the file.
+    content: NotificationFile,
+
+    /// The Etag value if provided.
+    etag: Option<Bytes>,
+
+    /// The Last-Modified value if provided,
+    last_modified: Option<DateTime<Utc>>,
+}
+
+impl Notification {
+    /// Creates a new notification from a successful HTTP response.
+    ///
+    /// Assumes that the response status was 200 OK.
+    fn from_response(
+        uri: &uri::Https, response: HttpResponse
+    ) -> Result<Self, Failed> {
+        let etag = response.etag();
+        let last_modified = response.last_modified();
+        let mut content = NotificationFile::parse(
+            io::BufReader::new(response)
+        ).map_err(|err| {
+            warn!("RRDP {}: {}", uri, err);
+            Failed
+        })?;
+        content.deltas.sort_by_key(|delta| delta.0);
+        Ok(Notification { content, etag, last_modified })
     }
 }
 
@@ -1457,7 +1635,7 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
 ///
 /// A value of this type is stored under the empty key with each repository
 /// and is updated on each … update.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct RepositoryState {
     /// The UUID of the current session of repository.
     pub session: Uuid,
@@ -1465,34 +1643,64 @@ struct RepositoryState {
     /// The serial number within the current session.
     pub serial: u64,
 
-    /// The time of last update of the server.
-    pub updated: DateTime<Utc>,
+    /// Unix timestamp in seconds of the time of last update of the server.
+    ///
+    /// We are not using `DateTime<Utc>` here since we don’t need sub-second
+    /// precision and converting on the fly makes a value change when cycled
+    /// through the database as its sub-second portion is forced to zero.
+    pub updated_ts: i64,
 
     /// The time when we consider the stored data to be expired.
-    pub best_before: DateTime<Utc>,
+    pub best_before_ts: i64,
+
+    /// The value of the date header of the notification file if present.
+    ///
+    /// Given as the Unix timestamp in seconds.
+    pub last_modified_ts: Option<i64>,
+
+    /// The value of the ETag header of the notification file if present.
+    ///
+    /// This is the complete tag including the quotation marks and possibly
+    /// the weak prefix.
+    pub etag: Option<Bytes>,
 }
 
 impl RepositoryState {
     /// Create the state based on the notification file.
     pub fn from_notify(
-        notify: &NotificationFile,
+        notify: &Notification,
         fallback: FallbackTime,
     ) -> Self {
-        Self::new(notify.session_id, notify.serial, fallback)
-    }
-
-    /// Create new state with given values.
-    pub fn new(session: Uuid, serial: u64, fallback: FallbackTime) -> Self {
         RepositoryState {
-            session, serial,
-            updated: Utc::now(),
-            best_before: fallback.best_before(),
+            session: notify.content.session_id,
+            serial: notify.content.serial,
+            updated_ts: Utc::now().timestamp(),
+            best_before_ts: fallback.best_before().timestamp(),
+            last_modified_ts: notify.last_modified.map(|x| x.timestamp()),
+            etag: notify.etag.clone(),
         }
     }
 
+    /// Returns the last update time as proper timestamp.
+    pub fn updated(&self) -> DateTime<Utc> {
+        Utc.timestamp(self.updated_ts, 0)
+    }
+
+    /// Returns the best before time as a proper timestamp.
+    pub fn best_before(&self) -> DateTime<Utc> {
+        Utc.timestamp(self.best_before_ts, 0)
+    }
+
+    /// Sets the update time to now.
+    pub fn touch(&mut self, fallback: FallbackTime) {
+        self.updated_ts = Utc::now().timestamp();
+        self.best_before_ts = fallback.best_before().timestamp();
+    }
+
+
     /// Returns whether this repository should be considered expired.
     pub fn is_expired(&self) -> bool {
-        Utc::now() > self.best_before
+        Utc::now() > self.best_before()
     }
 }
 
@@ -1512,11 +1720,23 @@ impl<'a> From<&'a RepositoryState> for IVec {
         // The serial in network byte order.
         vec.extend_from_slice(&state.serial.to_be_bytes());
 
-        // The update time as the i64 timestamp in network byte order.
-        vec.extend_from_slice(&state.updated.timestamp().to_be_bytes());
+        // The update timestamp in network byte order.
+        vec.extend_from_slice(&state.updated_ts.to_be_bytes());
 
         // The best-before time as the i64 timestamp in network byte order.
-        vec.extend_from_slice(&state.best_before.timestamp().to_be_bytes());
+        vec.extend_from_slice(&state.best_before_ts.to_be_bytes());
+
+        // The notification date as a i64 timestamp in network byte order.
+        // We use i64::MIN as a placeholder for `None`.
+        vec.extend_from_slice(
+            &state.last_modified_ts.unwrap_or(i64::MIN).to_be_bytes()
+        );
+
+        // The value of the notification etag until the end of data. We
+        // store `None` as an empty tag.
+        if let Some(etag) = state.etag.as_ref() {
+            vec.extend_from_slice(etag);
+        }
 
         vec.into()
     }
@@ -1526,7 +1746,7 @@ impl TryFrom<IVec> for RepositoryState {
     type Error = StateError;
 
     fn try_from(stored: IVec) -> Result<Self, Self::Error> {
-        const ENCODING_LEN: usize = {
+        const MIN_ENCODING_LEN: usize = {
             mem::size_of::<u8>() +
             mem::size_of::<uuid::Bytes>() +
             mem::size_of::<u64>() +
@@ -1534,7 +1754,7 @@ impl TryFrom<IVec> for RepositoryState {
             mem::size_of::<i64>()
         };
 
-        if stored.len() != ENCODING_LEN {
+        if stored.len() < MIN_ENCODING_LEN {
             return Err(StateError)
         }
 
@@ -1546,27 +1766,53 @@ impl TryFrom<IVec> for RepositoryState {
 
         // Session.
         let (field, stored) = stored.split_at(mem::size_of::<uuid::Bytes>());
-        let session = Uuid::from_slice(field).unwrap();
+        let session = Uuid::from_slice(
+            field
+        ).expect("Bug: slice of wrong length");
 
         // Serial.
         let (field, stored) = stored.split_at(mem::size_of::<u64>());
-        let serial = u64::from_be_bytes(field.try_into().unwrap());
+        let serial = u64::from_be_bytes(
+            field.try_into().expect("Bug: slice of wrong length")
+        );
 
         // Updated.
-        let (field, stored) = stored.split_at(
-            mem::size_of::<DateTime<Utc>>()
-        );
-        let updated = Utc.timestamp(
-            i64::from_be_bytes(field.try_into().unwrap()), 0
+        let (field, stored) = stored.split_at(mem::size_of::<i64>());
+        let updated_ts = i64::from_be_bytes(
+            field.try_into().expect("Bug: slice of wrong length")
         );
 
         // Best-before.
-        let field = stored;
-        let best_before = Utc.timestamp(
-            i64::from_be_bytes(field.try_into().unwrap()), 0
+        let (field, stored) = stored.split_at(mem::size_of::<i64>());
+        let best_before_ts = i64::from_be_bytes(
+            field.try_into().expect("Bug: slice of wrong length")
         );
+
+        // Notification Date.
+        let (field, stored) = stored.split_at(mem::size_of::<i64>());
+        let last_modified_ts = i64::from_be_bytes(
+            field.try_into().expect("Bug: slice of wrong length")
+        );
+        let last_modified_ts = if last_modified_ts == i64::MIN {
+            None
+        }
+        else {
+            Some(last_modified_ts)
+        };
+
+        // Notification ETag.
+        let field = stored;
+        let etag = if field.is_empty() {
+            None
+        }
+        else {
+            Some(Bytes::copy_from_slice(field))
+        };
         
-        Ok(RepositoryState { session, serial, updated, best_before })
+        Ok(RepositoryState {
+            session, serial, updated_ts, best_before_ts,
+            last_modified_ts, etag
+        })
     }
 }
 
@@ -2133,6 +2379,64 @@ mod test {
         let decoded = RepositoryObject::try_from(encoded).unwrap();
         assert_eq!(decoded.content.as_ref(), data);
         assert_eq!(decoded.hash.as_slice(), digest.as_ref());
+    }
+
+    #[test]
+    fn encoded_repository_state() {
+        fn cycles(state: &RepositoryState) {
+            let encoded = IVec::from(state);
+            let decoded = RepositoryState::try_from(encoded).unwrap();
+            assert_eq!(state, &decoded);
+        }
+
+        let mut state = RepositoryState {
+            session: Uuid::from_u128(12),
+            serial: 933,
+            updated_ts: 732,
+            best_before_ts: 3221,
+            last_modified_ts: None,
+            etag: None
+        };
+        cycles(&state);
+        state.last_modified_ts = Some(-177);
+        cycles(&state);
+        state.etag = Some(Bytes::from("W/\"foo\""));
+        cycles(&state);
+        state.last_modified_ts = None;
+        cycles(&state);
+    }
+
+    #[test]
+    fn response_parse_etag() {
+        // The Good:
+        assert_eq!(
+            HttpResponse::parse_etag(b"\"xyzzy\""),
+            Some(Bytes::from_static(b"\"xyzzy\"".as_ref()))
+        );
+        assert_eq!(
+            HttpResponse::parse_etag(b"W/\"xyzzy\""),
+            Some(Bytes::from_static(b"W/\"xyzzy\"".as_ref()))
+        );
+        assert_eq!(
+            HttpResponse::parse_etag(b"\"\""),
+            Some(Bytes::from_static(b"\"\"".as_ref()))
+        );
+        assert_eq!(
+            HttpResponse::parse_etag(b"W/\"\""),
+            Some(Bytes::from_static(b"W/\"\"".as_ref()))
+        );
+
+        // The Bad:
+        assert!(HttpResponse::parse_etag(b"").is_none());
+        assert!(HttpResponse::parse_etag(b"\"").is_none());
+        assert!(HttpResponse::parse_etag(b"some").is_none());
+        assert!(HttpResponse::parse_etag(b"some\"").is_none());
+        assert!(HttpResponse::parse_etag(b"W\"some\"").is_none());
+        assert!(HttpResponse::parse_etag(b"W/\"").is_none());
+        assert!(HttpResponse::parse_etag(b"W/\"some").is_none());
+
+        // The Corner Cases:
+        assert!(HttpResponse::parse_etag(b"w/\"some\"").is_none());
     }
 }
 

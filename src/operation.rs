@@ -30,19 +30,17 @@ use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
+use crate::{output, tals, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
-use crate::output;
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
 use crate::slurm::LocalExceptions;
-use crate::tals;
-use crate::validity::RouteValidity;
 
 #[cfg(unix)] use tokio::signal::unix::{Signal, SignalKind, signal};
 #[cfg(not(unix))] use futures::future::pending;
@@ -416,7 +414,9 @@ impl Init {
         name: &str,
         content: &str,
     ) -> Result<(), Failed> {
-        let mut file = match fs::File::create(tal_dir.join(name)) {
+        let mut file = match fs::File::create(tal_dir.join(
+            format!("{}.tal", name)
+        )) {
             Ok(file) => file,
             Err(err) => {
                 error!(
@@ -518,7 +518,7 @@ impl Server {
             history.clone(), rtr_metrics.clone(), process.config()
         )?;
         let http = http_listener(
-            history.clone(), rtr_metrics, log, process.config()
+            history.clone(), rtr_metrics, log.clone(), process.config()
         )?;
 
         process.drop_privileges()?;
@@ -534,8 +534,11 @@ impl Server {
 
         let join = thread::spawn(move || {
             loop {
+                if let Some(log) = log.as_ref() {
+                    log.start();
+                }
                 let timeout = match LocalExceptions::load(
-                    process.config(), false
+                    process.config(), true
                 ) {
                     Ok(exceptions) => {
                         if Self::process_once(
@@ -553,6 +556,9 @@ impl Server {
                         Duration::from_secs(10)
                     }
                 };
+                if let Some(log) = log.as_ref() {
+                    log.flush();
+                }
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
                         match validation.reload_tals() {
@@ -644,7 +650,7 @@ pub struct Vrps {
     format: OutputFormat,
 
     /// Optional output filters.
-    filters: Option<Vec<output::Filter>>,
+    selection: Option<output::Selection>,
 
     /// Don’t update the repository.
     noupdate: bool,
@@ -670,7 +676,6 @@ impl Vrps {
                 .short("f")
                 .long("format")
                 .value_name("FORMAT")
-                .possible_values(OutputFormat::VALUES)
                 .default_value(OutputFormat::DEFAULT_VALUE)
                 .help("Sets the output format")
                 .takes_value(true)
@@ -684,17 +689,19 @@ impl Vrps {
                 .long("complete")
                 .help("Return an error status on incomplete update")
             )
-            .arg(Arg::with_name("filter-prefix")
+            .arg(Arg::with_name("select-prefix")
                 .short("p")
-                .long("filter-prefix")
+                .long("select-prefix")
+                .alias("filter-prefix")
                 .help("Filter for an address prefix")
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
             )
-            .arg(Arg::with_name("filter-asn")
+            .arg(Arg::with_name("select-asn")
                 .short("a")
-                .long("filter-asn")
+                .long("select-asn")
+                .alias("filter-asn")
                 .help("Filter for an AS number")
                 .takes_value(true)
                 .multiple(true)
@@ -707,32 +714,45 @@ impl Vrps {
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
+        let format = matches.value_of("format").unwrap_or(
+            OutputFormat::DEFAULT_VALUE
+        );
+        let format = match OutputFormat::from_str(format) {
+            Ok(format) => format,
+            Err(_) => {
+                error!("Unknown output format '{}'", format);
+                return Err(Failed)
+            }
+        };
         Ok(Vrps {
-            filters: Self::output_filters(matches)?,
+            selection: Self::output_selection(matches)?,
             output: match matches.value_of("output").unwrap() {
                 "-" => None,
                 path => Some(path.into())
             },
-            format: OutputFormat::from_str(
-                matches.value_of("format").unwrap()
-            )?,
+            format,
             noupdate: matches.is_present("noupdate"),
             complete: matches.is_present("complete"),
         })
     }
 
-    /// Creates the filters for the vrps command.
-    fn output_filters(
+    /// Creates the selection for the vrps command.
+    fn output_selection(
         matches: &ArgMatches
-    ) -> Result<Option<Vec<output::Filter>>, Failed> {
-        let mut res = Vec::new();
-        if let Some(list) = matches.values_of("filter-prefix") {
+    ) -> Result<Option<output::Selection>, Failed> {
+        if !matches.is_present("select-prefix")
+            && !matches.is_present("select-asn")
+        {
+            return Ok(None)
+        }
+        let mut res = output::Selection::new();
+        if let Some(list) = matches.values_of("select-prefix") {
             for value in list {
                 match AddressPrefix::from_str(value) {
-                    Ok(some) => res.push(output::Filter::Prefix(some)),
+                    Ok(some) => res.push_origin_prefix(some),
                     Err(_) => {
                         error!(
-                            "Invalid prefix \"{}\" in --filter-prefix",
+                            "Invalid prefix \"{}\" in --select-prefix",
                             value
                         );
                         return Err(Failed)
@@ -740,27 +760,21 @@ impl Vrps {
                 }
             }
         }
-        if let Some(list) = matches.values_of("filter-asn") {
+        if let Some(list) = matches.values_of("select-asn") {
             for value in list {
-                let asn = match AsId::from_str(value) {
-                    Ok(asn) => asn,
+                match AsId::from_str(value) {
+                    Ok(asn) => res.push_origin_asn(asn),
                     Err(_) => {
                         error!(
-                            "Invalid ASN \"{}\" in --filter-asn",
+                            "Invalid ASN \"{}\" in --select-asn",
                             value
                         );
                         return Err(Failed)
                     }
-                };
-                res.push(output::Filter::As(asn))
+                }
             }
         }
-        if res.is_empty() {
-            Ok(None)
-        }
-        else {
-            Ok(Some(res))
-        }
+        Ok(Some(res))
     }
 
     /// Produces a list of Validated ROA Payload.
@@ -783,7 +797,6 @@ impl Vrps {
             process.config().unsafe_vrps,
         );
         validation.cleanup()?;
-        let filters = self.filters.as_ref().map(AsRef::as_ref);
         let res = match self.output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -796,12 +809,15 @@ impl Vrps {
                         return Err(Failed.into())
                     }
                 };
-                self.format.output(&vrps, filters, &metrics, &mut file)
+                self.format.output_snapshot(
+                    &vrps, self.selection.as_ref(), &metrics, &mut file)
             }
             None => {
                 let out = io::stdout();
                 let mut out = out.lock();
-                self.format.output(&vrps, filters, &metrics, &mut out)
+                self.format.output_snapshot(
+                    &vrps, self.selection.as_ref(), &metrics, &mut out
+                )
             }
         };
         if let Err(err) = res {
@@ -826,20 +842,35 @@ impl Vrps {
 
 /// Validate a route announcement.
 pub struct Validate {
-    /// The address prefix of the announcement.
-    prefix: AddressPrefix,
+    /// What to validate?
+    what: ValidateWhat,
 
-    /// The origin AS number of the announcement.
-    asn: AsId,
-
-    /// Output details in JSON.
+    /// Use JSON for parsing and writing.
     json: bool,
+
+    /// The destination to output the list to.
+    ///
+    /// If this is some path, then we print the list into that file.
+    /// Otherwise we just dump it to stdout.
+    output: Option<PathBuf>,
 
     /// Don’t update the repository.
     noupdate: bool,
 
     /// Return an error on incomplete update.
     complete: bool,
+}
+
+/// What route(s) should we validate, please?
+enum ValidateWhat {
+    /// Validate a single route with the given prefix and ASN.
+    Single(AddressPrefix, AsId),
+
+    /// Validate the routes provided in the given file.
+    File(PathBuf),
+
+    /// Validate the routes provided on stdin.
+    Stdin,
 }
 
 impl Validate {
@@ -852,19 +883,37 @@ impl Validate {
                 .long("prefix")
                 .help("Address prefix of the announcement")
                 .takes_value(true)
-                .required(true)
+                .requires("asn")
+                .conflicts_with("input-file")
             )
             .arg(Arg::with_name("asn")
                 .short("a")
                 .long("asn")
                 .help("Origin AS number of the announcement")
                 .takes_value(true)
-                .required(true)
+                .requires("prefix")
+                .conflicts_with("input-file")
             )
             .arg(Arg::with_name("json")
                 .short("j")
                 .long("json")
-                .help("Output detailed analysis in JSON")
+                .help("Expect input and produce output in JSON")
+            )
+            .arg(Arg::with_name("input-file")
+                .short("i")
+                .long("input")
+                .help("Read routes from a file")
+                .value_name("FILE")
+                .takes_value(true)
+                .conflicts_with_all(&["prefix", "asn"])
+            )
+            .arg(Arg::with_name("output-file")
+                .short("o")
+                .long("output")
+                .value_name("FILE")
+                .help("Write output to a file")
+                .takes_value(true)
+                .default_value("-")
             )
             .arg(Arg::with_name("noupdate")
                 .short("n")
@@ -881,27 +930,55 @@ impl Validate {
     /// Creates a command from clap matches.
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
         Ok(Validate {
-            prefix: {
-                let prefix = matches.value_of("prefix").unwrap();
-                match AddressPrefix::from_str(prefix) {
-                    Ok(prefix) => prefix,
-                    Err(err) => {
-                        error!("illegal address prefix: {}", err);
-                        return Err(Failed);
-                    }
+            what: if let Some(path) = matches.value_of("input-file") {
+                if path == "-" {
+                    ValidateWhat::Stdin
                 }
+                else {
+                    ValidateWhat::File(path.into())
+                }
+            }
+            else {
+                ValidateWhat::Single(
+                    {
+                        let prefix = match matches.value_of("prefix") {
+                            Some(prefix) => prefix,
+                            None => {
+                                error!("Missing required --prefix argument");
+                                return Err(Failed)
+                            }
+                        };
+                        match AddressPrefix::from_str(prefix) {
+                            Ok(prefix) => prefix,
+                            Err(err) => {
+                                error!("illegal address prefix: {}", err);
+                                return Err(Failed);
+                            }
+                        }
+                    },
+                    {
+                        let asn = match matches.value_of("asn") {
+                            Some(asn) => asn,
+                            None => {
+                                error!("Missing required --asn argument");
+                                return Err(Failed)
+                            }
+                        };
+                        match AsId::from_str(asn) {
+                            Ok(asn) => asn,
+                            Err(_) => {
+                                error!("illegal AS number");
+                                return Err(Failed);
+                            }
+                        }
+                    },
+                )
             },
-            asn: {
-                let asn = matches.value_of("asn").unwrap();
-                match AsId::from_str(asn) {
-                    Ok(asn) => asn,
-                    Err(_) => {
-                        error!("illegal AS number");
-                        return Err(Failed);
-                    }
-                }
-            }, 
             json: matches.is_present("json"),
+            output: match matches.value_of("output-file").unwrap() {
+                "-" => None,
+                path => Some(path.into())
+            },
             noupdate: matches.is_present("noupdate"),
             complete: matches.is_present("complete"),
         })
@@ -910,34 +987,142 @@ impl Validate {
 
     /// Outputs whether the given route announcement is valid.
     fn run(self, process: Process) -> Result<(), ExitError> {
+        let requests = self.read_requests()?;
+        let snapshot = self.get_snapshot(process)?;
+        self.output_validity(requests, snapshot)
+    }
+
+    fn read_requests(&self) -> Result<validity::RequestList, ExitError> {
+        match self.what {
+            ValidateWhat::Single(prefix, asn) => {
+                Ok(validity::RequestList::single(prefix, asn))
+            }
+            ValidateWhat::File(ref path) => {
+                let mut file = match fs::File::open(path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        error!(
+                            "Failed to open input file '{}': {}'",
+                            path.display(), err
+                        );
+                        return Err(ExitError::Generic)
+                    }
+                };
+                if self.json {
+                    validity::RequestList::from_json_reader(
+                        &mut file
+                    ).map_err(|err| {
+                        error!(
+                            "Failed to read input file '{}': {}'",
+                            path.display(), err
+                        );
+                        ExitError::Generic
+                    })
+                }
+                else {
+                    validity::RequestList::from_plain_reader(
+                        io::BufReader::new(file)
+                    ).map_err(|err| {
+                        error!(
+                            "Failed to read input file '{}': {}'",
+                            path.display(), err
+                        );
+                        ExitError::Generic
+                    })
+                }
+            }
+            ValidateWhat::Stdin => {
+                let file = io::stdin();
+                let mut file = file.lock();
+                if self.json {
+                    validity::RequestList::from_json_reader(
+                        &mut file
+                    ).map_err(|err| {
+                        error!("Failed to read input: {}'", err);
+                        ExitError::Generic
+                    })
+                }
+                else {
+                    validity::RequestList::from_plain_reader(
+                        file
+                    ).map_err(|err| {
+                        error!("Failed to read input: {}'", err);
+                        ExitError::Generic
+                    })
+                }
+            }
+        }
+    }
+
+    fn get_snapshot(
+        &self, process: Process
+    ) -> Result<PayloadSnapshot, ExitError> {
         let mut validation = Engine::new(process.config(), !self.noupdate)?;
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
         validation.cleanup()?;
-        let vrps = PayloadSnapshot::from_report(
+        let snapshot = PayloadSnapshot::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
             &mut metrics,
             process.config().unsafe_vrps,
         );
-        let validity = RouteValidity::new(self.prefix, self.asn, &vrps);
-        if self.json {
-            let stdout = io::stdout();
-            let mut stdout = stdout.lock();
-            validity.write_json(&mut stdout).map_err(|err| {
-                error!("Writing to stdout failed: {}", err);
-                Failed
-            })?;
-        }
-        else {
-            println!("{}", validity.state());
-        }
         if self.complete && !metrics.rsync_complete() {
+            error!("Failed: Incomplete update.");
             Err(ExitError::IncompleteUpdate)
         }
         else {
-            Ok(())
+            Ok(snapshot)
+        }
+    }
+
+    fn output_validity(
+        &self,
+        requests: validity::RequestList,
+        snapshot: PayloadSnapshot
+    ) -> Result<(), ExitError> {
+        let result = requests.validity(&snapshot);
+        match self.output.as_ref() {
+            Some(path) => {
+                let mut file = match fs::File::create(path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        error!(
+                            "Failed to open output file '{}': {}",
+                            path.display(), err
+                        );
+                        return Err(ExitError::Generic)
+                    }
+                };
+                let res = if self.json {
+                    result.write_json(&mut file)
+                }
+                else {
+                    result.write_plain(&mut file)
+                };
+                res.map_err(|err| {
+                    error!(
+                        "Failed to write to output file '{}': {}",
+                        path.display(), err
+                    );
+                    ExitError::Generic
+                })
+            }
+            None => {
+                let stdout = io::stdout();
+                let mut stdout = stdout.lock();
+                let res = if self.json {
+                    result.write_json(&mut stdout)
+                }
+                else {
+                    result.write_plain(&mut stdout)
+                };
+                res.map_err(|err| {
+                    error!("Failed to write output: {}", err);
+                    ExitError::Generic
+                })
+            }
         }
     }
 }

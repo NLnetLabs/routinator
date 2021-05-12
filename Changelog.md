@@ -16,6 +16,8 @@ Breaking Changes
   now fall back to rsync. The time since last successful update before
   this fallback happens is configurable via the `rrdp-fallback-time`
   option and defaults to one hour. ([#473], [#482])
+* The `rsync-timeout` now describes a hard timeout on the rsync process
+  for updating a repository. ([#528)]
 * Routinator now includes additional TALs for various commonly used
   RPKI testbeds. The `init` command has been restructured to make it
   possible to select the TALs for installation. The default is still to
@@ -29,6 +31,8 @@ New
 
 * The new option `--fresh` causes Routinator to delete all cached data
   before starting. This can be used when data corruption is reported. ([#470])
+* The new HTTP server endpoint `/json-delta` provides an option to
+  retrieve updates to a previously received data set via deltas. ([#537])
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
@@ -48,6 +52,9 @@ New
   Last-Modified headers in their response and process If-None-Match and
   If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
   [#488])
+* The `validate` command now accepts input from and can write its output
+  to files. Both are available in simple plain text and JSON formatting.
+  ([#514])
 
 Bug Fixes
 
@@ -58,8 +65,8 @@ Bug Fixes
 
 Other Changes
 
-* Updated the bundled APNIC TAL. When upgrading, please re-install the
-  TALs in your system via `routinator init`. ([#510])
+* Updated the bundled APNIC and LACNIC TALs. When upgrading, please re-install
+  the TALs in your system via `routinator init`. ([#510], [#543])
 * Upgrade [rpki-rs] to 0.11 and drop now unnecessary separate dependency
   to [rpki-rtr]. ([#443])
 * Upgrade Tokio-related dependencies to new version based on Tokio 1.0.
@@ -86,6 +93,10 @@ Other Changes
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
+[#514]: https://github.com/NLnetLabs/routinator/pull/514
+[#528]: https://github.com/NLnetLabs/routinator/pull/528
+[#537]: https://github.com/NLnetLabs/routinator/pull/537
+[#543]: https://github.com/NLnetLabs/routinator/pull/543
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker

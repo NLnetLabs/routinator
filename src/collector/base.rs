@@ -6,7 +6,7 @@ use std::{fs, io};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use log::{error, warn};
+use log::error;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::Config;
@@ -74,21 +74,16 @@ impl Collector {
 
     /// Creates a new collector.
     ///
-    /// Takes all necessary information from `config`. If `update` is `false`,
-    /// the collector will not be updated from upstream and only data that has
-    /// been collected previously will be used. This differs from disabling
-    /// transports as it will still use whatever is present on disk as
-    /// potentially updated data.
+    /// Takes all necessary information from `config`.
     pub fn new(
         config: &Config,
         db: &sled::Db,
-        update: bool
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
             cache_dir: config.cache_dir.clone(),
-            rrdp: rrdp::Collector::new(config, db, update)?,
-            rsync: rsync::Collector::new(config, update)?,
+            rrdp: rrdp::Collector::new(config, db)?,
+            rsync: rsync::Collector::new(config)?,
         })
     }
 
@@ -204,8 +199,7 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If the repository is definitely unavailable, logs diagnositic
-    /// information and returns `None`.
+    /// If the repository is definitely unavailable,  returns `Ok(None)`.
     pub fn repository<'s>(
         &'s self, ca: &'s CaCert
     ) -> Result<Option<Repository<'s>>, Failed> {
@@ -215,10 +209,6 @@ impl<'a> Run<'a> {
                 if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
                     return Ok(Some(Repository::rrdp(repository)))
                 }
-                warn!(
-                    "RRDP repository {} unavailable. Falling back to rsync.",
-                    rrdp_uri
-                );
             }
         }
 

@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.11.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rtr-metrics#81e3cd7b78ed3e9ac6f83f236b82b8024e1d5aa9"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#c68e42b494590f1fce6162e57de42c5b0c26e67f"
 dependencies = [
  "base64",
  "bcder",
@@ -1155,6 +1155,7 @@ dependencies = [
  "log",
  "quick-xml",
  "ring",
+ "serde",
  "tokio",
  "tokio-stream",
  "untrusted",
