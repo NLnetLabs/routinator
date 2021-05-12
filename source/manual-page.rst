@@ -331,6 +331,12 @@ The available options are:
       option can be given multiple times in which case proxies are tried in the
       given order.
 
+.. option:: --max-object-size=BYTES
+
+      Limits the size of individual objects received via either rsync or RRDP to
+      the given number of bytes. The default value if this option is not present
+      is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
+
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -995,6 +1001,12 @@ rrdp-proxies
       A list of string each providing the URI for a proxy for outgoing RRDP
       connections. The proxies are tried in order for each request. HTTP and
       SOCKS5 proxies are supported.
+
+max-object-size
+      An integer value that provides a limit for the size of individual objects
+      received via either rsync or RRDP to the given number of bytes. The
+      default value if this option is not present is 20,000,000 (i.e., 20
+      MBytes). A value of 0 disables the limit.
 
 dirty
       A boolean value which, if true, specifies that unused files and
