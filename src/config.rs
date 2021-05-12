@@ -62,6 +62,9 @@ const DEFAULT_UNSAFE_VRPS_POLICY: FilterPolicy = FilterPolicy::Warn;
 /// The default unknown-objects policy.
 const DEFAULT_UNKNOWN_OBJECTS_POLICY: FilterPolicy = FilterPolicy::Warn;
 
+/// The default maximum object size.
+const DEFAULT_MAX_OBJECT_SIZE: u64 = 20_000_000;
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -191,6 +194,9 @@ pub struct Config {
 
     /// Should we keep RRDP responses and if so where?
     pub rrdp_keep_responses: Option<PathBuf>,
+
+    /// Optional size limit for objects.
+    pub max_object_size: Option<u64>,
 
     /// Wether to not cleanup the repository directory after a validation run.
     ///
@@ -390,6 +396,12 @@ impl Config {
             .long("rrdp-keep-responses")
             .value_name("DIR")
             .help("Keep RRDP responses in the given directory")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("max-object-size")
+            .long("max-object-size")
+            .value_name("BYTES")
+            .help("Maximum size of downloaded objects (0 for no limit)")
             .takes_value(true)
         )
         .arg(Arg::with_name("dirty-repository")
@@ -703,6 +715,16 @@ impl Config {
             self.rrdp_keep_responses = Some(path.into())
         }
 
+        // max_object_size
+        if let Some(value) = from_str_value_of(matches, "max-object-size")? {
+            if value == 0 {
+                self.max_object_size = None
+            }
+            else {
+                self.max_object_size = Some(value)
+            }
+        }
+
         // dirty_repository
         if matches.is_present("dirty-repository") {
             self.dirty_repository = true
@@ -999,6 +1021,13 @@ impl Config {
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
+            max_object_size: {
+                match file.take_u64("max-object-size")? {
+                    Some(0) => None,
+                    Some(value) => Some(value),
+                    None => Some(DEFAULT_MAX_OBJECT_SIZE),
+                }
+            },
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1171,6 +1200,7 @@ impl Config {
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
+            max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1341,6 +1371,12 @@ impl Config {
                 format!("{}", path.display()).into()
             );
         }
+        res.insert("max-object-size".into(),
+            match self.max_object_size {
+                Some(value) => value as i64,
+                None => 0,
+            }.into()
+        );
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
             "validation-threads".into(),

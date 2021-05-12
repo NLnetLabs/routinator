@@ -498,15 +498,17 @@ impl RsyncCommand {
         let args = match config.rsync_args {
             Some(ref args) => args.clone(),
             None => {
+                let mut args = Vec::new();
                 let has_contimeout =
                    output.stdout.windows(12)
                    .any(|window| window == b"--contimeout");
                 if has_contimeout {
-                    vec!["--contimeout=10".into()]
+                    args.push("--contimeout=10".into());
                 }
-                else {
-                    vec![]
+                if let Some(max_size) = config.max_object_size {
+                    args.push(format!("--max-size={}", max_size));
                 }
+                args
             }
         };
         Ok(RsyncCommand {

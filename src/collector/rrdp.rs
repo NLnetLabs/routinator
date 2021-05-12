@@ -74,6 +74,9 @@ pub struct Collector {
     /// This is the time since the last known update of an RRDP repository
     /// before it is considered non-existant.
     fallback_time: FallbackTime,
+
+    /// The maximum allowed size for published objects.
+    max_object_size: Option<u64>,
 }
 
 impl Collector {
@@ -90,6 +93,7 @@ impl Collector {
             http: Some(HttpClient::new(config)?),
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
+            max_object_size: config.max_object_size,
         }))
     }
 
@@ -407,7 +411,8 @@ impl<'a> Run<'a> {
         }
         else {
             let mut update = RepositoryUpdate::new(
-                self.collector, http, rpki_notify
+                self.collector, http, rpki_notify,
+                self.collector.max_object_size,
             )?;
             let updated = update.update()?;
             self.metrics.lock().unwrap().push(update.metrics);
@@ -654,6 +659,9 @@ struct RepositoryUpdate<'a> {
 
     /// The update metrics.
     metrics: RrdpRepositoryMetrics,
+
+    /// The object size limit.
+    max_object_size: Option<u64>,
 }
 
 impl<'a> RepositoryUpdate<'a> {
@@ -662,13 +670,15 @@ impl<'a> RepositoryUpdate<'a> {
         collector: &'a Collector,
         http: &'a HttpClient,
         rpki_notify: &'a uri::Https,
+        max_object_size: Option<u64>,
     ) -> Result<Self, Failed> {
         let repository = Repository::new(collector, rpki_notify)?;
         let state = repository.load_state()?;
 
         Ok(RepositoryUpdate {
             collector, repository, http, rpki_notify, state,
-            metrics: RrdpRepositoryMetrics::new(rpki_notify.clone())
+            metrics: RrdpRepositoryMetrics::new(rpki_notify.clone()),
+            max_object_size,
         })
     }
 
@@ -771,7 +781,9 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(err.into())
             }
         };
-        let mut processor = SnapshotProcessor::new(&notify.content);
+        let mut processor = SnapshotProcessor::new(
+            &notify.content, self.max_object_size
+        );
         let mut reader = io::BufReader::new(HashRead::new(response));
         processor.process(&mut reader)?;
         let hash = reader.into_inner().into_hash();
@@ -971,7 +983,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         };
         let mut processor = DeltaProcessor::new(
-            notify.content.session_id, serial, tree
+            notify.content.session_id, serial, tree, self.max_object_size,
         );
         let mut reader = io::BufReader::new(HashRead::new(response));
 
@@ -1437,16 +1449,21 @@ struct SnapshotProcessor<'a> {
 
     /// The batch to add all objects to.
     batch: sled::Batch,
+
+    /// The object size limit.
+    max_object_size: Option<u64>,
 }
 
 impl<'a> SnapshotProcessor<'a> {
     /// Creates a new processor.
     fn new(
         notify: &'a NotificationFile,
+        max_object_size: Option<u64>,
     ) -> Self {
         SnapshotProcessor {
             notify,
-            batch: sled::Batch::default()
+            batch: sled::Batch::default(),
+            max_object_size,
         }
     }
 }
@@ -1479,7 +1496,9 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
         uri: uri::Rsync,
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
-        let data = RepositoryObject::read_into_ivec(data)?;
+        let data = RepositoryObject::read_into_ivec(
+            data, self.max_object_size
+        )?;
         self.batch.insert(uri.as_str(), data);
         Ok(())
     }
@@ -1501,6 +1520,9 @@ struct DeltaProcessor<'a> {
 
     /// The batch to add all updates to.
     batch: sled::Batch,
+
+    /// The object size limit.
+    max_object_size: Option<u64>,
 }
 
 impl<'a> DeltaProcessor<'a> {
@@ -1509,10 +1531,12 @@ impl<'a> DeltaProcessor<'a> {
         session_id: Uuid,
         serial: u64,
         tree: &'a sled::Tree,
+        max_object_size: Option<u64>,
     ) -> Self {
         DeltaProcessor {
             session_id, serial, tree,
             batch: sled::Batch::default(),
+            max_object_size,
         }
     }
 
@@ -1586,7 +1610,9 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
             Some(hash) => self.check_hash(&uri, hash)?,
             None => self.check_new(&uri)?
         }
-        let data = RepositoryObject::read_into_ivec(data)?;
+        let data = RepositoryObject::read_into_ivec(
+            data, self.max_object_size
+        )?;
         self.batch.insert(uri.as_slice(), data);
         Ok(())
     }
@@ -1806,9 +1832,10 @@ struct RepositoryObject<Octets> {
 impl RepositoryObject<()> {
     /// Reads an object’s content directly into a database vec.
     pub fn read_into_ivec(
-        reader: &mut impl io::Read
+        reader: &mut impl io::Read,
+        max_size: Option<u64>,
     ) -> Result<IVec, io::Error> {
-        let mut reader = HashRead::new(reader);
+        let mut reader = HashRead::new(MaxSizeRead::new(reader, max_size));
         let mut res = vec![0; mem::size_of::<rrdp::Hash>() + 1];
         io::copy(&mut reader, &mut res)?;
         let hash = reader.into_hash();
@@ -1952,6 +1979,58 @@ impl<R: io::Read> io::Read for HashRead<R> {
         let res = self.reader.read(buf)?;
         self.context.update(&buf[..res]);
         Ok(res)
+    }
+}
+
+
+//------------ MaxSizeRead ---------------------------------------------------
+
+/// A reader that reads until a certain limit is exceeded.
+struct MaxSizeRead<R> {
+    /// The wrapped reader.
+    reader: R,
+
+    /// The number of bytes left to read.
+    ///
+    /// If this is `None` we are allowed to read an unlimited amount.
+    left: Option<u64>,
+}
+
+impl<R> MaxSizeRead<R> {
+    fn new(reader: R, max_size: Option<u64>) -> Self {
+        MaxSizeRead { reader, left: max_size }
+    }
+}
+
+impl<R: io::Read> io::Read for MaxSizeRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        let res = self.reader.read(buf)?;
+        if let Some(left) = self.left {
+            let res64 = match u64::try_from(res) {
+                Ok(res) => res,
+                Err(_) => {
+                    // If the usize doesn’t fit into a u64, things are
+                    // definitely way too big.
+                    self.left = Some(0);
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other, "size limit exceeded"
+                    ))
+                }
+            };
+            if res64 > left {
+                self.left = Some(0);
+                Err(io::Error::new(
+                    io::ErrorKind::Other, "size limit exceeded")
+                )
+            }
+            else {
+                self.left = Some(left - res64);
+                Ok(res)
+            }
+        }
+        else {
+            Ok(res)
+        }
     }
 }
 
@@ -2288,7 +2367,7 @@ mod test {
             "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2";
         let digest = DigestAlgorithm::sha256().digest(data);
         let encoded = RepositoryObject::read_into_ivec(
-            &mut data.clone()
+            &mut data.clone(), None,
         ).unwrap();
 
         let hash = RepositoryObject::decode_hash(
