@@ -3,14 +3,14 @@
 Manual Page
 ===========
 
-:command:`routinator` - RPKI relying party software
-
-:Date:       YYYY-MM-DD
-:Author:     Martin Hoffmann
-:Copyright:  2019-2021 - NLnet Labs
-:Version:    0.9.0-dev
-
 .. only:: html
+
+    :command:`routinator` - RPKI relying party software
+
+    :Date:       YYYY-MM-DD
+    :Author:     Martin Hoffmann
+    :Copyright:  2019-2021 - NLnet Labs
+    :Version:    0.9.0-dev
 
     Synopsis
     --------
@@ -82,6 +82,27 @@ Manual Page
       <p><strong class="command">routinator</strong> <a class="reference internal"
       href="#cmdoption-version"><code class="xref std std-option docutils literal
       notranslate"><span class="pre">-V</span></code></a></p>
+
+.. only:: man
+
+      Synopsis
+      --------
+
+      :command:`routinator` [options] ``init`` [``init-options``]
+
+      :command:`routinator` [options] ``vrps`` [``vrps-options``] [:option:`-o` ``output-file``] [:option:`-f` ``format``]
+
+      :command:`routinator` [options] ``validate`` [validate-options] [:option:`-a` ``asn``] [:option:`-p` ``prefix``]
+
+      :command:`routinator` [options] ``server`` [server-options]
+
+      :command:`routinator` [options] ``update`` [update-options]
+
+      :command:`routinator` man [:option:`-o` ``file``]
+
+      :command:`routinator` :option:`-h`
+
+      :command:`routinator` :option:`-V`
 
 Description
 -----------
