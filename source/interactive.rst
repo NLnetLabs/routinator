@@ -276,11 +276,11 @@ output should be written.
 Three directories will be created in the output directory:
 
 rrdp
-    This directory contains all the files collected via RRDP from the various 
+    This directory contains all the files collected via RRDP from the various
     repositories. Each repository is stored in its own directory. The mapping
-    between rpkiNotify URI and path is provided in the *repositories.json*
-    file. For each repository, the files are stored in a directory structure
-    based on the components of the file as rsync URI.
+    between ``rpkiNotify`` URI and path is provided in the
+    :file:`repositories.json` file. For each repository, the files are stored in
+    a directory structure based on the components of the file as rsync URI.
 
 rsync
     This directory contains all the files collected via rsync. The files are
@@ -288,9 +288,8 @@ rsync
     URI.
 
 store
-    This directory contains all the files used for validation. Files collected 
-    via  RRDP  or rsync are copied to the store if they are correctly referenced
+    This directory contains all the files used for validation. Files collected
+    via RRDP or rsync are copied to the store if they are correctly referenced
     by a valid manifest. This part contains one directory for each RRDP
-    repository similarly structured to the *rrdp* directory and one additional
-    directory *rsync* that contains files collected via rsync.
-
+    repository similarly structured to the :file:`rrdp` directory and one
+    additional directory :file:`rsync` that contains files collected via rsync.
