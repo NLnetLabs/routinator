@@ -74,21 +74,16 @@ impl Collector {
 
     /// Creates a new collector.
     ///
-    /// Takes all necessary information from `config`. If `update` is `false`,
-    /// the collector will not be updated from upstream and only data that has
-    /// been collected previously will be used. This differs from disabling
-    /// transports as it will still use whatever is present on disk as
-    /// potentially updated data.
+    /// Takes all necessary information from `config`.
     pub fn new(
         config: &Config,
         db: &sled::Db,
-        update: bool
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
             cache_dir: config.cache_dir.clone(),
-            rrdp: rrdp::Collector::new(config, db, update)?,
-            rsync: rsync::Collector::new(config, update)?,
+            rrdp: rrdp::Collector::new(config, db)?,
+            rsync: rsync::Collector::new(config)?,
         })
     }
 

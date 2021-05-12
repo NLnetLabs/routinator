@@ -124,7 +124,7 @@ impl Store {
     /// started.
     pub fn cleanup(
         &self,
-        mut collector: collector::Cleanup,
+        mut collector: Option<collector::Cleanup>,
     ) -> Result<(), Failed> {
         // Cleanup RRDP repositories
         for name in self.db.tree_names() {
@@ -144,7 +144,9 @@ impl Store {
                 };
 
                 if Repository::new(self, &names, true)?.cleanup_rrdp()? {
-                    collector.retain_rrdp_repository(&uri);
+                    if let Some(collector) = collector.as_mut() {
+                        collector.retain_rrdp_repository(&uri);
+                    }
                 }
                 else {
                     names.drop_trees(&self.db)?;
@@ -158,7 +160,11 @@ impl Store {
         )?.cleanup_rsync(&mut collector)?;
 
         // Cleanup collector.
-        collector.commit()
+        if let Some(collector) = collector {
+            collector.commit()?;
+        }
+
+        Ok(())
     }
 
     /// Dumps the content of the store.
@@ -686,7 +692,7 @@ impl Repository {
     /// Registers all rsync modules that have at least one non-expired
     /// manifest to be retained by the collector.
     fn cleanup_rsync(
-        self, collector: &mut collector::Cleanup
+        self, collector: &mut Option<collector::Cleanup>
     ) -> Result<(), Failed> {
         let now = Time::now();
 
@@ -702,7 +708,9 @@ impl Repository {
                 Err(_) => None
             };
             if let Some(uri) = uri {
-                collector.retain_rsync_module(&uri);
+                if let Some(collector) = collector.as_mut() {
+                    collector.retain_rsync_module(&uri);
+                }
             }
             else {
                 self._retain_objects(&key, |_| false)?;

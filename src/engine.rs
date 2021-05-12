@@ -97,7 +97,9 @@ pub struct Engine {
     db: sled::Db,
 
     /// The collector to load updated data from.
-    collector: Collector,
+    ///
+    /// If this is `None`, updates have been disabled.
+    collector: Option<Collector>,
 
     /// The store to load stored data from.
     store: Store,
@@ -190,7 +192,12 @@ impl Engine {
         update: bool,
     ) -> Result<Self, Failed> {
         let db = Self::open_db(&config.cache_dir, config.fresh)?;
-        let collector = Collector::new(config, &db, update)?;
+        let collector = if update {
+            Some(Collector::new(config, &db)?)
+        }
+        else {
+            None
+        };
         let store = Store::new(db.clone());
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
@@ -316,7 +323,10 @@ impl Engine {
     /// This spawns threads and therefore needs to be done after a
     /// possible fork.
     pub fn ignite(&mut self) -> Result<(), Failed> {
-        self.collector.ignite()
+        if let Some(collector) = self.collector.as_mut() {
+            collector.ignite()?;
+        }
+        Ok(())
     }
 
     /// Starts a validation run.
@@ -329,7 +339,10 @@ impl Engine {
         &self, processor: P
     ) -> Result<Run<P>, Failed> {
         Ok(Run::new(
-            self, self.collector.start(), self.store.start(), processor
+            self,
+            self.collector.as_ref().map(Collector::start),
+            self.store.start(),
+            processor
         ))
     }
 
@@ -349,7 +362,9 @@ impl Engine {
     /// Cleans the collector and store owned by the engine.
     pub fn cleanup(&self) -> Result<(), Failed> {
         if !self.dirty_repository {
-            self.store.cleanup(self.collector.cleanup())?;
+            self.store.cleanup(
+                self.collector.as_ref().map(Collector::cleanup)
+            )?;
         }
         Ok(())
     }
@@ -357,7 +372,9 @@ impl Engine {
     /// Dumps the content of the collector and store owned by the engine.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         self.store.dump(dir)?;
-        self.collector.dump(dir)?;
+        if let Some(collector) = self.collector.as_ref() {
+            collector.dump(dir)?;
+        }
         Ok(())
     }
 }
@@ -376,7 +393,7 @@ pub struct Run<'a, P> {
     validation: &'a Engine,
 
     /// The runner for the collector.
-    collector: collector::Run<'a>,
+    collector: Option<collector::Run<'a>>,
 
     /// The runner for the store.
     store: store::Run<'a>,
@@ -392,7 +409,7 @@ impl<'a, P> Run<'a, P> {
     /// Creates a new runner from all the parts.
     fn new(
         validation: &'a Engine,
-        collector: collector::Run<'a>,
+        collector: Option<collector::Run<'a>>,
         store: store::Run<'a>,
         processor: P,
     ) -> Self {
@@ -408,7 +425,9 @@ impl<'a, P> Run<'a, P> {
     /// value, instead.
     pub fn done(self) -> Metrics {
         let mut metrics = self.metrics;
-        self.collector.done(&mut metrics);
+        if let Some(collector) = self.collector {
+            collector.done(&mut metrics)
+        }
         self.store.done(&mut metrics);
         metrics
     }
@@ -559,10 +578,12 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         _info: &TalInfo,
     ) -> Result<Option<Cert>, Failed> {
         // Get the new version, store and return it if it decodes.
-        if let Some(bytes) = self.collector.load_ta(uri) {
-            if let Ok(cert) = Cert::decode(bytes.clone()) {
-                self.store.update_ta(uri, &bytes)?;
-                return Ok(Some(cert))
+        if let Some(collector) = self.collector.as_ref() {
+            if let Some(bytes) = collector.load_ta(uri) {
+                if let Ok(cert) = Cert::decode(bytes.clone()) {
+                    self.store.update_ta(uri, &bytes)?;
+                    return Ok(Some(cert))
+                }
             }
         }
 
@@ -638,7 +659,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         processor: P::PubPoint,
         repository_index: Option<usize>,
     ) -> Result<Self, Failed> {
-        let collector = run.collector.repository(cert)?;
+        let collector = if let Some(collector) = run.collector.as_ref() {
+            collector.repository(cert)?
+        }
+        else {
+            None
+        };
         let store = run.store.repository(cert)?;
         Ok(PubPoint {
             run, cert, processor, collector, store,
@@ -1337,7 +1363,10 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
-        let defer = !self.point.run.collector.was_updated(&cert);
+        let defer = match self.point.run.collector.as_ref() {
+            Some(collector) => !collector.was_updated(&cert),
+            None => false,
+        };
 
         // If we switch repositories, we need to apply our metrics.
         let repository_index = if cert.repository_switch() {

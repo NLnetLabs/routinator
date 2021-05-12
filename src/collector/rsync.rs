@@ -89,10 +89,7 @@ impl Collector {
     /// Creates a new rsync collector.
     ///
     /// If use of rsync is disabled via the config, returns `Ok(None)`.
-    ///
-    /// The collector will not actually run rsync but use whatever files are
-    /// present already in the working directory if `update` is `false`.
-    pub fn new(config: &Config, update: bool) -> Result<Option<Self>, Failed> {
+    pub fn new(config: &Config) -> Result<Option<Self>, Failed> {
         if config.disable_rsync {
             Ok(None)
         }
@@ -101,10 +98,7 @@ impl Collector {
                 working_dir: WorkingDir::new(
                     Self::create_working_dir(config)?
                 ),
-                command: if update {
-                    Some(RsyncCommand::new(config)?)
-                }
-                else { None },
+                command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts
             }))
         }

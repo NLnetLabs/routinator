@@ -79,7 +79,7 @@ pub struct Collector {
 impl Collector {
     /// Creates a new RRDP collector.
     pub fn new(
-        config: &Config, db: &sled::Db, update: bool
+        config: &Config, db: &sled::Db,
     ) -> Result<Option<Self>, Failed> {
         if config.disable_rrdp {
             return Ok(None)
@@ -87,12 +87,7 @@ impl Collector {
 
         Ok(Some(Collector {
             db: db.clone(),
-            http: if update {
-                Some(HttpClient::new(config)?)
-            }
-            else {
-                None
-            },
+            http: Some(HttpClient::new(config)?),
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
         }))
