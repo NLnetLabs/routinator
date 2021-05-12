@@ -39,6 +39,25 @@ For rsync, the timeout is around the spawned rsync process. The default is five
 minutes for both and can be changed via the :option:`--rsync-timeout` and
 :option:`--rrdp-timeout` options.
 
+Validating
+----------
+
+The validation process determines if all certificates, ROAs and other files that
+may appear in the RPKI have the correct hash, no objects have expired and the
+entire data set is complete. During this process, Routinator may also encounter
+objects that are *stale*. 
+
+In RPKI, manifests and CRLs can be stale if the time given in their
+``next-update`` field is in the past, indicating that an update to the object
+was scheduled but didn't happen. This can be because of an operational issue at
+the issuer or an attacker trying to replay old objects. 
+
+Ongoing standards efforts and operational experiences suggest that stale objects
+should be rejected, which is the default policy set by the :option:`--stale`
+option since Routinator 0.8.0. As a result, all material published by the CA
+issuing this manifest and CRL is considered invalid, including all material of
+any child CA.
+
 Storing
 -------
 
