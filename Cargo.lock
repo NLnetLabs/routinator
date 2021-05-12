@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.11.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=deserialize-asid#9dae0c7abccd5af087a3f698f4d63411c4b00229"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#c68e42b494590f1fce6162e57de42c5b0c26e67f"
 dependencies = [
  "base64",
  "bcder",

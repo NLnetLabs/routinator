@@ -418,27 +418,20 @@ impl<'a> Run<'a> {
 
     /// Accesses the repository for the provided PRKI CA.
     ///
-    /// Normally, if the CA’s rpkiNotify URI is present, the RRDP repository
-    /// identified by that URI will be returned, otherwise the rsync
-    /// repository will be used.
+    /// If the CA’s rpkiNotify URI is present, the RRDP repository identified
+    /// by that URI will be returned, otherwise the rsync repository will be
+    /// used.
     ///
-    /// However, if the repository needs to reflect the repository that was
-    /// previously updated via the collector and the collector had to fall
-    /// back from RRDP to rsync, the rsync repository is used even if the
-    /// rpkiNotify URI is present. This is so that data from the two transport
-    /// methods is kept strictly separate to avoid potential poisoning.
-    ///
-    /// Therefore, if `collector` is not `None`, the provided collector
-    /// repository’s chosen transport will be used to determine whether RRDP
-    /// is used if available or not.
-    pub fn repository(
-        &self, ca_cert: &CaCert, collector: Option<&collector::Repository>
-    ) -> Result<Repository, Failed> {
-        match (ca_cert.rpki_notify(), collector.map(|c| c.is_rrdp())) {
-            (Some(rpki_notify), Some(true)) | (Some(rpki_notify), None) => {
-                self.rrdp_repository(rpki_notify)
-            }
-            _ => self.rsync_repository()
+    /// Note that we even use the RRDP repository if the collector had to fall
+    /// back to using rsync. Because rsync is ‘authoritative’ for the object
+    /// URIs, it is safe to use objects received via rsync in RRDP
+    /// repositories.
+    pub fn repository(&self, ca_cert: &CaCert) -> Result<Repository, Failed> {
+        if let Some(rpki_notify) = ca_cert.rpki_notify() {
+            self.rrdp_repository(rpki_notify)
+        }
+        else {
+            self.rsync_repository()
         }
     }
 

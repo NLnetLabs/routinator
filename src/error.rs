@@ -61,6 +61,7 @@ pub enum ExitError {
 
 impl From<Failed> for ExitError {
     fn from(_: Failed) -> ExitError {
+        error!("Fatal error. Exiting.");
         ExitError::Generic
     }
 }

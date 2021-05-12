@@ -6,7 +6,7 @@ use std::{fs, io};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use log::{error, warn};
+use log::error;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::Config;
@@ -204,8 +204,7 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If the repository is definitely unavailable, logs diagnositic
-    /// information and returns `None`.
+    /// If the repository is definitely unavailable,  returns `Ok(None)`.
     pub fn repository<'s>(
         &'s self, ca: &'s CaCert
     ) -> Result<Option<Repository<'s>>, Failed> {
@@ -215,10 +214,6 @@ impl<'a> Run<'a> {
                 if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
                     return Ok(Some(Repository::rrdp(repository)))
                 }
-                warn!(
-                    "RRDP repository {} unavailable. Falling back to rsync.",
-                    rrdp_uri
-                );
             }
         }
 

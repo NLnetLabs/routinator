@@ -34,7 +34,7 @@ use crate::{output, tals, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
-use crate::metrics::ServerMetrics;
+use crate::metrics::{SharedRtrServerMetrics};
 use crate::output::OutputFormat;
 use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
 use crate::process::Process;
@@ -414,7 +414,9 @@ impl Init {
         name: &str,
         content: &str,
     ) -> Result<(), Failed> {
-        let mut file = match fs::File::create(tal_dir.join(name)) {
+        let mut file = match fs::File::create(tal_dir.join(
+            format!("{}.tal", name)
+        )) {
             Ok(file) => file,
             Err(err) => {
                 error!(
@@ -507,14 +509,16 @@ impl Server {
         )?;
         process.setup_service(self.detach)?;
         let log = log.map(Arc::new);
-        let metrics = Arc::new(ServerMetrics::default());
+        let rtr_metrics = SharedRtrServerMetrics::new(
+            process.config().rtr_client_metrics
+        );
 
         let history = SharedHistory::from_config(process.config());
         let (mut notify, rtr) = rtr_listener(
-            history.clone(), metrics.clone(), process.config()
+            history.clone(), rtr_metrics.clone(), process.config()
         )?;
         let http = http_listener(
-            history.clone(), metrics, log, process.config()
+            history.clone(), rtr_metrics, log.clone(), process.config()
         )?;
 
         process.drop_privileges()?;
@@ -530,8 +534,11 @@ impl Server {
 
         let join = thread::spawn(move || {
             loop {
+                if let Some(log) = log.as_ref() {
+                    log.start();
+                }
                 let timeout = match LocalExceptions::load(
-                    process.config(), false
+                    process.config(), true
                 ) {
                     Ok(exceptions) => {
                         if Self::process_once(
@@ -549,6 +556,9 @@ impl Server {
                         Duration::from_secs(10)
                     }
                 };
+                if let Some(log) = log.as_ref() {
+                    log.flush();
+                }
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
                         match validation.reload_tals() {
@@ -640,7 +650,7 @@ pub struct Vrps {
     format: OutputFormat,
 
     /// Optional output filters.
-    filters: Option<Vec<output::Filter>>,
+    selection: Option<output::Selection>,
 
     /// Don’t update the repository.
     noupdate: bool,
@@ -666,7 +676,6 @@ impl Vrps {
                 .short("f")
                 .long("format")
                 .value_name("FORMAT")
-                .possible_values(OutputFormat::VALUES)
                 .default_value(OutputFormat::DEFAULT_VALUE)
                 .help("Sets the output format")
                 .takes_value(true)
@@ -680,17 +689,19 @@ impl Vrps {
                 .long("complete")
                 .help("Return an error status on incomplete update")
             )
-            .arg(Arg::with_name("filter-prefix")
+            .arg(Arg::with_name("select-prefix")
                 .short("p")
-                .long("filter-prefix")
+                .long("select-prefix")
+                .alias("filter-prefix")
                 .help("Filter for an address prefix")
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1)
             )
-            .arg(Arg::with_name("filter-asn")
+            .arg(Arg::with_name("select-asn")
                 .short("a")
-                .long("filter-asn")
+                .long("select-asn")
+                .alias("filter-asn")
                 .help("Filter for an AS number")
                 .takes_value(true)
                 .multiple(true)
@@ -703,32 +714,45 @@ impl Vrps {
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
+        let format = matches.value_of("format").unwrap_or(
+            OutputFormat::DEFAULT_VALUE
+        );
+        let format = match OutputFormat::from_str(format) {
+            Ok(format) => format,
+            Err(_) => {
+                error!("Unknown output format '{}'", format);
+                return Err(Failed)
+            }
+        };
         Ok(Vrps {
-            filters: Self::output_filters(matches)?,
+            selection: Self::output_selection(matches)?,
             output: match matches.value_of("output").unwrap() {
                 "-" => None,
                 path => Some(path.into())
             },
-            format: OutputFormat::from_str(
-                matches.value_of("format").unwrap()
-            )?,
+            format,
             noupdate: matches.is_present("noupdate"),
             complete: matches.is_present("complete"),
         })
     }
 
-    /// Creates the filters for the vrps command.
-    fn output_filters(
+    /// Creates the selection for the vrps command.
+    fn output_selection(
         matches: &ArgMatches
-    ) -> Result<Option<Vec<output::Filter>>, Failed> {
-        let mut res = Vec::new();
-        if let Some(list) = matches.values_of("filter-prefix") {
+    ) -> Result<Option<output::Selection>, Failed> {
+        if !matches.is_present("select-prefix")
+            && !matches.is_present("select-asn")
+        {
+            return Ok(None)
+        }
+        let mut res = output::Selection::new();
+        if let Some(list) = matches.values_of("select-prefix") {
             for value in list {
                 match AddressPrefix::from_str(value) {
-                    Ok(some) => res.push(output::Filter::Prefix(some)),
+                    Ok(some) => res.push_origin_prefix(some),
                     Err(_) => {
                         error!(
-                            "Invalid prefix \"{}\" in --filter-prefix",
+                            "Invalid prefix \"{}\" in --select-prefix",
                             value
                         );
                         return Err(Failed)
@@ -736,27 +760,21 @@ impl Vrps {
                 }
             }
         }
-        if let Some(list) = matches.values_of("filter-asn") {
+        if let Some(list) = matches.values_of("select-asn") {
             for value in list {
-                let asn = match AsId::from_str(value) {
-                    Ok(asn) => asn,
+                match AsId::from_str(value) {
+                    Ok(asn) => res.push_origin_asn(asn),
                     Err(_) => {
                         error!(
-                            "Invalid ASN \"{}\" in --filter-asn",
+                            "Invalid ASN \"{}\" in --select-asn",
                             value
                         );
                         return Err(Failed)
                     }
-                };
-                res.push(output::Filter::As(asn))
+                }
             }
         }
-        if res.is_empty() {
-            Ok(None)
-        }
-        else {
-            Ok(Some(res))
-        }
+        Ok(Some(res))
     }
 
     /// Produces a list of Validated ROA Payload.
@@ -779,7 +797,6 @@ impl Vrps {
             process.config().unsafe_vrps,
         );
         validation.cleanup()?;
-        let filters = self.filters.as_ref().map(AsRef::as_ref);
         let res = match self.output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -792,12 +809,15 @@ impl Vrps {
                         return Err(Failed.into())
                     }
                 };
-                self.format.output(&vrps, filters, &metrics, &mut file)
+                self.format.output_snapshot(
+                    &vrps, self.selection.as_ref(), &metrics, &mut file)
             }
             None => {
                 let out = io::stdout();
                 let mut out = out.lock();
-                self.format.output(&vrps, filters, &metrics, &mut out)
+                self.format.output_snapshot(
+                    &vrps, self.selection.as_ref(), &metrics, &mut out
+                )
             }
         };
         if let Err(err) = res {

@@ -11,18 +11,19 @@ use futures::pin_mut;
 use futures::future::{pending, select_all};
 use tokio_stream::Stream;
 use log::error;
-use rpki::rtr::server::{NotifySender, Server};
+use rpki::rtr::server::{NotifySender, Server, Socket};
+use rpki::rtr::state::State;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use crate::config::Config;
 use crate::error::ExitError;
-use crate::metrics::ServerMetrics;
+use crate::metrics::{SharedRtrServerMetrics, RtrClientMetrics};
 use crate::payload::SharedHistory;
 
 
 pub fn rtr_listener(
     history: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    metrics: SharedRtrServerMetrics,
     config: &Config
 ) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
     let sender = NotifySender::new();
@@ -51,7 +52,7 @@ pub fn rtr_listener(
 
 async fn _rtr_listener(
     origins: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    metrics: SharedRtrServerMetrics,
     sender: NotifySender,
     listeners: Vec<StdListener>,
     keepalive: Option<Duration>,
@@ -74,7 +75,7 @@ async fn _rtr_listener(
 async fn single_rtr_listener(
     listener: StdListener,
     origins: SharedHistory,
-    metrics: Arc<ServerMetrics>,
+    metrics: SharedRtrServerMetrics,
     sender: NotifySender,
     _keepalive: Option<Duration>,
 ) {
@@ -97,7 +98,7 @@ async fn single_rtr_listener(
 
 struct RtrListener {
     sock: TcpListener,
-    metrics: Arc<ServerMetrics>,
+    metrics: SharedRtrServerMetrics,
 
     // XXX Regression in Tokio 1.0: no more setting keepalive times.
     //keepalive: Option<Duration>,
@@ -114,12 +115,16 @@ impl Stream for RtrListener {
 
         match sock.poll_accept(cx) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(Ok((sock, _addr))) => {
-                self.metrics.inc_http_conn_open();
-                Poll::Ready(Some(Ok(RtrStream {
-                    sock,
-                    metrics: self.metrics.clone()
-                })))
+            Poll::Ready(Ok((sock, addr))) => {
+                let metrics = Arc::new(RtrClientMetrics::new(addr.ip()));
+
+                let server_metrics = self.metrics.clone();
+                let client_metrics = metrics.clone();
+                tokio::spawn(async move {
+                    server_metrics.add_client(client_metrics).await
+                });
+
+                Poll::Ready(Some(Ok(RtrStream { sock, metrics })))
             }
             Poll::Ready(Err(err)) => {
                 Poll::Ready(Some(Err(err)))
@@ -130,7 +135,13 @@ impl Stream for RtrListener {
 
 struct RtrStream {
     sock: TcpStream,
-    metrics: Arc<ServerMetrics>,
+    metrics: Arc<RtrClientMetrics>,
+}
+
+impl Socket for RtrStream {
+    fn update(&self, state: State, _reset: bool) {
+        self.metrics.update_now(state.serial());
+    }
 }
 
 impl AsyncRead for RtrStream {
@@ -142,7 +153,7 @@ impl AsyncRead for RtrStream {
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
         if let Poll::Ready(Ok(())) = res {
-            self.metrics.inc_rtr_bytes_read(
+            self.metrics.inc_bytes_read(
                 (buf.filled().len().saturating_sub(len)) as u64
             )    
         }
@@ -158,7 +169,7 @@ impl AsyncWrite for RtrStream {
         pin_mut!(sock);
         let res = sock.poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_rtr_bytes_written(n as u64)
+            self.metrics.inc_bytes_written(n as u64)
         }
         res
     }
@@ -182,7 +193,7 @@ impl AsyncWrite for RtrStream {
 
 impl Drop for RtrStream {
     fn drop(&mut self) {
-        self.metrics.inc_rtr_conn_close()
+        self.metrics.close()
     }
 }
 
