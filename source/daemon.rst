@@ -105,10 +105,16 @@ The service supports GET requests with the following paths:
 The RTR Service
 ---------------
 
-Routinator supports RPKI-RTR as specified in :RFC:`8210` as well as the older
-version described in :RFC:`6810`. When launched as an RTR server, routers with
-support for route origin validation (ROV) can connect to Routinator to fetch the
-processed data. 
+Routinator has a built-in server for the RPKI-to-Router (RTR) protocol. It
+supports :RFC:`8210` as well as the older version described in :RFC:`6810`. When
+launched as an RTR server, routers with support for route origin validation
+(ROV) can connect to Routinator to fetch the processed data. 
+
+.. Tip:: If you would like to run the RTR server as a separate daemon, for
+         example because you want to centralise validation and distribute
+         processed data to various locations where routers can connect, then
+         NLnet Labs provides `RTRTR
+         <https://www.nlnetlabs.nl/projects/rpki/rtrtr/>`_.
 
 Like the HTTP server, the RTR server is not started by default, nor does it have
 a default host or port. Thus, in order to start the RTR server at 192.0.2.13 and
