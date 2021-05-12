@@ -361,11 +361,7 @@ impl Engine {
 
     /// Cleans the collector and store owned by the engine.
     pub fn cleanup(&self) -> Result<(), Failed> {
-        self.store.cleanup(
-            self.collector.as_ref().map(|collector| {
-                collector.cleanup()
-            })
-        )
+        self.store.cleanup(self.collector.as_ref().map(Collector::cleanup))
     }
 
     /// Dumps the content of the collector and store owned by the engine.
