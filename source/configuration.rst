@@ -128,7 +128,8 @@ issue.
 
 You can do this by specifying route origins that should be filtered out of the
 output, as well as origins that should be added, in a file using JSON notation
-according to the SLURM standard specified in :RFC:`8416`.
+according to the :abbr:`SLURM (Simplified Local Internet Number Resource
+Management with the RPKI)` standard specified in :RFC:`8416`.
 
 A full example file is provided below. This, along with an empty one is
 available in the repository at `/test/slurm

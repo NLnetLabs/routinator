@@ -16,22 +16,25 @@ Routinator – *main* branch
     .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
                 :target: https://twitter.com/routinator3000/
 
-Routinator 3000 is free, open source RPKI Relying Party software written by
-`NLnet Labs <https://nlnetlabs.nl>`_ in the Rust programming language. The
-application is designed to be secure and have great portability. It is a
-lightweight implementation that can run effortlessly on minimalist hardware. 
+Routinator 3000 is free, open source :abbr:`RPKI (Resource Public Key
+Infrastructure)` Relying Party software written by `NLnet Labs
+<https://nlnetlabs.nl>`_ in the Rust programming language. The application is
+designed to be secure and have great portability. It is a lightweight
+implementation that can run effortlessly on minimalist hardware. 
 
 Routinator connects to the Trust Anchors of the five Regional Internet
 Registries (RIRs) — APNIC, AFRINIC, ARIN, LACNIC and RIPE NCC — downloads all of
-the certificates and ROAs in the various repositories, verifies the signatures
-and makes the result available for use in your BGP workflow. 
+the certificates and :abbr:`ROAs (Route Origin Attestations)` in the various
+repositories, verifies the signatures and makes the result available for use in
+your BGP workflow. 
 
 It is a full featured software package that can perform RPKI validation as a
 one-time operation and store the result on disk in formats such as CSV and JSON,
 or run as a service that periodically downloads and verifies RPKI data. Routers
-can connect to Routinator to fetch verified data via the RPKI-RTR protocol. The
-built-in HTTP server offers a user interface and endpoints for the various file
-formats, as well as logging, status and Prometheus monitoring. 
+can connect to Routinator to fetch verified data via the :abbr:`RPKI-RTR
+(RPKI-to-Router)` protocol. The built-in HTTP server offers a user interface and
+endpoints for the various file formats, as well as logging, status and
+Prometheus monitoring. 
 
 If you run into a problem with Routinator or you have a feature request, please
 `create an issue on Github <https://github.com/NLnetLabs/routinator/issues>`_.

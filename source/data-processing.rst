@@ -43,14 +43,14 @@ Validating
 ----------
 
 The validation process determines if all certificates, ROAs and other files that
-may appear in the RPKI have the correct hash, no objects have expired and the
-entire data set is complete. During this process, Routinator may also encounter
-objects that are *stale*. 
+may appear in the RPKI have the correct signatures. It will also verify if hash
+correct, no objects have expired and the entire data set is complete. During
+this process, Routinator may encounter objects that are *stale*. 
 
-In RPKI, manifests and CRLs can be stale if the time given in their
-``next-update`` field is in the past, indicating that an update to the object
-was scheduled but didn't happen. This can be because of an operational issue at
-the issuer or an attacker trying to replay old objects. 
+In RPKI, manifests and :abbr:`CRLs (Certificate Revocation Lists)` can be stale
+if the time given in their ``next-update`` field is in the past, indicating that
+an update to the object was scheduled but didn't happen. This can be because of
+an operational issue at the issuer or an attacker trying to replay old objects. 
 
 Ongoing standards efforts and operational experiences suggest that stale objects
 should be rejected, which is the default policy set by the :option:`--stale`
