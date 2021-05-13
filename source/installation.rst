@@ -112,9 +112,10 @@ When choosing a system to run Routinator on, make sure you have 1GB of
 available memory and 1GB of disk space. This will give you ample margin for
 the RPKI repositories to grow over time, as adoption increases.
 
-As new RPKI repositories can emerge in any address range and on any domain name,
-outbound access must not be blocked in any way. Routinator only needs outbound
-ports for HTTPS and rsync to be open, on ports 443 and 873 respectively. 
+As new RPKI repositories can emerge in any IP address range and on any domain
+name, outbound access must not be blocked in any way. Routinator only needs to
+establish outbound connections via HTTPS and rsync, on ports 443 and 873,
+respectively. 
 
 Installing From Source
 ----------------------
