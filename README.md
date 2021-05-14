@@ -143,9 +143,12 @@ Route Origin Validation or can output it in a number of useful formats.
 Routinator is designed to be lean and is capable of running on minimalist
 hardware, such as a Raspberry Pi. Running it on a system with 1GB of
 available RAM and 1GB of available disk space will give the global RPKI
-data set enough room to grow for the foreseeable future. A powerful CPU is
-not required, as cryptographic validation currently takes less than two
-seconds on an average system.
+data set enough room to grow for the foreseeable future. 
+
+As new RPKI repositories can emerge in any IP address range and on any domain
+name, outbound traffic must not be blocked based on IP or DNS in any way.
+Routinator only needs to establish outbound connections via HTTPS and rsync, on
+ports 443 and 873, respectively. 
 
 ## Getting Started
 
