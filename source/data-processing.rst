@@ -55,7 +55,8 @@ by default, but this can be changed with the :option:`--unknown-objects` option.
 
 Note that even if unknown objects are accepted, they must appear in the manifest
 and the hash over their content must match the one given in the manifest. If the
-hash does not match, the CA and all its objects are still rejected.
+hash does not match, the Certificate Authority (CA) and all its objects are
+still rejected.
 
 ROAs and VRPs
 """""""""""""
@@ -91,10 +92,10 @@ any child CA.
 Unsafe VRPs
 """""""""""
 
-If the address prefix of a VRP overlaps with any resources assigned to a
-Certificate Authority (CA) that has been rejected because if failed to validate
-completely, the VRP is said to be *unsafe* since using it may lead to legitimate
-routes being flagged as RPKI Invalid.
+If the address prefix of a VRP overlaps with any resources assigned to a CA that
+has been rejected because if failed to validate completely, the VRP is said to
+be *unsafe* since using it may lead to legitimate routes being flagged as RPKI
+Invalid.
 
 Routinator has an :option:`--unsafe-vrps` option that specifies how to deal with
 these types of VRPs. Currently, the default policy is *warn* in order to gain
