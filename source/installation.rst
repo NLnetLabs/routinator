@@ -83,7 +83,7 @@ Quick Start
 
        .. code-block:: bash
 
-          apt install rsync build-essential
+          apt install curl rsync build-essential
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
           source ~/.cargo/env
           cargo install --locked routinator
@@ -113,9 +113,9 @@ available memory and 1GB of disk space. This will give you ample margin for
 the RPKI repositories to grow over time, as adoption increases.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
-name, outbound access must not be blocked in any way. Routinator only needs to
-establish outbound connections via HTTPS and rsync, on ports 443 and 873,
-respectively. 
+name, outbound traffic must not be blocked based on IP or DNS in any way.
+Routinator only needs to establish outbound connections via HTTPS and rsync, on
+ports 443 and 873, respectively. 
 
 Installing From Source
 ----------------------
@@ -145,22 +145,25 @@ installation phase.
 C Toolchain
 """""""""""
 
-Some of the libraries Routinator depends on require a C toolchain to be
-present. Your system probably has some easy way to install the minimum
-set of packages to build from C sources. For example,
-:command:`apt install build-essential` will install everything you need on
-Debian/Ubuntu.
+Some of the libraries Routinator depends on require a C toolchain to be present.
+Your system probably has some easy way to install the minimum set of packages to
+build from C sources. For example, this command will install everything you need
+on Debian/Ubuntu:
 
-If you are unsure, try to run :command:`cc` on a command line and if there’s a
+.. code-block:: text
+
+apt install build-essential
+
+If you are unsure, try to run :command:`cc` on a command line. If there is a
 complaint about missing input files, you are probably good to go.
 
 Rust
 """"
 
-The Rust compiler runs on, and compiles to, a great number of platforms,
-though not all of them are equally supported. The official `Rust
-Platform Support <https://forge.rust-lang.org/platform-support.html>`_
-page provides an overview of the various support levels.
+The Rust compiler runs on, and compiles to, a great number of platforms, though
+not all of them are equally supported. The official `Rust Platform Support
+<https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_ page provides
+an overview of the various support levels.
 
 While some system distributions include Rust as system packages,
 Routinator relies on a relatively new version of Rust, currently 1.45 or
@@ -185,7 +188,7 @@ You can update your Rust installation later by running:
 Building
 --------
 
-The easiest way to get Routinator is to leave it to cargo by saying:
+The easiest way to get Routinator is to leave it to Cargo by saying:
 
 .. code-block:: text
 
@@ -202,7 +205,7 @@ If you want to update an installed version, you run the same command but add the
 :option:`--force` option to approve overwriting the installed version.
 
 The command will build Routinator and install it in the same directory that
-cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
+Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
 be in your path, too.
 
 Notes

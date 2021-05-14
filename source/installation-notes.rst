@@ -11,7 +11,7 @@ Using Native TLS Instead of Rustls
 
 By default Routinator uses the TLS library `Rustls
 <https://github.com/ctz/rustls>`_, which in most cases is fine. However, if
-needed you can instead use your system native TLS implementation with 
+needed you can instead use the native TLS implementation of your system with 
 Routinator.
 
 .. tabs::
@@ -68,11 +68,11 @@ Platform Specific Instructions
 
 For some platforms, :command:`rustup` cannot provide binary releases to install
 directly. The `Rust Platform Support
-<https://forge.rust-lang.org/platform-support.html>`_ page lists several
-platforms where official binary releases are not available, but Rust is still
-guaranteed to build. For these platforms, automated tests are not run so it’s
-not guaranteed to produce a working build, but they often work to quite a good
-degree.
+<https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_ page lists
+several platforms where official binary releases are not available, but Rust is
+still guaranteed to build. For these platforms, automated tests are not run so
+it’s not guaranteed to produce a working build, but they often work to quite a
+good degree.
 
 OpenBSD
 """""""

@@ -470,10 +470,10 @@ These can be requested by providing different commands on the command line.
                   is missing.
 
            csvcompat
-                  The same as csv except that all fields are embedded in double
-                  quotes and the autonomous system number is given without the
-                  prefix AS. This format is pretty much identical to the CSV
-                  produced by the RIPE NCC Validator.
+                  The same as *csv* except that all fields are embedded in
+                  double quotes and the autonomous system number is given
+                  without the prefix AS. This format is pretty much identical to
+                  the CSV produced by the RIPE NCC Validator.
 
            csvext
                   An extended version of csv each line contains these

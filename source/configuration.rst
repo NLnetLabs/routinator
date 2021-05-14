@@ -117,6 +117,8 @@ can start Routinator with:
 
    routinator server
 
+.. _doc_routinator_local_exceptions:
+
 Applying Local Exceptions
 -------------------------
 

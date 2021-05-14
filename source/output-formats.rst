@@ -94,9 +94,10 @@ jsonext
       validity of the ROA itself, and *chainValidity* the validity considering
       the validity of the certificates along the validation chain.
 
-      For assertions from local exceptions, *path* will provide the path of
-      the local exceptions file and, optionally, *comment* will provide the
-      comment if given for the assertion.
+      For assertions from :ref:`local exceptions
+      <doc_routinator_local_exceptions>`, *path* will provide the path of the
+      local exceptions file and, optionally, *comment* will provide the comment
+      if given for the assertion.
 
       Please note that the output in ``jsonext`` format will be quite large.
       
