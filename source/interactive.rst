@@ -152,7 +152,7 @@ read from standard input. You can also save the results to a file using the
 You can provide a simple plain text file with the routes you would like to have
 verified by Routinator. The input file should have one route announcement per
 line, provided as a prefix followed by an ASCII-art arrow ``=>`` surrounded by
-white space and followed by the AS number of the originating Autonomous System.
+white space and followed by the AS Number of the originating Autonomous System.
 
 For example, let's provide Routinator with this file, saved as
 :file:`beacons.txt`:

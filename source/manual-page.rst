@@ -597,7 +597,7 @@ These can be requested by providing different commands on the command line.
 
        .. option:: -a asn, --asn=asn
 
-              The AS number of the autonomous system that originated the route
+              The AS Number of the Autonomous System that originated the route
               announcement. ASNs can be given with or without the prefix AS.
 
        .. option:: -p prefix, --prefix=prefix
@@ -622,13 +622,13 @@ These can be requested by providing different commands on the command line.
               format. It should consist of a single object with one  member
               *routes*  which contains an array of objects. Each object
               describes one route announcement through its *prefix* and *asn*
-              members which contain a prefix and originating AS number as
+              members which contain a prefix and originating AS Number as
               strings, respectively.
 
               If the option is not provided, the input is assumed to consist of
               simple plain text with one route announcement per line, provided
               as a prefix followed by an ASCII-art arrow => surrounded by white
-              space and followed by the AS number of originating autonomous
+              space and followed by the AS Number of originating autonomous
               system.
 
               The following additional options are available independently of
@@ -1159,7 +1159,7 @@ The service only supports GET requests with the following paths:
 
 :command:`/api/v1/validity/as-number/prefix`
       Returns a JSON object describing whether the route announcement given by
-      its origin AS number and address prefix is RPKI valid, invalid, or not
+      its origin AS Number and address prefix is RPKI valid, invalid, or not
       found.  The returned object is compatible with that provided by the RIPE
       NCC RPKI Validator. For more information, see
       https://ripe.net/support/documentation/developer-documentation/rpki-validator-api

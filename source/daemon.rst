@@ -83,7 +83,7 @@ The service supports GET requests with the following paths:
 
 :command:`/api/v1/validity/as-number/prefix`
      Returns a JSON object describing whether the route announcement given by 
-     its origin AS number and address prefix is RPKI valid, invalid, or not 
+     its origin AS Number and address prefix is RPKI valid, invalid, or not 
      found. A complete list of VRPs that caused the result is included.
      
 :command:`/validity?asn=as-number&prefix=prefix`
