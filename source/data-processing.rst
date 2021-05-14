@@ -89,17 +89,17 @@ any child CA.
 ROAs and VRPs
 """""""""""""
 
-ROAs are objects that contain a statement authorising a *single* Autonomous
-System Number (ASN) to originate *one or more* IP prefixes, along with their
-maximum prefix length. ROAs can only be created by the legitimate holder of the
-IP prefixes contained within it, but they can authorise any ASN.
+ROAs are *cryptographic* objects that contain a statement authorising a *single*
+Autonomous System Number (ASN) to originate *one or more* IP prefixes, along
+with their maximum prefix length. ROAs can only be created by the legitimate
+holder of the IP prefixes contained within it, but they can authorise any ASN.
 
-If the ROA passes validation, Routinator will produce one or more validated ROA
-payloads (VRPs) for each ROA, depending on how many IP prefixes are contained
-within it. Each VRP is a tuple of an ASN, a single prefix and its maximum prefix
-length. The complete collection of VRPs can be compared to all BGP  origins seen
-by your routers to determine if they are RPKI *"Valid"*, *"Invalid"* or
-*"NotFound"*.
+If the ROA passes validation, Routinator will produce one or more *plain text*
+validated ROA payloads (VRPs) for each ROA, depending on how many IP prefixes
+are contained within it. Each VRP is a tuple of an ASN, a single prefix and its
+maximum prefix length. The complete collection of VRPs can be compared to all
+BGP origins seen by your routers to determine if they are RPKI *"Valid"*,
+*"Invalid"* or *"NotFound"*.
 
 Unsafe VRPs
 """""""""""
