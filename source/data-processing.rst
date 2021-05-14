@@ -58,21 +58,6 @@ and the hash over their content must match the one given in the manifest. If the
 hash does not match, the Certificate Authority (CA) and all its objects are
 still rejected.
 
-ROAs and VRPs
-"""""""""""""
-
-ROAs are objects that contain a statement authorising a *single* Autonomous
-System Number (ASN) to originate *one or more* IP prefixes, along with their
-maximum prefix length. ROAs can only be created by the legitimate holder of the
-IP prefixes contained within it, but they can authorise any ASN.
-
-If the ROA passes validation, Routinator will produce one or more validated ROA
-payloads (VRPs) for each ROA, depending on how many IP prefixes are contained
-within it. Each VRP is a tuple of an ASN, a single prefix and its maximum prefix
-length. The complete collection of VRPs can be compared to all BGP  origins seen
-by your routers to determine if they are RPKI *"Valid"*, *"Invalid"* or
-*"NotFound"*.
-
 Stale Objects
 """""""""""""
 
@@ -88,6 +73,21 @@ should be rejected, which is the default policy set by the :option:`--stale`
 option since Routinator 0.8.0. As a result, all material published by the CA
 issuing this manifest and CRL is considered invalid, including all material of
 any child CA.
+
+ROAs and VRPs
+"""""""""""""
+
+ROAs are objects that contain a statement authorising a *single* Autonomous
+System Number (ASN) to originate *one or more* IP prefixes, along with their
+maximum prefix length. ROAs can only be created by the legitimate holder of the
+IP prefixes contained within it, but they can authorise any ASN.
+
+If the ROA passes validation, Routinator will produce one or more validated ROA
+payloads (VRPs) for each ROA, depending on how many IP prefixes are contained
+within it. Each VRP is a tuple of an ASN, a single prefix and its maximum prefix
+length. The complete collection of VRPs can be compared to all BGP  origins seen
+by your routers to determine if they are RPKI *"Valid"*, *"Invalid"* or
+*"NotFound"*.
 
 Unsafe VRPs
 """""""""""
