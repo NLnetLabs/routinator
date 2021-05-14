@@ -44,7 +44,7 @@ Update metrics
 
 Object metrics
   - The number of valid ROAs per Trust Anchor
-  - The number of Validated ROA Payloads (VRPs) per Trust Anchor
+  - The number of validated ROA payloads (VRPs) per Trust Anchor
   - The number of stale objects found
   - The number of VRPs added locally
 

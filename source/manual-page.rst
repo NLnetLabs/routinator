@@ -445,7 +445,7 @@ These can be requested by providing different commands on the command line.
 
     This command requests that Routinator update the local repository and then
     validate the Route Origin Attestations in the repository and output the
-    valid route origins, which are also known as Validated ROA Payload or VRPs,
+    valid route origins, which are also known as validated ROA payloads or VRPs,
     as a list.
 
     .. option:: -o file, --output=file
