@@ -48,6 +48,15 @@ signatures. It will also verify if the hashes are correct, no objects have
 expired and the entire data set is complete. If any of the objects do not pass
 these checks, the data will be discarded.
 
+Currently, only certificates (.cer), certificate revocation lists (.crl),
+manifests (.mft), ROAs (.roa), and Ghostbuster Records (.gbr) are allowed to
+appear the RPKI. If another type of object is encountered Routinator will *warn*
+by default, but this can be changed with the :option:`--unknown-objects` option. 
+
+Note that even if unknown objects are accepted, they must appear in the manifest
+and the hash over their content must match the one given in the manifest. If the
+hash does not match, the CA and all its objects are still rejected.
+
 ROAs and VRPs
 """""""""""""
 
