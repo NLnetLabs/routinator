@@ -48,15 +48,20 @@ signatures. It will also verify if the hashes are correct, no objects have
 expired and the entire data set is complete. If any of the objects do not pass
 these checks, the data will be discarded.
 
+ROAs and VRPs
+"""""""""""""
+
 ROAs are objects that contain a statement authorising a *single* Autonomous
 System Number (ASN) to originate *one or more* IP prefixes, along with their
-maximum prefix length. A ROA can only be created by the legitimate holder of the
-IP prefixes contained within it, but it can authorise any ASN.
+maximum prefix length. ROAs can only be created by the legitimate holder of the
+IP prefixes contained within it, but they can authorise any ASN.
 
 If the ROA passes validation, Routinator will produce one or more validated ROA
 payloads (VRPs) for each ROA, depending on how many IP prefixes are contained
-within it. Each VRP is a tuple of an ASN, a single prefix and its maximum
-prefix length. 
+within it. Each VRP is a tuple of an ASN, a single prefix and its maximum prefix
+length. The complete collection of VRPs can be compared to all BGP  origins seen
+by your routers to determine if they are RPKI *"Valid"*, *"Invalid"* or
+*"NotFound"*.
 
 Stale Objects
 """""""""""""
@@ -77,22 +82,15 @@ any child CA.
 Unsafe VRPs
 """""""""""
 
-If the address prefix of a VRP overlaps
-with any resources assigned to a CA that has been rejected because if  failed  to  validate
-completely, the VRP is said to be unsafe since using it may lead to legitimate routes being
-flagged as RPKI invalid.
+If the address prefix of a VRP overlaps with any resources assigned to a
+Certificate Authority (CA) that has been rejected because if failed to validate
+completely, the VRP is said to be *unsafe* since using it may lead to legitimate
+routes being flagged as RPKI Invalid.
 
-There are three options how to deal with unsafe VRPS:
-
-A policy of reject will filter out these VPRs. Warnings will be logged  to  indicate  which
-VRPs have been filtered
-
-The warn policy will log warnings for unsafe VRPs but will add them to the valid VRPs.
-
-Finally, the accept policy will quietly add unsafe VRPs to the valid VRPs.
-
-Currently, the default policy is warn in order to gain operational experience with the fre-
-quency and impact of unsafe VRPs. This default may change in future version.
+Routinator has an :option:`--unsafe-vrps` option that specifies how to deal with
+these types of VRPs. Currently, the default policy is *warn* in order to gain
+operational experience with the frequency and impact of unsafe VRPs. This
+default may change in future version.
 
 Storing
 -------
