@@ -294,6 +294,12 @@ Relying Party Agreement before you can use it. Running the `routinator init`
 command will provide you with instructions where to find the agreement and how
 to express your acceptance of its terms.
 
+Some RIRs and third parties also provide separate TALs for testing purposes,
+allowing operators to gain experience with using RPKI in a safe environment.
+Both the production and testbed TALs are bundled with Routinator and can be
+installed with the `init` command. To get an overview of all available TALs 
+use the `--list-tals` option
+
 Once you have successfully prepared the working environment, your can run
 Routinator in one of two possible modes: printing the list of valid route
 origins, also known as _validated ROA payloads_ or VRPs, or providing the
