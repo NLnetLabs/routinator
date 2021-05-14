@@ -42,22 +42,57 @@ minutes for both and can be changed via the :option:`--rsync-timeout` and
 Validating
 ----------
 
-The validation process determines if all certificates, ROAs and other files that
-may appear in the RPKI have the correct signatures. It will also verify if the
-hashes are correct, no objects have expired and the entire data set is complete.
-If any of the objects do not pass these checks, the data will be discarded.
+The validation process determines if all certificates, Route Origin Attestations
+(ROAs) and other signed objects that may appear in the RPKI have the correct
+signatures. It will also verify if the hashes are correct, no objects have
+expired and the entire data set is complete. If any of the objects do not pass
+these checks, the data will be discarded.
 
-During this process, Routinator may encounter objects that are *stale*. In RPKI,
-manifests and :abbr:`CRLs (Certificate Revocation Lists)` can be stale if the
-time given in their ``next-update`` field is in the past, indicating that an
-update to the object was scheduled but didn't happen. This can be because of an
-operational issue at the issuer or an attacker trying to replay old objects. 
+ROAs are objects that contain a statement authorising a *single* Autonomous
+System Number (ASN) to originate *one or more* IP prefixes, along with their
+maximum prefix length. A ROA can only be created by the legitimate holder of the
+IP prefixes contained within it, but it can authorise any ASN.
+
+If the ROA passes validation, Routinator will produce one or more validated ROA
+payloads (VRPs) for each ROA, depending on how many IP prefixes are contained
+within it. Each VRP is a tuple of an ASN, a single prefix and its maximum
+prefix length. 
+
+Stale Objects
+"""""""""""""
+
+During the validation process, Routinator may encounter objects that are
+*stale*. In RPKI, manifests and :abbr:`CRLs (Certificate Revocation Lists)` can
+be stale if the time given in their ``next-update`` field is in the past,
+indicating that an update to the object was scheduled but didn't happen. This
+can be because of an operational issue at the issuer or an attacker trying to
+replay old objects. 
 
 Ongoing standards efforts and operational experiences suggest that stale objects
 should be rejected, which is the default policy set by the :option:`--stale`
 option since Routinator 0.8.0. As a result, all material published by the CA
 issuing this manifest and CRL is considered invalid, including all material of
 any child CA.
+
+Unsafe VRPs
+"""""""""""
+
+If the address prefix of a VRP overlaps
+with any resources assigned to a CA that has been rejected because if  failed  to  validate
+completely, the VRP is said to be unsafe since using it may lead to legitimate routes being
+flagged as RPKI invalid.
+
+There are three options how to deal with unsafe VRPS:
+
+A policy of reject will filter out these VPRs. Warnings will be logged  to  indicate  which
+VRPs have been filtered
+
+The warn policy will log warnings for unsafe VRPs but will add them to the valid VRPs.
+
+Finally, the accept policy will quietly add unsafe VRPs to the valid VRPs.
+
+Currently, the default policy is warn in order to gain operational experience with the fre-
+quency and impact of unsafe VRPs. This default may change in future version.
 
 Storing
 -------
