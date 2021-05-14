@@ -19,6 +19,15 @@ publication points, such as the ones operated by National Internet Registries
 and organisations running delegated RPKI. Each pointer explicitly states if RRDP
 is offered in addition to rsync. 
 
+As a precaution, Routinator will not accept rsync and HTTPS URIs from RPKI data
+with dubious host names. In particular, it will reject the name *localhost*,
+URIs that consist of IP addresses, and a host name that contains an explicit
+port. You can change this behaviour with the :option:`--allow-dubious-hosts`
+option.
+
+RRDP Fallback
+"""""""""""""
+
 If an RRDP endpoint is unavailable but it has worked in the past, Routinator
 will assume this is a transient problem. It will retry using RRDP for up to 60
 minutes since the last successful update, during which it will rely on the
@@ -28,6 +37,9 @@ exact moment fallback happens is picked randomly between the refresh time and
 the :option:`--rrdp-fallback-time` value. If rsync communication is
 unsuccessful too, the local cache is used until the objects go stale and
 ultimately expire. 
+
+Update Interval
+"""""""""""""""
 
 Routinator will fetch new RPKI data ten minutes after the last successful update
 has finished. The interval can be changed using the :option:`--refresh` option.
