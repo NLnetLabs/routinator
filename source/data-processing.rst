@@ -97,9 +97,11 @@ holder of the IP prefixes contained within it, but they can authorise any ASN.
 If the ROA passes validation, Routinator will produce one or more *plain text*
 validated ROA payloads (VRPs) for each ROA, depending on how many IP prefixes
 are contained within it. Each VRP is a tuple of an ASN, a single prefix and its
-maximum prefix length. The complete collection of VRPs can be compared to all
-BGP origins seen by your routers to determine if they are RPKI *"Valid"*,
-*"Invalid"* or *"NotFound"*.
+maximum prefix length. The complete collection of VRPs can be expressed in
+formats such as CSV or JSON, or exposed via the RPKI-to-Router (RTR) protocol so
+that they can be compared to all BGP origins seen by your routers. For each
+route origin it can be determined if they are RPKI *"Valid"*, *"Invalid"* or
+*"NotFound"*.
 
 Unsafe VRPs
 """""""""""
