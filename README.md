@@ -101,7 +101,7 @@ start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
 port 8323.
 
 ```bash
-apt install rsync build-essential
+apt install curl rsync build-essential
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 cargo install --locked routinator
