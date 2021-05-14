@@ -13,7 +13,7 @@
 Introducing ‘Routinator 3000,’ lightweight RPKI relying party software written
 in Rust. Routinator is a full-featured software package that can perform RPKI
 validation as a one-time operation and produce the result in formats such as
-CSV, JSON and RPSL, or run as a service that periodically downloads and verifies
+CSV and JSON, or run as a service that periodically downloads and verifies
 RPKI data. Routinator offers an RTR server allowing routers supporting Origin
 Validation to connect to it to fetch verified RPKI data. The built-in HTTP
 server offers a user interface and endpoints for the various file formats, as
