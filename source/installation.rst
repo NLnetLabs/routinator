@@ -152,7 +152,7 @@ on Debian/Ubuntu:
 
 .. code-block:: text
 
-apt install build-essential
+   apt install build-essential
 
 If you are unsure, try to run :command:`cc` on a command line. If there is a
 complaint about missing input files, you are probably good to go.
