@@ -14,11 +14,12 @@ Repository Delta Protocol (RRDP), which relies on HTTPS. RRDP was designed to be
 the successor to rsync in the RPKI. As almost all RPKI repositories currently
 support both protocols, Routinator will prefer RRDP if available. 
 
-When traversing the RPKI hierarchy, starting at the trust anchors of the Regional
-Internet Registries (RIRs), Routinator will find several pointers to child
-publication points, such as the ones operated by National Internet Registries
-and organisations running delegated RPKI. Each pointer explicitly states if RRDP
-is offered in addition to rsync.
+When traversing the RPKI hierarchy, starting at the trust anchors of the
+Regional Internet Registries (RIRs), Routinator will find several pointers to
+child publication points, such as the ones operated by National Internet
+Registries (NIRs), Local Internet Registries (LIRs) and organisations running
+delegated RPKI. Each pointer explicitly states if RRDP is offered in addition to
+rsync.
 
 .. figure:: img/ca-structure.svg
     :align: center
