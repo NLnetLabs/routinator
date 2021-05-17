@@ -44,6 +44,13 @@ New
   snapshot had to be used. It also separately provides the status codes
   for the request of the notification file and the snapshot or last
   requested delta file. ([#487], [#489])
+* Prometheus metrics and JSON status have been greatly extended with more
+  detailed counters for individual valid and invalid object types. They
+  are also now available on a per-repository basis in addition to the
+  already existing per-TAL basis. ([#493], [#539])
+* Prometheus metrics and JSON status can now optionally include per-client
+  RTR metrics. This is disabled by default to avoid accidentally leaking
+  information about the local network topology. ([#519])
 * The RRDP client now supports the gzip transfer encoding for HTTPs.
   ([#463], contributed by [@bjpbakker])
 * The `exception` config file value now also accepts a single string with
@@ -91,15 +98,18 @@ Other Changes
 [#488]: https://github.com/NLnetLabs/routinator/pull/488
 [#489]: https://github.com/NLnetLabs/routinator/pull/489
 [#490]: https://github.com/NLnetLabs/routinator/pull/490
+[#493]: https://github.com/NLnetLabs/routinator/pull/490
 [#496]: https://github.com/NLnetLabs/routinator/pull/496
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
 [#514]: https://github.com/NLnetLabs/routinator/pull/514
+[#519]: https://github.com/NLnetLabs/routinator/pull/519
 [#528]: https://github.com/NLnetLabs/routinator/pull/528
 [#531]: https://github.com/NLnetLabs/routinator/pull/531
 [#537]: https://github.com/NLnetLabs/routinator/pull/537
+[#539]: https://github.com/NLnetLabs/routinator/pull/539
 [#543]: https://github.com/NLnetLabs/routinator/pull/543
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
