@@ -12,10 +12,10 @@
 
 Introducing ‘Routinator 3000,’ lightweight RPKI relying party software written
 in Rust. Routinator is a full-featured software package that can perform RPKI
-validation as a one-time operation and produce the result in formats such as
-CSV, JSON and RPSL, or run as a service that periodically downloads and verifies
-RPKI data. Routinator offers an RTR server allowing routers supporting Origin
-Validation to connect to it to fetch verified RPKI data. The built-in HTTP
+validation as a one-time operation and produce the result in formats such as CSV
+and JSON, or run as a service that periodically downloads and verifies RPKI
+data. Routinator offers an RTR server allowing routers supporting route origin
+validation (ROV) to connect to it to fetch verified RPKI data. The built-in HTTP
 server offers a user interface and endpoints for the various file formats, as
 well as logging, status and Prometheus monitoring. 
 
@@ -101,7 +101,7 @@ start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on
 port 8323.
 
 ```bash
-apt install rsync build-essential
+apt install curl rsync build-essential
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 cargo install --locked routinator
@@ -136,16 +136,19 @@ All of these statements are published in a distributed repository.
 Routinator will collect these statements into a local copy, verify
 their signatures, and construct a list of associations between IP address
 prefixes and AS numbers. It provides this information to routers supporting
-Route Origin Validation or can output it in a number of useful formats.
+route origin validation (ROV) or can output it in a number of useful formats.
 
 ## System Requirements
 
 Routinator is designed to be lean and is capable of running on minimalist
 hardware, such as a Raspberry Pi. Running it on a system with 1GB of
 available RAM and 1GB of available disk space will give the global RPKI
-data set enough room to grow for the foreseeable future. A powerful CPU is
-not required, as cryptographic validation currently takes less than two
-seconds on an average system.
+data set enough room to grow for the foreseeable future. 
+
+As new RPKI repositories can emerge in any IP address range and on any domain
+name, outbound traffic must not be blocked based on IP or DNS in any way.
+Routinator only needs to establish outbound connections via HTTPS and rsync, on
+ports 443 and 873, respectively. 
 
 ## Getting Started
 
@@ -268,7 +271,7 @@ sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
 
 ## Running
 
-All functions of Routinator are accessible on the command line via sub-commands.
+All functions of Routinator are accessible on the command line via subcommands.
 
 The first thing you need to do before running Routinator is prepare its working
 environment via the command
@@ -291,9 +294,15 @@ Relying Party Agreement before you can use it. Running the `routinator init`
 command will provide you with instructions where to find the agreement and how
 to express your acceptance of its terms.
 
+Some RIRs and third parties also provide separate TALs for testing purposes,
+allowing operators to gain experience with using RPKI in a safe environment.
+Both the production and testbed TALs are bundled with Routinator and can be
+installed with the `init` command. To get an overview of all available TALs 
+use the `--list-tals` option
+
 Once you have successfully prepared the working environment, your can run
 Routinator in one of two possible modes: printing the list of valid route
-origins, also known as _Validated ROA Payloads_ or VRPs, or providing the
+origins, also known as _validated ROA payloads_ or VRPs, or providing the
 service for routers and other clients to access this list via HTTP or a
 dedicated protocol known as RPKI-to-Router protocol, or RTR.
 
@@ -365,8 +374,8 @@ exist and there is no `-c` option, default values are used.
 The configuration file is a TOML file. Its entries are named similarly to the
 command line options. Details about the available entries and there meaning can
 be found in the [manual
-page](https://routinator.docs.nlnetlabs.nl/en/stable/manual-page.html). In
-addition, a complete sample configuration file showing all the default values
+page](https://routinator.docs.nlnetlabs.nl/en/stable/manual-page.html#configuration-file).
+In addition, a complete sample configuration file showing all the default values
 can be found in the repository at
 [etc/routinator.conf](https://github.com/NLnetLabs/routinator/blob/main/etc/routinator.conf.example).
 
@@ -405,4 +414,4 @@ displays statistics from the last validation run Routinator has performed.
 It can also be used to verify the RPKI origin validation status of an AS
 Number and IP Prefix combination.
 
-![Routinator validity checker](https://routinator.rdocs.nlnetlabs.nl/en/stable/_images/routinator-ui-validity-checker.png)
+![Routinator validity checker](https://routinator.docs.nlnetlabs.nl/en/stable/_images/routinator-ui-validity-checker.png)
