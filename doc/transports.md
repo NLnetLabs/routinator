@@ -20,7 +20,7 @@ Begin by installing the `openssh-server` and `netcat` packages.
 Install Routinator and ensure it is running in RTR listener mode on localhost:
 
 ```bash
-routinator rtrd -a -l 127.0.0.1:3323
+routinator server --rtr 127.0.0.1:3323
 ```
 
 Create a username and a password for the router to log into the host with,
@@ -31,7 +31,7 @@ into Routinator by editing the `/etc/ssh/sshd_config` file or equivalent to
 include the following line:
 
 ```text
-# Define an `rpki-rtr` subsystem which is actually `netcat` used to proxy STDIN/STDOUT to a running `routinator rtrd -a -l 127.0.0.1:3323`
+# Define an `rpki-rtr` subsystem which is actually `netcat` used to proxy STDIN/STDOUT to a running `routinator server --rtr 127.0.0.1:3323`
 Subsystem       rpki-rtr        /bin/nc 127.0.0.1 3323
 
 # Certain routers may use old KEX algos and Ciphers which are no longer enabled by default.
@@ -61,7 +61,7 @@ Begin by installing the `stunnel` package.
 Install Routinator and ensure it is running in RTR listener mode on localhost:
 
 ```bash
-routinator rtrd -a -l 127.0.0.1:3323
+routinator server --rtr 127.0.0.1:3323
 ```
 
 Acquire (via for example [letsencrypt](https://letsencrypt.org/)) or generate

@@ -1,6 +1,6 @@
 //! Handling of endpoints related to the status.
 
-use std::cmp;
+use std::{cmp, fmt};
 use std::fmt::Write;
 use chrono::{Duration, Utc};
 use clap::{crate_name, crate_version};
@@ -38,6 +38,8 @@ async fn handle_metrics(
     server_metrics: &HttpServerMetrics,
     rtr_metrics: &SharedRtrServerMetrics,
 ) -> Response<Body> {
+    use PrometheusType::*;
+
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
         (
@@ -51,328 +53,235 @@ async fn handle_metrics(
             history.last_update_duration(),
         )
     };
-    let mut res = String::new();
 
-    // valid_roas 
-    writeln!(res,
-        "# HELP routinator_valid_roas number of valid ROAs seen\n\
-         # TYPE routinator_valid_roas gauge"
-    ).unwrap();
+    let mut res = PrometheusMetrics::new();
+
+    // Per-TAL metrics.
+    //
+    // For historical reasons, they don’t include a "_tal_" portion in the
+    // name.
+    res.publication_headers("per TAL");
+    res.vrp_headers("per TAL");
     for tal in &metrics.tals {
-        writeln!(res,
-            "routinator_valid_roas{{tal=\"{}\"}} {}",
-            tal.name(), tal.publication.valid_roas
-        ).unwrap();
+        res.publication_values("tal", &tal.name(), &tal.publication);
+        res.vrp_values("tal", &tal.name(), &tal.vrps);
     }
 
-    // vrps_total
-    writeln!(res,
-        "\n\
-         # HELP routinator_vrps_total number of valid VRPs per TAL\n\
-         # TYPE routinator_vrps_total gauge"
-    ).unwrap();
-    for tal in &metrics.tals {
-        writeln!(res,
-            "routinator_vrps_total{{tal=\"{}\"}} {}",
-            tal.name(), tal.vrps.valid
-        ).unwrap();
+    const VRPS_ADDED_LOCALLY: &str = "vrps_added_locally";
+    res.header(
+        VRPS_ADDED_LOCALLY, Gauge,
+        "VRPs added from local exceptions"
+    );
+    res.single(VRPS_ADDED_LOCALLY, metrics.local.contributed);
+
+    const STALE_OBJECTS: &str = "stale_objects";
+    res.header(
+        STALE_OBJECTS, Gauge,
+        "total number of stale manifests and CRLs"
+    );
+    res.single(STALE_OBJECTS, metrics.publication.stale_objects());
+
+    // Per-repository metrics.
+    res.set_prefix("routinator_repo");
+    res.publication_headers("per repository");
+    res.vrp_headers("per repository");
+    for repo in &metrics.repositories {
+        res.publication_values("uri", &repo.uri, &repo.publication);
+        res.vrp_values("uri", &repo.uri, &repo.vrps);
     }
+    res.set_prefix("routinator");
 
-    // vrps_final
-    writeln!(res,
-        "\n\
-        # HELP routinator_vrps_final final number of valid VRPs\n\
-        # TYPE routinator_vrps_final gauge\n\
-        routinator_vrps_final {}",
-        metrics.vrps.contributed,
-    ).unwrap();
-
-    // vrps_unsafe
-    writeln!(res,
-        "\n\
-         # HELP routinator_vrps_unsafe \
-                VRPs overlapping with rejected CAs\n\
-         # TYPE routinator_vrps_unsafe gauge"
-    ).unwrap();
-    for tal in &metrics.tals {
-        writeln!(res,
-            "routinator_vrps_unsafe{{tal=\"{}\"}} {}",
-            tal.name(), tal.vrps.marked_unsafe
-        ).unwrap();
-    }
-
-    // vrps_filtered_locally
-    writeln!(res,
-        "\n\
-         # HELP routinator_vrps_filtered_locally \
-                VRPs filtered based on local exceptions\n\
-         # TYPE routinator_vrps_filtered_locally gauge"
-    ).unwrap();
-    for tal in &metrics.tals {
-        writeln!(res,
-            "routinator_vrps_filtered_locally{{tal=\"{}\"}} {}",
-            tal.name(), tal.vrps.locally_filtered
-        ).unwrap();
-    }
-
-    // vrps_duplicate
-    writeln!(res,
-        "\n\
-         # HELP routinator_vrps_duplicate number of duplicate VRPs per TAL\n\
-         # TYPE routinator_vrps_duplicate gauge"
-    ).unwrap();
-    for tal in &metrics.tals {
-        writeln!(res,
-            "routinator_vrps_duplicate{{tal=\"{}\"}} {}",
-            tal.name(), tal.vrps.duplicate
-        ).unwrap();
-    }
-
-    // vrps_added_locally
-    writeln!(res,
-        "\n\
-         # HELP routinator_vrps_added_locally \
-                VRPs added from local exceptions\n\
-         # TYPE routinator_vrps_added_locally gauge"
-    ).unwrap();
-    writeln!(res,
-        "routinator_vrps_added_locally {}",
-        metrics.local.contributed
-    ).unwrap();
-
-    // stale_objects
-    writeln!(res,
-        "\n\
-        # HELP routinator_stale_count number of stale manifests and CRLs\n\
-        # TYPE routinator_stale_count gauge\n\
-        routinator_stale_count {}",
-        metrics.publication.stale_objects(),
-    ).unwrap();
-
-    // last_update_start, last_update_done, last_update_duration
+    // Update times.
+    //
     let now = Utc::now();
-    write!(res,
-        "\n\
-        # HELP routinator_last_update_start seconds since last update \
-            started\n\
-        # TYPE routinator_last_update_start gauge\n\
-        routinator_last_update_start {}\n\
-        \n\
-        # HELP routinator_last_update_duration duration in seconds of \
-            last update\n\
-        # TYPE routinator_last_update_duration gauge\n\
-        routinator_last_update_duration {}\n\
-        \n\
-        # HELP routinator_last_update_done seconds since last update \
-            finished\n\
-        # TYPE routinator_last_update_done gauge\n\
-        routinator_last_update_done ",
+    const LAST_UPDATE_START: &str = "last_update_start";
+    res.header(
+        LAST_UPDATE_START, Gauge,
+        "seconds since last update started"
+    );
+    res.single(
+        LAST_UPDATE_START,
+        now.signed_duration_since(start).num_seconds()
+    );
 
-        now.signed_duration_since(start).num_seconds(),
-        duration.map(|duration| { duration.as_secs() }).unwrap_or(0),
-    ).unwrap();
+    const LAST_UPDATE_DURATION: &str = "last_update_duration";
+    res.header(
+        LAST_UPDATE_DURATION, Gauge,
+        "duration of last update in seconds"
+    );
+    res.single(
+        LAST_UPDATE_DURATION, 
+        duration.map(|duration| { duration.as_secs() }).unwrap_or(0)
+    );
+
+    const LAST_UPDATE_DONE: &str = "last_update_done";
+    res.header(
+        LAST_UPDATE_DONE, Gauge,
+        "seconds since last update finished",
+    );
     match done {
         Some(instant) => {
-            writeln!(res, "{}",
+            res.single(
+                LAST_UPDATE_DONE,
                 now.signed_duration_since(instant).num_seconds()
-            ).unwrap();
+            );
         }
         None => {
-            writeln!(res, "Nan").unwrap();
+            res.single(
+                LAST_UPDATE_DONE, "NaN"
+            );
         }
     }
 
-    // serial
-    writeln!(res,
-        "\n\
-        # HELP routinator_serial current RTR serial number\n\
-        # TYPE routinator_serial gauge\n\
-        routinator_serial {}",
-        serial
-    ).unwrap();
+    // Serial number.
+    const SERIAL: &str = "serial";
+    res.header(
+        SERIAL, Gauge,
+        "current RTR serial number"
+    );
+    res.single(SERIAL, serial);
 
-    // rsync_status
-    writeln!(res,
-        "\n\
-        # HELP routinator_rsync_status exit status of rsync command\n\
-        # TYPE routinator_rsync_status gauge"
-    ).unwrap();
-    for metrics in &metrics.rsync {
-        writeln!(
-            res,
-            "routinator_rsync_status{{uri=\"{}\"}} {}",
-            metrics.module,
-            match metrics.status {
+
+    // RRDP collector metrics.
+    //
+    const RRDP_STATUS: &str = "rrdp_status";
+    const RRDP_NOTIFICATION_STATUS: &str = "rrdp_notification_status";
+    const RRDP_PAYLOAD_STATUS: &str = "rrdp_payload_status";
+    const RRDP_DURATION: &str = "rrdp_duration";
+    const RRDP_SERIAL: &str = "rrdp_serial";
+    res.header(
+        RRDP_STATUS, Gauge,
+        "combined status code for RRDP update requests"
+    );
+    res.header(
+        RRDP_NOTIFICATION_STATUS, Gauge,
+        "status code for getting RRDP notification file"
+    );
+    res.header(
+        RRDP_PAYLOAD_STATUS, Gauge,
+        "status code for getting RRDP payload file(s)"
+    );
+    res.header(
+        RRDP_DURATION, Gauge,
+        "duration of RRDP update in seconds"
+    );
+    res.header(
+        RRDP_SERIAL, Gauge,
+        "serial number of last RRDP update"
+    );
+    for rrdp in &metrics.rrdp {
+        res.multi(
+            RRDP_STATUS, "uri", &rrdp.notify_uri, rrdp.status().into_i16()
+        );
+        res.multi(
+            RRDP_NOTIFICATION_STATUS, "uri", &rrdp.notify_uri,
+            rrdp.notify_status.into_i16()
+        );
+        res.multi(
+            RRDP_PAYLOAD_STATUS, "uri", &rrdp.notify_uri,
+            rrdp.payload_status.map(|status| {
+                status.into_i16()
+            }).unwrap_or(0),
+        );
+        if let Ok(duration) = rrdp.duration {
+            res.multi(
+                RRDP_DURATION, "uri", &rrdp.notify_uri,
+                format_args!(
+                    "{}.{:03}",
+                    duration.as_secs(),
+                    duration.subsec_millis(),
+                )
+            );
+        }
+        if let Some(serial) = rrdp.serial {
+            res.multi(
+                RRDP_SERIAL, "uri", &rrdp.notify_uri, serial
+            );
+        }
+    }
+
+    // Rsync collector metrics
+    //
+    const RSYNC_STATUS: &str = "rsync_status";
+    const RSYNC_DURATION: &str = "rsync_duration";
+    res.header(
+        RSYNC_STATUS, Gauge,
+        "exit status of rsync command"
+    );
+    res.header(
+        RSYNC_DURATION, Gauge,
+        "duration of rsync command in seconds"
+    );
+    for rsync in &metrics.rsync {
+        res.multi(
+            RSYNC_STATUS, "uri", &rsync.module, 
+            match rsync.status {
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(_) => -1
             }
-        ).unwrap();
-    }
-
-    // rsync_duration
-    writeln!(res,
-        "\n\
-        # HELP routinator_rsync_duration duration of rsync in seconds\n\
-        # TYPE routinator_rsync_duration gauge"
-    ).unwrap();
-    for metrics in &metrics.rsync {
-        if let Ok(duration) = metrics.duration {
-            writeln!(
-                res,
-                "routinator_rsync_duration{{uri=\"{}\"}} {:.3}",
-                metrics.module,
-                duration.as_secs() as f64
-                + f64::from(duration.subsec_millis()) / 1000.
-            ).unwrap();
+        );
+        if let Ok(duration) = rsync.duration {
+            res.multi(
+                RSYNC_DURATION, "uri", &rsync.module, 
+                format_args!(
+                    "{}.{:03}",
+                    duration.as_secs(),
+                    duration.subsec_millis(),
+                )
+            );
         }
     }
 
-    // rrdp_status
-    writeln!(res,
-        "\n\
-        # HELP routinator_rrdp_status combined status code for repository \
-            update requests\n\
-        # TYPE routinator_rrdp_status gauge"
-    ).unwrap();
-    for metrics in &metrics.rrdp {
-        writeln!(
-            res,
-            "routinator_rrdp_status{{uri=\"{}\"}} {}",
-            metrics.notify_uri,
-            metrics.status().into_i16()
-        ).unwrap();
-    }
-
-    // rrdp_notification_status
-    writeln!(res,
-        "\n\
-        # HELP routinator_rrdp_notification_status status code for getting \
-            notification file\n\
-        # TYPE routinator_rrdp_notification_status gauge"
-    ).unwrap();
-    for metrics in &metrics.rrdp {
-        writeln!(
-            res,
-            "routinator_rrdp_notification_status{{uri=\"{}\"}} {}",
-            metrics.notify_uri,
-            metrics.notify_status.into_i16(),
-        ).unwrap();
-    }
-
-    // rrdp_payload_status
-    writeln!(res,
-        "\n\
-        # HELP routinator_rrdp_payload_status status code(s) for getting \
-            payload file(s)\n\
-        # TYPE routinator_rrdp_payload_status gauge"
-    ).unwrap();
-    for metrics in &metrics.rrdp {
-        writeln!(
-            res,
-            "routinator_rrdp_payload_status{{uri=\"{}\"}} {}",
-            metrics.notify_uri,
-            metrics.payload_status.map(|status| {
-                status.into_i16()
-            }).unwrap_or(0),
-        ).unwrap();
-    }
-
-    // rrdp_duration
-    writeln!(res,
-        "\n\
-        # HELP routinator_rrdp_duration duration of rrdp in seconds\n\
-        # TYPE routinator_rrdp_duration gauge"
-    ).unwrap();
-    for metrics in &metrics.rrdp {
-        if let Ok(duration) = metrics.duration {
-            writeln!(
-                res,
-                "routinator_rrdp_duration{{uri=\"{}\"}} {:.3}",
-                metrics.notify_uri,
-                duration.as_secs() as f64
-                + f64::from(duration.subsec_millis()) / 1000.
-            ).unwrap();
-        }
-    }
-
-    // rrdp_serial
-    writeln!(res,
-        "\n\
-        # HELP routinator_rrdp_serial serial number of last RRDP update\n\
-        # TYPE routinator_rrdp_serial gauge"
-    ).unwrap();
-    for metrics in &metrics.rrdp {
-        if let Some(serial) = metrics.serial {
-            writeln!(
-                res,
-                "routinator_rrdp_serial{{uri=\"{}\"}} {}",
-                metrics.notify_uri,
-                serial
-            ).unwrap();
-        }
-    }
-
+    // RTR server metrics.
+    //
     let detailed_rtr = rtr_metrics.detailed();
     let rtr_metrics = rtr_metrics.read().await;
 
-    // rtr_current_connections
-    writeln!(res,
-        "\n\
-        # HELP routinator_rtr_current_connections currently open RTR \
-                                                  connections\n\
-        # TYPE routinator_rtr_current_connections gauge"
-    ).unwrap();
-    writeln!(res,
-        "routinator_rtr_current_connections {}",
+    const RTR_CURRENT_CONNECTIONS: &str = "rtr_current_connections";
+    res.header(
+        RTR_CURRENT_CONNECTIONS, Gauge,
+        "number of currently open RTR connections"
+    );
+    res.single(
+        RTR_CURRENT_CONNECTIONS, 
         rtr_metrics.current_connections()
-    ).unwrap();
+    );
 
-    // rtr_bytes_read
-    writeln!(res,
-        "\n\
-        # HELP routinator_rtr_bytes_read number of bytes read via RTR\n\
-        # TYPE routinator_rtr_bytes_read counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_rtr_bytes_read {}", rtr_metrics.bytes_read()
-    ).unwrap();
+    const RTR_BYTES_READ: &str = "rtr_bytes_read";
+    res.header(
+        RTR_BYTES_READ, Counter,
+        "total number of bytes read from RTR connections"
+    );
+    res.single(RTR_BYTES_READ, rtr_metrics.bytes_read());
 
-    // rtr_bytes_written
-    writeln!(res,
-        "\n\
-        # HELP routinator_rtr_bytes_written number of bytes written via RTR\n\
-        # TYPE routinator_rtr_bytes_written counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_rtr_bytes_written {}", rtr_metrics.bytes_written()
-    ).unwrap();
+    const RTR_BYTES_WRITTEN: &str = "rtr_bytes_written";
+    res.header(
+        RTR_BYTES_WRITTEN, Counter,
+        "total number of bytes written to RTR connections"
+    );
+    res.single(RTR_BYTES_WRITTEN, rtr_metrics.bytes_written());
 
     if detailed_rtr {
-        // rtr_client_connections
-        writeln!(res,
-            "\n\
-            # HELP routinator_rtr_client_connections number of current \
-                connections per client\n\
-            # TYPE routinator_rtr_client_connections gauge"
-        ).unwrap();
+        const RTR_CLIENT_CONNECTIONS: &str = "rtr_client_connections";
+        res.header(
+            RTR_CLIENT_CONNECTIONS, Gauge,
+            "number of current connections per client address"
+        );
         rtr_metrics.fold_clients(0, |count, client| {
             if client.is_open() {
                 *count += 1
             }
         }).for_each(|(addr, count)| {
-            writeln!(res,
-                "routinator_rtr_client_connections{{addr=\"{}\"}} {}",
-                addr, count
-            ).unwrap();
+            res.multi(
+                RTR_CLIENT_CONNECTIONS, "addr", addr, count
+            );
         });
 
-        // rtr_client_serial
-        writeln!(res,
-            "\n\
-            # HELP routinator_rtr_client_serial \
-                last serial seen by a client\n\
-            # TYPE routinator_rtr_client_serial gauge"
-        ).unwrap();
+        const RTR_CLIENT_SERIAL: &str = "rtr_client_serial";
+        res.header(
+            RTR_CLIENT_SERIAL, Gauge,
+            "last serial seen by client address"
+        );
         rtr_metrics.fold_clients(None, |serial, client| {
             *serial = match (*serial, client.serial().map(u32::from)) {
                 (Some(left), Some(right)) => Some(cmp::max(left, right)),
@@ -381,23 +290,21 @@ async fn handle_metrics(
                 (None, None) => None
             };
         }).for_each(|(addr, count)| {
-            write!(res,
-                "routinator_rtr_client_serial{{addr=\"{}\"}} ",
-                addr,
-            ).unwrap();
             match count {
-                Some(count) => writeln!(res, "{}", count).unwrap(),
-                None => writeln!(res, "-1").unwrap(),
+                Some(count) => {
+                    res.multi(RTR_CLIENT_SERIAL, "addr", addr, count);
+                }
+                None => {
+                    res.multi(RTR_CLIENT_SERIAL, "addr", addr, -1);
+                }
             }
         });
 
-        // rtr_client_last_update_seconds
-        writeln!(res,
-            "\n\
-            # HELP routinator_rtr_last_update_seconds \
-                last serial seen by a client\n\
-            # TYPE routinator_rtr_last_update_seconds gauge"
-        ).unwrap();
+        const RTR_CLIENT_LAST_UPDATE: &str = "rtr_client_last_update_seconds";
+        res.header(
+            RTR_CLIENT_LAST_UPDATE, Gauge,
+            "seconds since last update by client address",
+        );
         rtr_metrics.fold_clients(None, |update, client| {
             *update = match (*update, client.updated()) {
                 (Some(left), Some(right)) => Some(cmp::max(left, right)),
@@ -406,113 +313,419 @@ async fn handle_metrics(
                 (None, None) => None
             };
         }).for_each(|(addr, update)| {
-            write!(res,
-                "routinator_rtr_last_update_seconds{{addr=\"{}\"}} ",
-                addr,
-            ).unwrap();
             match update {
                 Some(update) => {
                     let duration = Utc::now() - update;
-                    writeln!(res,
-                        "{}.{:03}",
-                        duration.num_seconds(),
-                        duration.num_milliseconds() % 1000,
-                    ).unwrap();
+                    res.multi(
+                        RTR_CLIENT_LAST_UPDATE,
+                        "addr", addr,
+                        format_args!(
+                            "{}.{:03}",
+                            duration.num_seconds(),
+                            duration.num_milliseconds() % 1000,
+                        )
+                    );
                 }
-                None => writeln!(res, "-1").unwrap(),
+                None => {
+                    res.multi(
+                        RTR_CLIENT_LAST_UPDATE,
+                        "addr", addr,
+                        -1
+                    )
+                }
             }
         });
 
-        // rtr_client_read_bytes
-        writeln!(res,
-            "\n\
-            # HELP routinator_rtr_client_read_bytes \
-                number of bytes read per client\n\
-            # TYPE routinator_rtr_client_read_bytes counter"
-        ).unwrap();
+        const RTR_CLIENT_READ: &str = "rtr_client_read_bytes";
+        res.header(
+            RTR_CLIENT_READ, Counter,
+            "number of bytes read from a client address"
+        );
         rtr_metrics.fold_clients(0, |count, client| {
             *count += client.bytes_read();
         }).for_each(|(addr, count)| {
-            writeln!(res,
-                "routinator_rtr_client_read_bytes{{addr=\"{}\"}} {}",
-                addr, count
-            ).unwrap()
+            res.multi(
+                RTR_CLIENT_READ, "addr", addr, count
+            );
         });
 
-        // rtr_client_written_bytes
-        writeln!(res,
-            "\n\
-            # HELP routinator_rtr_client_written_bytes \
-                number of bytes written per client\n\
-            # TYPE routinator_rtr_client_written_bytes counter"
-        ).unwrap();
+        const RTR_CLIENT_WRITTEN: &str = "rtr_client_written_bytes";
+        res.header(
+            RTR_CLIENT_WRITTEN, Counter,
+            "number of bytes written to a client address"
+        );
         rtr_metrics.fold_clients(0, |count, client| {
             *count += client.bytes_written();
         }).for_each(|(addr, count)| {
-            writeln!(res,
-                "routinator_rtr_client_bytes_written{{addr=\"{}\"}} {}",
-                addr, count
-            ).unwrap()
+            res.multi(
+                RTR_CLIENT_WRITTEN, "addr", addr, count
+            );
         });
+
     }
 
-    // http_connections
-    writeln!(res,
-        "\n\
-        # HELP routinator_http_connections total number of HTTP connections\n\
-        # TYPE routinator_http_connections counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_http_connections {}", server_metrics.conn_open()
-    ).unwrap();
+    // HTTP server metrics.
+    //
+    const HTTP_CONNECTIONS: &str = "http_connections";
+    res.header(
+        HTTP_CONNECTIONS, Counter,
+        "total number of HTTP connections opened"
+    );
+    res.single(HTTP_CONNECTIONS, server_metrics.conn_open());
 
-    // http_current_connections
-    writeln!(res,
-        "\n\
-        # HELP routinator_http_current_connections currently open HTTP \
-                                                  connections\n\
-        # TYPE routinator_http_current_connections gauge"
-    ).unwrap();
-    writeln!(res,
-        "routinator_http_current_connections {}",
+    const HTTP_CURRENT_CONNECTIONS: &str = "http_current_connections";
+    res.header(
+        HTTP_CURRENT_CONNECTIONS, Gauge,
+        "number of currently open HTTP connections"
+    );
+    res.single(
+        HTTP_CURRENT_CONNECTIONS,
         server_metrics.conn_open() - server_metrics.conn_close()
-    ).unwrap();
+    );
 
-    // http_bytes_read
-    writeln!(res,
-        "\n\
-        # HELP routinator_http_bytes_read number of bytes read via HTTP\n\
-        # TYPE routinator_http_bytes_read counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_http_bytes_read {}", server_metrics.bytes_read()
-    ).unwrap();
+    const HTTP_BYTES_READ: &str = "http_bytes_read";
+    res.header(
+        HTTP_BYTES_READ, Counter,
+        "number of bytes read from HTTP connections"
+    );
+    res.single("http_bytes_read", server_metrics.bytes_read());
 
-    // http_bytes_written
-    writeln!(res,
-        "\n\
-        # HELP routinator_http_bytes_written number of bytes written via HTTP\n\
-        # TYPE routinator_http_bytes_written counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_http_bytes_written {}", server_metrics.bytes_written()
-    ).unwrap();
+    const HTTP_BYTES_WRITTEN: &str = "http_bytes_written";
+    res.header(
+        HTTP_BYTES_WRITTEN, Counter,
+        "number of bytes written to HTTP connections"
+    );
+    res.single(HTTP_BYTES_WRITTEN, server_metrics.bytes_written());
 
-    // http_requests
-    writeln!(res,
-        "\n\
-        # HELP routinator_http_requests number of bytes written via HTTP\n\
-        # TYPE routinator_http_requests counter"
-    ).unwrap();
-    writeln!(res,
-        "routinator_http_requests {}", server_metrics.requests()
-    ).unwrap();
+    const HTTP_REQUESTS: &str = "http_requests";
+    res.header(
+        HTTP_REQUESTS, Counter,
+        "number of received HTTP requests"
+    );
+    res.single(HTTP_REQUESTS, server_metrics.requests());
+
+    res.into_response()
+}
 
 
-    Response::builder()
+#[derive(Default)]
+struct PrometheusMetrics {
+    target: String,
+    prefix: &'static str,
+}
+
+impl PrometheusMetrics {
+    const VALID_POINTS: &'static str = "valid_points";
+    const REJECTED_POINTS: &'static str = "rejected_points";
+    const VALID_MANIFESTS: &'static str = "valid_manifests";
+    const INVALID_MANIFESTS: &'static str = "invalid_manifests";
+    const STALE_MANIFESTS: &'static str = "stale_manifests";
+    const MISSING_MANIFESTS: &'static str = "missing_manifests";
+    const VALID_CRLS: &'static str = "valid_crls";
+    const INVALID_CRLS: &'static str = "invalid_crls";
+    const STALE_CRLS: &'static str = "stale_crls";
+    const STRAY_CRLS: &'static str = "stray_crls";
+    const VALID_CA_CERTS: &'static str = "valid_ca_certs";
+    const VALID_EE_CERTS: &'static str = "valid_ee_certs";
+    const INVALID_CERTS: &'static str = "invalid_certs";
+    const VALID_ROAS: &'static str = "valid_roas";
+    const INVALID_ROAS: &'static str = "invalid_roas";
+    const VALID_GBRS: &'static str = "valid_gbrs";
+    const INVALID_GBRS: &'static str = "invalid_gbrs";
+    const OTHER_OBJECTS: &'static str = "other_objects";
+
+    fn publication_headers(&mut self, group: &str) {
+        use PrometheusType::*;
+
+        self.header(
+            Self::VALID_POINTS, Gauge,
+            format_args!("valid publication points {}", group)
+        );
+        self.header(
+            Self::REJECTED_POINTS, Gauge,
+            format_args!("rejected publication points {}", group)
+        );
+        self.header(
+            Self::VALID_MANIFESTS, Gauge,
+            format_args!("valid manifests {}", group)
+        );
+        self.header(
+            Self::INVALID_MANIFESTS, Gauge,
+            format_args!("invalid manifests {}", group)
+        );
+        self.header(
+            Self::STALE_MANIFESTS, Gauge,
+            format_args!("stale manifests {}", group)
+        );
+        self.header(
+            Self::MISSING_MANIFESTS, Gauge,
+            format_args!("missing manifests {}", group)
+        );
+        self.header(
+            Self::VALID_CRLS, Gauge,
+            format_args!("valid CRLs {}", group)
+        );
+        self.header(
+            Self::INVALID_CRLS, Gauge,
+            format_args!("invalid CRLs {}", group)
+        );
+        self.header(
+            Self::STALE_CRLS, Gauge,
+            format_args!("stale CRLs {}", group)
+        );
+        self.header(
+            Self::STRAY_CRLS, Gauge,
+            format_args!("stray CRLs {}", group)
+        );
+        self.header(
+            Self::VALID_CA_CERTS, Gauge,
+            format_args!("valid CA certificates {}", group)
+        );
+        self.header(
+            Self::VALID_EE_CERTS, Gauge,
+            format_args!("valid router certificates {}", group)
+        );
+        self.header(
+            Self::INVALID_CERTS, Gauge,
+            format_args!("invalid certificate files {}", group)
+        );
+        self.header(
+            Self::VALID_ROAS, Gauge,
+            format_args!("valid ROAs {}", group)
+        );
+        self.header(
+            Self::INVALID_ROAS, Gauge,
+            format_args!("invalid ROAs {}", group)
+        );
+        self.header(
+            Self::VALID_GBRS, Gauge,
+            format_args!("valid GBRs {}", group)
+        );
+        self.header(
+            Self::INVALID_GBRS, Gauge,
+            format_args!("invalid GBRs {}", group)
+        );
+        self.header(
+            Self::OTHER_OBJECTS, Gauge,
+            format_args!("other objects {}", group)
+        );
+    }
+
+    fn publication_values(
+        &mut self, label_name: &str, label_value: &impl fmt::Display,
+        publication: &PublicationMetrics
+    ) {
+        self.multi(
+            Self::VALID_POINTS, label_name, label_value,
+            publication.valid_points
+        );
+        self.multi(
+            Self::REJECTED_POINTS, label_name, label_value,
+            publication.rejected_points
+        );
+        self.multi(
+            Self::VALID_MANIFESTS, label_name, label_value,
+            publication.valid_manifests
+        );
+        self.multi(
+            Self::INVALID_MANIFESTS, label_name, label_value,
+            publication.invalid_manifests
+        );
+        self.multi(
+            Self::STALE_MANIFESTS, label_name, label_value,
+            publication.stale_manifests
+        );
+        self.multi(
+            Self::MISSING_MANIFESTS, label_name, label_value,
+            publication.missing_manifests
+        );
+        self.multi(
+            Self::VALID_CRLS, label_name, label_value,
+            publication.valid_crls
+        );
+        self.multi(
+            Self::INVALID_CRLS, label_name, label_value,
+            publication.invalid_crls
+        );
+        self.multi(
+            Self::STALE_CRLS, label_name, label_value,
+            publication.stale_crls
+        );
+        self.multi(
+            Self::STRAY_CRLS, label_name, label_value,
+            publication.stray_crls
+        );
+        self.multi(
+            Self::VALID_CA_CERTS, label_name, label_value,
+            publication.valid_ca_certs
+        );
+        self.multi(
+            Self::VALID_EE_CERTS, label_name, label_value,
+            publication.valid_ee_certs
+        );
+        self.multi(
+            Self::INVALID_CERTS, label_name, label_value,
+            publication.invalid_certs
+        );
+        self.multi(
+            Self::VALID_ROAS, label_name, label_value,
+            publication.valid_roas
+        );
+        self.multi(
+            Self::INVALID_ROAS, label_name, label_value,
+            publication.invalid_roas
+        );
+        self.multi(
+            Self::VALID_GBRS, label_name, label_value,
+            publication.valid_gbrs
+        );
+        self.multi(
+            Self::INVALID_GBRS, label_name, label_value,
+            publication.invalid_gbrs
+        );
+        self.multi(
+            Self::OTHER_OBJECTS, label_name, label_value,
+            publication.others
+        );
+    }
+
+    const VRPS_TOTAL: &'static str = "vrps_total";
+    const VRPS_UNSAFE: &'static str = "vrps_unsafe";
+    const VRPS_FILTERED_LOCALLY: &'static str = "vrps_filtered_locally";
+    const VRPS_DUPLICATE: &'static str = "vrps_duplicate";
+    const VRPS_FINAL: &'static str = "vrps_final";
+
+    fn vrp_headers(&mut self, group: &str) {
+        use PrometheusType::*;
+
+        self.header(
+            Self::VRPS_TOTAL, Gauge,
+            format_args!("total number of encountered valid VRPs {}", group)
+        );
+        self.header(
+            Self::VRPS_UNSAFE, Gauge,
+            format_args!(
+                "VRPs overlapping with rejected publication points  {}",
+                group
+            )
+        );
+        self.header(
+            Self::VRPS_FILTERED_LOCALLY, Gauge,
+            format_args!("VRPs filtered out by local exceptions {}", group)
+        );
+        self.header(
+            Self::VRPS_DUPLICATE, Gauge,
+            format_args!("duplicate VRPs {}", group)
+        );
+        self.header(
+            Self::VRPS_FINAL, Gauge,
+            format_args!("VRPs contributed to the final set {}", group)
+        );
+    }
+
+    fn vrp_values(
+        &mut self, label_name: &str, label_value: &impl fmt::Display,
+        vrps: &VrpMetrics
+    ) {
+        self.multi(
+            Self::VRPS_TOTAL, label_name, label_value, vrps.valid
+        );
+        self.multi(
+            Self::VRPS_UNSAFE, label_name, label_value, vrps.marked_unsafe
+        );
+        self.multi(
+            Self::VRPS_FILTERED_LOCALLY, label_name, label_value,
+            vrps.locally_filtered
+        );
+        self.multi(
+            Self::VRPS_DUPLICATE, label_name, label_value, vrps.duplicate
+        );
+        self.multi(
+            Self::VRPS_FINAL, label_name, label_value, vrps.contributed
+        );
+    }
+}
+
+impl PrometheusMetrics {
+    fn new() -> Self {
+        PrometheusMetrics {
+            target: String::new(),
+            prefix: "routinator"
+        }
+    }
+
+    fn set_prefix(&mut self, prefix: &'static str) {
+        self.prefix = prefix
+    }
+
+    fn into_response(self) -> Response<Body> {
+        Response::builder()
         .header("Content-Type", "text/plain; version=0.0.4")
-        .body(res.into())
-        .unwrap()
+        .body(self.target.into())
+        .expect("finalizing HTTP response")
+    }
+
+    fn header(
+        &mut self,
+        name: &str,
+        ptype: PrometheusType,
+        help: impl fmt::Display
+    ) {
+        writeln!(&mut self.target,
+            "# HELP {}_{} {}\n# TYPE {}_{} {}",
+            self.prefix, name, help, self.prefix, name, ptype
+        ).expect("writing to string");
+    }
+
+    fn single(&mut self, name: &str, value: impl fmt::Display) {
+        writeln!(&mut self.target,
+            "{}_{} {}",
+            self.prefix, name, value
+        ).expect("writing to string");
+    }
+
+    fn multi(&mut self,
+        name: &str,
+        label_name: &str,
+        label_value: impl fmt::Display,
+        value: impl fmt::Display
+    ) {
+        writeln!(
+            &mut self.target,
+            "{}_{}{{{}=\"{}\"}} {}",
+            self.prefix, name,
+            label_name, label_value,
+            value,
+        ).expect("writing to string");
+    }
+}
+
+
+//------------ PrometheusType ------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+enum PrometheusType {
+    Counter,
+    Gauge,
+    /* Not currently used:
+    Histogram,
+    Summary,
+    */
+}
+
+impl fmt::Display for PrometheusType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(
+            match *self {
+                PrometheusType::Counter => "counter",
+                PrometheusType::Gauge => "gauge",
+                /*
+                PrometheusType::Histogram => "histogram",
+                PrometheusType::Summary => "summary",
+                */
+            }
+        )
+    }
 }
 
 

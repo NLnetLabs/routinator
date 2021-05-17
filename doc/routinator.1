@@ -1,4 +1,4 @@
-.TH "routinator" "1" "December 9, 2020" "NLnet Labs" "routinator 0.8.2
+.TH "routinator" "1" "February 2, 2021" "NLnet Labs" "routinator 0.8.3
 .\"
 .\" routinator.1 -- RPKI Relying Party software
 .\"
@@ -28,7 +28,7 @@
 .B routinator
 [options]
 .B validate
-[ validate-options ]
+[validate-options]
 .RB [ \-a
 .IR asn ]
 .RB [ \-p
@@ -37,7 +37,7 @@
 .B routinator
 [options]
 .B server
-[ server-options ]
+[server-options]
 .PP
 .B routinator
 [options]
@@ -62,11 +62,11 @@ collects and processes Resource Public Key Infrastructure (RPKI) data. It
 validates the Route Origin Attestations contained in the data and makes
 them available to your BGP routing workflow.
 .P
-It can either run in one-shot mode outputting a list of validated route
-origins in various formats or as a server for the RPKI-to-Router (RTR)
-protocol that routers often implement to access the data, or via HTTP.
+It can run in one-shot mode outputting a list of validated ROA
+payloads in various formats, as a server for the RPKI-to-Router (RTR)
+protocol that many routers implement to access the data, or via HTTP.
 .P
-These modes and additional operations can be chosen  via commands. For
+These modes and additional operations can be chosen via commands. For
 the available commands, see
 .B COMMANDS
 below.
@@ -96,9 +96,9 @@ overwritten by the
 .B -r
 or
 .B -t
-options, the local repository will be kept in the sub-directory
+options, the local repository will be kept in the subdirectory
 .I repository
-and the TALs will be kept in the sub-directory
+and the TALs will be kept in the subdirectory
 .I tals\fR.
 .IP
 If omitted, the base directory defaults to
@@ -153,8 +153,7 @@ A policy of
 .I reject
 instructs Routinator to consider all stale objects invalid. This will
 result in all material published by the CA issuing this manifest and CRL
-to be invalid including all material of any child CA. This is the default
-policy if the option is not provided.
+to be invalid including all material of any child CA. 
 .IP
 The
 .I warn
@@ -165,6 +164,15 @@ up on the issue.
 Finally, the
 .I accept
 policy will cause Routinator to quietly accept any stale object as valid.
+.IP
+In Routinator 0.8.0 and newer, 
+.I reject
+is the default policy if the option is not provided. In version 0.7.0 the
+default for this option was 
+.I warn.
+In all previous versions
+.I warn
+was hard-wired.
 
 .TP
 .BI --unsafe-vrps= policy
@@ -173,11 +181,11 @@ of a VRP overlaps with any resources assigned to a CA that has been rejected
 because if failed to validate completely, the VRP is said to be unsafe since
 using it may lead to legitimate routes being flagged as RPKI invalid.
 .IP
-There are three options how to deal with unsafe VRPS:
+There are three options how to deal with unsafe VRPs:
 .IP
 A policy of
 .I reject
-will filter out these VPRs. Warnings will be logged to indicate which VRPs
+will filter out these VRPs. Warnings will be logged to indicate which VRPs
 have been filtered
 .IP
 The
@@ -235,14 +243,14 @@ rejected.
 As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI data
 with dubious host names. In particular, it will reject the name
 .IR localhost,
-host names that consist of IP addresses, and a host name that contains an
+URIs that consist of IP addresses, and a host name that contains an
 explicit port.
 .IP
 This option allows to disable this filtering.
 
 .TP
 .B --fresh
-Delete and re-initialize the local data storage before starting. This option
+Delete and reinitialize the local data storage before starting. This option
 should be used when Routinator fails after reporting corrupt data storage.
 
 .TP
@@ -460,7 +468,7 @@ The same as
 except that all fields are embedded in double quotes and the autonomous system
 number is given without the prefix
 .IR AS .
-This format is pretty much identical to the CSV produced by the RIPE NCC
+This format is pretty much identical to the CSV produced by the RIPE NCC RPKI
 Validator.
 
 .TP
@@ -543,10 +551,10 @@ Choosing this format causes Routinator to produce a
 .I "roa-set"
 configuration item for the OpenBGPD configuration.
 .TP
-.B bird
+.B bird1
 Choosing this format causes Routinator to produce a
 .I "roa table"
-configuration item for the BIRD configuration.
+configuration item for the BIRD1 configuration.
 .TP
 .B bird2
 Choosing this format causes Routinator to produce a
@@ -734,7 +742,7 @@ the RTR protocol.
 .TP
 .BI \-\-rtr\-tcp\-keepalive= seconds
 The number of seconds to wait before sending a TCP keepalive on an
-established RTR connection. By default, TCP keepalive is enable on all RTR
+established RTR connection. By default, TCP keepalive is enabled on all RTR
 connections with an idle time of 60 seconds. Set this option to 0 to disable
 keepalives.
 .TP
@@ -747,13 +755,13 @@ local network topology.
 .BI \-\-refresh= seconds
 The amount of seconds the server should wait after having finished updating
 and validating the local repository before starting to update again. The
-next update will earlier if objects in the repository expire earlier. The
-default value is 600 seconds.
+next update will start earlier if objects in the repository expire earlier.
+The default value is 600 seconds.
 .TP
 .BI \-\-retry= seconds
 The amount of seconds to suggest to an RTR client to wait before trying to
-request data again if that failed. The default value is 600 seconds, the
-value recommended in RFC 8210.
+request data again if that failed. The default value is 600 seconds,
+as recommended in RFC 8210.
 .TP
 .BI \-\-expire= seconds
 The amount of seconds to an RTR client can keep using data if it cannot
@@ -816,7 +824,7 @@ the operation but provide exit status 2. If this option is not given, the
 operation will complete with exit status 0 in this case.
 
 .SS dump
-Writes the content of all stored data to the file system. This is primarily
+Writes the contents of all stored data to the file system. This is primarily
 intended for debugging but can be used to get access to the view of the RPKI
 data that Routinator currently sees.
 
@@ -873,7 +881,7 @@ TALs in files in the TAL directory which can be set by the
 .B \-t
 option. If the
 .B \-b
-option is used instead, the TAL directory will be in the sub-directory
+option is used instead, the TAL directory will be in the subdirectory
 .I tals
 under the directory specified in this option. The default location, if
 no options are used at all is
@@ -890,7 +898,7 @@ of
 .I .tal
 in this directory. This means that you can add and remove trust anchors by
 adding and removing files in this directory. If you add files, make sure they
-are in the format described by RFC 7730 or the upcoming RFC 8630.
+are in the format described by RFC 7730 or RFC 8630.
 
 .SH CONFIGURATION FILE
 Instead of providing all options on the command line, they can also be
@@ -949,7 +957,7 @@ A string specifying the policy for dealing with unsafe VRPs.
 .RS
 .TP
 .I reject
-Filter unsafe VPRs and add warning messages to the log.
+Filter unsafe VRPs and add warning messages to the log.
 .TP
 .I warn
 Warn about unsafe VRPs in the log but add them to the final set of VRPs.
@@ -1314,7 +1322,7 @@ In
 and
 .B server
 mode, Routinator will produce a set of VRPs from the data published in the
-RPKI repository. It will walk over all certfication authorities (CAs)
+RPKI repository. It will walk over all certification authorities (CAs)
 starting with those referred to in the configured TALs.
 .P
 Each CA is checked whether all its published objects are present, correctly
@@ -1356,7 +1364,7 @@ command line option or setting
 in the config file.
 .P
 By default, this filter is currently disabled but warnings are logged about
-unsafe VPRs. This allows to assess the operation impact of such a filter.
+unsafe VRPs. This allows to assess the operation impact of such a filter.
 Depending on this assessment, the default may change in future version.
 .P
 One exception from this rule are CAs that have the full address space
@@ -1368,7 +1376,7 @@ VRPs should something happen to a trust anchor is unnecessary.
 .SH RELAXED DECODING
 The documents defining RPKI include a number of very strict rules
 regarding the formatting of the objects published in the RPKI repository.
-However, because PRKI reuses existing technology, real-world applications
+However, because RPKI reuses existing technology, real-world applications
 produce objects that do not follow these strict requirements.
 .PP
 As a consequence, a significant portion of the RPKI repository is actually
@@ -1413,11 +1421,11 @@ signed objects.
 .IP
 In relaxed mode, we will allow BER encoding.
 .IP
-Note that this isn't just nit-picking. In BER encoding, octet strings can
-be broken up into a sequence of sub-strings. Since those strings are in
+Note that this isn't just nitpicking. In BER encoding, octet strings can
+be broken up into a sequence of substrings. Since those strings are in
 some places used to carry encoded content themselves, such an encoding
 does make parsing significantly more difficult. At least one CA does
-produce such broken-up strings.
+produce such broken up strings.
 
 .SH SIGNALS
 .SS SIGUSR1: Reload TALs and restart validation

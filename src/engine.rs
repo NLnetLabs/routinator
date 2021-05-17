@@ -160,11 +160,24 @@ impl Engine {
         }
 
         sled::open(&db_path).map_err(|err| {
-            error!(
-                "Failed to open store database at {}: {}",
-                db_path.display(),
-                err
-            );
+            match err {
+                sled::Error::Io(err) => {
+                    error!(
+                        "Failed to open store database at {}: {}\n\
+                        Is there another Routinator running?
+                        ",
+                        db_path.display(),
+                        err
+                    );
+                }
+                err => {
+                    error!(
+                        "Failed to open store database at {}: {}",
+                        db_path.display(),
+                        err
+                    );
+                }
+            }
             Failed
         })
     }
