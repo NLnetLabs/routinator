@@ -81,6 +81,8 @@ Other Changes
   to [rpki-rtr]. ([#443])
 * Upgrade Tokio-related dependencies to new version based on Tokio 1.0.
   ([#444])
+* Upgrade the bundled UI to version 0.2.0 reflecting the changed metrics.
+  ([#550])
 
 [#437]: https://github.com/NLnetLabs/routinator/pull/437
 [#443]: https://github.com/NLnetLabs/routinator/pull/443
@@ -111,6 +113,7 @@ Other Changes
 [#537]: https://github.com/NLnetLabs/routinator/pull/537
 [#539]: https://github.com/NLnetLabs/routinator/pull/539
 [#543]: https://github.com/NLnetLabs/routinator/pull/543
+[#550]: https://github.com/NLnetLabs/routinator/pull/550
 [rpki-rs]: https://github.com/NLnetLabs/rpki-rs/
 [rpki-rtr]: https://github.com/NLnetLabs/rpki-rtr/
 [@bjpbakker]: https://github.com/bjpbakker
