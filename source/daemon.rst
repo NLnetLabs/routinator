@@ -58,9 +58,9 @@ API Endpoints
 """""""""""""
 
 .. versionchanged:: 0.9
-   The ``/api/v1/status/`` path
+   The :command:`/api/v1/status` path
 .. versionadded:: 0.9
-   The ``/json-delta`` path
+   The :command:`/json-delta` path
 
 The service supports GET requests with the following paths:
 
