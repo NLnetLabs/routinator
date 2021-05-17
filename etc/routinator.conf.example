@@ -203,11 +203,11 @@ tal-dir = "..."
 #
 # The following will result in the same TAL labels as used by default by the
 # RIPE NCC Validator for the TALs included with Routinator.
-tal-labels = [
-    ["afrinic.tal", "AfriNIC RPKI Root"],
-    ["apnic.tal", "APNIC RPKI Root"],
-    ["arin.tal", "ARIN"],
-    ["lacnic.tal", "LACNIC RPKI Root"],
-    ["ripe.tal", "RIPE NCC RPKI Root"],
-]
+#tal-labels = [
+#    ["afrinic.tal", "AFRINIC RPKI Root"],
+#    ["apnic.tal", "APNIC RPKI Root"],
+#    ["arin.tal", "ARIN RPKI Root"],
+#    ["lacnic.tal", "LACNIC RPKI Root"],
+#    ["ripe.tal", "RIPE NCC RPKI Root"],
+#]
 
