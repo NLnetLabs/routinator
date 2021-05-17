@@ -151,7 +151,7 @@ impl Engine {
             if let Err(err) = fs::remove_dir_all(&db_path) {
                 if err.kind() != io::ErrorKind::NotFound {
                     error!(
-                        "Failed to delete database at {}: {}",
+                        "Failed to delete store database at {}: {}",
                         db_path.display(), err
                     );
                     return Err(Failed)
@@ -161,19 +161,18 @@ impl Engine {
 
         sled::open(&db_path).map_err(|err| {
             match err {
-                sled::Error::Io(ref err)
-                    if err.kind() == io::ErrorKind::WouldBlock
-                => {
+                sled::Error::Io(err) => {
                     error!(
-                        "Failed to open database at {}.\n\
-                         The database is in use. Is there another \
-                         Routinator running?",
-                        db_path.display()
+                        "Failed to open store database at {}: {}\n\
+                        Is there another Routinator running?
+                        ",
+                        db_path.display(),
+                        err
                     );
                 }
                 err => {
                     error!(
-                        "Failed to open database at {}: {}",
+                        "Failed to open store database at {}: {}",
                         db_path.display(),
                         err
                     );
