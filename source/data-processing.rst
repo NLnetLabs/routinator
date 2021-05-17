@@ -29,11 +29,11 @@ pointer explicitly states if RRDP is offered in addition to rsync.
 
     The RPKI hierarchy
 
-As a precaution, Routinator will not accept rsync and HTTPS URIs from RPKI data
-with dubious host names. In particular, it will reject the name *localhost*,
-URIs that consist of IP addresses, and a host name that contains an explicit
-port. You can change this behaviour with the :option:`--allow-dubious-hosts`
-option.
+As a precaution, Routinator will not accept rsync and HTTPS URIs from RPKI
+repositories with dubious hostnames. In particular, it will reject the name
+*localhost*, URIs that consist of IP addresses, and hostnames that contain an
+explicit port. You can change this behaviour with the
+:option:`--allow-dubious-hosts` option.
 
 RRDP Fallback
 """""""""""""
