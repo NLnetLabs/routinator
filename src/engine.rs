@@ -698,13 +698,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             PointManifest::Valid(manifest) => {
                 self.metrics.valid_manifests += 1;
                 self.metrics.valid_crls += 1;
-                manifest
+                Some(manifest)
             }
             PointManifest::Unverified(stored) => {
-                match self.validate_stored_manifest(stored) {
-                    Ok(manifest) => manifest,
-                    Err(_) => return Ok(Vec::new())
-                }
+                self.validate_stored_manifest(stored).ok()
             }
             PointManifest::NotFound => {
                 warn!(
@@ -712,6 +709,23 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     self.cert.rpki_manifest()
                 );
                 self.metrics.missing_manifests += 1;
+                None
+            }
+        };
+
+        let manifest = match manifest {
+            Some(manifest) => manifest,
+            None => {
+                self.metrics.rejected_points += 1;
+                metrics.apply(
+                    &self.metrics,
+                    self.repository_index.unwrap_or_else(|| {
+                        metrics.repository_index(
+                            self.cert, self.store.is_rrdp()
+                        )
+                    }),
+                    self.cert.tal
+                );
                 return Ok(Vec::new())
             }
         };
@@ -1201,17 +1215,22 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             }
         };
         self.point.processor.repository_index(repository_index);
+
         if self._process()? {
-            metrics.apply(
-                &self.point.metrics, repository_index, self.point.cert.tal
-            );
             self.point.processor.commit();
-            Ok(self.child_cas)
+            self.point.metrics.valid_points += 1;
         }
         else {
             self.point.processor.cancel(&self.point.cert);
-            Ok(Vec::new())
+            self.child_cas = Vec::new();
+            self.point.metrics = PublicationMetrics::default();
+            self.point.metrics.rejected_points += 1;
         }
+
+        metrics.apply(
+            &self.point.metrics, repository_index, self.point.cert.tal
+        );
+        Ok(self.child_cas)
     }
 
     /// Processes the point returning whether the point was accepted.
