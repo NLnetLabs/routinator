@@ -48,8 +48,8 @@ with these options:
 .. option:: -q, --quiet
 
       Print less information. Given twice, print nothing at all. A single
-      :option:`-q` will drop the log level to *error*. Repeating :option:`-q`
-      more than once turns logging off completely.
+      :option:`-q` will drop the log level to *error*. Specifying :option:`-q`
+      twice turns logging off completely.
 
 Detached Server Mode
 --------------------
