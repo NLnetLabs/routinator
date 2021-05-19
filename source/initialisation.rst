@@ -119,8 +119,8 @@ To see if Routinator has been initialised correctly and your firewall allows the
 required outbound connections on ports 443 and 873, it is recommended to perform
 an initial test run. You can do this by having Routinator print a validated ROA
 payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v`
-multiple times to increase the log level to *debug*. This way you can verify if
-Routinator establishes connections as expected:
+twice to increase the :ref:`log level <doc_routinator_logging>` to *debug*. This
+way you can verify if Routinator establishes connections as expected:
 
 .. code-block:: bash
 

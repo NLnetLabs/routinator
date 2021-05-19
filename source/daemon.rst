@@ -12,6 +12,12 @@ via the RTR protocol. You can start the Routinator service using the
           started the service. Thus, if you add or change a TAL you must restart
           Routinator or send it a :ref:`SIGUSR1 <manpage_signals>`.
 
+By default Routinator will stay attached to your terminal and log to standard
+error. You can provide the :option:`--detach` option to run it in the background
+instead, in which case logging information is written to syslog. To learn more
+about what kind of information is returned and how to influence what is logged
+and where, refer to the :ref:`Logging <doc_routinator_logging>` section.
+
 The HTTP Service
 ----------------
 
@@ -30,9 +36,6 @@ run:
 .. code-block:: text
 
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
-
-The application will stay attached to your terminal unless you provide the
-:option:`--detach` option. 
 
 After fetching and verifying all RPKI data, paths are available for each 
 :ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
@@ -64,25 +67,6 @@ API Endpoints
 
 The service supports GET requests with the following paths:
 
-:command:`/metrics`
-     Returns a set of :ref:`monitoring <doc_routinator_monitoring>` metrics in 
-     the format used by Prometheus.
-
-:command:`/status`
-     Returns the current status of the Routinator instance. This is similar to 
-     the output of the :command:`/metrics` endpoint but in a more human friendly
-     format.
-
-:command:`/log`
-     Returns the logging output of the last validation run. The log level 
-     matches that set upon start.
-
-     Note that the output is collected after each validation run and is 
-     therefore only available after the initial run has concluded.
-
-:command:`/version`
-     Returns the version of the Routinator instance.
-
 :command:`/api/v1/status`
      Returns exhaustive information in JSON format on all trust anchors,
      repositories, RRDP and rsync connections, as well as RTR and HTTP sessions.
@@ -108,6 +92,11 @@ The service supports GET requests with the following paths:
      that have been announced and withdrawn, respectively, since the provided
      session and serial. If *reset* is *true*, the *withdrawn* member is not
      present.
+
+In addition, the :command:`/log` endpoint returns :ref:`logging
+<doc_routinator_logging>` information and the :command:`/metrics`,
+:command:`/status` and :command:`/version` endpoints provide :ref:`monitoring
+<doc_routinator_monitoring>` data.
 
 The RTR Service
 ---------------

@@ -17,21 +17,14 @@ The HTTP service has these monitoring endpoints on the following paths:
      Returns the version of the Routinator instance
 
 :command:`/metrics`
-     Exposes a data format specifically for
+     Exposes time series data specifically for
      `Prometheus <https://prometheus.io/>`_, for which `dedicated port 9556
      <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>`_
      is reserved.
 
 :command:`/status`
-     Returns the information from the ``/metrics`` endpoint in a more
-     concise format
-     
-:command:`/log`
-     Returns the logging output of the last validation run. The log level 
-     matches that set upon start.
-
-     Note that the output is collected after each validation run and is 
-     therefore only available after the initial run has concluded.
+     Returns a subset of the information from the :command:`/metrics` endpoint
+     in a more concise format
 
 Metrics
 -------

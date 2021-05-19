@@ -113,6 +113,8 @@ that they can be compared to all BGP origins seen by your routers. For each
 route origin it can be determined if they are RPKI *"Valid"*, *"Invalid"* or
 *"NotFound"*.
 
+.. _doc_routinator_unsafe_vrps:
+
 Unsafe VRPs
 """""""""""
 
