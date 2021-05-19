@@ -36,19 +36,18 @@ Update metrics
   - The retrieval duration and `HTTP status code <https://en.wikipedia.org/wiki/List_of_HTTP_status_codes>`_ for each RRDP publication point 
 
 Object metrics
-  - The number of valid ROAs per Trust Anchor
-  - The number of validated ROA payloads (VRPs) per Trust Anchor
-  - The number of stale objects found
+  - For each crypotographic object that can appear in the RPKI, the number of valid, invalid and stale items per trust anchor and repository
+  - The number of validated ROA payloads (VRPs) per Trust Anchor and repository
   - The number of VRPs added and excluded locally
 
 RTR server
   - The current RTR serial number
-  - The current and total number of RTR connections
+  - The current number of RTR connections
   - The total amount of bytes sent and received over the RTR connection
   - Metrics for each RTR client is available if the :option:`--rtr-client-metrics` option is provided
   
 HTTP server
-  - The current and total number of HTTP connections
+  - The current number of HTTP connections
   - The total amount of bytes sent and received over the HTTP connection
   - The number of HTTP requests
 
