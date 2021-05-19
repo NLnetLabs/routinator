@@ -12,12 +12,11 @@ via the RTR protocol. You can start the Routinator service using the
           started the service. Thus, if you add or change a TAL you must restart
           Routinator or send it a :ref:`SIGUSR1 <manpage_signals>`.
 
-By default Routinator will will stay attached to your terminal and log to
-standard error. You can provide the :option:`--detach` option to run it in the
-background instead, in which case logging information is written to syslog. To
-learn more about what kind of information is returned and how to influence what
-is logged and where, refer to the :ref:`Logging <doc_routinator_logging>`
-section.
+By default Routinator will stay attached to your terminal and log to standard
+error. You can provide the :option:`--detach` option to run it in the background
+instead, in which case logging information is written to syslog. To learn more
+about what kind of information is returned and how to influence what is logged
+and where, refer to the :ref:`Logging <doc_routinator_logging>` section.
 
 The HTTP Service
 ----------------
