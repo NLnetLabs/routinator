@@ -30,20 +30,22 @@ debug
       Information about the internal state of Routinator that may be useful for
       debugging.
 
+
+
 Interactive
 -----------
 
 When running :ref:`interactively <doc_routinator_interactive>` logging
 information will be printed to standard error by default. You can redirect
-logging to syslog using the :option:`--syslog` option. You can influence the
-amount of information returned with these options:
+logging to syslog using the :option:`--syslog` option, or to a file with the
+:option:`--logfile` option. You can influence the amount of information returned
+with these options:
 
 .. option:: -v, --verbose
 
       Print more information. If given twice, even more information is printed.
       More specifically, a single :option:`-v` increases the log level from the
-      default of warn to *info*, specifying it more than once increases it to
-      *debug*.
+      default of warn to *info*, specifying it twice increases it to *debug*.
 
 .. option:: -q, --quiet
 
