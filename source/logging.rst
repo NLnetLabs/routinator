@@ -3,9 +3,9 @@
 Logging
 =======
 
-In order to allow diagnosis of the validated ROA payload (VRP) data set as well
-as its overall health, Routinator logs an extensive amount of information. The
-log levels used by syslog are utilised to allow filtering this information for
+To let you analyse the validated ROA payload (VRP) data set as well as its
+overall health, Routinator logs an extensive amount of information. The log
+levels used by syslog are utilised to allow filtering this information for
 particular use cases.
 
 The log levels represent the following information:
