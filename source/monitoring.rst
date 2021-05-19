@@ -39,7 +39,7 @@ Object metrics
   - The number of valid ROAs per Trust Anchor
   - The number of validated ROA payloads (VRPs) per Trust Anchor
   - The number of stale objects found
-  - The number of VRPs added locally
+  - The number of VRPs added and excluded locally
 
 RTR server
   - The current RTR serial number
