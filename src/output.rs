@@ -210,7 +210,7 @@ impl Selection {
                     SelectOrigin::Prefix(AddressPrefix::from_str(&value)?)
                 );
             }
-            else if key == "select-asn" || key == "select-prefix" {
+            else if key == "select-asn" || key == "filter-asn" {
                 res.origins.push(
                     SelectOrigin::AsId(
                         AsId::from_str(&value).map_err(|_| QueryError)?
