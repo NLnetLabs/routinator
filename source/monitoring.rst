@@ -17,14 +17,14 @@ The HTTP service has these monitoring endpoints on the following paths:
      Returns the version of the Routinator instance
 
 :command:`/metrics`
-     Exposes a data format specifically for
+     Exposes time series data specifically for
      `Prometheus <https://prometheus.io/>`_, for which `dedicated port 9556
      <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>`_
      is reserved.
 
 :command:`/status`
-     Returns the information from the :command:`/metrics` endpoint in a more
-     concise format
+     Returns a subset of the information from the :command:`/metrics` endpoint
+     in a more concise format
 
 Metrics
 -------
