@@ -22,15 +22,15 @@ http://192.0.2.13:8323/.
 
     The Routinator user interface
 
-The web interface provides two main functions. First, it displays statistics
-from the last validation run Routinator has performed. Secondly, you can the
-user interface to verify the RPKI origin validation status of an AS Number and
-IP Prefix combination. 
+The web interface provides several functions. It displays detailed statistics
+from the last validation run Routinator has performed, as well as HTTP and RTR
+connection metrics. You can also use the UI to verify the RPKI origin validation
+status of an AS Number and IP Prefix combination. 
 
 Verifying the validation status can be done by entering an existing BGP
 announcement or an ASN and prefix of your choice, for example for an
 announcement you're planning to do. The returned RPKI validity state will be
-`Valid`, `Invalid` or `NotFound` and is based on the current set of Validated
+*Valid*, *Invalid* or *NotFound* and is based on the current set of Validated
 ROA Payloads (VRPs) in the cache. Routinator will provide an overview of all
 VRPs that led to the result, along with the reason for the outcome.
 
