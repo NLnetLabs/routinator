@@ -61,9 +61,10 @@ songs on `Spotify
    output-formats
    interactive
    daemon
-   user-interface
-   monitoring
    configuration
+   monitoring
+   logging
+   user-interface
    manual-page
 
 .. history

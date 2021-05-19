@@ -16,6 +16,12 @@ command line via the following subcommands:
      Outputs the RPKI validity for a specific announcement by supplying
      an Autonomous System Number (ASN) and an IP prefix.
 
+During the validation process, logging information will be printed to standard
+error. You can influence the amount of details returned with the
+:option:`--verbose` and :option:`--quiet` options. To learn more about what kind
+of information returned, refer to the :ref:`Logging <doc_routinator_logging>`
+section.
+
 Printing a List of VRPs
 -----------------------
 

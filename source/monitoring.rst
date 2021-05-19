@@ -23,15 +23,8 @@ The HTTP service has these monitoring endpoints on the following paths:
      is reserved.
 
 :command:`/status`
-     Returns the information from the ``/metrics`` endpoint in a more
+     Returns the information from the :command:`/metrics` endpoint in a more
      concise format
-     
-:command:`/log`
-     Returns the logging output of the last validation run. The log level 
-     matches that set upon start.
-
-     Note that the output is collected after each validation run and is 
-     therefore only available after the initial run has concluded.
 
 Metrics
 -------
