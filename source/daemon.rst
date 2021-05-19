@@ -123,8 +123,7 @@ a default host or port. Thus, in order to start the RTR server at 192.0.2.13 and
 Please note that port 3323 is not the :abbr:`IANA (Internet Assigned Numbers
 Authority)`-assigned default port for the protocol,  which would be 323. But as
 this is a privileged port, you would need to be running Routinator as root when
-otherwise there is no reason to do that. The application will stay attached to
-your terminal unless you provide the :option:`--detach` option.
+otherwise there is no reason to do that. 
 
 Communication between Routinator and the router using the RPKI-RTR protocol is
 done via plain TCP. Below, there is an explanation how to secure the transport
