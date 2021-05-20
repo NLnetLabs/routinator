@@ -6,7 +6,8 @@ Running as a Daemon
 Routinator can run as a service that periodically fetches RPKI data, verifies it
 and makes the resulting data set available through the built-in HTTP server and
 via the RTR protocol. You can start the Routinator service using the
-:subcmd:`server` subcommand.
+:subcmd:`server` subcommand and specifying to start the HTTP server, the RTR 
+server, or both.
 
 .. Note:: Routinator will not reread the trust anchor locators after it has
           started the service. Thus, if you add or change a TAL you must restart
