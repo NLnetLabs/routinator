@@ -218,7 +218,7 @@ You can use this command to get an overview of the available versions:
 
 .. code-block:: text
 
-   apt-cache policy routinator
+   apt policy routinator
 
 If you want to install a Release Candidate or a specific version of Routinator
 using Cargo, explicitly use the ``--version`` option. If needed, use the
