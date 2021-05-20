@@ -186,23 +186,13 @@ You can update your Rust installation later by running:
    rustup update
 
 Building
---------
+""""""""
 
 The easiest way to get Routinator is to leave it to Cargo by saying:
 
 .. code-block:: text
 
    cargo install --locked routinator
-
-If you want to try the main branch from the repository instead of a release
-version, you can run:
-
-.. code-block:: text
-
-   cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
-
-If you want to update an installed version, you run the same command but add the
-:option:`--force` option to approve overwriting the installed version.
 
 The command will build Routinator and install it in the same directory that
 Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
