@@ -208,6 +208,43 @@ The command will build Routinator and install it in the same directory that
 Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
 be in your path, too.
 
+Installing Specific Versions
+----------------------------
+
+Release Candidates of Routinator are also available on our `software package
+repository <https://packages.nlnetlabs.nl>`_. To install these as well, add the
+line below that corresponds to your operating system to your
+``/etc/apt/sources.list`` or ``/etc/apt/sources.list.d/``:
+       
+.. code-block:: text
+
+   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main
+   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main
+   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main
+   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main
+   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main
+
+You can use this command to get an overview of the available versions:
+
+.. code-block:: text
+
+   apt-cache policy routinator
+
+If you want to install a Release Candidate or a specific version of Routinator
+using Cargo, explicitly use the ``--version`` option. If needed, use the
+``--force`` option to overwrite an existing version:
+        
+.. code-block:: text
+
+   cargo install --locked --force routinator --version 0.9.0-rc1
+
+If you want to try the main branch from the repository instead of a release
+version, you can run:
+
+.. code-block:: text
+
+   cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
+
 Notes
 -----
 
