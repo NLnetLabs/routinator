@@ -16,17 +16,17 @@ Routinator – *main* branch
     .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
                 :target: https://twitter.com/routinator3000/
 
-Routinator 3000 is free, open source :abbr:`RPKI (Resource Public Key
-Infrastructure)` Relying Party software written by `NLnet Labs
+Routinator 3000 is free, open source :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` Relying Party software written by `NLnet Labs
 <https://nlnetlabs.nl>`_ in the Rust programming language. The application is
 designed to be secure and have great portability. It is a lightweight
 implementation that can run effortlessly on minimalist hardware. 
 
 Routinator connects to the Trust Anchors of the five Regional Internet
 Registries (RIRs) — APNIC, AFRINIC, ARIN, LACNIC and RIPE NCC — downloads all of
-the certificates and :abbr:`ROAs (Route Origin Attestations)` in the various
-repositories, verifies the signatures and makes the result available for use in
-your BGP workflow. 
+the certificates and :term:`ROAs <Route Origin Attestation (ROA)>` in the
+various repositories, verifies the signatures and makes the result available for
+use in your BGP workflow. 
 
 It is a full featured software package that can perform RPKI validation as a
 one-time operation and store the result on disk in formats such as CSV and JSON,
@@ -46,9 +46,9 @@ on `Twitter <https://twitter.com/routinator3000>`_ and listen to its favourite
 songs on `Spotify
 <https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ>`_.
 
-.. Tip::  Throughout this documentation you will find references to standards
-          and specific terminology. For more information, please refer to the
-          `RPKI Community Documentation <https://rpki.readthedocs.io/>`_.
+.. Tip::  For more information on Resource Public Key Infrastructure, please 
+          refer to the `RPKI Community Documentation
+          <https://rpki.readthedocs.io/>`_.
 
 .. toctree::
    :maxdepth: 2
@@ -97,6 +97,7 @@ songs on `Spotify
    :name: toc-reference
    
    manual-page
+   glossary
 
 .. history
 .. authors

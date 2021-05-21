@@ -128,15 +128,15 @@ way you can verify if Routinator establishes connections as expected:
 
 Now, you can see how Routinator connects to the RPKI trust anchors, downloads
 the the contents of the repositories to your machine, verifies it and produces a
-list of validated ROA payloads in the default CSV format to standard output.
-Because it is expected that the state of the entire RPKI is not perfect as all
-times, you may see several warnings during the process about objects that are
-either stale or failed cryptographic verification, or repositories that are
-temporarily unavailable. 
+list of VRPs in the default CSV format to standard output. Because it is
+expected that the state of the entire RPKI is not perfect as all times, you may
+see several warnings during the process about objects that are either stale or
+failed cryptographic verification, or repositories that are temporarily
+unavailable. 
 
 From a cold start, this process will take a couple of minutes. Subsequent
 verification runs will be much faster, because only the changes between the
-repositories and the local cache need to be processed:
+repositories and the validated cache need to be processed:
 
 .. code-block:: text
 
