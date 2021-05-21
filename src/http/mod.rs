@@ -13,6 +13,7 @@ mod delta;
 mod errors;
 mod listener;
 mod log;
+mod metrics;
 mod payload;
 mod status;
 mod ui;
@@ -47,6 +48,11 @@ async fn handle_request(
         return response
     }
     if let Some(response) = log::handle_get(&req, log) {
+        return response
+    }
+    if let Some(response) = metrics::handle_get(
+        &req, origins, metrics, rtr_metrics
+    ).await {
         return response
     }
     if let Some(response) = status::handle_get(
