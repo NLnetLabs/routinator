@@ -93,6 +93,7 @@ html_favicon = 'resources/favicon.ico'
 html_theme_options = {
     'logo_only': True,
     'display_version': True,
+    'style_external_links': False,
 }
 
 # Theme options are theme-specific and customize the look and feel of a theme
