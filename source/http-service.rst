@@ -9,8 +9,8 @@ In addition to the various :ref:`VRP output formats
 :ref:`monitoring <doc_routinator_monitoring>` and :ref:`logging
 <doc_routinator_logging>` endpoints. 
 
-The server is not enabled by default for security reasons, nor does it have a
-default host or port. This service is intended to run on your internal network
+The HTTP server is not enabled by default for security reasons, nor does it have
+a default host or port. This service is intended to run on your internal network
 and doesn't offer HTTPS natively. If this is a requirement, you can for example
 run Routinator behind a :ref:`reverse proxy <doc_routinator_reverse_proxy>`.
 
@@ -23,16 +23,16 @@ run:
 
 After fetching and verifying all RPKI data, paths are available for each 
 :ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
-``/csv`` path you can fetch a list of all VRPs in CSV format.
+:command:`/csv` path you can fetch a list of all VRPs in CSV format.
 
 .. code-block:: text
 
-   curl http:///192.0.2.13:8323/csv
+   curl http://192.0.2.13:8323/csv
 
 These paths accept selector expressions to limit the VRPs returned in the form
-of a query string. The field ``select-asn`` can be used to select ASNs and
-the field ``select-prefix`` can be used to select prefixes. The fields can be
-repeated multiple times. 
+of a query string. You can use ``select-asn`` to select ASNs and
+``select-prefix`` to select prefixes. These expressions can be repeated multiple
+times. 
 
 For example, to only show the VRPs in JSON format authorising AS196615, use:
 
@@ -42,7 +42,7 @@ For example, to only show the VRPs in JSON format authorising AS196615, use:
 
 This will produce the following output:
 
-.. code-block:: text
+.. code-block:: json
 
    {
       "roas": [

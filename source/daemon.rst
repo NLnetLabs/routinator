@@ -13,12 +13,6 @@ default host or port. You can start the Routinator service using the
 :option:`--http` option and the RTR server with the :option:`--rtr` option. You
 can of course also start both.
 
-By default Routinator will stay attached to your terminal and log to standard
-error. You can provide the :option:`--detach` option to run it in the background
-instead, in which case logging information is written to syslog. To learn more
-about what kind of information is returned and how to influence what is logged
-and where, refer to the :ref:`Logging <doc_routinator_logging>` section.
-
 .. Note:: Routinator will not reread the trust anchor locators after it has
           started the service. Thus, if you add or change a TAL you must restart
           Routinator or send it a :ref:`SIGUSR1 <manpage_signals>`.
@@ -38,6 +32,13 @@ Make sure IPv6 addresses are in square brackets, e.g.:
 
 Both servers will only start serving data once the first validation run has
 completed. 
+
+By default Routinator will stay attached to your terminal and log to standard
+error. You can provide the :option:`--detach` option to run it in the background
+instead, in which case logging information is written to syslog. To learn more
+about what kind of information is returned and how to influence what is logged
+and where, refer to the :ref:`Logging <doc_routinator_logging>` section.
+
 
 .. Attention::  On Linux systems there is an overlap between IPv4 and IPv6. You
                 can’t bind to all interfaces on both address families on the

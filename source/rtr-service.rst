@@ -15,7 +15,7 @@ launched as an RTR server, routers with support for route origin validation
          <https://www.nlnetlabs.nl/projects/rpki/rtrtr/>`_.
 
 In order to start the RTR server at 192.0.2.13 and 2001:0DB8::13 on port 3323,
-run Routinator using the :subcmd:`server` command:
+run Routinator using the :subcmd:`server` subcommand:
 
 .. code-block:: text
 
