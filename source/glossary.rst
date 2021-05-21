@@ -95,9 +95,9 @@ Glossary
   Stale Object
     In RPKI, manifests and :term:`CRLs <Certificate Revocation List (CRL)>` can
     be stale if the time given in their ``next-update`` field is in the past,
-    indicating that an update to the object was scheduled but didn't happen.
-    This can be because of an operational issue at the issuer or an attacker
-    trying to replay old objects. 
+    indicating that an update to the object was scheduled but didn't happen. This
+    can be because of an operational issue at the issuer or an attacker trying to
+    replay old objects. 
     
   Unsafe VRPs
     If the address prefix of a :term:`VRP <Validated ROA Payload (VRP)>`
