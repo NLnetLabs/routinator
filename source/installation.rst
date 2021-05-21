@@ -135,8 +135,8 @@ rsync
 Currently, Routinator requires the :command:`rsync` executable to be in your
 path. Due to the nature of rsync, it is unclear which particular version you
 need at the very least, but whatever is being shipped with current Linux and
-\*BSD distributions and macOS should be fine. Alternatively, you can download
-rsync from `its website <https://rsync.samba.org/>`_.
+\*BSD distributions, as well as macOS should be fine. Alternatively, you can
+download rsync from `the Samba website <https://rsync.samba.org/>`_.
 
 On Windows, Routinator requires the rsync version that comes with
 `Cygwin <https://www.cygwin.com/>`_ – make sure to select rsync during the
@@ -240,4 +240,4 @@ Notes
 
 In case you want to build a statically linked Routinator, or you have an
 Operating System where special care needs to be taken, such as OpenBSD and
-CentOS 6, please refer to the :ref:`doc_routinator_installation_notes` section.
+CentOS 6, please refer to the :ref:`doc_routinator_installation_notes`.

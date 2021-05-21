@@ -3,7 +3,7 @@
 Initialisation
 ==============
 
-Before running Routinator for the first time, you must prepare its working
+Before running Routinator for the first time, you must prepare the working
 environment. You do this using the :subcmd:`init` subcommand. This will prepare
 both the directory for the local RPKI cache, as well as the directory where the
 Trust Anchor Locator (TAL) files reside.
