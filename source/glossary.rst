@@ -46,19 +46,18 @@ Glossary
     digitally signed attestations.
     
   Trust Anchor (TA)
-    Each of five Regional Internet Registries (RIRs) publishes a trust anchor 
-    that includes all resources (a ‘0/0’ self-signed certificate). They issue a
-    child certificate containing all the resources that are held and managed
-    by the RIR. In turn, child CAs can be issued to members containing the
-    resources they hold.
+    Each of the five Regional Internet Registries (RIRs) publishes a trust
+    anchor  that includes all resources (a ‘0/0’ self-signed X.509 CA
+    certificate). They issue a child certificate containing all the resources
+    that are held and managed by the RIR. 
   
   Trust Anchor Locator (TAL)
-    A trust anchor in the RPKI is represented by a self-signed X.509 CA
-    certificate. The Trust Anchor Locator (TAL) is used to retrieve and verify
-    the authenticity of a trust anchor. Specified in :rfc:`8630`, a TAL contains
-    one or more URIs pointing to the root certificate, as well as the public key
-    of the trust anchor in DER format, encoded in Base64. The TAL is constant so
-    long as the trust anchor's public key and its location do not change.
+    The Trust Anchor Locator (TAL) is used to retrieve and verify the
+    authenticity of a :term:`trust anchor <Trust Anchor (TA)>`. Specified in
+    :rfc:`8630`, a TAL contains one or more URIs pointing to the RIR root
+    certificate, as well as the public key of the trust anchor in DER format,
+    encoded in Base64. The TAL is constant so long as the trust anchor's public
+    key and its location do not change.
     
   Repository
     The RPKI repository system consists of multiple distributed and delegated 
