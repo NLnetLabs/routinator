@@ -52,19 +52,50 @@ songs on `Spotify
 
 .. toctree::
    :maxdepth: 2
-   :name: toc-routinator
+   :caption: Getting Started
+   :name: toc-getting-started
 
    installation
    installation-notes
    initialisation
+   
+.. toctree::
+   :maxdepth: 2
+   :caption: Core
+   :name: toc-core
+
    data-processing
    output-formats
-   interactive
-   daemon
    configuration
-   monitoring
+   local-exceptions
    logging
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Interactive
+   :name: toc-interactive
+
+   interactive
+   validity-checker
+   dump
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Service
+   :name: toc-service
+
+   daemon
+   rtr-service
+   http-service
    user-interface
+   api-endpoints
+   monitoring
+   
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+   :name: toc-reference
+   
    manual-page
 
 .. history
