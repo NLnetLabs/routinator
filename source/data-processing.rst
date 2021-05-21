@@ -9,18 +9,19 @@ Fetching
 .. versionadded:: 0.9
    Fallback from RRDP to rsync with :option:`--rrdp-fallback-time`
 
-There are two protocols in use to transport RPKI data: rsync and the RPKI
-Repository Delta Protocol (RRDP), which relies on HTTPS. RRDP was designed to be
-the successor to rsync in the RPKI. As almost all RPKI repositories currently
+There are two protocols in use to transport RPKI data: rsync and the :term:`RPKI
+Repository Delta Protocol (RRDP)`, which relies on HTTPS. RRDP was designed to
+be the successor to rsync in the RPKI. As almost all RPKI repositories currently
 support both protocols, Routinator will prefer RRDP if available. 
 
 In the RPKI, the certificate hierarchy follows the same structure as the
 Internet number resource allocation hierarchy. Routinator starts traversing the
-tree by connecting to the trust anchors of the Regional Internet Registries
-(RIRs). Along the way Routinator will find several pointers to child publication
-points, such as the ones operated by National Internet Registries (NIRs), Local
-Internet Registries (LIRs) and organisations running delegated RPKI. Each
-pointer explicitly states if RRDP is offered in addition to rsync.
+tree by connecting to the :term:`trust anchors <Trust Anchor (TA)>` of the
+Regional Internet Registries (RIRs). Along the way Routinator will find several
+pointers to child :term:`publication points <Publication Point>`, such as the
+ones operated by National Internet Registries (NIRs), Local Internet Registries
+(LIRs) and organisations running delegated RPKI. Each pointer explicitly states
+if RRDP is offered in addition to rsync.
 
 .. figure:: img/ca-structure.svg
     :align: center
@@ -29,10 +30,10 @@ pointer explicitly states if RRDP is offered in addition to rsync.
 
     The RPKI hierarchy
 
-As a precaution, Routinator will not accept rsync and HTTPS URIs from RPKI
-repositories with dubious hostnames. In particular, it will reject the name
-*localhost*, URIs that consist of IP addresses, and hostnames that contain an
-explicit port. You can change this behaviour with the
+As a precaution, Routinator will not accept rsync and HTTPS URIs from
+:term:`RPKI repositories <Repository>` with dubious hostnames. In particular, it
+will reject the name *localhost*, URIs that consist of IP addresses, and
+hostnames that contain an explicit port. You can change this behaviour with the
 :option:`--allow-dubious-hosts` option.
 
 RRDP Fallback

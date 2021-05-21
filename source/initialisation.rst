@@ -6,7 +6,7 @@ Initialisation
 Before running Routinator for the first time, you must prepare its working
 environment. You do this using the :subcmd:`init` subcommand. This will prepare
 both the directory for the local RPKI cache, as well as the directory where the
-Trust Anchor Locator (TAL) files reside.
+:term:`Trust Anchor Locator (TAL)` files reside.
 
 By default, both directories will be located under ``$HOME/.rpki-cache`` but
 you can change their locations via the command line options
