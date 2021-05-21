@@ -8,7 +8,7 @@ environment. You do this using the :subcmd:`init` subcommand. This will prepare
 both the directory for the local RPKI cache, as well as the directory where the
 Trust Anchor Locator (TAL) files reside.
 
-By default, both directories will be located under ``$HOME/.rpki-cache`` but
+By default, both directories will be located under :file:`$HOME/.rpki-cache` but
 you can change their locations via the command line options
 :option:`--repository-dir` and :option:`--tal-dir`.
 
