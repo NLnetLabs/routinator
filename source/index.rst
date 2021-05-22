@@ -46,9 +46,8 @@ on `Twitter <https://twitter.com/routinator3000>`_ and listen to its favourite
 songs on `Spotify
 <https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ>`_.
 
-.. Tip::  For more information on Resource Public Key Infrastructure, please 
-          refer to the `RPKI Community Documentation
-          <https://rpki.readthedocs.io/>`_.
+.. Tip::  To learn more about Resource Public Key Infrastructure, please refer 
+          to the `RPKI Community Documentation <https://rpki.readthedocs.io/>`_.
 
 .. toctree::
    :maxdepth: 2
