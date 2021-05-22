@@ -29,7 +29,7 @@ the only five you will ever need to fetch and validate all available RPKI data.
 Some RIRs and third parties also provide separate TALs for testing purposes,
 allowing operators to gain experience with using RPKI in a safe environment.
 Both the production and testbed TALs are bundled with Routinator and can be
-installed with the :subcmd:`init` command. 
+installed with the :subcmd:`init` subcommand. 
 
 To get an overview of all available TALs use the :option:`--list-tals` option:
 
@@ -84,9 +84,9 @@ This will return the following message:
    If you agree to the RPA, please run the command
    again with the --accept-arin-rpa option.
 
-Running the :subcmd:`init` command with the :option:`--accept-arin-rpa` option
-added will create the TAL directory and copy the five Trust Anchor Locator files
-into it:
+Running the :subcmd:`init` subcommand with the :option:`--accept-arin-rpa`
+option added will create the TAL directory and copy the five Trust Anchor
+Locator files into it:
 
 .. code-block:: bash
 
