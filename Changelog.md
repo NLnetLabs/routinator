@@ -14,9 +14,12 @@ Bug Fixes
 
 Other Changes
 
+* Rearranged the Prometheus metrics to be more canonical. ([#562])
+
 [#557]: https://github.com/NLnetLabs/routinator/pull/557
 [#558]: https://github.com/NLnetLabs/routinator/pull/558
 [#559]: https://github.com/NLnetLabs/routinator/pull/559
+[#562]: https://github.com/NLnetLabs/routinator/pull/562
 
 
 ## 0.9.0-rc1
