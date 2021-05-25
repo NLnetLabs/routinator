@@ -1,11 +1,22 @@
 # Change Log
 
-
 ## Unreleased next version
 
 Bug Fixes
 
+* In server mode, the database is now only opened after detaching from the
+  console if requested. This fixes Routinator hanging if the `--detach`
+  option is used due to invoking multi-threading before forking. ([#557])
+* Fixed a panic when trying to load a broken repository state object from
+  the database. ([#558])
+* Accept the `filter-asn` query parameter in the VRP set HTTP endpoints
+  again which was accidentally rejected. ([#559])
+
 Other Changes
+
+[#557]: https://github.com/NLnetLabs/routinator/pull/557
+[#558]: https://github.com/NLnetLabs/routinator/pull/558
+[#559]: https://github.com/NLnetLabs/routinator/pull/559
 
 
 ## 0.9.0-rc1
