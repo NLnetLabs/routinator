@@ -255,27 +255,30 @@ fn vrp_metrics<'a>(
 ) {
     let valid_metric = Metric::with_prefix(
         group.prefix(), "valid_vrps_total",
-        ("per ", group.help()),
+        ("overall number of VRPs per ", group.help()),
         MetricType::Gauge
     );
     let unsafe_metric = Metric::with_prefix(
         group.prefix(), "unsafe_vrps_total",
-        ("per ", group.help()),
+        (
+            "number of VRPs overlapping with rejected publication points per ",
+            group.help()
+        ),
         MetricType::Gauge
     );
     let filtered_metric = Metric::with_prefix(
         group.prefix(), "locally_filtered_vrps_total",
-        ("per ", group.help()),
+        ("number of VRPs filtered out by local exceptions per ", group.help()),
         MetricType::Gauge
     );
     let duplicate_metric = Metric::with_prefix(
         group.prefix(), "duplicate_vrps_total",
-        ("per ", group.help()),
+        ("number of duplicate VRPs per ", group.help()),
         MetricType::Gauge
     );
     let contributed_metric = Metric::with_prefix(
         group.prefix(), "contributed_vrps_total",
-        ("per ", group.help()),
+        ("number of VRPs contributed to the final set per ", group.help()),
         MetricType::Gauge
     );
 
@@ -301,7 +304,7 @@ fn vrp_metrics<'a>(
 fn rrdp_metrics(target: &mut Target, metrics: &[RrdpRepositoryMetrics]) {
     let status = Metric::new(
         "rrdp_status",
-        "combines status code for RRDP update requests",
+        "combined status code for RRDP update requests",
         MetricType::Gauge
     );
     target.header(status);
@@ -409,7 +412,7 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
     target.single(
         Metric::new(
             "rtr_bytes_written",
-            "total number of bytes weitten to RTR connections",
+            "total number of bytes written to RTR connections",
             MetricType::Counter
         ),
         metrics.bytes_written()
@@ -531,7 +534,7 @@ fn http_metrics(target: &mut Target, metrics: &HttpServerMetrics) {
     target.single(
         Metric::new(
             "http_bytes_read",
-            "number of bytes read from HTTP connection",
+            "number of bytes read from HTTP connections",
             MetricType::Counter
         ),
         metrics.bytes_read()
@@ -539,7 +542,7 @@ fn http_metrics(target: &mut Target, metrics: &HttpServerMetrics) {
     target.single(
         Metric::new(
             "http_bytes_written",
-            "number of bytes written ot HTTP connections",
+            "number of bytes written to HTTP connections",
             MetricType::Counter
         ),
         metrics.bytes_written()
