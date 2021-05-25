@@ -1751,6 +1751,7 @@ impl TryFrom<IVec> for RepositoryState {
             mem::size_of::<uuid::Bytes>() +
             mem::size_of::<u64>() +
             mem::size_of::<i64>() +
+            mem::size_of::<i64>() +
             mem::size_of::<i64>()
         };
 
@@ -2404,6 +2405,10 @@ mod test {
         cycles(&state);
         state.last_modified_ts = None;
         cycles(&state);
+
+        // Check that broken encodings are handled gracefully.
+        assert!(RepositoryState::try_from(IVec::from(Vec::new())).is_err());
+        assert!(RepositoryState::try_from(IVec::from(vec![0u8; 48])).is_err());
     }
 
     #[test]
