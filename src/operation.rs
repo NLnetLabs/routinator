@@ -502,7 +502,6 @@ impl Server {
     /// If `detach` is `true`, will fork the server and exit. Otherwise
     /// just runs the server forever.
     pub fn run(self, mut process: Process) -> Result<(), ExitError> {
-        Engine::init(process.config())?;
         let log = process.switch_logging(
             self.detach,
             !process.config().http_listen.is_empty()
