@@ -3,8 +3,9 @@
 Installation
 ============
 
-Getting started with Routinator is really easy by either installing a Debian
-and Ubuntu package, using Docker, or building from Cargo.
+Getting started with Routinator is really easy by either installing a Debian and
+Ubuntu package, using Docker, or building from :abbr:`Cargo (Rust's build system
+and package manager)`.
 
 Quick Start
 -----------

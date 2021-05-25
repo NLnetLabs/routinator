@@ -156,10 +156,10 @@ bird2
          route 93.175.147.0/24 max 24 as 196615;
 
 rpsl
-      This format produces a list of RPSL objects with the authorisation in the
-      fields *route*, *origin*, and *source*. In addition, the fields *descr*,
-      *mnt-by*, *created*, and *last-modified*, are present with more or less
-      meaningful values.
+      This format produces a list of :abbr:`RPSL (Routing Policy Specification
+      Language)` objects with the authorisation in the fields *route*, *origin*,
+      and *source*. In addition, the fields *descr*, *mnt-by*, *created*, and
+      *last-modified*, are present with more or less meaningful values.
       
       .. code-block:: text
          
