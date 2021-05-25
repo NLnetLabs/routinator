@@ -71,12 +71,8 @@ Glossary
     <RPKI Relying Parties>` can retrieve over the HTTPS protocol.
     
   Publication Point
-    RPKI does not use a single repository publication point to publish RPKI
-    objects. Instead, the RPKI repository system consists of multiple
-    distributed and delegated repository publication points. In practice this
-    means that when running a certificate authority, an CA operator can either
-    publish all cryptographic material themselves, or they can rely on a third
-    party for publication.
+    A directory within a :term:`repository <Repository>` that contains all the
+    objects published by a single CA.
 
   Manifest
     A manifest is a signed object that contains a listing of all the signed
