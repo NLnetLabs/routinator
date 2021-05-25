@@ -101,3 +101,9 @@ Glossary
     if failed to validate completely, the VRP is said to be *unsafe* since using
     it may lead to legitimate routes being flagged as RPKI Invalid.
   
+  Ghostbusters Record (GBR)
+    An RPKI object described in :rfc:`6493` that contains human contact 
+    information that may be verified (indirectly) by a CA certificate. The data 
+    in the record are those of a severely profiled vCard. Note that support for 
+    *publication* of GBR records is not widely implemented yet. As a result,
+    Routinator will validate the object, but not produce any output for it.
