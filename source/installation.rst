@@ -12,12 +12,13 @@ Quick Start
 
 .. tabs::
 
-   .. tab:: Packages
+   .. tab:: Deb Packages
 
-       Assuming you have a machine running a recent Debian or Ubuntu distribution, you
-       can install Routinator from our `software package repository
-       <https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
-       that corresponds to your operating system to your ``/etc/apt/sources.list`` or
+       Assuming you have a machine running a recent Debian or Ubuntu
+       distribution on an amd64/x86_64 architecture, you can install Routinator
+       from our `software package repository <https://packages.nlnetlabs.nl>`_.
+       To use this repository, add the line below that corresponds to your
+       operating system to your ``/etc/apt/sources.list`` or
        ``/etc/apt/sources.list.d/``:
 
        .. code-block:: text
@@ -53,6 +54,13 @@ Quick Start
        the status of Routinator with ``sudo systemctl status routinator`` and view the
        logs with ``sudo journalctl --unit=routinator``.
 
+   .. tab:: RPM Packages
+
+       Assuming you have a machine running a recent RHEL or CentOS distribution, you
+       can install Routinator from our `software package repository
+       <https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
+       that corresponds to your operating system 
+       
    .. tab:: Docker
 
        Due to the impracticality of complying with the ARIN TAL distribution terms
