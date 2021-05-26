@@ -181,8 +181,11 @@ jobs:
         # Get the operating system and release name (e.g. centos and 7) from
         # the image name (e.g. centos:7) by extracting only the parts before
         # and after but not including the colon:
-        echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
-        echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
+        OS_NAME=${MATRIX_IMAGE%:*}
+        OS_REL=${MATRIX_IMAGE#*:}
+
+        echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
+        echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
         echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
