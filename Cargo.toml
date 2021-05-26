@@ -93,13 +93,17 @@ systemd-units = { unit-name = "routinator", enable = false }
 [package.metadata.deb.variants.minimal]
 
 [package.metadata.generate-rpm]
+# "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
+# complain with "invalid-license".
+# See: https://fedoraproject.org/wiki/Licensing:Main?rd=Licensing
+license = "BSD"
 assets = [
     { source = "target/release/routinator", dest = "/usr/bin/routinator", mode = "755" },
-    { source = "doc/routinator.1", dest = "/usr/share/man/man1/routinator.1", mode = "644" },
-    { source = "etc/routinator.conf.system-service", dest = "/etc/routinator/routinator.conf", mode = "644" },
+    { source = "doc/routinator.1", dest = "/usr/share/man/man1/routinator.1", mode = "644", doc = true },
+    { source = "etc/routinator.conf.system-service", dest = "/etc/routinator/routinator.conf", mode = "644", config = true },
     { source = "debian/routinator.routinator.service", dest = "/lib/systemd/system/routinator.service", mode = "644" },
     { source = "debian/service.preset", dest = "/lib/systemd/system-preset/50-routinator.preset", mode = "644" },
-    { source = "debian/postinst", dest = "/tmp/krill.postinst", mode = "555" },
+    { source = "debian/postinst", dest = "/tmp/krill.postinst", mode = "755" },
     { source = "debian/routinator-init", dest = "/usr/bin/routinator-init", mode = "755" },
 ]
 # Scripts based on https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
@@ -131,3 +135,4 @@ post_uninstall_script = """
 shadow-utils = "*"
 rsync = "*"
 sudo = "*"
+
