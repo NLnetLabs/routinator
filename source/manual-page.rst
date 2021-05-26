@@ -526,7 +526,7 @@ These can be requested by providing different commands on the command line.
                   will provide the comment if given for the assertion.
                   
                   Please note that because of this additional information, 
-                  output in :option:`jsonext` format will be quite large.
+                  output in ``jsonext`` format will be quite large.
 
            openbgpd
                   Choosing this format causes Routinator to produce a roa-
@@ -1254,8 +1254,8 @@ that have address prefixes overlapping with resources of rejected CAs are called
 
 In  order to avoid these situations and instead fall back to an RPKI unknown
 state for such routes, Routinator allows to filter out these unsafe  VRPs. This
-can be enabled via the :option:`--unsafe-vrps=reject` command line option or
-setting :option:`unsafe-vrps=reject` in the config file.
+can be enabled via the ``--unsafe-vrps=reject`` command line option or setting
+``unsafe-vrps=reject`` in the config file.
 
 By default, this filter is currently disabled but warnings are logged about
 unsafe VRPs. This allows to assess the operation impact of such a filter.
