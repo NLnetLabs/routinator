@@ -78,6 +78,7 @@ providing an HTTP server on port 9556, simply take the output from
 ``http-listen`` values in your favourite text editor:
 
 .. code-block:: text
+   :emphasize-lines: 8,12,21
 
     allow-dubious-hosts = false
     dirty = false
