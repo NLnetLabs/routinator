@@ -1,5 +1,5 @@
-# GitHub Actions workflow for building and testing Routinator O/S DEB packages.
-# Uses GitHub Actions caching to avoid rebuilding Rust cargo-deb and
+# GitHub Actions workflow for building and testing Routinator O/S RPM packages.
+# Uses GitHub Actions caching to avoid rebuilding Rust cargo-generate-rpm and
 # Routinator dependencies on every run.
 #
 # Note: at the time of writing the GH cache contents expire after a
@@ -29,24 +29,20 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
-  # Use the cargo-deb Rust crate to build a Debian package for installing
-  # Routinator. See: https://github.com/mmstick/cargo-deb
-  deb-pkg:
+  # Use the cargo-generate-rpm Rust crate to build an RPM package for installing
+  # Routinator. See: https://github.com/cat-in-136/cargo-generate-rpm
+  rpm-pkg:
     strategy:
       matrix:
         image: # can't use complex values here, only primitive values are allowed
-          - "ubuntu:xenial"   # ubuntu/16.04
-          - "ubuntu:bionic"   # ubuntu/18.04
-          - "ubuntu:focal"    # ubuntu/20.04
-          - "debian:stretch"  # debian/9
-          - "debian:buster"   # debian/10
-          - "debian:bullseye" # debian/11
+          - "centos:7"
+          - "centos:8"
     env:
-      CARGO_DEB_VER: 1.28.0
+      CARGO_GENERATE_RPM_VER: 0.4.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
-    name: deb-pkg
+    name: rpm-pkg
     runs-on: ubuntu-latest
     # Build on the oldest platform we are targeting in order to avoid
     # https://github.com/rust-lang/rust/issues/57497. Specifying container
@@ -58,8 +54,8 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        # Get the operating system and release name (e.g. ubuntu and xenial) from
-        # the image name (e.g. ubuntu:xenial) by extracting only the parts before
+        # Get the operating system and release name (e.g. centos and 7) from
+        # the image name (e.g. centos:7) by extracting only the parts before
         # and after but not including the colon:
         echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
         echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
@@ -74,18 +70,16 @@ jobs:
     # doesn't work inside a Docker container.
     - name: Install Rust
       run: |
-        apt-get update
-        apt-get install -y curl
+        yum update -y
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal -y
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      env:
-        DEBIAN_FRONTEND: noninteractive
 
     - name: Install compilation and other dependencies
       run: |
-          apt-get install -y build-essential jq lintian pkg-config
-      env:
-        DEBIAN_FRONTEND: noninteractive
+        yum install epel-release -y
+        yum update -y
+        yum install -y jq rpmlint
+        yum groupinstall -y "Development Tools"
 
     # Speed up Routinator Rust builds by caching unchanged built dependencies.
     # See: https://github.com/actions/cache/blob/master/examples.md#rust---cargo
@@ -98,24 +92,24 @@ jobs:
           target
         key: ${{ matrix.image }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    # Speed up cargo-deb installation by only re-downloading and re-building its
-    # dependent crates if we change the version of cargo-deb that we are using.
-    - name: Cache Cargo Deb binary
-      id: cache-cargo-deb
+    # Speed up cargo-generate-rpm installation by only re-downloading and re-building its
+    # dependent crates if we change the version of cargo-generate-rpm that we are using.
+    - name: Cache Cargo Generate RPM binary
+      id: cache-cargo-generate-rpm
       uses: actions/cache@v2
       with:
-        path: ~/.cargo/bin/cargo-deb
-        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
+        path: ~/.cargo/bin/cargo-generate-rpm
+        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}
 
-    # Only install cargo-deb if not already fetched from the cache.
-    - name: Install Cargo Deb
-      if: steps.cache-cargo-deb.outputs.cache-hit != 'true'
+    # Only install cargo-generate-rpm if not already fetched from the cache.
+    - name: Install Cargo Generate RPM
+      if: steps.cache-cargo-generate-rpm.outputs.cache-hit != 'true'
       run: |
-        cargo install cargo-deb --version ${CARGO_DEB_VER}
+        cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER}
 
-    # Instruct cargo-deb to build the Debian package using the config section
-    # in Cargo.toml for the specified "variant".
-    - name: Create the DEB package
+    # Instruct cargo-generate-rpm to build the RPM package using the config section
+    # in Cargo.toml.
+    - name: Create the RPM package
       run: |
         # Packages for different distributions (e.g. Stretch, Buster) of the same
         # O/S (e.g. Debian) when served from a single package repository MUST have
@@ -142,53 +136,35 @@ jobs:
         # release but without having to decide what higher semver number to bump
         # to. In this case we do NOT want dash '-' to become '~' because `-`
         # is treated as higher and tilda is treated as lower.
-        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
-        DEB_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
+        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
+        ROUTINATOR_NEW_VER=$(echo $ROUTINATOR_VER | tr '-' '~')
+        RPM_ROUTINATOR_VER=$(echo $ROUTINATOR_NEW_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
 
-        case ${OS_REL} in
-          xenial|bionic|stretch) VARIANT_NAME="minimal" ;;
-          *)                     VARIANT_NAME="" ;;
-        esac
+        # Build and strip Routinator as cargo generate-rpm doesn't do this for us
+        cargo build --release --locked
+        strip -s target/release/routinator
+        sed -i -e "s/$ROUTINATOR_VER/$RPM_ROUTINATOR_VER/" Cargo.toml
+        cargo generate-rpm
 
-        case ${{ github.event_name }} in
-          pull_request) MAINTAINER="${{ github.actor }} <unknown@email.address>" ;;
-          push)         MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>" ;;
-          *)            echo 2>&1 "ERROR: Unexpected GitHub Actions event"; exit 1 ;;
-        esac
-
-        # Generate the RFC 5322 format date by hand instead of using date --rfc-email
-        # because that option doesn't exist on Ubuntu 16.04 and Debian 9
-        RFC5322_TS=$(LC_TIME=en_US.UTF-8 date +'%a, %d %b %Y %H:%M:%S %z')
-
-        # Generate the changelog file that Debian packages are required to have.
-        # See: https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#changelog
-        echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >debian/changelog
-        echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>debian/changelog
-        echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>debian/changelog
-        DEB_VER="${DEB_ROUTINATOR_VER}-1${OS_REL}"
-
-        if [[ "${VARIANT_NAME}" == "" ]]; then
-          cargo deb --deb-version ${DEB_VER} -v -- --locked
-        else
-          cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v -- --locked
-        fi
-
-    # See what Lintian thinks of our package.
+    # See what rpmlint thinks of our package.
     - name: Verify the DEB package
       run: |
-        lintian -v target/debian/*.deb
+        # cargo generate-rpm creates RPMs that rpmlint considers to have
+        # errors so don't use the rpmlint exit code otherwise we will always
+        # abort the workflow.
+        rpmlint target/generate-rpm/*.rpm || true
 
-    # Upload the produced DEB package. The artifact will be available
+    # Upload the produced RPM package. The artifact will be available
     # via the GH Actions job summary and build log pages, but only to
     # users logged in to GH with sufficient rights in this project. The
     # uploaded artifact is also downloaded by the next job (see below)
     # to sanity check that it can be installed and results in a working
     # Routinator installation.
-    - name: Upload DEB package
+    - name: Upload RPM package
       uses: actions/upload-artifact@v2
       with:
         name: ${{ env.OS_NAME }}_${{ env.OS_REL }}
-        path: target/debian/*.deb
+        path: target/generate-rpm/*.rpm
 
   # Download and sanity check on target operating systems the packages created
   # by previous jobs (see above). Don't test on GH runners as they come with
@@ -196,20 +172,16 @@ jobs:
   # of the actual deployment targets, nor do GH runners support all targets that
   # we want to test. Don't test in Docker containers as they do not support
   # systemd.
-  deb-pkg-test:
-    name: deb-pkg-test
-    needs: deb-pkg
+  rpm-pkg-test:
+    name: rpm-pkg-test
+    needs: rpm-pkg
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         image: # can't use complex values here, only primitive values are allowed
-          - "ubuntu:xenial"   # ubuntu/16.04
-          - "ubuntu:bionic"   # ubuntu/18.04
-          - "ubuntu:focal"    # ubuntu/20.04
-          - "debian:stretch"  # debian/9
-          - "debian:buster"   # debian/10
-          - "debian:bullseye" # debian/11
+          - "centos:7"
+          - "centos:8"
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -218,19 +190,16 @@ jobs:
       id: setvars
       shell: bash
       run: |
-        # Get the operating system and release name (e.g. ubuntu and xenial) from
-        # the image name (e.g. ubuntu:xenial) by extracting only the parts before
+        # Get the operating system and release name (e.g. centos and 7) from
+        # the image name (e.g. centos:7) by extracting only the parts before
         # and after but not including the colon:
-        OS_NAME=${MATRIX_IMAGE%:*}
-        OS_REL=${MATRIX_IMAGE#*:}
-
-        echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
-        echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
+        echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
+        echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
         echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
-    - name: Download DEB package
+    - name: Download RPM package
       uses: actions/download-artifact@v2
       with:
         name: ${{ env.OS_NAME }}_${{ env.OS_REL }}
@@ -253,12 +222,10 @@ jobs:
         # namespacing: Permission denied" in a Debian 10 container.
         sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
 
-    # Run apt-get update and install man and sudo support (missing in some LXC/LXD
+    # Run yum update and install man and sudo support (missing in some LXC/LXD
     # O/S images) but first wait for cloud-init to finish otherwise the network
     # isn't yet ready. Don't use cloud-init status --wait as that isn't supported
-    # on older O/S's like Ubuntu 16.04 and Debian 9. Use the sudo package provided
-    # configuration files otherwise when using sudo we get an error that the root
-    # user isn't allowed to use sudo.
+    # on older O/S's.
     - name: Prepare container
       shell: bash
       run: |
@@ -266,18 +233,18 @@ jobs:
         while ! sudo lxc exec testcon -- ls -la /var/lib/cloud/data/result.json; do
           sleep 1s
         done
-        sg lxd -c "lxc exec testcon -- apt-get update"
-        sg lxd -c "lxc exec testcon -- apt-get install -y -o Dpkg::Options::=\"--force-confnew\" man sudo"
+        sg lxd -c "lxc exec testcon -- yum update -y"
+        sg lxd -c "lxc exec testcon -- yum install -y man"
 
-    - name: Copy DEB into LXC container
+    - name: Copy RPM into LXC container
       run: |
-        DEB_FILE=$(ls -1 *.deb)
-        sg lxd -c "lxc file push ${DEB_FILE} testcon/tmp/"
-        echo "DEB_FILE=${DEB_FILE}" >> $GITHUB_ENV
+        RPM_FILE=$(ls -1 *.rpm)
+        sg lxd -c "lxc file push ${RPM_FILE} testcon/tmp/"
+        echo "RPM_FILE=${RPM_FILE}" >> $GITHUB_ENV
 
-    - name: Install new DEB package
+    - name: Install new RPM package
       run: |
-        sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/${DEB_FILE}"
+        sg lxd -c "lxc exec testcon -- yum install -y /tmp/${RPM_FILE}"
 
     - name: Test installed packages
       run: |
