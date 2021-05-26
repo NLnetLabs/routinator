@@ -15,7 +15,7 @@
 # by default support init managers such as systemd but we want to test systemd
 # service unit installation and activation.
 
-name: Packaging
+name: Packaging RPM
 on:
   push:
     branches:
