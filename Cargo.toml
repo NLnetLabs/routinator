@@ -106,7 +106,9 @@ assets = [
     { source = "debian/postinst", dest = "/tmp/krill.postinst", mode = "755" },
     { source = "debian/routinator-init", dest = "/usr/bin/routinator-init", mode = "755" },
 ]
-# Scripts based on https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+# Scripts based on:
+#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
+#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
 post_install_script = """
     # ala RPM scriptlet %systemd_post
     if [ $1 -eq 1 ] ; then
