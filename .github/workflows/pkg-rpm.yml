@@ -111,26 +111,13 @@ jobs:
     # in Cargo.toml.
     - name: Create the RPM package
       run: |
-        # Packages for different distributions (e.g. Stretch, Buster) of the same
-        # O/S (e.g. Debian) when served from a single package repository MUST have
-        # unique package_ver_architecture triples. Cargo deb can vary the name based
-        # on the 'variant' config section in use, but doesn't do so according to
-        # Debian policy (as it modifies the package name, not the package version).
-        #   Format: package_ver_architecture
-        #   Where ver has format: [epoch:]upstream_version[-debian_revision]
-        #   And debian_version should be of the form: 1<xxx>
-        #   Where it is common to set <xxx> to the O/S name.
-        # See:
-        #   - https://unix.stackexchange.com/a/190899
-        #   - https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
-        # Therefore we generate the version ourselves.
-        #
-        # In addition, Semantic Versioning and Debian version policy cannot
-        # express a pre-release label in the same way. For example 0.8.0-rc.1
-        # is a valid Cargo.toml [package].version value but when used as a
-        # Debian package version 0.8.0-rc.1 would be considered _NEWER_ than
-        # the final 0.8.0 release. To express this in a Debian compatible way we
-        # must replace the dash '-' with a tilda '~'.
+        # Handle the release candidate case where the version string needs to have
+        # dash replaced by tilda. The cargo build command won't work if the version
+        # key in Cargo.toml contains a tilda but we have to put the tilda there for
+        # when we run cargo generate-rpm so that it uses it.
+        # 
+        # For background on RPM versioning see:
+        #   https://docs.fedoraproject.org/en-US/packaging-guidelines/Versioning/
         #
         # Finally, sometimes we want a version to be NEWER than the latest
         # release but without having to decide what higher semver number to bump
