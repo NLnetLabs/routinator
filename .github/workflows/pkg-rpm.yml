@@ -135,7 +135,7 @@ jobs:
         cargo generate-rpm
 
     # See what rpmlint thinks of our package.
-    - name: Verify the DEB package
+    - name: Verify the RPM package
       run: |
         # cargo generate-rpm creates RPMs that rpmlint considers to have
         # errors so don't use the rpmlint exit code otherwise we will always
