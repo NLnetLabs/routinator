@@ -206,7 +206,7 @@ jobs:
     - name: Launch LXC container
       run: |
         # security.nesting=true is needed to avoid error "Failed to set up mount
-        # namespacing: Permission denied" in a Debian 10 container.
+        # namespacing: Permission denied".
         sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
 
     # Run yum update and install man and sudo support (missing in some LXC/LXD
