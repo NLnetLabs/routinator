@@ -1,2 +1,7 @@
-#!/bin/sh
-sudo -u routinator routinator --config /etc/routinator/routinator.conf init "$@"
+#!/bin/bash
+CMD="routinator --config /etc/routinator/routinator.conf init $@"
+if [[ $EUID -eq 0 ]]; then
+    su -s /bin/sh -c "$CMD" routinator
+else
+    sudo -u routinator $CMD
+fi
