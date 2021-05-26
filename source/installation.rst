@@ -56,10 +56,11 @@ Quick Start
 
    .. tab:: RPM Packages
 
-       Assuming you have a machine running a recent RHEL or CentOS distribution, you
-       can install Routinator from our `software package repository
-       <https://packages.nlnetlabs.nl>`_. To use this repository, add the line below
-       that corresponds to your operating system 
+       Assuming you have a machine running a recent RHEL or CentOS distribution,
+       on an amd64/x86_64 architecture, you can install Routinator from our
+       `software package repository <https://packages.nlnetlabs.nl>`_. To use
+       this repository, add the line below that corresponds to your operating
+       system
        
    .. tab:: Docker
 
