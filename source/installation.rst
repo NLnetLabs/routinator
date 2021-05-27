@@ -291,7 +291,7 @@ Installing Specific Versions
 
        Release Candidates of Routinator are also available on our `software 
        package repository <https://packages.nlnetlabs.nl>`_. To use this 
-       repository create an additional repo file named
+       repository as well, create an additional repo file named
        :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`.
        
        On CentOS/RHEL 7 enter this configuration and save the file:
@@ -328,8 +328,8 @@ Installing Specific Versions
    .. tab:: Docker
 
        All release versions of Routinator, as well as release candidates and
-       builds based on the latest main branch are available on
-       `Docker Hub <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_.
+       builds based on the latest main branch are available on `Docker Hub
+       <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_. 
        
        For example, installing Routinator 0.9.0 RC2 is as simple as:
         
