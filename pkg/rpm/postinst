@@ -1,0 +1,9 @@
+# Script based on the RPM %systemd_post scriptlet. See:
+#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
+#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    useradd --system --home-dir /var/lib/routinator --user-group --create-home routinator
+    systemctl preset routinator.service 2>&1 || :
+fi

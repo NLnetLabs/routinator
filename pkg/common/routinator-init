@@ -1,0 +1,21 @@
+#!/bin/bash
+CMD="routinator --config /etc/routinator/routinator.conf init $@"
+
+if [[ $EUID -eq $(id -u routinator) ]]; then
+    # We are the routinator user, go!
+    echo "Running command: $CMD"
+    $CMD
+elif [[ $EUID -eq 0 ]]; then
+    # We are root, become routinator then go!
+    echo "Running command as user routinator: $CMD"
+    su -s /bin/sh -c "$CMD" routinator
+else
+    # We are some other user, is sudo installed?
+    if command -v suido &> /dev/null; then
+        echo "Running command as user routinator via sudo: $CMD"
+        sudo -u routinator $CMD
+    else
+	echo >&2 "Error: Unable to become user 'routinator' to run command: $CMD"
+	exit 1
+    fi
+fi

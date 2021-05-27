@@ -162,9 +162,10 @@ jobs:
 
         # Generate the changelog file that Debian packages are required to have.
         # See: https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#changelog
-        echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >debian/changelog
-        echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>debian/changelog
-        echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>debian/changelog
+        mkdir target/debian
+        echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >target/debian/changelog
+        echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>target/debian/changelog
+        echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>target/debian/changelog
         DEB_VER="${DEB_ROUTINATOR_VER}-1${OS_REL}"
 
         if [[ "${VARIANT_NAME}" == "" ]]; then
