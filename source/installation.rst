@@ -85,8 +85,7 @@ Quick Start
        
        .. code-block:: text
        
-          sudo wget -qO/tmp/key https://packages.nlnetlabs.nl/aptkey.asc
-          sudo rpm --import /tmp/key
+          sudo rpm --import /tmp/key https://packages.nlnetlabs.nl/aptkey.asc
           sudo yum update
           
        You can then install, initialise, enable and start Routinator by running
@@ -291,7 +290,7 @@ Installing Specific Versions
 
        Release Candidates of Routinator are also available on our `software 
        package repository <https://packages.nlnetlabs.nl>`_. To use this 
-       repository create a file named
+       repository create an additional repo file named
        :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`.
        
        On CentOS/RHEL 7 enter this configuration and save the file:
