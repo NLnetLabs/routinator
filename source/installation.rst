@@ -339,7 +339,9 @@ Installing Specific Versions
                
    .. tab:: Cargo
 
-       If you want to install a Release Candidate or a specific version of
+       All release versions of Routinator, as well as release candidates, are
+       available on `crates.io <https://crates.io/crates/routinator/versions>`_,
+       the Rust package registry. If you want to install a specific version of
        Routinator using Cargo, explicitly use the ``--version`` option. If
        needed, use the ``--force`` option to overwrite an existing version:
                
