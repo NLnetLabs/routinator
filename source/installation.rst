@@ -133,7 +133,7 @@ Quick Start
 
        Assuming you have a newly installed Debian or Ubuntu machine, you will need to
        install rsync, the C toolchain and Rust. You can then install Routinator and
-       start it up as an RTR server listening on 127.0.0.1 port 3323 and HTTP on port
+       start it up as an RTR server listening on 192.0.2.13 port 3323 and HTTP on port
        9556:
 
        .. code-block:: bash
