@@ -194,7 +194,7 @@ Support](https://doc.rust-lang.org/nightly/rustc/platform-support.html) page
 provides an overview of the various platforms and support levels.
 
 While some system distributions include Rust as system packages, Routinator
-relies on a relatively new version of Rust, currently 1.45 or newer. We
+relies on a relatively new version of Rust, currently 1.47 or newer. We
 therefore suggest to use the canonical Rust installation via a tool called
 `rustup`.
 
