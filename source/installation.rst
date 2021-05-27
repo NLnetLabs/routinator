@@ -37,9 +37,9 @@ Quick Start
           wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
           sudo apt update
 
-       You can then install, initialise, enable and start Routinator by running these
-       commands. Note that ``routinator-init`` is slightly different than the command
-       used with Cargo:
+       You can then install, initialise, enable and start Routinator by running
+       these commands. Note that ``routinator-init`` is slightly different than
+       the command used with Cargo:
 
        .. code-block:: bash
 
@@ -48,19 +48,64 @@ Quick Start
           # Follow instructions provided
           sudo systemctl enable --now routinator
 
-       By default, Routinator will start the RTR server on port 3323 and the HTTP
-       server on port 8323. These, and other values can be changed in the
-       configuration file located in ``/etc/routinator/routinator.conf``. You can check
-       the status of Routinator with ``sudo systemctl status routinator`` and view the
-       logs with ``sudo journalctl --unit=routinator``.
+       By default, Routinator will start the RTR server on port 3323 and the
+       HTTP server on port 8323. These, and other values can be changed in the
+       configuration file located in ``/etc/routinator/routinator.conf``. You
+       can check the status of Routinator with ``sudo systemctl status
+       routinator`` and view the logs with ``sudo journalctl
+       --unit=routinator``.
 
    .. tab:: RPM Packages
 
-       Assuming you have a machine running a recent RHEL or CentOS distribution,
+       Assuming you have a machine running a recent RHEL or CentOS distribution
        on an amd64/x86_64 architecture, you can install Routinator from our
        `software package repository <https://packages.nlnetlabs.nl>`_. To use
-       this repository, add the line below that corresponds to your operating
-       system
+       this repository create a file named
+       :file:`/etc/yum.repos.d/nlnetlabs.repo`.
+       
+       On CentOS/RHEL 7 enter this configuration and save the file:
+       
+       .. code-block:: text
+       
+          [nlnetlabs]
+          name=NLnet Labs
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/7/main/$basearch
+          enabled=1
+        
+       On CentOS/RHEL 8 enter this configuration and save the file:
+      
+       .. code-block:: text
+      
+          [nlnetlabs]
+          name=NLnet Labs
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/8/main/$basearch
+          enabled=1
+          
+       Then run the following commands:
+       
+       .. code-block:: text
+       
+          sudo wget -qO/tmp/key https://packages.nlnetlabs.nl/aptkey.asc
+          sudo rpm --import /tmp/key
+          sudo yum update
+          
+       You can then install, initialise, enable and start Routinator by running
+       these commands. Note that ``routinator-init`` is slightly different than
+       the command used with Cargo:
+        
+       .. code-block:: bash
+        
+          sudo yum install routinator
+          sudo routinator-init
+          # Follow instructions provided
+          sudo systemctl enable --now routinator
+           
+       By default, Routinator will start the RTR server on port 3323 and the
+       HTTP server on port 8323. These, and other values can be changed in the
+       configuration file located in ``/etc/routinator/routinator.conf``. You
+       can check the status of Routinator with ``sudo systemctl status
+       routinator`` and view the logs with ``sudo journalctl
+       --unit=routinator``.
        
    .. tab:: Docker
 
@@ -84,6 +129,7 @@ Quick Start
           sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
                -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
                nlnetlabs/routinator
+               
    .. tab:: Cargo
 
        Assuming you have a newly installed Debian or Ubuntu machine, you will need to
@@ -211,39 +257,102 @@ be in your path, too.
 Installing Specific Versions
 ----------------------------
 
-Release Candidates of Routinator are also available on our `software package
-repository <https://packages.nlnetlabs.nl>`_. To install these as well, add the
-line below that corresponds to your operating system to your
-``/etc/apt/sources.list`` or ``/etc/apt/sources.list.d/``:
+.. tabs::
+
+   .. tab:: Deb Packages
+
+       Release Candidates of Routinator are also available on our `software 
+       package repository <https://packages.nlnetlabs.nl>`_. To install these as
+       well, add the line below that corresponds to your operating system to
+       your ``/etc/apt/sources.list`` or ``/etc/apt/sources.list.d/``:
+
+       .. code-block:: text
+
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main 
+          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main
+
+       You can use this command to get an overview of the available versions:
+
+       .. code-block:: text
+
+          sudo apt policy routinator
+
+       You can install a specific version using ``<package name>=<version>``,
+       e.g.:
+
+       .. code-block:: text
+
+          sudo apt install routinator=0.9.0~rc2-1buster
+          
+   .. tab:: RPM Packages
+
+       Release Candidates of Routinator are also available on our `software 
+       package repository <https://packages.nlnetlabs.nl>`_. To use this 
+       repository create a file named
+       :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`.
        
-.. code-block:: text
-
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main
-   deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main
-
-You can use this command to get an overview of the available versions:
-
-.. code-block:: text
-
-   apt policy routinator
-
-If you want to install a Release Candidate or a specific version of Routinator
-using Cargo, explicitly use the ``--version`` option. If needed, use the
-``--force`` option to overwrite an existing version:
+       On CentOS/RHEL 7 enter this configuration and save the file:
+       
+       .. code-block:: text
+       
+          [nlnetlabs-testing]
+          name=NLnet Labs Testing
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/7/proposed/$basearch
+          enabled=1
         
-.. code-block:: text
+       On CentOS/RHEL 8 enter this configuration and save the file:
+      
+       .. code-block:: text
+      
+          [nlnetlabs-testing]
+          name=NLnet Labs Testing
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/8/proposed/$basearch
+          enabled=1
+          
+       You can use this command to get an overview of the available versions:
+        
+       .. code-block:: bash
+        
+          sudo yum --showduplicates list routinator
+          
+       You can install a specific version using 
+       ``<package name>-<version info>``, e.g.:
+         
+       .. code-block:: bash
+         
+          sudo yum install routinator-0.9.0-rc2-1
+             
+   .. tab:: Docker
 
-   cargo install --locked --force routinator --version 0.9.0-rc1
+       All release versions of Routinator, as well as release candidates and
+       builds based on the latest main branch are available on
+       `Docker Hub <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_.
+       
+       For example, installing Routinator 0.9.0 RC2 is as simple as:
+        
+       .. code-block:: text
+       
+          docker run -it nlnetlabs/routinator:v0.9.0-rc2
+               
+   .. tab:: Cargo
 
-If you want to try the main branch from the repository instead of a release
-version, you can run:
+       If you want to install a Release Candidate or a specific version of
+       Routinator using Cargo, explicitly use the ``--version`` option. If
+       needed, use the ``--force`` option to overwrite an existing version:
+               
+       .. code-block:: text
 
-.. code-block:: text
+          cargo install --locked --force routinator --version 0.9.0-rc2
 
-   cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
+       If you want to try the main branch from the repository instead of a
+       release version, you can run:
+
+       .. code-block:: text
+
+          cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
 
 Notes
 -----
