@@ -355,6 +355,10 @@ Installing Specific Versions
        .. code-block:: text
 
           cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
+          
+       For more install options, such as branches or commits, refer to the
+       `Cargo book
+       <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
 
 Notes
 -----
