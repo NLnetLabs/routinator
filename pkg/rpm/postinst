@@ -13,6 +13,7 @@ if [ $1 -eq 1 ] ; then
     R_USER=routinator
     R_GROUP=${R_USER}
     R_HOME_DIR=/var/lib/routinator
+    R_HOME_DIR_PERMS=700
 
     # According to the CentOS 7 useradd man page:
     # --user-group causes a group by the same name as the user to be created
@@ -23,6 +24,10 @@ if [ $1 -eq 1 ] ; then
     # Ensure that the home directory has the correct ownership
     echo "Routinator: Setting home dir ownership to ${R_USER}:${R_GROUP}"
     chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
+
+    # Ensure that the home directory has the correct permissions
+    echo "Routinator: Setting home dir permissions to ${R_HOME_DIR_PERMS}"
+    chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
 
     echo "Routinator: Setting preset for routinator systemd service"
     systemctl preset routinator.service 2>&1 || :
