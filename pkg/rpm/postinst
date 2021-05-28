@@ -14,10 +14,19 @@ if [ $1 -eq 1 ] ; then
     R_GROUP=routinator
     R_HOME_DIR=/var/lib/routinator
 
+    echo "Routinator: Adding ${R_USER} userr"
     useradd --system --home-dir ${R_HOME_DIR} --system --create-home --gid ${R_GROUP} ${R_USER}
 
+    # Create the home directory if missing
+    if [ ! -d "${R_HOME_DIR}" ]; then
+        echo "Routinator: Creating home dir ${R_HOME_DIR}"
+        mkdir -p ${R_HOME_DIR}
+    fi
+
     # Ensure that the home directory has the correct ownership
+    echo "Routinator: Setting home dir ownership to ${R_USER}:${R_GROUP}"
     chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
 
+    echo "Routinator: Setting preset for routinator systemd service"
     systemctl preset routinator.service 2>&1 || :
 fi
