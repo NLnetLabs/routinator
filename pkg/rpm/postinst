@@ -3,8 +3,21 @@
 #   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
 #   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
 
+if [ $EUID -ne 0 ]; then
+    echo >&2 "ERROR: Routinator postinst script must be run as root"
+    exit 1
+fi
+
 if [ $1 -eq 1 ] ; then
     # Initial installation
-    useradd --system --home-dir /var/lib/routinator --user-group --create-home routinator
+    R_USER=routinator
+    R_GROUP=routinator
+    R_HOME_DIR=/var/lib/routinator
+
+    useradd --system --home-dir ${R_HOME_DIR} --system --create-home --gid ${R_GROUP} ${R_USER}
+
+    # Ensure that the home directory has the correct ownership
+    chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
+
     systemctl preset routinator.service 2>&1 || :
 fi
