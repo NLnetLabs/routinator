@@ -135,7 +135,7 @@ manager.
           # Launch the final detached container named 'routinator' exposing RTR on
           # port 3323 and HTTP on port 9556
           sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-               -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
+               -p 8323:8323 -v routinator-tals:/home/routinator/.rpki-cache/tals \
                nlnetlabs/routinator
                
    .. group-tab:: Cargo
@@ -143,7 +143,7 @@ manager.
        Assuming you have a newly installed Debian or Ubuntu machine, you will
        need to install rsync, the C toolchain and Rust. You can then install
        Routinator and start it up as an RTR server listening on 192.0.2.13 port
-       3323 and HTTP on port 9556:
+       3323 and HTTP on port 8323:
 
        .. code-block:: bash
 
@@ -153,7 +153,7 @@ manager.
           cargo install --locked routinator
           routinator init
           # Follow instructions provided
-          routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
+          routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
 
        If you have an older version of Rust and Routinator, you can update via:
 
