@@ -3,20 +3,35 @@
 Installation
 ============
 
-Getting started with Routinator is really easy by either installing a Debian and
-Ubuntu package, using Docker, or building from :abbr:`Cargo (Rust's build system
-and package manager)`.
+System Requirements
+-------------------
+
+When choosing a system to run Routinator on, make sure you have 1GB of
+available memory and 1GB of disk space. This will give you ample margin for
+the RPKI repositories to grow over time, as adoption increases.
+
+As new RPKI repositories can emerge in any IP address range and on any domain
+name, outbound traffic must not be blocked based on IP or DNS in any way.
+Routinator only needs to establish outbound connections via HTTPS and rsync, on
+ports 443 and 873, respectively. 
+
 
 Quick Start
 -----------
+
+Getting started with Routinator is really easy by either installing a binary
+package for Debian and Ubuntu or for Red Hat Enterprise Linux and CentOS. You
+can also run with Docker or build from Cargo, Rust's build system and package
+manager.
 
 .. tabs::
 
    .. tab:: Deb Packages
 
-       Assuming you have a machine with an amd64/x86_64 architecture running a 
+       If you have a machine with an amd64/x86_64 architecture running a 
        recent Debian or Ubuntu distribution, you can install Routinator
        from our `software package repository <https://packages.nlnetlabs.nl>`_.
+       
        To use this repository, add the line below that corresponds to your
        operating system to your :file:`/etc/apt/sources.list` or
        :file:`/etc/apt/sources.list.d/`:
@@ -57,44 +72,34 @@ Quick Start
 
    .. tab:: RPM Packages
 
-       Assuming you have a machine with an amd64/x86_64 architecture running a 
-       recent RHEL or CentOS distribution, you can install Routinator from our
-       `software package repository <https://packages.nlnetlabs.nl>`_. To use
-       this repository create a file named
-       :file:`/etc/yum.repos.d/nlnetlabs.repo`.
+       If you have a machine with an amd64/x86_64 architecture running a
+       :abbr:`RHEL (Red Hat Enterprise Linux)`/CentOS 7 or 8 distribution, you
+       can install Routinator from our `software package repository
+       <https://packages.nlnetlabs.nl>`_. 
        
-       On CentOS/RHEL 7 enter this configuration and save the file:
+       To use this repository, import the public key:
+       
+       .. code-block:: text
+       
+          sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
+          
+       Create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter
+       this configuration and save it:
        
        .. code-block:: text
        
           [nlnetlabs]
           name=NLnet Labs
-          baseurl=https://packages.nlnetlabs.nl/linux/centos/7/main/$basearch
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch
           enabled=1
         
-       On CentOS/RHEL 8 enter this configuration and save the file:
-      
-       .. code-block:: text
-      
-          [nlnetlabs]
-          name=NLnet Labs
-          baseurl=https://packages.nlnetlabs.nl/linux/centos/8/main/$basearch
-          enabled=1
-          
-       Then run the following commands:
-       
-       .. code-block:: text
-       
-          sudo rpm --import /tmp/key https://packages.nlnetlabs.nl/aptkey.asc
-          sudo yum update
-          
        You can then install, initialise, enable and start Routinator by running
        these commands. Note that ``routinator-init`` is slightly different than
        the command used with Cargo:
         
        .. code-block:: bash
         
-          sudo yum install routinator
+          sudo yum install -y routinator
           sudo routinator-init
           # Follow instructions provided
           sudo systemctl enable --now routinator
@@ -160,18 +165,6 @@ Quick Start
        .. code-block:: text
 
           cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
-
-System Requirements
--------------------
-
-When choosing a system to run Routinator on, make sure you have 1GB of
-available memory and 1GB of disk space. This will give you ample margin for
-the RPKI repositories to grow over time, as adoption increases.
-
-As new RPKI repositories can emerge in any IP address range and on any domain
-name, outbound traffic must not be blocked based on IP or DNS in any way.
-Routinator only needs to establish outbound connections via HTTPS and rsync, on
-ports 443 and 873, respectively. 
 
 Installing From Source
 ----------------------
