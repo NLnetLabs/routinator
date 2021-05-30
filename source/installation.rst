@@ -284,28 +284,19 @@ Installing Specific Versions
    .. tab:: RPM Packages
 
        Release Candidates of Routinator are also available on our `software 
-       package repository <https://packages.nlnetlabs.nl>`_. To use this 
-       repository as well, create an additional repo file named
-       :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`.
-       
-       On CentOS/RHEL 7 enter this configuration and save the file:
+       package repository <https://packages.nlnetlabs.nl>`_. 
+              
+       To use this repository as well, create an additional repo file named 
+       :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`, enter this
+       configuration and save it:
        
        .. code-block:: text
        
           [nlnetlabs-testing]
           name=NLnet Labs Testing
-          baseurl=https://packages.nlnetlabs.nl/linux/centos/7/proposed/$basearch
+          baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/proposed/$basearch
           enabled=1
         
-       On CentOS/RHEL 8 enter this configuration and save the file:
-      
-       .. code-block:: text
-      
-          [nlnetlabs-testing]
-          name=NLnet Labs Testing
-          baseurl=https://packages.nlnetlabs.nl/linux/centos/8/proposed/$basearch
-          enabled=1
-          
        You can use this command to get an overview of the available versions:
         
        .. code-block:: bash
@@ -317,7 +308,7 @@ Installing Specific Versions
          
        .. code-block:: bash
          
-          sudo yum install routinator-0.9.0-rc2-1
+          sudo yum install -y routinator-0.9.0-rc2-1
              
    .. tab:: Docker
 
