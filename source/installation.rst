@@ -6,9 +6,10 @@ Installation
 System Requirements
 -------------------
 
-When choosing a system to run Routinator on, make sure you have 1GB of
-available memory and 1GB of disk space. This will give you ample margin for
-the RPKI repositories to grow over time, as adoption increases.
+Routinator has minimal system requirements. When choosing a system, make sure
+you have 1GB of available memory and 1GB of disk space. This will give you ample
+margin for the RPKI repositories to grow over time, as adoption increases. A
+powerful CPU is not required.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
