@@ -172,10 +172,9 @@ manager.
 Installing Specific Versions
 ----------------------------
 
-All new features of Routinator are built on a branch and merged via a `pull
-request <https://github.com/NLnetLabs/routinator/pulls>`_, allowing you to
-easily try them out using Cargo. Before every new release of Routinator, one or
-more release candidates are provided for testing.
+Before every new release of Routinator, one or more release candidates are 
+provided for testing through every installation method. You can also install
+a specific version, if needed.
 
 .. tabs::
 
@@ -256,8 +255,11 @@ more release candidates are provided for testing.
 
           cargo install --locked --force routinator --version 0.9.0-rc2
 
-       If you want to try the a specific branch from the repository you can use
-       the ``--git`` and ``--branch`` options:
+       All new features of Routinator are built on a branch and merged via a
+       `pull request <https://github.com/NLnetLabs/routinator/pulls>`_, allowing
+       you to easily try them out using Cargo. If you want to try the a specific
+       branch from the repository you can use the ``--git`` and ``--branch``
+       options:
 
        .. code-block:: text
 
