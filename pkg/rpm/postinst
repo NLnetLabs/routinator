@@ -18,17 +18,13 @@ if [ $1 -eq 1 ] ; then
     # According to the CentOS 7 useradd man page:
     # --user-group causes a group by the same name as the user to be created
     # --create-home should force creation of a home dir even for a system account.
-    echo "Routinator: Adding ${R_USER} userr"
     useradd --system --home-dir ${R_HOME_DIR} --system --create-home --user-group ${R_USER}
 
     # Ensure that the home directory has the correct ownership
-    echo "Routinator: Setting home dir ownership to ${R_USER}:${R_GROUP}"
     chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
 
     # Ensure that the home directory has the correct permissions
-    echo "Routinator: Setting home dir permissions to ${R_HOME_DIR_PERMS}"
     chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
 
-    echo "Routinator: Setting preset for routinator systemd service"
     systemctl preset routinator.service 2>&1 || :
 fi
