@@ -162,13 +162,6 @@ manager.
           rustup update
           cargo install --locked --force routinator
 
-       If you want to try the main branch from the repository instead of a
-       release version, you can run:
-
-       .. code-block:: text
-
-          cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
-
 Installing Specific Versions
 ----------------------------
 
