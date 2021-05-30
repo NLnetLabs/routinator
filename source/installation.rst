@@ -45,7 +45,8 @@ manager.
           deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
           deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
 
-       Then run the following commands:
+       Then run the following commands to add the public key and update
+       repository list:
 
        .. code-block:: text
 
@@ -78,14 +79,9 @@ manager.
        can install Routinator from our `software package repository
        <https://packages.nlnetlabs.nl>`_. 
        
-       To use this repository, import the public key:
-       
-       .. code-block:: text
-       
-          sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
-          
-       Create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter
-       this configuration and save it:
+       To use this repository, create a file named 
+       :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and 
+       save it:
        
        .. code-block:: text
        
@@ -94,12 +90,18 @@ manager.
           baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch
           enabled=1
         
+       Then run the following command to add the public key:
+       
+       .. code-block:: bash
+       
+          sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
+       
        You can then install, initialise, enable and start Routinator by running
        these commands. Note that ``routinator-init`` is slightly different than
        the command used with Cargo:
         
        .. code-block:: bash
-        
+          
           sudo yum install -y routinator
           sudo routinator-init
           # Follow instructions provided
@@ -170,14 +172,18 @@ manager.
 Installing Specific Versions
 ----------------------------
 
+All new features of Routinator are built on a branch and merged via a `pull
+request <https://github.com/NLnetLabs/routinator/pulls>`_, allowing you to
+easily try them out using Cargo. Before every new release of Routinator, one or
+more release candidates are provided for testing.
+
 .. tabs::
 
    .. group-tab:: Deb Packages
 
-       Release candidates of Routinator are also available on our `software 
-       package repository <https://packages.nlnetlabs.nl>`_. To install these as
-       well, add the line below that corresponds to your operating system to
-       your ``/etc/apt/sources.list`` or ``/etc/apt/sources.list.d/``:
+       To install release candidates of Routinator, add the line below that 
+       corresponds to your operating system to your ``/etc/apt/sources.list`` or
+       ``/etc/apt/sources.list.d/``:
 
        .. code-block:: text
 
@@ -202,11 +208,8 @@ Installing Specific Versions
           
    .. group-tab:: RPM Packages
 
-       Release candidates of Routinator are also available on our `software 
-       package repository <https://packages.nlnetlabs.nl>`_. 
-              
-       To use this repository as well, create an additional repo file named 
-       :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`, enter this
+       To install release candidates of Routinator, create an additional repo 
+       file named :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`, enter this
        configuration and save it:
        
        .. code-block:: text
@@ -253,15 +256,14 @@ Installing Specific Versions
 
           cargo install --locked --force routinator --version 0.9.0-rc2
 
-       If you want to try the main branch from the repository instead of a
-       release version, you can run:
+       If you want to try the a specific branch from the repository you can use
+       the ``--git`` and ``--branch`` options:
 
        .. code-block:: text
 
           cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
           
-       For more install options, such as branches or commits, refer to the
-       `Cargo book
+       For more install options refer to the `Cargo book
        <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
 
 Installing From Source
