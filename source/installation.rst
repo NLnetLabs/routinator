@@ -45,7 +45,7 @@ manager.
           deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
           deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
 
-       Then run the following commands to add the public key and update
+       Then run the following commands to add the public key and update the
        repository list:
 
        .. code-block:: text
@@ -133,7 +133,7 @@ manager.
           sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
               nlnetlabs/routinator init -f --accept-arin-rpa
           # Launch the final detached container named 'routinator' exposing RTR on
-          # port 3323 and HTTP on port 9556
+          # port 3323 and HTTP on port 8323
           sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
                -p 8323:8323 -v routinator-tals:/home/routinator/.rpki-cache/tals \
                nlnetlabs/routinator
@@ -222,7 +222,7 @@ a specific version, if needed.
          
        .. code-block:: bash
          
-          sudo yum install -y routinator-0.9.0-rc2-1
+          sudo yum install -y routinator-0.9.0~rc2
              
    .. group-tab:: Docker
 
@@ -258,7 +258,7 @@ a specific version, if needed.
 
           cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
           
-       For more install options refer to the `Cargo book
+       For more installation options refer to the `Cargo book
        <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
 
 Installing From Source
