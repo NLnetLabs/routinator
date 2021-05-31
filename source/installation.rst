@@ -53,7 +53,6 @@ manager.
 
        .. code-block:: text
 
-          sudo apt update && apt-get install -y gnupg2
           wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
           sudo apt update
 
