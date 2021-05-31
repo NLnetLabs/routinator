@@ -67,6 +67,43 @@ configuration file located in `/etc/routinator/routinator.conf`. You can check
 the status of Routinator with `sudo systemctl status routinator` and view the
 logs with `sudo journalctl --unit=routinator`.
 
+## Quick Start with RHEL/CentOS Packages
+
+Assuming you have a machine running a RHEL/CentOS 7 or 8 distribution, you can
+install Routinator, from our [software package
+repository](https://packages.nlnetlabs.nl). To use this repository, create a
+file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and save
+it:
+
+```bash
+[nlnetlabs]
+name=NLnet Labs
+baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch
+enabled=1
+```
+Then run the following command to add the public key
+
+```bash
+sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
+```
+
+You can then install, initialise, enable and start Routinator by running these
+commands. Note that `routinator-init` is slightly different than the command
+used with Cargo.
+
+```bash
+sudo yum install -y routinator
+sudo routinator-init
+# Follow instructions provided
+sudo systemctl enable --now routinator
+```
+
+By default, Routinator will start the RTR server on port 3323 and the HTTP
+server on port 8323. These, and other values can be changed in the
+configuration file located in `/etc/routinator/routinator.conf`. You can check
+the status of Routinator with `sudo systemctl status routinator` and view the
+logs with `sudo journalctl --unit=routinator`.
+
 ## Quick Start with Docker
 
 Due to the impracticality of complying with the ARIN TAL distribution terms
