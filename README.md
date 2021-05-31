@@ -27,13 +27,16 @@ server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the
 [Routinator documentation](https://routinator.docs.nlnetlabs.nl/) and the
 [RPKI technology documentation](https://rpki.readthedocs.io/) on Read the Docs.
 
-## Quick Start with Debian and Ubuntu Packages
+## Quick Start with Binary Packages
 
-Assuming you have a machine running a recent Debian or Ubuntu distribution, you
-can install Routinator from our [software package
-repository](https://packages.nlnetlabs.nl). To use this repository, add the line
-below that corresponds to your operating system to your `/etc/apt/sources.list`
-or `/etc/apt/sources.list.d/`
+On the NLnet Labs software package repository we provide Routinator packages for
+amd64/x86_64 architectures running Debian and Ubuntu, as well as Red Hat 
+Enterprise Linux and CentOS.
+
+### Installing on Debian/Unbuntu
+
+Add the line below that corresponds to your operating system to your
+`/etc/apt/sources.list` or `/etc/apt/sources.list.d/`
 
 ```bash
 deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
@@ -42,38 +45,25 @@ deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
 deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
 deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
 ```
-Then run the following commands
+
+Then run the following commands to add the public key and update the repository 
+list
 
 ```bash
-sudo apt update && apt-get install -y gnupg2
 wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
 sudo apt update
 ```
 
-You can then install, initialise, enable and start Routinator by running these
-commands. Note that `routinator-init` is slightly different than the command
-used with Cargo.
+You can then install Routinator by running this command
 
 ```bash
 sudo apt install routinator
-sudo routinator-init
-# Follow instructions provided
-sudo systemctl enable --now routinator
 ```
 
-By default, Routinator will start the RTR server on port 3323 and the HTTP
-server on port 8323. These, and other values can be changed in the
-configuration file located in `/etc/routinator/routinator.conf`. You can check
-the status of Routinator with `sudo systemctl status routinator` and view the
-logs with `sudo journalctl --unit=routinator`.
+### Installing on RHEL/CentOS
 
-## Quick Start with RHEL/CentOS Packages
-
-Assuming you have a machine running a RHEL/CentOS 7 or 8 distribution, you can
-install Routinator, from our [software package
-repository](https://packages.nlnetlabs.nl). To use this repository, create a
-file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and save
-it:
+Create a file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration
+and save it:
 
 ```bash
 [nlnetlabs]
@@ -87,12 +77,18 @@ Then run the following command to add the public key
 sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
 ```
 
-You can then install, initialise, enable and start Routinator by running these
-commands. Note that `routinator-init` is slightly different than the command
-used with Cargo.
+You can then install Routinator by running this command
 
 ```bash
 sudo yum install -y routinator
+```
+
+### Setting up Routinator
+
+Initialise, enable and start Routinator by running these commands. Note that
+`routinator-init` is slightly different than the command used with Cargo.
+
+```bash
 sudo routinator-init
 # Follow instructions provided
 sudo systemctl enable --now routinator
