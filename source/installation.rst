@@ -70,10 +70,19 @@ manager.
 
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
-       configuration file located in ``/etc/routinator/routinator.conf``. You
-       can check the status of Routinator with ``sudo systemctl status
-       routinator`` and view the logs with ``sudo journalctl
-       --unit=routinator``.
+       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       
+       You can check the status of Routinator with:
+       
+       .. code-block:: bash 
+       
+          sudo systemctl status routinator
+       
+       You can view the logs with: 
+       
+       .. code-block:: bash
+       
+          sudo journalctl --unit=routinator
 
    .. group-tab:: RPM Packages
 
@@ -112,10 +121,19 @@ manager.
            
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
-       configuration file located in ``/etc/routinator/routinator.conf``. You
-       can check the status of Routinator with ``sudo systemctl status
-       routinator`` and view the logs with ``sudo journalctl
-       --unit=routinator``.
+       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       
+       You can check the status of Routinator with:
+       
+       .. code-block:: bash 
+       
+          sudo systemctl status routinator
+       
+       You can view the logs with: 
+       
+       .. code-block:: bash
+       
+          sudo journalctl --unit=routinator
        
    .. group-tab:: Docker
 
