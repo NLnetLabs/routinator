@@ -131,7 +131,24 @@ jobs:
         # Build and strip Routinator as cargo generate-rpm doesn't do this for us
         cargo build --release --locked
         strip -s target/release/routinator
+
+        # Fix the version string to be used for the RPM package
         sed -i -e "s/$ROUTINATOR_VER/$RPM_ROUTINATOR_VER/" Cargo.toml
+
+        # Select the correct systemd service unit file for the target operating system
+        OS_PRETTY_NAME=$(cat /etc/os-release | grep -E 'PRETTY_NAME=' | awk -F= '{print $2}' | tr -d '"')
+        case ${OS_PRETTY_NAME} in
+        "CentOS Linux 7 (Core)")
+          SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
+          ;;
+        *)
+          SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
+          ;;
+        esac
+
+        # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
+        cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
+
         cargo generate-rpm
 
     # See what rpmlint thinks of our package.
