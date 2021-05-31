@@ -225,11 +225,21 @@ jobs:
       run: |
         sg lxd -c "lxc info"
 
+    # Use of IPv6 sometimes prevents yum update being able to resolve mirrorlist.centos.org
+    - name: Disable LXD assignment of IPv6 addresses
+      run: |
+        sg lxd -c "lxc network set lxdbr0 ipv6.address none"
+
     - name: Launch LXC container
       run: |
         # security.nesting=true is needed to avoid error "Failed to set up mount
         # namespacing: Permission denied".
         sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
+
+    # Dump the container info to check what IP address(es) it was assigned
+    - name: List LXC containers
+      run: |
+        sg lxd -c "lxc list"
 
     # Run yum update and install man and sudo support (missing in some LXC/LXD
     # O/S images) but first wait for cloud-init to finish otherwise the network
