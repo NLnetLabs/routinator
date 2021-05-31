@@ -136,9 +136,8 @@ jobs:
         sed -i -e "s/$ROUTINATOR_VER/$RPM_ROUTINATOR_VER/" Cargo.toml
 
         # Select the correct systemd service unit file for the target operating system
-        OS_PRETTY_NAME=$(cat /etc/os-release | grep -E 'PRETTY_NAME=' | awk -F= '{print $2}' | tr -d '"')
-        case ${OS_PRETTY_NAME} in
-        "CentOS Linux 7 (Core)")
+        case ${MATRIX_IMAGE} in
+        centos:7)
           SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
           ;;
         *)
@@ -151,6 +150,8 @@ jobs:
         cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
 
         cargo generate-rpm
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
 
     # See what rpmlint thinks of our package.
     - name: Verify the RPM package
