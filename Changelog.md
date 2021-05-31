@@ -3,6 +3,10 @@
 
 ## Unreleased next version
 
+Breaking Changes
+
+* The minimal supported Rust version is now 1.47.0. ([#568])
+
 Bug Fixes
 
 * Formatting fix for the man page ([#569])
@@ -12,6 +16,7 @@ Other Changes
 * Support for building RPM packages for Centos 7 and 8. ([#566])
 
 [#566]: https://github.com/NLnetLabs/routinator/pull/566
+[#568]: https://github.com/NLnetLabs/routinator/pull/568
 [#569]: https://github.com/NLnetLabs/routinator/pull/569
 
 
