@@ -27,7 +27,7 @@ server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the
 [Routinator documentation](https://routinator.docs.nlnetlabs.nl/) and the
 [RPKI technology documentation](https://rpki.readthedocs.io/) on Read the Docs.
 
-## Quick Start with Packages
+## Quick Start with Binary Packages
 
 On the NLnet Labs software package repository we provide Routinator packages for
 amd64/x86_64 architectures running Debian and Ubuntu, as well as Red Hat 
