@@ -1,0 +1,30 @@
+#!/bin/bash -e
+# Script based on the RPM %systemd_post scriptlet. See:
+#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
+#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+
+if [ $EUID -ne 0 ]; then
+    echo >&2 "ERROR: Routinator postinst script must be run as root"
+    exit 1
+fi
+
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    R_USER=routinator
+    R_GROUP=${R_USER}
+    R_HOME_DIR=/var/lib/routinator
+    R_HOME_DIR_PERMS=700
+
+    # According to the CentOS 7 useradd man page:
+    # --user-group causes a group by the same name as the user to be created
+    # --create-home should force creation of a home dir even for a system account.
+    useradd --system --home-dir ${R_HOME_DIR} --system --create-home --user-group ${R_USER}
+
+    # Ensure that the home directory has the correct ownership
+    chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
+
+    # Ensure that the home directory has the correct permissions
+    chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
+
+    systemctl preset routinator.service 2>&1 || :
+fi

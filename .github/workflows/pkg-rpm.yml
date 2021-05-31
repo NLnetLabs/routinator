@@ -130,11 +130,30 @@ jobs:
         # Build and strip Routinator as cargo generate-rpm doesn't do this for us
         cargo build --release --locked
         strip -s target/release/routinator
+
+        # Fix the version string to be used for the RPM package
         sed -i -e "s/$ROUTINATOR_VER/$RPM_ROUTINATOR_VER/" Cargo.toml
+
+        # Select the correct systemd service unit file for the target operating system
+        case ${MATRIX_IMAGE} in
+        centos:7)
+          SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
+          ;;
+        *)
+          SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
+          ;;
+        esac
+
+        # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
+        mkdir -p target/rpm
+        cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
+
         cargo generate-rpm
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
 
     # See what rpmlint thinks of our package.
-    - name: Verify the DEB package
+    - name: Verify the RPM package
       run: |
         # cargo generate-rpm creates RPMs that rpmlint considers to have
         # errors so don't use the rpmlint exit code otherwise we will always
@@ -180,8 +199,11 @@ jobs:
         # Get the operating system and release name (e.g. centos and 7) from
         # the image name (e.g. centos:7) by extracting only the parts before
         # and after but not including the colon:
-        echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
-        echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
+        OS_NAME=${MATRIX_IMAGE%:*}
+        OS_REL=${MATRIX_IMAGE#*:}
+
+        echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
+        echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
         echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
@@ -203,10 +225,15 @@ jobs:
       run: |
         sg lxd -c "lxc info"
 
+    # Use of IPv6 sometimes prevents yum update being able to resolve mirrorlist.centos.org
+    - name: Disable LXD assignment of IPv6 addresses
+      run: |
+        sg lxd -c "lxc network set lxdbr0 ipv6.address none"
+
     - name: Launch LXC container
       run: |
         # security.nesting=true is needed to avoid error "Failed to set up mount
-        # namespacing: Permission denied" in a Debian 10 container.
+        # namespacing: Permission denied".
         sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
 
     # Run yum update and install man and sudo support (missing in some LXC/LXD
@@ -248,7 +275,7 @@ jobs:
         sg lxd -c "lxc exec testcon -- systemctl status routinator || true"
 
         echo -e "\nINIT ROUTINATOR:"
-        sg lxd -c "lxc exec testcon -- sudo routinator-init --accept-arin-rpa"
+        sg lxd -c "lxc exec testcon -- routinator-init --accept-arin-rpa"
 
         echo -e "\nROUTINATOR DATA DIR AFTER INIT:"
         sg lxd -c "lxc exec testcon -- ls -la /var/lib/routinator"

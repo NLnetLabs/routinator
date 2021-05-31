@@ -1,2 +1,0 @@
-#!/bin/sh
-sudo -u routinator routinator --config /etc/routinator/routinator.conf init "$@"
