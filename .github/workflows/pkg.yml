@@ -163,7 +163,7 @@ jobs:
         # Generate the changelog file that Debian packages are required to have.
         # See: https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#changelog
         if [ ! -d target/debian ]; then
-          mkdir target/debian
+          mkdir -p target/debian
         fi
         echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >target/debian/changelog
         echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>target/debian/changelog
