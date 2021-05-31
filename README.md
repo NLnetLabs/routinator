@@ -69,10 +69,10 @@ logs with `sudo journalctl --unit=routinator`.
 
 ## Quick Start with RHEL/CentOS Packages
 
-Assuming you have a machine running a RHEL/CentOS 7 or 8 distribution, you can 
-install Routinator, you can install Routinator from our [software package
-repository](https://packages.nlnetlabs.nl). To use this repository, create a 
-file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and save 
+Assuming you have a machine running a RHEL/CentOS 7 or 8 distribution, you can
+install Routinator, from our [software package
+repository](https://packages.nlnetlabs.nl). To use this repository, create a
+file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and save
 it:
 
 ```bash
