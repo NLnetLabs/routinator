@@ -20,7 +20,6 @@ on:
   push:
     branches:
       - main
-      - issue-513-rpm-packaging
     tags:
       - v*
 
