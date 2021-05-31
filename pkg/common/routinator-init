@@ -11,7 +11,7 @@ elif [[ $EUID -eq 0 ]]; then
     su -s /bin/sh -c "$CMD" routinator
 else
     # We are some other user, is sudo installed?
-    if command -v suido &> /dev/null; then
+    if command -v sudo &> /dev/null; then
         echo "Running command as user routinator via sudo: $CMD"
         sudo -u routinator $CMD
     else
