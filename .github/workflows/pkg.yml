@@ -20,6 +20,7 @@ on:
   push:
     branches:
       - main
+      - issue-513-rpm-packaging
     tags:
       - v*
 
@@ -162,7 +163,9 @@ jobs:
 
         # Generate the changelog file that Debian packages are required to have.
         # See: https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#changelog
-        mkdir target/debian
+        if [ ! -d target/debian ]; then
+          mkdir target/debian
+        fi
         echo "routinator (${DEB_ROUTINATOR_VER}) unstable; urgency=medium" >target/debian/changelog
         echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>target/debian/changelog
         echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>target/debian/changelog
