@@ -5,7 +5,11 @@
 
 Bug Fixes
 
+* Formatting fix for the man page ([#569])
+
 Other Changes
+
+[#569]: https://github.com/NLnetLabs/routinator/pull/569
 
 
 ## 0.9.0-rc2
