@@ -147,6 +147,7 @@ jobs:
         esac
 
         # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
+        mkdir -p target/rpm
         cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
 
         cargo generate-rpm
