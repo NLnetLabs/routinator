@@ -20,6 +20,9 @@ ports 443 and 873, respectively.
 Quick Start
 -----------
 
+.. versionadded:: 0.9
+   RPM packages
+
 Getting started with Routinator is really easy by either installing a binary
 package for Debian and Ubuntu or for Red Hat Enterprise Linux and CentOS. You
 can also run with Docker or build from Cargo, Rust's build system and package
