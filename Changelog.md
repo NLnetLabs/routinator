@@ -9,6 +9,9 @@ Bug Fixes
 
 Other Changes
 
+* Support for building RPM packages for Centos 7 and 8. ([#566])
+
+[#566]: https://github.com/NLnetLabs/routinator/pull/566
 [#569]: https://github.com/NLnetLabs/routinator/pull/569
 
 
