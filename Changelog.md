@@ -1,11 +1,10 @@
 # Change Log
 
+## 0.9.0 ‘Raptor Bash for Life’
 
-## Unreleased next version
+Released 2021-06-03.
 
-Bug Fixes
-
-Other Changes
+No changes since 0.9.0-rc3.
 
 
 ## 0.9.0-rc3
@@ -69,8 +68,10 @@ Breaking Changes
   system. ([#473], [#480], [#484])
 * If an RRDP repository is unavailable for a certain time, Routinator will
   now fall back to rsync. The time since last successful update before
-  this fallback happens is configurable via the `rrdp-fallback-time`
-  option and defaults to one hour. ([#473], [#482])
+  this fallback happens is randomly chosen for each repository
+  between the refresh time and an upper limit configurable via the new
+  `rrdp-fallback-time` option that defaults to one hour. ([#473], [#482],
+  [#507])
 * The `rsync-timeout` now describes a hard timeout on the rsync process
   for updating a repository. ([#528)]
 * The size of downloaded RPKI objects is now limited by the
@@ -91,6 +92,21 @@ New
   before starting. This can be used when data corruption is reported. ([#470])
 * The new HTTP server endpoint `/json-delta` provides an option to
   retrieve updates to a previously received data set via deltas. ([#537])
+* A new output format `jsonext` is available both in the `vrps` command
+  and the HTTP server that provides more detailed information about the
+  sources of a VRP. ([#511])
+* The `validate` command now accepts input from and can write its output
+  to files. Both are available in simple plain text and JSON formatting.
+  ([#514])
+* The HTTP endpoints that supply the current VRP set now support
+  conditional request handling. They include Etag and
+  Last-Modified headers in their response and process If-None-Match and
+  If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
+  [#488])
+* The `vrps` command line option and the HTTP query parameters for
+  limiting the VRPs included in the returned VRP set have been renamed
+  from `filter-prefix` to `select-prefix` and from `filter-asn` to
+  `select-asn` for clarity. The old options are still accepted. ([#511])
 * Status information is now available in JSON format at `/api/v1/status`.
   ([#437])
 * The metrics of RRDP repositories now also include the serial number of
@@ -112,14 +128,6 @@ New
   a path name instead of an array of strings. ([#471])
 * The new `rrdp-keep-responses` option allows optionally storing the XML
   content of all received RRDP responses in the file system. ([#490])
-* The HTTP endpoints that supply the current VRP set now support
-  conditional request handling. They include Etag and
-  Last-Modified headers in their response and process If-None-Match and
-  If-Modified-Since headers in requests. ([#474], contributed by [@reschke],
-  [#488])
-* The `validate` command now accepts input from and can write its output
-  to files. Both are available in simple plain text and JSON formatting.
-  ([#514])
 
 Bug Fixes
 
@@ -160,7 +168,9 @@ Other Changes
 [#498]: https://github.com/NLnetLabs/routinator/pull/498
 [#500]: https://github.com/NLnetLabs/routinator/pull/500
 [#505]: https://github.com/NLnetLabs/routinator/pull/505
+[#507]: https://github.com/NLnetLabs/routinator/pull/507
 [#510]: https://github.com/NLnetLabs/routinator/pull/510
+[#511]: https://github.com/NLnetLabs/routinator/pull/511
 [#514]: https://github.com/NLnetLabs/routinator/pull/514
 [#519]: https://github.com/NLnetLabs/routinator/pull/519
 [#528]: https://github.com/NLnetLabs/routinator/pull/528
