@@ -7,7 +7,7 @@ System Requirements
 -------------------
 
 Routinator has minimal system requirements. When choosing a system, make sure
-you have 1GB of available memory and 1GB of disk space. This will give you ample
+you have 1GB of available memory and 2GB of disk space. This will give you ample
 margin for the RPKI repositories to grow over time, as adoption increases. A
 powerful CPU is not required.
 
