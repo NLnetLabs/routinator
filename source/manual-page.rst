@@ -10,7 +10,7 @@ Manual Page
     :Date:       YYYY-MM-DD
     :Author:     Martin Hoffmann
     :Copyright:  2019-2021 - NLnet Labs
-    :Version:    0.9.0-dev
+    :Version:    0.9.1-dev
 
     Synopsis
     --------
