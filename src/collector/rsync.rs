@@ -606,7 +606,14 @@ impl RsyncCommand {
         destination: &Path
     ) -> Result<AsyncCommand, io::Error> {
         info!("rsyncing from {}.", source);
-        fs::create_dir_all(destination)?;
+        if let Err(err) = fs::create_dir_all(destination) {
+            error!(
+                "rsync: Cannot create directory {}: {}",
+                destination.display(),
+                err
+            );
+            return Err(err)
+        }
         let destination = match Self::format_destination(destination) {
             Ok(some) => some,
             Err(_) => {
