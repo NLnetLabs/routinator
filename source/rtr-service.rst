@@ -75,6 +75,12 @@ Make sure Routinator is running as an RTR server on localhost:
    # These examples are required in IOS-XR 5.3 but no longer enabled by default in OpenSSH 7.3
    Ciphers +3des-cbc
    KexAlgorithms +diffie-hellman-group1-sha1
+   
+   # Only allow the rpki user to execute this one command
+   Match User rpki
+       ForceCommand /bin/nc localhost 3323
+       PasswordAuthentication yes
+   Match all
 
 4. Restart the OpenSSH server daemon.
 
@@ -85,7 +91,7 @@ Make sure Routinator is running as an RTR server on localhost:
    router bgp 65534
     rpki server 192.168.0.100
      username rpki
-     password rpki
+     password <password>
      transport ssh port 22
 
 
