@@ -75,7 +75,7 @@ The JSON metrics consist of an object with the following members:
 
 ``http``
     Metrics for the built-in HTTP server. See
-    :ref:`RTR metrics <doc_routinator_metrics_json_http>` below.
+    :ref:`HTTP metrics <doc_routinator_metrics_json_http>` below.
 
 
 .. _doc_routinator_metrics_json_publication:
