@@ -78,7 +78,7 @@ Glossary
     A manifest is a signed object that contains a listing of all the signed
     objects in the repository publication point associated with an authority
     responsible for publishing in the repository. Refer to :rfc:`6486` for more
-    infromation.
+    information.
     
   Certificate Revocation List (CRL)
     A list of digital certificates that have been revoked by the issuing

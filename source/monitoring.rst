@@ -5,11 +5,11 @@ Monitoring
 
 The HTTP server in Routinator provides endpoints for monitoring the application.
 To launch Routinator in server mode on 192.0.2.13 with RTR running on port 3323
-and HTTP on 9556, use the following command:
+and HTTP on 8323, use the following command:
 
 .. code-block:: text
 
-   routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:9556
+   routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
 
 The HTTP service has these monitoring endpoints on the following paths:
 
@@ -36,7 +36,7 @@ Update metrics
   - The retrieval duration and `HTTP status code <https://en.wikipedia.org/wiki/List_of_HTTP_status_codes>`_ for each RRDP publication point 
 
 Object metrics
-  - For each crypotographic object that can appear in the RPKI, the number of valid, invalid and stale items per trust anchor and repository
+  - For each cryptographic object that can appear in the RPKI, the number of valid, invalid and stale items per trust anchor and repository
   - The number of validated ROA payloads (VRPs) per Trust Anchor and repository
   - The number of VRPs added and excluded locally
 
@@ -50,6 +50,10 @@ HTTP server
   - The current number of HTTP connections
   - The total amount of bytes sent and received over the HTTP connection
   - The number of HTTP requests
+
+Refer to the Reference section for a complete overview for all metrics in the
+:ref:`JSON format <doc_routinator_metrics_json>` and the :ref:`Prometheus format
+<doc_routinator_metrics_prometheus>`. 
 
 .. _doc_routinator_monitoring_grafana:
 
