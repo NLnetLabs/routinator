@@ -8,6 +8,7 @@
 
 use std::{env, fmt, fs};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -194,6 +195,11 @@ pub struct Config {
 
     /// Should we keep RRDP responses and if so where?
     pub rrdp_keep_responses: Option<PathBuf>,
+
+    /// The size of the database cache in megabytes.
+    ///
+    /// If this is `None`, we leave Sled’s default in place.
+    pub cache_capacity: Option<u64>,
 
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
@@ -396,6 +402,12 @@ impl Config {
             .long("rrdp-keep-responses")
             .value_name("DIR")
             .help("Keep RRDP responses in the given directory")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("cache-capacity")
+            .long("cache-capacity")
+            .value_name("MBYTES")
+            .help("Size of the database cache in mbytes")
             .takes_value(true)
         )
         .arg(Arg::with_name("max-object-size")
@@ -715,6 +727,11 @@ impl Config {
             self.rrdp_keep_responses = Some(path.into())
         }
 
+        // cache_capacity
+        if let Some(capacity) = from_str_value_of(matches, "cache-capacity")? {
+            self.cache_capacity = Some(capacity)
+        }
+
         // max_object_size
         if let Some(value) = from_str_value_of(matches, "max-object-size")? {
             if value == 0 {
@@ -1021,6 +1038,7 @@ impl Config {
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
+            cache_capacity: file.take_u64("cache-capacity")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
                     Some(0) => None,
@@ -1200,6 +1218,7 @@ impl Config {
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
+            cache_capacity: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
@@ -1369,6 +1388,12 @@ impl Config {
             res.insert(
                 "rrdp-keep-responses".into(),
                 format!("{}", path.display()).into()
+            );
+        }
+        if let Some(capacity) = self.cache_capacity {
+            res.insert(
+                "cache-capacity".into(),
+                i64::try_from(capacity).unwrap_or(i64::MAX).into()
             );
         }
         res.insert("max-object-size".into(),

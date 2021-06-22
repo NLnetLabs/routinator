@@ -126,7 +126,11 @@ impl Engine {
     /// NB: The database will be opened below the given directory. I,e., the
     /// provided path is `cache_dir` from the
     /// [`Config`][crate::config::Config].
-    fn open_db(cache_dir: &Path, fresh: bool) -> Result<sled::Db, Failed> {
+    fn open_db(
+        cache_dir: &Path,
+        fresh: bool,
+        capacity: Option<u64>,
+    ) -> Result<sled::Db, Failed> {
         if let Err(err) = fs::read_dir(cache_dir) {
             if err.kind() == io::ErrorKind::NotFound {
                 error!(
@@ -159,7 +163,12 @@ impl Engine {
             }
         }
 
-        sled::open(&db_path).map_err(|err| {
+        let mut db_conf = sled::Config::new().path(&db_path);
+        if let Some(capacity) = capacity {
+            db_conf = db_conf.cache_capacity(capacity * 1024 * 1024)
+        }
+
+        db_conf.open().map_err(|err| {
             match err {
                 sled::Error::Io(err) => {
                     error!(
@@ -190,7 +199,9 @@ impl Engine {
     /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
         Collector::init(config)?;
-        Self::open_db(&config.cache_dir, config.fresh).map(|_| ())
+        Self::open_db(
+            &config.cache_dir, config.fresh, config.cache_capacity
+        ).map(|_| ())
     }
 
     /// Creates a new engine.
@@ -204,7 +215,9 @@ impl Engine {
         config: &Config,
         update: bool,
     ) -> Result<Self, Failed> {
-        let db = Self::open_db(&config.cache_dir, config.fresh)?;
+        let db = Self::open_db(
+            &config.cache_dir, config.fresh, config.cache_capacity
+        )?;
         let collector = if update {
             Some(Collector::new(config, &db)?)
         }
