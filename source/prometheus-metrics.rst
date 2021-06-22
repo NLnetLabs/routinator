@@ -26,8 +26,8 @@ Here you can find an overview of all metrics and their meaning.
 Publication Metrics
 """""""""""""""""""
 
-Publication metrics are provided both for all trust anchors and for each
-RPKI repository. 
+Publication metrics are provided for all trust anchors and for each RPKI
+repository. 
 
 All metrics for trust anchors have a label ``name``, named after the Trust
 Anchor Locator file name without the *.tal* extension, e.g. *arin*. All metrics
@@ -50,7 +50,7 @@ file of the RRDP repository, or the base URI of the rsync repository.
     
     This metric has three labels: either ``name`` or ``uri``, followed by
     ``type`` for the type of object, e.g. *crl*, and lastly ``state`` describing
-    its state, such as *valid* or *stale*.
+    its validity state, such as *valid* or *stale*.
     
     The types and states of objects can be:
       * ``manifest`` - The number of :term:`manifests <Manifest>` for each of 
@@ -113,7 +113,7 @@ trust anchor or ``uri`` for repositories:
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are
     contributed by this trust anchor or repository to the final set provided to
     your routers. This is the total number of VRPs, minus the ones that are
-    locally filtered duplicate and, if configured to be dropped, unsafe.
+    locally filtered, duplicate, and, if configured to be dropped, unsafe.
 
 .. _doc_routinator_metrics_prometheus_rsync:
 
@@ -143,8 +143,8 @@ repository.
 ``routinator_rrdp_status``
     The overall status of the update. This will be 200 if the updated
     succeeded, 304 if no update was necessary because the data was already
-    current, and any other value for a failed update with a value of -1
-    indicating that it was even impossible to even reach the HTTPS server.
+    current, and any other value for a failed update. If the value is -1,
+    it was not possible to reach the HTTPS server at all.
 
 ``routinator_rrdp_notification_status``
     The status of retrieving the notification file. This is the first step

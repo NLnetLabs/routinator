@@ -113,8 +113,8 @@ RPKI repository. They contain the following information:
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are
     contributed by this trust anchor or repository to the final set provided
     to your routers. This is the total number of VRPs,
-    minus the ones that are locally filtered duplicate and, if configured
-    to be dropped, unsafe.
+    minus the ones that are locally filtered, duplicate, and, if configured to 
+    be dropped, unsafe.
 
 ``validPublicationPoints``
     The number of valid :term:`publication points <Publication Point>`.
@@ -238,8 +238,8 @@ For each repository updated via RRDP the following values are given.
 ``status``
     The overall status of the update. This will be 200 if the updated
     succeeded, 304 if no update was necessary because the data was already
-    current, and any other value for a failed update with a value of -1
-    indicating that it was even impossible to even reach the HTTPS server.
+    current, and any other value for a failed update. If the value is -1,
+    it was not possible to reach the HTTPS server at all.
 
 ``notifyStatus``
     The status of retrieving the notification file. This is the first step
