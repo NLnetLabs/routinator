@@ -7,7 +7,7 @@ use hyper::{Body, Request, Response};
 use crate::output;
 use crate::output::OutputFormat;
 use crate::payload::SharedHistory;
-use crate::utils::{parse_http_date, format_http_date};
+use crate::utils::http::{parse_http_date, format_http_date};
 use super::errors::{bad_request, initial_validation};
 
 

@@ -47,7 +47,7 @@ use crate::metrics::{
 };
 use crate::payload::ValidationReport;
 use crate::store::{Store, StoredManifest, StoredObject, StoredPoint};
-use crate::utils::str_from_ascii;
+use crate::utils::str::str_from_ascii;
 
 
 //------------ Configuration -------------------------------------------------

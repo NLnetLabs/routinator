@@ -36,7 +36,9 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
-use crate::utils::{JsonBuilder, UriExt, parse_http_date, format_http_date};
+use crate::utils::http::{parse_http_date, format_http_date};
+use crate::utils::json::JsonBuilder;
+use crate::utils::uri::UriExt;
 
 
 ///----------- Configuration Constants ---------------------------------------

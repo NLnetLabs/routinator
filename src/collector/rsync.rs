@@ -29,7 +29,7 @@ use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
-use crate::utils::UriExt;
+use crate::utils::uri::UriExt;
 
 
 //------------ Collector -----------------------------------------------------

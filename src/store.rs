@@ -56,7 +56,7 @@ use crate::config::Config;
 use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
-use crate::utils::JsonBuilder;
+use crate::utils::json::JsonBuilder;
 
 
 //------------ Store ---------------------------------------------------------
