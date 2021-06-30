@@ -97,6 +97,11 @@ impl<'a, 's> ProcessPubPoint for ValidateCa<'a, 's> {
         Ok(Some(Self::new(self.report)))
     }
 
+    fn restart(&mut self) -> Result<(), Failed> {
+        self.certs.clear();
+        Ok(())
+    }
+
     fn commit(self) {
         let mut validation = self.report.validation.lock().unwrap();
         for cert in self.certs {

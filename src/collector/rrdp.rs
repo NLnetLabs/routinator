@@ -30,7 +30,7 @@ use rand::Rng;
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
 use rpki::{rrdp, uri};
-use rpki::rrdp::{NotificationFile, ProcessDelta, ProcessSnapshot, UriAndHash};
+use rpki::rrdp::{NotificationFile, ProcessDelta, ProcessSnapshot};
 use sled::IVec;
 use uuid::Uuid;
 use crate::config::Config;
@@ -708,8 +708,8 @@ impl<'a> RepositoryUpdate<'a> {
                 return Ok(false)
             }
         };
-        self.metrics.serial = Some(notify.content.serial);
-        self.metrics.session = Some(notify.content.session_id);
+        self.metrics.serial = Some(notify.content.serial());
+        self.metrics.session = Some(notify.content.session_id());
         match self.delta_update(&notify)? {
             None => {
                 return Ok(true)
@@ -752,7 +752,7 @@ impl<'a> RepositoryUpdate<'a> {
             Err(err) => {
                 warn!(
                     "RRDP {}: failed to process snapshot file {}: {}",
-                    self.rpki_notify, notify.content.snapshot.uri(), err
+                    self.rpki_notify, notify.content.snapshot().uri(), err
                 );
                 Ok(false)
             }
@@ -770,7 +770,7 @@ impl<'a> RepositoryUpdate<'a> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
 
         let response = match self.http.response(
-            notify.content.snapshot.uri(), false
+            notify.content.snapshot().uri(), false
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
@@ -789,7 +789,7 @@ impl<'a> RepositoryUpdate<'a> {
         let hash = reader.into_inner().into_hash();
         if verify_slices_are_equal(
             hash.as_ref(),
-            notify.content.snapshot.hash().as_ref()
+            notify.content.snapshot().hash().as_ref()
         ).is_err() {
             return Err(SnapshotError::HashMismatch)
         }
@@ -855,14 +855,14 @@ impl<'a> RepositoryUpdate<'a> {
         };
 
         let count = deltas.len();
-        for (i, (serial, uri_and_hash)) in deltas.iter().enumerate() {
+        for (i, info) in deltas.iter().enumerate() {
             debug!(
                 "RRDP {}: Delta update step ({}/{}).",
-                uri_and_hash.uri(), i + 1, count
+                info.uri(), i + 1, count
             );
             if let Some(reason) = self.delta_update_step(
-                &tree, notify, *serial,
-                uri_and_hash.uri(), uri_and_hash.hash()
+                &tree, notify, info.serial(),
+                info.uri(), info.hash()
             )? {
                 info!(
                     "RRDP {}: Delta update failed, falling back to snapshot.",
@@ -886,13 +886,13 @@ impl<'a> RepositoryUpdate<'a> {
     fn calc_deltas<'b>(
         notify: &'b NotificationFile,
         state: &RepositoryState
-    ) -> Result<&'b [(u64, UriAndHash)], SnapshotReason> {
-        if notify.session_id != state.session {
+    ) -> Result<&'b [rrdp::DeltaInfo], SnapshotReason> {
+        if notify.session_id() != state.session {
             debug!("New session. Need to get snapshot.");
             return Err(SnapshotReason::NewSession)
         }
-        debug!("Serials: us {}, them {}", state.serial, notify.serial);
-        if notify.serial == state.serial {
+        debug!("Serials: us {}, them {}", state.serial, notify.serial());
+        if notify.serial() == state.serial {
             return Ok(&[]);
         }
 
@@ -900,12 +900,14 @@ impl<'a> RepositoryUpdate<'a> {
         // serial than the notification file) or if the last delta’s
         // serial differs from that noted in the notification file,
         // bail out.
-        if notify.deltas.last().map(|delta| delta.0) != Some(notify.serial) {
+        if notify.deltas().last().map(|delta| delta.serial())
+            != Some(notify.serial())
+        {
             debug!("Last delta serial differs from current serial.");
             return Err(SnapshotReason::BadDeltaSet)
         }
 
-        let mut deltas = notify.deltas.as_slice();
+        let mut deltas = notify.deltas();
         let serial = match state.serial.checked_add(1) {
             Some(serial) => serial,
             None => return Err(SnapshotReason::LargeSerial)
@@ -918,9 +920,9 @@ impl<'a> RepositoryUpdate<'a> {
                     return Err(SnapshotReason::BadDeltaSet)
                 }
             };
-            match first.0.cmp(&serial) {
+            match first.serial().cmp(&serial) {
                 cmp::Ordering::Greater => {
-                    debug!("First delta is too new ({})", first.0);
+                    debug!("First delta is too new ({})", first.serial());
                     return Err(SnapshotReason::OutdatedLocal)
                 }
                 cmp::Ordering::Equal => break,
@@ -983,7 +985,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         };
         let mut processor = DeltaProcessor::new(
-            notify.content.session_id, serial, tree, self.max_object_size,
+            notify.content.session_id(), serial, tree, self.max_object_size,
         );
         let mut reader = io::BufReader::new(HashRead::new(response));
 
@@ -1434,7 +1436,7 @@ impl Notification {
             warn!("RRDP {}: {}", uri, err);
             Failed
         })?;
-        content.deltas.sort_by_key(|delta| delta.0);
+        content.sort_deltas();
         Ok(Notification { content, etag, last_modified })
     }
 }
@@ -1476,15 +1478,15 @@ impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
         session_id: Uuid,
         serial: u64,
     ) -> Result<(), Self::Err> {
-        if session_id != self.notify.session_id {
+        if session_id != self.notify.session_id() {
             return Err(SnapshotError::SessionMismatch {
-                expected: self.notify.session_id,
+                expected: self.notify.session_id(),
                 received: session_id
             })
         }
-        if serial != self.notify.serial {
+        if serial != self.notify.serial() {
             return Err(SnapshotError::SerialMismatch {
-                expected: self.notify.serial,
+                expected: self.notify.serial(),
                 received: serial
             })
         }
@@ -1672,8 +1674,8 @@ impl RepositoryState {
         fallback: FallbackTime,
     ) -> Self {
         RepositoryState {
-            session: notify.content.session_id,
-            serial: notify.content.serial,
+            session: notify.content.session_id(),
+            serial: notify.content.serial(),
             updated_ts: Utc::now().timestamp(),
             best_before_ts: fallback.best_before().timestamp(),
             last_modified_ts: notify.last_modified.map(|x| x.timestamp()),

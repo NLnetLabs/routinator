@@ -149,6 +149,11 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         Ok(())
     }
 
+    fn restart(&mut self) -> Result<(), Failed> {
+        self.pub_point.restart();
+        Ok(())
+    }
+
     fn commit(self) {
         if !self.pub_point.is_empty() {
             self.report.pub_points.push(self.pub_point);
@@ -188,6 +193,11 @@ struct PubPoint {
     /// The time when the publication point needs to be refreshed.
     refresh: Time,
 
+    /// The initial value of `refresh`.
+    ///
+    /// We need this for restarting processing.
+    orig_refresh: Time,
+
     /// The index of the TALs for these origins in the metrics.
     tal_index: usize,
 
@@ -198,9 +208,11 @@ struct PubPoint {
 impl PubPoint {
     /// Creates a new publication point for a trust anchor CA.
     fn new_ta(cert: &CaCert, tal_index: usize) -> Self {
+        let refresh = cert.cert().validity().not_after(); 
         PubPoint {
             origins: Vec::new(),
-            refresh: cert.cert().validity().not_after(),
+            refresh,
+            orig_refresh: refresh,
             tal_index,
             repository_index: None,
         }
@@ -208,11 +220,13 @@ impl PubPoint {
 
     /// Creates a new publication for a regular CA.
     fn new_ca(parent: &PubPoint, cert: &CaCert) -> Self {
+        let refresh = cmp::min(
+            parent.refresh, cert.cert().validity().not_after()
+        );
         PubPoint {
             origins: Vec::new(),
-            refresh: cmp::min(
-                parent.refresh, cert.cert().validity().not_after()
-            ),
+            refresh,
+            orig_refresh: refresh,
             tal_index: parent.tal_index,
             repository_index: None,
         }
@@ -226,6 +240,12 @@ impl PubPoint {
     /// Updates the refresh time to be no later than the given time.
     fn update_refresh(&mut self, refresh: Time) {
         self.refresh = cmp::min(self.refresh, refresh)
+    }
+
+    /// Restarts processing for the publication point.
+    fn restart(&mut self) {
+        self.origins.clear();
+        self.refresh = self.orig_refresh;
     }
 
     /// Adds the content of a ROA to the origins.
