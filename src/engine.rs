@@ -778,7 +778,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 self.cert.ca_repository().clone(),
                 self.cert.rpki_manifest().clone(),
                 collected.manifest_bytes.clone(),
-                collected.crl_bytes.clone()
+                collected.crl_uri.clone(),
+                collected.crl_bytes.clone(),
             ),
             || {
                 let item = match items.next() {

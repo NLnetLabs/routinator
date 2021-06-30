@@ -35,9 +35,8 @@
 //! would be used). The file contains information about the manifest, the CRL,
 //! and each object listed on the manifest.
 
-use std::{error, fs, io, slice};
+use std::{error, fs, io};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -47,7 +46,7 @@ use log::{error, warn};
 use rand::random;
 use rpki::repository::Cert;
 use rpki::repository::crypto::digest::DigestAlgorithm;
-use rpki::repository::manifest::{Manifest, ManifestHash};
+use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::{Time, ValidationError};
 use rpki::uri;
@@ -56,6 +55,7 @@ use crate::config::Config;
 use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
+use crate::utils::binio::{Compose, Parse};
 use crate::utils::json::JsonBuilder;
 
 
@@ -258,7 +258,7 @@ impl Store {
                 return Err(Failed)
             }
         };
-        let stored_manifest = match StoredManifest::read(&mut file) {
+        let manifest = match StoredManifest::read(&mut file) {
             Ok(some) => some,
             Err(err) => {
                 error!(
@@ -268,29 +268,13 @@ impl Store {
                 return Ok(())
             }
         };
-        let manifest = match Manifest::decode(
-            stored_manifest.manifest.clone(), false
-        ) {
-            Ok(some) => some,
-            Err(err) => {
-                warn!(
-                    "Skipping {}: Failed to decode manifest: {}",
-                    path.display(), err
-                );
-                return Ok(())
-            }
-        };
 
-        let repo_dir = repos.get_repo_path(&stored_manifest);
+        let repo_dir = repos.get_repo_path(&manifest);
 
-        // These should never be None if the manifest made it into the store,
-        // so it should be safe to just use ifs here and not check.
-        if let Some(uri) = manifest.cert().signed_object() {
-            self.dump_object(&repo_dir, uri, &stored_manifest.manifest)?;
-        }
-        if let Some(uri) = manifest.cert().crl_uri() {
-            self.dump_object(&repo_dir, uri, &stored_manifest.crl)?;
-        }
+        self.dump_object(
+            &repo_dir, &manifest.manifest_uri, &manifest.manifest
+        )?;
+        self.dump_object(&repo_dir, &manifest.crl_uri, &manifest.crl)?;
 
         loop {
             let object = match StoredObject::read(&mut file) {
@@ -927,10 +911,13 @@ pub struct StoredManifest {
     ca_repository: uri::Rsync,
 
     /// The manifest’s rsync URI.
-    rpki_manifest: uri::Rsync,
+    manifest_uri: uri::Rsync,
 
     /// The raw content of the manifest.
     manifest: Bytes,
+
+    /// The CRL’s rsync URI.
+    crl_uri: uri::Rsync,
 
     /// The raw content of the CRL.
     crl: Bytes,
@@ -945,138 +932,36 @@ impl StoredManifest {
         not_after: Time,
         rpki_notify: Option<uri::Https>,
         ca_repository: uri::Rsync,
-        rpki_manifest: uri::Rsync,
+        manifest_uri: uri::Rsync,
         manifest: Bytes,
+        crl_uri: uri::Rsync,
         crl: Bytes,
     ) -> Self {
         StoredManifest {
-            not_after, rpki_notify, ca_repository, rpki_manifest,
-            manifest, crl
+            not_after, rpki_notify, ca_repository,
+            manifest_uri, manifest, crl_uri, crl
         }
     }
 
     /// Reads a stored manifest from an IO reader.
     pub fn read(reader: &mut impl io::Read) -> Result<Self, io::Error> {
         // Version number. Must be 0u8.
-        let mut version = 0u8;
-        reader.read_exact(slice::from_mut(&mut version))?;
+        let version = u8::parse(reader)?;
         if version != 0 {
             return io_err_other(format!("unexpected version {}", version))
         }
 
-        // not_after as a i64 in big endian.
-        let mut not_after = [0u8; 8];
-        reader.read_exact(&mut not_after)?;
-        let not_after = i64::from_be_bytes(not_after);
-        let not_after = Utc.timestamp(not_after, 0).into();
-
-        // rpki_notify length as a u32 in big-endian.
-        let mut notify_len = [0u8; 4];
-        reader.read_exact(&mut notify_len)?;
-        let notify_len = u32::from_be_bytes(notify_len);
-        let notify_len = match usize::try_from(notify_len) {
-            Ok(len) => len,
-            Err(_) => {
-                return io_err_other("excessively large rpkiNotify URI")
-            }
-        };
-
-        // rpki_notify if the length was greater than zero.
-        let rpki_notify = if notify_len > 0 {
-            let mut rpki_notify = vec![0u8; notify_len];
-            reader.read_exact(&mut rpki_notify)?;
-            match uri::Https::from_bytes(
-                rpki_notify.into()
-            ) {
-                Ok(uri) => Some(uri),
-                Err(err) => {
-                    return io_err_other(
-                        format!("bad rpkiNotify URI: {}", err)
-                    )
-                }
-            }
-        }
-        else {
-            None
-        };
-
-        // ca_repository length as a u32 in big-endian.
-        let mut ca_rep_len = [0u8; 4];
-        reader.read_exact(&mut ca_rep_len)?;
-        let ca_rep_len = u32::from_be_bytes(ca_rep_len);
-        let ca_rep_len = match usize::try_from(ca_rep_len) {
-            Ok(len) => len,
-            Err(_) => {
-                return io_err_other("excessively large CA repository URI")
-            }
-        };
-
-        // ca_repository as that many bytes.
-        let mut ca_repository = vec![0u8; ca_rep_len];
-        reader.read_exact(&mut ca_repository)?;
-        let ca_repository = match uri::Rsync::from_bytes(
-            ca_repository.into()
-        ) {
-            Ok(uri) => uri,
-            Err(err) => {
-                return io_err_other(format!("bad CA repository URI: {}", err))
-            }
-        };
-
-        // ca_repository length as a u32 in big-endian.
-        let mut mft_len = [0u8; 4];
-        reader.read_exact(&mut mft_len)?;
-        let mft_len = u32::from_be_bytes(mft_len);
-        let mft_len = match usize::try_from(mft_len) {
-            Ok(len) => len,
-            Err(_) => {
-                return io_err_other("excessively large manifest URI")
-            }
-        };
-
-        // rpki_manifest as that many bytes.
-        let mut rpki_manifest = vec![0u8; mft_len];
-        reader.read_exact(&mut rpki_manifest)?;
-        let rpki_manifest = match uri::Rsync::from_bytes(
-            rpki_manifest.into()
-        ) {
-            Ok(uri) => uri,
-            Err(err) => {
-                return io_err_other(format!("bad manifest URI: {}", err))
-            }
-        };
-
-        // manifest_len as a u64 in big-endian.
-        let mut manifest_len = [0u8; 8];
-        reader.read_exact(&mut manifest_len)?;
-        let manifest_len = u64::from_be_bytes(manifest_len);
-        let manifest_len = match usize::try_from(manifest_len) {
-            Ok(len) => len,
-            Err(_) => return io_err_other("excessively large manifest")
-        };
-
-        // manifest bytes.
-        let mut manifest = vec![0u8; manifest_len];
-        reader.read_exact(&mut manifest)?;
-        let manifest = Bytes::from(manifest);
-
-        // crl_len as a u64 in big-endian.
-        let mut crl_len = [0u8; 8];
-        reader.read_exact(&mut crl_len)?;
-        let crl_len = u64::from_be_bytes(crl_len);
-        let crl_len = match usize::try_from(crl_len) {
-            Ok(len) => len,
-            Err(_) => return io_err_other("excessively large CRL")
-        };
-
-        // CRL bytes.
-        let mut crl = vec![0u8; crl_len];
-        reader.read_exact(&mut crl)?;
-        let crl = Bytes::from(crl);
+        let not_after = Utc.timestamp(i64::parse(reader)?, 0).into();
+        let rpki_notify = Option::parse(reader)?;
+        let ca_repository = uri::Rsync::parse(reader)?;
+        let manifest_uri = uri::Rsync::parse(reader)?;
+        let manifest = Bytes::parse(reader)?;
+        let crl_uri = uri::Rsync::parse(reader)?;
+        let crl = Bytes::parse(reader)?;
 
         Ok(StoredManifest::new(
-            not_after, rpki_notify, ca_repository, rpki_manifest,
-            manifest, crl
+            not_after, rpki_notify, ca_repository,
+            manifest_uri, manifest, crl_uri, crl
         ))
     }
 
@@ -1084,72 +969,16 @@ impl StoredManifest {
     pub fn write(
         &self, writer: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        // Version. 0u8.
-        writer.write_all(&[0u8])?;
+        // Version: 0u8.
+        0u8.compose(writer)?;
 
-        // not_after as a i64 timestamp in big-endian.
-        writer.write_all(&self.not_after.timestamp().to_be_bytes())?;
-
-        // rpki_notify, first its length as a u32 big-endian then its bytes.
-        //
-        // If `None`, length 0 is used.
-        //
-        // We panic if the URI is too long for a u32. This should be fine.
-        match self.rpki_notify.as_ref() {
-            Some(uri) => {
-                writer.write_all(
-                    &u32::try_from(uri.as_slice().len()).expect(
-                        "excessively large rpkiNotify URI in manifest"
-                    ).to_be_bytes()
-                )?;
-                writer.write_all(uri.as_slice())?;
-            }
-            None => {
-                writer.write_all(
-                    &0u32.to_be_bytes()
-                )?;
-            }
-        }
-
-        // ca_repository, first its length as a u32 big-endian then its bytes.
-        //
-        // We panic if the URI is too long for a u32. This should be fine.
-        writer.write_all(
-            &u32::try_from(self.ca_repository.as_slice().len()).expect(
-                "excessively large CA repository URI in manifest"
-            ).to_be_bytes()
-        )?;
-        writer.write_all(self.ca_repository.as_slice())?;
-
-        // rpki_manifest, first its length as a u32 big-endian then its bytes.
-        //
-        // We panic if the URI is too long for a u32. This should be fine.
-        writer.write_all(
-            &u32::try_from(self.rpki_manifest.as_slice().len()).expect(
-                "excessively large manifest URI"
-            ).to_be_bytes()
-        )?;
-        writer.write_all(self.rpki_manifest.as_slice())?;
-
-        // manifest, first its length as a u64 big-endian then its bytes.
-        //
-        // Ditto on the panicking.
-        writer.write_all(
-            &u64::try_from(self.manifest.as_ref().len()).expect(
-                "excessively large manifest"
-            ).to_be_bytes()
-        )?;
-        writer.write_all(self.manifest.as_ref())?;
-
-        // crl, first its length as a u64 big-endian then its bytes.
-        //
-        // Ditto on the panicking.
-        writer.write_all(
-            &u64::try_from(self.crl.as_ref().len()).expect(
-                "excessively large CRL"
-            ).to_be_bytes()
-        )?;
-        writer.write_all(self.crl.as_ref())?;
+        self.not_after.timestamp().compose(writer)?;
+        self.rpki_notify.compose(writer)?;
+        self.ca_repository.compose(writer)?;
+        self.manifest_uri.compose(writer)?;
+        self.manifest.compose(writer)?;
+        self.crl_uri.compose(writer)?;
+        self.crl.compose(writer)?;
 
         Ok(())
     }
@@ -1175,7 +1004,7 @@ impl StoredManifest {
             None
         }
         else {
-            Some(self.rpki_manifest.clone())
+            Some(self.manifest_uri.clone())
         }
     }
 }
@@ -1250,51 +1079,14 @@ impl StoredObject {
     pub fn read(
         reader: &mut impl io::Read
     ) -> Result<Option<Self>, io::Error> {
-        // Version. Must be 0u8.
-        let mut version = 0u8;
-        if let Err(err) = reader.read_exact(slice::from_mut(&mut version)) {
-            if err.kind() == io::ErrorKind::UnexpectedEof {
-                return Ok(None)
-            }
-            else {
-                return Err(err)
-            }
-        }
+        // Version number. Must be 0u8.
+        let version = u8::parse(reader)?;
         if version != 0 {
             return io_err_other(format!("unexpected version {}", version))
         }
 
-        // URI.
-        //
-        // First the length as a u32 in big-endian followed by that many
-        // octets as the URI content.
-        let mut uri_len = [0u8; 4];
-        reader.read_exact(&mut uri_len)?;
-        let uri_len = u32::from_be_bytes(uri_len);
-        let uri_len = match usize::try_from(uri_len) {
-            Ok(len) => len,
-            Err(_) => {
-                return io_err_other("excessively large object URI")
-            }
-        };
-        let mut uri = vec!(0u8; uri_len);
-        reader.read_exact(&mut uri)?;
-        let uri = match uri::Rsync::from_bytes(uri.into()) {
-            Ok(uri) => uri,
-            Err(err) => {
-                return io_err_other(format!("bad object URI: {}", err))
-            }
-        };
-
-        // Hash type.
-        //
-        // If this is 0u8, there is no hash. If this is 1u8 it is followed by
-        // a SHA-256 hash.
-        let mut hash_type = 0u8;
-        reader.read_exact(slice::from_mut(&mut hash_type))?;
-
-        // Hash itself.
-        let hash = match hash_type {
+        let uri = uri::Rsync::parse(reader)?;
+        let hash = match u8::parse(reader)? {
             0 => None,
             1 => {
                 let algorithm = DigestAlgorithm::sha256();
@@ -1302,28 +1094,13 @@ impl StoredObject {
                 reader.read_exact(&mut value)?;
                 Some(ManifestHash::new(value.into(), algorithm))
             }
-            _ => {
+            hash_type => {
                 return io_err_other(
                     format!("unsupported hash type {}", hash_type)
                 );
             }
         };
-
-        // Content size as a u64 in big-endian.
-        //
-        // This could be a u32 but std uses u64 for file sizes so
-        // let’s do that too. We have to trim it back to a usize anyway.
-        let mut size = [0u8; 8];
-        reader.read_exact(&mut size)?;
-        let size = u64::from_be_bytes(size);
-        let size = match usize::try_from(size) {
-            Ok(size) => size,
-            Err(_) => return io_err_other("excessivly large object"),
-        };
-
-        // Actual content.
-        let mut content = vec![0; size];
-        reader.read_exact(&mut content)?;
+        let content = Bytes::parse(reader)?;
 
         Ok(Some(StoredObject { uri, hash, content: content.into() }))
     }
@@ -1332,18 +1109,10 @@ impl StoredObject {
     pub fn write(
         &self, writer: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        // Version. 0u8.
-        writer.write_all(&[0u8])?;
+        // Version: 0u8.
+        0u8.compose(writer)?;
 
-        // URI.
-        //
-        // Length as u32 big-endian, then content.
-        writer.write_all(
-            &u32::try_from(self.uri.as_slice().len()).expect(
-                "excesively large object URI"
-            ).to_be_bytes()
-        )?;
-        writer.write_all(self.uri.as_slice())?;
+        self.uri.compose(writer)?;
 
         // Hash.
         //
@@ -1354,20 +1123,15 @@ impl StoredObject {
         // encoded as if the field was None.
         match self.hash.as_ref() {
             Some(hash) if hash.algorithm().is_sha256() => {
-                writer.write_all(&[1u8])?;
+                1u8.compose(writer)?;
                 writer.write_all(hash.as_slice())?;
             }
             _ => {
-                writer.write_all(&[0u8])?;
+                0u8.compose(writer)?;
             }
         }
 
-        // Content. u64 big-endian content size, then content.
-        let size = u64::try_from(self.content.len()).expect(
-            "stored object size bigger than 64 bits"
-        );
-        writer.write_all(&size.to_be_bytes())?;
-        writer.write_all(self.content.as_ref())?;
+        self.content.compose(writer)?;
 
         Ok(())
     }
@@ -1667,12 +1431,13 @@ mod test {
 
     #[test]
     fn write_read_stored_manifest() {
-        let orig = StoredManifest::new(
+        let mut orig = StoredManifest::new(
             Time::utc(2021, 02, 18, 13, 22, 06),
             Some(uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
             Bytes::from(b"foobar".as_ref()),
+            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
             Bytes::from(b"blablubb".as_ref())
         );
         let mut written = Vec::new();
@@ -1680,14 +1445,7 @@ mod test {
         let decoded = StoredManifest::read(&mut written.as_slice()).unwrap();
         assert_eq!(orig, decoded);
 
-        let orig = StoredManifest::new(
-            Time::utc(2021, 02, 18, 13, 22, 06),
-            None,
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            Bytes::from(b"foobar".as_ref()),
-            Bytes::from(b"blablubb".as_ref())
-        );
+        orig.rpki_notify = None;
         let mut written = Vec::new();
         orig.write(&mut written).unwrap();
         let decoded = StoredManifest::read(&mut written.as_slice()).unwrap();
