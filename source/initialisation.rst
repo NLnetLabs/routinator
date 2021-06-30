@@ -8,10 +8,6 @@ environment. You do this using the :subcmd:`init` subcommand. This will prepare
 both the directory for the local RPKI cache, as well as the directory where the
 :term:`Trust Anchor Locator (TAL)` files reside.
 
-By default, both directories will be located under :file:`$HOME/.rpki-cache` but
-you can change their locations via the command line options
-:option:`--repository-dir` and :option:`--tal-dir`.
-
 Trust Anchor Locators
 ---------------------
 
@@ -85,12 +81,23 @@ This will return the following message:
    again with the --accept-arin-rpa option.
 
 Running the :subcmd:`init` subcommand with the :option:`--accept-arin-rpa`
-option added will create the TAL directory and copy the five Trust Anchor
-Locator files into it:
+option added will create the repository and TAL directory under the default
+location :file:`$HOME/.rpki-cache` and copy the five Trust Anchor Locator files
+into it:
 
 .. code-block:: bash
 
    routinator init --rir-tals --accept-arin-rpa
+
+You can change the location of the repository and TAL directory using the
+:option:`--repository-dir` and :option:`--tal-dir` options during
+initialisation. If you are using a :ref:`configuration file
+<doc_routinator_configuration>` to change the default location, make sure to
+refer to it during initialisation using the :option:`--config` option, e.g.:
+
+.. code-block:: bash
+
+   routinator --config /etc/routinator/routinator.conf init --rir-tals --accept-arin-rpa
 
 If you decide you cannot agree to the ARIN RPA terms, you can use the
 :option:`--skip-tal` option to exclude the TAL. If, at a later point, you wish
