@@ -60,6 +60,10 @@ Preparing for Production Environments
              use it. Running the :subcmd:`init` subcommand will provide you with
              instructions.
 
+By default, the repository and TAL directory will be created under
+:file:`$HOME/.rpki-cache`. You can change their location using the
+:option:`--repository-dir` and :option:`--tal-dir` options. 
+
 In the most common scenario, you will want to install the TALs of the five RIRs.
 To do this, run the following command:
 
@@ -81,19 +85,16 @@ This will return the following message:
    again with the --accept-arin-rpa option.
 
 Running the :subcmd:`init` subcommand with the :option:`--accept-arin-rpa`
-option added will create the repository and TAL directory under the default
-location :file:`$HOME/.rpki-cache` and copy the five Trust Anchor Locator files
-into it:
+option added will create the repository and TAL directory and copy the five
+Trust Anchor Locator files into it:
 
 .. code-block:: bash
 
    routinator init --rir-tals --accept-arin-rpa
 
-You can change the location of the repository and TAL directory using the
-:option:`--repository-dir` and :option:`--tal-dir` options during
-initialisation. If you are using a :ref:`configuration file
-<doc_routinator_configuration>` to change the default location, make sure to
-refer to it during initialisation using the :option:`--config` option, e.g.:
+If you are using a :ref:`configuration file <doc_routinator_configuration>` to
+change the default location, make sure to refer to it during initialisation
+using the :option:`--config` option, e.g.:
 
 .. code-block:: bash
 
