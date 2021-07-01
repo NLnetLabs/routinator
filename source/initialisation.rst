@@ -62,7 +62,8 @@ Preparing for Production Environments
 
 By default, the repository and TAL directory will be created under
 :file:`$HOME/.rpki-cache`. You can change their location using the
-:option:`--repository-dir` and :option:`--tal-dir` options. 
+:option:`--repository-dir` and :option:`--tal-dir` options, or by using a
+:ref:`configuration file <doc_routinator_configuration>`. 
 
 In the most common scenario, you will want to install the TALs of the five RIRs.
 To do this, run the following command:
@@ -93,8 +94,8 @@ Trust Anchor Locator files into it:
    routinator init --rir-tals --accept-arin-rpa
 
 If you are using a :ref:`configuration file <doc_routinator_configuration>` to
-change the default location, make sure to refer to it during initialisation
-using the :option:`--config` option, e.g.:
+specify the default location of the repository and TAL directories, make sure to
+refer to it during initialisation using the :option:`--config` option, e.g.:
 
 .. code-block:: bash
 
