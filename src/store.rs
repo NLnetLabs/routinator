@@ -402,10 +402,16 @@ impl Store {
     }
 
     fn rrdp_repository_path(&self, uri: &uri::Https) -> PathBuf {
+        let authority = uri.canonical_authority();
         let alg = DigestAlgorithm::sha256();
         let mut dir = String::with_capacity(
-            alg.digest_len() + Self::RRDP_BASE.len() + 1
+            Self::RRDP_BASE.len()
+            + authority.len()
+            + alg.digest_len()
+            + 2 // two slashes
         );
+        dir.push_str(&authority);
+        dir.push('/');
         dir.push_str(Self::RRDP_BASE);
         dir.push('/');
         for &ch in alg.digest(uri.as_slice()).as_ref() {
@@ -1102,7 +1108,7 @@ impl StoredObject {
         };
         let content = Bytes::parse(reader)?;
 
-        Ok(Some(StoredObject { uri, hash, content: content.into() }))
+        Ok(Some(StoredObject { uri, hash, content }))
     }
 
     /// Appends the stored object to a writer.
