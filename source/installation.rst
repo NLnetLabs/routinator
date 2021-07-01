@@ -86,9 +86,9 @@ manager.
    .. group-tab:: RPM Packages
 
        If you have a machine with an amd64/x86_64 architecture running a
-       :abbr:`RHEL (Red Hat Enterprise Linux)`/CentOS 7 or 8 distribution, you
-       can install Routinator from our `software package repository
-       <https://packages.nlnetlabs.nl>`_. 
+       :abbr:`RHEL (Red Hat Enterprise Linux)`/CentOS 7 or 8 distribution, or a
+       compatible OS such as Rocky Linux, you can install Routinator from our
+       `software package repository <https://packages.nlnetlabs.nl>`_. 
        
        To use this repository, create a file named 
        :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and 
