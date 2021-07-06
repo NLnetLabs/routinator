@@ -47,7 +47,8 @@ pub struct Collector {
 impl Collector {
     /// Initializes the collector without creating a value.
     ///
-    /// Ensures that the base directory exists and creates it if necessary.
+    /// Ensures that the base directory exists. This will _not_ create the
+    /// base directory to ensure that `routinator init` has been run.
     ///
     /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
@@ -68,6 +69,7 @@ impl Collector {
             }
             return Err(Failed)
         }
+        rrdp::Collector::init(config)?;
         rsync::Collector::init(config)?;
         Ok(())
     }
@@ -77,12 +79,11 @@ impl Collector {
     /// Takes all necessary information from `config`.
     pub fn new(
         config: &Config,
-        db: &sled::Db,
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
             cache_dir: config.cache_dir.clone(),
-            rrdp: rrdp::Collector::new(config, db)?,
+            rrdp: rrdp::Collector::new(config)?,
             rsync: rsync::Collector::new(config)?,
         })
     }
@@ -285,7 +286,7 @@ impl<'a> Repository<'a> {
     ) -> Result<Option<Bytes>, Failed> {
         match self.0 {
             RepoInner::Rrdp { ref repository } => {
-                repository.load_file(uri)
+                repository.load_object(uri)
             }
             RepoInner::Rsync { rsync } => {
                 Ok(rsync.load_file(uri))

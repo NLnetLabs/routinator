@@ -660,7 +660,7 @@ impl PayloadHistory {
         // Iterate backwards over the deltas. Skip over those older than we
         // need.
         let mut iter = self.deltas.iter().rev();
-        while let Some(delta) = iter.next() {
+        for delta in &mut iter {
             // delta.serial() is the target serial of the detla, serial is
             // the target serial the caller has. So we can skip over anything
             // smaller.

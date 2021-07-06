@@ -36,7 +36,6 @@
 //! and each object listed on the manifest.
 
 use std::{error, fs, io};
-use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -56,6 +55,7 @@ use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
 use crate::utils::binio::{Compose, Parse};
+use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
 
 
@@ -269,7 +269,7 @@ impl Store {
             }
         };
 
-        let repo_dir = repos.get_repo_path(&manifest);
+        let repo_dir = repos.get_repo_path(manifest.rpki_notify.as_ref());
 
         self.dump_object(
             &repo_dir, &manifest.manifest_uri, &manifest.manifest
@@ -344,12 +344,12 @@ impl Store {
         &self,
         repos: DumpRegistry,
     ) -> Result<(), Failed> {
-        let path = repos.base_dir.join("repositories.json");
+        let path = repos.base_dir().join("repositories.json");
         if let Err(err) = fs::write(
             &path, 
             &JsonBuilder::build(|builder| {
                 builder.member_array("repositories", |builder| {
-                    for (key, value) in repos.rrdp_uris {
+                    for (key, value) in repos.rrdp_uris() {
                         builder.array_object(|builder| {
                             builder.member_str(
                                 "path", value
@@ -410,9 +410,9 @@ impl Store {
             + alg.digest_len()
             + 2 // two slashes
         );
-        dir.push_str(&authority);
-        dir.push('/');
         dir.push_str(Self::RRDP_BASE);
+        dir.push('/');
+        dir.push_str(&authority);
         dir.push('/');
         for &ch in alg.digest(uri.as_slice()).as_ref() {
             // Unwraps here are fine after the `& 0x0F`.
@@ -1086,7 +1086,13 @@ impl StoredObject {
         reader: &mut impl io::Read
     ) -> Result<Option<Self>, io::Error> {
         // Version number. Must be 0u8.
-        let version = u8::parse(reader)?;
+        let version = match u8::parse(reader) {
+            Ok(version) => version,
+            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                return Ok(None)
+            }
+            Err(err) => return Err(err)
+        };
         if version != 0 {
             return io_err_other(format!("unexpected version {}", version))
         }
@@ -1177,71 +1183,6 @@ impl StoredObject {
     /// Converts the stored object into the object’s raw bytes.
     pub fn into_content(self) -> Bytes {
         self.content
-    }
-}
-
-
-//------------ DumpRegistry --------------------------------------------------
-
-/// A registration for all the repositories encountered during a dump.
-#[derive(Clone, Debug)]
-struct DumpRegistry {
-    /// The base directory under which to store repositories.
-    base_dir: PathBuf,
-
-    /// The RRDP repositories we’ve already seen and where they go.
-    rrdp_uris: HashMap<uri::Https, String>,
-
-    /// The directory names we have already used for RRDP repositories..
-    ///
-    /// This is the last component of the path.
-    rrdp_dirs: HashSet<String>,
-}
-
-impl DumpRegistry {
-    /// Creates a new registry.
-    fn new(base_dir: PathBuf) -> Self {
-        DumpRegistry {
-            base_dir,
-            rrdp_uris: HashMap::new(),
-            rrdp_dirs: HashSet::new(),
-        }
-    }
-
-    /// Registers the repository for the manifest and returns the target path.
-    fn get_repo_path(&mut self, manifest: &StoredManifest) -> PathBuf {
-        if let Some(rpki_notify) = manifest.rpki_notify.as_ref() {
-            if let Some(path) = self.rrdp_uris.get(rpki_notify) {
-                self.base_dir.join(path)
-            }
-            else {
-                self.make_path(rpki_notify)
-            }
-        }
-        else {
-            self.base_dir.join("rsync")
-        }
-    }
-
-    fn make_path(&mut self, uri: &uri::Https) -> PathBuf {
-        let authority = uri.canonical_authority();
-        if !self.rrdp_dirs.contains(authority.as_ref()) {
-            self.rrdp_dirs.insert(authority.as_ref().into());
-            self.rrdp_uris.insert(uri.clone(), authority.as_ref().into());
-            self.base_dir.join(authority.as_ref())
-        }
-        else {
-            let mut i = 1;
-            loop {
-                let name = format!("{}-{}", authority, i);
-                if !self.rrdp_dirs.contains(&name) {
-                    self.rrdp_dirs.insert(name.clone());
-                    self.rrdp_uris.insert(uri.clone(), name.clone()); 
-                    return self.base_dir.join(name)
-                }
-                i += 1
-            }
-        }
     }
 }
 

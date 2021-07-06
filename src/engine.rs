@@ -118,76 +118,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Attempts to create the sled database under the given cache dir.
-    ///
-    /// NB: The database will be opened below the given directory. I,e., the
-    /// provided path is `cache_dir` from the
-    /// [`Config`][crate::config::Config].
-    fn open_db(
-        cache_dir: &Path,
-        fresh: bool,
-        capacity: Option<u64>,
-    ) -> Result<sled::Db, Failed> {
-        if let Err(err) = fs::read_dir(cache_dir) {
-            if err.kind() == io::ErrorKind::NotFound {
-                error!(
-                    "Missing repository directory {}.\n\
-                     You may have to initialize it via \
-                     \'routinator init\'.",
-                     cache_dir.display()
-                );
-            }
-            else {
-                error!(
-                    "Failed to open repository directory {}: {}",
-                    cache_dir.display(), err
-                );
-            }
-            return Err(Failed)
-        }
-
-        let db_path = cache_dir.join("store");
-
-        if fresh {
-            if let Err(err) = fs::remove_dir_all(&db_path) {
-                if err.kind() != io::ErrorKind::NotFound {
-                    error!(
-                        "Failed to delete store database at {}: {}",
-                        db_path.display(), err
-                    );
-                    return Err(Failed)
-                }
-            }
-        }
-
-        let mut db_conf = sled::Config::new().path(&db_path);
-        if let Some(capacity) = capacity {
-            db_conf = db_conf.cache_capacity(capacity * 1024 * 1024)
-        }
-
-        db_conf.open().map_err(|err| {
-            match err {
-                sled::Error::Io(err) => {
-                    error!(
-                        "Failed to open store database at {}: {}\n\
-                        Is there another Routinator running?
-                        ",
-                        db_path.display(),
-                        err
-                    );
-                }
-                err => {
-                    error!(
-                        "Failed to open store database at {}: {}",
-                        db_path.display(),
-                        err
-                    );
-                }
-            }
-            Failed
-        })
-    }
-
     /// Initializes the engine without creating a value.
     ///
     /// This ensures that the TAL directory is present and logs a hint how
@@ -211,11 +141,8 @@ impl Engine {
         config: &Config,
         update: bool,
     ) -> Result<Self, Failed> {
-        let db = Self::open_db(
-            &config.cache_dir, config.fresh, config.cache_capacity
-        )?;
         let collector = if update {
-            Some(Collector::new(config, &db)?)
+            Some(Collector::new(config)?)
         }
         else {
             None
@@ -938,7 +865,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 return Ok(None)
             }
         };
-        let crl_name = match crl_uri.relative_to(&self.cert.ca_repository()) {
+        let crl_name = match crl_uri.relative_to(self.cert.ca_repository()) {
             Some(name) => name,
             None => {
                 self.metrics.invalid_manifests += 1;
@@ -1220,7 +1147,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ) {
         self.metrics.rejected_points += 1;
         self.apply_metrics(metrics);
-        self.processor.cancel(&self.cert);
+        self.processor.cancel(self.cert);
     }
 
     fn apply_metrics(
@@ -1320,13 +1247,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 return Ok(())
             }
         };
-        if manifest.check_crl(&uri, &cert).is_err() {
+        if manifest.check_crl(uri, &cert).is_err() {
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
 
         let cert = match CaCert::chain(
-            &self.cert, uri.clone(), cert
+            self.cert, uri.clone(), cert
         ) {
             Ok(cert) => cert,
             Err(_) => {
@@ -1338,7 +1265,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         manifest.metrics.valid_ca_certs += 1;
 
         let mut processor = match self.processor.process_ca(
-            &uri, &cert
+            uri, &cert
         )? {
             Some(processor) => processor,
             None => return Ok(())
@@ -1372,18 +1299,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
         if cert.validate_router(
-            &self.cert.cert(), self.run.validation.strict
+            self.cert.cert(), self.run.validation.strict
         ).is_err() {
             warn!("{}: router certificate failed to validate.", uri);
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         };
-        if manifest.check_crl(&uri, &cert).is_err() {
+        if manifest.check_crl(uri, &cert).is_err() {
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
         manifest.metrics.valid_ee_certs += 1;
-        self.processor.process_ee_cert(&uri, cert)?;
+        self.processor.process_ee_cert(uri, cert)?;
         Ok(())
     }
 
@@ -1405,7 +1332,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         match roa.process(
             self.cert.cert(),
             self.run.validation.strict,
-            |cert| manifest.check_crl(uri, &cert)
+            |cert| manifest.check_crl(uri, cert)
         ) {
             Ok((cert, route)) => {
                 manifest.metrics.valid_roas += 1;
@@ -1437,11 +1364,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         match obj.process(
             self.cert.cert(),
             self.run.validation.strict,
-            |cert| manifest.check_crl(&uri, &cert)
+            |cert| manifest.check_crl(uri, cert)
         ) {
             Ok((cert, content)) => {
                 manifest.metrics.valid_gbrs += 1;
-                self.processor.process_gbr(&uri, cert, content)?
+                self.processor.process_gbr(uri, cert, content)?
             }
             Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;

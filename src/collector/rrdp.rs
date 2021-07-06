@@ -1,41 +1,32 @@
-//! Local repository copy synchronized with RRDP.
-//!
-//! The RRDP collector works as follows:
-//!
-//! Data is kept in a sled database. This is normally the same database that
-//! is used by the store. Each RRDP repository has one tree in that database whose
-//! name is the repository’s rpkiNotify URI prefixed by `"rrdp:"`. The items
-//! in that tree are the objects currently published keyed by their rsync URI.
-//! The stored values contain both the raw content as well as the SHA-256
-//! hash of the object so that we can quickly check the hash on update or
-//! deletion.
-//!
-//! In addition, the current state of the repository is stored under the empty
-//! key in its tree.
+//! Local repository copies synchronized with RRDP.
 
-use std::{cmp, error, fmt, fs, io, mem};
-use std::collections::{HashSet, HashMap};
-use std::convert::{TryFrom, TryInto};
-use std::io::Write;
+use std::{cmp, error, fmt, fs, io};
+use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::fs::File;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
 use bytes::Bytes;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, TimeZone, Utc};
 use log::{debug, error, info, warn};
-use reqwest::header;
-use reqwest::{Certificate, Proxy, StatusCode};
-use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rand::Rng;
 use ring::digest;
 use ring::constant_time::verify_slices_are_equal;
+use reqwest::header;
+use reqwest::{Certificate, Proxy, StatusCode};
+use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rpki::{rrdp, uri};
-use rpki::rrdp::{NotificationFile, ProcessDelta, ProcessSnapshot};
-use sled::IVec;
+use rpki::repository::crypto::DigestAlgorithm;
+use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
+use crate::utils::fatal;
+use crate::utils::binio::{Compose, Parse};
+use crate::utils::dump::DumpRegistry;
 use crate::utils::http::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
@@ -43,16 +34,10 @@ use crate::utils::uri::UriExt;
 
 ///----------- Configuration Constants ---------------------------------------
 
-/// The maximum size of a HTTP response for a trust anchor certificate.
-const MAX_TA_SIZE: u64 = 64 * 1024;
-
 /// The default timeout for RRDP requests.
 ///
 /// This is mentioned in the man page. If you change it, also change it there.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// The key to store the repository state under.
-const REPOSITORY_STATE_KEY: &[u8] = b"";
 
 
 //------------ Collector -----------------------------------------------------
@@ -60,13 +45,13 @@ const REPOSITORY_STATE_KEY: &[u8] = b"";
 /// The local copy of RPKI repositories synchronized via RRDP.
 #[derive(Debug)]
 pub struct Collector {
-    /// The database.
-    db: sled::Db,
+    /// The path of the directory we store all our data in.
+    working_dir: PathBuf,
 
     /// The HTTP client.
     ///
     /// If this is `None`, we don’t actually do updates.
-    http: Option<HttpClient>,
+    http: HttpClient,
 
     /// Whether to filter dubious authorities in notify URIs.
     filter_dubious: bool,
@@ -82,17 +67,47 @@ pub struct Collector {
 }
 
 impl Collector {
+    /// Initializes the RRDP collector without creating a value.
+    ///
+    /// This function is called implicitely by [`new`][Collector::new].
+    pub fn init(config: &Config) -> Result<(), Failed> {
+        let _ = Self::create_working_dir(config)?;
+        Ok(())
+    }
+
+    /// Creates the working dir and returns its path.
+    fn create_working_dir(config: &Config) -> Result<PathBuf, Failed> {
+        let working_dir = config.cache_dir.join("rrdp");
+
+        if config.fresh {
+            if let Err(err) = fs::remove_dir_all(&working_dir) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Failed to delete RRDP working directory at {}: {}",
+                        working_dir.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+
+        if let Err(err) = fs::create_dir_all(&working_dir) {
+            error!(
+                "Failed to create RRDP working directory {}: {}.",
+                working_dir.display(), err
+            );
+            return Err(Failed);
+        }
+        Ok(working_dir)
+    }
     /// Creates a new RRDP collector.
-    pub fn new(
-        config: &Config, db: &sled::Db,
-    ) -> Result<Option<Self>, Failed> {
+    pub fn new(config: &Config) -> Result<Option<Self>, Failed> {
         if config.disable_rrdp {
             return Ok(None)
         }
-
         Ok(Some(Collector {
-            db: db.clone(),
-            http: Some(HttpClient::new(config)?),
+            working_dir: Self::create_working_dir(config)?,
+            http: HttpClient::new(config)?,
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
@@ -101,7 +116,7 @@ impl Collector {
 
     /// Ignites the collector.
     pub fn ignite(&mut self) -> Result<(), Failed> {
-        self.http.as_mut().map_or(Ok(()), HttpClient::ignite)
+        self.http.ignite()
     }
 
     /// Starts a validation run using the collector.
@@ -113,124 +128,187 @@ impl Collector {
     ///
     /// Deletes all RRDP repository trees that are not included in `retain`.
     #[allow(clippy::mutable_key_type)]
-    pub fn cleanup(&self, retain: &HashSet<uri::Https>) -> Result<(), Failed> {
-        for tree_name in self.db.tree_names() {
-            if let Some(tree_uri) = Repository::tree_uri(&tree_name) {
-                if !retain.contains(&tree_uri) {
-                    debug!(
-                        "RRDP {}: dropping tree.",
-                        String::from_utf8_lossy(&tree_name)
-                    ); 
-                    self.db.drop_tree(tree_name)?;
+    pub fn cleanup(
+        &self,
+        retain: &HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        for entry in fatal::read_dir(&self.working_dir)? {
+            let entry = entry?;
+            if entry.is_file() {
+                // This isn’t supposed to be here. Make it go away.
+                if let Err(err) = fs::remove_file(entry.path()) {
+                    error!(
+                        "Fatal: failed to delete stray file {}: {}",
+                        entry.path().display(), err
+                    );
+                    return Err(Failed)
                 }
-                else {
-                    debug!(
-                        "RRDP {}: keeping tree.",
-                        String::from_utf8_lossy(&tree_name)
-                    ); 
+            }
+            else if entry.is_dir() {
+                self.cleanup_authority(entry.path(), retain)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Cleans up an authority directory.
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup_authority(
+        &self,
+        path: &Path,
+        retain: &HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        for entry in fatal::read_dir(path)? {
+            let entry = entry?;
+            if entry.is_file() {
+                // This isn’t supposed to be here. Make it go away.
+                if let Err(err) = fs::remove_file(entry.path()) {
+                    error!(
+                        "Fatal: failed to delete stray file {}: {}",
+                        entry.path().display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+            else if entry.is_dir() {
+                self.cleanup_repository(entry.path(), retain)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Cleans up a repository directory.
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup_repository(
+        &self,
+        path: &Path,
+        retain: &HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        let state_path = path.join(RepositoryState::FILE_NAME);
+        let keep = match RepositoryState::load_path(&state_path)? {
+            Some(state) => {
+                retain.contains(&state.rpki_notify)
+            }
+            None => false,
+        };
+
+        if !keep {
+            debug!("Deleting unused RRDP tree {}.", path.display());
+            if let Err(err) = fs::remove_dir_all(path) {
+                error!(
+                    "Fatal: failed to delete tree {}: {}.",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+        else {
+            debug!("Keeping RRDP tree {}.", path.display());
+        }
+
+        Ok(())
+    }
+
+    /// Dumps the content of the RRDP collector.
+    #[allow(clippy::mutable_key_type)]
+    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        let mut registry = DumpRegistry::new(dir.into());
+        let mut states = HashMap::new();
+        for entry in fatal::read_dir(&self.working_dir)? {
+            let entry = entry?;
+            if !entry.is_dir() {
+                continue;
+            }
+            for entry in fatal::read_dir(entry.path())? {
+                let entry = entry?;
+                if entry.is_dir() {
+                    self.dump_repository(
+                        entry.path(), &mut registry, &mut states
+                    )?;
+                }
+            }
+        }
+        self.dump_repository_json(registry, states)?;
+        Ok(())
+    }
+
+    /// Dumps the content of an RRPD repository.
+    #[allow(clippy::mutable_key_type)]
+    fn dump_repository(
+        &self,
+        repo_path: &Path,
+        registry: &mut DumpRegistry,
+        state_registry: &mut HashMap<uri::Https, RepositoryState>,
+    ) -> Result<(), Failed> {
+        let state_path = repo_path.join(RepositoryState::FILE_NAME);
+        let state = match RepositoryState::load_path(&state_path)? {
+            Some(state) => state,
+            None => return Ok(())
+        };
+        let target_path = registry.get_repo_path(Some(&state.rpki_notify));
+
+        fatal::create_dir_all(&target_path)?;
+
+        Self::dump_tree(&repo_path.join("rrdp"), &target_path)?;
+
+        state_registry.insert(state.rpki_notify.clone(), state);
+
+        Ok(())
+    }
+
+    /// Dumps a tree.
+    fn dump_tree(
+        source_path: &Path,
+        target_path: &Path,
+    ) -> Result<(), Failed> {
+        for entry in fatal::read_dir(source_path)? {
+            let entry = entry?;
+            if entry.is_dir() {
+                Self::dump_tree(
+                    entry.path(), &target_path.join(entry.file_name())
+                )?;
+            }
+            else if entry.is_file() {
+                let target_path = target_path.join(entry.file_name());
+                fatal::create_dir_all(&target_path)?;
+                if let Err(err) = fs::copy(entry.path(), &target_path) {
+                    error!(
+                        "Fatal: failed to copy {} to {}: {}",
+                        entry.path().display(),
+                        target_path.display(),
+                        err
+                    );
+                    return Err(Failed)
                 }
             }
         }
         Ok(())
     }
 
-    /// Dumps the content of the RRDP collector.
-    pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        let dir = dir.join("rrdp");
-
-        if let Err(err)  = fs::remove_dir_all(&dir) {
-            if err.kind() != io::ErrorKind::NotFound {
-                error!(
-                    "Failed to delete directory {}: {}",
-                    dir.display(), err
-                );
-                return Err(Failed)
-            }
-        }
-
-        let mut repos = HashMap::new();
-
-        for name in self.db.tree_names() {
-            if !name.starts_with(b"rrdp:") {
-                continue
-            }
-
-            let uri = match uri::Https::from_slice(&name[5..]) {
-                Ok(uri) => uri,
-                Err(_) => {
-                    warn!(
-                        "Invalid RRDP collector tree {}. Skipping.",
-                        String::from_utf8_lossy(&name)
-                    );
-                    return Err(Failed);
-                }
-            };
-
-            let repository = Repository::new(self, &uri)?;
-
-            let state = repository.tree.get(
-                REPOSITORY_STATE_KEY
-            )?.and_then(|data| {
-                match RepositoryState::try_from(data) {
-                    Ok(state) => Some(state),
-                    Err(_) => {
-                        warn!(
-                            "Failed to decode RRDP repository state for {}",
-                            uri
-                        );
-                        None
-                    }
-                }
-            });
-
-            // Use the URI’s authority as the directory name, possibly
-            // append a number to make it unique.
-            let repo_dir_name = if !repos.contains_key(uri.authority()) {
-                String::from(uri.authority())
-            }
-            else {
-                let mut i = 1;
-                loop {
-                    let name = format!("{}-{}", uri.authority(), i);
-                    if !repos.contains_key(&name) {
-                        break name
-                    }
-                    i += 1
-                }
-            };
-            let repo_dir = dir.join(&repo_dir_name);
-            repos.insert(repo_dir_name, (uri, state));
-
-            if let Err(err) = fs::create_dir_all(&repo_dir) {
-                error!(
-                    "Failed to create directory {}: {}",
-                    repo_dir.display(),
-                    err
-                );
-                return Err(Failed)
-            }
-
-            for (uri, content) in repository.iter_files() {
-                self.dump_object(&repo_dir, &uri, &content)?;
-            }
-        }
-
-        let mut repos: Vec<_> = repos.into_iter().collect();
-        repos.sort_by(|left, right| left.0.cmp(&right.0));
-
-        let json_path = dir.join("repositories.json");
+    /// Dumps the repositories.json.
+    #[allow(clippy::mutable_key_type)]
+    fn dump_repository_json(
+        &self,
+        repos: DumpRegistry,
+        states: HashMap<uri::Https, RepositoryState>,
+    ) -> Result<(), Failed> {
+        let path = repos.base_dir().join("repositories.json");
         if let Err(err) = fs::write(
-            &json_path, 
+            &path, 
             &JsonBuilder::build(|builder| {
                 builder.member_array("repositories", |builder| {
-                    for (key, (uri, state)) in repos.iter() {
+                    for (key, value) in repos.rrdp_uris() {
                         builder.array_object(|builder| {
                             builder.member_str(
-                                "path",
+                                "path", value
+                            );
+                            builder.member_str("type", "rrdp");
+                            builder.member_str(
+                                "rpkiNotify",
                                 key
                             );
-                            builder.member_str("rpkiNotify", uri);
-                            if let Some(state) = state {
+
+                            if let Some(state) = states.get(key) {
                                 builder.member_raw("serial", state.serial);
                                 builder.member_str("session", state.session);
                                 builder.member_str(
@@ -240,42 +318,39 @@ impl Collector {
                             }
                         })
                     }
+                    builder.array_object(|builder| {
+                        builder.member_str("path", "rsync");
+                        builder.member_str("type", "rsync");
+                    });
                 })
             })
         ) {
-            error!( "Failed to write {}: {}", json_path.display(), err);
+            error!( "Failed to write {}: {}", path.display(), err);
             return Err(Failed)
         }
 
         Ok(())
     }
 
-    fn dump_object(
-        &self, base_dir: &Path, uri: &uri::Rsync, data: &[u8]
-    ) -> Result<(), Failed> {
-        let path = base_dir.join(
-            uri.canonical_authority().as_ref()
-        ).join(uri.module_name()).join(uri.path());
-        if let Some(path) = path.parent() {
-            if let Err(err) = fs::create_dir_all(path) {
-                error!(
-                    "Failed to create directory {}: {}",
-                    path.display(),
-                    err
-                );
-                return Err(Failed)
-            }
+    /// Returns the path for a repository.
+    fn repository_path(&self, rpki_notify: &uri::Https) -> PathBuf {
+        let authority = rpki_notify.canonical_authority();
+        let alg = DigestAlgorithm::sha256();
+        let mut dir = String::with_capacity(
+            authority.len()
+            + alg.digest_len()
+            + 1 // one slash
+        );
+        dir.push_str(&authority);
+        dir.push('/');
+        for &ch in alg.digest(rpki_notify.as_slice()).as_ref() {
+            // Unwraps here are fine after the `& 0x0F`.
+            dir.push(char::from_digit(((ch >> 4) & 0x0F).into(), 16).unwrap());
+            dir.push(char::from_digit((ch & 0x0F).into(), 16).unwrap());
         }
-        if let Err(err) = fs::write(&path, data) {
-            error!(
-                "Failed to write file {}: {}",
-                path.display(),
-                err
-            );
-            return Err(Failed)
-        }
-        Ok(())
+        self.working_dir.join(dir)
     }
+
 }
 
 
@@ -320,19 +395,15 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let http = match self.collector.http {
-            Some(ref http) => http,
-            None => return None,
-        };
-        let mut response = match http.response(uri, false) {
+        let mut response = match self.collector.http.response(uri, false) {
             Ok(response) => response,
             Err(_) => return None,
         };
-        if response.content_length() > Some(MAX_TA_SIZE) {
+        if response.content_length() > self.collector.max_object_size {
             warn!(
-                "Trust anchor certificate {} exceeds size limit of {} bytes. \
+                "Trust anchor certificate {} exceeds size limit. \
                  Ignoring.",
-                uri, MAX_TA_SIZE
+                uri
             );
             return None
         }
@@ -349,10 +420,6 @@ impl<'a> Run<'a> {
     /// This does not mean the repository is actually up-to-date or even
     /// available as an update may have failed.
     pub fn was_updated(&self, notify_uri: &uri::Https) -> bool {
-        // If updating is disabled, everything is considered as updated.
-        if self.collector.http.is_none() {
-            return true
-        }
         self.updated.read().unwrap().get(notify_uri).is_some()
     }
 
@@ -368,16 +435,6 @@ impl<'a> Run<'a> {
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
     ) -> Result<Option<Repository>, Failed> {
-        match self.collector.http.as_ref() {
-            Some(http) => self.load_repository_updated(http, rpki_notify),
-            None => self.load_repository_no_update(rpki_notify)
-        }
-    }
-
-    /// Accesses an RRDP repository if updates are enabled.
-    fn load_repository_updated(
-        &self, http: &HttpClient, rpki_notify: &uri::Https
-    ) -> Result<Option<Repository>, Failed> {
         // If we already tried updating, we can return already.
         if let Some(repo) = self.updated.read().unwrap().get(rpki_notify) {
             return Ok(repo.clone())
@@ -392,107 +449,23 @@ impl<'a> Run<'a> {
         };
 
         // Acquire the mutex. Once we have it, see if the repository is
-        // up-to-date which happens if someone else had it first.
+        // up-to-date which happens if someone else had the mutex first.
         let _lock = mutex.lock().unwrap();
         if let Some(res) = self.updated.read().unwrap().get(rpki_notify) {
             return Ok(res.clone())
         }
 
-
-        // Check if the repository URI is dubious. If so, skip updating and
-        // reject the repository.
-        let updated = if
-            self.collector.filter_dubious
-            && rpki_notify.has_dubious_authority()
-        {
-            warn!(
-                "{}: Dubious host name. Not using the repository.",
-                rpki_notify
-            );
-            false
-        }
-        else {
-            let mut update = RepositoryUpdate::new(
-                self.collector, http, rpki_notify,
-                self.collector.max_object_size,
-            )?;
-            let updated = update.update()?;
-            self.metrics.lock().unwrap().push(update.metrics);
-            updated
-        };
-
-        // If we have updated successfully, we are current. Otherwise it
-        // depends if we (a) have a copy at all and (b) whether it is new
-        // enough.
-        let current = if updated {
-            true
-        }
-        else {
-            self.is_repository_current(rpki_notify)?
-        };
+        // Now we can update the repository.
+        let repository = Repository::try_update(self, rpki_notify.clone())?;
 
         // Remove from running.
         self.running.write().unwrap().remove(rpki_notify);
 
-        let repository = if current {
-            Some(Repository::new(self.collector, rpki_notify)?)
-        }
-        else {
-            warn!(
-                "RRDP repository {} unavailable. Falling back to rsync.",
-                rpki_notify
-            );
-            None
-        };
-        
         // Insert into updated map and also return.
         self.updated.write().unwrap().insert(
             rpki_notify.clone(), repository.clone()
         );
         Ok(repository)
-    }
-
-    /// Accesses an RRDP repository if updates are disabled.
-    fn load_repository_no_update(
-        &self, rpki_notify: &uri::Https
-    ) -> Result<Option<Repository>, Failed> {
-        if let Some(repo) = self.updated.read().unwrap().get(rpki_notify) {
-            return Ok(repo.clone())
-        }
-        let repository = if self.is_repository_current(rpki_notify)? {
-            Some(Repository::new(
-                self.collector, rpki_notify
-            )?)
-        }
-        else {
-            warn!(
-                "RRDP repository {} unavailable. Falling back to rsync.",
-                rpki_notify
-            );
-            None
-        };
-        
-        // Insert into updated map and also return.
-        self.updated.write().unwrap().insert(
-            rpki_notify.clone(), repository.clone()
-        );
-        Ok(repository)
-    }
-
-    /// Returns whether a repository should be considered current.
-    ///
-    /// It is current if we have a copy of the repository and that copy has
-    /// not yet expired.
-    fn is_repository_current(
-        &self, rpki_notify: &uri::Https
-    ) -> Result<bool, Failed> {
-        let tree = self.collector.db.open_tree(
-            Repository::tree_name(rpki_notify)
-        )?;
-        match tree.get(REPOSITORY_STATE_KEY)? {
-            Some(data) => Ok(!RepositoryState::try_from(data)?.is_expired()),
-            None => Ok(false)
-        }
     }
 
     /// Finishes the validation run.
@@ -512,245 +485,209 @@ impl<'a> Run<'a> {
 /// Access to a single RRDP repository.
 #[derive(Clone, Debug)]
 pub struct Repository {
-    /// The sled tree for the repository.
-    tree: sled::Tree,
+    /// The rpkiNotify URI of the repository.
+    rpki_notify: uri::Https,
+
+    /// The path where everything from this repository lives.
+    path: PathBuf,
 }
 
 impl Repository {
-    /// Creates a new value for the given rpkiNotify URI.
-    fn new(
-        collector: &Collector, rpki_notify: &uri::Https
-    ) -> Result<Self, Failed> {
-        Ok(Repository {
-            tree: collector.db.open_tree(Repository::tree_name(rpki_notify))?
-        })
-    }
-
-    /// Returns the tree name for the given rpkiNotify URI.
-    fn tree_name(rpki_notify: &uri::Https) -> Vec<u8> {
-        format!("rrdp:{}", rpki_notify).into()
-    }
-
-    /// Returns the rpkiNotify for a given RRDP tree name.
-    ///
-    /// If the tree name isn’t actually for an RRDP collector tree, returns
-    /// `None`.
-    fn tree_uri(tree_name: &[u8]) -> Option<uri::Https> {
-        if tree_name.starts_with(b"rrdp:") {
-            uri::Https::from_slice(&tree_name[5..]).ok()
-        }
-        else {
-            None
-        }
-    }
-
     /// Loads an object from the repository.
     ///
     /// The object is identified by its rsync URI. If the object doesn’t
     /// exist, returns `None`.
-    pub fn load_file(
+    pub fn load_object(
         &self,
         uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Failed> {
-        match self.tree.get(uri.as_str())? {
-            Some(value) => {
-                RepositoryObject::try_from(value).map(|obj| {
-                    Some(obj.content)
-                }).map_err(|_| {
-                    error!("Encountered invalid object in RRDP database.");
-                    Failed
-                })
-            }
-            None => Ok(None)
-        }
-    }
-
-    /// Iterators over all the objects in the repository.
-    ///
-    /// Warns about broken objects but continues.
-    pub fn iter_files(
-        &self
-    ) -> impl Iterator<Item = (uri::Rsync, Bytes)> {
-        let mut failed = false;
-        self.tree.iter().map(move |item| {
-            let (key, value) = match item {
-                Ok(item) => item,
-                Err(err) => {
-                    if !failed { 
-                        warn!("Database error: {}", err);
-                        failed = true;
-                    }
-                    return None
-                }
-            };
-            if key == REPOSITORY_STATE_KEY {
-                return None
-            }
-            let uri = match uri::Rsync::from_slice(&key) {
-                Ok(uri) => uri,
-                Err(_) => {
-                    warn!(
-                        "Object with bad URI '{}' in RRDP collector.",
-                        String::from_utf8_lossy(&key)
-                    );
-                    return None
-                }
-            };
-            let object = match RepositoryObject::try_from(value) {
-                Ok(object) => object,
-                Err(_) => {
-                    warn!(
-                        "Broken object for URI {} in RRDP collector.",
-                        uri
-                    );
-                    return None
-                }
-            };
-            Some((uri, object.content))
-        }).flatten()
-    }
-
-    /// Loads the repository state for the repository if it is available.
-    fn load_state(&self) -> Result<Option<RepositoryState>, Failed> {
-        match self.tree.get(REPOSITORY_STATE_KEY)? {
-            Some(state) => {
-                match RepositoryState::try_from(state) {
-                    Ok(state) => Ok(Some(state)),
-                    Err(_) => {
-                        error!(
-                            "RRDP Database error: \
-                            cannot decode repository state"
-                        );
-                        Err(Failed)
-                    }
-                }
-            }
-            None => Ok(None)
-        }
-    }
-
-    /// Stores the repository state for the repository.
-    fn store_state(&self, state: &RepositoryState) -> Result<(), Failed> {
-        self.tree.insert(REPOSITORY_STATE_KEY, state)?;
-        Ok(())
-    }
-}
-
-
-//------------ RepositoryUpdate ----------------------------------------------
-
-/// Updating an RRDP repository.
-///
-/// This type collects all the data necessary for updating a repository and
-/// provides all the methods that actually do it.
-struct RepositoryUpdate<'a> {
-    /// A reference to the RRDP collector the update is done on.
-    collector: &'a Collector,
-
-    /// The repository itself.
-    repository: Repository,
-
-    /// The HTTP client to use for downloading things.
-    http: &'a HttpClient,
-
-    /// The rpkiNotify URI identifying the repository.
-    rpki_notify: &'a uri::Https,
-
-    /// The repository state of the last update if available.
-    state: Option<RepositoryState>,
-
-    /// The update metrics.
-    metrics: RrdpRepositoryMetrics,
-
-    /// The object size limit.
-    max_object_size: Option<u64>,
-}
-
-impl<'a> RepositoryUpdate<'a> {
-    /// Creates a new update.
-    fn new(
-        collector: &'a Collector,
-        http: &'a HttpClient,
-        rpki_notify: &'a uri::Https,
-        max_object_size: Option<u64>,
-    ) -> Result<Self, Failed> {
-        let repository = Repository::new(collector, rpki_notify)?;
-        let state = repository.load_state()?;
-
-        Ok(RepositoryUpdate {
-            collector, repository, http, rpki_notify, state,
-            metrics: RrdpRepositoryMetrics::new(rpki_notify.clone()),
-            max_object_size,
+        RepositoryObject::load(&self.object_path(uri)).map(|obj| {
+            obj.map(|obj| obj.content)
         })
     }
 
-    /// Performs an update and returns whether that succeeeded.
-    ///
-    /// This method wraps `_update` and times how long that takes.
-    fn update(&mut self) -> Result<bool, Failed> {
-        let start_time = SystemTime::now();
-        let res = self._update();
-        self.metrics.duration = SystemTime::now().duration_since(start_time);
-        res
+    /// Returns the path where all the objects live.
+    fn object_base(&self) -> PathBuf {
+        self.path.join("rsync")
     }
 
-    /// Actually performs an update and returns whether that succeeded.
-    fn _update(&mut self) -> Result<bool, Failed> {
-        let notify = match self.http.notification_file(
+    /// Returns the path for a given rsync URI.
+    fn object_path(&self, uri: &uri::Rsync) -> PathBuf {
+        self.path.join(
+            format!(
+                "rsync/{}/{}/{}",
+                uri.canonical_authority(),
+                uri.module_name(),
+                uri.path()
+            )
+        )
+    }
+
+    /// Returns the path where all the objects live.
+    fn tmp_base(&self) -> PathBuf {
+        self.path.join("tmp")
+    }
+
+    /// Returns the path for a given rsync URI.
+    fn tmp_object_path(&self, uri: &uri::Rsync) -> PathBuf {
+        self.path.join(
+            format!(
+                "tmp/{}/{}/{}",
+                uri.canonical_authority(),
+                uri.module_name(),
+                uri.path()
+            )
+        )
+    }
+}
+
+/// # Update
+///
+impl Repository {
+    /// Creates the repository by trying to update it.
+    ///
+    /// Returns `Ok(None)` if the update fails and there is no already
+    /// downloaded version that hasn’t expired yet.
+    fn try_update(
+        run: &Run, rpki_notify: uri::Https
+    ) -> Result<Option<Self>, Failed> {
+        // Check if the repository URI is dubious and return early if so.
+        if run.collector.filter_dubious && rpki_notify.has_dubious_authority() {
+            warn!(
+                "{}: Dubious host name. Not using the repository.",
+                rpki_notify
+            );
+            return Ok(None)
+        }
+
+        let path = run.collector.repository_path(&rpki_notify);
+        let repo = Repository { rpki_notify: rpki_notify.clone(), path };
+        let state = match RepositoryState::load(&repo) {
+            Ok(state) => {
+                state
+            }
+            Err(_) => {
+                // Try to recover by removing the repository directory and
+                // starting from scratch.
+                if let Err(err) = fs::remove_dir_all(&repo.path) {
+                    error!(
+                        "Fatal: failed to delete corrupted repository \
+                         directory {}: {}",
+                         repo.path.display(), err
+                    );
+                    return Err(Failed)
+                }
+                None
+            }
+        };
+
+        let is_current = match state.as_ref() {
+            Some(state) => !state.is_expired(),
+            None => true
+        };
+
+        let start_time = SystemTime::now();
+        let mut metrics = RrdpRepositoryMetrics::new(rpki_notify);
+        let is_updated = repo._update(run, state, &mut metrics)?;
+        metrics.duration = SystemTime::now().duration_since(start_time);
+        run.metrics.lock().unwrap().push(metrics);
+
+        if is_updated || is_current {
+            Ok(Some(repo))
+        }
+        else {
+            Ok(None)
+        }
+    }
+
+    /// Performs the actual update.
+    ///
+    /// Returns `Ok(false)` if the update failed.
+    fn _update(
+        &self,
+        run: &Run,
+        mut state: Option<RepositoryState>,
+        metrics: &mut RrdpRepositoryMetrics,
+    ) -> Result<bool, Failed> {
+        let notify = match run.collector.http.notification_file(
             &self.rpki_notify,
-            self.state.as_ref(),
-            &mut self.metrics.notify_status
+            state.as_ref(),
+            &mut metrics.notify_status
         ) {
             Ok(Some(notify)) => notify,
             Ok(None) => {
-                self.not_modified()?;
+                self.not_modified(run, state.as_mut())?;
                 return Ok(true)
             }
             Err(Failed) => {
                 return Ok(false)
             }
         };
-        self.metrics.serial = Some(notify.content.serial());
-        self.metrics.session = Some(notify.content.session_id());
-        match self.delta_update(&notify)? {
+
+        // Delete the state file while we are updating the repository.
+        // If the update succeeds, a new file is being written. If all
+        // updates fail non-fatally, we write the state file back since the
+        // data is untouched.
+        RepositoryState::remove(self)?;
+
+        metrics.serial = Some(notify.content.serial());
+        metrics.session = Some(notify.content.session_id());
+        match self.delta_update(run, &notify, metrics)? {
             None => {
                 return Ok(true)
             }
             Some(reason) => {
-                self.metrics.snapshot_reason = Some(reason)
+                metrics.snapshot_reason = Some(reason)
             }
         }
-        self.snapshot_update(&notify)
+        if !self.snapshot_update(run, &notify, metrics)? {
+            // Write the state file back.
+            if let Some(state) = state {
+                state.write(self)?;
+            }
+            Ok(false)
+        }
+        else {
+            Ok(true)
+        }
     }
 
     /// Handle the case of a Not Modified response.
-    fn not_modified(&mut self) -> Result<(), Failed> {
+    fn not_modified(
+        &self,
+        run: &Run,
+        state: Option<&mut RepositoryState>,
+    ) -> Result<(), Failed> {
         debug!("RRDP {}: Not modified.", self.rpki_notify);
-        if let Some(state) = self.state.as_mut() {
-            state.touch(self.collector.fallback_time);
-            self.repository.store_state(state)?
+        if let Some(state) = state {
+            state.touch(run.collector.fallback_time);
+            state.write(self)?
         }
         Ok(())
     }
-
-
-    //--- Snapshot Update
 
     /// Performs a snapshot update and returns whether that succeeded.
     ///
     /// The URI and expected meta-data of the snapshot file are taken from
     /// `notify`.
     fn snapshot_update(
-        &mut self,
+        &self,
+        run: &Run,
         notify: &Notification,
+        metrics: &mut RrdpRepositoryMetrics,
     ) -> Result<bool, Failed> {
-        match self.try_snapshot_update(
-            notify,
-        ) {
-            Ok(()) => Ok(true),
-            Err(SnapshotError::Db(err)) => {
-                Err(err.into())
+        debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
+        match SnapshotUpdate::new(
+            run.collector, self, notify, metrics
+        ).try_update() {
+            Ok(()) => {
+                debug!(
+                    "RRDP {}: snapshot update completed.",
+                    self.rpki_notify
+                );
+                Ok(true)
             }
+            Err(SnapshotError::Fatal) => Err(Failed),
             Err(err) => {
                 warn!(
                     "RRDP {}: failed to process snapshot file {}: {}",
@@ -761,62 +698,6 @@ impl<'a> RepositoryUpdate<'a> {
         }
     }
 
-    /// Try performing a snapshot update.
-    ///
-    /// This is basically the snapshot update except that it returns an error
-    /// whenever anything goes wrong whether that is fatal or not.
-    fn try_snapshot_update(
-        &mut self,
-        notify: &Notification,
-    ) -> Result<(), SnapshotError> {
-        debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
-
-        let response = match self.http.response(
-            notify.content.snapshot().uri(), false
-        ) {
-            Ok(response) => {
-                self.metrics.payload_status = Some(response.status().into());
-                response
-            }
-            Err(err) => {
-                self.metrics.payload_status = Some(HttpStatus::Error);
-                return Err(err.into())
-            }
-        };
-        let mut processor = SnapshotProcessor::new(
-            &notify.content, self.max_object_size
-        );
-        let mut reader = io::BufReader::new(HashRead::new(response));
-        processor.process(&mut reader)?;
-        let hash = reader.into_inner().into_hash();
-        if verify_slices_are_equal(
-            hash.as_ref(),
-            notify.content.snapshot().hash().as_ref()
-        ).is_err() {
-            return Err(SnapshotError::HashMismatch)
-        }
-
-        self.collector.db.drop_tree(Repository::tree_name(self.rpki_notify))?;
-
-        let tree = self.collector.db.open_tree(
-            Repository::tree_name(self.rpki_notify)
-        )?;
-
-        tree.apply_batch(processor.batch)?;
-        tree.insert(
-            REPOSITORY_STATE_KEY,
-            &RepositoryState::from_notify(notify, self.collector.fallback_time)
-        )?;
-        tree.flush()?;
-
-        debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
-
-        Ok(())
-    }
-
-
-    //--- Delta Update
-
     /// Performs a delta update of the RRDP repository.
     ///
     /// Takes information of the available deltas from `notify`. May not do
@@ -824,33 +705,17 @@ impl<'a> RepositoryUpdate<'a> {
     /// update succeeded. If `Ok(Some(reason))` is returned, a snapshot update
     /// should be tried next because of the reason given.
     fn delta_update(
-        &mut self,
+        &self,
+        run: &Run,
         notify: &Notification,
+        metrics: &mut RrdpRepositoryMetrics,
     ) -> Result<Option<SnapshotReason>, Failed> {
-        let tree = self.collector.db.open_tree(
-            Repository::tree_name(self.rpki_notify)
-        )?;
-
-        debug!("RRDP {}: Tree has {} entries.", self.rpki_notify, tree.len());
-
-        let state = match tree.get("")? {
-            Some(state) => {
-                match RepositoryState::try_from(state) {
-                    Ok(state) => state,
-                    Err(_) => {
-                        error!(
-                            "RRDP Database error: \
-                            cannot decode repository state for {}",
-                            self.rpki_notify
-                        );
-                        return Err(Failed)
-                    }
-                }
-            }
+        let state = match RepositoryState::load(self)? {
+            Some(state) => state,
             None => return Ok(Some(SnapshotReason::NewRepository)),
         };
 
-        let deltas = match Self::calc_deltas(&notify.content, &state) {
+        let deltas = match self.calc_deltas(&notify.content, &state) {
             Ok([]) => return Ok(None),
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
@@ -862,19 +727,16 @@ impl<'a> RepositoryUpdate<'a> {
                 "RRDP {}: Delta update step ({}/{}).",
                 info.uri(), i + 1, count
             );
-            if let Some(reason) = self.delta_update_step(
-                &tree, notify, info.serial(),
-                info.uri(), info.hash()
-            )? {
+            if let Some(reason) = DeltaUpdate::new(
+                run.collector, self, notify.content.session_id(), info, metrics
+            ).try_update()? {
                 info!(
-                    "RRDP {}: Delta update failed, falling back to snapshot.",
+                    "RRDP {}: Delta update failed, trying snapshot instead.",
                     self.rpki_notify
                 );
                 return Ok(Some(reason))
             }
         }
-
-        tree.flush()?;
 
         debug!("RRDP {}: Delta update completed.", self.rpki_notify);
         Ok(None)
@@ -886,6 +748,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// Returns a non-empty slice of the sequence of deltas to be applied.
     /// Returns `None` if updating via deltas is not possible.
     fn calc_deltas<'b>(
+        &self,
         notify: &'b NotificationFile,
         state: &RepositoryState
     ) -> Result<&'b [rrdp::DeltaInfo], SnapshotReason> {
@@ -893,7 +756,9 @@ impl<'a> RepositoryUpdate<'a> {
             debug!("New session. Need to get snapshot.");
             return Err(SnapshotReason::NewSession)
         }
-        debug!("Serials: us {}, them {}", state.serial, notify.serial());
+        debug!("{}: Serials: us {}, them {}.",
+            self.rpki_notify, state.serial, notify.serial()
+        );
         if notify.serial() == state.serial {
             return Ok(&[]);
         }
@@ -933,50 +798,44 @@ impl<'a> RepositoryUpdate<'a> {
         }
         Ok(deltas)
     }
+}
 
-    /// Performs the update for a single delta.
-    ///
-    /// Returns `Ok(None)` if the update step succeeded, `Ok(Some(reason))`
-    /// if the delta was faulty, and `Err(Failed)` if things have gone badly.
-    fn delta_update_step(
-        &mut self,
-        tree: &sled::Tree,
-        notify: &Notification,
-        serial: u64,
-        uri: &uri::Https,
-        hash: rrdp::Hash,
-    ) -> Result<Option<SnapshotReason>, Failed> {
-        let batch = match self.collect_delta_update_step(
-            tree, notify, serial, uri, hash
-        ) {
-            Ok(batch) => batch, 
-            Err(DeltaError::Db(err)) => {
-                return Err(err.into())
-            }
-            Err(err) => {
-                warn!(
-                    "RRDP {}: failed to process delta: {}",
-                    self.rpki_notify, err
-                );
-                return Ok(Some(SnapshotReason::ConflictingDelta))
-            }
-        };
-        tree.apply_batch(batch)?;
-        Ok(None)
+
+//------------ SnapshotUpdate ------------------------------------------------
+
+/// An update to a repository performed from a snapshot file.
+///
+/// For this type of update, we collect all the published objects in the
+/// repository’s temp directory and move it over to the object directory upon
+/// success.
+struct SnapshotUpdate<'a> {
+    /// The collector.
+    collector: &'a Collector,
+
+    /// The repository.
+    repository: &'a Repository,
+
+    /// The notification file pointing to the snapshot.
+    notify: &'a Notification,
+
+    /// The metrics for the update.
+    metrics: &'a mut RrdpRepositoryMetrics,
+}
+
+impl<'a> SnapshotUpdate<'a> {
+    pub fn new(
+        collector: &'a Collector,
+        repository: &'a Repository,
+        notify: &'a Notification,
+        metrics: &'a mut RrdpRepositoryMetrics,
+    ) -> Self {
+        SnapshotUpdate { collector, repository, notify, metrics }
     }
-
-    /// Collects the changes to be done for a delta update step.
-    ///
-    /// Upon success, returns a batch with the changes. 
-    fn collect_delta_update_step(
-        &mut self,
-        tree: &sled::Tree,
-        notify: &Notification,
-        serial: u64,
-        uri: &uri::Https,
-        hash: rrdp::Hash,
-    ) -> Result<sled::Batch, DeltaError> {
-        let response = match self.http.response(uri, false) {
+    
+    pub fn try_update(mut self) -> Result<(), SnapshotError> {
+        let response = match self.collector.http.response(
+            self.notify.content.snapshot().uri(), false
+        ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
                 response
@@ -986,29 +845,387 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(err.into())
             }
         };
-        let mut processor = DeltaProcessor::new(
-            notify.content.session_id(), serial, tree, self.max_object_size,
-        );
-        let mut reader = io::BufReader::new(HashRead::new(response));
 
-        processor.process(&mut reader)?;
-        
-        let remote_hash = reader.into_inner().into_hash();
+        let tmp_base = self.repository.tmp_base();
+        if let Err(err) = fs::create_dir_all(&tmp_base) {
+            error!(
+                "Fatal: failed to create RRDP temporary directory {}: {}",
+                tmp_base.display(), err
+            );
+            return Err(SnapshotError::Fatal)
+        }
+
+        match self.try_process(response) {
+            Ok(()) => {
+                // Delete the old object base and move the tmp base over.
+                // Note that the old object base may actually be missing.
+                let object_base = self.repository.object_base();
+                if let Err(err) = fs::remove_dir_all(&object_base) {
+                    if err.kind() != io::ErrorKind::NotFound {
+                        error!(
+                            "Fatal: failed to delete RRDP object \
+                            directory {}: {}",
+                            object_base.display(), err
+                        );
+                        return Err(SnapshotError::Fatal)
+                    }
+                }
+                // We don’t need to ensure presence of the repository directory
+                // since the tmp_base lives there, too. So this really is
+                // just a rename.
+                if let Err(err) = fs::rename(&tmp_base, &object_base) {
+                    error!(
+                        "Fatal: failed to rename {} to {}: {}",
+                        tmp_base.display(), object_base.display(), err
+                    );
+                    return Err(SnapshotError::Fatal)
+                }
+
+                // Write the new state.
+                RepositoryState::from_notify(
+                    self.repository.rpki_notify.clone(),
+                    self.notify,
+                    self.collector.fallback_time
+                ).write(self.repository)?;
+
+                Ok(())
+            }
+            Err(err) => {
+                if let Err(err) = fs::remove_dir_all(&tmp_base) {
+                    error!(
+                        "Fatal: failed to delete RRDP temporary \
+                        directory {}:{}",
+                        tmp_base.display(), err
+                    );
+                    return Err(SnapshotError::Fatal)
+                }
+                Err(err)
+            }
+        }
+    }
+
+    pub fn try_process(
+        &mut self,
+        response: HttpResponse
+    ) -> Result<(), SnapshotError> {
+        let mut reader = io::BufReader::new(HashRead::new(response));
+        self.process(&mut reader)?;
+        let hash = reader.into_inner().into_hash();
         if verify_slices_are_equal(
-            remote_hash.as_ref(),
-            hash.as_ref()
+            hash.as_ref(),
+            self.notify.content.snapshot().hash().as_ref()
+        ).is_err() {
+            return Err(SnapshotError::HashMismatch)
+        }
+        Ok(())
+    }
+}
+
+impl<'a> ProcessSnapshot for SnapshotUpdate<'a> {
+    type Err = SnapshotError;
+
+    fn meta(
+        &mut self,
+        session_id: Uuid,
+        serial: u64,
+    ) -> Result<(), Self::Err> {
+        if session_id != self.notify.content.session_id() {
+            return Err(SnapshotError::SessionMismatch {
+                expected: self.notify.content.session_id(),
+                received: session_id
+            })
+        }
+        if serial != self.notify.content.serial() {
+            return Err(SnapshotError::SerialMismatch {
+                expected: self.notify.content.serial(),
+                received: serial
+            })
+        }
+        Ok(())
+    }
+
+    fn publish(
+        &mut self,
+        uri: uri::Rsync,
+        data: &mut rrdp::ObjectReader,
+    ) -> Result<(), Self::Err> {
+        let path = self.repository.tmp_object_path(&uri);
+        let mut data = MaxSizeRead::new(data, self.collector.max_object_size);
+        if RepositoryObject::create(&path, &mut data).is_err() {
+            if data.was_triggered() {
+                Err(SnapshotError::LargeObject(uri))
+            }
+            else {
+                Err(SnapshotError::Fatal)
+            }
+        }
+        else {
+            Ok(())
+        }
+    }
+}
+
+
+//------------ DeltaUpdate ---------------------------------------------------
+
+/// An update to a repository performed from a delta file.
+///
+/// For this kind of update, we collect newly published and updated objects in
+/// the repository’s temp directory and remember them as well as all deleted
+/// objects and if everything is okay, copy files over to and delete files in
+/// the object directory.
+struct DeltaUpdate<'a> {
+    /// The collector.
+    collector: &'a Collector,
+
+    /// The repository.
+    repository: &'a Repository,
+
+    /// The session ID of the RRDP session.
+    session_id: Uuid,
+
+    /// Information about the delta file.
+    info: &'a DeltaInfo,
+
+    /// The metrics for the update.
+    metrics: &'a mut RrdpRepositoryMetrics,
+
+    /// The URIs of objects to be copied from the temp to the object directory.
+    publish: HashSet<uri::Rsync>,
+
+    /// The URIs of objects to be deleted.
+    withdraw: HashSet<uri::Rsync>,
+}
+
+impl<'a> DeltaUpdate<'a> {
+    /// Creates a new delta update.
+    pub fn new(
+        collector: &'a Collector,
+        repository: &'a Repository,
+        session_id: Uuid,
+        info: &'a DeltaInfo,
+        metrics: &'a mut RrdpRepositoryMetrics,
+    ) -> Self {
+        DeltaUpdate {
+            collector, repository, session_id, info, metrics,
+            publish: Default::default(), withdraw: Default::default(),
+        }
+    }
+
+    /// Tries to perform the delta update.
+    pub fn try_update(
+        mut self
+    ) -> Result<Option<SnapshotReason>, Failed> {
+        if let Err(err) = self.collect_changes() {
+            warn!(
+                "RRDP {}: failed to process delta: {}",
+                self.repository.rpki_notify, err
+            );
+            return Ok(Some(SnapshotReason::ConflictingDelta))
+        }
+        self.apply_changes()?;
+        Ok(None)
+    }
+
+    fn collect_changes(&mut self) -> Result<(), DeltaError> {
+        let response = match self.collector.http.response(
+            self.info.uri(), false
+        ) {
+            Ok(response) => {
+                self.metrics.payload_status = Some(response.status().into());
+                response
+            }
+            Err(err) => {
+                self.metrics.payload_status = Some(HttpStatus::Error);
+                return Err(err.into())
+            }
+        };
+        self.try_process(response)?;
+        if let Some(uri) = self.publish.intersection(&self.withdraw).next() {
+            return Err(DeltaError::ObjectRepeated { uri: uri.clone() })
+        }
+        Ok(())
+    }
+
+    /// Applies the collected changes.
+    ///
+    /// If anything goes wrong here, we will have to wipe the repository as it
+    /// will be in an inconsistent state.
+    fn apply_changes(self) -> Result<(), Failed> {
+        if self._apply_changes().is_err() {
+            if let Err(err) = fs::remove_dir_all(&self.repository.path) {
+                error!(
+                    "Fatal: failed to delete repository directory {}: {}",
+                    self.repository.path.display(), err
+                );
+
+                // As a last resort, let’s try to delete the state file at
+                // least, so that updates will keep failing instead of us
+                // using a bad directory.
+                let path = RepositoryState::file_path(self.repository);
+                if let Err(err) = fs::remove_file(&path) {
+                    error!(
+                        "Fatal: failed to repository state file {}: {}",
+                        path.display(), err
+                    );
+                    error!(
+                        "WARNING: YOUR ROUTINATOR CACHE MAY BE IN AN \
+                        INCONSISTENT STATE."
+                    );
+                    error!(
+                        "Please run Routinator with the --fresh option \
+                        at least once."
+                    );
+                }
+            }
+            Err(Failed)
+        }
+        else {
+            Ok(())
+        }
+    }
+
+    /// Actually apllies the changes, not dealing with errors.
+    fn _apply_changes(&self) -> Result<(), Failed> {
+        for uri in &self.publish {
+            let tmp_path = self.repository.tmp_object_path(uri);
+            let obj_path = self.repository.object_path(uri);
+            if let Err(err) = fs::remove_file(&obj_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Fatal: failed to delete {}: {}",
+                        obj_path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+            if let Some(parent) = obj_path.parent() {
+                if let Err(err) = fs::create_dir_all(&parent) {
+                    error!(
+                        "Fatal: failed to create directory {}: {}",
+                        parent.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+            if let Err(err) = fs::rename(&tmp_path, &obj_path) {
+                error!(
+                    "Fatal: failed to move {} to {}: {}",
+                    tmp_path.display(), obj_path.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+        for uri in &self.withdraw {
+            let obj_path = self.repository.object_path(uri);
+            if let Err(err) = fs::remove_file(&obj_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    error!(
+                        "Fatal: failed to delete {}: {}",
+                        obj_path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn try_process(
+        &mut self,
+        response: HttpResponse
+    ) -> Result<(), DeltaError> {
+        let mut reader = io::BufReader::new(HashRead::new(response));
+        self.process(&mut reader)?;
+        let hash = reader.into_inner().into_hash();
+        if verify_slices_are_equal(
+            hash.as_ref(),
+            self.info.hash().as_ref()
         ).is_err() {
             return Err(DeltaError::DeltaHashMismatch)
         }
+        Ok(())
+    }
 
-        processor.batch.insert(
-            REPOSITORY_STATE_KEY,
-            &RepositoryState::from_notify(
-                notify, self.collector.fallback_time
-            ),
-        );
+    /// Checks whether the object has the given hash.
+    ///
+    /// If the hash is `None`, actually checks that the object doesn’t
+    /// exist.
+    fn check_hash(
+        &self, uri: &uri::Rsync, expected: Option<rrdp::Hash>
+    ) -> Result<(), DeltaError> {
+        let current = RepositoryObject::load_hash(
+            &self.repository.object_path(uri)
+        )?;
+        if current == expected {
+            Ok(())
+        }
+        else if expected.is_none() {
+            Err(DeltaError::ObjectAlreadyPresent { uri: uri.clone() })
+        }
+        else if current.is_none() {
+            Err(DeltaError::MissingObject { uri: uri.clone() })
+        }
+        else {
+            Err(DeltaError::ObjectHashMismatch { uri: uri.clone() })
+        }
+    }
+}
 
-        Ok(processor.batch)
+impl<'a> ProcessDelta for DeltaUpdate<'a> {
+    type Err = DeltaError;
+
+    fn meta(
+        &mut self, session_id: Uuid, serial: u64
+    ) -> Result<(), Self::Err> {
+        if session_id != self.session_id {
+            return Err(DeltaError::SessionMismatch {
+                expected: self.session_id,
+                received: session_id
+            })
+        }
+        if serial != self.info.serial() {
+            return Err(DeltaError::SerialMismatch {
+                expected: self.info.serial(),
+                received: serial
+            })
+        }
+        Ok(())
+    }
+
+    fn publish(
+        &mut self,
+        uri: uri::Rsync,
+        hash: Option<rrdp::Hash>,
+        data: &mut rrdp::ObjectReader<'_>
+    ) -> Result<(), Self::Err> {
+        self.check_hash(&uri, hash)?;
+        let mut data = MaxSizeRead::new(data, self.collector.max_object_size);
+        let path = self.repository.tmp_object_path(&uri);
+        if RepositoryObject::create(&path, &mut data).is_err() {
+            if data.was_triggered() {
+                return Err(DeltaError::LargeObject(uri))
+            }
+            else {
+                return Err(DeltaError::Fatal)
+            }
+        }
+        if !self.publish.insert(uri.clone()) {
+            return Err(DeltaError::ObjectRepeated { uri })
+        }
+        Ok(())
+    }
+
+    fn withdraw(
+        &mut self,
+        uri: uri::Rsync,
+        hash: rrdp::Hash
+    ) -> Result<(), Self::Err> {
+        self.check_hash(&uri, Some(hash))?;
+        if !self.withdraw.insert(uri.clone()) {
+            return Err(DeltaError::ObjectRepeated { uri })
+        }
+        Ok(())
     }
 }
 
@@ -1175,7 +1392,6 @@ impl HttpClient {
             HttpResponse::create(response, uri, &self.response_dir, multi)
         })
     }
-
 
     /// Requests, parses, and returns the given RRDP notification file.
     ///
@@ -1444,195 +1660,6 @@ impl Notification {
 }
 
 
-//------------ SnapshotProcessor ---------------------------------------------
-
-/// The processor for an RRDP snapshot.
-struct SnapshotProcessor<'a> {
-    /// A reference to the notification file pointing to the snapshot.
-    notify: &'a NotificationFile,
-
-    /// The batch to add all objects to.
-    batch: sled::Batch,
-
-    /// The object size limit.
-    max_object_size: Option<u64>,
-}
-
-impl<'a> SnapshotProcessor<'a> {
-    /// Creates a new processor.
-    fn new(
-        notify: &'a NotificationFile,
-        max_object_size: Option<u64>,
-    ) -> Self {
-        SnapshotProcessor {
-            notify,
-            batch: sled::Batch::default(),
-            max_object_size,
-        }
-    }
-}
-
-impl<'a> ProcessSnapshot for SnapshotProcessor<'a> {
-    type Err = SnapshotError;
-
-    fn meta(
-        &mut self,
-        session_id: Uuid,
-        serial: u64,
-    ) -> Result<(), Self::Err> {
-        if session_id != self.notify.session_id() {
-            return Err(SnapshotError::SessionMismatch {
-                expected: self.notify.session_id(),
-                received: session_id
-            })
-        }
-        if serial != self.notify.serial() {
-            return Err(SnapshotError::SerialMismatch {
-                expected: self.notify.serial(),
-                received: serial
-            })
-        }
-        Ok(())
-    }
-
-    fn publish(
-        &mut self,
-        uri: uri::Rsync,
-        data: &mut rrdp::ObjectReader,
-    ) -> Result<(), Self::Err> {
-        let data = RepositoryObject::read_into_ivec(
-            data, self.max_object_size
-        )?;
-        self.batch.insert(uri.as_str(), data);
-        Ok(())
-    }
-}
-
-
-//------------ DeltaProcessor ------------------------------------------------
-
-/// The processor for RRDP delta updates.
-struct DeltaProcessor<'a> {
-    /// The session ID of the RRDP session.
-    session_id: Uuid,
-
-    /// The expected serial number of the delta.
-    serial: u64,
-
-    /// The database tree of the RRDP repository.
-    tree: &'a sled::Tree,
-
-    /// The batch to add all updates to.
-    batch: sled::Batch,
-
-    /// The object size limit.
-    max_object_size: Option<u64>,
-}
-
-impl<'a> DeltaProcessor<'a> {
-    /// Creates a new processor.
-    fn new(
-        session_id: Uuid,
-        serial: u64,
-        tree: &'a sled::Tree,
-        max_object_size: Option<u64>,
-    ) -> Self {
-        DeltaProcessor {
-            session_id, serial, tree,
-            batch: sled::Batch::default(),
-            max_object_size,
-        }
-    }
-
-    /// Checks the hash of an object that should be present.
-    fn check_hash(
-        &self,
-        uri: &uri::Rsync,
-        hash: rrdp::Hash,
-    ) -> Result<(), DeltaError> {
-        let data = match self.tree.get(&uri)? {
-            Some(data) => data,
-            None => {
-                return Err(DeltaError::MissingObject { uri: uri.clone() })
-            }
-        };
-        let stored_hash = RepositoryObject::decode_hash(&data)?;
-        if stored_hash != hash {
-            Err(DeltaError::ObjectHashMismatch { uri: uri.clone() })
-        }
-        else {
-            Ok(())
-        }
-    }
-
-    /// Checks that a new object isn’t present yet.
-    fn check_new(
-        &self,
-        uri: &uri::Rsync
-    ) -> Result<(), DeltaError> {
-        if self.tree.get(&uri)?.is_some() {
-            Err(DeltaError::ObjectAlreadyPresent { uri: uri.clone() })
-        }
-        else {
-            Ok(())
-        }
-    }
-}
-
-impl<'a> ProcessDelta for DeltaProcessor<'a> {
-    type Err = DeltaError;
-
-    fn meta(
-        &mut self, session_id: Uuid, serial: u64
-    ) -> Result<(), Self::Err> {
-        if session_id != self.session_id {
-            return Err(DeltaError::SessionMismatch {
-                expected: self.session_id,
-                received: session_id
-            })
-        }
-        if serial != self.serial {
-            return Err(DeltaError::SerialMismatch {
-                expected: self.serial,
-                received: serial
-            })
-        }
-        Ok(())
-    }
-
-    fn publish(
-        &mut self,
-        uri: uri::Rsync,
-        hash: Option<rrdp::Hash>,
-        data: &mut rrdp::ObjectReader<'_>
-    ) -> Result<(), Self::Err> {
-        // XXX We could also look at the result of the insert instead of
-        //     runnning check_new if there is no hash. However, then we do
-        //     all the decoding stuff which I think is more expensive than
-        //     a quick lookup. Might be wrong, though.
-        match hash {
-            Some(hash) => self.check_hash(&uri, hash)?,
-            None => self.check_new(&uri)?
-        }
-        let data = RepositoryObject::read_into_ivec(
-            data, self.max_object_size
-        )?;
-        self.batch.insert(uri.as_slice(), data);
-        Ok(())
-    }
-
-    fn withdraw(
-        &mut self,
-        uri: uri::Rsync,
-        hash: rrdp::Hash
-    ) -> Result<(), Self::Err> {
-        self.check_hash(&uri, hash)?;
-        self.batch.remove(uri.as_slice());
-        Ok(())
-    }
-}
-
-
 //------------ RepositoryState -----------------------------------------------
 
 /// The current state of an RRDP repository.
@@ -1641,6 +1668,9 @@ impl<'a> ProcessDelta for DeltaProcessor<'a> {
 /// and is updated on each … update.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct RepositoryState {
+    /// The rpkiNotify URI of the repository.
+    pub rpki_notify: uri::Https,
+
     /// The UUID of the current session of repository.
     pub session: Uuid,
 
@@ -1672,10 +1702,12 @@ struct RepositoryState {
 impl RepositoryState {
     /// Create the state based on the notification file.
     pub fn from_notify(
+        rpki_notify: uri::Https,
         notify: &Notification,
         fallback: FallbackTime,
     ) -> Self {
         RepositoryState {
+            rpki_notify,
             session: notify.content.session_id(),
             serial: notify.content.serial(),
             updated_ts: Utc::now().timestamp(),
@@ -1701,225 +1733,229 @@ impl RepositoryState {
         self.best_before_ts = fallback.best_before().timestamp();
     }
 
-
     /// Returns whether this repository should be considered expired.
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.best_before()
     }
-}
 
-
-//--- From and TryFrom
-
-impl<'a> From<&'a RepositoryState> for IVec {
-    fn from(state: &'a RepositoryState) -> IVec {
-        let mut vec = Vec::with_capacity(state.session.as_bytes().len() + 17);
-
-        // Version. 0u8
-        vec.push(0u8);
-
-        // The session as its bytes.
-        vec.extend_from_slice(state.session.as_bytes());
-
-        // The serial in network byte order.
-        vec.extend_from_slice(&state.serial.to_be_bytes());
-
-        // The update timestamp in network byte order.
-        vec.extend_from_slice(&state.updated_ts.to_be_bytes());
-
-        // The best-before time as the i64 timestamp in network byte order.
-        vec.extend_from_slice(&state.best_before_ts.to_be_bytes());
-
-        // The notification date as a i64 timestamp in network byte order.
-        // We use i64::MIN as a placeholder for `None`.
-        vec.extend_from_slice(
-            &state.last_modified_ts.unwrap_or(i64::MIN).to_be_bytes()
-        );
-
-        // The value of the notification etag until the end of data. We
-        // store `None` as an empty tag.
-        if let Some(etag) = state.etag.as_ref() {
-            vec.extend_from_slice(etag);
-        }
-
-        vec.into()
+    /// Reads the state file of a repository.
+    pub fn load(repo: &Repository) -> Result<Option<Self>, Failed> {
+        Self::load_path(&Self::file_path(repo))
     }
-}
 
-impl TryFrom<IVec> for RepositoryState {
-    type Error = StateError;
-
-    fn try_from(stored: IVec) -> Result<Self, Self::Error> {
-        const MIN_ENCODING_LEN: usize = {
-            mem::size_of::<u8>() +
-            mem::size_of::<uuid::Bytes>() +
-            mem::size_of::<u64>() +
-            mem::size_of::<i64>() +
-            mem::size_of::<i64>() +
-            mem::size_of::<i64>()
+    /// Reads the state file at a path.
+    pub fn load_path(path: &Path) -> Result<Option<Self>, Failed> {
+        let mut file = match File::open(path) {
+            Ok(file) => file,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Ok(None)
+            }
+            Err(err) => {
+                warn!(
+                    "Failed to open repository state file {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
         };
-
-        if stored.len() < MIN_ENCODING_LEN {
-            return Err(StateError)
-        }
-
-        // Version. Must be 0u8.
-        let (field, stored) = stored.split_at(mem::size_of::<u8>());
-        if field != b"\0" {
-            return Err(StateError)
-        }
-
-        // Session.
-        let (field, stored) = stored.split_at(mem::size_of::<uuid::Bytes>());
-        let session = Uuid::from_slice(
-            field
-        ).expect("Bug: slice of wrong length");
-
-        // Serial.
-        let (field, stored) = stored.split_at(mem::size_of::<u64>());
-        let serial = u64::from_be_bytes(
-            field.try_into().expect("Bug: slice of wrong length")
-        );
-
-        // Updated.
-        let (field, stored) = stored.split_at(mem::size_of::<i64>());
-        let updated_ts = i64::from_be_bytes(
-            field.try_into().expect("Bug: slice of wrong length")
-        );
-
-        // Best-before.
-        let (field, stored) = stored.split_at(mem::size_of::<i64>());
-        let best_before_ts = i64::from_be_bytes(
-            field.try_into().expect("Bug: slice of wrong length")
-        );
-
-        // Notification Date.
-        let (field, stored) = stored.split_at(mem::size_of::<i64>());
-        let last_modified_ts = i64::from_be_bytes(
-            field.try_into().expect("Bug: slice of wrong length")
-        );
-        let last_modified_ts = if last_modified_ts == i64::MIN {
-            None
-        }
-        else {
-            Some(last_modified_ts)
-        };
-
-        // Notification ETag.
-        let field = stored;
-        let etag = if field.is_empty() {
-            None
-        }
-        else {
-            Some(Bytes::copy_from_slice(field))
-        };
-        
-        Ok(RepositoryState {
-            session, serial, updated_ts, best_before_ts,
-            last_modified_ts, etag
+        Self::_read(&mut file)
+        .map(Some)
+        .map_err(|err| {
+            warn!(
+                "Failed to read repository state file {}: {}",
+                path.display(), err
+            );
+            Failed
         })
+    }
+
+    /// Deletes the state file of a repository.
+    pub fn remove(repo: &Repository) -> Result<(), Failed> {
+        let path = Self::file_path(repo);
+        if let Err(err) = fs::remove_file(&path) {
+            if err.kind() != io::ErrorKind::NotFound {
+                error!(
+                    "Fatal: failed to delete {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+        Ok(())
+    }
+
+
+    /// Reads the state from an IO reader.
+    fn _read(reader: &mut impl io::Read) -> Result<Self, io::Error> {
+        // Version number. Must be 0u8.
+        let version = u8::parse(reader)?;
+        if version != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("unexpected version {}", version)
+            ))
+        }
+
+        Ok(RepositoryState {
+            rpki_notify: Parse::parse(reader)?,
+            session: Parse::parse(reader)?,
+            serial: Parse::parse(reader)?,
+            updated_ts: Parse::parse(reader)?,
+            best_before_ts: Parse::parse(reader)?,
+            last_modified_ts: Parse::parse(reader)?,
+            etag: Parse::parse(reader)?,
+        })
+    }
+
+    /// Writes the state file of a repository.
+    pub fn write(&self, repo: &Repository) -> Result<(), Failed> {
+        let path = Self::file_path(repo);
+        let mut file = match File::create(&path) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Fatal: Failed to open repository state file {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        self._write(&mut file).map_err(|err| {
+            error!(
+                "Fatal: Failed to write repository state file {}: {}",
+                path.display(), err
+            );
+            Failed
+        })
+    }
+
+    /// Writes the state to an IO writer.
+    fn _write(
+        &self, writer: &mut impl io::Write
+    ) -> Result<(), io::Error> {
+        0u8.compose(writer)?; // version
+        self.rpki_notify.compose(writer)?;
+        self.session.compose(writer)?;
+        self.serial.compose(writer)?;
+        self.updated_ts.compose(writer)?;
+        self.best_before_ts.compose(writer)?;
+        self.last_modified_ts.compose(writer)?;
+        self.etag.compose(writer)?;
+        Ok(())
+    }
+
+    pub const FILE_NAME: &'static str = "state.bin";
+
+    pub fn file_path(repo: &Repository) -> PathBuf {
+        repo.path.join(Self::FILE_NAME)
     }
 }
 
 
 //------------ RepositoryObject ----------------------------------------------
 
-/// A repository object stored in the database.
+/// A repository object stored locally.
+///
+/// In order to speed up updates, we store the RRDP hash of a file before its
+/// content, if we understand it.
 #[derive(Clone, Debug)]
-struct RepositoryObject<Octets> {
+struct RepositoryObject {
     /// The RRDP hash of the object.
     hash: rrdp::Hash,
 
     /// The content of the object.
-    content: Octets,
+    content: Bytes,
 }
 
-impl RepositoryObject<()> {
-    /// Reads an object’s content directly into a database vec.
-    pub fn read_into_ivec(
-        reader: &mut impl io::Read,
-        max_size: Option<u64>,
-    ) -> Result<IVec, io::Error> {
-        let mut reader = HashRead::new(MaxSizeRead::new(reader, max_size));
-        let mut res = vec![0; mem::size_of::<rrdp::Hash>() + 1];
-        io::copy(&mut reader, &mut res)?;
-        let hash = reader.into_hash();
-        res[1..hash.as_slice().len() + 1].copy_from_slice(hash.as_slice());
-        Ok(res.into())
-    }
-
-    /// Decodes only the object hash from the database representation.
-    pub fn decode_hash(stored: &[u8]) -> Result<rrdp::Hash, ObjectError> {
-        const MIN_LEN: usize = {
-            mem::size_of::<u8>() + mem::size_of::<rrdp::Hash>()
+impl RepositoryObject {
+    /// Loads a repository object from the given path.
+    pub fn load(path: &Path) -> Result<Option<Self>, Failed> {
+        let mut file = match Self::open(path)? {
+            Some(file) => file,
+            None => return Ok(None)
         };
-
-        if stored.len() < MIN_LEN {
-            return Err(ObjectError)
-        }
-
-        // Version. Must be 0u8.
-        let (field, stored) = stored.split_at(mem::size_of::<u8>());
-        if field != b"\0" {
-            return Err(ObjectError)
-        }
-
-        // Hash
-        let (field, _) = stored.split_at(mem::size_of::<rrdp::Hash>());
-        let hash = rrdp::Hash::try_from(field).unwrap();
-
-        Ok(hash)
+        Self::read(&mut file).map(Some).map_err(|err| {
+            error!("Fatal: failed to read {}: {}", path.display(), err);
+            Failed
+        })
     }
-}
 
-
-//--- From and TryFrom
-
-impl<'a, Octets: AsRef<[u8]>> From<&'a RepositoryObject<Octets>> for IVec {
-    fn from(src: &'a RepositoryObject<Octets>) -> Self {
-        let mut vec = Vec::with_capacity(
-            src.hash.as_ref().len() + src.content.as_ref().len() + 1
-        );
-
-        // Version. 0u8
-        vec.push(0u8);
-        
-        // The hash as its bytes
-        vec.extend_from_slice(src.hash.as_ref());
-
-        // The content as its bytes.
-        vec.extend_from_slice(src.content.as_ref());
-
-        vec.into()
-    }
-}
-
-impl TryFrom<IVec> for RepositoryObject<Bytes> {
-    type Error = ObjectError;
-
-    fn try_from(stored: IVec) -> Result<Self, Self::Error> {
-        const MIN_LEN: usize = {
-            mem::size_of::<u8>() + mem::size_of::<rrdp::Hash>()
+    /// Checks the hash of the objects.
+    pub fn load_hash(path: &Path) -> Result<Option<rrdp::Hash>, Failed> {
+        let mut file = match Self::open(path)? {
+            Some(file) => file,
+            None => return Ok(None)
         };
+        rrdp::Hash::parse(&mut file).map(Some).map_err(|err| {
+            error!("Fatal: failed to read {}: {}", path.display(), err);
+            Failed
+        })
+    }
 
-        if stored.len() < MIN_LEN {
-            return Err(ObjectError)
+    /// Opens the file for a repository object.
+    fn open(path: &Path) -> Result<Option<File>, Failed> {
+        match File::open(path) {
+            Ok(file) => Ok(Some(file)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                Ok(None)
+            }
+            Err(err) => {
+                error!("Fatal: failed to open {}: {}", path.display(), err);
+                Err(Failed)
+            }
         }
+    }
 
-        // Version. Must be 0u8.
-        let (field, stored) = stored.split_at(mem::size_of::<u8>());
-        if field != b"\0" {
-            return Err(ObjectError)
+    /// Reads the object from a reader.
+    fn read(source: &mut impl io::Read) -> Result<Self, io::Error> {
+        let hash = Parse::parse(source)?;
+        let mut content = Vec::new();
+        source.read_to_end(&mut content)?;
+        Ok(RepositoryObject {
+            hash,
+            content: content.into(),
+        })
+    }
+
+    /// Writes a new object using everything from reader.
+    pub fn create(
+        path: &Path, data: &mut impl io::Read
+    ) -> Result<(), Failed> {
+        if let Some(parent) = path.parent() {
+            if let Err(err) = fs::create_dir_all(parent) {
+                error!(
+                    "Fatal: failed to create directory {}: {}.",
+                    parent.display(), err
+                );
+                return Err(Failed)
+            }
         }
+        let mut target = match File::create(&path) {
+            Ok(target) => target,
+            Err(err) => {
+                error!(
+                    "Fatal: failed to open file {}: {}", path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        Self::_create(data, &mut target).map_err(|err| {
+            error!(
+                "Fatal: failed to write file {}: {}", path.display(), err
+            );
+            Failed
+        })
+    }
 
-        // Hash
-        let (field, stored) = stored.split_at(mem::size_of::<rrdp::Hash>());
-        let hash = rrdp::Hash::try_from(field).unwrap();
-
-        // Content
-        let content = Bytes::copy_from_slice(stored);
-
-        Ok(RepositoryObject { hash, content })
+    fn _create(
+        data: &mut impl io::Read, target: &mut File
+    ) -> Result<(), io::Error> {
+        rrdp::Hash::from([0u8; 32]).compose(target)?;
+        let mut reader = HashRead::new(data);
+        io::copy(&mut reader, target)?;
+        target.seek(SeekFrom::Start(0))?;
+        reader.into_hash().compose(target)?;
+        Ok(())
     }
 }
 
@@ -1999,11 +2035,18 @@ struct MaxSizeRead<R> {
     ///
     /// If this is `None` we are allowed to read an unlimited amount.
     left: Option<u64>,
+
+    /// Did we trigger?
+    triggered: bool,
 }
 
 impl<R> MaxSizeRead<R> {
-    fn new(reader: R, max_size: Option<u64>) -> Self {
-        MaxSizeRead { reader, left: max_size }
+    pub fn new(reader: R, max_size: Option<u64>) -> Self {
+        MaxSizeRead { reader, left: max_size, triggered: false }
+    }
+
+    pub fn was_triggered(&self) -> bool {
+        self.triggered
     }
 }
 
@@ -2017,6 +2060,7 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
                     // If the usize doesn’t fit into a u64, things are
                     // definitely way too big.
                     self.left = Some(0);
+                    self.triggered = true;
                     return Err(io::Error::new(
                         io::ErrorKind::Other, "size limit exceeded"
                     ))
@@ -2024,6 +2068,7 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
             };
             if res64 > left {
                 self.left = Some(0);
+                self.triggered = true;
                 Err(io::Error::new(
                     io::ErrorKind::Other, "size limit exceeded")
                 )
@@ -2038,248 +2083,6 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
         }
     }
 }
-
-
-//============ Errors ========================================================
-
-//------------ SnapshotError -------------------------------------------------
-
-/// An error happened during snapshot processing.
-///
-/// This is an internal error type only necessary for error handling during
-/// RRDP processing. Values will be logged and converted into failures or
-/// negative results as necessary.
-#[derive(Debug)]
-enum SnapshotError {
-    Http(reqwest::Error),
-    Rrdp(rrdp::ProcessError),
-    SessionMismatch {
-        expected: Uuid,
-        received: Uuid
-    },
-    SerialMismatch {
-        expected: u64,
-        received: u64,
-    },
-    HashMismatch,
-    Db(sled::Error),
-}
-
-impl From<reqwest::Error> for SnapshotError {
-    fn from(err: reqwest::Error) -> Self {
-        SnapshotError::Http(err)
-    }
-}
-
-impl From<rrdp::ProcessError> for SnapshotError {
-    fn from(err: rrdp::ProcessError) -> Self {
-        SnapshotError::Rrdp(err)
-    }
-}
-
-impl From<io::Error> for SnapshotError {
-    fn from(err: io::Error) -> Self {
-        SnapshotError::Rrdp(err.into())
-    }
-}
-
-impl From<sled::Error> for SnapshotError {
-    fn from(err: sled::Error) -> Self {
-        SnapshotError::Db(err)
-    }
-}
-
-impl fmt::Display for SnapshotError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            SnapshotError::Http(ref err) => err.fmt(f),
-            SnapshotError::Rrdp(ref err) => err.fmt(f),
-            SnapshotError::SessionMismatch { ref expected, ref received } => {
-                write!(
-                    f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
-                )
-            }
-            SnapshotError::SerialMismatch { ref expected, ref received } => {
-                write!(
-                    f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
-                )
-            }
-            SnapshotError::HashMismatch => {
-                write!(f, "hash value mismatch")
-            }
-            SnapshotError::Db(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for SnapshotError { }
-
-
-//------------ DeltaError ----------------------------------------------------
-
-/// An error happened during delta processing.
-///
-/// This is an internal error type only necessary for error handling during
-/// RRDP processing. Values will be logged and converted into failures or
-/// negative results as necessary.
-#[derive(Debug)]
-enum DeltaError {
-    Http(reqwest::Error),
-    Rrdp(rrdp::ProcessError),
-    SessionMismatch {
-        expected: Uuid,
-        received: Uuid
-    },
-    SerialMismatch {
-        expected: u64,
-        received: u64,
-    },
-    MissingObject {
-        uri: uri::Rsync,
-    },
-    ObjectAlreadyPresent {
-        uri: uri::Rsync,
-    },
-    ObjectHashMismatch {
-        uri: uri::Rsync,
-    },
-    DeltaHashMismatch,
-    ObjectError,
-    Db(sled::Error),
-}
-
-impl From<reqwest::Error> for DeltaError {
-    fn from(err: reqwest::Error) -> Self {
-        DeltaError::Http(err)
-    }
-}
-
-impl From<rrdp::ProcessError> for DeltaError {
-    fn from(err: rrdp::ProcessError) -> Self {
-        DeltaError::Rrdp(err)
-    }
-}
-
-impl From<io::Error> for DeltaError {
-    fn from(err: io::Error) -> Self {
-        DeltaError::Rrdp(err.into())
-    }
-}
-
-impl From<ObjectError> for DeltaError {
-    fn from(_: ObjectError) -> Self {
-        DeltaError::ObjectError
-    }
-}
-
-impl From<sled::Error> for DeltaError {
-    fn from(err: sled::Error) -> Self {
-        DeltaError::Db(err)
-    }
-}
-
-impl fmt::Display for DeltaError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DeltaError::Http(ref err) => err.fmt(f),
-            DeltaError::Rrdp(ref err) => err.fmt(f),
-            DeltaError::SessionMismatch { ref expected, ref received } => {
-                write!(
-                    f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
-                )
-            }
-            DeltaError::SerialMismatch { ref expected, ref received } => {
-                write!(
-                    f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
-                )
-            }
-            DeltaError::MissingObject { ref uri } => {
-                write!(
-                    f,
-                    "reference to missing object {}",
-                    uri
-                )
-            }
-            DeltaError::ObjectAlreadyPresent { ref uri } => {
-                write!(
-                    f,
-                    "attempt to add already present object {}",
-                    uri
-                )
-            }
-            DeltaError::ObjectHashMismatch { ref uri } => {
-                write!(
-                    f,
-                    "local object {} has different hash",
-                    uri
-                )
-            }
-            DeltaError::DeltaHashMismatch => {
-                write!(f, "delta file hash value mismatch")
-            }
-            DeltaError::ObjectError => {
-                write!(f, "database error: failed to decode object")
-            }
-            DeltaError::Db(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for DeltaError { }
-
-
-//------------ StateError ----------------------------------------------------
-
-/// Repository state cannot be decoded correctly.
-///
-/// This is treated as a database error leading to a failure.
-#[derive(Clone, Copy, Debug)]
-pub struct StateError;
-
-impl From<StateError> for Failed {
-    fn from(_: StateError) -> Self {
-        error!("Database error: failed to decode object.");
-        Failed
-    }
-}
-
-impl fmt::Display for StateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("repository state cannot be decoded")
-    }
-}
-
-impl error::Error for StateError { }
-
-
-
-//------------ ObjectError ---------------------------------------------------
-
-/// A repository object cannot be decoded correctly.
-///
-/// This is treated as a database error leading to a failure.
-#[derive(Clone, Copy, Debug)]
-struct ObjectError;
-
-impl fmt::Display for ObjectError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("cached object cannot be decoded")
-    }
-}
-
-impl error::Error for ObjectError { }
 
 
 //------------ SnapshotReason ------------------------------------------------
@@ -2358,94 +2161,238 @@ impl From<StatusCode> for HttpStatus {
 }
 
 
-//============ Tests =========================================================
+//============ Errors ========================================================
+
+//------------ SnapshotError -------------------------------------------------
+
+/// An error happened during snapshot processing.
+///
+/// This is an internal error type only necessary for error handling during
+/// RRDP processing. Values will be logged and converted into failures or
+/// negative results as necessary.
+#[derive(Debug)]
+enum SnapshotError {
+    Http(reqwest::Error),
+    Rrdp(rrdp::ProcessError),
+    SessionMismatch {
+        expected: Uuid,
+        received: Uuid
+    },
+    SerialMismatch {
+        expected: u64,
+        received: u64,
+    },
+    HashMismatch,
+    LargeObject(uri::Rsync),
+    Fatal,
+}
+
+impl From<reqwest::Error> for SnapshotError {
+    fn from(err: reqwest::Error) -> Self {
+        SnapshotError::Http(err)
+    }
+}
+
+impl From<rrdp::ProcessError> for SnapshotError {
+    fn from(err: rrdp::ProcessError) -> Self {
+        SnapshotError::Rrdp(err)
+    }
+}
+
+impl From<io::Error> for SnapshotError {
+    fn from(err: io::Error) -> Self {
+        SnapshotError::Rrdp(err.into())
+    }
+}
+
+impl From<Failed> for SnapshotError {
+    fn from(_: Failed) -> Self {
+        SnapshotError::Fatal
+    }
+}
+
+impl fmt::Display for SnapshotError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SnapshotError::Http(ref err) => err.fmt(f),
+            SnapshotError::Rrdp(ref err) => err.fmt(f),
+            SnapshotError::SessionMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "session ID mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            SnapshotError::SerialMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "serial number mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            SnapshotError::HashMismatch => {
+                write!(f, "hash value mismatch")
+            }
+            SnapshotError::LargeObject(ref uri) => {
+                write!(f, "object exceeds size limit: {}", uri)
+            }
+            SnapshotError::Fatal => Ok(())
+        }
+    }
+}
+
+impl error::Error for SnapshotError { }
+
+
+//------------ DeltaError ----------------------------------------------------
+
+/// An error happened during delta processing.
+///
+/// This is an internal error type only necessary for error handling during
+/// RRDP processing. Values will be logged and converted into failures or
+/// negative results as necessary.
+#[derive(Debug)]
+enum DeltaError {
+    Http(reqwest::Error),
+    Rrdp(rrdp::ProcessError),
+    SessionMismatch {
+        expected: Uuid,
+        received: Uuid
+    },
+    SerialMismatch {
+        expected: u64,
+        received: u64,
+    },
+    MissingObject {
+        uri: uri::Rsync,
+    },
+    ObjectAlreadyPresent {
+        uri: uri::Rsync,
+    },
+    ObjectHashMismatch {
+        uri: uri::Rsync,
+    },
+    ObjectRepeated {
+        uri: uri::Rsync,
+    },
+    DeltaHashMismatch,
+    LargeObject(uri::Rsync),
+    Fatal,
+}
+
+impl From<reqwest::Error> for DeltaError {
+    fn from(err: reqwest::Error) -> Self {
+        DeltaError::Http(err)
+    }
+}
+
+impl From<rrdp::ProcessError> for DeltaError {
+    fn from(err: rrdp::ProcessError) -> Self {
+        DeltaError::Rrdp(err)
+    }
+}
+
+impl From<io::Error> for DeltaError {
+    fn from(err: io::Error) -> Self {
+        DeltaError::Rrdp(err.into())
+    }
+}
+
+impl From<Failed> for DeltaError {
+    fn from(_: Failed) -> Self {
+        DeltaError::Fatal
+    }
+}
+
+impl fmt::Display for DeltaError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            DeltaError::Http(ref err) => err.fmt(f),
+            DeltaError::Rrdp(ref err) => err.fmt(f),
+            DeltaError::SessionMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "session ID mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            DeltaError::SerialMismatch { ref expected, ref received } => {
+                write!(
+                    f,
+                    "serial number mismatch (notification_file: {}, \
+                     snapshot file: {}",
+                     expected, received
+                )
+            }
+            DeltaError::MissingObject { ref uri } => {
+                write!(
+                    f,
+                    "reference to missing object {}",
+                    uri
+                )
+            }
+            DeltaError::ObjectAlreadyPresent { ref uri } => {
+                write!(
+                    f,
+                    "attempt to add already present object {}",
+                    uri
+                )
+            }
+            DeltaError::ObjectHashMismatch { ref uri } => {
+                write!(
+                    f,
+                    "local object {} has different hash",
+                    uri
+                )
+            }
+            DeltaError::ObjectRepeated { ref uri } => {
+                write!(f, "object appears multiple times: {}", uri)
+            }
+            DeltaError::LargeObject(ref uri) => {
+                write!(f, "object exceeds size limit: {}", uri)
+            }
+            DeltaError::DeltaHashMismatch => {
+                write!(f, "delta file hash value mismatch")
+            }
+            DeltaError::Fatal => {
+                Ok(())
+            }
+        }
+    }
+}
+
+impl error::Error for DeltaError { }
+
+
+//============ Testing =======================================================
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use rpki::repository::crypto::digest::DigestAlgorithm;
+    use std::str::FromStr;
 
     #[test]
-    fn encoded_repository_object() {
-        let data = b"foobar".as_ref();
-        let expected_hash =
-            "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2";
-        let digest = DigestAlgorithm::sha256().digest(data);
-        let encoded = RepositoryObject::read_into_ivec(
-            &mut data.clone(), None,
-        ).unwrap();
-
-        let hash = RepositoryObject::decode_hash(
-            encoded.as_ref()
-        ).unwrap();
-        assert_eq!(hash.as_slice(), digest.as_ref());
-        assert_eq!(format!("{}", hash), expected_hash);
-
-        let decoded = RepositoryObject::try_from(encoded).unwrap();
-        assert_eq!(decoded.content.as_ref(), data);
-        assert_eq!(decoded.hash.as_slice(), digest.as_ref());
-    }
-
-    #[test]
-    fn encoded_repository_state() {
-        fn cycles(state: &RepositoryState) {
-            let encoded = IVec::from(state);
-            let decoded = RepositoryState::try_from(encoded).unwrap();
-            assert_eq!(state, &decoded);
-        }
-
-        let mut state = RepositoryState {
-            session: Uuid::from_u128(12),
-            serial: 933,
-            updated_ts: 732,
-            best_before_ts: 3221,
-            last_modified_ts: None,
-            etag: None
+    fn write_read_repository_state() {
+        let orig = RepositoryState {
+            rpki_notify: uri::Https::from_str(
+                "https://foo.bar/bla/blubb"
+            ).unwrap(),
+            session: Uuid::nil(),
+            serial: 12,
+            updated_ts: 28,
+            best_before_ts: 892,
+            last_modified_ts: Some(23),
+            etag: Some(Bytes::copy_from_slice(b"23890"))
         };
-        cycles(&state);
-        state.last_modified_ts = Some(-177);
-        cycles(&state);
-        state.etag = Some(Bytes::from("W/\"foo\""));
-        cycles(&state);
-        state.last_modified_ts = None;
-        cycles(&state);
-
-        // Check that broken encodings are handled gracefully.
-        assert!(RepositoryState::try_from(IVec::from(Vec::new())).is_err());
-        assert!(RepositoryState::try_from(IVec::from(vec![0u8; 48])).is_err());
-    }
-
-    #[test]
-    fn response_parse_etag() {
-        // The Good:
-        assert_eq!(
-            HttpResponse::parse_etag(b"\"xyzzy\""),
-            Some(Bytes::from_static(b"\"xyzzy\"".as_ref()))
-        );
-        assert_eq!(
-            HttpResponse::parse_etag(b"W/\"xyzzy\""),
-            Some(Bytes::from_static(b"W/\"xyzzy\"".as_ref()))
-        );
-        assert_eq!(
-            HttpResponse::parse_etag(b"\"\""),
-            Some(Bytes::from_static(b"\"\"".as_ref()))
-        );
-        assert_eq!(
-            HttpResponse::parse_etag(b"W/\"\""),
-            Some(Bytes::from_static(b"W/\"\"".as_ref()))
-        );
-
-        // The Bad:
-        assert!(HttpResponse::parse_etag(b"").is_none());
-        assert!(HttpResponse::parse_etag(b"\"").is_none());
-        assert!(HttpResponse::parse_etag(b"some").is_none());
-        assert!(HttpResponse::parse_etag(b"some\"").is_none());
-        assert!(HttpResponse::parse_etag(b"W\"some\"").is_none());
-        assert!(HttpResponse::parse_etag(b"W/\"").is_none());
-        assert!(HttpResponse::parse_etag(b"W/\"some").is_none());
-
-        // The Corner Cases:
-        assert!(HttpResponse::parse_etag(b"w/\"some\"").is_none());
+        let mut written = Vec::new();
+        orig._write(&mut written).unwrap();
+        let mut slice = written.as_slice();
+        let decoded = RepositoryState::_read(&mut slice).unwrap();
+        assert!(slice.is_empty());
+        assert_eq!(orig, decoded);
     }
 }
 

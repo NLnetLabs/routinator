@@ -572,11 +572,11 @@ impl Config {
         cur_dir: &Path,
     ) -> Result<Self, Failed> {
         let mut res = Self::create_base_config(
-            Self::path_value_of(matches, "config", &cur_dir)
+            Self::path_value_of(matches, "config", cur_dir)
                 .as_ref().map(AsRef::as_ref)
         )?;
 
-        res.apply_arg_matches(matches, &cur_dir)?;
+        res.apply_arg_matches(matches, cur_dir)?;
 
         Ok(res)
     }
@@ -948,7 +948,7 @@ impl Config {
     fn create_base_config(path: Option<&Path>) -> Result<Self, Failed> {
         let file = match path {
             Some(path) => {
-                match ConfigFile::read(&path)? {
+                match ConfigFile::read(path)? {
                     Some(file) => file,
                     None => {
                         error!("Cannot read config file {}", path.display());
