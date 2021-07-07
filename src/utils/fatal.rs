@@ -1,6 +1,6 @@
 /// Utilities for dealing with the file system.
 
-use std::fs;
+use std::{fs, io};
 use std::ffi::{OsStr, OsString};
 use std::fs::Metadata;
 use std::path::{Path, PathBuf};
@@ -143,13 +143,18 @@ pub fn create_dir_all(path: &Path) -> Result<(), Failed> {
 //------------ remove_file ---------------------------------------------------
 
 /// Removes a file.
+///
+/// Ignores if the file doesn’t exist.
 pub fn remove_file(path: &Path) -> Result<(), Failed> {
-    fs::remove_file(path).map_err(|err| {
-        error!(
-            "Fatal: failed to remove file {}: {}",
-            path.display(), err
-        );
-        Failed
-    })
+    if let Err(err) = fs::remove_file(path) {
+        if err.kind() != io::ErrorKind::NotFound {
+            error!(
+                "Fatal: failed to remove file {}: {}",
+                path.display(), err
+            );
+            return Err(Failed)
+        }
+    }
+    Ok(())
 }
 
