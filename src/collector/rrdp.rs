@@ -729,7 +729,7 @@ impl Repository {
             for (i, info) in deltas.iter().enumerate() {
                 debug!(
                     "RRDP {}: Delta update step ({}/{}).",
-                    info.uri(), i + 1, count
+                    self.rpki_notify, i + 1, count
                 );
                 if let Some(reason) = DeltaUpdate::new(
                     run.collector, self, notify.content.session_id(),
