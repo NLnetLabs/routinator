@@ -140,6 +140,20 @@ pub fn create_dir_all(path: &Path) -> Result<(), Failed> {
 }
 
 
+//------------ remove_dir_all ------------------------------------------------
+
+/// Removes a directory tree.
+pub fn remove_dir_all(path: &Path) -> Result<(), Failed> {
+    fs::remove_dir_all(path).map_err(|err| {
+        error!(
+            "Fatal: failed to remove directory tree {}: {}",
+            path.display(), err
+        );
+        Failed
+    })
+}
+
+
 //------------ remove_file ---------------------------------------------------
 
 /// Removes a file.

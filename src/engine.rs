@@ -303,18 +303,9 @@ impl Engine {
         let report = ValidationReport::new();
         let mut run = self.start(&report)?;
         run.process()?;
+        run.cleanup()?;
         let metrics = run.done();
         Ok((report, metrics))
-    }
-
-    /// Cleans the collector and store owned by the engine.
-    pub fn cleanup(&self) -> Result<(), Failed> {
-        if !self.dirty_repository {
-            self.store.cleanup(
-                self.collector.as_ref().map(Collector::cleanup)
-            )?;
-        }
-        Ok(())
     }
 
     /// Dumps the content of the collector and store owned by the engine.
@@ -365,6 +356,21 @@ impl<'a, P> Run<'a, P> {
             validation, collector, store, processor,
             metrics: Default::default()
         }
+    }
+
+    /// Cleans the collector and store owned by the engine.
+    pub fn cleanup(&mut self) -> Result<(), Failed> {
+        if self.validation.dirty_repository {
+            debug!("Skipping cleanup as configured.");
+            return Ok(())
+        }
+
+        let mut retain = collector::Cleanup::new();
+        self.validation.store.cleanup(&mut retain)?;
+        if let Some(collector) = self.collector.as_mut() {
+            collector.cleanup(&mut retain)?;
+        }
+        Ok(())
     }
 
     /// Finishes the validation run and returns the metrics.

@@ -103,14 +103,6 @@ impl Collector {
         Run::new(self)
     }
 
-    /// Prepares for a cleanup run.
-    ///
-    /// The method returns a [`Cleanup`] value that can be used to register
-    /// those repositories that should be kept around.
-    pub fn cleanup(&self) -> Cleanup {
-        Cleanup::new(self)
-    }
-
     /// Dumps the content of the collector and store owned by the engine.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         if let Some(rrdp) = self.rrdp.as_ref() {
@@ -235,6 +227,20 @@ impl<'a> Run<'a> {
         }
         true
     }
+
+    /// Cleans the collector.
+    ///
+    /// Any RRDP repository or rsync module not included in `retain` will
+    /// be deleted.
+    pub fn cleanup(&self, retain: &mut Cleanup) -> Result<(), Failed> {
+        if let Some(rsync) = self.rsync.as_ref() {
+            rsync.cleanup(&mut retain.rsync)?;
+        }
+        if let Some(rrdp) = self.rrdp.as_ref() {
+            rrdp.cleanup(&mut retain.rrdp)?;
+        }
+        Ok(())
+    }
 }
 
 
@@ -298,19 +304,9 @@ impl<'a> Repository<'a> {
 
 //------------ Cleanup -------------------------------------------------------
 
-/// A builder-style type for cleanup.
-///
-/// This type can be requested from a collector via [`Collector::cleanup`]. 
-/// Repositories that should be be kept in the collector can be registered via
-/// the [`retain_rrdp_repository`][Cleanup::retain_rrdp_repository] and
-/// [`retain_rsync_module`][Cleanup::retain_rsync_module] methods. A call to
-/// [`commit`][Cleanup::commit] will cause the collector to delete all
-/// repositories that have not been registered.
-#[derive(Clone, Debug)]
-pub struct Cleanup<'a> {
-    /// A reference to the underlying collector.
-    collector: &'a Collector,
-
+/// A builder-style type for data retained during cleanup.
+#[derive(Clone, Debug, Default)]
+pub struct Cleanup {
     /// The set of rsync modules to retain.
     rsync: rsync::ModuleSet,
 
@@ -318,39 +314,20 @@ pub struct Cleanup<'a> {
     rrdp: HashSet<uri::Https>,
 }
 
-impl<'a> Cleanup<'a> {
+impl Cleanup {
     /// Creates a new cleanup object for the given collector.
-    fn new(collector: &'a Collector) -> Self {
-        Cleanup {
-            collector,
-            rsync: Default::default(),
-            rrdp: Default::default(),
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
     /// Registers an RRDP repository to be retained in cleanup.
-    pub fn retain_rrdp_repository(&mut self, rpki_notify: &uri::Https) {
-        if self.collector.rrdp.is_some() {
-            self.rrdp.insert(rpki_notify.clone());
-        }
+    pub fn add_rrdp_repository(&mut self, rpki_notify: &uri::Https) {
+        self.rrdp.insert(rpki_notify.clone());
     }
 
     /// Registers an rsync module to be retained in cleanup.
-    pub fn retain_rsync_module(&mut self, uri: &uri::Rsync) {
-        if self.collector.rsync.is_some() {
-            self.rsync.add_from_uri(uri);
-        }
-    }
-
-    /// Performs the cleanup run.
-    pub fn commit(self) -> Result<(), Failed> {
-        if let Some(rsync) = self.collector.rsync.as_ref() {
-            rsync.cleanup(&self.rsync)
-        }
-        if let Some(rrdp) = self.collector.rrdp.as_ref() {
-            rrdp.cleanup(&self.rrdp)?
-        }
-        Ok(())
+    pub fn add_rsync_module(&mut self, uri: &uri::Rsync) {
+        self.rsync.add_from_uri(uri);
     }
 }
 

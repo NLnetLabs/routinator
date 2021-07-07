@@ -126,22 +126,17 @@ impl Store {
     /// RRDP repositories that have no more publication points are removed,
     /// too.
     ///
-    /// The method also triggers a cleanup of the collector via the provided
-    /// collector cleanup object. All RRDP repositories and rsync modules that
-    /// have still non-expired publication points will be registered to be
-    /// retained with the collector cleanup and then a cleaning run is
-    /// started.
+    /// If `collector` is provided, then all RRDP repositories and rsync
+    /// modules retained are registered with it for retaining in the
+    /// collector as well.
     pub fn cleanup(
         &self,
-        mut collector: Option<collector::Cleanup>,
+        collector: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
         self.cleanup_ta()?;
-        self.cleanup_rrdp(collector.as_mut())?;
-        self.cleanup_rsync(collector.as_mut())?;
+        self.cleanup_rrdp(collector)?;
+        self.cleanup_rsync(collector)?;
         self.cleanup_tmp()?;
-        if let Some(collector) = collector {
-            collector.commit()?;
-        }
         Ok(())
     }
 
@@ -169,14 +164,12 @@ impl Store {
     /// point that is retained is registered to be retained by the collector.
     fn cleanup_rrdp(
         &self,
-        mut collector: Option<&mut collector::Cleanup>
+        retain: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
         cleanup_dir_tree(&self.rrdp_repository_base(), |path| {
             if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
                 if let Some(uri) = stored.retain_rrdp() {
-                    if let Some(cleanup) = collector.as_mut() {
-                        cleanup.retain_rrdp_repository(&uri)
-                    }
+                    retain.add_rrdp_repository(&uri);
                     return Ok(true)
                 }
             }
@@ -186,14 +179,12 @@ impl Store {
 
     fn cleanup_rsync(
         &self,
-        mut collector: Option<&mut collector::Cleanup>
+        retain: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
         cleanup_dir_tree(&self.rsync_repository_path(), |path| {
             if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
                 if let Some(uri) = stored.retain_rsync() {
-                    if let Some(cleanup) = collector.as_mut() {
-                        cleanup.retain_rsync_module(&uri)
-                    }
+                    retain.add_rsync_module(&uri);
                     return Ok(true)
                 }
             }

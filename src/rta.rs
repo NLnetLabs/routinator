@@ -37,7 +37,9 @@ impl<'a> ValidationReport<'a> {
         engine: &Engine,
     ) -> Result<(), Failed> {
         let mut run = engine.start(self)?;
-        run.process()
+        run.process()?;
+        run.cleanup()?;
+        Ok(())
     }
 
     pub fn finalize(self) -> Result<&'a ResourceTaggedAttestation, Failed> {

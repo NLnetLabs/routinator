@@ -124,88 +124,6 @@ impl Collector {
         Run::new(self)
     }
 
-    /// Cleans up the RRDP collector.
-    ///
-    /// Deletes all RRDP repository trees that are not included in `retain`.
-    #[allow(clippy::mutable_key_type)]
-    pub fn cleanup(
-        &self,
-        retain: &HashSet<uri::Https>
-    ) -> Result<(), Failed> {
-        for entry in fatal::read_dir(&self.working_dir)? {
-            let entry = entry?;
-            if entry.is_file() {
-                // This isn’t supposed to be here. Make it go away.
-                if let Err(err) = fs::remove_file(entry.path()) {
-                    error!(
-                        "Fatal: failed to delete stray file {}: {}",
-                        entry.path().display(), err
-                    );
-                    return Err(Failed)
-                }
-            }
-            else if entry.is_dir() {
-                self.cleanup_authority(entry.path(), retain)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Cleans up an authority directory.
-    #[allow(clippy::mutable_key_type)]
-    pub fn cleanup_authority(
-        &self,
-        path: &Path,
-        retain: &HashSet<uri::Https>
-    ) -> Result<(), Failed> {
-        for entry in fatal::read_dir(path)? {
-            let entry = entry?;
-            if entry.is_file() {
-                // This isn’t supposed to be here. Make it go away.
-                if let Err(err) = fs::remove_file(entry.path()) {
-                    error!(
-                        "Fatal: failed to delete stray file {}: {}",
-                        entry.path().display(), err
-                    );
-                    return Err(Failed)
-                }
-            }
-            else if entry.is_dir() {
-                self.cleanup_repository(entry.path(), retain)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Cleans up a repository directory.
-    #[allow(clippy::mutable_key_type)]
-    pub fn cleanup_repository(
-        &self,
-        path: &Path,
-        retain: &HashSet<uri::Https>
-    ) -> Result<(), Failed> {
-        let state_path = path.join(RepositoryState::FILE_NAME);
-        let keep = match RepositoryState::load_path(&state_path)? {
-            Some(state) => {
-                retain.contains(&state.rpki_notify)
-            }
-            None => false,
-        };
-
-        if !keep {
-            debug!("Deleting unused RRDP tree {}.", path.display());
-            if let Err(err) = fs::remove_dir_all(path) {
-                error!(
-                    "Fatal: failed to delete tree {}: {}.",
-                    path.display(), err
-                );
-                return Err(Failed)
-            }
-        }
-
-        Ok(())
-    }
-
     /// Dumps the content of the RRDP collector.
     #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
@@ -462,6 +380,94 @@ impl<'a> Run<'a> {
             rpki_notify.clone(), repository.clone()
         );
         Ok(repository)
+    }
+
+    /// Cleans up the RRDP collector.
+    ///
+    /// Deletes all RRDP repository trees that are not included in `retain`.
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup(
+        &self,
+        retain: &mut HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        // Add all the RRDP repositories we’ve tried during this run to be
+        // kept.
+        for uri in self.updated.read().unwrap().keys() {
+            retain.insert(uri.clone());
+        }
+
+        for entry in fatal::read_dir(&self.collector.working_dir)? {
+            let entry = entry?;
+            if entry.is_file() {
+                // This isn’t supposed to be here. Make it go away.
+                if let Err(err) = fs::remove_file(entry.path()) {
+                    error!(
+                        "Fatal: failed to delete stray file {}: {}",
+                        entry.path().display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+            else if entry.is_dir() {
+                self.cleanup_authority(entry.path(), retain)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Cleans up an authority directory.
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup_authority(
+        &self,
+        path: &Path,
+        retain: &HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        for entry in fatal::read_dir(path)? {
+            let entry = entry?;
+            if entry.is_file() {
+                // This isn’t supposed to be here. Make it go away.
+                if let Err(err) = fs::remove_file(entry.path()) {
+                    error!(
+                        "Fatal: failed to delete stray file {}: {}",
+                        entry.path().display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+            else if entry.is_dir() {
+                self.cleanup_repository(entry.path(), retain)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Cleans up a repository directory.
+    #[allow(clippy::mutable_key_type)]
+    pub fn cleanup_repository(
+        &self,
+        path: &Path,
+        retain: &HashSet<uri::Https>
+    ) -> Result<(), Failed> {
+        let state_path = path.join(RepositoryState::FILE_NAME);
+        let keep = match RepositoryState::load_path(&state_path)? {
+            Some(state) => {
+                retain.contains(&state.rpki_notify)
+            }
+            None => false,
+        };
+
+        if !keep {
+            debug!("Deleting unused RRDP tree {}.", path.display());
+            if let Err(err) = fs::remove_dir_all(path) {
+                error!(
+                    "Fatal: failed to delete tree {}: {}.",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        }
+
+        Ok(())
     }
 
     /// Finishes the validation run.
@@ -1268,7 +1274,7 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(true);
+        builder = builder.gzip(false);
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
