@@ -202,9 +202,6 @@ impl Collector {
                 return Err(Failed)
             }
         }
-        else {
-            debug!("Keeping RRDP tree {}.", path.display());
-        }
 
         Ok(())
     }
@@ -639,12 +636,6 @@ impl Repository {
             }
         };
 
-        // Delete the state file while we are updating the repository.
-        // If the update succeeds, a new file is being written. If all
-        // updates fail non-fatally, we write the state file back since the
-        // data is untouched.
-        RepositoryState::remove(self)?;
-
         metrics.serial = Some(notify.content.serial());
         metrics.session = Some(notify.content.session_id());
         match self.delta_update(run, state.as_ref(), &notify, metrics)? {
@@ -655,16 +646,7 @@ impl Repository {
                 metrics.snapshot_reason = Some(reason)
             }
         }
-        if !self.snapshot_update(run, &notify, metrics)? {
-            // Write the state file back.
-            if let Some(state) = state {
-                state.write(self)?;
-            }
-            Ok(false)
-        }
-        else {
-            Ok(true)
-        }
+        self.snapshot_update(run, &notify, metrics)
     }
 
     /// Handle the case of a Not Modified response.
@@ -732,27 +714,39 @@ impl Repository {
         };
 
         let deltas = match self.calc_deltas(&notify.content, state) {
-            Ok([]) => return Ok(None),
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
         };
 
-        let count = deltas.len();
-        for (i, info) in deltas.iter().enumerate() {
-            debug!(
-                "RRDP {}: Delta update step ({}/{}).",
-                info.uri(), i + 1, count
-            );
-            if let Some(reason) = DeltaUpdate::new(
-                run.collector, self, notify.content.session_id(), info, metrics
-            ).try_update()? {
-                info!(
-                    "RRDP {}: Delta update failed, trying snapshot instead.",
-                    self.rpki_notify
+        if !deltas.is_empty() {
+            let count = deltas.len();
+            for (i, info) in deltas.iter().enumerate() {
+                debug!(
+                    "RRDP {}: Delta update step ({}/{}).",
+                    info.uri(), i + 1, count
                 );
-                return Ok(Some(reason))
+                if let Some(reason) = DeltaUpdate::new(
+                    run.collector, self, notify.content.session_id(),
+                    info, metrics
+                ).try_update()? {
+                    info!(
+                        "RRDP {}: Delta update failed, \
+                        trying snapshot instead.",
+                        self.rpki_notify
+                    );
+                    return Ok(Some(reason))
+                }
             }
         }
+
+        // We are up-to-date now, so we can replace the state file with one
+        // reflecting the notification we’ve got originally. This will update
+        // the etag and last-modified data.
+        RepositoryState::from_notify(
+            self.rpki_notify.clone(),
+            notify,
+            run.collector.fallback_time
+        ).write(self)?;
 
         debug!("RRDP {}: Delta update completed.", self.rpki_notify);
         Ok(None)
@@ -873,6 +867,10 @@ impl<'a> SnapshotUpdate<'a> {
 
         match self.try_process(response) {
             Ok(()) => {
+                // Remove the state file to signal we are messing with the
+                // directory.
+                RepositoryState::remove(self.repository)?;
+
                 // Delete the old object base and move the tmp base over.
                 // Note that the old object base may actually be missing.
                 let object_base = self.repository.object_base();
@@ -1068,37 +1066,28 @@ impl<'a> DeltaUpdate<'a> {
     /// If anything goes wrong here, we will have to wipe the repository as it
     /// will be in an inconsistent state.
     fn apply_changes(self) -> Result<(), Failed> {
+        // First, delete the state file to mark the repository as being in
+        // flux.
+        RepositoryState::remove(self.repository)?;
+
         if self._apply_changes().is_err() {
             if let Err(err) = fs::remove_dir_all(&self.repository.path) {
                 error!(
                     "Fatal: failed to delete repository directory {}: {}",
                     self.repository.path.display(), err
                 );
-
-                // As a last resort, let’s try to delete the state file at
-                // least, so that updates will keep failing instead of us
-                // using a bad directory.
-                let path = RepositoryState::file_path(self.repository);
-                if let Err(err) = fs::remove_file(&path) {
-                    error!(
-                        "Fatal: failed to repository state file {}: {}",
-                        path.display(), err
-                    );
-                    error!(
-                        "WARNING: YOUR ROUTINATOR CACHE MAY BE IN AN \
-                        INCONSISTENT STATE."
-                    );
-                    error!(
-                        "Please run Routinator with the --fresh option \
-                        at least once."
-                    );
-                }
             }
-            Err(Failed)
+            return Err(Failed)
         }
-        else {
-            Ok(())
-        }
+
+        // Write a state file to reflect how far we’ve come.
+        RepositoryState::new_for_delta(
+            self.repository.rpki_notify.clone(),
+            self.session_id,
+            self.info.serial(),
+            self.collector.fallback_time
+        ).write(self.repository)?;
+        Ok(())
     }
 
     /// Actually apllies the changes, not dealing with errors.
@@ -1716,6 +1705,24 @@ struct RepositoryState {
 }
 
 impl RepositoryState {
+    /// Create the state for a delta update.
+    pub fn new_for_delta(
+        rpki_notify: uri::Https,
+        session: Uuid,
+        serial: u64,
+        fallback: FallbackTime,
+    ) -> Self {
+        RepositoryState {
+            rpki_notify,
+            session,
+            serial,
+            updated_ts: Utc::now().timestamp(),
+            best_before_ts: fallback.best_before().timestamp(),
+            last_modified_ts: None,
+            etag: None
+        }
+    }
+
     /// Create the state based on the notification file.
     pub fn from_notify(
         rpki_notify: uri::Https,
@@ -1787,17 +1794,7 @@ impl RepositoryState {
 
     /// Deletes the state file of a repository.
     pub fn remove(repo: &Repository) -> Result<(), Failed> {
-        let path = Self::file_path(repo);
-        if let Err(err) = fs::remove_file(&path) {
-            if err.kind() != io::ErrorKind::NotFound {
-                error!(
-                    "Fatal: failed to delete {}: {}",
-                    path.display(), err
-                );
-                return Err(Failed)
-            }
-        }
-        Ok(())
+        fatal::remove_file(&Self::file_path(repo))
     }
 
 

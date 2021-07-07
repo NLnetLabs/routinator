@@ -139,3 +139,17 @@ pub fn create_dir_all(path: &Path) -> Result<(), Failed> {
     })
 }
 
+
+//------------ remove_file ---------------------------------------------------
+
+/// Removes a file.
+pub fn remove_file(path: &Path) -> Result<(), Failed> {
+    fs::remove_file(path).map_err(|err| {
+        error!(
+            "Fatal: failed to remove file {}: {}",
+            path.display(), err
+        );
+        Failed
+    })
+}
+
