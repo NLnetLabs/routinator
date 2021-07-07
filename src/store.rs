@@ -414,11 +414,10 @@ impl Store {
         dir.push('/');
         dir.push_str(&authority);
         dir.push('/');
-        for &ch in alg.digest(uri.as_slice()).as_ref() {
-            // Unwraps here are fine after the `& 0x0F`.
-            dir.push(char::from_digit(((ch >> 4) & 0x0F).into(), 16).unwrap());
-            dir.push(char::from_digit((ch & 0x0F).into(), 16).unwrap());
-        }
+        crate::utils::str::append_hex(
+            alg.digest(uri.as_slice()).as_ref(),
+            &mut dir
+        );
         self.path.join(dir)
     }
 
@@ -706,7 +705,7 @@ impl<'a> StoredPoint<'a> {
             Failed
         })?;
 
-        let object_start = file.stream_position().map_err(|err| {
+        let object_start = file.seek(SeekFrom::Current(0)).map_err(|err| {
             error!(
                 "Failed to read stored publication point at {}: {}",
                 path.display(), err
@@ -769,7 +768,7 @@ impl<'a> StoredPoint<'a> {
             );
             return Err(UpdateError::Fatal)
         }
-        let tmp_object_start = match tmp_file.stream_position() {
+        let tmp_object_start = match tmp_file.seek(SeekFrom::Current(0)) {
             Ok(some) => some,
             Err(err) => {
                 error!(

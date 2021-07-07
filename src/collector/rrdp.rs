@@ -343,11 +343,10 @@ impl Collector {
         );
         dir.push_str(&authority);
         dir.push('/');
-        for &ch in alg.digest(rpki_notify.as_slice()).as_ref() {
-            // Unwraps here are fine after the `& 0x0F`.
-            dir.push(char::from_digit(((ch >> 4) & 0x0F).into(), 16).unwrap());
-            dir.push(char::from_digit((ch & 0x0F).into(), 16).unwrap());
-        }
+        crate::utils::str::append_hex(
+            alg.digest(rpki_notify.as_slice()).as_ref(),
+            &mut dir
+        );
         self.working_dir.join(dir)
     }
 
