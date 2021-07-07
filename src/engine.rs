@@ -1151,14 +1151,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     }
 
     fn apply_metrics(
-        &self,
+        &mut self,
         metrics: &mut RunMetrics,
     ) {
+        let repository_index = self.repository_index.unwrap_or_else(|| {
+            metrics.repository_index(self.cert)
+        });
+        self.processor.repository_index(repository_index);
         metrics.apply(
             &self.metrics,
-            self.repository_index.unwrap_or_else(|| {
-                metrics.repository_index(self.cert)
-            }),
+            repository_index,
             self.cert.tal
         );
     }
@@ -1896,5 +1898,4 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
     fn cancel(self, _cert: &CaCert) {
     }
 }
-
 
