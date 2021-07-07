@@ -585,9 +585,10 @@ impl Repository {
             Some(state) => !state.is_expired(),
             None => true
         };
+        let best_before = state.as_ref().map(|state| state.best_before());
 
         let start_time = SystemTime::now();
-        let mut metrics = RrdpRepositoryMetrics::new(rpki_notify);
+        let mut metrics = RrdpRepositoryMetrics::new(rpki_notify.clone());
         let is_updated = repo._update(run, state, &mut metrics)?;
         metrics.duration = SystemTime::now().duration_since(start_time);
         run.metrics.lock().unwrap().push(metrics);
@@ -596,6 +597,21 @@ impl Repository {
             Ok(Some(repo))
         }
         else {
+            match best_before {
+                Some(date) => {
+                    info!(
+                        "RRDP {}: Update failed and \
+                        current copy is expired since {}.",
+                        rpki_notify, date
+                    );
+                },
+                None => {
+                    info!(
+                        "RRDP {}: Update failed and there is no current copy.",
+                        rpki_notify
+                    );
+                }
+            }
             Ok(None)
         }
     }
@@ -632,7 +648,7 @@ impl Repository {
 
         metrics.serial = Some(notify.content.serial());
         metrics.session = Some(notify.content.session_id());
-        match self.delta_update(run, &notify, metrics)? {
+        match self.delta_update(run, state.as_ref(), &notify, metrics)? {
             None => {
                 return Ok(true)
             }
@@ -707,15 +723,16 @@ impl Repository {
     fn delta_update(
         &self,
         run: &Run,
+        state: Option<&RepositoryState>,
         notify: &Notification,
         metrics: &mut RrdpRepositoryMetrics,
     ) -> Result<Option<SnapshotReason>, Failed> {
-        let state = match RepositoryState::load(self)? {
+        let state = match state {
             Some(state) => state,
             None => return Ok(Some(SnapshotReason::NewRepository)),
         };
 
-        let deltas = match self.calc_deltas(&notify.content, &state) {
+        let deltas = match self.calc_deltas(&notify.content, state) {
             Ok([]) => return Ok(None),
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
