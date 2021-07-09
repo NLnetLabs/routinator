@@ -6,13 +6,13 @@
 //! _store._ The types in this module provide access to this store.
 //!
 //! The store is initialized and configured via [`Store`]. During validation,
-//! [`Run`] is used which can be aquired from the store via the
+//! [`Run`] is used which can be acquired from the store via the
 //! [`start`][Store::start] method. It provides access to the trust anchor
 //! certificates via the [`load_ta`][Run::load_ta] and
-//! [`update_ta`][Run::update_ta] methods individual repositories and
-//! publication points via [`repository`][Run::repository] and
-//! [`pub_point`][Run::pub_point], respectively. These are represented by the
-//! [`Repository`] and [`StoredPoint`] types.
+//! [`update_ta`][Run::update_ta] methods, and access to individual
+//! repositories and publication points via [`repository`][Run::repository]
+//! and [`pub_point`][Run::pub_point], respectively. These are represented
+//! by the [`Repository`] and [`StoredPoint`] types.
 //!
 //! # Error Handling
 //!
@@ -26,7 +26,9 @@
 //!
 //! The store uses the file system to store its data. Each repository has a
 //! directory of its own. For RRDP, the directory is named after the SHA-256
-//! hash of the rpkiNotify URI. For rsync there is only one directory, called
+//! hash of the rpkiNotify URI. This directory is in turned stored in an
+//! intermediary directory named after the authority part of the repositories
+//! rpkiNotify URI. For rsync there is only one directory, called
 //! `rsync`.
 //!
 //! Within each repository, all the objects of a publication point are stored
@@ -118,84 +120,6 @@ impl Store {
     /// Start a validation run with the store.
     pub fn start(&self) -> Run {
         Run::new(self)
-    }
-
-    /// Cleans up the store.
-    ///
-    /// All publication points that have an expired manifest will be removed.
-    /// RRDP repositories that have no more publication points are removed,
-    /// too.
-    ///
-    /// If `collector` is provided, then all RRDP repositories and rsync
-    /// modules retained are registered with it for retaining in the
-    /// collector as well.
-    pub fn cleanup(
-        &self,
-        collector: &mut collector::Cleanup,
-    ) -> Result<(), Failed> {
-        self.cleanup_ta()?;
-        self.cleanup_rrdp(collector)?;
-        self.cleanup_rsync(collector)?;
-        self.cleanup_tmp()?;
-        Ok(())
-    }
-
-    /// Cleans up the trust anchors.
-    ///
-    /// Deletes all files that either don’t successfully parse as certificates
-    /// or that are expired certificates.
-    fn cleanup_ta(&self) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.path.join("ta"), |path| {
-            let mut content = Vec::new();
-            File::open(&path)?.read_to_end(&mut content)?;
-            if let Ok(cert) = Cert::decode(Bytes::from(content)) {
-                if cert.validity().not_after() > Time::now() {
-                    return Ok(true)
-                }
-            }
-            Ok(false)
-        })
-    }
-
-    /// Cleans up the RRDP repositories.
-    ///
-    /// Deletes all publication points with an expired manifest as well as
-    /// any obviously garbage files. The RRDP repository of any publication
-    /// point that is retained is registered to be retained by the collector.
-    fn cleanup_rrdp(
-        &self,
-        retain: &mut collector::Cleanup,
-    ) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.rrdp_repository_base(), |path| {
-            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
-                if let Some(uri) = stored.retain_rrdp() {
-                    retain.add_rrdp_repository(&uri);
-                    return Ok(true)
-                }
-            }
-            Ok(false)
-        })
-    }
-
-    fn cleanup_rsync(
-        &self,
-        retain: &mut collector::Cleanup,
-    ) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.rsync_repository_path(), |path| {
-            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
-                if let Some(uri) = stored.retain_rsync() {
-                    retain.add_rsync_module(&uri);
-                    return Ok(true)
-                }
-            }
-            Ok(false)
-        })
-    }
-
-    fn cleanup_tmp(&self) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.path.join("tmp"), |_path| {
-            Ok(false)
-        })
     }
 
     /// Dumps the content of the store.
@@ -572,6 +496,84 @@ impl<'a> Run<'a> {
         &self, ca_cert: &CaCert
     ) -> Result<StoredPoint<'a>, Failed> {
         self.repository(ca_cert).get_point(ca_cert.rpki_manifest())
+    }
+
+    /// Cleans up the store.
+    ///
+    /// All publication points that have an expired manifest will be removed.
+    /// RRDP repositories that have no more publication points are removed,
+    /// too.
+    ///
+    /// If `collector` is provided, then all RRDP repositories and rsync
+    /// modules retained are registered with it for retaining in the
+    /// collector as well.
+    pub fn cleanup(
+        &self,
+        collector: &mut collector::Cleanup,
+    ) -> Result<(), Failed> {
+        self.cleanup_ta()?;
+        self.cleanup_rrdp(collector)?;
+        self.cleanup_rsync(collector)?;
+        self.cleanup_tmp()?;
+        Ok(())
+    }
+
+    /// Cleans up the trust anchors.
+    ///
+    /// Deletes all files that either don’t successfully parse as certificates
+    /// or that are expired certificates.
+    fn cleanup_ta(&self) -> Result<(), Failed> {
+        cleanup_dir_tree(&self.store.path.join("ta"), |path| {
+            let mut content = Vec::new();
+            File::open(&path)?.read_to_end(&mut content)?;
+            if let Ok(cert) = Cert::decode(Bytes::from(content)) {
+                if cert.validity().not_after() > Time::now() {
+                    return Ok(true)
+                }
+            }
+            Ok(false)
+        })
+    }
+
+    /// Cleans up the RRDP repositories.
+    ///
+    /// Deletes all publication points with an expired manifest as well as
+    /// any obviously garbage files. The RRDP repository of any publication
+    /// point that is retained is registered to be retained by the collector.
+    fn cleanup_rrdp(
+        &self,
+        retain: &mut collector::Cleanup,
+    ) -> Result<(), Failed> {
+        cleanup_dir_tree(&self.store.rrdp_repository_base(), |path| {
+            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
+                if let Some(uri) = stored.retain_rrdp() {
+                    retain.add_rrdp_repository(&uri);
+                    return Ok(true)
+                }
+            }
+            Ok(false)
+        })
+    }
+
+    fn cleanup_rsync(
+        &self,
+        retain: &mut collector::Cleanup,
+    ) -> Result<(), Failed> {
+        cleanup_dir_tree(&self.store.rsync_repository_path(), |path| {
+            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
+                if let Some(uri) = stored.retain_rsync() {
+                    retain.add_rsync_module(&uri);
+                    return Ok(true)
+                }
+            }
+            Ok(false)
+        })
+    }
+
+    fn cleanup_tmp(&self) -> Result<(), Failed> {
+        cleanup_dir_tree(&self.store.path.join("tmp"), |_path| {
+            Ok(false)
+        })
     }
 }
 

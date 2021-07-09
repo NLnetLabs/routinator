@@ -366,7 +366,7 @@ impl<'a, P> Run<'a, P> {
         }
 
         let mut retain = collector::Cleanup::new();
-        self.validation.store.cleanup(&mut retain)?;
+        self.store.cleanup(&mut retain)?;
         if let Some(collector) = self.collector.as_mut() {
             collector.cleanup(&mut retain)?;
         }
