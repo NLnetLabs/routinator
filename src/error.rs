@@ -24,19 +24,6 @@ use log::error;
 #[derive(Clone, Copy, Debug)]
 pub struct Failed;
 
-impl From<sled::Error> for Failed {
-    fn from(err: sled::Error) -> Failed {
-        error!("RPKI storage error: {}", err);
-        if matches!(err, sled::Error::Io(_) | sled::Error::Corruption {..}) {
-            error!(
-                "Starting Routinator with the --fresh option \
-                may fix this issue"
-            );
-        }
-        Failed
-    }
-}
-
 
 //------------ ExitError -----------------------------------------------------
 

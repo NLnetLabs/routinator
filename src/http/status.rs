@@ -9,7 +9,7 @@ use crate::metrics::{
     HttpServerMetrics, PublicationMetrics, SharedRtrServerMetrics, VrpMetrics
 };
 use crate::payload::SharedHistory;
-use crate::utils::JsonBuilder;
+use crate::utils::json::JsonBuilder;
 use super::errors::initial_validation;
 
 
