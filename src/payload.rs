@@ -661,7 +661,7 @@ impl PayloadHistory {
         // need.
         let mut iter = self.deltas.iter().rev();
         for delta in &mut iter {
-            // delta.serial() is the target serial of the detla, serial is
+            // delta.serial() is the target serial of the delta, serial is
             // the target serial the caller has. So we can skip over anything
             // smaller.
             match delta.serial().partial_cmp(&serial) {

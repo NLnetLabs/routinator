@@ -49,8 +49,6 @@ pub struct Collector {
     working_dir: PathBuf,
 
     /// The HTTP client.
-    ///
-    /// If this is `None`, we don’t actually do updates.
     http: HttpClient,
 
     /// Whether to filter dubious authorities in notify URIs.
@@ -147,7 +145,7 @@ impl Collector {
         Ok(())
     }
 
-    /// Dumps the content of an RRPD repository.
+    /// Dumps the content of an RRDP repository.
     #[allow(clippy::mutable_key_type)]
     fn dump_repository(
         &self,
@@ -503,8 +501,8 @@ impl Repository {
         &self,
         uri: &uri::Rsync
     ) -> Result<Option<Bytes>, Failed> {
-        RepositoryObject::load(&self.object_path(uri)).map(|obj| {
-            obj.map(|obj| obj.content)
+        RepositoryObject::load(&self.object_path(uri)).map(|maybe_obj| {
+            maybe_obj.map(|obj| obj.content)
         })
     }
 
@@ -1096,7 +1094,7 @@ impl<'a> DeltaUpdate<'a> {
         Ok(())
     }
 
-    /// Actually apllies the changes, not dealing with errors.
+    /// Actually applies the changes, not dealing with errors.
     fn _apply_changes(&self) -> Result<(), Failed> {
         for uri in &self.publish {
             let tmp_path = self.repository.tmp_object_path(uri);

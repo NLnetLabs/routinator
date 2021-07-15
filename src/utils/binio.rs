@@ -127,6 +127,9 @@ impl<R: io::Read> Parse<R> for Option<i64> {
 
 
 //----------- uri::Rsync -----------------------------------------------------
+//
+// Encoded as a u32 for the length and then that many bytes. If the length
+// doesn’t fit in a u32, the encoder produces an error.
 
 impl<W: io::Write> Compose<W> for uri::Rsync {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
@@ -139,8 +142,7 @@ impl<W: io::Write> Compose<W> for uri::Rsync {
 
 impl<R: io::Read> Parse<R> for uri::Rsync {
     fn parse(source: &mut R) -> Result<Self, io::Error> {
-        let len = u32::parse(source)?;
-        let len = usize::try_from(len).map_err(|_| {
+        let len = usize::try_from(u32::parse(source)?).map_err(|_| {
             io_err_other("URI too large for this system")
         })?;
         let mut bits = vec![0u8; len];
@@ -153,6 +155,9 @@ impl<R: io::Read> Parse<R> for uri::Rsync {
 
 
 //----------- uri::Https -----------------------------------------------------
+//
+// Encoded as a u32 for the length and then that many bytes. If the length
+// doesn’t fit in a u32, the encoder produces an error.
 
 impl<W: io::Write> Compose<W> for uri::Https {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
@@ -178,6 +183,9 @@ impl<R: io::Read> Parse<R> for uri::Https {
 
 
 //----------- Option<uri::Https> ---------------------------------------------
+//
+// Encoded as a u32 for the length and then that many bytes. If the length
+// doesn’t fit in a u32, the encoder produces an error.
 
 impl<W: io::Write> Compose<W> for Option<uri::Https> {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
@@ -212,6 +220,9 @@ impl<R: io::Read> Parse<R> for Option<uri::Https> {
 
 
 //------------ Bytes ---------------------------------------------------------
+//
+// Encoded as a u64 for the length and then that many bytes. If the length
+// doesn’t fit in a u64, the encoder produces an error.
 
 impl<W: io::Write> Compose<W> for Bytes {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
@@ -225,7 +236,7 @@ impl<W: io::Write> Compose<W> for Bytes {
 impl<R: io::Read> Parse<R> for Bytes {
     fn parse(source: &mut R) -> Result<Self, io::Error> {
         let len = usize::try_from(u64::parse(source)?).map_err(|_| {
-            io_err_other("URI too large for this system")
+            io_err_other("data block too large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
@@ -236,7 +247,10 @@ impl<R: io::Read> Parse<R> for Bytes {
 
 //------------ Option<Bytes> -------------------------------------------------
 //
-// This uses u64::MAX in the length field as the marker for `None`
+// Encoded as a u64 for the length and then that many bytes. If the length
+// doesn’t fit in a u64, the encoder produces an error.
+//
+// Uses u64::MAX in the length field as the marker for `None`
 
 impl<W: io::Write> Compose<W> for Option<Bytes> {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
@@ -254,7 +268,7 @@ impl<R: io::Read> Parse<R> for Option<Bytes> {
             return Ok(None)
         }
         let len = usize::try_from(len).map_err(|_| {
-            io_err_other("URI too large for this system")
+            io_err_other("data block large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
