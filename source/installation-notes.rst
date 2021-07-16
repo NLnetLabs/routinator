@@ -203,7 +203,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
 
 .. code-block:: bash
 
-  cargo install routinator
+  cargo install --locked routinator
   vi /home/routinator/.bash_profile
   Edit the PATH line to include "/home/routinator/.cargo/bin"
   PATH=$PATH:$HOME/.local/bin:$HOME/bin:/home/routinator/.cargo/bin
