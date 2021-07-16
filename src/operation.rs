@@ -628,7 +628,6 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
-        validation.cleanup()?;
         history.mark_update_done();
         Ok(())
     }
@@ -795,7 +794,6 @@ impl Vrps {
             &mut metrics,
             process.config().unsafe_vrps,
         );
-        validation.cleanup()?;
         let res = match self.output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -1060,7 +1058,6 @@ impl Validate {
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = validation.process_origins()?;
-        validation.cleanup()?;
         let snapshot = PayloadSnapshot::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
@@ -1242,7 +1239,6 @@ impl ValidateDocument {
             error!("RTA did not validate. (process)");
             return Err(ExitError::Invalid);
         }
-        validation.cleanup()?;
 
         match rta_validation.finalize() {
             Ok(rta) => {
@@ -1308,7 +1304,6 @@ impl Update {
         validation.ignite()?;
         process.switch_logging(false, false)?;
         let (_, metrics) = validation.process_origins()?;
-        validation.cleanup()?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }

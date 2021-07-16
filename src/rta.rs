@@ -37,7 +37,9 @@ impl<'a> ValidationReport<'a> {
         engine: &Engine,
     ) -> Result<(), Failed> {
         let mut run = engine.start(self)?;
-        run.process()
+        run.process()?;
+        run.cleanup()?;
+        Ok(())
     }
 
     pub fn finalize(self) -> Result<&'a ResourceTaggedAttestation, Failed> {
@@ -95,6 +97,11 @@ impl<'a, 's> ProcessPubPoint for ValidateCa<'a, 's> {
         }
         self.certs.push(cert.cert().clone());
         Ok(Some(Self::new(self.report)))
+    }
+
+    fn restart(&mut self) -> Result<(), Failed> {
+        self.certs.clear();
+        Ok(())
     }
 
     fn commit(self) {

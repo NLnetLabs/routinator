@@ -18,9 +18,9 @@
 /// the accompanying trait [`ProcessPubPoint`] dealing with individual
 /// publication points.
 
-use std::{fmt, fs, io, str};
+use std::{fmt, fs, io};
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -36,18 +36,18 @@ use rpki::repository::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::repository::roa::{Roa, RouteOriginAttestation};
 use rpki::repository::sigobj::SignedObject;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
-use rpki::repository::x509::{Time, Validity, ValidationError};
+use rpki::repository::x509::{Time, ValidationError, Validity};
 use rpki::uri;
 use crate::{collector, store};
-use crate::collector::Collector;
 use crate::config::{Config, FilterPolicy};
+use crate::collector::Collector;
 use crate::error::Failed;
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
 use crate::payload::ValidationReport;
-use crate::store::{Store, StoredManifest};
-use crate::utils::str_from_ascii;
+use crate::store::{Store, StoredManifest, StoredObject, StoredPoint};
+use crate::utils::str::str_from_ascii;
 
 
 //------------ Configuration -------------------------------------------------
@@ -93,9 +93,6 @@ pub struct Engine {
     /// The list of our TALs. 
     tals: Vec<Tal>,
 
-    /// The sled database.
-    db: sled::Db,
-
     /// The collector to load updated data from.
     ///
     /// If this is `None`, updates have been disabled.
@@ -121,76 +118,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Attempts to create the sled database under the given cache dir.
-    ///
-    /// NB: The database will be opened below the given directory. I,e., the
-    /// provided path is `cache_dir` from the
-    /// [`Config`][crate::config::Config].
-    fn open_db(
-        cache_dir: &Path,
-        fresh: bool,
-        capacity: Option<u64>,
-    ) -> Result<sled::Db, Failed> {
-        if let Err(err) = fs::read_dir(cache_dir) {
-            if err.kind() == io::ErrorKind::NotFound {
-                error!(
-                    "Missing repository directory {}.\n\
-                     You may have to initialize it via \
-                     \'routinator init\'.",
-                     cache_dir.display()
-                );
-            }
-            else {
-                error!(
-                    "Failed to open repository directory {}: {}",
-                    cache_dir.display(), err
-                );
-            }
-            return Err(Failed)
-        }
-
-        let db_path = cache_dir.join("store");
-
-        if fresh {
-            if let Err(err) = fs::remove_dir_all(&db_path) {
-                if err.kind() != io::ErrorKind::NotFound {
-                    error!(
-                        "Failed to delete store database at {}: {}",
-                        db_path.display(), err
-                    );
-                    return Err(Failed)
-                }
-            }
-        }
-
-        let mut db_conf = sled::Config::new().path(&db_path);
-        if let Some(capacity) = capacity {
-            db_conf = db_conf.cache_capacity(capacity * 1024 * 1024)
-        }
-
-        db_conf.open().map_err(|err| {
-            match err {
-                sled::Error::Io(err) => {
-                    error!(
-                        "Failed to open store database at {}: {}\n\
-                        Is there another Routinator running?
-                        ",
-                        db_path.display(),
-                        err
-                    );
-                }
-                err => {
-                    error!(
-                        "Failed to open store database at {}: {}",
-                        db_path.display(),
-                        err
-                    );
-                }
-            }
-            Failed
-        })
-    }
-
     /// Initializes the engine without creating a value.
     ///
     /// This ensures that the TAL directory is present and logs a hint how
@@ -199,9 +126,8 @@ impl Engine {
     /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
         Collector::init(config)?;
-        Self::open_db(
-            &config.cache_dir, config.fresh, config.cache_capacity
-        ).map(|_| ())
+        Store::init(config)?;
+        Ok(())
     }
 
     /// Creates a new engine.
@@ -215,21 +141,17 @@ impl Engine {
         config: &Config,
         update: bool,
     ) -> Result<Self, Failed> {
-        let db = Self::open_db(
-            &config.cache_dir, config.fresh, config.cache_capacity
-        )?;
         let collector = if update {
-            Some(Collector::new(config, &db)?)
+            Some(Collector::new(config)?)
         }
         else {
             None
         };
-        let store = Store::new(db.clone());
+        let store = Store::new(config)?;
         let mut res = Engine {
             tal_dir: config.tal_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
-            db,
             collector,
             store,
             strict: config.strict,
@@ -381,18 +303,9 @@ impl Engine {
         let report = ValidationReport::new();
         let mut run = self.start(&report)?;
         run.process()?;
+        run.cleanup()?;
         let metrics = run.done();
         Ok((report, metrics))
-    }
-
-    /// Cleans the collector and store owned by the engine.
-    pub fn cleanup(&self) -> Result<(), Failed> {
-        if !self.dirty_repository {
-            self.store.cleanup(
-                self.collector.as_ref().map(Collector::cleanup)
-            )?;
-        }
-        Ok(())
     }
 
     /// Dumps the content of the collector and store owned by the engine.
@@ -443,6 +356,21 @@ impl<'a, P> Run<'a, P> {
             validation, collector, store, processor,
             metrics: Default::default()
         }
+    }
+
+    /// Cleans the collector and store owned by the engine.
+    pub fn cleanup(&mut self) -> Result<(), Failed> {
+        if self.validation.dirty_repository {
+            debug!("Skipping cleanup as configured.");
+            return Ok(())
+        }
+
+        let mut retain = collector::Cleanup::new();
+        self.store.cleanup(&mut retain)?;
+        if let Some(collector) = self.collector.as_mut() {
+            collector.cleanup(&mut retain)?;
+        }
+        Ok(())
     }
 
     /// Finishes the validation run and returns the metrics.
@@ -664,16 +592,15 @@ struct PubPoint<'a, P: ProcessRun> {
     /// The processor for valid data at this publication point.
     processor: P::PubPoint,
 
-    /// The point’s repository in the collector if available.
-    collector: Option<collector::Repository<'a>>,
-
-    /// The point’s repository in the store.
-    store: store::Repository,
-
     /// The index of this point’s repository in the run’s metrics.
     repository_index: Option<usize>,
 
-    /// The publication metrics for this publication point.
+    /// The base publication metrics for this publication point.
+    ///
+    /// This one only receives information about the publication point itself,
+    /// as well as the manifest and manifest CRL. Everything else will be
+    /// collected during object processing via `ValidPointManifest` so we can
+    /// drop it if the point gets cancelled.
     metrics: PublicationMetrics,
 }
 
@@ -685,16 +612,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         processor: P::PubPoint,
         repository_index: Option<usize>,
     ) -> Result<Self, Failed> {
-        let collector = if let Some(collector) = run.collector.as_ref() {
-            collector.repository(cert)?
-        }
-        else {
-            None
-        };
-        let store = run.store.repository(cert)?;
         Ok(PubPoint {
-            run, cert, processor, collector, store,
-            repository_index,
+            run, cert, processor, repository_index,
             metrics: Default::default(),
         })
     }
@@ -704,87 +623,58 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// Upon success, returns a list of all the child CAs of this publication
     /// point as CA processing tasks.
     pub fn process(
-        mut self,
+        self,
         metrics: &mut RunMetrics,
     ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
-        let manifest = match self.update_stored()? {
-            PointManifest::Valid(manifest) => {
-                self.metrics.valid_manifests += 1;
-                self.metrics.valid_crls += 1;
-                Some(manifest)
+        let mut store = self.run.store.pub_point(self.cert)?;
+        if let Some(collector) = self.run.collector.as_ref() {
+            if let Some(collector) = collector.repository(self.cert)? {
+                match self.process_collected(
+                    collector, &mut store, metrics
+                )? {
+                    Ok(res) => return Ok(res),
+                    Err(mut this) => {
+                        this.metrics = Default::default();
+                        return this.process_stored(store, metrics)
+                    }
+                }
             }
-            PointManifest::Unverified(stored) => {
-                self.validate_stored_manifest(stored).ok()
-            }
-            PointManifest::NotFound => {
-                warn!(
-                    "{}: No valid manifest found.",
-                    self.cert.rpki_manifest()
-                );
-                self.metrics.missing_manifests += 1;
-                None
-            }
-        };
-
-        let manifest = match manifest {
-            Some(manifest) => manifest,
-            None => {
-                self.metrics.rejected_points += 1;
-                metrics.apply(
-                    &self.metrics,
-                    self.repository_index.unwrap_or_else(|| {
-                        metrics.repository_index(
-                            self.cert, self.store.is_rrdp()
-                        )
-                    }),
-                    self.cert.tal
-                );
-                return Ok(Vec::new())
-            }
-        };
-
-        ValidPubPoint::new(self, manifest).process(metrics)
+        }
+        self.process_stored(store, metrics)
     }
 
-    /// Tries to update the stored data for the publication point.
+    /// Tries to update the stored data and validate at the same time.
     ///
     /// Tries to fetch the updated manifest from the collector. If it differs
     /// from the stored manifest, updates the stored manifest and objects if
     /// the manifest is valid and all the objects are present and match their
-    /// hashes.
+    /// hashes. While checking, also processes the data so we only need to do
+    /// that once.
     ///
-    /// Depending on how far it gets, returns either a validated or raw
-    /// manifest or that the publication point can’t be found at all.
-    // Clippy false positive: We are using HashSet<Bytes> here -- Bytes is
-    // not a mutable type.
-    #[allow(clippy::mutable_key_type)]
-    fn update_stored(&self) -> Result<PointManifest, Failed> {
-        // If we don’t have a collector, we just use the stored publication
-        // point.
-        let collector = match self.collector {
-            Some(ref collector) => collector,
-            None => {
-                return self.store.load_manifest(
-                    self.cert.rpki_manifest()
-                ).map(Into::into)
-            }
-        };
-
-        // Try to load the manifest both from store and collector.
-        let collected = collector.load_object(self.cert.rpki_manifest())?;
-        let stored = self.store.load_manifest(self.cert.rpki_manifest())?;
-
-        // If the manifest is not in the collector, we can abort already.
-        let collected = match collected {
-            Some(mft) => mft,
-            None => return Ok(stored.into())
+    /// Returns a list of the child CAs if it successfully finished or `self`
+    /// if there is no update or it is not valid and the store needs to be
+    /// consulted.
+    #[allow(clippy::type_complexity)] // Yeah, I know ...
+    fn process_collected(
+        mut self,
+        collector: collector::Repository,
+        store: &mut StoredPoint,
+        metrics: &mut RunMetrics,
+    ) -> Result<Result<Vec<CaTask<P::PubPoint>>, Self>, Failed> {
+        // Try to load the manifest from the collector. If there isn’t one,
+        // we are done, too.
+        let collected = match collector.load_object(
+            self.cert.rpki_manifest()
+        )? {
+            Some(collected) => collected,
+            None => return Ok(Err(self))
         };
 
         // If the stored and collected manifests are the same, nothing has
         // changed and we can abort the update. However, we need to check that
         // the stored manifest refers to the same CA repository URI, just to
         // be sure.
-        let same = if let Some(mft) = stored.as_ref() {
+        let same = if let Some(mft) = store.manifest() {
             mft.manifest() == &collected
                 && mft.ca_repository() == self.cert.ca_repository()
         }
@@ -792,107 +682,116 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             false
         };
         if same {
-            return Ok(stored.into())
+            return Ok(Err(self))
         }
 
-        // Validate the collected manifest.
-        let collected = match self.validate_collected_manifest(
-            collected, collector
+        // Validate the collected manifest. If it is no good, well, you know
+        // the drill.
+        let mut collected = match self.validate_collected_manifest(
+            collected, &collector
         )? {
             Some(collected) => collected,
             None => {
-                return Ok(stored.into())
+                return Ok(Err(self))
             }
         };
 
-        // The manifest is fine. Now we can update the store. We do this in a
-        // transaction and rollback if anything is wrong.
-        let files = self.store.update_point(
-            self.cert.rpki_manifest(),
+        // The manifest is fine, so we can now look at the objects. The
+        // objects are fine if they are present and match the hash. If they
+        // don’t we have to cancel the update. We also validate them while we
+        // are at it. This also collects all the child CAs that need
+        // processing later on in `ca_tasks`. 
+        //
+        // However, the processor can decide it doesn’t like the publication
+        // point at all. This is not an error -- the publication point is
+        // correct from a store perspective --, but we must not process te
+        // collected `ca_tasks`. We keep track of this through `point_ok` and,
+        // if that happens to end up being `false` return an empty list to
+        // signal that the publication point was processed successfully but
+        // shouldn’t be considered further.
+        let mut ca_tasks = Vec::new();
+        let mut items = collected.content.iter();
+        let mut point_ok = true;
+        let update_result = store.update(
+            StoredManifest::new(
+                collected.ee_cert.validity().not_after(),
+                self.cert.rpki_notify().cloned(),
+                self.cert.ca_repository().clone(),
+                self.cert.rpki_manifest().clone(),
+                collected.manifest_bytes.clone(),
+                collected.crl_uri.clone(),
+                collected.crl_bytes.clone(),
+            ),
+            || {
+                let item = match items.next() {
+                    Some(item) => item,
+                    None => return Ok(None)
+                };
 
-            |update| {
-                // Store all files on the collected manifest. Abort if they
-                // can’t be loaded or if their hash doesn’t match.
-                //
-                // We also stick all file names into a set so we can delete
-                // everything that isn’t on the manifest.
-                let mut files = HashSet::new();
-                for item in collected.content.iter() {
-                    let file = match str_from_ascii(item.file()) {
-                        Ok(file) => file,
-                        Err(_) => {
-                            warn!("{}: illegal file name '{}'.",
-                                self.cert.rpki_manifest(),
-                                String::from_utf8_lossy(item.file())
-                            );
-                            return Err(store::UpdateError::abort())
-                        }
-                    };
-                    let uri = self.cert.ca_repository().join(
-                        file.as_ref()
-                    ).unwrap();
-
-                    let hash = ManifestHash::new(
-                        item.hash().clone(), collected.content.file_hash_alg()
-                    );
-
-                    let content = match collector.load_object(&uri)? {
-                        Some(content) => content,
-                        None => {
-                            warn!("{}: failed to load.", uri);
-                            return Err(store::UpdateError::abort());
-                        }
-                    };
-
-                    if hash.verify(&content).is_err() {
-                        warn!("{}: file has wrong manifest hash.", uri);
-                        return Err(store::UpdateError::abort());
+                let file = match str_from_ascii(item.file()) {
+                    Ok(file) => file,
+                    Err(_) => {
+                        warn!("{}: illegal file name '{}'.",
+                            self.cert.rpki_manifest(),
+                            String::from_utf8_lossy(item.file())
+                        );
+                        return Err(store::UpdateError::Abort)
                     }
+                };
+                let uri = self.cert.ca_repository().join(
+                    file.as_ref()
+                ).unwrap();
 
-                    update.insert_object(
-                        file,
-                        &store::StoredObject::new(content, Some(hash))
-                    );
+                let hash = ManifestHash::new(
+                    item.hash().clone(), collected.content.file_hash_alg()
+                );
 
-                    files.insert(item.file().clone());
+                let content = match collector.load_object(&uri)? {
+                    Some(content) => content,
+                    None => {
+                        warn!("{}: failed to load.", uri);
+                        return Err(store::UpdateError::Abort)
+                    }
+                };
+
+                if hash.verify(&content).is_err() {
+                    warn!("{}: file has wrong manifest hash.", uri);
+                    return Err(store::UpdateError::Abort)
                 }
 
-                update.update_manifest(
-                    store::StoredManifest::new(
-                        self.cert.cert.validity().not_after(),
-                        self.cert.ca_repository().clone(),
-                        collected.manifest_bytes.clone(),
-                        collected.crl_bytes.clone(),
-                    )
-                );
-                Ok(files)
+                if !self.process_object(
+                    &uri, content.clone(),
+                    &mut collected, &mut ca_tasks
+                )? {
+                    point_ok = false;
+                }
+
+                Ok(Some(StoredObject::new(uri, content, Some(hash))))
             }
         );
 
-        let files = match files {
-            Ok(files) => files,
-            Err(err) => {
-                if err.was_aborted() {
-                    warn!(
-                        "{}: Invalid manifest or content. \
-                        Using previously stored version.",
-                        self.cert.rpki_manifest()
-                    );
-                    return Ok(stored.into())
+        match update_result {
+            Ok(()) => {
+                // Update was successful. We have to accept whatever result
+                // we got.
+                if point_ok {
+                    self.accept_point(collected, metrics);
+                    Ok(Ok(ca_tasks))
                 }
                 else {
-                    return Err(Failed)
+                    self.reject_point(metrics);
+                    Ok(Ok(Vec::new()))
                 }
             }
-        };
-
-        // Delete everything in the store that is not in files.
-        self.store.retain_objects(
-            self.cert.rpki_manifest(),
-            |file| files.contains(file.as_bytes())
-        )?;
-
-        Ok(collected.into())
+            Err(store::UpdateError::Abort) => {
+                // Update was aborted. We need to use the store.
+                Ok(Err(self))
+            }
+            Err(store::UpdateError::Fatal) => {
+                // We are doomed.
+                Err(Failed)
+            }
+        }
     }
 
     /// Tries to validate a manifest acquired from the collector.
@@ -902,7 +801,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// collector, validates that against the CA and checks that the manifest
     /// has not been revoked.
     fn validate_collected_manifest(
-        &self,
+        &mut self,
         manifest_bytes: Bytes,
         repository: &collector::Repository,
     ) -> Result<Option<ValidPointManifest>, Failed> {
@@ -911,6 +810,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ) {
             Ok(manifest) => manifest,
             Err(_) => {
+                self.metrics.invalid_manifests += 1;
                 warn!("{}: failed to decode", self.cert.rpki_manifest());
                 return Ok(None)
             }
@@ -920,12 +820,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ) {
             Ok(some) => some,
             Err(_) => {
+                self.metrics.invalid_manifests += 1;
                 warn!("{}: failed to validate", self.cert.rpki_manifest());
                 return Ok(None)
             }
         };
         if content.is_stale() {
-            //self.metrics.inc_stale_count();
+            self.metrics.stale_manifests += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
@@ -945,8 +846,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             None => return Ok(None)
         };
 
+        self.metrics.valid_manifests += 1;
+
         Ok(Some(ValidPointManifest {
-            ee_cert, content, crl_uri, crl, manifest_bytes, crl_bytes
+            ee_cert, content, crl_uri, crl, manifest_bytes, crl_bytes,
+            metrics: Default::default(),
         }))
     }
 
@@ -959,7 +863,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ///
     /// If all that is true, returns the decoded CRL.
     fn validate_collected_crl(
-        &self,
+        &mut self,
         ee_cert: &ResourceCert,
         manifest: &ManifestContent,
         repository: &collector::Repository
@@ -970,13 +874,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             // RFC 6481: MUST end in .crl.
             Some(some) if some.ends_with(".crl") => some.clone(),
             _ => {
+                self.metrics.invalid_manifests += 1;
                 warn!("{}: invalid CRL URI.", self.cert.rpki_manifest());
                 return Ok(None)
             }
         };
-        let crl_name = match crl_uri.relative_to(&self.cert.ca_repository()) {
+        let crl_name = match crl_uri.relative_to(self.cert.ca_repository()) {
             Some(name) => name,
             None => {
+                self.metrics.invalid_manifests += 1;
                 warn!(
                     "{}: CRL URI outside repository directory.",
                     self.cert.rpki_manifest()
@@ -994,28 +900,24 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let bytes = match repository.load_object(&crl_uri)? {
                     Some(bytes) => bytes,
                     None => {
+                        self.metrics.invalid_crls += 1;
                         warn!("{}: failed to load.", crl_uri);
                         return Ok(None)
                     }
                 };
                 let hash = ManifestHash::new(hash, manifest.file_hash_alg());
                 if hash.verify(&bytes).is_err() {
+                    self.metrics.invalid_crls += 1;
                     warn!("{}: file has wrong hash.", crl_uri);
                     return Ok(None)
                 }
                 crl_bytes = Some(bytes);
             }
-            else if file.ends_with(b".crl") {
-                warn!(
-                    "{}: manifest contains unexpected CRLs.",
-                    self.cert.rpki_manifest()
-                );
-                return Ok(None)
-            }
         }
         let crl_bytes = match crl_bytes {
             Some(some) => some,
             None => {
+                self.metrics.invalid_crls += 1;
                 warn!(
                     "{}: CRL not listed on manifest.",
                     self.cert.rpki_manifest()
@@ -1028,16 +930,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         let mut crl = match Crl::decode(crl_bytes.clone()) {
             Ok(crl) => crl,
             Err(_) => {
+                self.metrics.invalid_crls += 1;
                 warn!("{}: failed to decode.", crl_uri);
                 return Ok(None)
             }
         };
         if crl.validate(self.cert.cert().subject_public_key_info()).is_err() {
+            self.metrics.invalid_crls += 1;
             warn!("{}: failed to validate.", crl_uri);
             return Ok(None)
         }
         if crl.is_stale() {
-            //self.metrics.inc_stale_count();
+            self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
                     warn!("{}: stale CRL.", crl_uri);
@@ -1057,6 +961,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         // Finally: has the manifest’s cert been revoked?
         if crl.contains(ee_cert.serial_number()) {
+            self.metrics.invalid_manifests += 1;
             warn!(
                 "{}: certificate has been revoked.",
                 self.cert.rpki_manifest()
@@ -1066,6 +971,56 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         // Phew: All good.
         Ok(Some((crl_uri, crl, crl_bytes)))
+    }
+
+    /// Process the stored version of the publication point.
+    ///
+    /// Validates the objects of the currently stored version of the
+    /// publication point if there is one.
+    ///
+    /// Returns a list of all child CAs of this publication point.
+    fn process_stored(
+        mut self,
+        mut store: StoredPoint,
+        metrics: &mut RunMetrics,
+    ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
+        let manifest = match store.take_manifest() {
+            Some(manifest) => manifest,
+            None => {
+                // We don’t seem to have this point in the store either.
+                // Warn and return.
+                warn!(
+                    "{}: No valid manifest found.",
+                    self.cert.rpki_manifest()
+                );
+                self.metrics.missing_manifests += 1;
+                self.reject_point(metrics);
+                return Ok(Vec::new())
+            }
+        };
+
+        let mut manifest = match self.validate_stored_manifest(manifest) {
+            Ok(manifest) => manifest,
+            Err(_) => {
+                self.reject_point(metrics);
+                return Ok(Vec::new())
+            }
+        };
+
+        let mut ca_tasks = Vec::new();
+        for object in &mut store {
+            let object = object?;
+            if !self.process_object(
+                object.uri(), object.content().clone(),
+                &mut manifest, &mut ca_tasks
+            )? {
+                self.reject_point(metrics);
+                return Ok(Vec::new())
+            }
+        }
+
+        self.accept_point(manifest, metrics);
+        Ok(ca_tasks)
     }
 
     /// Tries to validate a stored manifest.
@@ -1183,111 +1138,46 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok(ValidPointManifest {
             ee_cert, content, crl_uri, crl,
             manifest_bytes: stored_manifest.manifest().clone(),
-            crl_bytes: stored_manifest.crl().clone()
+            crl_bytes: stored_manifest.crl().clone(),
+            metrics: Default::default(),
         })
     }
-}
 
+    // XXX Check metrics generation and concentrate at one central point.
 
-//------------ ValidPubPoint -------------------------------------------------
-
-/// Processing of a publication point that is known to be valid.
-struct ValidPubPoint<'a, P: ProcessRun> {
-    /// A reference to the publication point.
-    point: PubPoint<'a, P>,
-
-    /// The valid manifest of the point.
-    manifest: ValidPointManifest,
-
-    /// The list of child CA processing tasks we want to return eventually.
-    child_cas: Vec<CaTask<P::PubPoint>>,
-}
-
-impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
-    /// Creates a new valid publication point from point and manifest.
-    pub fn new(point: PubPoint<'a, P>, manifest: ValidPointManifest) -> Self {
-        ValidPubPoint {
-            point, manifest,
-            child_cas: Vec::new()
-        }
+    fn accept_point(
+        mut self,
+        manifest: ValidPointManifest,
+        metrics: &mut RunMetrics,
+    ) {
+        self.metrics.valid_points += 1;
+        self.metrics += manifest.metrics;
+        self.apply_metrics(metrics);
+        self.processor.commit();
     }
 
-    /// Processes the point returning the child CAs.
-    pub fn process(
+    fn reject_point(
         mut self,
         metrics: &mut RunMetrics,
-    ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
-        let repository_index = match self.point.repository_index {
-            Some(index) => index,
-            None => {
-                let index = metrics.repository_index(
-                    self.point.cert, self.point.store.is_rrdp()
-                );
-                self.point.repository_index = Some(index);
-                index
-            }
-        };
-        self.point.processor.repository_index(repository_index);
-
-        if self._process()? {
-            self.point.processor.commit();
-            self.point.metrics.valid_points += 1;
-        }
-        else {
-            self.point.processor.cancel(&self.point.cert);
-            self.child_cas = Vec::new();
-            self.point.metrics = PublicationMetrics::default();
-            self.point.metrics.rejected_points += 1;
-        }
-
-        metrics.apply(
-            &self.point.metrics, repository_index, self.point.cert.tal
-        );
-        Ok(self.child_cas)
+    ) {
+        self.metrics.rejected_points += 1;
+        self.apply_metrics(metrics);
+        self.processor.cancel(self.cert);
     }
 
-    /// Processes the point returning whether the point was accepted.
-    ///
-    /// If the processor votes to abort processing of the entire point, this
-    /// will return `Ok(false)`.
-    pub fn _process(
+    fn apply_metrics(
         &mut self,
-    ) -> Result<bool, Failed> {
-        for item in self.manifest.content.iter() {
-            let (file, hash) = item.into_pair();
-            let file = match str_from_ascii(&file) {
-                Ok(file) => file,
-                Err(_) => {
-                    warn!(
-                        "{}: illegal file name {} in manifest.",
-                        self.point.cert.rpki_manifest(),
-                        String::from_utf8_lossy(&file)
-                    );
-                    return Ok(false)
-                }
-            };
-            let uri = match self.point.cert.ca_repository().join(
-                file.as_ref()
-            ) {
-                Ok(uri) => uri,
-                Err(_) => {
-                    warn!(
-                        "{}: illegal file name {} in manifest.",
-                        self.point.cert.rpki_manifest(),
-                        file
-                    );
-                    return Ok(false)
-                }
-            };
-            let hash = ManifestHash::new(
-                hash, self.manifest.content.file_hash_alg()
-            );
-            if !self.process_object(uri, file, hash)? {
-                return Ok(false)
-            }
-        }
-
-        Ok(true)
+        metrics: &mut RunMetrics,
+    ) {
+        let repository_index = self.repository_index.unwrap_or_else(|| {
+            metrics.repository_index(self.cert)
+        });
+        self.processor.repository_index(repository_index);
+        metrics.apply(
+            &self.metrics,
+            repository_index,
+            self.cert.tal
+        );
     }
 
     /// Processes a single object.
@@ -1296,45 +1186,32 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
     /// publication point should be disregarded.
     fn process_object(
         &mut self,
-        uri: uri::Rsync, file: &str, hash: ManifestHash,
+        uri: &uri::Rsync,
+        content: Bytes,
+        manifest: &mut ValidPointManifest,
+        ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<bool, Failed> {
-        let object = match self.point.store.load_object(
-            self.point.cert.rpki_manifest(), file
-        )? {
-            Some(bytes) => bytes,
-            None => {
-                warn!("{}: failed to load.", uri);
-                return Ok(false)
-            }
-        };
-
-        // This shouldn’t actually happen?
-        if object.verify_hash(&hash).is_err() {
-            warn!("{}: file has wrong manifest hash.", uri);
-            return Ok(false)
-        }
-
-        if !self.point.processor.want(&uri)? {
+        if !self.processor.want(uri)? {
             return Ok(true)
         }
 
         if uri.ends_with(".cer") {
-            self.process_cer(uri, object)?;
+            self.process_cer(uri, content, manifest, ca_task)?;
         }
         else if uri.ends_with(".roa") {
-            self.process_roa(uri, object)?;
+            self.process_roa(uri, content, manifest)?;
         }
         else if uri.ends_with(".crl") {
-            if uri != self.manifest.crl_uri {
+            if *uri != manifest.crl_uri {
                 warn!("{}: stray CRL.", uri);
-                self.point.metrics.stray_crls += 1;
+                manifest.metrics.stray_crls += 1;
             }
         }
         else if uri.ends_with(".gbr") {
-            self.process_gbr(uri, object)?;
+            self.process_gbr(uri, content, manifest)?;
         }
         else {
-            self.point.metrics.others += 1;
+            manifest.metrics.others += 1;
             warn!("{}: unknown object type.", uri);
         }
         Ok(true)
@@ -1342,73 +1219,79 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
     /// Processes a certificate object.
     fn process_cer(
-        &mut self, uri: uri::Rsync, object: store::StoredObject,
+        &mut self,
+        uri: &uri::Rsync,
+        content: Bytes,
+        manifest: &mut ValidPointManifest,
+        ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<(), Failed> {
-        let cert = match Cert::decode(object.into_content()) {
+        let cert = match Cert::decode(content) {
             Ok(cert) => cert,
             Err(_) => {
                 warn!("{}: failed to decode.", uri);
-                self.point.metrics.invalid_certs += 1;
+                manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
 
         if cert.key_usage() == KeyUsage::Ca {
-            self.process_ca_cer(uri, cert)
+            self.process_ca_cer(uri, cert, manifest, ca_task)
         }
         else {
-            self.process_ee_cer(uri, cert)
+            self.process_ee_cer(uri, cert, manifest)
         }
     }
 
     /// Processes a CA certificate.
     #[allow(clippy::too_many_arguments)]
     fn process_ca_cer(
-        &mut self, uri: uri::Rsync, cert: Cert,
+        &mut self, uri: &uri::Rsync, cert: Cert,
+        manifest: &mut ValidPointManifest,
+        ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<(), Failed> {
-        if self.point.cert.check_loop(&cert).is_err() {
+        if self.cert.check_loop(&cert).is_err() {
             warn!("{}: certificate loop detected.", uri);
-            self.point.metrics.invalid_certs += 1;
+            manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
         let cert = match cert.validate_ca(
-            self.point.cert.cert(), self.point.run.validation.strict
+            self.cert.cert(), self.run.validation.strict
         ) {
             Ok(cert) => cert,
             Err(_) => {
                 warn!("{}: CA certificate failed to validate.", uri);
-                self.point.metrics.invalid_certs += 1;
+                manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
-        if self.check_crl(&uri, &cert).is_err() {
-            self.point.metrics.invalid_certs += 1;
+        if manifest.check_crl(uri, &cert).is_err() {
+            manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
 
         let cert = match CaCert::chain(
-            &self.point.cert, uri.clone(), cert
+            self.cert, uri.clone(), cert
         ) {
             Ok(cert) => cert,
             Err(_) => {
-                self.point.metrics.invalid_certs += 1;
+                manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
 
-        self.point.metrics.valid_ca_certs += 1;
+        manifest.metrics.valid_ca_certs += 1;
 
-        let mut processor = match self.point.processor.process_ca(
-            &uri, &cert
+        let mut processor = match self.processor.process_ca(
+            uri, &cert
         )? {
             Some(processor) => processor,
             None => return Ok(())
         };
-        processor.update_refresh(cert.cert.validity().not_after());
+        processor.update_refresh(cert.cert().validity().not_after());
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
-        let defer = match self.point.run.collector.as_ref() {
+        let defer = match self.run.collector.as_ref() {
             Some(collector) => !collector.was_updated(&cert),
             None => false,
         };
@@ -1418,10 +1301,10 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             None
         }
         else {
-            self.point.repository_index
+            self.repository_index
         };
 
-        self.child_cas.push(CaTask {
+        ca_task.push(CaTask {
             cert, processor, repository_index, defer
         });
         Ok(())
@@ -1429,49 +1312,51 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
     /// Processes an EE certificate.
     fn process_ee_cer(
-        &mut self, uri: uri::Rsync, cert: Cert,
+        &mut self, uri: &uri::Rsync, cert: Cert,
+        manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
         if cert.validate_router(
-            &self.point.cert.cert, self.point.run.validation.strict
+            self.cert.cert(), self.run.validation.strict
         ).is_err() {
             warn!("{}: router certificate failed to validate.", uri);
-            self.point.metrics.invalid_certs += 1;
+            manifest.metrics.invalid_certs += 1;
             return Ok(())
         };
-        if self.check_crl(&uri, &cert).is_err() {
-            self.point.metrics.invalid_certs += 1;
+        if manifest.check_crl(uri, &cert).is_err() {
+            manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
-        self.point.metrics.valid_ee_certs += 1;
-        self.point.processor.process_ee_cert(&uri, cert)?;
+        manifest.metrics.valid_ee_certs += 1;
+        self.processor.process_ee_cert(uri, cert)?;
         Ok(())
     }
 
     /// Processes a ROA object.
     fn process_roa(
-        &mut self, uri: uri::Rsync, object: store::StoredObject,
+        &mut self, uri: &uri::Rsync, content: Bytes,
+        manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
         let roa = match Roa::decode(
-            object.into_content(), self.point.run.validation.strict
+            content, self.run.validation.strict
         ) {
             Ok(roa) => roa,
             Err(_) => {
                 warn!("{}: decoding failed.", uri);
-                self.point.metrics.invalid_roas += 1;
+                manifest.metrics.invalid_roas += 1;
                 return Ok(())
             }
         };
         match roa.process(
-            &self.point.cert.cert,
-            self.point.run.validation.strict,
-            |cert| self.check_crl(&uri, &cert)
+            self.cert.cert(),
+            self.run.validation.strict,
+            |cert| manifest.check_crl(uri, cert)
         ) {
             Ok((cert, route)) => {
-                self.point.metrics.valid_roas += 1;
-                self.point.processor.process_roa(&uri, cert, route)?
+                manifest.metrics.valid_roas += 1;
+                self.processor.process_roa(uri, cert, route)?
             }
             Err(_) => {
-                self.point.metrics.invalid_roas += 1;
+                manifest.metrics.invalid_roas += 1;
                 warn!("{}: validation failed.", uri)
             }
         }
@@ -1480,35 +1365,72 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
 
     /// Processes a Ghostbuster Record.
     fn process_gbr(
-        &mut self, uri: uri::Rsync, object: store::StoredObject,
+        &mut self, uri: &uri::Rsync, content: Bytes,
+        manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
         let obj = match SignedObject::decode(
-            object.into_content(), self.point.run.validation.strict
+            content, self.run.validation.strict
         ) {
             Ok(obj) => obj,
             Err(_) => {
                 warn!("{}: decoding failed.", uri);
-                self.point.metrics.invalid_gbrs += 1;
+                manifest.metrics.invalid_gbrs += 1;
                 return Ok(())
             }
         };
         match obj.process(
-            &self.point.cert.cert,
-            self.point.run.validation.strict,
-            |cert| self.check_crl(&uri, &cert)
+            self.cert.cert(),
+            self.run.validation.strict,
+            |cert| manifest.check_crl(uri, cert)
         ) {
             Ok((cert, content)) => {
-                self.point.metrics.valid_gbrs += 1;
-                self.point.processor.process_gbr(&uri, cert, content)?
+                manifest.metrics.valid_gbrs += 1;
+                self.processor.process_gbr(uri, cert, content)?
             }
             Err(_) => {
-                self.point.metrics.invalid_gbrs += 1;
+                manifest.metrics.invalid_gbrs += 1;
                 warn!("{}: validation failed.", uri)
             }
         }
         Ok(())
     }
+}
 
+
+//------------ ValidPointManifest --------------------------------------------
+
+/// All information from a validated manifest.
+#[derive(Clone, Debug)]
+struct ValidPointManifest {
+    /// The EE certificate the manifest was signed with.
+    ee_cert: ResourceCert,
+
+    /// The payload of the manifest.
+    content: ManifestContent,
+
+    /// The CRL distribution point URI of the manifest.
+    ///
+    /// This is here separately because it may be `None` in a `ResourceCert`
+    /// but can’t be in a valid CA cert.
+    crl_uri: uri::Rsync,
+
+    /// The CRL.
+    crl: Crl,
+
+    /// The raw bytes of the manifest.
+    manifest_bytes: Bytes,
+
+    /// The raw bytes of the CRL.
+    crl_bytes: Bytes,
+
+    /// The publication metrics collected while processing the manifest.
+    ///
+    /// We keep them here separatedly, so we can just zero them out if
+    /// processor decides to drop the publication point.
+    metrics: PublicationMetrics,
+}
+
+impl ValidPointManifest {
     /// Checks whether `cert` has been revoked.
     fn check_crl(
         &self, uri: &uri::Rsync, cert: &Cert
@@ -1521,12 +1443,12 @@ impl<'a, P: ProcessRun> ValidPubPoint<'a, P> {
             }
         };
 
-        if *crl_uri != self.manifest.crl_uri {
+        if *crl_uri != self.crl_uri {
             warn!("{}: certifacte's CRL differs from manifest's.", uri);
             return Err(ValidationError)
         }
 
-        if self.manifest.crl.contains(cert.serial_number()) {
+        if self.crl.contains(cert.serial_number()) {
             warn!("{}: certificate has been revoked.", uri);
             return Err(ValidationError)
         }
@@ -1620,6 +1542,7 @@ pub struct CaCert {
     parent: Option<Arc<CaCert>>,
 
     /// The index of the TAL in the metrics.
+    pub(crate) // XXX
     tal: usize,
 
     /// The combined validity of the certificate.
@@ -1740,6 +1663,7 @@ impl CaCert {
     ///
     /// This is just a quick check and may report a switch when in fact there
     /// isn’t one.
+    pub(crate) // XXX
     fn repository_switch(&self) -> bool {
         let parent = match self.parent.as_ref() {
             Some(parent) => parent,
@@ -1756,76 +1680,6 @@ impl CaCert {
         }
     }
 } 
-
-
-//------------ PointManifest -------------------------------------------------
-
-/// The various results of getting manifest from collector and store.
-// XXX Clippy complains that ValidPointManifest is 1160 bytes. I _think_ this
-//     is fine here as PointManifest is just a helper type to make things
-//     easier and everything eventually turns into a ValidPointManifest, but
-//     perhaps some restructuring might be good, anyway.
-#[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug)]
-enum PointManifest {
-    /// The manifest has been loaded from store but has not been verified.
-    Unverified(StoredManifest),
-
-    /// The manifest has been loaded and has been validated.
-    Valid(ValidPointManifest),
-
-    /// The manifest has not been found anywhere.
-    NotFound,
-}
-
-impl From<StoredManifest> for PointManifest {
-    fn from(src: StoredManifest) -> Self {
-        PointManifest::Unverified(src)
-    }
-}
-
-impl From<Option<StoredManifest>> for PointManifest {
-    fn from(src: Option<StoredManifest>) -> Self {
-        match src {
-            Some(manifest) => PointManifest::Unverified(manifest),
-            None => PointManifest::NotFound
-        }
-    }
-}
-
-impl From<ValidPointManifest> for PointManifest {
-    fn from(src: ValidPointManifest) -> PointManifest {
-        PointManifest::Valid(src)
-    }
-}
-
-
-//------------ ValidPointManifest --------------------------------------------
-
-/// All information from a validated manifest.
-#[derive(Clone, Debug)]
-struct ValidPointManifest {
-    /// The EE certificate the manifest was signed with.
-    ee_cert: ResourceCert,
-
-    /// The payload of the manifest.
-    content: ManifestContent,
-
-    /// The CRL distribution point URI of the manifest.
-    ///
-    /// This is here separately because it may be `None` in a `ResourceCert`
-    /// but can’t be in a valid CA cert.
-    crl_uri: uri::Rsync,
-
-    /// The CRL.
-    crl: Crl,
-
-    /// The raw bytes of the manifest.
-    manifest_bytes: Bytes,
-
-    /// The raw bytes of the CRL.
-    crl_bytes: Bytes,
-}
 
 
 //------------ RunMetrics ----------------------------------------------------
@@ -1863,15 +1717,12 @@ impl RunMetrics {
     /// Returns the index of a repository in the metrics.
     ///
     /// Adds a new repository if necessary.
-    pub fn repository_index(&self, cert: &CaCert, rrdp: bool) -> usize {
-        let uri = cert.rpki_notify().and_then(|uri| {
-            if rrdp {
-                Some(Cow::Borrowed(uri.as_str()))
-            }
-            else {
-                None
-            }
-        }).unwrap_or_else(|| cert.ca_repository.canonical_module());
+    pub fn repository_index(&self, cert: &CaCert) -> usize {
+        let uri = cert.rpki_notify().map(|uri| {
+            Cow::Borrowed(uri.as_str())
+        }).unwrap_or_else(|| {
+            cert.ca_repository.canonical_module()
+        });
 
         let mut repository_indexes = self.repository_indexes.lock().unwrap();
         if let Some(index) = repository_indexes.get(uri.as_ref()) {
@@ -2036,6 +1887,16 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         let _ = (uri, cert, content);
         Ok(())
     }
+
+    /// Restart processing with an empty data set.
+    ///
+    /// The method is called if processing has to switch to a different
+    /// object set for a publication point. An implementation must drop all
+    /// data collected so far and start with an empty set again.
+    ///
+    /// The method does not indicate whether processing has succeeded or
+    /// failed.
+    fn restart(&mut self) -> Result<(), Failed>;
 
     /// Completes processing of the CA.
     ///

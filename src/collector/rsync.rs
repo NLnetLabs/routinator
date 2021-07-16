@@ -29,7 +29,8 @@ use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
-use crate::utils::UriExt;
+use crate::utils::fatal;
+use crate::utils::uri::UriExt;
 
 
 //------------ Collector -----------------------------------------------------
@@ -114,120 +115,6 @@ impl Collector {
     /// Start a validation run on the collector.
     pub fn start(&self) -> Run {
         Run::new(self)
-    }
-
-    /// Cleans the collector only keeping the modules included in `retain`.
-    //
-    //  This currently is super agressive, deleting everyting that it doesn’t
-    //  like.
-    pub fn cleanup(&self, retain: &ModuleSet) {
-        if self.command.is_none() {
-            return
-        }
-
-        let dir = match fs::read_dir(&self.working_dir.base) {
-            Ok(dir) => dir,
-            Err(err) => {
-                error!(
-                    "Failed to read rsync working directory: {}",
-                    err
-                );
-                return
-            }
-        };
-
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    error!(
-                        "Failed to iterate over rsync directory: {}",
-                        err
-                    );
-                    return
-                }
-            };
-
-            let keep = match entry.file_name().into_string() {
-                Ok(name) => {
-                    match retain.authorities.get(&name) {
-                        Some(modules) => self.cleanup_host(&entry, modules),
-                        None => false,
-                    }
-                }
-                Err(_) => false
-            };
-
-            if !keep {
-                if let Err(err) = fs::remove_dir_all(entry.path()) {
-                    info!(
-                        "Failed to remove unused rsync working dir '{}': {}",
-                        entry.path().display(), err
-                    );
-                }
-            }
-        }
-    }
-
-    /// Removes all modules from the directory that are not in `retain`.
-    ///
-    /// Returns whether the host should be kept or can be deleted, too.
-    fn cleanup_host(
-        &self, entry: &fs::DirEntry, retain: &HashSet<String>
-    ) -> bool {
-        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-            return false
-        }
-
-        let path = entry.path();
-        let dir = match fs::read_dir(&path) {
-            Ok(dir) => dir,
-            Err(err) => {
-                info!(
-                    "Failed to read directory {}: {}. Skipping.",
-                    path.display(), err
-                );
-                return false
-            }
-        };
-
-        let mut keep_host = false;
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    info!(
-                        "Failed to iterate over directory {}: {}",
-                        path.display(), err
-                    );
-                    return false
-                }
-            };
-
-            let keep = match entry.file_name().into_string() {
-                Ok(name) => {
-                    if retain.contains(&name) {
-                        keep_host = true;
-                        true
-                    }
-                    else {
-                        false
-                    }
-                }
-                Err(_) => false
-            };
-
-            if !keep {
-                if let Err(err) = fs::remove_dir_all(entry.path()) {
-                    info!(
-                        "Failed to remove unused rsync dir '{}': {}",
-                        entry.path().display(), err
-                    );
-                }
-            }
-        }
-
-        keep_host
     }
 
     /// Dumps the content of the rsync collector.
@@ -443,6 +330,76 @@ impl<'a> Run<'a> {
                 None
             }
         }
+    }
+
+    /// Cleans the collector only keeping the modules included in `retain`.
+    //
+    //  This currently is super agressive, deleting everyting that it doesn’t
+    //  like.
+    pub fn cleanup(&self, retain: &mut ModuleSet) -> Result<(), Failed> {
+        if self.collector.command.is_none() {
+            return Ok(())
+        }
+
+        // Add all modules we’ve used during this run to retain.
+        for module in self.updated.read().unwrap().iter() {
+            retain.add_from_uri(&module.to_uri());
+        }
+
+        for entry in fatal::read_dir(
+            &self.collector.working_dir.base
+        )? {
+            let entry = entry?;
+            let keep = match entry.file_name().to_str() {
+                Some(name) => {
+                    match retain.authorities.get(name) {
+                        Some(modules) => self.cleanup_host(&entry, modules)?,
+                        None => false,
+                    }
+                }
+                None => false
+            };
+
+            if !keep {
+                fatal::remove_dir_all(entry.path())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Removes all modules from the directory that are not in `retain`.
+    ///
+    /// Returns whether the host directory should be kept or can be deleted,
+    /// too.
+    fn cleanup_host(
+        &self, entry: &fatal::DirEntry, retain: &HashSet<String>
+    ) -> Result<bool, Failed> {
+        if entry.is_file() {
+            fatal::remove_file(entry.path())?;
+            return Ok(false)
+        }
+        else if !entry.is_dir() {
+            return Ok(false)
+        }
+
+        let mut keep_host = false;
+        for entry in fatal::read_dir(entry.path())? {
+            let entry = entry?;
+            let keep = match entry.file_name().to_str() {
+                Some(name) => retain.contains(name),
+                None => false
+            };
+
+            if !keep {
+                fatal::remove_dir_all(entry.path())?;
+            }
+            else {
+                keep_host = true;
+            }
+        }
+
+        Ok(keep_host)
     }
 
     /// Finishes the validation run.
