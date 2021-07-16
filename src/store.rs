@@ -34,7 +34,8 @@
 //! Within each repository, all the objects of a publication point are stored
 //! in a single file. This file is named using the manifest’s signedObject
 //! URI (i.e., where the manifest would be found if the rsync repository
-//! would be used). The file contains information about the manifest, the CRL,
+//! would be used). The first component of this path is the URI scheme, i.e.,
+//! `rsync`. The file contains information about the manifest, the CRL,
 //! and each object listed on the manifest.
 
 use std::{error, fs, io};
@@ -105,6 +106,8 @@ impl Store {
     /// Ensures that the base directory exists and creates it of necessary.
     ///
     /// The function is called implicitly by [`new`][Self::new].
+    //  (Or, well, not really, but they both only call `create_base_dir`, so
+    //   from a user persepective it does.)
     pub fn init(config: &Config) -> Result<(), Failed> {
         Self::create_base_dir(config)?;
         Ok(())
@@ -717,10 +720,6 @@ impl<'a> StoredPoint<'a> {
 
     pub fn is_rrdp(&self) -> bool {
         self.is_rrdp
-    }
-
-    pub fn exisits(&self) -> bool {
-        self.manifest.is_some()
     }
 
     pub fn manifest(&self) -> Option<&StoredManifest> {

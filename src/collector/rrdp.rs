@@ -1,4 +1,23 @@
 //! Local repository copies synchronized with RRDP.
+//!
+//! The RRDP collector uses the file system to store its data.  For each
+//! hostname serving an RRDP repository, there is directory. Within these
+//! directories, each repository has its own directory based on the SHA-256
+//! hash of the full rpkiNotify URI. Within this directory, all objects
+//! published by the RRDP server are stored in a (relative) path constructed
+//! from all the components of their rsync URI. The first of these is indeed
+//! `rsync`.
+//!
+//! During updates, all newly published objects are stored in a temporary
+//! tree alongside the actual object tree. The files are also stored in paths
+//! build from their rsync URI, but the first component `rsync` is replaced
+//! by `tmp`.
+//!
+//! For each repository, the state at last update is stored in a file named
+//! `state.bin` place in the repository directory. This file is removed before
+//! any update is attempted to mark the repository as ‘in flux.’ Similarly,
+//! if this file is not found before an update is started, the repository is
+//! considered not present even if there are actually files.
 
 use std::{cmp, error, fmt, fs, io};
 use std::collections::{HashMap, HashSet};
@@ -284,7 +303,7 @@ pub struct Run<'a> {
     ///
     /// The value in the map is a mutex that is used to synchronize competing
     /// attempts to update the module. Only the thread that has the mutex is
-    /// allowed to actually run rsync.
+    /// allowed to actually update.
     running: RwLock<HashMap<uri::Https, Arc<Mutex<()>>>>,
 
     /// The server metrics.
@@ -583,7 +602,7 @@ impl Repository {
 
         let is_current = match state.as_ref() {
             Some(state) => !state.is_expired(),
-            None => true
+            None => false,
         };
         let best_before = state.as_ref().map(|state| state.best_before());
 
@@ -1272,7 +1291,7 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(false);
+        builder = builder.gzip(true);
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);
@@ -1672,9 +1691,6 @@ impl Notification {
 //------------ RepositoryState -----------------------------------------------
 
 /// The current state of an RRDP repository.
-///
-/// A value of this type is stored under the empty key with each repository
-/// and is updated on each … update.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct RepositoryState {
     /// The rpkiNotify URI of the repository.
@@ -2027,6 +2043,8 @@ impl<R> HashRead<R> {
 
     /// Converts the reader into the hash.
     pub fn into_hash(self) -> rrdp::Hash {
+        // Unwrap should be safe: This can only fail if the slice has the
+        // wrong length.
         rrdp::Hash::try_from(self.context.finish()).unwrap()
     }
 }

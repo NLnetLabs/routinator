@@ -699,9 +699,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // The manifest is fine, so we can now look at the objects. The
         // objects are fine if they are present and match the hash. If they
         // don’t we have to cancel the update. We also validate them while we
-        // are at it. If they don’t validate, they still count as fine,
-        // though, for the point update.
-        let mut res = Vec::new();
+        // are at it. This also collects all the child CAs that need
+        // processing later on in `ca_tasks`. 
+        //
+        // However, the processor can decide it doesn’t like the publication
+        // point at all. This is not an error -- the publication point is
+        // correct from a store perspective --, but we must not process te
+        // collected `ca_tasks`. We keep track of this through `point_ok` and,
+        // if that happens to end up being `false` return an empty list to
+        // signal that the publication point was processed successfully but
+        // shouldn’t be considered further.
+        let mut ca_tasks = Vec::new();
         let mut items = collected.content.iter();
         let mut point_ok = true;
         let update_result = store.update(
@@ -753,7 +761,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
                 if !self.process_object(
                     &uri, content.clone(),
-                    &mut collected, &mut res
+                    &mut collected, &mut ca_tasks
                 )? {
                     point_ok = false;
                 }
@@ -768,7 +776,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 // we got.
                 if point_ok {
                     self.accept_point(collected, metrics);
-                    Ok(Ok(res))
+                    Ok(Ok(ca_tasks))
                 }
                 else {
                     self.reject_point(metrics);
@@ -999,11 +1007,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
-        let mut res = Vec::new();
+        let mut ca_tasks = Vec::new();
         for object in &mut store {
             let object = object?;
             if !self.process_object(
-                object.uri(), object.content().clone(), &mut manifest, &mut res
+                object.uri(), object.content().clone(),
+                &mut manifest, &mut ca_tasks
             )? {
                 self.reject_point(metrics);
                 return Ok(Vec::new())
@@ -1011,7 +1020,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         self.accept_point(manifest, metrics);
-        Ok(res)
+        Ok(ca_tasks)
     }
 
     /// Tries to validate a stored manifest.

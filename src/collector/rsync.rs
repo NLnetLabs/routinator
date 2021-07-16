@@ -370,7 +370,8 @@ impl<'a> Run<'a> {
 
     /// Removes all modules from the directory that are not in `retain`.
     ///
-    /// Returns whether the host should be kept or can be deleted, too.
+    /// Returns whether the host directory should be kept or can be deleted,
+    /// too.
     fn cleanup_host(
         &self, entry: &fatal::DirEntry, retain: &HashSet<String>
     ) -> Result<bool, Failed> {
