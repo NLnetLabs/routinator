@@ -17,7 +17,11 @@ pub fn handle_get(
     req: &Request<Body>,
     history: &SharedHistory,
 ) -> Option<Response<Body>> {
-    let format = OutputFormat::from_path(req.uri().path())?;
+    let format = match req.uri().path() {
+        "/api/v1/json" => OutputFormat::Json,
+        "/api/v1/jsonext" => OutputFormat::ExtendedJson,
+        path => OutputFormat::from_path(path)?,
+    };
 
     let (session, serial, created, snapshot, metrics) = {
         let history = history.read();
