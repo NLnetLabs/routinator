@@ -727,12 +727,15 @@ impl PayloadHistory {
 //------------ PayloadSnapshot -----------------------------------------------
 
 /// The complete set of validated payload data.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PayloadSnapshot {
     /// A list of route origins.
     ///
     /// This list contains an ordered sequence of unique origins.
     origins: Vec<(RouteOrigin, OriginInfo)>,
+
+    /// The time when this snapshot was created.
+    created: DateTime<Utc>,
 
     /// The time when this snapshot needs to be refreshed at the latest.
     refresh: Option<Time>,
@@ -764,6 +767,11 @@ impl PayloadSnapshot {
         ).into_snapshot()
     }
 
+    /// Returns when this snapshot was created.
+    pub fn created(&self) -> DateTime<Utc> {
+        self.created
+    }
+
     /// Returns when this snapshot should be refreshed at the latest.
     ///
     /// Returns `None` if there is no known refresh time.
@@ -785,7 +793,21 @@ impl PayloadSnapshot {
     fn to_builder(&self) -> SnapshotBuilder {
         SnapshotBuilder {
             origins: self.origins.iter().cloned().collect(),
-            refresh: self.refresh
+            created: self.created,
+            refresh: self.refresh,
+        }
+    }
+}
+
+
+//--- Default
+
+impl Default for PayloadSnapshot {
+    fn default() -> Self {
+        PayloadSnapshot {
+            origins: Vec::new(),
+            created: Utc::now(),
+            refresh: None
         }
     }
 }
@@ -836,10 +858,13 @@ impl Iterator for SnapshotVrpIter {
 //------------ SnapshotBuilder -----------------------------------------------
 
 /// The representation of a snapshot during history updates.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct SnapshotBuilder {
     /// A set of route origins.
     origins: HashMap<RouteOrigin, OriginInfo>,
+
+    /// The time when this snapshot was created.
+    created: DateTime<Utc>,
 
     /// The time when this snapshot needs to be refreshed at the latest.
     refresh: Option<Time>,
@@ -861,7 +886,11 @@ impl SnapshotBuilder {
         metrics: &mut Metrics,
         unsafe_vrps: FilterPolicy
     ) -> Self {
-        let mut res = Self::default();
+        let mut res = SnapshotBuilder {
+            origins: HashMap::new(),
+            created: metrics.time,
+            refresh: None
+        };
         let rejected = report.rejected.finalize();
 
         // Process all publication points from the report.
@@ -946,7 +975,8 @@ impl SnapshotBuilder {
         origins.sort_by(|left, right| left.0.cmp(&right.0));
         PayloadSnapshot {
             origins,
-            refresh: self.refresh
+            created: self.created,
+            refresh: self.refresh,
         }
     }
 }

@@ -45,8 +45,8 @@ use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
+use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::dump::DumpRegistry;
-use crate::utils::http::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
 
