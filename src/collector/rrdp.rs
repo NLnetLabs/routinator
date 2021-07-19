@@ -1538,7 +1538,7 @@ impl HttpResponse {
         if let Err(err) = fs::create_dir_all(&parent) {
             warn!(
                 "Cannot keep HTTP response; \
-                creating director {} failed: {}",
+                creating directory {} failed: {}",
                 parent.display(), err
             );
             return Err(Failed)
