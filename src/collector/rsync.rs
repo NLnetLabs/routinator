@@ -120,6 +120,7 @@ impl Collector {
     /// Dumps the content of the rsync collector.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         let target = dir.join("rsync");
+        debug!("Dumping rsync collector content to {}", target.display());
 
         if let Err(err) = fs::remove_dir_all(&target) {
             if err.kind() != io::ErrorKind::NotFound {
@@ -130,7 +131,9 @@ impl Collector {
                 return Err(Failed)
             }
         }
-        self.dump_dir(&self.working_dir.base, &target)
+        self.dump_dir(&self.working_dir.base, &target)?;
+        debug!("Rsync collector dump complete.");
+        Ok(())
     }
 
     /// Recursively copies the content of `source` to `target`.

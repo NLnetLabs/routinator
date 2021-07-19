@@ -44,7 +44,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
-use log::{error, warn};
+use log::{debug, error, warn};
 use rand::random;
 use rpki::repository::Cert;
 use rpki::repository::crypto::digest::DigestAlgorithm;
@@ -127,7 +127,8 @@ impl Store {
 
     /// Dumps the content of the store.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        let dir = dir.join("stored");
+        let dir = dir.join("store");
+        debug!("Dumping store content to {}", dir.display());
 
         if let Err(err) = fs::remove_dir_all(&dir) {
             if err.kind() != io::ErrorKind::NotFound {
@@ -143,6 +144,7 @@ impl Store {
         self.dump_tree(&self.rsync_repository_path(), &mut repos)?;
         self.dump_tree(&self.rrdp_repository_base(), &mut repos)?;
         self.dump_repository_json(repos)?;
+        debug!("Store dump complete.");
         Ok(())
     }
 

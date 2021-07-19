@@ -1387,7 +1387,7 @@ impl Dump {
 
     /// Prints the current configuration to stdout and exits.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let engine = Engine::new(process.config(), false)?;
+        let engine = Engine::new(process.config(), true)?;
         process.switch_logging(false, false)?;
         engine.dump(&self.output)?;
         Ok(())

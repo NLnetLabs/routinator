@@ -142,8 +142,9 @@ impl Collector {
     }
 
     /// Dumps the content of the RRDP collector.
-    #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        let dir = dir.join("rrdp");
+        debug!("Dumping RRDP collector content to {}", dir.display());
         let mut registry = DumpRegistry::new(dir.into());
         let mut states = HashMap::new();
         for entry in fatal::read_dir(&self.working_dir)? {
@@ -161,6 +162,7 @@ impl Collector {
             }
         }
         self.dump_repository_json(registry, states)?;
+        debug!("RRDP collector dump complete.");
         Ok(())
     }
 
@@ -181,7 +183,7 @@ impl Collector {
 
         fatal::create_dir_all(&target_path)?;
 
-        Self::dump_tree(&repo_path.join("rrdp"), &target_path)?;
+        Self::dump_tree(&repo_path.join("rsync"), &target_path)?;
 
         state_registry.insert(state.rpki_notify.clone(), state);
 
@@ -202,7 +204,7 @@ impl Collector {
             }
             else if entry.is_file() {
                 let target_path = target_path.join(entry.file_name());
-                fatal::create_dir_all(&target_path)?;
+                fatal::create_parent_all(&target_path)?;
                 if let Err(err) = fs::copy(entry.path(), &target_path) {
                     error!(
                         "Fatal: failed to copy {} to {}: {}",
