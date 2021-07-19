@@ -981,6 +981,16 @@ impl SnapshotBuilder {
     }
 }
 
+impl Default for SnapshotBuilder {
+    fn default() -> Self {
+        SnapshotBuilder {
+            origins: HashMap::new(),
+            created: Utc::now(),
+            refresh: None
+        }
+    }
+}
+
 
 //------------ AllVrpMetrics -------------------------------------------------
 
