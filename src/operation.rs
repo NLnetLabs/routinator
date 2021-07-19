@@ -246,7 +246,10 @@ impl Init {
             )
             .after_help(
                 "If none of --rir-tals, --rir-test-tals, or --tal is \
-                given, assumes --rir-tals."
+                given, assumes --rir-tals.\n
+                \n\
+                Additional global options are available. \
+                Please consult 'routinator --help' for those."
             );
 
         for tal in tals::BUNDLED_TALS {
@@ -482,6 +485,7 @@ impl Server {
                 .long("detach")
                 .help("Detach from the terminal")
             )
+            .after_help(AFTER_HELP)
         ))
     }
 
@@ -705,6 +709,7 @@ impl Vrps {
                 .multiple(true)
                 .number_of_values(1)
             )
+            .after_help(AFTER_HELP)
         )
     }
 
@@ -921,6 +926,7 @@ impl Validate {
                 .long("complete")
                 .help("Return an error status on incomplete update")
             )
+            .after_help(AFTER_HELP)
         )
     }
 
@@ -1162,6 +1168,7 @@ impl ValidateDocument {
                 .required(true)
                 .help("Path to the signature")
             )
+            .after_help(AFTER_HELP)
         )
     }
 
@@ -1283,6 +1290,7 @@ impl Update {
                 .long("complete")
                 .help("Return an error status on incomplete update")
             )
+            .after_help(AFTER_HELP)
         )
     }
 
@@ -1326,6 +1334,7 @@ impl PrintConfig {
         // config
         app.subcommand(Config::server_args(SubCommand::with_name("config")
             .about("Prints the current config and exits")
+            .after_help(AFTER_HELP)
         ))
     }
 
@@ -1368,6 +1377,7 @@ impl Dump {
                 .help("Output directory")
                 .takes_value(true)
             )
+            .after_help(AFTER_HELP)
         )
     }
 
@@ -1571,8 +1581,13 @@ impl SignalListener {
 }
 
 
-//------------ The Man Page --------------------------------------------------
+//------------ Constants -----------------------------------------------------
 
 /// The raw bytes of the manual page.
 const MAN_PAGE: &[u8] = include_bytes!("../doc/routinator.1");
+
+/// The after help message pointing to the main help.
+const AFTER_HELP: &str = 
+    "Additional global options are available. \
+    Please consult 'routinator --help' for those.";
 
