@@ -6,10 +6,19 @@ Breaking changes
 
 New
 
+* The start of a validation run is now logged as an info message.  ([#609])
+* A reference to the global help appears now at the end of a sub-command’s
+  help message. ([#607])
+
 Bug Fixes
+
+* Catch and log error output from rsync. ([#577])
 
 Other
 
+[#577]: https://github.com/NLnetLabs/routinator/pull/577
+[#607]: https://github.com/NLnetLabs/routinator/pull/607
+[#609]: https://github.com/NLnetLabs/routinator/pull/609
 
 
 ## 0.9.0 ‘Raptor Bash for Life’
