@@ -694,7 +694,9 @@ impl Config {
         }
 
         // rrdp_connect_timeout
-        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-connect-timeout"
+        )? {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
         }
 
