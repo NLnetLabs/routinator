@@ -619,6 +619,7 @@ impl Server {
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Failed> {
+        info!("Starting a validation run.");
         history.mark_update_start();
         let (report, metrics) = validation.process_origins()?;
         let must_notify = history.update(
