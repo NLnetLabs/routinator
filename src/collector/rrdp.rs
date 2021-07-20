@@ -51,14 +51,6 @@ use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
 
 
-///----------- Configuration Constants ---------------------------------------
-
-/// The default timeout for RRDP requests.
-///
-/// This is mentioned in the man page. If you change it, also change it there.
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
-
 //------------ Collector -----------------------------------------------------
 
 /// The local copy of RPKI repositories synchronized via RRDP.
@@ -1292,15 +1284,7 @@ impl HttpClient {
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.gzip(true);
-        match config.rrdp_timeout {
-            Some(Some(timeout)) => {
-                builder = builder.timeout(timeout);
-            }
-            Some(None) => { /* keep no timeout */ }
-            None => {
-                builder = builder.timeout(DEFAULT_TIMEOUT);
-            }
-        }
+        builder = builder.timeout(config.rrdp_timeout);
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
