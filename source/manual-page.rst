@@ -299,6 +299,12 @@ The available options are:
       The actual time is chosen at random between the refresh time and this
       value in order to spread out load on the rsync server.
 
+.. option:: --rrdp-max-delta-count=count
+
+      If the number of deltas necessary to update an RRDP repository is larger
+      than the value provided by this option, the snapshot is used instead. If
+      the option is missing, the default of 100 is used.
+
 .. option:: --rrdp-timeout=seconds
 
       Sets the timeout in seconds for any RRDP-related network operation, i.e.,
@@ -984,6 +990,11 @@ rsync-timeout
 
 disable-rrdp
       A boolean value that, if present and true, turns off the use of RRDP.
+
+rrdp-max-delta-count
+      An integer value that specifies the maximum number of deltas necessary to
+      update an RRDP repository before using the snapshot instead. If the value
+      is missing, the default of 100 is used.
 
 rrdp-timeout
       An integer value that provides a timeout in seconds for all individual
