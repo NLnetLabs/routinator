@@ -303,7 +303,8 @@ The available options are:
 
       Sets the timeout in seconds for any RRDP-related network operation, i.e.,
       connects, reads, and writes. If this option is omitted, the default
-      timeout of 30 seconds is used. Set the option to 0 to disable the timeout.
+      timeout of 300 seconds is used. Set the option to 0 to disable the 
+      timeout.
 
 .. option:: --rrdp-connect-timeout=seconds
 
@@ -987,7 +988,7 @@ disable-rrdp
 rrdp-timeout
       An integer value that provides a timeout in seconds for all individual
       RRDP-related network operations, i.e., connects, reads, and writes. If the
-      value is missing, a default timeout of 30 seconds will be used. Set the
+      value is missing, a default timeout of 300 seconds will be used. Set the
       value to 0 to turn the timeout off.
 
 rrdp-fallback-time
