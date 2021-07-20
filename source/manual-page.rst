@@ -10,7 +10,7 @@ Manual Page
     :Date:       YYYY-MM-DD
     :Author:     Martin Hoffmann
     :Copyright:  2019-2021 - NLnet Labs
-    :Version:    0.9.1-dev
+    :Version:    0.10.0-dev
 
     Synopsis
     --------
@@ -330,6 +330,20 @@ The available options are:
       made by the RRDP client. It can be either an HTTP or a SOCKS URI. The
       option can be given multiple times in which case proxies are tried in the
       given order.
+
+.. option:: --rrdp-keep-responses=path
+
+      If this option is enabled, the bodies of all HTTPS responses received from
+      RRDP servers will be stored under *path* . 
+      
+      The sub-path will be constructed using the components of the requested
+      URI. For the responses to the notification files, the timestamp is
+      appended to the path to make it possible to distinguish the series of
+      requests made over time.
+
+.. option:: --rrdp-disable-gzip
+
+      If this option is present, the gzip transfer encoding is disabled.
 
 .. option:: --max-object-size=BYTES
 
@@ -1001,6 +1015,17 @@ rrdp-proxies
       A list of string each providing the URI for a proxy for outgoing RRDP
       connections. The proxies are tried in order for each request. HTTP and
       SOCKS5 proxies are supported.
+
+rrdp-keep-responses
+      A string containing a path to a directory into which the bodies of all
+      HTTPS responses received from RRDP servers will be stored. The sub-path
+      will be constructed using the components of the requested URI. For the
+      responses to the notification files, the timestamp is appended to the path
+      to make it possible to distinguish the series of requests made over time.
+
+rrdp-disable-gzip
+      A boolean value that determines whether the gzip transfer encoding should
+      be disabled in RRDP requests. If the option is missing, gzip will be used.
 
 max-object-size
       An integer value that provides a limit for the size of individual objects
