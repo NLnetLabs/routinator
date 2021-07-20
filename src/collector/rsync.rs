@@ -513,7 +513,7 @@ impl RsyncCommand {
             command.kill_on_drop(true);
             let mut child = command.spawn()?;
             let stdout = child.stdout.take();
-            let stderr = child.stdout.take();
+            let stderr = child.stderr.take();
             let (status, stdout, stderr) = tokio::try_join!(
                 tokio::time::timeout(
                     self.timeout, child.wait()
