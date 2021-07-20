@@ -290,6 +290,12 @@ The actual time is chosen at random between the refresh time and this value
 in order to spread out load on the rsync server. 
 
 .TP
+.BI --rrdp-max-delta-count= count
+If the number of deltas necessary to update an RRDP repository is
+larger than the value provided by this option, the snapshot is used instead.
+If the option is missing, the default of 100 is used.
+
+.TP
 .BI --rrdp-timeout= seconds
 Sets the timeout in seconds for any RRDP-related network operation, i.e.,
 connects, reads, and writes. If this option is omitted, the default timeout
@@ -1026,6 +1032,12 @@ successful update of an RRDP repository before Routinator falls back to
 using rsync. The default in case the value is missing is 3600 seconds. If
 the value provided is smaller than twice the refresh time, it is silently
 increased to that value.
+
+.TP
+.BI rrdp-max-delta-count
+An integer value that specifies the maximum number of deltas necessary to
+update an RRDP repository before using the snapshot instead.
+If the value is missing, the default of 100 is used.
 
 .TP
 .B rrdp-timeout

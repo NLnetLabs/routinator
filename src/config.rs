@@ -47,6 +47,9 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 /// The default for the RRDP fallback time.
 const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
 
+/// The default for the maximum number of deltas.
+const DEFAULT_RRDP_MAX_DELTA_COUNT: usize = 100;
+
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 
@@ -168,6 +171,9 @@ pub struct Config {
 
     /// Time since last update of an RRDP repository before fallback to rsync.
     pub rrdp_fallback_time: Duration,
+
+    /// The maxmimm number of deltas we allow before using snapshot.
+    pub rrdp_max_delta_count: usize,
 
     /// Optional RRDP timeout in seconds.
     ///
@@ -363,6 +369,12 @@ impl Config {
         .arg(Arg::with_name("disable-rrdp")
             .long("disable-rrdp")
             .help("Disable RRDP and only use rsync")
+        )
+        .arg(Arg::with_name("rrdp-max-delta-count")
+            .long("rrdp-max-delta-count")
+            .takes_value(true)
+            .value_name("COUNT")
+            .help("Maximum number of RRDP deltas before using snapshot")
         )
         .arg(Arg::with_name("rrdp-timeout")
             .long("rrdp-timeout")
@@ -683,6 +695,13 @@ impl Config {
             matches, "rrdp-fallback-time"
         )? {
             self.rrdp_fallback_time = Duration::from_secs(value)
+        }
+
+        // rrdp_max_delta_count
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-max-delta-count"
+        )? {
+            self.rrdp_max_delta_count = value
         }
 
         // rrdp_timeout
@@ -1012,6 +1031,10 @@ impl Config {
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_RRDP_FALLBACK_TIME)
             },
+            rrdp_max_delta_count: {
+                file.take_usize("rrdp-max-delta-count")?
+                .unwrap_or(DEFAULT_RRDP_MAX_DELTA_COUNT)
+            },
             rrdp_timeout: {
                 file.take_u64("rrdp-timeout")?
                 .map(|secs| {
@@ -1211,6 +1234,7 @@ impl Config {
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
+            rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
             rrdp_timeout: None,
             rrdp_connect_timeout: None,
             rrdp_local_addr: None,
@@ -1354,6 +1378,10 @@ impl Config {
         res.insert(
             "rrdp-fallback-time".into(),
             (self.rrdp_fallback_time.as_secs() as i64).into()
+        );
+        res.insert(
+            "rrdp-max-delta-count".into(),
+            i64::try_from(self.rrdp_max_delta_count).unwrap_or(i64::MAX).into()
         );
         if let Some(timeout) = self.rrdp_timeout {
             res.insert(
@@ -1742,7 +1770,7 @@ impl ConfigFile {
             None => Ok(None)
         }
     }
-    
+
     /// Takes an unsigned integer value from the config file.
     ///
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
@@ -1763,6 +1791,37 @@ impl ConfigFile {
                     else {
                         Ok(Some(res as u64))
                     }
+                }
+                else {
+                    error!(
+                        "Failed in config file {}: \
+                         '{}' expected to be an integer.",
+                        self.path.display(), key
+                    );
+                    Err(Failed)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Takes an unsigned integer value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer or if it is negative.
+    fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Failed> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    usize::try_from(res).map(Some).map_err(|_| {
+                        error!(
+                            "Failed in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Failed
+                    })
                 }
                 else {
                     error!(
