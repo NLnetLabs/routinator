@@ -73,6 +73,9 @@ pub struct Collector {
 
     /// The maximum allowed size for published objects.
     max_object_size: Option<u64>,
+
+    /// The maximum number of deltas we process before using a snapshot.
+    max_delta_count: usize,
 }
 
 impl Collector {
@@ -120,6 +123,7 @@ impl Collector {
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
+            max_delta_count: config.rrdp_max_delta_count,
         }))
     }
 
@@ -735,6 +739,14 @@ impl Repository {
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
         };
+
+        if deltas.len() > run.collector.max_delta_count {
+            debug!(
+                "RRDP: {}: Too many delta steps required ({})",
+                self.rpki_notify, deltas.len()
+            );
+            return Ok(Some(SnapshotReason::TooManyDeltas))
+        }
 
         if !deltas.is_empty() {
             let count = deltas.len();
@@ -2129,6 +2141,9 @@ pub enum SnapshotReason {
 
     /// A delta file was conflicting with locally stored data.
     ConflictingDelta,
+
+    /// There were too many deltas to process.
+    TooManyDeltas,
 }
 
 impl SnapshotReason {
@@ -2143,6 +2158,7 @@ impl SnapshotReason {
             LargeSerial => "large-serial",
             OutdatedLocal => "outdate-local",
             ConflictingDelta => "conflicting-delta",
+            TooManyDeltas => "too-many-deltas",
         }
     }
 }
