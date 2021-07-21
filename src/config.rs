@@ -197,6 +197,9 @@ pub struct Config {
     /// Should we keep RRDP responses and if so where?
     pub rrdp_keep_responses: Option<PathBuf>,
 
+    /// Disable the use if the gzip transfer encoding in the RRDP client.
+    pub rrdp_disable_gzip: bool,
+
     /// The size of the database cache in megabytes.
     ///
     /// If this is `None`, we leave Sled’s default in place.
@@ -404,6 +407,10 @@ impl Config {
             .value_name("DIR")
             .help("Keep RRDP responses in the given directory")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-disable-gzip")
+            .long("rrdp-disable-gzip")
+            .help("Disable the gzip transfer encoding in RRDP")
         )
         .arg(Arg::with_name("cache-capacity")
             .long("cache-capacity")
@@ -697,7 +704,9 @@ impl Config {
         }
 
         // rrdp_connect_timeout
-        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-connect-timeout"
+        )? {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
         }
 
@@ -728,6 +737,11 @@ impl Config {
         // rrdp_keep_responses
         if let Some(path) = matches.value_of("rrdp-keep-responses") {
             self.rrdp_keep_responses = Some(path.into())
+        }
+
+        // rrdp_disable_gzip
+        if matches.is_present("rrdp-disable-gzip") {
+            self.rrdp_disable_gzip = true;
         }
 
         // cache_capacity
@@ -1037,6 +1051,9 @@ impl Config {
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
+            rrdp_disable_gzip: {
+                file.take_bool("rrdp-disable-gzip")?.unwrap_or(false)
+            },
             cache_capacity: file.take_u64("cache-capacity")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
@@ -1217,6 +1234,7 @@ impl Config {
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
+            rrdp_disable_gzip: false,
             cache_capacity: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
@@ -1390,6 +1408,12 @@ impl Config {
             res.insert(
                 "rrdp-keep-responses".into(),
                 format!("{}", path.display()).into()
+            );
+        }
+        if self.rrdp_disable_gzip {
+            res.insert(
+                "rrdp-disable-gzip".into(),
+                true.into()
             );
         }
         if let Some(capacity) = self.cache_capacity {
