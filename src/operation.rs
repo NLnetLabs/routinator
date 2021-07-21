@@ -625,10 +625,19 @@ impl Server {
         let must_notify = history.update(
             report, &exceptions, metrics,
         );
-        info!(
-            "Validation completed. New serial is {}.",
-            history.read().serial()
-        );
+        if log::max_level() >= log::Level::Info {
+            info!("Validation completed.");
+            let (metrics, serial) = {
+                let history = history.read();
+                (history.metrics(), history.serial())
+            };
+            if let Some(metrics) = metrics {
+                output::Summary::log(&metrics)
+            }
+            info!(
+                "New serial is {}.", serial
+            );
+        }
         if must_notify {
             info!("Sending out notifications.");
             notify.notify();
@@ -1398,7 +1407,7 @@ impl Dump {
 
     /// Prints the current configuration to stdout and exits.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let engine = Engine::new(process.config(), false)?;
+        let engine = Engine::new(process.config(), true)?;
         process.switch_logging(false, false)?;
         engine.dump(&self.output)?;
         Ok(())

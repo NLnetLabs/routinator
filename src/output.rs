@@ -5,12 +5,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
-use log::error;
+use log::{error, info};
 use rpki::repository::resources::AsId;
 use crate::payload;
 use crate::error::Failed;
 use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
 use crate::metrics::Metrics;
+use crate::utils::date::format_iso_date;
 
 
 //------------ OutputFormat --------------------------------------------------
@@ -541,9 +542,18 @@ struct Json;
 
 impl<W: io::Write> Formatter<W> for Json {
     fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "{{\n  \"roas\": [")
+        writeln!(target,
+            "{{\
+            \n  \"metadata\": {{\
+            \n    \"generated\": {},\
+            \n    \"generatedTime\": \"{}\"\
+            \n  }},\
+            \n  \"roas\": [",
+            metrics.time.timestamp(),
+            format_iso_date(metrics.time)
+        )
     }
 
     fn footer(
@@ -575,29 +585,20 @@ impl<W: io::Write> Formatter<W> for Json {
 
 struct ExtendedJson;
 
-impl ExtendedJson {
-    // 2017-08-25T13:12:19Z
-    const TIME_ITEMS: &'static [Item<'static>] = &[
-        Item::Numeric(Numeric::Year, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Month, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Day, Pad::Zero),
-        Item::Literal("T"),
-        Item::Numeric(Numeric::Hour, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Minute, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Second, Pad::Zero),
-        Item::Literal("Z"),
-    ];
-}
-
 impl<W: io::Write> Formatter<W> for ExtendedJson {
     fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "{{\n  \"roas\": [")
+        writeln!(target,
+            "{{\
+            \n  \"metadata\": {{\
+            \n    \"generated\": {},\
+            \n    \"generatedTime\": \"{}\"\
+            \n  }},\
+            \n  \"roas\": [",
+            metrics.time.timestamp(),
+            format_iso_date(metrics.time)
+        )
     }
 
     fn footer(
@@ -638,18 +639,10 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }} \
                     }}",
-                    roa.roa_validity.not_before().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.roa_validity.not_after().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.chain_validity.not_before().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.chain_validity.not_after().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    )
+                    format_iso_date(roa.roa_validity.not_before().into()),
+                    format_iso_date(roa.roa_validity.not_after().into()),
+                    format_iso_date(roa.chain_validity.not_before().into()),
+                    format_iso_date(roa.chain_validity.not_after().into()),
                 )?;
             }
             if let Some(exc) = item.exception_info() {
@@ -792,28 +785,47 @@ impl<W: io::Write> Formatter<W> for Rpsl {
 
 //------------ Summary -------------------------------------------------------
 
-struct Summary;
+/// Output only a summary.
+pub struct Summary;
 
-impl<W: io::Write> Formatter<W> for Summary {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+impl Summary {
+    fn produce_header(
+        metrics: &Metrics,
+        mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
     ) -> Result<(), io::Error> {
-        writeln!(target, "Summary at {}", metrics.time)?;
+        line(format_args!("Summary at {}", metrics.time))?;
         for tal in &metrics.tals {
-            writeln!(target,
+            line(format_args!(
                 "{}: {} verified ROAs, {} verified VRPs, \
                  {} unsafe VRPs, {} final VRPs.",
                 tal.name(), tal.publication.valid_roas, tal.vrps.valid,
                 tal.vrps.marked_unsafe, tal.vrps.contributed
-            )?;
+            ))?;
         }
-        writeln!(target,
+        line(format_args!(
             "total: {} verified ROAs, {} verified VRPs, \
              {} unsafe VRPs, {} final VRPs.",
             metrics.publication.valid_roas,
             metrics.vrps.valid, metrics.vrps.marked_unsafe,
             metrics.vrps.contributed,
-        )
+        ))
+    }
+
+    pub fn log(metrics: &Metrics) {
+        Self::produce_header(metrics, |args| {
+            info!("{}", args);
+            Ok(())
+        }).unwrap()
+    }
+}
+
+impl<W: io::Write> Formatter<W> for Summary {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        Self::produce_header(metrics, |args| {
+            write!(target, "{}", args)
+        })
     }
 
     fn origin(

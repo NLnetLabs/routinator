@@ -4,21 +4,69 @@
 
 Breaking changes
 
+* Data is now stored directly in the file system again. This returns
+  memory consumption to pre-0.9 levels. All improvements to robustness
+  have been maintained. ([#590], [#601], [#604])
+* The `json` and `jsonext` output formats now include a `metadata` object
+  that contains the time the data set was created in the `generated` and
+  `generatedTime` fields as Unix and ISO time stamps, respectively.
+  ([#605])
+* The JSON output of the `validate` command and the of the `/validity`
+  HTTP endpoint now include a `generatedTime` field that provides
+  the generation time of the data set that was used for validation as an
+  ISO time stamp. ([#605])
+* The default RRDP timeout (via the `rrdp-timeout` option) has been increased
+  to 300 seconds. ([#612])
+
 New
 
+* The maximum over delta steps performed during an update of an RRDP
+  repository is now be limited via the `rrdp-max-delta` option. If more
+  steps are necessary, the snapshot is used instead. This will improve the
+  update times in cases where Routinator isn’t running constantly. The
+  default limit is 100 steps. ([#615])
+* It is now possible to disable the use of the gzip transfer encoding in
+  the RRDP client via the new `rrdp-disable-gzip` option. ([#602])
 * The start of a validation run is now logged as an info message.  ([#609])
 * A reference to the global help appears now at the end of a sub-command’s
   help message. ([#607])
+* A summary of the data set similar to the `summary` output format is now
+  logged at log level info at the end of a validation run. ([#617])
 
 Bug Fixes
 
 * Catch and log error output from rsync. ([#577])
+* Local exception files that contain prefix assertions with a shorter
+  max-length than the prefix length are now rejected instead of adding
+  these invalid prefix assertions to the output data set. ([#608])
+* The `rrdp-timeout` command line option was setting both the RRDP timeout
+  and the RRDP connection timeout. Now the `rrdp-connect-timeout` is
+  correctly used for the latter. (Note: The config file was using the correct
+  keys.) ([#611])
+* Added `--rrdp-fallback-time` option to the command line parser. It was
+  documented and supposed to be present previously, but wasn’t. ([#614])
 
 Other
 
+* In the JSON metrics for RRDP repositories, the fields `serial`,
+  `session`, `delta`, and `snapshotReason` are left out entirely when the
+  server reported not changes via a 304 response. ([#613])
+
 [#577]: https://github.com/NLnetLabs/routinator/pull/577
+[#590]: https://github.com/NLnetLabs/routinator/pull/590
+[#601]: https://github.com/NLnetLabs/routinator/pull/601
+[#602]: https://github.com/NLnetLabs/routinator/pull/602
+[#604]: https://github.com/NLnetLabs/routinator/pull/604
+[#605]: https://github.com/NLnetLabs/routinator/pull/605
 [#607]: https://github.com/NLnetLabs/routinator/pull/607
+[#608]: https://github.com/NLnetLabs/routinator/pull/608
 [#609]: https://github.com/NLnetLabs/routinator/pull/609
+[#611]: https://github.com/NLnetLabs/routinator/pull/611
+[#612]: https://github.com/NLnetLabs/routinator/pull/612
+[#613]: https://github.com/NLnetLabs/routinator/pull/613
+[#614]: https://github.com/NLnetLabs/routinator/pull/614
+[#615]: https://github.com/NLnetLabs/routinator/pull/615
+[#617]: https://github.com/NLnetLabs/routinator/pull/617
 
 
 ## 0.9.0 ‘Raptor Bash for Life’

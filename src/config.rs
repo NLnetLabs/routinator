@@ -8,6 +8,7 @@
 
 use std::{env, fmt, fs};
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -43,8 +44,14 @@ const DEFAULT_EXPIRE: u64 = 7200;
 /// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
+/// The default for the RRDP timeout.
+const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
+
 /// The default for the RRDP fallback time.
 const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
+
+/// The default for the maximum number of deltas.
+const DEFAULT_RRDP_MAX_DELTA_COUNT: usize = 100;
 
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
@@ -168,12 +175,13 @@ pub struct Config {
     /// Time since last update of an RRDP repository before fallback to rsync.
     pub rrdp_fallback_time: Duration,
 
-    /// Optional RRDP timeout in seconds.
+    /// The maxmimm number of deltas we allow before using snapshot.
+    pub rrdp_max_delta_count: usize,
+
+    /// RRDP timeout in seconds.
     ///
-    /// If this is not set, the default timeouts of the `reqwest` crate are
-    /// used. Use `Some(None)` for no timeout.
-    #[allow(clippy::option_option)]
-    pub rrdp_timeout: Option<Option<Duration>>,
+    /// If this is None, no timeout is set.
+    pub rrdp_timeout: Option<Duration>,
 
     /// Optional RRDP connect timeout in seconds.
     pub rrdp_connect_timeout: Option<Duration>,
@@ -194,6 +202,9 @@ pub struct Config {
 
     /// Should we keep RRDP responses and if so where?
     pub rrdp_keep_responses: Option<PathBuf>,
+
+    /// Disable the use if the gzip transfer encoding in the RRDP client.
+    pub rrdp_disable_gzip: bool,
 
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
@@ -358,6 +369,18 @@ impl Config {
             .long("disable-rrdp")
             .help("Disable RRDP and only use rsync")
         )
+        .arg(Arg::with_name("rrdp-max-delta-count")
+            .long("rrdp-max-delta-count")
+            .takes_value(true)
+            .value_name("COUNT")
+            .help("Maximum number of RRDP deltas before using snapshot")
+        )
+        .arg(Arg::with_name("rrdp-fallback-time")
+            .long("rrdp-fallback-time")
+            .takes_value(true)
+            .value_name("SECONDS")
+            .help("Maximum time since last update before fallback to rsync")
+        )
         .arg(Arg::with_name("rrdp-timeout")
             .long("rrdp-timeout")
             .value_name("SECONDS")
@@ -397,6 +420,10 @@ impl Config {
             .value_name("DIR")
             .help("Keep RRDP responses in the given directory")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-disable-gzip")
+            .long("rrdp-disable-gzip")
+            .help("Disable the gzip transfer encoding in RRDP")
         )
         .arg(Arg::with_name("max-object-size")
             .long("max-object-size")
@@ -673,16 +700,27 @@ impl Config {
             self.rrdp_fallback_time = Duration::from_secs(value)
         }
 
+        // rrdp_max_delta_count
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-max-delta-count"
+        )? {
+            self.rrdp_max_delta_count = value
+        }
+
         // rrdp_timeout
         if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
-            self.rrdp_timeout = match value {
-                0 => Some(None),
-                value => Some(Some(Duration::from_secs(value))),
+            self.rrdp_timeout = if value == 0 {
+                None
             }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // rrdp_connect_timeout
-        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-connect-timeout"
+        )? {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
         }
 
@@ -713,6 +751,11 @@ impl Config {
         // rrdp_keep_responses
         if let Some(path) = matches.value_of("rrdp-keep-responses") {
             self.rrdp_keep_responses = Some(path.into())
+        }
+
+        // rrdp_disable_gzip
+        if matches.is_present("rrdp-disable-gzip") {
+            self.rrdp_disable_gzip = true;
         }
 
         // max_object_size
@@ -995,16 +1038,16 @@ impl Config {
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_RRDP_FALLBACK_TIME)
             },
+            rrdp_max_delta_count: {
+                file.take_usize("rrdp-max-delta-count")?
+                .unwrap_or(DEFAULT_RRDP_MAX_DELTA_COUNT)
+            },
             rrdp_timeout: {
-                file.take_u64("rrdp-timeout")?
-                .map(|secs| {
-                    if secs == 0 {
-                        None
-                    }
-                    else {
-                        Some(Duration::from_secs(secs))
-                    }
-                })
+                match file.take_u64("rrdp-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RRDP_TIMEOUT)
+                }
             },
             rrdp_connect_timeout: {
                 file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
@@ -1021,6 +1064,9 @@ impl Config {
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
+            rrdp_disable_gzip: {
+                file.take_bool("rrdp-disable-gzip")?.unwrap_or(false)
+            },
             max_object_size: {
                 match file.take_u64("max-object-size")? {
                     Some(0) => None,
@@ -1193,13 +1239,15 @@ impl Config {
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
-            rrdp_timeout: None,
+            rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
+            rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
             rrdp_connect_timeout: None,
             rrdp_local_addr: None,
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
+            rrdp_disable_gzip: false,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
@@ -1336,12 +1384,19 @@ impl Config {
             "rrdp-fallback-time".into(),
             (self.rrdp_fallback_time.as_secs() as i64).into()
         );
-        if let Some(timeout) = self.rrdp_timeout {
-            res.insert(
-                "rrdp-timeout".into(),
-                ((timeout.map(|d| d.as_secs()).unwrap_or(0)) as i64).into()
-            );
-        }
+        res.insert(
+            "rrdp-max-delta-count".into(),
+            i64::try_from(self.rrdp_max_delta_count).unwrap_or(i64::MAX).into()
+        );
+        res.insert(
+            "rrdp-timeout".into(),
+            match self.rrdp_timeout {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
+        );
         if let Some(timeout) = self.rrdp_connect_timeout {
             res.insert(
                 "rrdp-connect-timeout".into(),
@@ -1369,6 +1424,12 @@ impl Config {
             res.insert(
                 "rrdp-keep-responses".into(),
                 format!("{}", path.display()).into()
+            );
+        }
+        if self.rrdp_disable_gzip {
+            res.insert(
+                "rrdp-disable-gzip".into(),
+                true.into()
             );
         }
         res.insert("max-object-size".into(),
@@ -1717,7 +1778,7 @@ impl ConfigFile {
             None => Ok(None)
         }
     }
-    
+
     /// Takes an unsigned integer value from the config file.
     ///
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
@@ -1738,6 +1799,37 @@ impl ConfigFile {
                     else {
                         Ok(Some(res as u64))
                     }
+                }
+                else {
+                    error!(
+                        "Failed in config file {}: \
+                         '{}' expected to be an integer.",
+                        self.path.display(), key
+                    );
+                    Err(Failed)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Takes an unsigned integer value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer or if it is negative.
+    fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Failed> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    usize::try_from(res).map(Some).map_err(|_| {
+                        error!(
+                            "Failed in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Failed
+                    })
                 }
                 else {
                     error!(

@@ -126,7 +126,7 @@ impl Collector {
 ///
 /// This type references the underlying [`Collector`]. It can be used with
 /// multiple threads using
-/// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
+/// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
     /// A reference to the underlying collector.

@@ -45,18 +45,10 @@ use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
+use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::dump::DumpRegistry;
-use crate::utils::http::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
-
-
-///----------- Configuration Constants ---------------------------------------
-
-/// The default timeout for RRDP requests.
-///
-/// This is mentioned in the man page. If you change it, also change it there.
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 
 //------------ Collector -----------------------------------------------------
@@ -81,6 +73,9 @@ pub struct Collector {
 
     /// The maximum allowed size for published objects.
     max_object_size: Option<u64>,
+
+    /// The maximum number of deltas we process before using a snapshot.
+    max_delta_count: usize,
 }
 
 impl Collector {
@@ -128,6 +123,7 @@ impl Collector {
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
+            max_delta_count: config.rrdp_max_delta_count,
         }))
     }
 
@@ -144,7 +140,9 @@ impl Collector {
     /// Dumps the content of the RRDP collector.
     #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        let mut registry = DumpRegistry::new(dir.into());
+        let dir = dir.join("rrdp");
+        debug!("Dumping RRDP collector content to {}", dir.display());
+        let mut registry = DumpRegistry::new(dir);
         let mut states = HashMap::new();
         for entry in fatal::read_dir(&self.working_dir)? {
             let entry = entry?;
@@ -161,6 +159,7 @@ impl Collector {
             }
         }
         self.dump_repository_json(registry, states)?;
+        debug!("RRDP collector dump complete.");
         Ok(())
     }
 
@@ -181,7 +180,7 @@ impl Collector {
 
         fatal::create_dir_all(&target_path)?;
 
-        Self::dump_tree(&repo_path.join("rrdp"), &target_path)?;
+        Self::dump_tree(&repo_path.join("rsync"), &target_path)?;
 
         state_registry.insert(state.rpki_notify.clone(), state);
 
@@ -202,7 +201,7 @@ impl Collector {
             }
             else if entry.is_file() {
                 let target_path = target_path.join(entry.file_name());
-                fatal::create_dir_all(&target_path)?;
+                fatal::create_parent_all(&target_path)?;
                 if let Err(err) = fs::copy(entry.path(), &target_path) {
                     error!(
                         "Fatal: failed to copy {} to {}: {}",
@@ -740,6 +739,14 @@ impl Repository {
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
         };
+
+        if deltas.len() > run.collector.max_delta_count {
+            debug!(
+                "RRDP: {}: Too many delta steps required ({})",
+                self.rpki_notify, deltas.len()
+            );
+            return Ok(Some(SnapshotReason::TooManyDeltas))
+        }
 
         if !deltas.is_empty() {
             let count = deltas.len();
@@ -1291,16 +1298,8 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(true);
-        match config.rrdp_timeout {
-            Some(Some(timeout)) => {
-                builder = builder.timeout(timeout);
-            }
-            Some(None) => { /* keep no timeout */ }
-            None => {
-                builder = builder.timeout(DEFAULT_TIMEOUT);
-            }
-        }
+        builder = builder.gzip(!config.rrdp_disable_gzip);
+        builder = builder.timeout(config.rrdp_timeout);
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
@@ -2142,6 +2141,9 @@ pub enum SnapshotReason {
 
     /// A delta file was conflicting with locally stored data.
     ConflictingDelta,
+
+    /// There were too many deltas to process.
+    TooManyDeltas,
 }
 
 impl SnapshotReason {
@@ -2156,6 +2158,7 @@ impl SnapshotReason {
             LargeSerial => "large-serial",
             OutdatedLocal => "outdate-local",
             ConflictingDelta => "conflicting-delta",
+            TooManyDeltas => "too-many-deltas",
         }
     }
 }
@@ -2179,6 +2182,13 @@ impl HttpStatus {
             HttpStatus::Response(code) => code.as_u16() as i16,
             HttpStatus::Error => -1
         }
+    }
+
+    pub fn is_not_modified(self) -> bool {
+        matches!(
+            self,
+            HttpStatus::Response(code) if code == StatusCode::NOT_MODIFIED
+        )
     }
 
     pub fn is_success(self) -> bool {

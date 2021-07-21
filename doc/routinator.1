@@ -290,10 +290,16 @@ The actual time is chosen at random between the refresh time and this value
 in order to spread out load on the rsync server. 
 
 .TP
+.BI --rrdp-max-delta-count= count
+If the number of deltas necessary to update an RRDP repository is
+larger than the value provided by this option, the snapshot is used instead.
+If the option is missing, the default of 100 is used.
+
+.TP
 .BI --rrdp-timeout= seconds
 Sets the timeout in seconds for any RRDP-related network operation, i.e.,
 connects, reads, and writes. If this option is omitted, the default timeout
-of 30 seconds is used. Set the option to 0 to disable the timeout.
+of 300 seconds is used. Set the option to 0 to disable the timeout.
 
 .TP
 .BI --rrdp-connect-timeout= seconds
@@ -322,7 +328,21 @@ by the RRDP client. It can be either an HTTP or a SOCKS URI. The option can
 be given multiple times in which case proxies are tried in the given order.
 
 .TP
-.BI --max-object-size= BYTES
+.BI --rrdp-keep-responses= path
+If this option is enabled, the bodies of all HTTPS responses received from
+RRDP servers will be stored under
+.IR path .
+The sub-path will be constructed using the components of the requested URI.
+For the responses to the notification files, the timestamp is appended to
+the path to make it possible to distinguish the series of requests made over
+time.
+
+.TP
+.B --rrdp-disable-gzip
+If this option is present, the gzip transfer encoding is disabled.
+
+.TP
+.BI --max-object-size= bytes
 Limits the size of individual objects received via either rsync or RRDP to
 the given number of bytes. The default value if this option is not present
 is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
@@ -486,7 +506,7 @@ Routinator -- all entries will be in one single output file.
 
 .TP
 .B json
-The list is placed into a JSON object with a single element
+The output is in JSON format. The list is placed into a member named 
 .I "roas"
 which contains an array of objects with four elements each: The autonomous
 system number of the network authorized to originate a prefix in
@@ -502,10 +522,19 @@ except for different naming of the trust anchor. Routinator uses the name
 of the TAL file without the extension
 .IR ".tal"
 whereas the RIPE NCC Validator has a dedicated name for each.
+.IP
+The output object also includes a member named
+.I "metadata"
+which provides additional information. Currently, this is a member
+.I "generated"
+which provides the time the list was generated as a Unix timestamp, and a
+member
+.I "generatedTime"
+which provides the same time but in the standard ISO date format.
 
 .TP
 .B jsonext
-The list is placed into a JSON object with a single element
+The output is in JSON format. The list is placed into a member named 
 .I "roas"
 which contains an array of objects with four elements each: The autonomous
 system number of the network authorized to originate a prefix in
@@ -540,6 +569,15 @@ For assertions from local exceptions,
 will provide the path of the local exceptions file and, optionally,
 .I "comment"
 will provide the comment if given for the assertion.
+.IP
+The output object also includes a member named
+.I "metadata"
+which provides additional information. Currently, this is a member
+.I "generated"
+which provides the time the list was generated as a Unix timestamp, and a
+member
+.I "generatedTime"
+which provides the same time but in the standard ISO date format.
 .IP
 Please note that because of this additional information, output in
 .B jsonext
@@ -1028,10 +1066,16 @@ the value provided is smaller than twice the refresh time, it is silently
 increased to that value.
 
 .TP
+.BI rrdp-max-delta-count
+An integer value that specifies the maximum number of deltas necessary to
+update an RRDP repository before using the snapshot instead.
+If the value is missing, the default of 100 is used.
+
+.TP
 .B rrdp-timeout
 An integer value that provides a timeout in seconds for all individual
 RRDP-related network operations, i.e., connects, reads, and writes. If the
-value is missing, a default timeout of 30 seconds will be used. Set the value
+value is missing, a default timeout of 300 seconds will be used. Set the value
 to 0 to turn the timeout off.
 
 .TP
@@ -1054,6 +1098,20 @@ certificates provided via this option, the system's own trust store is used.
 A list of string each providing the URI for a proxy for outgoing RRDP
 connections. The proxies are tried in order for each request. HTTP and SOCKS5
 proxies are supported.
+
+.TP
+.B rrdp-keep-responses
+A string containing a path to a directory into which the bodies of all HTTPS
+responses received from RRDP servers will be stored.
+The sub-path will be constructed using the components of the requested URI.
+For the responses to the notification files, the timestamp is appended to
+the path to make it possible to distinguish the series of requests made over
+time.
+
+.TP
+.B rrdp-disable-gzip
+A boolean value that determines whether the gzip transfer encoding should be
+disabled in RRDP requests. If the option is missing, gzip will be used.
 
 .TP
 .B max-object-size
