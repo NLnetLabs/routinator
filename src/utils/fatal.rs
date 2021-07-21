@@ -164,6 +164,23 @@ pub fn create_dir_all(path: &Path) -> Result<(), Failed> {
 }
 
 
+//------------ create_parent_all ---------------------------------------------
+
+/// Creates all directories leading necessary to create a file.
+pub fn create_parent_all(path: &Path) -> Result<(), Failed> {
+    if let Some(path) = path.parent() {
+        fs::create_dir_all(path).map_err(|err| {
+            error!(
+                "Fatal: failed to create directory {}: {}",
+                path.display(), err
+            );
+            Failed
+        })?
+    }
+    Ok(())
+}
+
+
 //------------ remove_dir_all ------------------------------------------------
 
 /// Removes a directory tree.
