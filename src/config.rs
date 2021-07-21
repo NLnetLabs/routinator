@@ -8,7 +8,7 @@
 
 use std::{env, fmt, fs};
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -43,6 +43,9 @@ const DEFAULT_EXPIRE: u64 = 7200;
 
 /// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
+
+/// The default for the RRDP timeout.
+const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// The default for the RRDP fallback time.
 const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
@@ -169,12 +172,10 @@ pub struct Config {
     /// Time since last update of an RRDP repository before fallback to rsync.
     pub rrdp_fallback_time: Duration,
 
-    /// Optional RRDP timeout in seconds.
+    /// RRDP timeout in seconds.
     ///
-    /// If this is not set, the default timeouts of the `reqwest` crate are
-    /// used. Use `Some(None)` for no timeout.
-    #[allow(clippy::option_option)]
-    pub rrdp_timeout: Option<Option<Duration>>,
+    /// If this is None, no timeout is set.
+    pub rrdp_timeout: Option<Duration>,
 
     /// Optional RRDP connect timeout in seconds.
     pub rrdp_connect_timeout: Option<Duration>,
@@ -694,10 +695,12 @@ impl Config {
 
         // rrdp_timeout
         if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
-            self.rrdp_timeout = match value {
-                0 => Some(None),
-                value => Some(Some(Duration::from_secs(value))),
+            self.rrdp_timeout = if value == 0 {
+                None
             }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // rrdp_connect_timeout
@@ -1027,15 +1030,11 @@ impl Config {
                 .unwrap_or(DEFAULT_RRDP_FALLBACK_TIME)
             },
             rrdp_timeout: {
-                file.take_u64("rrdp-timeout")?
-                .map(|secs| {
-                    if secs == 0 {
-                        None
-                    }
-                    else {
-                        Some(Duration::from_secs(secs))
-                    }
-                })
+                match file.take_u64("rrdp-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RRDP_TIMEOUT)
+                }
             },
             rrdp_connect_timeout: {
                 file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
@@ -1228,7 +1227,7 @@ impl Config {
             rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
-            rrdp_timeout: None,
+            rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
             rrdp_connect_timeout: None,
             rrdp_local_addr: None,
             rrdp_root_certs: Vec::new(),
@@ -1373,12 +1372,15 @@ impl Config {
             "rrdp-fallback-time".into(),
             (self.rrdp_fallback_time.as_secs() as i64).into()
         );
-        if let Some(timeout) = self.rrdp_timeout {
-            res.insert(
-                "rrdp-timeout".into(),
-                ((timeout.map(|d| d.as_secs()).unwrap_or(0)) as i64).into()
-            );
-        }
+        res.insert(
+            "rrdp-timeout".into(),
+            match self.rrdp_timeout {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
+        );
         if let Some(timeout) = self.rrdp_connect_timeout {
             res.insert(
                 "rrdp-connect-timeout".into(),
