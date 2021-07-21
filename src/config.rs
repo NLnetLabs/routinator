@@ -368,7 +368,7 @@ impl Config {
             .long("rrdp-fallback-time")
             .takes_value(true)
             .value_name("SECONDS")
-            .help("Maximum age of an RRDP repository before fallback to rsync")
+            .help("Maximum time since last update before fallback to rsync")
         )
         .arg(Arg::with_name("rrdp-timeout")
             .long("rrdp-timeout")
