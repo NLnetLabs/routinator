@@ -2168,6 +2168,13 @@ impl HttpStatus {
         }
     }
 
+    pub fn is_not_modified(self) -> bool {
+        matches!(
+            self,
+            HttpStatus::Response(code) if code == StatusCode::NOT_MODIFIED
+        )
+    }
+
     pub fn is_success(self) -> bool {
         matches!(
             self,
