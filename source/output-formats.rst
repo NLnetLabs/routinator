@@ -59,20 +59,22 @@ csvext
          rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd03::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
          rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd04::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
          rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
-         
+           
 json
-      The VRP list is placed into a JSON object with an element *metadata* which
-      contains the date in time the validation run completed, expressed in epoch
-      in *generated* and human-readable in *generatedTime*. The element *roas*
-      contains an array of objects with four elements each: The autonomous
-      system number of the network authorised to originate a prefix in *asn*,
-      the prefix in slash notation in *prefix*, the maximum prefix length of the
-      announced route in *maxLength*, and the trust anchor from which the
-      authorisation was derived in *ta*. This format of the *roas* element is
-      identical to that produced by the RIPE NCC RPKI Validator except for
-      different naming of the trust anchor. 
+      The output is in JSON format. The list is placed into a member named
+      *roas* which contains an array of objects with four elements each: The
+      autonomous system number of the network authorised to originate a prefix
+      in *asn*, the prefix in slash notation in *prefix*, the maximum prefix
+      length of the announced route in *maxLength*, and the trust anchor from
+      which the authorisation was derived in *ta*. This format of the *roas*
+      element is identical to that produced by the RIPE NCC RPKI Validator
+      except for different naming of the trust anchor. 
       
-      The object contains a *metadata* element containing the 
+      The output object also includes a member named *metadata* which provides 
+      additional information. Currently, this is a member *generated* which 
+      provides the time the list was generated as a Unix timestamp, and a
+      member *generatedTime* which provides the same time but in the standard 
+      ISO date format.
       
       .. code-block:: text
          
@@ -89,14 +91,12 @@ json
          }
 
 jsonext
-      The list is placed into a JSON object with an element *metadata* which
-      contains the date in time the validation run completed, expressed in epoch
-      in *generated* and human-readable in *generatedTime*. The element *roas*
-      contains an array of objects with four elements each: The autonomous
-      system number of the network authorised to originate a prefix in *asn*,
-      the prefix in slash notation  in *prefix*, the maximum prefix length of
-      the announced route  in *maxLength*.
-
+      The output is in JSON format. The list is placed into a member named
+      *roas* which contains an array of objects with four elements each:: The
+      autonomous system number of the network authorised to originate a prefix
+      in *asn*, the prefix in slash notation  in *prefix*, the maximum prefix
+      length of the announced route  in *maxLength*.
+      
       Extensive information about the source of the object is given in the
       array *source*. Each item in that array is an object providing details of
       a source of the VRP. The object will have a type of roa if it was derived
@@ -111,6 +111,12 @@ jsonext
       <doc_routinator_local_exceptions>`, *path* will provide the path of the
       local exceptions file and, optionally, *comment* will provide the comment
       if given for the assertion.
+
+      The output object also includes a member named *metadata* which provides 
+      additional information. Currently, this is a member *generated* which 
+      provides the time the list was generated as a Unix timestamp, and a
+      member *generatedTime* which provides the same time but in the standard 
+      ISO date format.
 
       Please note that the output in ``jsonext`` format will be quite large.
       
