@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
-use log::error;
+use log::{error, info};
 use rpki::repository::resources::AsId;
 use crate::payload;
 use crate::error::Failed;
@@ -785,28 +785,47 @@ impl<W: io::Write> Formatter<W> for Rpsl {
 
 //------------ Summary -------------------------------------------------------
 
-struct Summary;
+/// Output only a summary.
+pub struct Summary;
 
-impl<W: io::Write> Formatter<W> for Summary {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+impl Summary {
+    fn produce_header(
+        metrics: &Metrics,
+        mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
     ) -> Result<(), io::Error> {
-        writeln!(target, "Summary at {}", metrics.time)?;
+        line(format_args!("Summary at {}", metrics.time))?;
         for tal in &metrics.tals {
-            writeln!(target,
+            line(format_args!(
                 "{}: {} verified ROAs, {} verified VRPs, \
                  {} unsafe VRPs, {} final VRPs.",
                 tal.name(), tal.publication.valid_roas, tal.vrps.valid,
                 tal.vrps.marked_unsafe, tal.vrps.contributed
-            )?;
+            ))?;
         }
-        writeln!(target,
+        line(format_args!(
             "total: {} verified ROAs, {} verified VRPs, \
              {} unsafe VRPs, {} final VRPs.",
             metrics.publication.valid_roas,
             metrics.vrps.valid, metrics.vrps.marked_unsafe,
             metrics.vrps.contributed,
-        )
+        ))
+    }
+
+    pub fn log(metrics: &Metrics) {
+        Self::produce_header(metrics, |args| {
+            info!("{}", args);
+            Ok(())
+        }).unwrap()
+    }
+}
+
+impl<W: io::Write> Formatter<W> for Summary {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        Self::produce_header(metrics, |args| {
+            write!(target, "{}", args)
+        })
     }
 
     fn origin(
