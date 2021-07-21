@@ -796,27 +796,6 @@ impl<W: io::Write> Formatter<W> for Rpsl {
 pub struct Summary;
 
 impl Summary {
-    pub fn write(
-        metrics: &Metrics, target: &mut impl io::Write
-    ) -> Result<(), io::Error> {
-        writeln!(target, "Summary at {}", metrics.time)?;
-        for tal in &metrics.tals {
-            writeln!(target,
-                "{}: {} verified ROAs, {} verified VRPs, \
-                 {} unsafe VRPs, {} final VRPs.",
-                tal.name(), tal.publication.valid_roas, tal.vrps.valid,
-                tal.vrps.marked_unsafe, tal.vrps.contributed
-            )?;
-        }
-        writeln!(target,
-            "total: {} verified ROAs, {} verified VRPs, \
-             {} unsafe VRPs, {} final VRPs.",
-            metrics.publication.valid_roas,
-            metrics.vrps.valid, metrics.vrps.marked_unsafe,
-            metrics.vrps.contributed,
-        )
-    }
-
     fn produce_header(
         metrics: &Metrics,
         mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
