@@ -33,33 +33,35 @@ of VRPs that caused the result is included:
    
 .. code-block:: json   
    
-   {
-     "validated_route": {
-      "route": {
-        "origin_asn": "AS12654",
-        "prefix": "93.175.147.0/24"
-      },
-      "validity": {
-        "state": "Invalid",
-        "reason": "as",
-        "description": "At least one VRP Covers the Route Prefix, but no 
-         VRP ASN matches the route origin ASN",
-        "VRPs": {
-         "matched": [
-         ],
-         "unmatched_as": [
-           {
-            "asn": "AS196615",
-            "prefix": "93.175.147.0/24",
-            "max_length": "24"
-           }
-
-         ],
-         "unmatched_length": [
-         ]      }
-      }
-     }
-   }
+    {
+      "validated_routes": [
+        {
+          "route": {
+            "origin_asn": "AS12654",
+            "prefix": "93.175.147.0/24"
+          },
+          "validity": {
+            "state": "invalid",
+            "reason": "as",
+            "description": "At least one VRP Covers the Route Prefix, but no VRP ASN matches the route origin ASN",
+            "VRPs": {
+              "matched": [
+              ],
+              "unmatched_as": [
+                {
+                  "asn": "AS196615",
+                  "prefix": "93.175.147.0/24",
+                  "max_length": "24"
+                }
+              ],
+              "unmatched_length": [
+              ]
+            }
+          }
+        }
+      ],
+      "generatedTime": "2021-07-21T11:36:44Z"
+    }
 
 If you run the HTTP service in daemon mode, validation information is also
 available via the :ref:`user interface <doc_routinator_ui>` and at the
