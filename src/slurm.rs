@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
 use rpki::repository::resources::AsId;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use crate::config::Config;
 use crate::error::Failed;
 use crate::payload::{AddressPrefix, RouteOrigin};
@@ -279,17 +279,119 @@ struct BgpsecFilter {
     comment: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug)]
 struct PrefixAssertion {
     prefix: AddressPrefix,
 
     asn: u32,
 
-    #[serde(rename = "maxPrefixLength")]
     max_prefix_len: Option<u8>,
 
     comment: Option<String>,
+}
+
+// We need to enforce that max_prefix_len is greater than or equal to
+// prefix.len(), so we need to roll our own implementation.
+impl<'de> Deserialize<'de> for PrefixAssertion {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D
+    ) -> Result<Self, D::Error> {
+        use serde::de;
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        enum Fields { Prefix, Asn, MaxPrefixLength, Comment }
+
+        struct StructVisitor;
+
+        impl<'de> de::Visitor<'de> for StructVisitor {
+            type Value = PrefixAssertion;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("PrefixAssertion struct")
+            }
+
+            fn visit_map<V: de::MapAccess<'de>>(
+                self, mut map: V
+            ) -> Result<Self::Value, V::Error> {
+                let mut prefix = None;
+                let mut asn = None;
+                let mut max_prefix_len = None;
+                let mut comment = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Fields::Prefix => {
+                            if prefix.is_some() {
+                                return Err(
+                                    de::Error::duplicate_field("prefix")
+                                );
+                            }
+                            prefix = Some(map.next_value()?);
+                        }
+                        Fields::Asn => {
+                            if asn.is_some() {
+                                return Err(
+                                    de::Error::duplicate_field("asn")
+                                );
+                            }
+                            asn = Some(map.next_value()?);
+                        }
+                        Fields::MaxPrefixLength => {
+                            if max_prefix_len.is_some() {
+                                return Err(
+                                    de::Error::duplicate_field(
+                                        "maxPrefixLength"
+                                    )
+                                );
+                            }
+                            max_prefix_len = Some(map.next_value()?);
+                        }
+                        Fields::Comment => {
+                            if comment.is_some() {
+                                return Err(
+                                    de::Error::duplicate_field("comment")
+                                );
+                            }
+                            comment = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let prefix: AddressPrefix = prefix.ok_or_else(|| {
+                    de::Error::missing_field("prefix")
+                })?;
+                let asn = asn.ok_or_else(|| {
+                    de::Error::missing_field("asn")
+                })?;
+
+                if let Some(max_prefix_len) = max_prefix_len {
+                    if
+                        (prefix.is_v4() && max_prefix_len > 32)
+                        || max_prefix_len > 128
+                    {
+                        return Err(de::Error::custom(
+                            "maxPrefixLen is too large"
+                        ))
+                    }
+                    if prefix.address_length() > max_prefix_len {
+                        return Err(de::Error::custom(
+                            "maxPrefixLen exceeds prefix length")
+                        )
+                    }
+                }
+
+                Ok(PrefixAssertion { prefix, asn, max_prefix_len, comment })
+            }
+        }
+
+        const FIELDS: &[&str] = &[
+            "prefix", "asn", "maxPrefixLen", "comment"
+        ];
+        deserializer.deserialize_struct(
+            "PrefixAssertion", FIELDS, StructVisitor
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -380,7 +482,7 @@ pub mod tests {
 
 
     #[test]
-    fn should_parse_empty_slurm_file() {
+    fn parse_empty_slurm_file() {
         let json = include_str!("../test/slurm/empty.json");
         let exceptions = LocalExceptions::from_json(json, false).unwrap();
 
@@ -389,7 +491,7 @@ pub mod tests {
     }
 
     #[test]
-    fn should_parse_full_slurm_file() {
+    fn parse_full_slurm_file() {
         let json = include_str!("../test/slurm/full.json");
         let exceptions = LocalExceptions::from_json(json, false).unwrap();
 
@@ -429,5 +531,11 @@ pub mod tests {
                 )
             )
         );
+    }
+
+    #[test]
+    fn parse_bad_maxlen_file() {
+        let json = include_str!("../test/slurm/bad_maxlen.json");
+        assert!(LocalExceptions::from_json(json, false).is_err());
     }
 }
