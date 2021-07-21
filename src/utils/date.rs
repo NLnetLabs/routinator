@@ -1,5 +1,6 @@
 //! Utilities for dealing with HTTP.
 
+use std::fmt;
 use chrono::{DateTime, Utc};
 use chrono::format::{Item, Fixed, Numeric, Pad};
 
@@ -100,6 +101,26 @@ pub fn format_http_date(date: DateTime<Utc>) -> String {
 }
 
 
+//------------ Constructing ISO Dates ----------------------------------------
+
+const ISO_DATE: &[Item<'static>] = &[
+    Item::Numeric(Numeric::Year, Pad::Zero),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::Month, Pad::Zero),
+    Item::Literal("-"),
+    Item::Numeric(Numeric::Day, Pad::Zero),
+    Item::Literal("T"),
+    Item::Numeric(Numeric::Hour, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Minute, Pad::Zero),
+    Item::Literal(":"),
+    Item::Numeric(Numeric::Second, Pad::Zero),
+    Item::Literal("Z"),
+];
+
+pub fn format_iso_date(date: DateTime<Utc>) -> impl fmt::Display {
+    date.format_with_items(ISO_DATE.iter())
+}
 
 
 //============ Tests =========================================================

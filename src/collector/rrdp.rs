@@ -45,8 +45,8 @@ use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
+use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::dump::DumpRegistry;
-use crate::utils::http::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
 
@@ -1294,7 +1294,7 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(true);
+        builder = builder.gzip(!config.rrdp_disable_gzip);
         match config.rrdp_timeout {
             Some(Some(timeout)) => {
                 builder = builder.timeout(timeout);

@@ -11,6 +11,7 @@ use crate::payload;
 use crate::error::Failed;
 use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
 use crate::metrics::Metrics;
+use crate::utils::date::format_iso_date;
 
 
 //------------ OutputFormat --------------------------------------------------
@@ -541,9 +542,18 @@ struct Json;
 
 impl<W: io::Write> Formatter<W> for Json {
     fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "{{\n  \"roas\": [")
+        writeln!(target,
+            "{{\
+            \n  \"metadata\": {{\
+            \n    \"generated\": {},\
+            \n    \"generatedTime\": \"{}\"\
+            \n  }},\
+            \n  \"roas\": [",
+            metrics.time.timestamp(),
+            format_iso_date(metrics.time)
+        )
     }
 
     fn footer(
@@ -575,29 +585,20 @@ impl<W: io::Write> Formatter<W> for Json {
 
 struct ExtendedJson;
 
-impl ExtendedJson {
-    // 2017-08-25T13:12:19Z
-    const TIME_ITEMS: &'static [Item<'static>] = &[
-        Item::Numeric(Numeric::Year, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Month, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Day, Pad::Zero),
-        Item::Literal("T"),
-        Item::Numeric(Numeric::Hour, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Minute, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Second, Pad::Zero),
-        Item::Literal("Z"),
-    ];
-}
-
 impl<W: io::Write> Formatter<W> for ExtendedJson {
     fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "{{\n  \"roas\": [")
+        writeln!(target,
+            "{{\
+            \n  \"metadata\": {{\
+            \n    \"generated\": {},\
+            \n    \"generatedTime\": \"{}\"\
+            \n  }},\
+            \n  \"roas\": [",
+            metrics.time.timestamp(),
+            format_iso_date(metrics.time)
+        )
     }
 
     fn footer(
@@ -638,18 +639,10 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }} \
                     }}",
-                    roa.roa_validity.not_before().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.roa_validity.not_after().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.chain_validity.not_before().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    roa.chain_validity.not_after().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    )
+                    format_iso_date(roa.roa_validity.not_before().into()),
+                    format_iso_date(roa.roa_validity.not_after().into()),
+                    format_iso_date(roa.chain_validity.not_before().into()),
+                    format_iso_date(roa.chain_validity.not_after().into()),
                 )?;
             }
             if let Some(exc) = item.exception_info() {

@@ -24,7 +24,7 @@
 //!
 //! The second part currently comes in two flavours:
 //!
-//! * [origins], which processes data for Route Origin Validation (i.e.,
+//! * [payload], which processes data for Route Origin Validation (i.e.,
 //!   checking that a BGP route has been announced by someone who was
 //!   authorized to do so), and
 //! * [rta], which processes Resource Tagged Authorizations (i.e., objects
