@@ -625,10 +625,19 @@ impl Server {
         let must_notify = history.update(
             report, &exceptions, metrics,
         );
-        info!(
-            "Validation completed. New serial is {}.",
-            history.read().serial()
-        );
+        if log::max_level() >= log::Level::Info {
+            info!("Validation completed.");
+            let (metrics, serial) = {
+                let history = history.read();
+                (history.metrics(), history.serial())
+            };
+            if let Some(metrics) = metrics {
+                output::Summary::log(&metrics)
+            }
+            info!(
+                "New serial is {}.", serial
+            );
+        }
         if must_notify {
             info!("Sending out notifications.");
             notify.notify();
