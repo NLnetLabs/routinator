@@ -329,8 +329,8 @@ use self::noop::ServiceImpl;
 
 /// Unix “Service.”
 ///
-/// This implementation is based on the _daemonize_ crate. See
-/// https://github.com/knsd/daemonize for more information.
+/// This implementation is based on the 
+/// [daemonize](https://github.com/knsd/daemonize) crate.
 ///
 #[cfg(unix)]
 mod unix {
