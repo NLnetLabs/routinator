@@ -206,11 +206,6 @@ pub struct Config {
     /// Disable the use if the gzip transfer encoding in the RRDP client.
     pub rrdp_disable_gzip: bool,
 
-    /// The size of the database cache in megabytes.
-    ///
-    /// If this is `None`, we leave Sled’s default in place.
-    pub cache_capacity: Option<u64>,
-
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
 
@@ -429,12 +424,6 @@ impl Config {
         .arg(Arg::with_name("rrdp-disable-gzip")
             .long("rrdp-disable-gzip")
             .help("Disable the gzip transfer encoding in RRDP")
-        )
-        .arg(Arg::with_name("cache-capacity")
-            .long("cache-capacity")
-            .value_name("MBYTES")
-            .help("Size of the database cache in mbytes")
-            .takes_value(true)
         )
         .arg(Arg::with_name("max-object-size")
             .long("max-object-size")
@@ -769,11 +758,6 @@ impl Config {
             self.rrdp_disable_gzip = true;
         }
 
-        // cache_capacity
-        if let Some(capacity) = from_str_value_of(matches, "cache-capacity")? {
-            self.cache_capacity = Some(capacity)
-        }
-
         // max_object_size
         if let Some(value) = from_str_value_of(matches, "max-object-size")? {
             if value == 0 {
@@ -1083,7 +1067,6 @@ impl Config {
             rrdp_disable_gzip: {
                 file.take_bool("rrdp-disable-gzip")?.unwrap_or(false)
             },
-            cache_capacity: file.take_u64("cache-capacity")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
                     Some(0) => None,
@@ -1265,7 +1248,6 @@ impl Config {
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
             rrdp_disable_gzip: false,
-            cache_capacity: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
@@ -1448,12 +1430,6 @@ impl Config {
             res.insert(
                 "rrdp-disable-gzip".into(),
                 true.into()
-            );
-        }
-        if let Some(capacity) = self.cache_capacity {
-            res.insert(
-                "cache-capacity".into(),
-                i64::try_from(capacity).unwrap_or(i64::MAX).into()
             );
         }
         res.insert("max-object-size".into(),
