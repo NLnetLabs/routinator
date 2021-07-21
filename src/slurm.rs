@@ -290,7 +290,7 @@ struct PrefixAssertion {
     comment: Option<String>,
 }
 
-// We neeed to enforce that max_prefix_len is greater or equal to
+// We need to enforce that max_prefix_len is greater than or equal to
 // prefix.len(), so we need to roll our own implementation.
 impl<'de> Deserialize<'de> for PrefixAssertion {
     fn deserialize<D: Deserializer<'de>>(

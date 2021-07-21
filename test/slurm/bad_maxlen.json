@@ -38,7 +38,7 @@
         "asn": 64496,
         "prefix": "198.51.100.0/24",
         "maxPrefixLength": 20,
-        "comment": "My other important route"
+        "comment": "My other important route with an invalid max len"
       },
       {
         "asn": 64496,
