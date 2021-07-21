@@ -2,9 +2,11 @@
 
 use std::{fmt, io};
 use std::str::FromStr;
+use chrono::{DateTime, Utc};
 use rpki::repository::resources::AsId;
 use serde::Deserialize;
 use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
+use crate::utils::date::format_iso_date;
 
 
 //------------ RouteValidityList ---------------------------------------------
@@ -13,6 +15,7 @@ use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
 #[derive(Clone, Debug)]
 pub struct RouteValidityList<'a> {
     routes: Vec<RouteValidity<'a>>,
+    created: DateTime<Utc>,
 }
 
 impl<'a> RouteValidityList<'a> {
@@ -23,7 +26,8 @@ impl<'a> RouteValidityList<'a> {
         RouteValidityList {
             routes: requests.routes.iter().map(|route| {
                 RouteValidity::new(route.prefix, route.asn, snapshot)
-            }).collect()
+            }).collect(),
+            created: snapshot.created(),
         }
     }
 
@@ -53,7 +57,12 @@ impl<'a> RouteValidityList<'a> {
             write!(target, "    ")?;
             route.write_single_json("    ", target)?;
         }
-        writeln!(target, "\n  ]\n}}")
+        writeln!(target,
+            "\n  ],\
+            \n  \"generatedTime\": \"{}\"\
+            \n}}",
+            format_iso_date(self.created),
+        )
     }
 
     pub fn iter_state(
@@ -187,19 +196,24 @@ impl<'a> RouteValidity<'a> {
         writeln!(target, "{} => {}: {}", self.prefix, self.asn, self.state())
     }
 
-    pub fn into_json(self) -> Vec<u8> {
+    pub fn into_json(self, current: &PayloadSnapshot) -> Vec<u8> {
         let mut res = Vec::new();
-        self.write_json(&mut res).unwrap();
+        self.write_json(current, &mut res).unwrap();
         res
     }
 
     pub fn write_json<W: io::Write>(
         &self,
+        current: &PayloadSnapshot,
         target: &mut W
     ) -> Result<(), io::Error> {
         write!(target, "{{\n  \"validated_route\": ")?;
         self.write_single_json("  ", target)?;
-        writeln!(target, "\n}}")
+        writeln!(target,
+            ",\n  \"generatedTime\": \"{}\"\
+            \n}}",
+            format_iso_date(current.created()),
+        )
     }
 
     fn write_single_json<W: io::Write>(

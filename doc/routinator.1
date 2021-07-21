@@ -500,7 +500,7 @@ Routinator -- all entries will be in one single output file.
 
 .TP
 .B json
-The list is placed into a JSON object with a single element
+The output is in JSON format. The list is placed into a member named 
 .I "roas"
 which contains an array of objects with four elements each: The autonomous
 system number of the network authorized to originate a prefix in
@@ -516,10 +516,19 @@ except for different naming of the trust anchor. Routinator uses the name
 of the TAL file without the extension
 .IR ".tal"
 whereas the RIPE NCC Validator has a dedicated name for each.
+.IP
+The output object also includes a member named
+.I "metadata"
+which provides additional information. Currently, this is a member
+.I "generated"
+which provides the time the list was generated as a Unix timestamp, and a
+member
+.I "generatedTime"
+which provides the same time but in the standard ISO date format.
 
 .TP
 .B jsonext
-The list is placed into a JSON object with a single element
+The output is in JSON format. The list is placed into a member named 
 .I "roas"
 which contains an array of objects with four elements each: The autonomous
 system number of the network authorized to originate a prefix in
@@ -554,6 +563,15 @@ For assertions from local exceptions,
 will provide the path of the local exceptions file and, optionally,
 .I "comment"
 will provide the comment if given for the assertion.
+.IP
+The output object also includes a member named
+.I "metadata"
+which provides additional information. Currently, this is a member
+.I "generated"
+which provides the time the list was generated as a Unix timestamp, and a
+member
+.I "generatedTime"
+which provides the same time but in the standard ISO date format.
 .IP
 Please note that because of this additional information, output in
 .B jsonext

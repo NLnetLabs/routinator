@@ -117,7 +117,7 @@ fn validity(
     .header("Content-Type", "application/json")
     .body(
         RouteValidity::new(prefix, asn, &current)
-        .into_json()
+        .into_json(&current)
         .into()
     ).unwrap()
 }
