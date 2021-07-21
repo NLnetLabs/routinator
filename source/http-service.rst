@@ -45,6 +45,10 @@ This will produce the following output:
 .. code-block:: json
 
    {
+      "metadata": {
+        "generated": 1626853335,
+        "generatedTime": "2021-07-21T07:42:15Z"
+     },
       "roas": [
          { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
          { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },

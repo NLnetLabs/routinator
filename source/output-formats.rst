@@ -5,6 +5,9 @@ VRP Output Formats
 
 .. versionadded:: 0.9
    The ``jsonext`` format
+   
+.. versionadded:: 0.10
+   Metadata in json and jsonext format
 
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be generated
@@ -58,29 +61,39 @@ csvext
          rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
          
 json
-      The VRP list is placed into a JSON object with a single element *roas*
-      which contains an array of objects with four elements each: The autonomous
+      The VRP list is placed into a JSON object with an element *metadata* which
+      contains the date in time the validation run completed, expressed in epoch
+      in *generated* and human-readable in *generatedTime*. The element *roas*
+      contains an array of objects with four elements each: The autonomous
       system number of the network authorised to originate a prefix in *asn*,
       the prefix in slash notation in *prefix*, the maximum prefix length of the
       announced route in *maxLength*, and the trust anchor from which the
-      authorisation was derived in *ta*. This format is identical to that
-      produced by the RIPE NCC RPKI Validator except for different naming of the
-      trust anchor. 
+      authorisation was derived in *ta*. This format of the *roas* element is
+      identical to that produced by the RIPE NCC RPKI Validator except for
+      different naming of the trust anchor. 
+      
+      The object contains a *metadata* element containing the 
       
       .. code-block:: text
          
          {
+           "metadata": {
+             "generated": 1626853335,
+             "generatedTime": "2021-07-21T07:42:15Z"
+           },
            "roas": [
-            { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
-            { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
-            { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
+             { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
+             { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
+             { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
            ]
          }
 
 jsonext
-      The list is placed into a JSON object with a single element *roas* which
+      The list is placed into a JSON object with an element *metadata* which
+      contains the date in time the validation run completed, expressed in epoch
+      in *generated* and human-readable in *generatedTime*. The element *roas*
       contains an array of objects with four elements each: The autonomous
-      system number of the network authorized to originate a prefix in *asn*,
+      system number of the network authorised to originate a prefix in *asn*,
       the prefix in slash notation  in *prefix*, the maximum prefix length of
       the announced route  in *maxLength*.
 
@@ -104,6 +117,10 @@ jsonext
       .. code-block:: text
       
           {
+            "metadata": {
+              "generated": 1626853335,
+              "generatedTime": "2021-07-21T07:42:15Z"
+            },
             "roas": [{
               "asn": "AS196615",
               "prefix": "93.175.147.0/24",
@@ -186,4 +203,3 @@ summary
          ripe: 23495 verified ROAs, 125031 verified VRPs, 0 unsafe VRPs, 125029 final VRPs.
          arin: 30026 verified ROAs, 35806 verified VRPs, 0 unsafe VRPs, 30207 final VRPs.
          total: 76741 verified ROAs, 248225 verified VRPs, 0 unsafe VRPs, 241198 final VRPs.
-
