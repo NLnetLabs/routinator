@@ -429,27 +429,29 @@ async fn handle_api_status(
                         }
                         Err(_) => target.member_raw("duration", "null")
                     }
-                    match metrics.serial {
-                        Some(serial) => {
-                            target.member_raw("serial", serial);
+                    if !metrics.status().is_not_modified() {
+                        match metrics.serial {
+                            Some(serial) => {
+                                target.member_raw("serial", serial);
+                            }
+                            None => target.member_raw("serial", "null")
                         }
-                        None => target.member_raw("serial", "null")
-                    }
-                    match metrics.session {
-                        Some(session) => {
-                            target.member_str("session", session);
+                        match metrics.session {
+                            Some(session) => {
+                                target.member_str("session", session);
+                            }
+                            None => target.member_raw("session", "null")
                         }
-                        None => target.member_raw("session", "null")
-                    }
-                    target.member_raw("delta",
-                        if metrics.snapshot_reason.is_none() { "true" }
-                        else { "false" }
-                    );
-                    if let Some(reason) = metrics.snapshot_reason {
-                        target.member_str("snapshot_reason", reason.code())
-                    }
-                    else {
-                        target.member_raw("snapshot_reason", "null");
+                        target.member_raw("delta",
+                            if metrics.snapshot_reason.is_none() { "true" }
+                            else { "false" }
+                        );
+                        if let Some(reason) = metrics.snapshot_reason {
+                            target.member_str("snapshot_reason", reason.code())
+                        }
+                        else {
+                            target.member_raw("snapshot_reason", "null");
+                        }
                     }
                 })
             }

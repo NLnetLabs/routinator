@@ -45,18 +45,10 @@ use crate::error::Failed;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
+use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::dump::DumpRegistry;
-use crate::utils::http::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
-
-
-///----------- Configuration Constants ---------------------------------------
-
-/// The default timeout for RRDP requests.
-///
-/// This is mentioned in the man page. If you change it, also change it there.
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 
 //------------ Collector -----------------------------------------------------
@@ -148,7 +140,9 @@ impl Collector {
     /// Dumps the content of the RRDP collector.
     #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        let mut registry = DumpRegistry::new(dir.into());
+        let dir = dir.join("rrdp");
+        debug!("Dumping RRDP collector content to {}", dir.display());
+        let mut registry = DumpRegistry::new(dir);
         let mut states = HashMap::new();
         for entry in fatal::read_dir(&self.working_dir)? {
             let entry = entry?;
@@ -165,6 +159,7 @@ impl Collector {
             }
         }
         self.dump_repository_json(registry, states)?;
+        debug!("RRDP collector dump complete.");
         Ok(())
     }
 
@@ -185,7 +180,7 @@ impl Collector {
 
         fatal::create_dir_all(&target_path)?;
 
-        Self::dump_tree(&repo_path.join("rrdp"), &target_path)?;
+        Self::dump_tree(&repo_path.join("rsync"), &target_path)?;
 
         state_registry.insert(state.rpki_notify.clone(), state);
 
@@ -206,7 +201,7 @@ impl Collector {
             }
             else if entry.is_file() {
                 let target_path = target_path.join(entry.file_name());
-                fatal::create_dir_all(&target_path)?;
+                fatal::create_parent_all(&target_path)?;
                 if let Err(err) = fs::copy(entry.path(), &target_path) {
                     error!(
                         "Fatal: failed to copy {} to {}: {}",
@@ -1303,16 +1298,8 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(true);
-        match config.rrdp_timeout {
-            Some(Some(timeout)) => {
-                builder = builder.timeout(timeout);
-            }
-            Some(None) => { /* keep no timeout */ }
-            None => {
-                builder = builder.timeout(DEFAULT_TIMEOUT);
-            }
-        }
+        builder = builder.gzip(!config.rrdp_disable_gzip);
+        builder = builder.timeout(config.rrdp_timeout);
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
@@ -2195,6 +2182,13 @@ impl HttpStatus {
             HttpStatus::Response(code) => code.as_u16() as i16,
             HttpStatus::Error => -1
         }
+    }
+
+    pub fn is_not_modified(self) -> bool {
+        matches!(
+            self,
+            HttpStatus::Response(code) if code == StatusCode::NOT_MODIFIED
+        )
     }
 
     pub fn is_success(self) -> bool {

@@ -8,7 +8,7 @@
 
 use std::{env, fmt, fs};
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -43,6 +43,9 @@ const DEFAULT_EXPIRE: u64 = 7200;
 
 /// The default number of VRP diffs to keep.
 const DEFAULT_HISTORY_SIZE: usize = 10;
+
+/// The default for the RRDP timeout.
+const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// The default for the RRDP fallback time.
 const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
@@ -175,12 +178,10 @@ pub struct Config {
     /// The maxmimm number of deltas we allow before using snapshot.
     pub rrdp_max_delta_count: usize,
 
-    /// Optional RRDP timeout in seconds.
+    /// RRDP timeout in seconds.
     ///
-    /// If this is not set, the default timeouts of the `reqwest` crate are
-    /// used. Use `Some(None)` for no timeout.
-    #[allow(clippy::option_option)]
-    pub rrdp_timeout: Option<Option<Duration>>,
+    /// If this is None, no timeout is set.
+    pub rrdp_timeout: Option<Duration>,
 
     /// Optional RRDP connect timeout in seconds.
     pub rrdp_connect_timeout: Option<Duration>,
@@ -201,6 +202,9 @@ pub struct Config {
 
     /// Should we keep RRDP responses and if so where?
     pub rrdp_keep_responses: Option<PathBuf>,
+
+    /// Disable the use if the gzip transfer encoding in the RRDP client.
+    pub rrdp_disable_gzip: bool,
 
     /// The size of the database cache in megabytes.
     ///
@@ -376,6 +380,12 @@ impl Config {
             .value_name("COUNT")
             .help("Maximum number of RRDP deltas before using snapshot")
         )
+        .arg(Arg::with_name("rrdp-fallback-time")
+            .long("rrdp-fallback-time")
+            .takes_value(true)
+            .value_name("SECONDS")
+            .help("Maximum time since last update before fallback to rsync")
+        )
         .arg(Arg::with_name("rrdp-timeout")
             .long("rrdp-timeout")
             .value_name("SECONDS")
@@ -415,6 +425,10 @@ impl Config {
             .value_name("DIR")
             .help("Keep RRDP responses in the given directory")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("rrdp-disable-gzip")
+            .long("rrdp-disable-gzip")
+            .help("Disable the gzip transfer encoding in RRDP")
         )
         .arg(Arg::with_name("cache-capacity")
             .long("cache-capacity")
@@ -706,14 +720,18 @@ impl Config {
 
         // rrdp_timeout
         if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
-            self.rrdp_timeout = match value {
-                0 => Some(None),
-                value => Some(Some(Duration::from_secs(value))),
+            self.rrdp_timeout = if value == 0 {
+                None
             }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // rrdp_connect_timeout
-        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+        if let Some(value) = from_str_value_of(
+            matches, "rrdp-connect-timeout"
+        )? {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
         }
 
@@ -744,6 +762,11 @@ impl Config {
         // rrdp_keep_responses
         if let Some(path) = matches.value_of("rrdp-keep-responses") {
             self.rrdp_keep_responses = Some(path.into())
+        }
+
+        // rrdp_disable_gzip
+        if matches.is_present("rrdp-disable-gzip") {
+            self.rrdp_disable_gzip = true;
         }
 
         // cache_capacity
@@ -1036,15 +1059,11 @@ impl Config {
                 .unwrap_or(DEFAULT_RRDP_MAX_DELTA_COUNT)
             },
             rrdp_timeout: {
-                file.take_u64("rrdp-timeout")?
-                .map(|secs| {
-                    if secs == 0 {
-                        None
-                    }
-                    else {
-                        Some(Duration::from_secs(secs))
-                    }
-                })
+                match file.take_u64("rrdp-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RRDP_TIMEOUT)
+                }
             },
             rrdp_connect_timeout: {
                 file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
@@ -1061,6 +1080,9 @@ impl Config {
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
+            rrdp_disable_gzip: {
+                file.take_bool("rrdp-disable-gzip")?.unwrap_or(false)
+            },
             cache_capacity: file.take_u64("cache-capacity")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
@@ -1235,13 +1257,14 @@ impl Config {
             disable_rrdp: false,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
-            rrdp_timeout: None,
+            rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
             rrdp_connect_timeout: None,
             rrdp_local_addr: None,
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: None,
+            rrdp_disable_gzip: false,
             cache_capacity: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
@@ -1383,12 +1406,15 @@ impl Config {
             "rrdp-max-delta-count".into(),
             i64::try_from(self.rrdp_max_delta_count).unwrap_or(i64::MAX).into()
         );
-        if let Some(timeout) = self.rrdp_timeout {
-            res.insert(
-                "rrdp-timeout".into(),
-                ((timeout.map(|d| d.as_secs()).unwrap_or(0)) as i64).into()
-            );
-        }
+        res.insert(
+            "rrdp-timeout".into(),
+            match self.rrdp_timeout {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
+        );
         if let Some(timeout) = self.rrdp_connect_timeout {
             res.insert(
                 "rrdp-connect-timeout".into(),
@@ -1416,6 +1442,12 @@ impl Config {
             res.insert(
                 "rrdp-keep-responses".into(),
                 format!("{}", path.display()).into()
+            );
+        }
+        if self.rrdp_disable_gzip {
+            res.insert(
+                "rrdp-disable-gzip".into(),
+                true.into()
             );
         }
         if let Some(capacity) = self.cache_capacity {

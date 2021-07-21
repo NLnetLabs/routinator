@@ -24,27 +24,51 @@
 //!
 //! # Data Storage
 //!
-//! The store uses the file system to store its data. Each repository has a
-//! directory of its own. For RRDP, the directory is named after the SHA-256
-//! hash of the rpkiNotify URI. This directory is in turned stored in an
-//! intermediary directory named after the authority part of the repositories
-//! rpkiNotify URI. For rsync there is only one directory, called
-//! `rsync`.
+//! The store uses the file system to store its data. It has its dedicated
+//! directory within the RPKI repository directory, normally named `stored`
+//! (this is because an earlier version used `store` already). Within this
+//! directory are four sub-directories: `rrdp` and `rsync` contain the data
+//! for each stored publication point; `ta` contains the downloaded trust
+//! anchor certificates; and `tmp` is a directory for storing files as they
+//! are constructed.
 //!
-//! Within each repository, all the objects of a publication point are stored
-//! in a single file. This file is named using the manifest’s signedObject
-//! URI (i.e., where the manifest would be found if the rsync repository
-//! would be used). The first component of this path is the URI scheme, i.e.,
-//! `rsync`. The file contains information about the manifest, the CRL,
-//! and each object listed on the manifest.
+//! All publication points that do not support RRDP are stored under `rsync`.
+//! Each has a file stored at a path and file name derived from the
+//! signedObject URI of its manifest, starting with the authority part of the
+//! URI and then just following along. The file contains status information,
+//! the manifest, the CRL, and each object. It starts with a serialized
+//! [`StoredManifest`] which is followed by a sequence of serialized
+//! [`StoredObject`]s for all the objects as given on the manifest.
+//!
+//! All publication points that are hosted in an RRDP repository are stored
+//! under `rrdp`, independently of whether they have been retrieved via RRDP
+//! or rsync. Directly under `rrdp` is a set of directories for all the
+//! authorities (i.e., host names) of the RRDP servers seen. Within each of
+//! these is a set of directories named after the SHA-256 hash of the
+//! rpkiNotify URI of the RRDP repository. These directories in turn contain
+//! the same files for each publication point as in the rsync case above. They
+//! are similarly stored at a path and file name derived from the signedObject
+//! URI of the manifest with the `rsync` scheme used as the first component
+//! instead. (There is no good reason for that, it just happened.)
+//!
+//! Trust anchor certficates are stored under `ta` using a three level
+//! directory structure derived from the URI the certificate is retrieved
+//! from. The first level is the scheme, `https` or `rsync`, the second
+//! level is the authority (i.e., hostname), and the third is the SHA-256
+//! hash of the full URI with an extension of `.cer` added.
+//!
+//! Finally, the `tmp` directory is used to build the publication point files
+//! in so they can be constructed without yet knowing whether the update is
+//! actually complete and correct. File names here are named using eight
+//! random hex-digits.
 
 use std::{error, fs, io};
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
-use log::{error, warn};
+use log::{debug, error, warn};
 use rand::random;
 use rpki::repository::Cert;
 use rpki::repository::crypto::digest::DigestAlgorithm;
@@ -57,9 +81,11 @@ use crate::config::Config;
 use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
+use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
+use crate::utils::uri::UriExt;
 
 
 //------------ Store ---------------------------------------------------------
@@ -127,22 +153,14 @@ impl Store {
 
     /// Dumps the content of the store.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        let dir = dir.join("stored");
-
-        if let Err(err) = fs::remove_dir_all(&dir) {
-            if err.kind() != io::ErrorKind::NotFound {
-                error!(
-                    "Failed to delete directory {}: {}",
-                    dir.display(), err
-                );
-                return Err(Failed)
-            }
-        }
-
+        let dir = dir.join("store");
+        debug!("Dumping store content to {}", dir.display());
+        fatal::remove_dir_all(&dir)?;
         let mut repos = DumpRegistry::new(dir);
         self.dump_tree(&self.rsync_repository_path(), &mut repos)?;
         self.dump_tree(&self.rrdp_repository_base(), &mut repos)?;
         self.dump_repository_json(repos)?;
+        debug!("Store dump complete.");
         Ok(())
     }
 
@@ -155,9 +173,16 @@ impl Store {
         path: &Path,
         repos: &mut DumpRegistry,
     ) -> Result<(), Failed> {
-        for_each_file(path, |path| {
-            self.dump_point(path, repos)
-        })
+        for entry in fatal::read_dir(path)? {
+            let entry = entry?;
+            if entry.is_dir() {
+                self.dump_tree(entry.path(), repos)?;
+            }
+            else if entry.is_file() {
+                self.dump_point(entry.path(), repos)?;
+            }
+        }
+        Ok(())
     }
 
     /// Dumps all data for a single stored publication point.
@@ -227,13 +252,7 @@ impl Store {
             )
         );
         if let Some(dir) = path.parent() {
-            if let Err(err) = fs::create_dir_all(&dir) {
-                error!(
-                    "Fatal: cannot create directory {}: {}",
-                    dir.display(), err
-                );
-                return Err(Failed)
-            }
+            fatal::create_dir_all(dir)?;
         }
         let mut target = match File::create(&path) {
             Ok(some) => some,
@@ -256,16 +275,15 @@ impl Store {
         Ok(())
     }
 
-
     /// Writes the repositories.json file.
     fn dump_repository_json(
         &self,
         repos: DumpRegistry,
     ) -> Result<(), Failed> {
         let path = repos.base_dir().join("repositories.json");
-        if let Err(err) = fs::write(
+        fatal::write_file(
             &path, 
-            &JsonBuilder::build(|builder| {
+            JsonBuilder::build(|builder| {
                 builder.member_array("repositories", |builder| {
                     for (key, value) in repos.rrdp_uris() {
                         builder.array_object(|builder| {
@@ -284,74 +302,54 @@ impl Store {
                         builder.member_str("type", "rsync");
                     });
                 })
-            })
-        ) {
-            error!( "Failed to write {}: {}", path.display(), err);
-            return Err(Failed)
-        }
-
-        Ok(())
+            }).as_bytes()
+        )
     }
 
+    /// Returns the path to use for the trust anchor at the given URI.
     fn ta_path(&self, uri: &TalUri) -> PathBuf {
         match *uri {
             TalUri::Rsync(ref uri) => {
-                self.path.join(format!(
-                    "ta/rsync/{}/{}/{}",
-                    uri.canonical_authority(),
-                    uri.module_name(),
-                    uri.path()
-                ))
+                self.path.join(
+                    uri.unique_path("ta/rsync", ".cer")
+                )
             }
             TalUri::Https(ref uri) => {
-                self.path.join(format!(
-                    "ta/https/{}/{}",
-                    uri.canonical_authority(),
-                    uri.path()
-                ))
+                self.path.join(
+                    uri.unique_path("ta/https", ".cer")
+                )
             }
         }
     }
 
+    /// The name of the directory where all the RRDP repositories go.
     const RRDP_BASE: &'static str = "rrdp";
 
+    /// Returns the path where all the RRDP repositories are stored.
     fn rrdp_repository_base(&self) -> PathBuf {
         self.path.join(Self::RRDP_BASE)
     }
 
+    /// Returns the path for the RRDP repository with the given rpkiNotify URI.
     fn rrdp_repository_path(&self, uri: &uri::Https) -> PathBuf {
-        let authority = uri.canonical_authority();
-        let alg = DigestAlgorithm::sha256();
-        let mut dir = String::with_capacity(
-            Self::RRDP_BASE.len()
-            + authority.len()
-            + alg.digest_len()
-            + 2 // two slashes
-        );
-        dir.push_str(Self::RRDP_BASE);
-        dir.push('/');
-        dir.push_str(&authority);
-        dir.push('/');
-        crate::utils::str::append_hex(
-            alg.digest(uri.as_slice()).as_ref(),
-            &mut dir
-        );
-        self.path.join(dir)
+        self.path.join(uri.unique_path(Self::RRDP_BASE, ""))
     }
 
+    /// Returns the path where the combined rsync repository is stored.
     fn rsync_repository_path(&self) -> PathBuf {
         self.path.join("rsync")
     }
 
+    /// The name of the directory where the temporary files go.
+    const TMP_BASE: &'static str = "tmp";
+
+    /// Creates and returns a temporary file.
+    ///
+    /// The file is created in the store’s temporary path. If this succeeds,
+    /// the path and file object are returned.
     fn tmp_file(&self) -> Result<(PathBuf, File), Failed> {
-        let tmp_dir = self.path.join("tmp");
-        if let Err(err) = fs::create_dir_all(&tmp_dir) {
-            error!(
-                "Fatal: cannot create directory at {}: {}",
-                tmp_dir.display(), err
-            );
-            return Err(Failed)
-        }
+        let tmp_dir = self.path.join(Self::TMP_BASE);
+        fatal::create_dir_all(&tmp_dir)?;
         for _ in 0..100 {
             let tmp_path = tmp_dir.join(format!("{:08x}", random::<u32>()));
             let file = {
@@ -390,9 +388,7 @@ impl Store {
 ///
 /// The type provides access to the stored versions of trust anchor
 /// certificates via the [`load_ta`][Self::load_ta] method and repositories
-/// through the [`repository`][Self::repository] method and its more specific
-/// friends [`rrdp_repository`][Self::rrdp_repository] and
-/// [`rsync_repository`][Self::rsync_repository].
+/// through the [`repository`][Self::repository] method.
 ///
 /// Stored trust anchor certificates can be updated via
 /// [`update_ta`][Self::update_ta] on [`Run`] directly, while the
@@ -400,7 +396,7 @@ impl Store {
 ///
 /// This type references the underlying [`Store`]. It can be used with
 /// multiple threads using
-/// [crossbeam’s][https://github.com/crossbeam-rs/crossbeam] scoped threads.
+/// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
     /// A reference to the underlying store.
@@ -426,20 +422,9 @@ impl<'a> Run<'a> {
 
     /// Loads a stored trust anchor certificate.
     pub fn load_ta(&self, uri: &TalUri) -> Result<Option<Bytes>, Failed> {
-        let path = self.store.ta_path(uri);
-        match fs::read(&path) {
-            Ok(res) => Ok(Some(res.into())),
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                Ok(None)
-            }
-            Err(err) => {
-                error!(
-                    "Fatal: failed to read from file {}: {}",
-                    path.display(), err
-                );
-                Err(Failed)
-            }
-        }
+        fatal::read_existing_file(&self.store.ta_path(uri)).map(|maybe| {
+            maybe.map(Into::into)
+        })
     }
 
     /// Updates or inserts a stored trust anchor certificate.
@@ -448,24 +433,12 @@ impl<'a> Run<'a> {
     ) -> Result<(), Failed> {
         let path = self.store.ta_path(uri);
         if let Some(dir) = path.parent() {
-            if let Err(err) = fs::create_dir_all(&dir) {
-                error!(
-                    "Fatal: failed to create directory {}: {}",
-                    dir.display(), err
-                );
-                return Err(Failed)
-            }
+            fatal::create_dir_all(dir)?;
         }
-        fs::write(&path, content).map_err(|err| {
-            error!(
-                "Fatal: failed to write to file {}: {}",
-                path.display(), err
-            );
-            Failed
-        })
+        fatal::write_file(&path, content)
     }
 
-    /// Accesses the repository for the provided PRKI CA.
+    /// Accesses the repository for the provided RPKI CA.
     ///
     /// If the CA’s rpkiNotify URI is present, the RRDP repository identified
     /// by that URI will be returned, otherwise the rsync repository will be
@@ -507,16 +480,15 @@ impl<'a> Run<'a> {
     /// RRDP repositories that have no more publication points are removed,
     /// too.
     ///
-    /// If `collector` is provided, then all RRDP repositories and rsync
-    /// modules retained are registered with it for retaining in the
-    /// collector as well.
+    /// All RRDP repositories and rsync modules retained are registered with
+    /// `collector` for retaining in the collector as well.
     pub fn cleanup(
         &self,
         collector: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
         self.cleanup_ta()?;
-        self.cleanup_rrdp(collector)?;
-        self.cleanup_rsync(collector)?;
+        self.cleanup_points(&self.store.rrdp_repository_base(), collector)?;
+        self.cleanup_points(&self.store.rsync_repository_path(), collector)?;
         self.cleanup_tmp()?;
         Ok(())
     }
@@ -527,8 +499,7 @@ impl<'a> Run<'a> {
     /// or that are expired certificates.
     fn cleanup_ta(&self) -> Result<(), Failed> {
         cleanup_dir_tree(&self.store.path.join("ta"), |path| {
-            let mut content = Vec::new();
-            File::open(&path)?.read_to_end(&mut content)?;
+            let content = fatal::read_file(path)?;
             if let Ok(cert) = Cert::decode(Bytes::from(content)) {
                 if cert.validity().not_after() > Time::now() {
                     return Ok(true)
@@ -538,34 +509,27 @@ impl<'a> Run<'a> {
         })
     }
 
-    /// Cleans up the RRDP repositories.
+    /// Cleans up a tree with publication points.
     ///
     /// Deletes all publication points with an expired manifest as well as
     /// any obviously garbage files. The RRDP repository of any publication
     /// point that is retained is registered to be retained by the collector.
-    fn cleanup_rrdp(
+    fn cleanup_points(
         &self,
+        base: &Path,
         retain: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.store.rrdp_repository_base(), |path| {
-            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
-                if let Some(uri) = stored.retain_rrdp() {
-                    retain.add_rrdp_repository(&uri);
-                    return Ok(true)
-                }
-            }
-            Ok(false)
-        })
-    }
-
-    fn cleanup_rsync(
-        &self,
-        retain: &mut collector::Cleanup,
-    ) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.store.rsync_repository_path(), |path| {
-            if let Ok(stored) = StoredManifest::read(&mut File::open(&path)?) {
-                if let Some(uri) = stored.retain_rsync() {
-                    retain.add_rsync_module(&uri);
+        cleanup_dir_tree(base, |path| {
+            if let Ok(stored) = StoredManifest::read(
+                &mut fatal::open_file(path)?
+            ) {
+                if stored.retain() {
+                    if let Some(uri) = stored.rpki_notify.as_ref() {
+                        retain.add_rrdp_repository(uri)
+                    }
+                    else {
+                        retain.add_rsync_module(&stored.manifest_uri)
+                    }
                     return Ok(true)
                 }
             }
@@ -591,8 +555,7 @@ impl<'a> Run<'a> {
 /// manifest’s object list.
 ///
 /// You can get access to a publication point via
-/// [`get_point`][Self::get_point] and delete one via
-/// [`remove_point`][Self::remove_point].
+/// [`get_point`][Self::get_point].
 ///
 pub struct Repository<'a> {
     /// The store we are part of.
@@ -622,9 +585,7 @@ impl<'a> Repository<'a> {
     /// manifest.
     ///
     /// A stored point instance will be returned whether there actually is
-    /// information stored for the point or not. You can use
-    /// [`StoredPoint::exists`] to check if there is previously stored
-    /// information.
+    /// information stored for the point or not.
     pub fn get_point(
         &self, manifest_uri: &uri::Rsync
     ) -> Result<StoredPoint<'a>, Failed> {
@@ -633,16 +594,7 @@ impl<'a> Repository<'a> {
         )
     }
 
-    /// Completely removes a publication point.
-    ///
-    /// The publication point to be removed is given via its manifest’s
-    /// signedObject URI.
-    pub fn remove_point(
-        &self, manifest_uri: &uri::Rsync
-    ) -> Result<(), io::Error> {
-        fs::remove_file(self.point_path(manifest_uri))
-    }
-
+    /// Returns the path for a publication point with the given manifest URI.
     fn point_path(&self, manifest_uri: &uri::Rsync) -> PathBuf {
         self.path.join(
             format!(
@@ -658,16 +610,37 @@ impl<'a> Repository<'a> {
 
 //------------ StoredPoint ---------------------------------------------------
 
+/// The stored information of a publication point.
+///
+/// This types allows access to the stored manifest via
+/// [`manifest`][Self::manifest] and acts as an iterator over the
+/// publication point’s objects. The method [`update`][Self::update] allows
+/// atomically updating the information.
 pub struct StoredPoint<'a> {
+    /// A reference to the underlying store.
     store: &'a Store,
+
+    /// The path to the file-system location of the repository.
     path: PathBuf,
+
+    /// The file with all the information we need.
+    ///
+    /// There will only be something here if there actually is a stored
+    /// point on disk yet.
     file: Option<File>,
+
+    /// The stored manifest for the point if there is one.
     manifest: Option<StoredManifest>,
-    object_start: u64,
+
+    /// Is this a publication point with in an RRDP repository?
     is_rrdp: bool,
 }
 
 impl<'a> StoredPoint<'a> {
+    /// Opens the stored point.
+    ///
+    /// If there is a file at the given path, it is opened. Otherwise, er,
+    /// well, it is not.
     fn open(
         store: &'a Store,
         path: PathBuf,
@@ -680,7 +653,6 @@ impl<'a> StoredPoint<'a> {
                     store, path,
                     file: None,
                     manifest: None,
-                    object_start: 0,
                     is_rrdp
                 })
             }
@@ -701,40 +673,34 @@ impl<'a> StoredPoint<'a> {
             Failed
         })?;
 
-        let object_start = file.seek(SeekFrom::Current(0)).map_err(|err| {
-            error!(
-                "Failed to read stored publication point at {}: {}",
-                path.display(), err
-            );
-            Failed
-        })?;
-
         Ok(StoredPoint {
             store, path,
             file: Some(file),
             manifest: Some(manifest),
-            object_start,
             is_rrdp
         })
     }
 
+    /// Returns whether the stored point is for an RRDP repository.
     pub fn is_rrdp(&self) -> bool {
         self.is_rrdp
     }
 
+    /// Returns a reference to the stored manifest if available.
+    ///
+    /// The manifest will not be available if there is no previously stored
+    /// version of the publication point and an update has not succeeded yet,
+    /// or if the manifest has been taken out via
+    /// [`take_manifest`][Self::take_manifest].
     pub fn manifest(&self) -> Option<&StoredManifest> {
         self.manifest.as_ref()
     }
 
+    /// Takes the stored manifest from the point.
+    ///
+    /// Afterwards, [`manifest`][Self::manifest] will return `None`.
     pub fn take_manifest(&mut self) -> Option<StoredManifest> {
         self.manifest.take()
-    }
-
-    pub fn rewind(&mut self) -> Result<(), io::Error> {
-        if let Some(file) = self.file.as_mut() {
-            file.seek(SeekFrom::Start(self.object_start))?;
-        }
-        Ok(())
     }
 
     /// Replaces the data of the stored point.
@@ -742,7 +708,7 @@ impl<'a> StoredPoint<'a> {
     /// Updates the manifest with the provided manifest and the objects
     /// provided by the closure. The closure is called repeatedly until it
     /// either returns `Ok(None)` or `Err(_)`. In the latter case, the update
-    /// is cancelled, the old point retained unchanged and the error is
+    /// is cancelled, the old point remains unchanged and the error is
     /// returned. Otherwise, `self` represents the new point. It is
     /// positioned at the first object, i.e., if it is iterated over, the
     /// first object will be returned next.
@@ -785,13 +751,7 @@ impl<'a> StoredPoint<'a> {
                 Ok(None) => break,
                 Err(err) => {
                     drop(tmp_file);
-                    if let Err(err) = fs::remove_file(&tmp_path) {
-                        error!(
-                            "Fatal: failed to delete file {}: {}",
-                            tmp_path.display(), err
-                        );
-                        return Err(UpdateError::Fatal)
-                    }
+                    fatal::remove_file(&tmp_path)?;
                     return Err(err)
                 }
             }
@@ -802,40 +762,13 @@ impl<'a> StoredPoint<'a> {
         drop(self.file.take());
 
         if existing {
-            if let Err(err) = fs::remove_file(&self.path) {
-                error!(
-                    "Fatal: cannot delete file {}: {}",
-                    self.path.display(), err
-                );
-                return Err(UpdateError::Fatal)
-            }
+            fatal::remove_file(&self.path)?;
         }
         else if let Some(path) = self.path.parent() {
-            if let Err(err) = fs::create_dir_all(&path) {
-                error!(
-                    "Fatal: cannot create direcory {}: {}",
-                    path.display(), err
-                );
-                return Err(UpdateError::Fatal)
-            }
+            fatal::create_dir_all(path)?;
         }
-        if let Err(err) = fs::rename(&tmp_path, &self.path) {
-            error!(
-                "Fatal: cannot move {} to {}: {}",
-                tmp_path.display(), self.path.display(), err
-            );
-            return Err(UpdateError::Fatal)
-        }
-        let mut file = match File::open(&self.path) {
-            Ok(some) => some,
-            Err(err) => {
-                error!(
-                    "Fatal: failed to open {}: {}",
-                    self.path.display(), err
-                );
-                return Err(UpdateError::Fatal)
-            }
-        };
+        fatal::rename(&tmp_path, &self.path)?;
+        let mut file = fatal::open_file(&self.path)?;
         if let Err(err) = file.seek(SeekFrom::Start(tmp_object_start)) {
             error!(
                 "Fatal: failed to position file {}: {}",
@@ -846,7 +779,6 @@ impl<'a> StoredPoint<'a> {
 
         self.file = Some(file);
         self.manifest = Some(manifest);
-        self.object_start = tmp_object_start;
 
         Ok(())
     }
@@ -980,29 +912,9 @@ impl StoredManifest {
         Ok(())
     }
 
-    /// Returns whether we should retain the stored manifest in an RRDP repo.
-    ///
-    /// Returns the URI of the repository if we should or `None` if we
-    /// shouldn’t.
-    fn retain_rrdp(&self) -> Option<uri::Https> {
-        if self.not_after <= Time::now() {
-            None
-        }
-        else {
-            self.rpki_notify.clone()
-        }
-    }
-
-    /// Returns whether we should retain the stored manifest in an rsync repo.
-    ///
-    /// Returns the manifest URI if we should or `None` if we shouldn’t.
-    fn retain_rsync(&self) -> Option<uri::Rsync> {
-        if self.not_after <= Time::now() {
-            None
-        }
-        else {
-            Some(self.manifest_uri.clone())
-        }
+    /// Returns whether we should retain the stored manifest.
+    fn retain(&self) -> bool {
+        self.not_after > Time::now()
     }
 }
 
@@ -1141,9 +1053,9 @@ impl StoredObject {
 
     /// Verifies that the object matches the given hash.
     ///
-    /// This will be a simple comparison with [`Self::hash`] if both hashes
-    /// use the same algorithm (which currently is always true but may change
-    /// in the future) otherwise the object’s bytes are being hashed.
+    /// This will be a simple comparison if both hashes use the same algorithm
+    /// (which currently is always true but may change in the future)
+    /// otherwise the object’s bytes are being hashed.
     pub fn verify_hash(
         &self, hash: &ManifestHash
     ) -> Result<(), ValidationError> {
@@ -1206,63 +1118,6 @@ fn io_err_other<T>(
     Err(io::Error::new(io::ErrorKind::Other, err))
 }
 
-/// Recursively iterate over all files in a directory tree.
-fn for_each_file(
-    base: &Path,
-    mut op: impl FnMut(&Path) -> Result<(), Failed>
-) -> Result<(), Failed> {
-    fn recurse(
-        base: &Path,
-        op: &mut impl FnMut(&Path) -> Result<(), Failed>
-    ) -> Result<(), Failed> {
-        let dir = match fs::read_dir(base) {
-            Ok(dir) => dir,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(())
-            }
-            Err(err) => {
-                error!(
-                    "Failed to read directory {}: {}",
-                    base.display(), err
-                );
-                return Err(Failed)
-            }
-        };
-
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    error!(
-                        "Failed to read directory {}: {}",
-                        base.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            let ftype = match entry.file_type() {
-                Ok(ftype) => ftype,
-                Err(err) => {
-                    error!(
-                        "Failed to read directory {}: {}",
-                        base.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            let path = entry.path();
-            if ftype.is_dir() {
-                recurse(&path, op)?;
-            }
-            else if ftype.is_file() {
-                op(&path)?;
-            }
-        }
-        Ok(())
-    }
-    recurse(base, &mut op)
-}
-
 
 /// Cleans up a directory tree.
 ///
@@ -1271,92 +1126,55 @@ fn for_each_file(
 /// directory is deleted.
 fn cleanup_dir_tree(
     base: &Path,
-    mut keep: impl FnMut(&Path) -> Result<bool, io::Error>
+    mut keep: impl FnMut(&Path) -> Result<bool, Failed>
 ) -> Result<(), Failed> {
+    /// Actual recursion.
+    ///
+    /// If `top` is `true`, we ignore if the directory `path` is missing.
+    ///
+    /// Returns whether the `base` needs to be kept. I.e., if `Ok(false)`
+    /// is returned, the calling recursing step will perform a
+    /// `delete_dir_all(base)`.
     fn recurse(
         base: &Path,
-        op: &mut impl FnMut(&Path) -> Result<bool, io::Error>
+        top: bool,
+        op: &mut impl FnMut(&Path) -> Result<bool, Failed>
     ) -> Result<bool, Failed> {
-        let dir = match fs::read_dir(base) {
-            Ok(dir) => dir,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(false)
+        let dir = if top {
+            match fatal::read_existing_dir(base)? {
+                Some(dir) => dir,
+                None => return Ok(false),
             }
-            Err(err) => {
-                error!(
-                    "Failed to read directory {}: {}",
-                    base.display(), err
-                );
-                return Err(Failed)
-            }
+        }
+        else {
+            fatal::read_dir(base)?
         };
 
         let mut keep = false;
         for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    error!(
-                        "Failed to read directory {}: {}",
-                        base.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            let ftype = match entry.file_type() {
-                Ok(ftype) => ftype,
-                Err(err) => {
-                    error!(
-                        "Failed to read directory {}: {}",
-                        base.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            let path = entry.path();
-            if ftype.is_dir() {
-                if !recurse(&path, op)? {
-                    if let Err(err) = fs::remove_dir(&path) {
-                        error!(
-                            "Failed to delete unused directory {}: {}",
-                            path.display(), err
-                        );
-                        return Err(Failed)
-                    }
+            let entry = entry?;
+            if entry.is_dir() {
+                if !recurse(entry.path(), false, op)? {
+                    fatal::remove_dir_all(entry.path())?;
                 }
                 else {
                     keep = true;
                 }
             }
-            else if ftype.is_file() {
-                let res = match op(&path) {
-                    Ok(res) => res,
-                    Err(err) => {
-                        error!("{}: {}", path.display(), err);
-                        return Err(Failed)
-                    }
-                };
-                if !res {
-                    if let Err(err) = fs::remove_file(&path) {
-                        error!(
-                            "Failed to delete unused file {}: {}",
-                            path.display(), err
-                        );
-                        return Err(Failed)
-                    }
+            else if entry.is_file() {
+                if !op(entry.path())? {
+                    fatal::remove_file(entry.path())?;
                 }
                 else {
                     keep = true;
                 }
             }
-            else {
-                // Something fishy. Let’s not try deleting it.
-                keep = true;
-            }
+            // Let’s not try deleting non-file-and-non-dir things here but
+            // leave it to remove_dir_all to give it a shot.
         }
         Ok(keep)
     }
-    recurse(base, &mut keep).map(|_| ())
+    recurse(base, true, &mut keep).map(|_| ())
 }
 
 

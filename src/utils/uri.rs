@@ -1,8 +1,11 @@
 //! Utilities for handling rsync and HTTPS URIs.
 
+use std::borrow::Cow;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use rpki::uri;
+use rpki::repository::crypto::{Digest, DigestAlgorithm};
 
 
 //------------ UriExt --------------------------------------------------------
@@ -10,6 +13,7 @@ use rpki::uri;
 /// An extension trait for URI kind of types.
 pub trait UriExt {
     fn get_authority(&self) -> &str;
+    fn unique_components(&self) -> (Cow<str>, Digest);
 
     /// Returns whether the URI has a dubious authority.
     ///
@@ -41,17 +45,67 @@ pub trait UriExt {
 
         false
     }
+
+    /// Returns a unique relative path derived from this URI.
+    fn unique_path(
+        &self, prefix: &str, extension: &str
+    ) -> PathBuf {
+        let (authority, digest) = self.unique_components();
+        let mut res = String::with_capacity(
+            prefix.len()
+            + authority.len()
+            + digest.as_ref().len() * 2 // two hexdigits per octet
+            + extension.len()
+            + 2 // up to two slashes.
+        );
+        if !prefix.is_empty() {
+            res.push_str(prefix);
+            res.push('/');
+        }
+        res.push_str(&authority);
+        res.push('/');
+        crate::utils::str::append_hex(
+            digest.as_ref(),
+            &mut res
+        );
+        if !extension.is_empty() {
+            res.push_str(extension)
+        }
+        res.into()
+    }
 }
 
 impl UriExt for uri::Https {
     fn get_authority(&self) -> &str {
         self.authority()
     }
+
+    fn unique_components(&self) -> (Cow<str>, Digest) {
+        let authority = self.canonical_authority();
+        let mut digest = DigestAlgorithm::sha256().start();
+        digest.update(b"https://");
+        digest.update(authority.as_bytes());
+        digest.update(b"/");
+        digest.update(self.path().as_bytes());
+        (authority, digest.finish())
+    }
 }
 
 impl UriExt for uri::Rsync {
     fn get_authority(&self) -> &str {
         self.authority()
+    }
+
+    fn unique_components(&self) -> (Cow<str>, Digest) {
+        let authority = self.canonical_authority();
+        let mut digest = DigestAlgorithm::sha256().start();
+        digest.update(b"rsync://");
+        digest.update(authority.as_bytes());
+        digest.update(b"/");
+        digest.update(self.module_name().as_bytes());
+        digest.update(b"/");
+        digest.update(self.path().as_bytes());
+        (authority, digest.finish())
     }
 }
 
