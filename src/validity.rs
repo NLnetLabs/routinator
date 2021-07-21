@@ -59,7 +59,7 @@ impl<'a> RouteValidityList<'a> {
         }
         writeln!(target,
             "\n  ],\
-            ,\n  \"generatedTime\": \"{}\"\
+            \n  \"generatedTime\": \"{}\"\
             \n}}",
             format_iso_date(self.created),
         )
