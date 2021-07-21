@@ -99,7 +99,7 @@ impl UriExt for uri::Rsync {
     fn unique_components(&self) -> (Cow<str>, Digest) {
         let authority = self.canonical_authority();
         let mut digest = DigestAlgorithm::sha256().start();
-        digest.update(b"https://");
+        digest.update(b"rsync://");
         digest.update(authority.as_bytes());
         digest.update(b"/");
         digest.update(self.module_name().as_bytes());

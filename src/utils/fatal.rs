@@ -134,7 +134,7 @@ pub fn read_dir(path: &Path) -> Result<ReadDir, Failed> {
 
 /// Returns an iterator over an existing directory.
 ///
-/// Returns `None` if the repository doesn’st exist.
+/// Returns `None` if the repository doesn’t exist.
 pub fn read_existing_dir(path: &Path) -> Result<Option<ReadDir>, Failed> {
     match fs::read_dir(path) {
         Ok(iter) => Ok(Some(ReadDir { path, iter })),
@@ -271,6 +271,7 @@ pub fn read_existing_file(path: &Path) -> Result<Option<Vec<u8>>, Failed> {
 /// Writes a slice to a file.
 ///
 /// Errors out if the file cannot be opened for writing or writing fails.
+/// If the file exists, overwrites the current content.
 pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
     fs::write(path, contents).map_err(|err| {
         error!(

@@ -37,7 +37,7 @@
 //! signedObject URI of its manifest, starting with the authority part of the
 //! URI and then just following along. The file contains status information,
 //! the manifest, the CRL, and each object. It starts with a serialized
-//! [`StoredManifest`] which is followed by a sequenceof serialized
+//! [`StoredManifest`] which is followed by a sequence of serialized
 //! [`StoredObject`]s for all the objects as given on the manifest.
 //!
 //! All publication points that are hosted in an RRDP repository are stored
@@ -339,7 +339,7 @@ impl Store {
     }
 
     /// The name of the directory where the temporary files go.
-    const TMP_BASE: &'static str = "rrdp";
+    const TMP_BASE: &'static str = "tmp";
 
     /// Creates and returns a temporary file.
     ///
@@ -910,7 +910,7 @@ impl StoredManifest {
         Ok(())
     }
 
-    /// Returns whether we should retian the stored manifest.
+    /// Returns whether we should retain the stored manifest.
     fn retain(&self) -> bool {
         self.not_after > Time::now()
     }
@@ -1126,6 +1126,13 @@ fn cleanup_dir_tree(
     base: &Path,
     mut keep: impl FnMut(&Path) -> Result<bool, Failed>
 ) -> Result<(), Failed> {
+    /// Actual recursion.
+    ///
+    /// If `top` is `true`, we ignore if the directory `path` is missing.
+    ///
+    /// Returns whether the `base` needs to be kept. I.e., if `Ok(false)`
+    /// is returned, the calling recursing step will perform a
+    /// `delete_dir_all(base)`.
     fn recurse(
         base: &Path,
         top: bool,
