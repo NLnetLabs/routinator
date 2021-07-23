@@ -40,11 +40,11 @@ uuid            = "0.8.1"
 
 
 [target.'cfg(unix)'.dependencies]
-nix             = "0.20.0"
+nix             = "0.22.0"
 syslog          = "5.0.0"
 
 [build-dependencies]
-rustc_version   = "0.3.3"
+rustc_version   = "0.4.0"
 
 [features]
 default = [ "socks", "ui"]
