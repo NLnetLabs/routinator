@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased next version
+## 0.10.0-rc1
 
 Breaking changes
 
