@@ -7,15 +7,14 @@ System Requirements
 -------------------
 
 Routinator has minimal system requirements. When choosing a system, make sure
-you have 1GB of available memory and 2GB of disk space. This will give you ample
-margin for the RPKI repositories to grow over time, as adoption increases. A
-powerful CPU is not required.
+you have 1GB of available memory and 4GB of disk space for the application. This
+will give you ample margin for the RPKI repositories to grow over time, as
+adoption increases. A powerful CPU is not required.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
 Routinator only needs to establish outbound connections via HTTPS and rsync, on
 ports 443 and 873, respectively. 
-
 
 Quick Start
 -----------
