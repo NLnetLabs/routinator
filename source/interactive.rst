@@ -7,7 +7,7 @@ Running Interactively
    ``--filter-asn`` and ``--filter-prefix``
    
 .. versionadded:: 0.10
-   Metadata in json format
+   Metadata in JSON format
 
 Routinator can perform RPKI validation as a one-time operation and print a
 validated ROA payload (VRP) list in various formats using the :subcmd:`vrps`
