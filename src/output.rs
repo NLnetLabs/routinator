@@ -389,8 +389,8 @@ impl Iterator for OutputStream<
 #[derive(Debug)]
 pub struct QueryError;
 
-impl From<payload::FromStrError> for QueryError {
-    fn from(_: payload::FromStrError) -> Self {
+impl From<payload::ParsePrefixError> for QueryError {
+    fn from(_: payload::ParsePrefixError) -> Self {
         QueryError
     }
 }
