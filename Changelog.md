@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next release candidate
+## 0.10.0-rc2
+
+Released 2021-07-27.
 
 Bug Fixes
 
