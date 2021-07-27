@@ -10,7 +10,8 @@ use std::collections::hash_map;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::hash::Hash;
-use std::net::IpAddr;
+use std::net::{AddrParseError, IpAddr};
+use std::num::ParseIntError;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
@@ -1358,8 +1359,31 @@ pub struct AddressPrefix {
 
 impl AddressPrefix {
     /// Creates a new prefix from an address and a length.
-    pub fn new(addr: IpAddr, len: u8) -> Self {
-        AddressPrefix{addr, len}
+    pub fn new(addr: IpAddr, len: u8) -> Result<Self, AddressPrefixError> {
+        if (addr.is_ipv4() && len > 32) || len > 128 {
+            return Err(AddressPrefixError::LengthOverflow)
+        }
+        let res = AddressPrefix { addr, len };
+        if !res.is_host_zero() {
+            Err(AddressPrefixError::NonZeroHost)
+        }
+        else {
+            Ok(res)
+        }
+    }
+
+    /// Returns whether the host portion of the address is all zeros.
+    fn is_host_zero(self) -> bool {
+        match self.addr {
+            IpAddr::V4(addr) => {
+                u32::from(addr).trailing_zeros()
+                    >= 32u32.saturating_sub(self.len.into())
+            }
+            IpAddr::V6(addr) => {
+                u128::from(addr).trailing_zeros()
+                    >= 128u32.saturating_sub(self.len.into())
+            }
+        }
     }
 
     /// Returns whether the prefix is for an IPv4 address.
@@ -1439,17 +1463,24 @@ impl From<AddressPrefix> for IpBlock {
 }
 
 impl FromStr for AddressPrefix {
-    type Err = FromStrError;
+    type Err = ParsePrefixError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut iter = s.splitn(2, '/');
-        let addr = iter.next().ok_or_else(|| FromStrError(s.into()))?;
-        let len = iter.next().ok_or_else(|| FromStrError(s.into()))?;
-        let addr = IpAddr::from_str(addr)
-                          .map_err(|_| FromStrError(s.into()))?;
-        let len = u8::from_str(len)
-                     .map_err(|_| FromStrError(s.into()))?;
-        Ok(AddressPrefix { addr, len })
+        let addr = iter.next().ok_or(ParsePrefixError::Empty)?;
+        if addr.is_empty() {
+            return Err(ParsePrefixError::Empty)
+        }
+        let len = iter.next().ok_or(ParsePrefixError::MissingLen)?;
+        let addr = IpAddr::from_str(addr).map_err(
+            ParsePrefixError::InvalidAddr
+        )?;
+        let len = u8::from_str(len).map_err(
+            ParsePrefixError::InvalidLen
+        )?;
+        AddressPrefix::new(addr, len).map_err(
+            ParsePrefixError::InvalidPrefix
+        )
     }
 }
 
@@ -1486,19 +1517,76 @@ impl fmt::Display for AddressPrefix {
 }
 
 
-//------------ FromStrError --------------------------------------------------
+//------------ AddressPrefixError --------------------------------------------
 
-/// Creating an IP address prefix from a string has failed.
-#[derive(Clone, Debug)]
-pub struct FromStrError(String);
+/// Creating an address prefix failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AddressPrefixError {
+    /// The prefix length is longer than allowed for the address family.
+    LengthOverflow,
 
-impl fmt::Display for FromStrError {
+    /// The host portion of the address has non-zero bits set.
+    NonZeroHost,
+}
+
+impl fmt::Display for AddressPrefixError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "bad prefix {}", self.0)
+        f.write_str(match *self {
+            AddressPrefixError::LengthOverflow => {
+                "prefix length too large"
+            }
+            AddressPrefixError::NonZeroHost => {
+                "non-zero host portion"
+            }
+        })
     }
 }
 
-impl error::Error for FromStrError { }
+impl error::Error for AddressPrefixError { }
+
+
+//------------ ParsePrefixError ---------------------------------------
+
+/// Creating an IP address prefix from a string has failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParsePrefixError {
+    /// The value parsed was empty.
+    Empty,
+
+    /// The length portion after a slash was missing.
+    MissingLen,
+
+    /// The address portion is invalid.
+    InvalidAddr(AddrParseError),
+
+    /// The length portion is invalid.
+    InvalidLen(ParseIntError),
+
+    /// The combined prefix is invalid.
+    InvalidPrefix(AddressPrefixError),
+}
+
+impl fmt::Display for ParsePrefixError{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParsePrefixError::Empty => f.write_str("empty string"),
+            ParsePrefixError::MissingLen => {
+                f.write_str("missing length portion")
+            }
+            ParsePrefixError::InvalidAddr(err) => {
+                write!(f, "invalid address: {}", err)
+            }
+            ParsePrefixError::InvalidLen(err) => {
+                write!(f, "invalid length: {}", err)
+            }
+            ParsePrefixError::InvalidPrefix(err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for ParsePrefixError { }
 
 
 //============ Part Three. Payload Source Information ========================
@@ -1673,7 +1761,7 @@ mod test {
     use super::*;
 
     fn make_prefix(s: &str, l: u8) -> AddressPrefix {
-        AddressPrefix::new(s.parse().unwrap(), l)
+        AddressPrefix::new(s.parse().unwrap(), l).unwrap()
     }
 
     #[test]
@@ -1736,11 +1824,11 @@ mod test {
                 max_len
             )
         }
-        let o0 = origin(10, "10.0.0.10/10", 10);
-        let o1 = origin(11, "10.0.0.10/11", 10);
-        let o2 = origin(12, "10.0.0.10/12", 10);
-        let o3 = origin(13, "10.0.0.10/13", 10);
-        let o4 = origin(14, "10.0.0.10/14", 10);
+        let o0 = origin(10, "10.0.0.0/10", 10);
+        let o1 = origin(11, "10.0.0.0/11", 10);
+        let o2 = origin(12, "10.0.0.0/12", 10);
+        let o3 = origin(13, "10.0.0.0/13", 10);
+        let o4 = origin(14, "10.0.0.0/14", 10);
 
         let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
         let mut current = SnapshotBuilder::default();
@@ -1786,6 +1874,99 @@ mod test {
                 )
             ).into_iter().collect::<HashSet<_>>(),
             HashSet::from_iter(vec![1, 3].into_iter()),
+        );
+    }
+
+    #[test]
+    fn prefix_from_str() {
+        // good prefixes
+        assert_eq!(
+            AddressPrefix::from_str("0.0.0.0/0").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("0.0.0.0").unwrap(), 0
+            ).unwrap()
+        );
+        assert_eq!(
+            AddressPrefix::from_str("10.0.0.0/8").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("10.0.0.0").unwrap(), 8
+            ).unwrap()
+        );
+        assert_eq!(
+            AddressPrefix::from_str("10.0.0.0/32").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("10.0.0.0").unwrap(), 32
+            ).unwrap()
+        );
+        assert_eq!(
+            AddressPrefix::from_str("::/0").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("::").unwrap(), 0
+            ).unwrap()
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8::/32").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("2001:db8::").unwrap(), 32
+            ).unwrap()
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8::/128").unwrap(),
+            AddressPrefix::new(
+                IpAddr::from_str("2001:db8::").unwrap(), 128
+            ).unwrap()
+        );
+
+        // empty
+        assert_eq!(
+            AddressPrefix::from_str("").unwrap_err(),
+            ParsePrefixError::Empty
+        );
+
+        // missing length
+        assert_eq!(
+            AddressPrefix::from_str("10.0.0.0").unwrap_err(),
+            ParsePrefixError::MissingLen
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8::").unwrap_err(),
+            ParsePrefixError::MissingLen
+        );
+
+        // prefix length overflow
+        assert_eq!(
+            AddressPrefix::from_str("10.0.0.0/33").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::LengthOverflow)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8::/129").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::LengthOverflow)
+        );
+
+        // non-zero host
+        assert_eq!(
+            AddressPrefix::from_str("10.128.0.0/8").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("10.0.0.1/8").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("10.192.0.0/9").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8:8000::/32").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8::1/32").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
+        );
+        assert_eq!(
+            AddressPrefix::from_str("2001:db8:4000::/33").unwrap_err(),
+            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
         );
     }
 }

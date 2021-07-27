@@ -460,7 +460,7 @@ pub mod tests {
             AddressPrefix::new(
                 ip_string.parse().unwrap(),
                 length
-            ),
+            ).unwrap(),
             max_length,
         )
     }
@@ -476,14 +476,26 @@ pub mod tests {
         ip_string: &str,
         length: u8
     ) -> Option<AddressPrefix> {
-        Some(AddressPrefix::new(ip_string.parse().unwrap(), length))
+        Some(AddressPrefix::new(ip_string.parse().unwrap(), length).unwrap())
     }
 
 
 
     #[test]
     fn parse_empty_slurm_file() {
-        let json = include_str!("../test/slurm/empty.json");
+        let json = r##"
+            {
+              "slurmVersion": 1,
+              "validationOutputFilters": {
+                "prefixFilters": [],
+                "bgpsecFilters": []
+              },
+              "locallyAddedAssertions": {
+                "prefixAssertions": [],
+                "bgpsecAssertions": []
+              }
+            }
+        "##;
         let exceptions = LocalExceptions::from_json(json, false).unwrap();
 
         assert_eq!(0, exceptions.origin_assertions.len());
@@ -535,7 +547,82 @@ pub mod tests {
 
     #[test]
     fn parse_bad_maxlen_file() {
-        let json = include_str!("../test/slurm/bad_maxlen.json");
-        assert!(LocalExceptions::from_json(json, false).is_err());
+        assert!(LocalExceptions::from_json(
+            r##"
+                {
+                  "slurmVersion": 1,
+                  "validationOutputFilters": {
+                    "prefixFilters": [],
+                    "bgpsecFilters": []
+                  },
+                  "locallyAddedAssertions": {
+                    "prefixAssertions": [
+                      {
+                        "asn": 64496,
+                        "prefix": "198.51.100.0/24",
+                        "maxPrefixLength": 20,
+                        "comment": "invalid max len"
+                      },
+                    ],
+                    "bgpsecAssertions": []
+                  }
+                }
+            "##,
+            false
+        ).is_err());
+    }
+
+    #[test]
+    fn parse_bad_prefix_len_file() {
+        assert!(LocalExceptions::from_json(
+            r##"
+                {
+                  "slurmVersion": 1,
+                  "validationOutputFilters": {
+                    "prefixFilters": [],
+                    "bgpsecFilters": []
+                  },
+                  "locallyAddedAssertions": {
+                    "prefixAssertions": [
+                      {
+                        "asn": 64496,
+                        "prefix": "198.51.100.0/44",
+                        "maxPrefixLength": 46,
+                        "comment": "invalid prefix len"
+                      },
+                    ],
+                    "bgpsecAssertions": []
+                  }
+                }
+            "##,
+            false
+        ).is_err());
+    }
+
+    #[test]
+    fn parse_non_zero_host_file() {
+        assert!(LocalExceptions::from_json(
+            r##"
+                {
+                  "slurmVersion": 1,
+                  "validationOutputFilters": {
+                    "prefixFilters": [],
+                    "bgpsecFilters": []
+                  },
+                  "locallyAddedAssertions": {
+                    "prefixAssertions": [
+                      {
+                        "asn": 64496,
+                        "prefix": "198.51.100.0/16",
+                        "maxPrefixLength": 16,
+                        "comment": "non-zero"
+                      },
+                    ],
+                    "bgpsecAssertions": []
+                  }
+                }
+            "##,
+            false
+        ).is_err());
     }
 }
