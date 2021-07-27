@@ -824,7 +824,7 @@ impl<W: io::Write> Formatter<W> for Summary {
         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
         Self::produce_header(metrics, |args| {
-            write!(target, "{}", args)
+            writeln!(target, "{}", args)
         })
     }
 
