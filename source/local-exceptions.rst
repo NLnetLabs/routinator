@@ -80,8 +80,9 @@ available in the repository at `/test/slurm
    }
 
 Use the :option:`--exceptions` option to refer to your file with local
-exceptions. Routinator will re-read that file on every validation run, so you
-can simply update the file whenever your exceptions change.
+exceptions. Routinator verify that the JSON itself is valid, as well as the
+specified values. The exceptions file will be re-read on every validation run,
+so you can simply update the file whenever your exceptions change. 
 
 In the metrics Routinator provides, there are counters indicating how many VRPs
 are added and excluded from the final data set as a result of your exceptions. 
