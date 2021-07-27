@@ -4,7 +4,19 @@
 
 Bug Fixes
 
-Other
+* Fix the missing line feed in the summary output format. ([#625])
+* The RTR server now returns the correct PDU as a cache reset response,
+  which is returned when the server cannot provide a delta update to a
+  client. Previously, a broken End of Data PDU was returned.
+  (Via [rpki #151].)
+* Make parsing of local exception files much more strict to avoid introducing
+  illegal VRPs into the data set. Parsing will now fail if any aspect of a
+  prefix or prefix assertion is incorrect. This includes a non-zero host
+  portion of a prefix. ([#627])
+
+[#625]: https://github.com/NLnetLabs/routinator/pull/625
+[#627]: https://github.com/NLnetLabs/routinator/pull/627
+[rpki #151]: https://github.com/NLnetLabs/rpki-rs/pull/151
 
 
 ## 0.10.0-rc1
