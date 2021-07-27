@@ -105,7 +105,9 @@ jobs:
     - name: Install Cargo Generate RPM
       if: steps.cache-cargo-generate-rpm.outputs.cache-hit != 'true'
       run: |
-        cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
+        # Temporary workaround for https://github.com/cat-in-136/cargo-generate-rpm/issues/21
+        rustup toolchain install 1.52.0
+        cargo +1.52.0 install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
 
     # Instruct cargo-generate-rpm to build the RPM package using the config section
     # in Cargo.toml.
