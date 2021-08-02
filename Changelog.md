@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.10.0-rc3
+
+Released 2021-08-02.
 
 New
 
