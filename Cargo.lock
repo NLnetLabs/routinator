@@ -253,6 +253,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d34cfa13a63ae058bfa601fe9e313bbdb3746427c1459185464ce0fcf62e1e8"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "winapi",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -990,6 +1002,7 @@ dependencies = [
  "rand",
  "reqwest",
  "ring",
+ "routinator-ui",
  "rpki",
  "rustc_version",
  "serde",
@@ -1000,6 +1013,17 @@ dependencies = [
  "tokio-stream",
  "toml",
  "uuid",
+]
+
+[[package]]
+name = "routinator-ui"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4c81b9fdea472b2db2a51b9a38b093387879dc6594544391424d5448babbbc0"
+dependencies = [
+ "flate2",
+ "reqwest",
+ "tar",
 ]
 
 [[package]]
@@ -1213,6 +1237,17 @@ dependencies = [
  "libc",
  "log",
  "time",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d779dc6aeff029314570f666ec83f19df7280bb36ef338442cfa8c604021b80"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
 ]
 
 [[package]]
@@ -1637,4 +1672,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0120db82e8a1e0b9fb3345a539c478767c0048d842860994d96113d5b667bd69"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "xattr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
+dependencies = [
+ "libc",
 ]
