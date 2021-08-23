@@ -1,12 +1,10 @@
 # Change Log
 
-## Unreleased future version
+## 0.10.0 ‘Through Many Dangers, Toils, and Snares’
 
-Bug Fixes
+Released 2012-08-23
 
-New
-
-Other Changes
+No changes since 0.10.0-rc3.
 
 
 ## 0.10.0-rc3
