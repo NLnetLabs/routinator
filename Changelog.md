@@ -2,7 +2,7 @@
 
 ## 0.10.0 ‘Through Many Dangers, Toils, and Snares’
 
-Released 2012-08-23
+Released 2021-08-23
 
 No changes since 0.10.0-rc3.
 
