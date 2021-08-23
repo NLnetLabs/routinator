@@ -38,7 +38,7 @@ On the NLnet Labs software package repository we provide Routinator packages for
 amd64/x86_64 architectures running Debian and Ubuntu, as well as Red Hat 
 Enterprise Linux and CentOS.
 
-### Installing on Debian/Unbuntu
+### Installing on Debian/Ubuntu
 
 Add the line below that corresponds to your operating system to your
 `/etc/apt/sources.list` or `/etc/apt/sources.list.d/`
