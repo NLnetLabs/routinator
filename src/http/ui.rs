@@ -1,8 +1,8 @@
 //! Handling of endpoints related to the UI.
 
-/// The frontend is served on BASE_DIR by including all web resources (html, css, js)
-/// from a single Vec of structs; each struct holds a bytes array that represents
-/// a single file from the web resources.
+/// The frontend is served on BASE_DIR by including all web resources (html,
+/// css, js) from a single vec of structs; each struct holds a bytes array
+/// that represents a single file from the web resources.
 
 #[cfg(feature = "ui")]
 use hyper::{Body, Request, Response};
@@ -26,13 +26,17 @@ pub fn handle_get(req: &Request<Body>) -> Option<Response<Body>> {
         match routinator_ui::endpoints::ui_resource(p) {
             Some(endpoint) => Some(serve(endpoint.content, endpoint.content_type)),
             None => {
-                // In order to have the frontend handle all routing and queryparams under BASE_URL,
-                // all unknown URLs that start with BASE_URL will route to CATCH_ALL_URL.
+                // In order to have the frontend handle all routing and
+                // queryparams under BASE_URL, all unknown URLs that start
+                // with BASE_URL will route to CATCH_ALL_URL.
                 //
-                // Note that we could be smarter about this and do a (somewhat convoluted) regex on
-                // the requested URL to figure out if it makes sense as a search prefix url.
+                // Note that we could be smarter about this and do a
+                // (somewhat convoluted) regex on the requested URL to figure
+                // out if it makes sense as a search prefix url.
                 if let Some(default) =
-                    routinator_ui::endpoints::ui_resource(std::path::Path::new(CATCH_ALL_URL))
+                    routinator_ui::endpoints::ui_resource(
+                        std::path::Path::new(CATCH_ALL_URL)
+                    )
                 {
                     Some(serve(default.content, default.content_type))
                 } else {
@@ -43,15 +47,17 @@ pub fn handle_get(req: &Request<Body>) -> Option<Response<Body>> {
             }
         }
     } else {
-        // This is the last handler in the chain, so if the requested URL did not
-        // start with BASE_URL, we're returning 404.
+        // This is the last handler in the chain, so if the requested URL did
+        // not start with BASE_URL, we're returning 404.
         Some(super::not_found())
     }
 }
 
+/// Creates the response from data and the content type.
 fn serve(data: &'static [u8], ctype: &'static [u8]) -> Response<Body> {
     Response::builder()
         .header("Content-Type", ctype)
         .body(data.into())
         .unwrap()
 }
+
