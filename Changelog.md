@@ -1,18 +1,13 @@
 # Change Log
 
-## Unreleased future version
+## 0.10.1-rc1
 
-Breaking Changes
-
-New
-
-Bug Fixes
+Released 2021-09-13.
 
 Other Changes
 
 * Extended UI with BGP and allocation data lookups. [(#635)]
 * The UI now lives in its own crate [routinator-ui]. [(#635)]
-
 
 [#635]: https://github.com/NLnetLabs/routinator/pull/635
 [routinator-ui]: https://crates.io/crates/routinator-ui
