@@ -10,6 +10,13 @@ Bug Fixes
 
 Other Changes
 
+* Extended UI with BGP and allocation data lookups. [(#635)]
+* The UI now lives in its own crate [routinator-ui]. [(#635)]
+
+
+[#635]: https://github.com/NLnetLabs/routinator/pull/635
+[routinator-ui]: https://crates.io/crates/routinator-ui
+
 
 ## 0.10.0 ‘Through Many Dangers, Toils, and Snares’
 
