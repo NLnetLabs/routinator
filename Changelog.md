@@ -4,9 +4,14 @@
 
 Bug Fixes
 
+* Redirect `/` to `/ui` to bring back the UI for the blank hostname.
+  ([#648])
+
 New
 
 Other Changes
+
+[#648]: https://github.com/NLnetLabs/routinator/pull/648
 
 
 ## 0.10.1-rc1
@@ -15,8 +20,8 @@ Released 2021-09-13.
 
 Other Changes
 
-* Extended UI with BGP and allocation data lookups. [(#635)]
-* The UI now lives in its own crate [routinator-ui]. [(#635)]
+* Extended UI with BGP and allocation data lookups. ([#635])
+* The UI now lives in its own crate [routinator-ui]. ([#635])
 
 [#635]: https://github.com/NLnetLabs/routinator/pull/635
 [routinator-ui]: https://crates.io/crates/routinator-ui

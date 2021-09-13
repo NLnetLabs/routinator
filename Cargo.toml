@@ -37,7 +37,7 @@ tokio           = { version = "1.0", features = [ "io-util", "macros", "process"
 tokio-stream    = "0.1"
 toml            = "0.5.6"
 uuid            = "0.8.1"
-routinator-ui   = { version = "0.3.2", optional = true }
+routinator-ui   = { version = "0.3.3", optional = true }
 
 
 [target.'cfg(unix)'.dependencies]
