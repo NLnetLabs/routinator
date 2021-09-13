@@ -1,10 +1,10 @@
 //! Handling of endpoints related to the UI.
+//!
+//! The frontend is served on BASE_DIR by including all web resources (html,
+//! css, js) from a single vec of structs; each struct holds a bytes array
+//! that represents a single file from the web resources.
+#![cfg(feature = "ui")]
 
-/// The frontend is served on BASE_DIR by including all web resources (html,
-/// css, js) from a single vec of structs; each struct holds a bytes array
-/// that represents a single file from the web resources.
-
-#[cfg(feature = "ui")]
 use hyper::{Body, Request, Response};
 
 // Sensible settings for BASE_URL are either:
