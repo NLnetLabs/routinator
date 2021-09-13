@@ -1,13 +1,13 @@
 # Change Log
 
-## Unreleased next version
+## 0.10.1-rc2
+
+Released 2021-09-13.
 
 Bug Fixes
 
 * Redirect `/` to `/ui` to bring back the UI for the blank hostname.
   ([#648])
-
-New
 
 Other Changes
 
