@@ -5,7 +5,8 @@
 //! that represents a single file from the web resources.
 #![cfg(feature = "ui")]
 
-use hyper::{Body, Request, Response};
+use bytes::Bytes;
+use hyper::{Body, Request, Response, StatusCode};
 
 // Sensible settings for BASE_URL are either:
 // "/"   => just route everything from the domain-name without further ado, or
@@ -21,10 +22,23 @@ const BASE_URL: &str = "/ui";
 const CATCH_ALL_URL: &str = "index.html";
 
 pub fn handle_get(req: &Request<Body>) -> Option<Response<Body>> {
+    if req.uri().path() == "/" {
+        return Some(
+            Response::builder()
+            .status(StatusCode::MOVED_PERMANENTLY)
+            .header("Content-Type", "text/plain")
+            .header("Location", "/ui/")
+            .body(Bytes::from("Moved permanently to /ui/").into())
+            .unwrap()
+        )
+    }
+
     let req_path = std::path::Path::new(req.uri().path());
     if let Ok(p) = req_path.strip_prefix(BASE_URL) {
         match routinator_ui::endpoints::ui_resource(p) {
-            Some(endpoint) => Some(serve(endpoint.content, endpoint.content_type)),
+            Some(endpoint) => {
+                Some(serve(endpoint.content, endpoint.content_type))
+            }
             None => {
                 // In order to have the frontend handle all routing and
                 // queryparams under BASE_URL, all unknown URLs that start
