@@ -11,6 +11,9 @@ New
 
 Other Changes
 
+* Update UI to 0.3.3.
+ * Fixes UI loading with query parameters.
+
 [#648]: https://github.com/NLnetLabs/routinator/pull/648
 
 
