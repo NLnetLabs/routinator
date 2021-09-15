@@ -1017,9 +1017,9 @@ dependencies = [
 
 [[package]]
 name = "routinator-ui"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58223c01554f6643bd12ef2934891d31baafb830411b7fc87722b71733ac647c"
+checksum = "f2b93eb434f0d58c19ab098008bda682fc2e8f2918f3b6f64dcb8c34c3fc8fba"
 dependencies = [
  "flate2",
  "reqwest",
