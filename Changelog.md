@@ -1,10 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.10.1-rc3
 
-Bug Fixes
-
-New
+Released 2021-09-15.
 
 Other Changes
 
