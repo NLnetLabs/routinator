@@ -8,6 +8,11 @@ New
 
 Other Changes
 
+* Update UI to 0.3.4. ([#651]) 
+  * Fixed links for prefixes.
+
+[#651]: https://github.com/NLnetLabs/routinator/pull/651
+
 
 ## 0.10.1-rc2
 
@@ -21,7 +26,7 @@ Bug Fixes
 Other Changes
 
 * Update UI to 0.3.3.
- * Fixes UI loading with query parameters.
+  * Fixes UI loading with query parameters.
 
 [#648]: https://github.com/NLnetLabs/routinator/pull/648
 
