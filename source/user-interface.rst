@@ -40,9 +40,10 @@ the cache. Routinator will provide an overview of all VRPs that led to the
 result, along with the reason for the outcome.
 
 Routinator doesn't just retrieve the ASN for a specific prefix, but it also
-fetches related information. In addition to validating the exact match, it can
-provide details on less specific and more specific announcements seen in BGP, as
-well as other resources allocated to the same organisation.
+fetches related information. In addition to validating the longest matching
+prefix (or exact match if this is what you selected), details can provided on
+less specific and more specific announcements seen in BGP, as well as other
+resources allocated to the same organisation.
 
 .. figure:: img/routinator-ui-prefix-check-related.png
     :align: center
