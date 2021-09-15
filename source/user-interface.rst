@@ -15,24 +15,54 @@ The application will stay attached to your terminal unless you provide the
 user interface from the example above will be available at 
 http://192.0.2.13:8323/.
 
-.. figure:: img/routinator-ui-validity-checker.png
+Prefix Check
+------------
+
+In addition to displaying detailed statistics from the last validation run
+Routinator has performed, as well as HTTP and RTR connection metrics, the most
+prominent functionality is the prefix check.
+
+.. figure:: img/routinator-ui-prefix-check.png
     :align: center
     :width: 100%
     :alt: Routinator user interface
 
-    The Routinator user interface
+    The Routinator Prefix Check
 
-The web interface provides several functions. It displays detailed statistics
-from the last validation run Routinator has performed, as well as HTTP and RTR
-connection metrics. You can also use the UI to verify the RPKI origin validation
-status of an AS Number and IP Prefix combination. 
+By default, you only need to provide an IP address or prefix. When
+clicking :guilabel:`Validate`, Routinator will look up from which Autonomous
+System the closest matching prefix is announced in BGP and perform RPKI
+validation. Alternatively, you can manually provide an ASN. 
 
-Verifying the validation status can be done by entering an existing BGP
-announcement or an ASN and prefix of your choice, for example for an
-announcement you're planning to do. The returned RPKI validity state will be
-*Valid*, *Invalid* or *NotFound* and is based on the current set of Validated
-ROA Payloads (VRPs) in the cache. Routinator will provide an overview of all
-VRPs that led to the result, along with the reason for the outcome.
+The returned RPKI validity state will be *Valid*, *Invalid* or
+*NotFound* and is based on the current set of Validated ROA Payloads (VRPs) in
+the cache. Routinator will provide an overview of all VRPs that led to the
+result, along with the reason for the outcome.
+
+Routinator doesn't just retrieve the ASN for a specific prefix, but it also
+fetches related information. In addition to validating the exact match, it can
+provide details on less specific and more specific announcements seen in BGP, as
+well as other resources allocated to the same organisation.
+
+.. figure:: img/routinator-ui-prefix-check-related.png
+    :align: center
+    :width: 100%
+    :alt: Routinator user interface
+
+    Prefixes related to your query
+
+The lookups that Routinator performs are powered by the open source `roto-api
+<https://github.com/NLnetLabs/roto-api>`_ service, developed and hosted by NLnet
+Labs at `bgp-api.net <https://rest.bgp-api.net/api/v1/>`_. The service relies
+on these data sources:
+
+  - BGP information based on `RISWhois <https://www.ris.ripe.net/dumps/>`_
+    data, which is part of the RIPE NCC's `Routing Information Service 
+    <https://ris.ripe.net/>`_ (RIS). This data set is currently updated every 8
+    hours.
+  - Resource allocations retrieved from `statistics 
+    <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five Regional 
+    Internet Registries. These are updated daily.
 
 .. _doc_routinator_reverse_proxy:
 
