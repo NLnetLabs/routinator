@@ -52,10 +52,10 @@ resources allocated to the same organisation.
 
     Prefixes related to your query
 
-The lookups that Routinator performs are powered by the open source `roto-api
-<https://github.com/NLnetLabs/roto-api>`_ service, developed and hosted by NLnet
-Labs at `bgp-api.net <https://rest.bgp-api.net/api/v1/>`_. The service relies
-on these data sources:
+Routinator does not perform the BGP and allocation lookups itself, but relies on
+the open source `roto-api <https://github.com/NLnetLabs/roto-api>`_ service,
+developed and hosted by NLnet Labs at `bgp-api.net
+https://rest.bgp-api.net/api/v1/`_. The service uses these data sources:
 
   - BGP information based on `RISWhois <https://www.ris.ripe.net/dumps/>`_
     data, which is part of the RIPE NCC's `Routing Information Service 
