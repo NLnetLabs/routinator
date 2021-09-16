@@ -9,7 +9,11 @@ RUN apk add rust cargo
 WORKDIR /tmp/routinator
 COPY . .
 
-RUN cargo build \
+# Force Cargo to use HTTP/1.1 without pipelining instead of HTTP/2 with
+# multiplexing. This seems to help with various "spurious network error"
+# warnings when Cargo attempts to fetch from crates.io when building this
+# image on Docker Hub and GitHub Actions build machines. 
+RUN CARGO_HTTP_MULTIPLEXING=false cargo build \
     --target x86_64-alpine-linux-musl \
     --release \
     --locked
