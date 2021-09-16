@@ -48,11 +48,10 @@ jobs:
       # Do a basic sanity check of the created image using the test tag to select the image to run.
       - name: Sanity check
         run: |
-          DOCKER_TAG=${{ github.ref == 'refs/heads/main' && 'unstable' || 'latest' }}
           docker run --rm nlnetlabs/routinator:sanitycheck --version
 
       # Push the image and tags to Docker Hub.
-      # This will apparently not build the image again but instead will push the image that was built in the step above.
+      # The build uses the cached build outputs from the step above so we don't have to wait for the build again.
       #
       # On push of a tag to refs/tags/v1.2.3 the Docker tags will be 'v1.2.3' and 'latest' because of:
       #   type=semver,pattern={{raw}}
@@ -71,5 +70,5 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
