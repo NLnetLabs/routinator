@@ -48,7 +48,7 @@ jobs:
       # Do a basic sanity check of the created image using the test tag to select the image to run.
       - name: Sanity check
         run: |
-          DOCKER_TAG=${{ github.ref == 'refs/heads/main' ? 'unstable' : 'latest' }}
+          DOCKER_TAG=${{ github.ref == 'refs/heads/main' && 'unstable' || 'latest' }}
           docker run --rm nlnetlabs/routinator:sanitycheck --version
 
       # Push the image and tags to Docker Hub.
