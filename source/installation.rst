@@ -29,7 +29,7 @@ manager.
 
 .. tabs::
 
-   .. group-tab:: Deb Packages
+   .. group-tab:: Debian Packages
 
        If you have a machine with an amd64/x86_64 architecture running a 
        recent Debian or Ubuntu distribution, you can install Routinator
@@ -182,6 +182,75 @@ manager.
           rustup update
           cargo install --locked --force routinator
 
+Updating
+--------
+
+.. tabs::
+
+   .. group-tab:: Debian Packages
+
+       To update an existing Routinator installation, first update the 
+       repository using:
+
+       .. code-block:: text
+
+          sudo apt policy routinator
+
+       You can use this command to get an overview of the available versions:
+
+       .. code-block:: text
+
+          sudo apt policy routinator
+
+       You can upgrade an existing Routinator installation to the latest version
+       using:
+
+       .. code-block:: text
+
+          sudo apt --only-upgrade install routinator
+          
+   .. group-tab:: RPM Packages
+
+       To update an existing Routinator installation, you can use this command 
+       to get an overview of the available versions:
+        
+       .. code-block:: bash
+        
+          sudo yum --showduplicates list routinator
+          
+       You can update to the latest version using:
+         
+       .. code-block:: bash
+         
+          sudo yum update -y routinator
+             
+   .. group-tab:: Docker
+
+       All release versions of Routinator, as well as release candidates and
+       builds based on the latest main branch are available on `Docker Hub
+       <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_. 
+       
+       For example, upgrading to the latest Routinator is as simple as:
+        
+       .. code-block:: text
+       
+          docker run -it nlnetlabs/routinator:latest
+               
+   .. group-tab:: Cargo
+
+       All release versions of Routinator, as well as release candidates, are
+       available on `crates.io <https://crates.io/crates/routinator/versions>`_,
+       the Rust package registry. If you want to install the latest version of
+       Routinator using Cargo, explicitly use the ``--force`` option to 
+       overwrite an existing version with the latest release:
+               
+       .. code-block:: text
+
+          cargo install --locked --force routinator
+
+       For more installation options refer to the `Cargo book
+       <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
+
 Installing Specific Versions
 ----------------------------
 
@@ -191,7 +260,7 @@ a specific version, if needed.
 
 .. tabs::
 
-   .. group-tab:: Deb Packages
+   .. group-tab:: Debian Packages
 
        To install release candidates of Routinator, add the line below that 
        corresponds to your operating system to your ``/etc/apt/sources.list`` or
