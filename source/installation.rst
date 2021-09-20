@@ -175,13 +175,6 @@ manager.
           # Follow instructions provided
           routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
 
-       If you have an older version of Rust and Routinator, you can update via:
-
-       .. code-block:: text
-
-          rustup update
-          cargo install --locked --force routinator
-
 Updating
 --------
 
@@ -234,14 +227,16 @@ Updating
                
    .. group-tab:: Cargo
 
-       If you want to install the latest version of Routinator using Cargo,
-       explicitly use the ``--force`` option to  overwrite an existing version
-       with the latest release:
+       If you want to install the latest version of Routinator using Cargo, it's
+       recommended to also update Rust to the latest version first. Use the 
+       ``--force`` option to  overwrite an existing version with the latest 
+       release:
                
        .. code-block:: text
 
+          rustup update
           cargo install --locked --force routinator
-
+          
 Installing Specific Versions
 ----------------------------
 
