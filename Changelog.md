@@ -1,12 +1,10 @@
 # Change Log
 
-## Unreleased next version
+## 0.10.1 ‘That’s No Moon’
 
-Bug Fixes
+Released 2021-09-20.
 
-New
-
-Other Changes
+No changes since 0.10.1-rc3.
 
 
 ## 0.10.1-rc3
