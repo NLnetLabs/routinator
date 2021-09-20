@@ -194,7 +194,7 @@ Updating
 
        .. code-block:: text
 
-          sudo apt policy routinator
+          sudo apt update
 
        You can use this command to get an overview of the available versions:
 
@@ -226,11 +226,7 @@ Updating
              
    .. group-tab:: Docker
 
-       All release versions of Routinator, as well as release candidates and
-       builds based on the latest main branch are available on `Docker Hub
-       <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_. 
-       
-       For example, upgrading to the latest Routinator is as simple as:
+       Upgrading to the latest version of Routinator can be done with:
         
        .. code-block:: text
        
@@ -238,18 +234,13 @@ Updating
                
    .. group-tab:: Cargo
 
-       All release versions of Routinator, as well as release candidates, are
-       available on `crates.io <https://crates.io/crates/routinator/versions>`_,
-       the Rust package registry. If you want to install the latest version of
-       Routinator using Cargo, explicitly use the ``--force`` option to 
-       overwrite an existing version with the latest release:
+       If you want to install the latest version of Routinator using Cargo,
+       explicitly use the ``--force`` option to  overwrite an existing version
+       with the latest release:
                
        .. code-block:: text
 
           cargo install --locked --force routinator
-
-       For more installation options refer to the `Cargo book
-       <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
 
 Installing Specific Versions
 ----------------------------
