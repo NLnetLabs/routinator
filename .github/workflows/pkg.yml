@@ -437,7 +437,6 @@ jobs:
         esac
 
     - name: Install new package
-      run: |
       if: ${{ matrix.mode == 'fresh-install' }}
       run: |
         case ${OS_NAME} in
