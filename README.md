@@ -1,15 +1,14 @@
 # Routinator
 
+[![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
+[![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
+[![Docker](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-docker.yml/badge.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
+
 [![](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.readthedocs.io/en/stable/?badge=stable)
 [![](https://img.shields.io/discord/818584154278199396?label=Discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
-
-[![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
-[![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
-[![Packaging RPM](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-rpm.yml/badge.svg)](https://nlnetlabs.nl/packages/)
-[![Docker](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-docker.yml/badge.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
 
 <img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
 
