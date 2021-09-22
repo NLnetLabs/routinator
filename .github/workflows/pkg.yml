@@ -33,7 +33,7 @@ jobs:
   # packages respectively for installing Routinator. See:
   #   - https://github.com/mmstick/cargo-deb
   #   - https://github.com/cat-in-136/cargo-generate-rpm
-  deb-pkg:
+  pkg:
     strategy:
       matrix:
         image: # can't use complex values here, only primitive values are allowed
