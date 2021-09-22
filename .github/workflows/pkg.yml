@@ -427,12 +427,13 @@ jobs:
             sg lxd -c "lxc exec testcon -- apt install -y routinator"
             ;;
           centos)
-            rpm --import https://packages.nlnetlabs.nl/aptkey.asc
-            cat "[nlnetlabs]" >/etc/yum.repos.d/nlnetlabs.repo
-            cat "name=NLnet Labs" >>/etc/yum.repos.d/nlnetlabs.repo
-            cat "baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch" >>/etc/yum.repos.d/nlnetlabs.repo
-            cat "enabled=1" >>/etc/yum.repos.d/nlnetlabs.repo
-            yum install -y routinator
+            echo '[nlnetlabs]' >$HOME/nlnetlabs.repo
+            echo 'name=NLnet Labs' >>$HOME/nlnetlabs.repo
+            echo 'baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch' >>$HOME/nlnetlabs.repo
+            echo 'enabled=1' >>$HOME/nlnetlabs.repo
+            sg lxd -c "lxc file push $HOME/nlnetlabs.repo testcon/etc/yum.repos.d/"
+            sg lxd -c "lxc exec testcon -- rpm --import https://packages.nlnetlabs.nl/aptkey.asc"
+            sg lxd -c "lxc exec testcon -- yum install -y routinator"
             ;;
         esac
 
