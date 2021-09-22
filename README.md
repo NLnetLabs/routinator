@@ -14,11 +14,10 @@
 <img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
 
 Introducing ‘Routinator 3000,’ lightweight RPKI relying party software written
-in Rust. Routinator is a full-featured software package that can perform RPKI
-validation as a one-time operation and produce the result in formats such as CSV
-and JSON, or run as a service that periodically downloads and verifies RPKI
-data. The built-in HTTP server offers a user interface and API endpoints for the
-various output formats, as well as logging, status and Prometheus monitoring. 
+in Rust. Routinator is a full featured software package that runs as a service
+which periodically downloads and verifies RPKI data. The built-in HTTP server 
+offers a user interface and API endpoints for various file formats, as 
+well as logging, status and Prometheus metrics.
 
 Routinator has a built-in an RTR server allowing routers supporting route origin
 validation (ROV) to connect to it to fetch verified RPKI data. Note that if you
