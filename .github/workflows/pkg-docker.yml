@@ -25,7 +25,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=semver,pattern={{raw}}
+            type=semver,pattern={{version}},prefix=v
             type=raw,value=unstable,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref != 'refs/heads/main' && !contains(github.ref, '-') }}
 
@@ -54,9 +54,12 @@ jobs:
       # The build uses the cached build outputs from the step above so we don't have to wait for the build again.
       #
       # On push of a tag to refs/tags/v1.2.3 the Docker tags will be 'v1.2.3' and 'latest' because of:
-      #   type=semver,pattern={{raw}}
+      #   type=semver,pattern={{version}},prefix=v
       #   type=raw,value=latest,enable=${{ github.ref != 'refs/heads/main' && !contains(github.ref, '-') }}
       #                                    ^^^^^^^^^^^^^ true, not main       ^^^^^^^^^ true, no dash found
+      #
+      #   Note: we don't use semver,pattern={{raw}} because while that preserves the leading v in v1.2.3 it
+      #   discards the leading v in v1.2.3-rc4.
       #
       # On push of a tag to refs/tags/v1.2.3-rc1 the Docker tags will be 'v1.2.3' but NOT 'latest' because of:
       #   type=semver,pattern={{raw}}
