@@ -726,11 +726,11 @@ These can be requested by providing different commands on the command line.
               be used for the RTR protocol.
 
        .. option:: --rtr-tcp-keepalive=seconds
-       
-              The amount of seconds the server should wait after having finished
-              updating and validating the local repository before starting to
-              update again. The next update will earlier if objects in the
-              repository expire earlier. The default value is 600 seconds.
+        
+              The number of seconds to wait before sending a TCP keepalive on an
+              established RTR  connection. By  default, TCP keepalive is
+              enabled on all RTR connections with an idle time of 60 seconds. 
+              Set this option to 0 to disable keepalives.
 
        .. option:: --rtr-client-metrics
        
