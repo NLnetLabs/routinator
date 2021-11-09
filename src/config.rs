@@ -72,6 +72,9 @@ const DEFAULT_UNKNOWN_OBJECTS_POLICY: FilterPolicy = FilterPolicy::Warn;
 /// The default maximum object size.
 const DEFAULT_MAX_OBJECT_SIZE: u64 = 20_000_000;
 
+/// The default maximum CA depth.
+const DEFAULT_MAX_CA_DEPTH: usize = 32;
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -209,7 +212,10 @@ pub struct Config {
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
 
-    /// Wether to not cleanup the repository directory after a validation run.
+    /// Maxium length of the CA chain.
+    pub max_ca_depth: usize,
+
+    /// Whether to not cleanup the repository directory after a validation run.
     ///
     /// If this is `false` and update has not been disabled otherwise, all
     /// data for rsync modules (if rsync is enabled) and RRDP servers (if
@@ -768,6 +774,11 @@ impl Config {
             }
         }
 
+        // max_ca_depth
+        if let Some(value) = from_str_value_of(matches, "max-ca-depth")? {
+            self.max_ca_depth = value;
+        }
+
         // dirty_repository
         if matches.is_present("dirty-repository") {
             self.dirty_repository = true
@@ -1074,6 +1085,10 @@ impl Config {
                     None => Some(DEFAULT_MAX_OBJECT_SIZE),
                 }
             },
+            max_ca_depth: {
+                file.take_usize("max-ca-depth")?
+                    .unwrap_or(DEFAULT_MAX_CA_DEPTH)
+            },
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1249,6 +1264,7 @@ impl Config {
             rrdp_keep_responses: None,
             rrdp_disable_gzip: false,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
+            max_ca_depth: DEFAULT_MAX_CA_DEPTH,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1437,6 +1453,9 @@ impl Config {
                 Some(value) => value as i64,
                 None => 0,
             }.into()
+        );
+        res.insert("max-ca-depth".into(),
+            (self.max_ca_depth as i64).into()
         );
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
