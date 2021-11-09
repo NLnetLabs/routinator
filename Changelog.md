@@ -1,5 +1,16 @@
 # Change Log
 
+# Unreleased future version
+
+Breaking Changes
+
+Bug Fixes
+
+New
+
+Other Changes
+
+
 # 0.10.2 ‘Skuffet, men ikke overrasket’
 
 Released 2021-11-09.
