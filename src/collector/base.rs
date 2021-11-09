@@ -4,7 +4,7 @@
 
 use std::{fs, io};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use bytes::Bytes;
 use log::error;
 use rpki::repository::tal::TalUri;
@@ -30,9 +30,6 @@ use super::{rrdp, rsync};
 /// you need to call [`ignite`][Self::ignite] once.
 #[derive(Debug)]
 pub struct Collector {
-    /// The base directory of the cache.
-    cache_dir: PathBuf,
-
     /// The collector for RRDP transport.
     ///
     /// If this is `None`, use of RRDP has been disabled entirely.
@@ -82,7 +79,6 @@ impl Collector {
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
-            cache_dir: config.cache_dir.clone(),
             rrdp: rrdp::Collector::new(config)?,
             rsync: rsync::Collector::new(config)?,
         })
@@ -129,9 +125,6 @@ impl Collector {
 /// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
-    /// A reference to the underlying collector.
-    collector: &'a Collector,
-
     /// The runner for rsync if this transport is enabled.
     rsync: Option<rsync::Run<'a>>,
 
@@ -143,7 +136,6 @@ impl<'a> Run<'a> {
     /// Creates a new validation run for the given collector.
     fn new(collector: &'a Collector) -> Self {
         Run {
-            collector,
             rsync: collector.rsync.as_ref().map(|rsync| rsync.start()),
             rrdp: collector.rrdp.as_ref().map(|rrdp| rrdp.start()),
         }

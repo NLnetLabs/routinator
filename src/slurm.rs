@@ -193,6 +193,7 @@ pub struct ExceptionInfo {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct SlurmFile {
     #[serde(rename = "slurmVersion")]
     version: SlurmVersion,
@@ -237,6 +238,7 @@ impl TryFrom<u8> for SlurmVersion {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct ValidationOutputFilters {
     #[serde(rename = "prefixFilters")]
     prefix: Vec<RawPrefixFilter>,
@@ -247,6 +249,7 @@ struct ValidationOutputFilters {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct LocallyAddedAssertions {
     #[serde(rename = "prefixAssertions")]
     prefix: Vec<PrefixAssertion>,
@@ -259,6 +262,7 @@ struct LocallyAddedAssertions {
 // filters unless we want to do our own Deserialize impl. Which we don’t.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct RawPrefixFilter {
     prefix: Option<AddressPrefix>,
 
@@ -270,6 +274,7 @@ struct RawPrefixFilter {
 // serde doesn’t allow enums to be flattened. So we will have to allow empty
 // filters unless we want to do our own Deserialize impl. Which we don’t.
 #[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
 struct BgpsecFilter {
     #[serde(rename = "SKI")]
     ski: Option<String>,
@@ -396,6 +401,7 @@ impl<'de> Deserialize<'de> for PrefixAssertion {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct BgpsecAssertion {
     asn: u32,
 
@@ -469,7 +475,7 @@ pub mod tests {
         prefix: Option<AddressPrefix>,
         asn: Option<u32>
     ) -> PrefixFilter {
-        PrefixFilter { prefix, asn: asn.map(|asn| AsId::from(asn)) }
+        PrefixFilter { prefix, asn: asn.map(AsId::from) }
     }
 
     fn address_prefix(

@@ -80,6 +80,7 @@ const ASCTIME_DATE: &[Item<'static>] = &[
 ///
 /// Since all date format allow ASCII characters only, this expects a str.
 /// If it cannot parse the date, it simply returns `None`.
+#[allow(clippy::question_mark)] // False positive.
 pub fn parse_http_date(date: &str) -> Option<DateTime<Utc>> {
     use chrono::format::{Parsed, parse};
 

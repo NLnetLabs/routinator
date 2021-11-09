@@ -104,9 +104,6 @@ pub struct Engine {
     /// How do we deal with stale objects?
     stale: FilterPolicy,
 
-    /// How do we deal with unknown object types?
-    unknown_objects: FilterPolicy,
-
     /// Number of validation threads.
     validation_threads: usize,
 
@@ -153,7 +150,6 @@ impl Engine {
             store,
             strict: config.strict,
             stale: config.stale,
-            unknown_objects: config.unknown_objects,
             validation_threads: config.validation_threads,
             dirty_repository: config.dirty_repository,
         };
@@ -1525,6 +1521,7 @@ pub struct CaCert {
     cert: ResourceCert,
 
     /// The certificate’s location.
+    #[allow(dead_code)] // Keep it even if unused, we may want it metrics later
     uri: TalUri,
 
     /// The CA repository URI of the certificate.

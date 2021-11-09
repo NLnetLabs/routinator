@@ -1839,7 +1839,7 @@ mod test {
         let mut next = SnapshotBuilder::default();
         next.origins.insert(o0, info.clone());
         next.origins.insert(o2, info.clone());
-        next.origins.insert(o4, info.clone());
+        next.origins.insert(o4, info);
         let delta = PayloadDelta::construct(
             &current, &next, 12.into()
         ).unwrap();
