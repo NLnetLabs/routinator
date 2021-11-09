@@ -2334,7 +2334,7 @@ mod test {
         assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
         assert!(config.rtr_listen.is_empty());
         assert!(config.http_listen.is_empty());
-        assert_eq!(config.systemd_listen, false);
+        assert!(!config.systemd_listen);
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(config.log_target, LogTarget::Default(Facility::LOG_DAEMON));
     }
@@ -2358,7 +2358,7 @@ mod test {
              log-level = \"info\"\n\
              log = \"file\"\n\
              log-file = \"foo.log\"",
-            &Path::new("/test/routinator.conf")
+            Path::new("/test/routinator.conf")
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
@@ -2367,7 +2367,7 @@ mod test {
             config.exceptions,
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
-        assert_eq!(config.strict, true);
+        assert!(config.strict);
         assert_eq!(config.validation_threads, 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
@@ -2384,7 +2384,7 @@ mod test {
             config.http_listen,
             vec![SocketAddr::from_str("192.0.2.4:8080").unwrap()]
         );
-        assert_eq!(config.systemd_listen, true);
+        assert!(config.systemd_listen);
         assert_eq!(config.log_level, LevelFilter::Info);
         assert_eq!(
             config.log_target,
@@ -2398,13 +2398,13 @@ mod test {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
              tal-dir = \"taldir\"",
-            &Path::new("/test/routinator.conf")
+            Path::new("/test/routinator.conf")
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
         assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
         assert!(config.exceptions.is_empty());
-        assert_eq!(config.strict, false);
+        assert!(!config.strict);
         assert_eq!(config.validation_threads, ::num_cpus::get());
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -2412,7 +2412,7 @@ mod test {
         assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
         assert!(config.rtr_listen.is_empty());
         assert!(config.http_listen.is_empty());
-        assert_eq!(config.systemd_listen, false);
+        assert!(!config.systemd_listen);
         assert!(config.http_listen.is_empty());
         assert_eq!(config.log_level, LevelFilter::Warn);
         assert_eq!(
@@ -2464,7 +2464,7 @@ mod test {
         assert_eq!(
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
-        assert_eq!(config.strict, true);
+        assert!(config.strict);
         assert_eq!(config.validation_threads, 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }
@@ -2508,7 +2508,7 @@ mod test {
             config.http_listen,
             vec![SocketAddr::from_str("192.0.2.4:8080").unwrap()]
         );
-        assert_eq!(config.systemd_listen, true);
+        assert!(config.systemd_listen);
     }
 }
 

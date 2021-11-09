@@ -1893,6 +1893,7 @@ impl RepositoryState {
 #[derive(Clone, Debug)]
 struct RepositoryObject {
     /// The RRDP hash of the object.
+    #[allow(dead_code)]
     hash: rrdp::Hash,
 
     /// The content of the object.
@@ -1940,7 +1941,7 @@ impl RepositoryObject {
 
     /// Reads the object from a reader.
     fn read(source: &mut impl io::Read) -> Result<Self, io::Error> {
-        let hash = Parse::parse(source)?;
+        let hash = rrdp::Hash::parse(source)?;
         let mut content = Vec::new();
         source.read_to_end(&mut content)?;
         Ok(RepositoryObject {

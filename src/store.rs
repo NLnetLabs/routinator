@@ -1188,7 +1188,7 @@ mod test {
     #[test]
     fn write_read_stored_manifest() {
         let mut orig = StoredManifest::new(
-            Time::utc(2021, 02, 18, 13, 22, 06),
+            Time::utc(2021, 2, 18, 13, 22, 6),
             Some(uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
