@@ -338,10 +338,6 @@ the path to make it possible to distinguish the series of requests made over
 time.
 
 .TP
-.B --rrdp-disable-gzip
-If this option is present, the gzip transfer encoding is disabled.
-
-.TP
 .BI --max-object-size= bytes
 Limits the size of individual objects received via either rsync or RRDP to
 the given number of bytes. The default value if this option is not present
@@ -1111,12 +1107,6 @@ responses received from RRDP servers will be stored.
 The sub-path will be constructed using the components of the requested URI.
 For the responses to the notification files, the timestamp is appended to
 the path to make it possible to distinguish the series of requests made over
-time.
-
-.TP
-.B rrdp-disable-gzip
-A boolean value that determines whether the gzip transfer encoding should be
-disabled in RRDP requests. If the option is missing, gzip will be used.
 
 .TP
 .B max-object-size

@@ -1301,7 +1301,6 @@ impl HttpClient {
 
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
-        builder = builder.gzip(!config.rrdp_disable_gzip);
         builder = builder.timeout(None); // Set per request.
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
