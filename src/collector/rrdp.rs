@@ -1278,6 +1278,9 @@ struct HttpClient {
 
     /// The base directory for storing copies of responses if that is enabled.
     response_dir: Option<PathBuf>,
+
+    /// The timeout for requests.
+    timeout: Option<Duration>,
 }
 
 impl HttpClient {
@@ -1299,7 +1302,7 @@ impl HttpClient {
         let mut builder = create_builder();
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.gzip(!config.rrdp_disable_gzip);
-        builder = builder.timeout(config.rrdp_timeout);
+        builder = builder.timeout(None); // Set per request.
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
@@ -1326,6 +1329,7 @@ impl HttpClient {
         Ok(HttpClient {
             client: Err(Some(builder)),
             response_dir: config.rrdp_keep_responses.clone(),
+            timeout: config.rrdp_timeout,
         })
     }
 
@@ -1412,9 +1416,12 @@ impl HttpClient {
     fn _response(
         &self,
         uri: &uri::Https,
-        request: RequestBuilder,
+        mut request: RequestBuilder,
         multi: bool
     ) -> Result<HttpResponse, reqwest::Error> {
+        if let Some(timeout) = self.timeout {
+            request = request.timeout(timeout);
+        }
         request.send().map(|response| {
             HttpResponse::create(response, uri, &self.response_dir, multi)
         })
