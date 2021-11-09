@@ -6,9 +6,31 @@ Breaking Changes
 
 Bug Fixes
 
+* The `rrdp-timeout` configuration setting now correctly limits the maximum
+  length an RRDP request can take. This prevents a possible issue where a
+  RRDP repository maliciously or erroneously delays a request and
+  subsequently a validation run. ([#666], [CVE-2021-43173])
+
 New
 
+* The new configuration setting `max-ca-depth` limits the length a chain
+  of CAs from a trust anchor. By default it is set to 32. This fixes a
+  possible vulnerability where a CA creates an infinite chain of CAs.
+  ([#665], [CVE-2021-43172])
+
 Other Changes
+
+* Support for the gzip transfer encoding for RRDP has been removed because
+  gzip in combination with XML provides multiple ways to delay validation.
+  The configuration setting `rrdp-disable-gzip` is now deprecated and will
+  be removed in the next breaking release. ([#667], [CVE-2021-43174])
+
+[#665]: https://github.com/NLnetLabs/routinator/pull/665
+[#666]: https://github.com/NLnetLabs/routinator/pull/666
+[#667]: https://github.com/NLnetLabs/routinator/pull/667
+[CVE-2021-43172]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2021-43172_CVE-2021-43173_CVE-2021-43174.txt
+[CVE-2021-43173]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2021-43172_CVE-2021-43173_CVE-2021-43174.txt
+[CVE-2021-43174]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2021-43172_CVE-2021-43173_CVE-2021-43174.txt
 
 
 ## 0.10.1 ‘That’s No Moon’
