@@ -348,10 +348,6 @@ The available options are:
       appended to the path to make it possible to distinguish the series of
       requests made over time.
 
-.. option:: --rrdp-disable-gzip
-
-      If this option is present, the gzip transfer encoding is disabled.
-
 .. option:: --max-object-size=BYTES
 
       Limits the size of individual objects received via either rsync or RRDP to
@@ -1038,10 +1034,6 @@ rrdp-keep-responses
       will be constructed using the components of the requested URI. For the
       responses to the notification files, the timestamp is appended to the path
       to make it possible to distinguish the series of requests made over time.
-
-rrdp-disable-gzip
-      A boolean value that determines whether the gzip transfer encoding should
-      be disabled in RRDP requests. If the option is missing, gzip will be used.
 
 max-object-size
       An integer value that provides a limit for the size of individual objects
