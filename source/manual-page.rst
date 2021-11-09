@@ -358,6 +358,10 @@ The available options are:
       the given number of bytes. The default value if this option is not present
       is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
 
+.. option:: --max-ca-depth=count
+      The maximum number of CAs a given CA may be away from a trust anchor
+      certificate before it is rejected. The default value is 32.
+
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -1044,6 +1048,11 @@ max-object-size
       received via either rsync or RRDP to the given number of bytes. The
       default value if this option is not present is 20,000,000 (i.e., 20
       MBytes). A value of 0 disables the limit.
+
+max-ca-depth
+      An integer value that specifies the maximum number of CAs a given CA may
+      be away from a trust anchor certificate before it is rejected. If the
+      option is  missing, a default of 32 will be used.
 
 dirty
       A boolean value which, if true, specifies that unused files and
