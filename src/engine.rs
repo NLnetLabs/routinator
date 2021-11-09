@@ -109,6 +109,9 @@ pub struct Engine {
 
     /// Should we leave the repository dirty after a valiation run.
     dirty_repository: bool,
+
+    /// Maximum depth of the CA chain.
+    max_ca_depth: usize,
 }
 
 impl Engine {
@@ -152,6 +155,7 @@ impl Engine {
             stale: config.stale,
             validation_threads: config.validation_threads,
             dirty_repository: config.dirty_repository,
+            max_ca_depth: config.max_ca_depth,
         };
         res.reload_tals()?;
         Ok(res)
@@ -1263,7 +1267,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         let cert = match CaCert::chain(
-            self.cert, uri.clone(), cert
+            self.cert, uri.clone(), cert, self.run.validation.max_ca_depth,
         ) {
             Ok(cert) => cert,
             Err(_) => {
@@ -1535,6 +1539,9 @@ pub struct CaCert {
     /// This will be `None` for a trust anchor certificate.
     parent: Option<Arc<CaCert>>,
 
+    /// The length of the chain of certificates from a trust anchor.
+    chain_len: usize,
+
     /// The index of the TAL in the metrics.
     pub(crate) // XXX
     tal: usize,
@@ -1551,16 +1558,38 @@ impl CaCert {
     pub fn root(
         cert: ResourceCert, uri: TalUri, tal: usize
     ) -> Result<Arc<Self>, Failed> {
-        Self::new(cert, uri, None, tal)
+        Self::new(cert, uri, None, 0, tal)
     }
 
     /// Creates a new CA cert for an issued CA.
     pub fn chain(
         issuer: &Arc<Self>,
         uri: uri::Rsync,
-        cert: ResourceCert
+        cert: ResourceCert,
+        max_depth: usize,
     ) -> Result<Arc<Self>, Failed> {
-        Self::new(cert, TalUri::Rsync(uri), Some(issuer.clone()), issuer.tal)
+        let chain_len = match issuer.chain_len.checked_add(1) {
+            Some(chain_len) => chain_len,
+            None => {
+                error!(
+                    "CA {}: CA depth overrun.",
+                    uri
+                );
+                return Err(Failed)
+            }
+        };
+        if chain_len > max_depth {
+            error!(
+                "CA {}: CA depth overrun.",
+                uri
+            );
+            return Err(Failed)
+        }
+        Self::new(
+            cert, TalUri::Rsync(uri),
+            Some(issuer.clone()), chain_len,
+            issuer.tal
+        )
     }
 
     /// Creates a new CA cert from its various parts.
@@ -1568,6 +1597,7 @@ impl CaCert {
         cert: ResourceCert,
         uri: TalUri, 
         parent: Option<Arc<Self>>,
+        chain_len: usize,
         tal: usize,
     ) -> Result<Arc<Self>, Failed> {
         let combined_validity = match parent.as_ref() {
@@ -1602,7 +1632,7 @@ impl CaCert {
             }
         };
         Ok(Arc::new(CaCert {
-            cert, uri, ca_repository, rpki_manifest, parent, tal,
+            cert, uri, ca_repository, rpki_manifest, parent, chain_len, tal,
             combined_validity,
         }))
     }
