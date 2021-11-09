@@ -1,8 +1,8 @@
 # Change Log
 
-# Unreleased next version
+# 0.10.2 ‘Skuffet, men ikke overrasket’
 
-Breaking Changes
+Released 2021-11-09.
 
 Bug Fixes
 
