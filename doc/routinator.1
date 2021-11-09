@@ -344,6 +344,11 @@ the given number of bytes. The default value if this option is not present
 is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
 
 .TP
+.BI --max-ca-depth= count
+The maximum number of CAs a given CA may be away from a trust anchor
+certificate before it is rejected. The default value is 32.
+
+.TP
 .B --dirty
 If this option is present, unused files and directories will not be deleted
 from the repository directory after each validation run.
@@ -1109,6 +1114,12 @@ An integer value that provides a limit for the size of individual objects
 received via either rsync or RRDP to the given number of bytes. The default
 value if this option is not present is 20,000,000 (i.e., 20 MBytes). A value
 of 0 disables the limit.
+
+.TP
+.B max-ca-depth
+An integer value that specifies the maximum number of CAs a given CA may be
+away from a trust anchor certificate before it is rejected. If the option is
+missing, a default of 32 will be used.
 
 .TP
 .B dirty
