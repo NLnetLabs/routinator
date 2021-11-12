@@ -70,9 +70,16 @@ Using the Prometheus endpoint it's possible to build a detailed dashboard using
 for example `Grafana <https://grafana.com>`_. We provide a `template
 <https://grafana.com/grafana/dashboards/11922>`_ to get started.
 
-.. figure:: img/routinator_grafana_dashboard.png
+.. figure:: img/routinator-repository-monitoring.png
     :align: center
     :width: 100%
-    :alt: Grafana dashboard
+    :alt: Time series for each RPKI Repository
 
-    A sample Grafana dashboard
+    Time series for each RPKI Repository
+
+.. figure:: img/routinator-trust-anchor-monitoring.png
+    :align: center
+    :width: 100%
+    :alt: Time series for each Trust Anchor
+
+    Time series for each Trust Anchor
