@@ -42,9 +42,9 @@ If you run into a problem with Routinator or you have a feature request, please
 We are also happy to accept your pull requests. For community support and
 exchanging operational experiences we provide a `mailing list
 <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_ and a `Discord server
-<https://discord.gg/8dvKB5Ykhy>`_. `Professional support services
+<https://discord.gg/8dvKB5Ykhy>`_. There are also `professional support services
 <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level agreement
-are also available.
+available.
 
 You can follow the adventures of Routinator on `Twitter
 <https://twitter.com/routinator3000>`_ and listen to its favourite songs on
