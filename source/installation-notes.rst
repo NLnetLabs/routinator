@@ -9,18 +9,14 @@ get Routinator working as desired.
 Enabling or Disabling Features
 ------------------------------
 
-When you build Routinator yourself using Cargo, `features
+When you build Routinator yourself using Cargo, `"features"
 <https://doc.rust-lang.org/cargo/reference/features.html>`_ provide a mechanism
-to express conditional compilation and optional dependencies.
+to express conditional compilation and optional dependencies. The Routinator
+package defines a set of named features in the ``[features]`` table of
+`Cargo.toml <https://github.com/NLnetLabs/routinator/blob/main/Cargo.toml>`_.
+The table also defines if a feature is enabled or disabled by default.
 
-The Routinator package defines a set of named features in the ``[features]``
-table of `Cargo.toml
-<https://github.com/NLnetLabs/routinator/blob/main/Cargo.toml>`_, and each
-feature can either be enabled or disabled. Features for the package being built
-can be enabled on the command-line with flags such as ``--features``.
-
-Routinator currently has the following features that can be enabled and
-disabled during compilation:
+Routinator currently has the following features:
 
 ``socks`` —  *Enabled* by default
     Allow the configuration of a SOCKS proxy.
@@ -33,7 +29,7 @@ disabled during compilation:
     
 To disable the features that are enabled by default, use the
 ``--no-default-features`` option. You can then choose which features you want
-using the ``--features`` option listing each feature separated by commas. 
+using the ``--features`` option, listing each feature separated by commas. 
 
 For example, if you want to build Routinator without the user interface, make 
 sure SOCKS support is retained and use the native TLS implementation, enter the 
