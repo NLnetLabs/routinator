@@ -15,16 +15,17 @@ to express conditional compilation and optional dependencies.
 
 The Routinator package defines a set of named features in the ``[features]``
 table of `Cargo.toml
-https://github.com/NLnetLabs/routinator/blob/main/Cargo.toml`_, and each feature
-can either be enabled or disabled. Features for the package being built can be
-enabled on the command-line with flags such as ``--features``.
+<https://github.com/NLnetLabs/routinator/blob/main/Cargo.toml>`_, and each
+feature can either be enabled or disabled. Features for the package being built
+can be enabled on the command-line with flags such as ``--features``.
 
-Routinator currently has these features that can be enabled and disabled:
+Routinator currently has the following features that can be enabled and
+disabled during compilation:
 
 ``socks`` —  *Enabled* by default
-    All the configuration of a SOCKS proxy.
+    Allow the configuration of a SOCKS proxy.
 ``ui``  —  *Enabled* by default
-    Download and build the the `routinator-ui <https://crates.io/crates/routinator-ui>`_ crate.
+    Download and build the the `routinator-ui <https://crates.io/crates/routinator-ui>`_ crate to run the :ref:`user interface <doc_routinator_ui>`.
 ``native-tls`` —  *Disabled* by default
     Use the native TLS implementation of your system instead of `rustls <https://github.com/rustls/rustls>`_.
 ``rta`` —  *Disabled* by default
