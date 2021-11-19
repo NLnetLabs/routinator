@@ -6,35 +6,41 @@ Installation Notes
 In certain scenarios and on some platforms specific steps are needed in order to
 get Routinator working as desired.
 
-Using Native TLS Instead of Rustls
-----------------------------------
+Enabling or Disabling Features
+------------------------------
 
-By default Routinator uses the TLS library `Rustls
-<https://github.com/ctz/rustls>`_, which in most cases is fine. However, if
-needed you can instead use the native TLS implementation of your system with 
-Routinator.
+When you build Routinator yourself using Cargo, `features
+<https://doc.rust-lang.org/cargo/reference/features.html>`_ provide a mechanism
+to express conditional compilation and optional dependencies.
 
-.. tabs::
+The Routinator package defines a set of named features in the ``[features]``
+table of `Cargo.toml
+https://github.com/NLnetLabs/routinator/blob/main/Cargo.toml`_, and each feature
+can either be enabled or disabled. Features for the package being built can be
+enabled on the command-line with flags such as ``--features``.
 
-   .. tab:: Cargo
+Routinator currently has these features that can be enabled and disabled:
 
-      Build Routinator with the ``native-tls`` feature enabled:
+``socks`` —  *Enabled* by default
+    All the configuration of a SOCKS proxy.
+``ui``  —  *Enabled* by default
+    Download and build the the `routinator-ui <https://crates.io/crates/routinator-ui>`_ crate.
+``native-tls`` —  *Disabled* by default
+    Use the native TLS implementation of your system instead of `rustls <https://github.com/rustls/rustls>`_.
+``rta`` —  *Disabled* by default
+    Let Routinator validate `Resource Tagged Attestations (RTAs) <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_.
+    
+To disable the features that are enabled by default, use the
+``--no-default-features`` option. You can then choose which features you want
+using the ``--features`` option listing each feature separated by commas. 
 
-      .. code-block:: text
+For example, if you want to build Routinator without the user interface, make 
+sure SOCKS support is retained and use the native TLS implementation, enter the 
+following command:
 
-         git clone --branch vX.Y.Z --depth 1 https://github.com/NLnetLabs/routinator.git
-         cd routinator
-         cargo build --release --features socks,native-tls
+.. code-block:: text
 
-   .. tab:: Docker
-
-      Specify a ``native-tls`` image tag when running the container:
-
-      .. code-block:: text
-
-         sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-              -p 9556:9556 -v routinator-tals:/home/routinator/.rpki-cache/tals \
-              nlnetlabs/routinator:native-tls
+   cargo install --locked --no-default-features --features socks,native-tls routinator
 
 Statically Linked Routinator
 ----------------------------
