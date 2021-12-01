@@ -355,6 +355,7 @@ The available options are:
       is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
 
 .. option:: --max-ca-depth=count
+
       The maximum number of CAs a given CA may be away from a trust anchor
       certificate before it is rejected. The default value is 32.
 
