@@ -54,7 +54,7 @@ file. To get an overview of all available options, please refer to the
 :ref:`doc_routinator_manpage`, which can be also  viewed by running
 :command:`routinator man`.
 
-You can specify such a config file via the :option:`--config` option. If you
+You can specify such a configuration file via the :option:`--config` option. If you
 don’t, Routinator will check if there is a :file:`$HOME/.routinator.conf` and if
 it exists, use it. If it doesn’t exist and there is no :option:`--config`
 option, the default values are used.
