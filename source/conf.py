@@ -28,7 +28,7 @@ author = 'NLnet Labs (CC-BY 3.0)'
 # The short X.Y version
 version = '0.10.3'
 # The full version, including alpha/beta/rc tags
-release = '0.10.3'
+release = '0.10.3-dev'
 
 # -- Version Warning Banner configuration ------------------------------------
 versionwarning_messages = {
