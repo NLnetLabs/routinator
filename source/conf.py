@@ -26,9 +26,9 @@ copyright = '2018-2021, NLnet Labs'
 author = 'NLnet Labs (CC-BY 3.0)'
 
 # The short X.Y version
-version = ''
+version = '0.10.3'
 # The full version, including alpha/beta/rc tags
-release = ''
+release = '0.10.3'
 
 # -- Version Warning Banner configuration ------------------------------------
 versionwarning_messages = {
@@ -159,7 +159,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('manual-page', 'routinator', 'RPKI relying party software',
-     [author], 1)
+     "Jaap Akkerhuis wrote the original version of this manual page, Martin Hoffmann extended it for later versions.", 1)
 ]
 
 
