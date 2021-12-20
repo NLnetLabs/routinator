@@ -1203,38 +1203,38 @@ be used within the local network.
 
 The service only supports GET requests with the following paths:
 
-:command:`/metrics`
+/metrics
       Returns a set of monitoring metrics in the format used by Prometheus.
 
-:command:`/status`
+/status
       Returns the current status of the Routinator instance. This is similar to
       the output of the **/metrics** endpoint but in a more human friendly
       format.
 
-:command:`/api/v1/status`
+/api/v1/status
       Returns the current status in JSON format.
 
-:command:`/log`
+/log
       Returns the logging output of the last validation run. The log level
       matches that set upon start.
       
       Note that the output is collected after each validation run and is
       therefore only available after the initial run has concluded.
 
-:command:`/version`
+/version
       Returns the version of the Routinator instance.
 
-:command:`/api/v1/validity/as-number/prefix`
+/api/v1/validity/as-number/prefix
       Returns a JSON object describing whether the route announcement given by
       its origin AS Number and address prefix is RPKI valid, invalid, or not
       found.  The returned object is compatible with that provided by the RIPE
       NCC RPKI Validator. For more information, see
       https://ripe.net/support/documentation/developer-documentation/rpki-validator-api
 
-:command:`/validity?asn=as-number&prefix=prefix`
+/validity?asn=as-number&prefix=prefix
       Same as above but with a more form-friendly calling convention.
 
-:command:`/json-delta, /json-delta?sessionsession?serial=serial`
+/json-delta, /json-delta?sessionsession?serial=serial
       Returns a JSON object with the changes since the dataset version
       identified by the *session* and *serial* query parameters. If a delta
       cannot be produced from that version, the full data set is returned and
