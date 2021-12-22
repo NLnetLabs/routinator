@@ -929,270 +929,272 @@ The configuration file can contain the following entries. All path values are
 interpreted relative to the directory the configuration file is located in. All
 values can be overridden via the command line options.
 
-repository-dir
-      A string containing the path to the directory to store the local
-      repository in. This entry is mandatory.
+.. Glossary::
 
-tal-dir
-      A string containing the path to the directory that contains the Trust
-      Anchor Locators. This entry is mandatory.
+      repository-dir
+            A string containing the path to the directory to store the local
+            repository in. This entry is mandatory.
 
-exceptions
-      A list of strings, each containing the path to a file with local
-      exceptions. If missing, no local exception files are used.
+      tal-dir
+            A string containing the path to the directory that contains the Trust
+            Anchor Locators. This entry is mandatory.
 
-strict
-      A boolean specifying whether strict validation should be employed. If
-      missing, strict validation will not be used.
+      exceptions
+            A list of strings, each containing the path to a file with local
+            exceptions. If missing, no local exception files are used.
 
-stale
-      A string specifying the policy for dealing with stale objects.
+      strict
+            A boolean specifying whether strict validation should be employed. If
+            missing, strict validation will not be used.
 
-      reject
-             Consider all stale objects invalid rendering all material published
-             by the CA issuing the stale object to be invalid including all
-             material of any child CA. This is the default policy if the value 
-             is missing.
+      stale
+            A string specifying the policy for dealing with stale objects.
 
-      warn
-             Consider stale objects to be valid but print a warning to the log.
+            reject
+                  Consider all stale objects invalid rendering all material published
+                  by the CA issuing the stale object to be invalid including all
+                  material of any child CA. This is the default policy if the value 
+                  is missing.
 
-      accept
-             Quietly consider stale objects valid.
+            warn
+                  Consider stale objects to be valid but print a warning to the log.
 
-unsafe-vrps
-      A string specifying the policy for dealing with unsafe VRPs.
+            accept
+                  Quietly consider stale objects valid.
 
-      reject
-             Filter unsafe VRPs and add warning messages to the log.
+      unsafe-vrps
+            A string specifying the policy for dealing with unsafe VRPs.
 
-      warn
-             Warn about unsafe VRPs in the log but add them to the final set of
-             VRPs. This is the default policy if the value is missing.
+            reject
+                  Filter unsafe VRPs and add warning messages to the log.
 
-      accept
-             Quietly add unsafe VRPs to the final set of VRPs.
+            warn
+                  Warn about unsafe VRPs in the log but add them to the final set of
+                  VRPs. This is the default policy if the value is missing.
 
-unknown-objects
-      A string specifying the policy for dealing with unknown RPKI object types.
+            accept
+                  Quietly add unsafe VRPs to the final set of VRPs.
 
-       reject
-             Reject the object and its issuing CA.
+      unknown-objects
+            A string specifying the policy for dealing with unknown RPKI object types.
 
-       warn
-             Warn about the object but ignore it and accept the issuing CA.
-             This is the default policy if the value is missing.
+            reject
+                  Reject the object and its issuing CA.
 
-       accept
-             Quietly ignore the object and accept the issuing CA.
+            warn
+                  Warn about the object but ignore it and accept the issuing CA.
+                  This is the default policy if the value is missing.
 
-allow-dubious-hosts
-      A boolean value that, if present and true, disables Routinator's filtering
-      of dubious host names in rsync and HTTPS URIs from RPKI data.
+            accept
+                  Quietly ignore the object and accept the issuing CA.
 
-disable-rsync
-      A boolean value that, if present and true, turns off the use of rsync.
+      allow-dubious-hosts
+            A boolean value that, if present and true, disables Routinator's filtering
+            of dubious host names in rsync and HTTPS URIs from RPKI data.
 
-rsync-command
-      A string specifying the command to use for running rsync. The default is
-      simply *rsync*.
+      disable-rsync
+            A boolean value that, if present and true, turns off the use of rsync.
 
-rsync-args
-      A list of strings containing the arguments to be passed to the rsync
-      command. Each string is an argument of its own.
+      rsync-command
+            A string specifying the command to use for running rsync. The default is
+            simply *rsync*.
 
-      If this option is not provided, Routinator will try to find out if your
-      rsync understands the ``--contimeout`` option and, if so, will set it to
-      10 thus letting connection attempts time out after ten seconds. If your
-      rsync is too old to support this option, no arguments are used.
+      rsync-args
+            A list of strings containing the arguments to be passed to the rsync
+            command. Each string is an argument of its own.
 
-rsync-timeout
-      An integer value specifying the number seconds an rsync command is allowed
-      to run before it is being terminated. The default if the value is missing
-      is 300 seconds.
+            If this option is not provided, Routinator will try to find out if your
+            rsync understands the ``--contimeout`` option and, if so, will set it to
+            10 thus letting connection attempts time out after ten seconds. If your
+            rsync is too old to support this option, no arguments are used.
 
-disable-rrdp
-      A boolean value that, if present and true, turns off the use of RRDP.
+      rsync-timeout
+            An integer value specifying the number seconds an rsync command is allowed
+            to run before it is being terminated. The default if the value is missing
+            is 300 seconds.
 
-rrdp-fallback-time
-      An integer value specifying the maximum number of seconds since a last
-      successful update of an RRDP repository before Routinator falls back to
-      using rsync. The default in case the value is missing is 3600 seconds. If
-      the value provided is smaller than twice the refresh time, it is silently
-      increased to that value.
+      disable-rrdp
+            A boolean value that, if present and true, turns off the use of RRDP.
 
-rrdp-max-delta-count
-      An integer value that specifies the maximum number of deltas necessary to
-      update an RRDP repository before using the snapshot instead. If the value
-      is missing, the default of 100 is used.
+      rrdp-fallback-time
+            An integer value specifying the maximum number of seconds since a last
+            successful update of an RRDP repository before Routinator falls back to
+            using rsync. The default in case the value is missing is 3600 seconds. If
+            the value provided is smaller than twice the refresh time, it is silently
+            increased to that value.
 
-rrdp-timeout
-      An integer value that provides a timeout in seconds for all individual
-      RRDP-related network operations, i.e., connects, reads, and writes. If the
-      value is missing, a default timeout of 300 seconds will be used. Set the
-      value to 0 to turn the timeout off.
+      rrdp-max-delta-count
+            An integer value that specifies the maximum number of deltas necessary to
+            update an RRDP repository before using the snapshot instead. If the value
+            is missing, the default of 100 is used.
 
-rrdp-connect-timeout
-      An integer value that, if present, sets a separate timeout in seconds for
-      RRDP connect requests only.
+      rrdp-timeout
+            An integer value that provides a timeout in seconds for all individual
+            RRDP-related network operations, i.e., connects, reads, and writes. If the
+            value is missing, a default timeout of 300 seconds will be used. Set the
+            value to 0 to turn the timeout off.
 
-rrdp-local-addr
-      A string value that provides the local address to be used by RRDP
-      connections.
+      rrdp-connect-timeout
+            An integer value that, if present, sets a separate timeout in seconds for
+            RRDP connect requests only.
 
-rrdp-root-certs
-      A list of strings each providing a path to a file containing a trust
-      anchor certificate for HTTPS authentication of RRDP connections. In
-      addition to the certificates provided via this option, the system's own
-      trust store is used.
+      rrdp-local-addr
+            A string value that provides the local address to be used by RRDP
+            connections.
 
-rrdp-proxies
-      A list of string each providing the URI for a proxy for outgoing RRDP
-      connections. The proxies are tried in order for each request. HTTP and
-      SOCKS5 proxies are supported.
+      rrdp-root-certs
+            A list of strings each providing a path to a file containing a trust
+            anchor certificate for HTTPS authentication of RRDP connections. In
+            addition to the certificates provided via this option, the system's own
+            trust store is used.
 
-rrdp-keep-responses
-      A string containing a path to a directory into which the bodies of all
-      HTTPS responses received from RRDP servers will be stored. The sub-path
-      will be constructed using the components of the requested URI. For the
-      responses to the notification files, the timestamp is appended to the path
-      to make it possible to distinguish the series of requests made over time.
+      rrdp-proxies
+            A list of string each providing the URI for a proxy for outgoing RRDP
+            connections. The proxies are tried in order for each request. HTTP and
+            SOCKS5 proxies are supported.
 
-max-object-size
-      An integer value that provides a limit for the size of individual objects
-      received via either rsync or RRDP to the given number of bytes. The
-      default value if this option is not present is 20,000,000 (i.e., 20
-      MBytes). A value of 0 disables the limit.
+      rrdp-keep-responses
+            A string containing a path to a directory into which the bodies of all
+            HTTPS responses received from RRDP servers will be stored. The sub-path
+            will be constructed using the components of the requested URI. For the
+            responses to the notification files, the timestamp is appended to the path
+            to make it possible to distinguish the series of requests made over time.
 
-max-ca-depth
-      An integer value that specifies the maximum number of CAs a given CA may
-      be away from a trust anchor certificate before it is rejected. If the
-      option is missing, a default of 32 will be used.
+      max-object-size
+            An integer value that provides a limit for the size of individual objects
+            received via either rsync or RRDP to the given number of bytes. The
+            default value if this option is not present is 20,000,000 (i.e., 20
+            MBytes). A value of 0 disables the limit.
 
-dirty
-      A boolean value which, if true, specifies that unused files and
-      directories should not be deleted from the repository directory after each
-      validation run. If left out, its value will be false and unused files
-      will be deleted.
+      max-ca-depth
+            An integer value that specifies the maximum number of CAs a given CA may
+            be away from a trust anchor certificate before it is rejected. If the
+            option is missing, a default of 32 will be used.
 
-validation-threads
-      An integer value specifying the number of threads to be used during
-      validation of the repository. If this value is missing, the number of CPUs
-      in the system is used.
+      dirty
+            A boolean value which, if true, specifies that unused files and
+            directories should not be deleted from the repository directory after each
+            validation run. If left out, its value will be false and unused files
+            will be deleted.
 
-log-level
-      A string value specifying the maximum log level for which log messages
-      should be emitted. The default is *warn*.
+      validation-threads
+            An integer value specifying the number of threads to be used during
+            validation of the repository. If this value is missing, the number of CPUs
+            in the system is used.
 
-      See `LOGGING`_ below for more information on what information is logged at
-      the different levels.
+      log-level
+            A string value specifying the maximum log level for which log messages
+            should be emitted. The default is *warn*.
 
-log
-      A string specifying where to send log messages to. This can be
-      one of the following values:
+            See `LOGGING`_ below for more information on what information is logged at
+            the different levels.
 
-      default
-             Log messages will be sent to standard error if Routinator
-             stays attached to the terminal or to syslog if it runs in
-             daemon mode.
+      log
+            A string specifying where to send log messages to. This can be
+            one of the following values:
 
-      stderr
-             Log messages will be sent to standard error.
+            default
+                  Log messages will be sent to standard error if Routinator
+                  stays attached to the terminal or to syslog if it runs in
+                  daemon mode.
 
-      syslog
-             Log messages will be sent to syslog.
+            stderr
+                  Log messages will be sent to standard error.
 
-      file
-             Log messages will be sent to the file specified through
-             the log-file configuration file entry.
+            syslog
+                  Log messages will be sent to syslog.
 
-      The default if this value is missing is, unsurprisingly, *default*.
+            file
+                  Log messages will be sent to the file specified through
+                  the log-file configuration file entry.
 
-log-file
-      A string value containing the path to a file to which log messages will be
-      appended if the log configuration value is set to file. In this case, the
-      value is mandatory.
+            The default if this value is missing is, unsurprisingly, *default*.
 
-syslog-facility
-      A string value specifying the syslog facility to use for logging to
-      syslog. The default value if this entry is missing is *daemon*.
+      log-file
+            A string value containing the path to a file to which log messages will be
+            appended if the log configuration value is set to file. In this case, the
+            value is mandatory.
 
-rtr-listen
-      An array of string values each providing the address and port which the
-      RTR daemon should listen on in TCP mode. Address and port should be
-      separated by a colon. IPv6 address should be enclosed in square brackets.
+      syslog-facility
+            A string value specifying the syslog facility to use for logging to
+            syslog. The default value if this entry is missing is *daemon*.
 
-http-listen
-      An array of string values each providing the address and port which the
-      HTTP service should listen on. Address and port should be separated by a
-      colon. IPv6 address should be enclosed in square brackets.
+      rtr-listen
+            An array of string values each providing the address and port which the
+            RTR daemon should listen on in TCP mode. Address and port should be
+            separated by a colon. IPv6 address should be enclosed in square brackets.
 
-listen-systemd
-      The RTR TCP listening socket will be acquired from systemd via socket
-      activation. Use this option together with systemd's socket units to allow
-      Routinator running as a regular user to bind to the default RTR port 323.
+      http-listen
+            An array of string values each providing the address and port which the
+            HTTP service should listen on. Address and port should be separated by a
+            colon. IPv6 address should be enclosed in square brackets.
 
-rtr-tcp-keepalive
-      An integer value specifying the number of seconds to wait before sending a
-      TCP keepalive on an established RTR connection. If this option is missing,
-      TCP keepalive will be enabled on all RTR connections with an idle time of
-      60 seconds. If this option is present and set to zero, TCP keepalives are
-      disabled.
+      listen-systemd
+            The RTR TCP listening socket will be acquired from systemd via socket
+            activation. Use this option together with systemd's socket units to allow
+            Routinator running as a regular user to bind to the default RTR port 323.
 
-rtr-client-metrics
-      A boolean value specifying whether server metrics should include separate
-      metrics for every RTR client. If the value is missing, no RTR client
-      metrics will be provided.
+      rtr-tcp-keepalive
+            An integer value specifying the number of seconds to wait before sending a
+            TCP keepalive on an established RTR connection. If this option is missing,
+            TCP keepalive will be enabled on all RTR connections with an idle time of
+            60 seconds. If this option is present and set to zero, TCP keepalives are
+            disabled.
 
-refresh
-      An integer value specifying the number of seconds Routinator should wait
-      between consecutive validation runs in server mode. The next validation
-      run will happen earlier, if objects expire earlier. The default is 600
-      seconds.
+      rtr-client-metrics
+            A boolean value specifying whether server metrics should include separate
+            metrics for every RTR client. If the value is missing, no RTR client
+            metrics will be provided.
 
-retry
-      An integer value specifying the number of seconds an RTR client is
-      requested to wait after it failed to receive a data set. The default is
-      600 seconds.
+      refresh
+            An integer value specifying the number of seconds Routinator should wait
+            between consecutive validation runs in server mode. The next validation
+            run will happen earlier, if objects expire earlier. The default is 600
+            seconds.
 
-expire
-      An integer value specifying the number of seconds an RTR client is
-      requested to use a data set if it cannot get an update before throwing it
-      away and continuing with no data at all. The default is 7200 seconds if it
-      cannot get an update before throwing it away and continuing with no data
-      at all. The default is 7200 seconds.
+      retry
+            An integer value specifying the number of seconds an RTR client is
+            requested to wait after it failed to receive a data set. The default is
+            600 seconds.
 
-history-size
-      An integer value specifying how many change sets Routinator should keep in
-      RTR server mode. The default is 10.
+      expire
+            An integer value specifying the number of seconds an RTR client is
+            requested to use a data set if it cannot get an update before throwing it
+            away and continuing with no data at all. The default is 7200 seconds if it
+            cannot get an update before throwing it away and continuing with no data
+            at all. The default is 7200 seconds.
 
-pid-file
-      A string value containing a path pointing to the PID file to be used in
-      daemon mode.
+      history-size
+            An integer value specifying how many change sets Routinator should keep in
+            RTR server mode. The default is 10.
 
-working-dir
-      A string value containing a path to the working directory for the daemon
-      process.
+      pid-file
+            A string value containing a path pointing to the PID file to be used in
+            daemon mode.
 
-chroot
-      A string value containing the path any daemon process should use as its
-      root directory.
+      working-dir
+            A string value containing a path to the working directory for the daemon
+            process.
 
-user
-      A string value containing the user name a daemon process should run as.
+      chroot
+            A string value containing the path any daemon process should use as its
+            root directory.
 
-group
-      A string value containing the group name a daemon process should run as.
+      user
+            A string value containing the user name a daemon process should run as.
 
-tal-label
-      An array containing arrays of two string values mapping the name of a TAL
-      file (without the path but including the extension) as given by the first
-      string to the name of the TAL to be included where the TAL is referenced
-      in output as given by the second string.
+      group
+            A string value containing the group name a daemon process should run as.
 
-      If the options missing or if a TAL isn't mentioned in the option,
-      Routinator will construct a name for the TAL by using its file name
-      (without the path) and dropping the extension.
+      tal-label
+            An array containing arrays of two string values mapping the name of a TAL
+            file (without the path but including the extension) as given by the first
+            string to the name of the TAL to be included where the TAL is referenced
+            in output as given by the second string.
+
+            If the options missing or if a TAL isn't mentioned in the option,
+            Routinator will construct a name for the TAL by using its file name
+            (without the path) and dropping the extension.
 
 HTTP Service
 ------------
