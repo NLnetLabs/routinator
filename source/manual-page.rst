@@ -3,106 +3,24 @@
 Manual Page
 ===========
 
-.. only:: html
+Synopsis
+--------
 
-    :command:`routinator` - RPKI relying party software
+:command:`routinator` [options] ``init`` [``init-options``]
 
-    :Date:       |today|
-    :Author:     Martin Hoffmann
-    :Copyright:  2019-2021 - NLnet Labs
-    :Version:    |release|
+:command:`routinator` [options] ``vrps`` [``vrps-options``] [:option:`-o` ``output-file``] [:option:`-f` ``format``]
 
-    Synopsis
-    --------
+:command:`routinator` [options] ``validate`` [validate-options] [:option:`-a` ``asn``] [:option:`-p` ``prefix``]
 
-    .. raw:: html
+:command:`routinator` [options] ``server`` [server-options]
 
-      <p><strong class="command">routinator</strong> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">options</span></code> <a class="reference internal"
-      href="#subcmd-init"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">init</span></code></a> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">init-options</span></code></p>
+:command:`routinator` [options] ``update`` [update-options]
 
-      <p><strong class="command">routinator</strong> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">options</span></code> <a class="reference internal"
-      href="#subcmd-vrps"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">vrps</span></code></a> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">vrps-options</span></code> <a class="reference
-      internal" href="#cmdoption-o"><code class="xref std std-option docutils
-      literal notranslate"><span class="pre">-o
-      <var>output-file</var></span></code></a> <a class="reference internal"
-      href="#cmdoption-format"><code class="xref std std-option docutils literal
-      notranslate"><span class="pre">-f <var>format</var></span></code></a></p>
+:command:`routinator` man [:option:`-o` ``file``]
 
-      <p><strong class="command">routinator</strong> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">options</span></code> <a class="reference internal"
-      href="#subcmd-validate"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">validate</span></code></a> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">validate-options</span></code> <a class="reference internal"
-      href="#cmdoption-asn"><code class="xref std std-option docutils literal
-      notranslate"><span class="pre">-a <var>asn</var></span></code></a> <a
-      class="reference internal" href="#cmdoption-prefix"><code class="xref std
-      std-option docutils literal notranslate"><span class="pre">-p
-      <var>prefix</var></span></code></a></p>
+:command:`routinator` :option:`-h`
 
-      <p><strong class="command">routinator</strong> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">options</span></code> <a class="reference internal"
-      href="#subcmd-server"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">server</span></code></a> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">server-options</span></code></p>
-
-      <p><strong class="command">routinator</strong> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">options</span></code> <a class="reference internal"
-      href="#subcmd-update"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">update</span></code></a> <code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">update-options</span></code></p>
-
-      <p><strong class="command">routinator</strong> <a class="reference internal"
-      href="#subcmd-man"><code class="xref std std-subcmd docutils literal
-      notranslate"><span class="pre">man</span></code></a> <a class="reference
-      internal" href="#cmdoption-output"><code class="xref std std-option docutils
-      literal notranslate"><span class="pre">-o
-      <var>file</var></span></code></a></p>
-
-      <p><strong class="command">routinator</strong> <a
-      class="reference internal" href="#cmdoption-h"><code class="xref std
-      std-option docutils literal notranslate"><span
-      class="pre">-h</span></code></a></p>
-
-      <p><strong class="command">routinator</strong> <a class="reference internal"
-      href="#cmdoption-version"><code class="xref std std-option docutils literal
-      notranslate"><span class="pre">-V</span></code></a></p>
-
-.. only:: man
-
-      Synopsis
-      --------
-
-      :command:`routinator` [options] ``init`` [``init-options``]
-
-      :command:`routinator` [options] ``vrps`` [``vrps-options``] [:option:`-o` ``output-file``] [:option:`-f` ``format``]
-
-      :command:`routinator` [options] ``validate`` [validate-options] [:option:`-a` ``asn``] [:option:`-p` ``prefix``]
-
-      :command:`routinator` [options] ``server`` [server-options]
-
-      :command:`routinator` [options] ``update`` [update-options]
-
-      :command:`routinator` man [:option:`-o` ``file``]
-
-      :command:`routinator` :option:`-h`
-
-      :command:`routinator` :option:`-V`
+:command:`routinator` :option:`-V`
 
 Description
 -----------
