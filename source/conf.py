@@ -17,7 +17,12 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import sphinx_rtd_theme
-import versionwarning
+try:
+    import versionwarning
+    versionbanner = True
+except ModuleNotFoundError:
+    versionbanner = False
+
 
 # -- Project information -----------------------------------------------------
 
@@ -31,11 +36,12 @@ version = '0.10.3'
 release = '0.10.3-dev'
 
 # -- Version Warning Banner configuration ------------------------------------
-versionwarning_messages = {
-    'latest': 'You are reading the <code class="docutils literal notranslate"><span class="pre">latest</span></code> (unstable) version of this documentation, which may describe features which are not available in the <a href="/en/stable/">stable version</a>.',
-}
-versionwarning_banner_title = 'Note'
-versionwarning_body_selector = 'div[itemprop="articleBody"]'
+if versionbanner:
+    versionwarning_messages = {
+        'latest': 'You are reading the <code class="docutils literal notranslate"><span class="pre">latest</span></code> (unstable) version of this documentation, which may describe features which are not available in the <a href="/en/stable/">stable version</a>.',
+    }
+    versionwarning_banner_title = 'Note'
+    versionwarning_body_selector = 'div[itemprop="articleBody"]'
 
 # -- General configuration ---------------------------------------------------
 
@@ -50,9 +56,10 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
     'sphinx_tabs.tabs',
-    'versionwarning.extension',
     'sphinx_copybutton',
 ]
+if versionbanner:
+    extensions.append('versionwarning.extension')
 
 # Add any paths that contain templates here, relative to this directory.
 
