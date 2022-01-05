@@ -27,7 +27,7 @@ except ModuleNotFoundError:
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
-copyright = '2018-2021, NLnet Labs'
+copyright = '2018-2022, NLnet Labs'
 author = 'NLnet Labs (CC-BY 3.0)'
 
 # The short X.Y version
