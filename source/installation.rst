@@ -34,19 +34,24 @@ manager.
        If you have a machine with an amd64/x86_64 architecture running a 
        recent Debian or Ubuntu distribution, you can install Routinator
        from our `software package repository <https://packages.nlnetlabs.nl>`_.
-       
-       To use this repository, add the line below that corresponds to your
-       operating system to your :file:`/etc/apt/sources.list` or
-       :file:`/etc/apt/sources.list.d/`:
+       To use it, add the line below that corresponds to your distribution to
+       either :file:`/etc/apt/sources.list` or :file:`/etc/apt/sources.list.d/`.
 
-       .. code-block:: text
+       ===========  ======================================================================================
+       Debian       Configuration line
+       ===========  ======================================================================================
+       9            ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main``
+       10           ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main``
+       11           ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye main``
+       ===========  ======================================================================================
 
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
+       ===========  ======================================================================================
+       Ubuntu       Configuration line
+       ===========  ======================================================================================
+       16.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main``
+       18.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main``
+       20.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main``
+       ===========  ======================================================================================
 
        Then run the following commands to add the public key and update the
        repository list:
@@ -248,18 +253,25 @@ a specific version, if needed.
 
    .. group-tab:: Debian Packages
 
-       To install release candidates of Routinator, add the line below that 
-       corresponds to your operating system to your ``/etc/apt/sources.list`` or
-       ``/etc/apt/sources.list.d/``:
+       To install release candidates of Routinator, add the line below that
+       corresponds to your distribution to either :file:`/etc/apt/sources.list`
+       or :file:`/etc/apt/sources.list.d/`.
 
-       .. code-block:: text
+       ===========  =======================================================================================
+       Debian       Configuration line
+       ===========  =======================================================================================
+       9            ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main``
+       10           ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main``
+       11           ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye-proposed main``
+       ===========  =======================================================================================
 
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye-proposed main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main 
-          deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main
+       ===========  =======================================================================================
+       Ubuntu       Configuration line
+       ===========  =======================================================================================
+       16.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main``
+       18.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main``
+       20.x         ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main``
+       ===========  =======================================================================================
 
        You can use this command to get an overview of the available versions:
 
