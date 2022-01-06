@@ -31,11 +31,12 @@ manager.
 
    .. group-tab:: Debian Packages
 
-       If you have a machine with an amd64/x86_64 architecture running a 
-       recent Debian or Ubuntu distribution, you can install Routinator
-       from our `software package repository <https://packages.nlnetlabs.nl>`_.
-       To use it, add the line below that corresponds to your distribution to
-       either :file:`/etc/apt/sources.list` or :file:`/etc/apt/sources.list.d/`.
+       If you have a machine with an amd64/x86_64 architecture running a recent
+       Debian or Ubuntu distribution, you can install Routinator from our
+       `software package repository <https://packages.nlnetlabs.nl>`_. To use
+       it, add the line below that corresponds to your distribution to
+       :file:`/etc/apt/sources.list` or add it to a file called
+       :file:`nlnetlabs.list` you create in :file:`/etc/apt/sources.list.d/`.
 
        .. list-table:: Debian
           :widths: 1 15
