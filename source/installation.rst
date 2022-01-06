@@ -29,49 +29,50 @@ manager.
 
 .. tabs::
 
-   .. group-tab:: Debian Packages
+   .. group-tab:: Debian
 
-       If you have a machine with an amd64/x86_64 architecture running a recent
-       Debian or Ubuntu distribution, you can install Routinator from our
-       `software package repository <https://packages.nlnetlabs.nl>`_. To use
-       it, add the line below that corresponds to your distribution to
-       :file:`/etc/apt/sources.list` or add it to a file called
-       :file:`nlnetlabs.list` you create in :file:`/etc/apt/sources.list.d/`.
-
-       .. list-table:: Debian
-          :widths: 1 15
-
-          *  -  9
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main``
-          *  -  10
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main``
-          *  -  11
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye main``
-
-       .. list-table:: Ubuntu
-          :widths: 1 15
-
-          *  -  16.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main``
-          *  -  18.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main``
-          *  -  20.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main``
-
-       Then run the following commands to add the public key and update the
-       repository list:
-
-       .. code-block:: text
-
-          wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
-          sudo apt update
-
-       You can then install, initialise, enable and start Routinator by running
-       these commands. Note that ``routinator-init`` is slightly different than
-       the command used with Cargo:
+       If you have a machine with an amd64/x86_64 architecture running Debian 9,
+       10 or 11, you can install Routinator from our `software package
+       repository <https://packages.nlnetlabs.nl>`_. 
+       
+       First update the ``apt`` package index: 
 
        .. code-block:: bash
 
+          sudo apt update
+
+       Then install packages to allow ``apt`` to use a repository over HTTPS:
+
+       .. code-block:: bash
+
+          sudo apt install \
+            ca-certificates \
+            curl \
+            gnupg \
+            lsb-release
+
+       Add the GPG key from NLnet Labs:
+
+       .. code-block:: bash
+
+          curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
+
+       Now, use the following command to set up the *main* repository:
+
+       .. code-block:: bash
+
+          echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
+          $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+
+       After updating the ``apt`` package index, you can now install,
+       initialise, enable and start Routinator by running these commands. Note
+       that ``routinator-init`` is slightly different than the command used with
+       Cargo:
+
+       .. code-block:: bash
+
+          sudo apt update
           sudo apt install routinator
           sudo routinator-init
           # Follow instructions provided
@@ -93,7 +94,72 @@ manager.
        
           sudo journalctl --unit=routinator
 
-   .. group-tab:: RPM Packages
+   .. group-tab:: Ubuntu
+
+       If you have a machine with an amd64/x86_64 architecture running Ubuntu
+       16.x, 18.x, or 20.x, you can install Routinator from our `software
+       package repository <https://packages.nlnetlabs.nl>`_. 
+       
+       First update the ``apt`` package index: 
+
+       .. code-block:: bash
+
+          sudo apt update
+
+       Then install packages to allow ``apt`` to use a repository over HTTPS:
+
+       .. code-block:: bash
+
+          sudo apt install \
+            ca-certificates \
+            curl \
+            gnupg \
+            lsb-release
+
+       Add the GPG key from NLnet Labs:
+
+       .. code-block:: bash
+
+          curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
+
+       Now, use the following command to set up the *main* repository:
+
+       .. code-block:: bash
+
+          echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
+          $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+
+       After updating the ``apt`` package index, you can now install,
+       initialise, enable and start Routinator by running these commands. Note
+       that ``routinator-init`` is slightly different than the command used with
+       Cargo:
+
+       .. code-block:: bash
+
+          sudo apt update
+          sudo apt install routinator
+          sudo routinator-init
+          # Follow instructions provided
+          sudo systemctl enable --now routinator
+
+       By default, Routinator will start the RTR server on port 3323 and the
+       HTTP server on port 8323. These, and other values can be changed in the
+       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       
+       You can check the status of Routinator with:
+       
+       .. code-block:: bash 
+       
+          sudo systemctl status routinator
+       
+       You can view the logs with: 
+       
+       .. code-block:: bash
+       
+          sudo journalctl --unit=routinator
+
+   .. group-tab:: RHEL/CentOS
 
        If you have a machine with an amd64/x86_64 architecture running a
        :abbr:`RHEL (Red Hat Enterprise Linux)`/CentOS 7 or 8 distribution, or a
@@ -190,7 +256,7 @@ Updating
 
 .. tabs::
 
-   .. group-tab:: Debian Packages
+   .. group-tab:: Debian
 
        To update an existing Routinator installation, first update the 
        repository using:
@@ -211,8 +277,30 @@ Updating
        .. code-block:: text
 
           sudo apt --only-upgrade install routinator
-          
-   .. group-tab:: RPM Packages
+
+   .. group-tab:: Ubuntu
+
+       To update an existing Routinator installation, first update the 
+       repository using:
+
+       .. code-block:: text
+
+          sudo apt update
+
+       You can use this command to get an overview of the available versions:
+
+       .. code-block:: text
+
+          sudo apt policy routinator
+
+       You can upgrade an existing Routinator installation to the latest version
+       using:
+
+       .. code-block:: text
+
+          sudo apt --only-upgrade install routinator
+
+   .. group-tab:: RHEL/CentOS
 
        To update an existing Routinator installation, you can use this command 
        to get an overview of the available versions:
@@ -256,46 +344,77 @@ a specific version, if needed.
 
 .. tabs::
 
-   .. group-tab:: Debian Packages
+   .. group-tab:: Debian
 
-       To install release candidates of Routinator, add the line below that
-       corresponds to your distribution to either :file:`/etc/apt/sources.list`
-       or :file:`/etc/apt/sources.list.d/`.
+       If you would like to try out release candidates of Routinator you can add
+       the *proposed* repository to the existing *main* repository described
+       earlier. 
+       
+       Assuming you already have followed the steps to install regular releases,
+       run this command to add the additional repository:
 
-       .. list-table:: Debian
-          :widths: 1 15
+       .. code-block:: bash
 
-          *  -  9
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch-proposed main``
-          *  -  10
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster-proposed main``
-          *  -  11
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye-proposed main``
+          echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
+          $(lsb_release -cs)-proposed main" | sudo tee /etc/apt/sources.list.d/nlnetlabs-proposed.list > /dev/null
 
-       .. list-table:: Ubuntu
-          :widths: 1 15
+       Make sure to update the ``apt`` package index:
 
-          *  -  16.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial-proposed main``
-          *  -  18.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic-proposed main``
-          *  -  20.x
-             -  ``deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal-proposed main``
+       .. code-block:: bash
 
-       You can use this command to get an overview of the available versions:
+          sudo apt update
+       
+       You can now use this command to get an overview of the available 
+       versions:
 
-       .. code-block:: text
+       .. code-block:: bash
 
           sudo apt policy routinator
 
        You can install a specific version using ``<package name>=<version>``,
        e.g.:
 
-       .. code-block:: text
+       .. code-block:: bash
 
           sudo apt install routinator=0.9.0~rc2-1buster
+
+   .. group-tab:: Ubuntu
+
+       If you would like to try out release candidates of Routinator you can add
+       the *proposed* repository to the existing *main* repository described
+       earlier. 
+       
+       Assuming you already have followed the steps to install regular releases,
+       run this command to add the additional repository:
+
+       .. code-block:: bash
+
+          echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
+          $(lsb_release -cs)-proposed main" | sudo tee /etc/apt/sources.list.d/nlnetlabs-proposed.list > /dev/null
+
+       Make sure to update the ``apt`` package index:
+
+       .. code-block:: bash
+
+          sudo apt update
+       
+       You can now use this command to get an overview of the available 
+       versions:
+
+       .. code-block:: bash
+
+          sudo apt policy routinator
+
+       You can install a specific version using ``<package name>=<version>``,
+       e.g.:
+
+       .. code-block:: bash
+
+          sudo apt install routinator=0.9.0~rc2-1bionic
           
-   .. group-tab:: RPM Packages
+   .. group-tab:: RHEL/CentOS
 
        To install release candidates of Routinator, create an additional repo 
        file named :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`, enter this
