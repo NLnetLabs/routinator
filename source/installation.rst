@@ -65,17 +65,31 @@ manager.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
           $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
 
-       After updating the ``apt`` package index, you can now install,
-       initialise, enable and start Routinator by running these commands. Note
-       that ``routinator-init`` is slightly different than the command used with
-       Cargo:
+       Update the ``apt`` package index once more: 
 
        .. code-block:: bash
 
           sudo apt update
+
+       You can now install Routinator with:
+
+       .. code-block:: bash
+
           sudo apt install routinator
+
+       Before running Routinator for the first time, you must prepare the
+       directory for the local RPKI cache, as well as the directory where the
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
+
+       .. code-block:: bash
+
           sudo routinator-init
-          # Follow instructions provided
+
+       After successful initialisation you can enable Routinator with:
+
+       .. code-block:: bash
+
           sudo systemctl enable --now routinator
 
        By default, Routinator will start the RTR server on port 3323 and the
@@ -130,17 +144,31 @@ manager.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
           $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
 
-       After updating the ``apt`` package index, you can now install,
-       initialise, enable and start Routinator by running these commands. Note
-       that ``routinator-init`` is slightly different than the command used with
-       Cargo:
+       Update the ``apt`` package index once more: 
 
        .. code-block:: bash
 
           sudo apt update
+
+       You can now install Routinator with:
+
+       .. code-block:: bash
+
           sudo apt install routinator
+
+       Before running Routinator for the first time, you must prepare the
+       directory for the local RPKI cache, as well as the directory where the
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
+
+       .. code-block:: bash
+
           sudo routinator-init
-          # Follow instructions provided
+
+       After successful initialisation you can enable Routinator with:
+
+       .. code-block:: bash
+
           sudo systemctl enable --now routinator
 
        By default, Routinator will start the RTR server on port 3323 and the
