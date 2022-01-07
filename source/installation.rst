@@ -22,18 +22,19 @@ Quick Start
 .. versionadded:: 0.9
    RPM packages
 
-Getting started with Routinator is really easy by either installing a binary
-package for Debian and Ubuntu or for Red Hat Enterprise Linux and CentOS. You
-can also run with Docker or build from Cargo, Rust's build system and package
-manager.
+Getting started with Routinator is really easy by installing a binary package
+for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL), CentOS and
+Rocky Linux. The `NLnet Labs software package repository
+<https://packages.nlnetlabs.nl>`_ currently has packages available for the
+``amd64``/``x86_64`` architecture only. Alternatively, you can run with Docker
+or build from Cargo, Rust's build system and package manager.
 
 .. tabs::
 
    .. group-tab:: Debian
 
-       If you have a machine with an amd64/x86_64 architecture running Debian 9,
-       10 or 11, you can install Routinator from our `software package
-       repository <https://packages.nlnetlabs.nl>`_. 
+       Our software package repository has binary packages available for 
+       Debian 9 (stretch), 10 (buster) and 11 (bullseye).
        
        First update the ``apt`` package index: 
 
@@ -110,9 +111,8 @@ manager.
 
    .. group-tab:: Ubuntu
 
-       If you have a machine with an amd64/x86_64 architecture running Ubuntu
-       16.x, 18.x, or 20.x, you can install Routinator from our `software
-       package repository <https://packages.nlnetlabs.nl>`_. 
+       Our software package repository has binary packages available for Ubuntu
+       16.x (Xenial Xerus), 18.x (Bionic Beaver) and 20.x (Focal Fossa).
        
        First update the ``apt`` package index: 
 
@@ -189,14 +189,12 @@ manager.
 
    .. group-tab:: RHEL/CentOS
 
-       If you have a machine with an amd64/x86_64 architecture running a
-       :abbr:`RHEL (Red Hat Enterprise Linux)`/CentOS 7 or 8 distribution, or a
-       compatible OS such as Rocky Linux, you can install Routinator from our
-       `software package repository <https://packages.nlnetlabs.nl>`_. 
+       Our software package repository has binary packages available for
+       RHEL/CentOS 7 and 8, or a compatible operating system such as Rocky 
+       Linux.
        
-       To use this repository, create a file named 
-       :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration and 
-       save it:
+       First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter
+       this configuration and save it:
        
        .. code-block:: text
        
@@ -205,23 +203,33 @@ manager.
           baseurl=https://packages.nlnetlabs.nl/linux/centos/$releasever/main/$basearch
           enabled=1
         
-       Then run the following command to add the public key:
+       Add the GPG key from NLnet Labs:
        
        .. code-block:: bash
        
           sudo rpm --import https://packages.nlnetlabs.nl/aptkey.asc
        
-       You can then install, initialise, enable and start Routinator by running
-       these commands. Note that ``routinator-init`` is slightly different than
-       the command used with Cargo:
-        
+       You can now install Routinator with:
+
        .. code-block:: bash
-          
+
           sudo yum install -y routinator
+
+       Before running Routinator for the first time, you must prepare the
+       directory for the local RPKI cache, as well as the directory where the
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
+
+       .. code-block:: bash
+
           sudo routinator-init
-          # Follow instructions provided
+
+       After successful initialisation you can enable Routinator with:
+
+       .. code-block:: bash
+
           sudo systemctl enable --now routinator
-           
+
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
        configuration file located in :file:`/etc/routinator/routinator.conf`. 
@@ -240,43 +248,91 @@ manager.
        
    .. group-tab:: Docker
 
-       Due to the impracticality of complying with the ARIN TAL distribution
-       terms in an unsupervised Docker environment, before launching the
-       container it is necessary to first review and agree to the `ARIN Relying
-       Party Agreement (RPA)
-       <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree to the
-       terms, you can let the Routinator Docker image install the TALs into a
-       mounted volume that is later reused for the server:
+       Due to the impracticality of complying with terms and conditions in an
+       unsupervised Docker environment, before launching the container it is
+       necessary to first review and agree to the `ARIN Relying Party Agreement
+       (RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree,
+       you can let the Routinator Docker image install the :term:`Trust Anchor
+       Locator (TAL)` files into a mounted volume that is later reused for the
+       server.
+
+       First, create a Docker volume to persist the TAL files in:
 
        .. code-block:: bash
 
-          # Create a Docker volume to persist TALs in
           sudo docker volume create routinator-tals
-          # Review the ARIN terms.
-          # Run a disposable container to install TALs.
+
+       Then run a disposable container to install the TALs:
+
+       .. code-block:: bash
+
           sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
               nlnetlabs/routinator init -f --accept-arin-rpa
-          # Launch the final detached container named 'routinator' exposing RTR on
-          # port 3323 and HTTP on port 8323
+
+       Finally, launch the detached container named *routinator*, exposing the
+       :term:`RPKI-to-Router (RPKI-RTR)` protocol on port 3323 and HTTP on port
+       8323:
+
+       .. code-block:: bash
+
           sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
                -p 8323:8323 -v routinator-tals:/home/routinator/.rpki-cache/tals \
                nlnetlabs/routinator
                
+       The Routinator container is known to run successfully run under 
+       `gVisor <https://gvisor.dev/>`_ for additional isolation.
+
    .. group-tab:: Cargo
 
-       Assuming you have a newly installed Debian or Ubuntu machine, you will
-       need to install rsync, the C toolchain and Rust. You can then install
-       Routinator and start it up as an RTR server listening on 192.0.2.13 port
-       3323 and HTTP on port 8323:
+       In this Quick Start we'll assume that you have a newly installed, recent
+       Linux distribution. Full instructions are in the 
+       `Installing From Source`_ and :doc:`initialisation` sections.
+       
+       First you will need to install rsync, the C toolchain and curl to fetch
+       Rust:
 
        .. code-block:: bash
 
-          apt install curl rsync build-essential
+          sudo apt install \
+            rsync \
+            build-essential \
+            curl
+
+       Rust is installed and managed by the ``rustup`` tool. To download Rustup
+       and install Rust, run the following command and follow the on-screen
+       instructions:
+
+       .. code-block:: bash
+
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-          source ~/.cargo/env
+
+       To configure your current shell, run:
+
+       .. code-block:: bash
+
+          source $HOME/.cargo/env
+
+       You can then proceed to install Routinator:
+
+       .. code-block:: bash
+
           cargo install --locked routinator
+
+       Before running Routinator for the first time, you must prepare the
+       directory for the local RPKI cache, as well as the directory where the
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
+
+       .. code-block:: bash
+
           routinator init
-          # Follow instructions provided
+
+       After successful initialisation you can for example start Routinator as a
+       daemon with the :term:`RPKI-to-Router (RPKI-RTR)` server on port 3323 and
+       the HTTP server on port 8323:
+
+       .. code-block:: bash
+
           routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
 
 Updating
