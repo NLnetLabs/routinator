@@ -95,7 +95,8 @@ or build from Cargo, Rust's build system and package manager.
 
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
-       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       :doc:`configuration file<configuration>` located in
+       :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
        
@@ -173,7 +174,8 @@ or build from Cargo, Rust's build system and package manager.
 
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
-       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       :doc:`configuration file<configuration>` located in
+       :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
        
@@ -232,7 +234,8 @@ or build from Cargo, Rust's build system and package manager.
 
        By default, Routinator will start the RTR server on port 3323 and the
        HTTP server on port 8323. These, and other values can be changed in the
-       configuration file located in :file:`/etc/routinator/routinator.conf`. 
+       :doc:`configuration file<configuration>` located in
+       :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
        
