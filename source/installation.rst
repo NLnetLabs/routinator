@@ -334,7 +334,7 @@ or build from Cargo, Rust's build system and package manager.
        daemon with the :term:`RPKI-to-Router (RPKI-RTR)` server on port 3323 and
        the HTTP server on port 8323:
 
-       .. code-block:: bash
+       .. code-block:: text
 
           routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
 
@@ -413,13 +413,17 @@ Updating
    .. group-tab:: Cargo
 
        If you want to install the latest version of Routinator using Cargo, it's
-       recommended to also update Rust to the latest version first. Use the 
-       ``--force`` option to  overwrite an existing version with the latest 
-       release:
+       recommended to update Rust to the latest version first, using:
                
        .. code-block:: text
 
           rustup update
+
+       Use the ``--force`` option to  overwrite an existing version with the
+       latest Routinator release:
+
+       .. code-block:: text
+
           cargo install --locked --force routinator
           
 Installing Specific Versions
