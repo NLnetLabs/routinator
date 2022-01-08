@@ -43,6 +43,10 @@ if versionbanner:
     versionwarning_banner_title = 'Note'
     versionwarning_body_selector = 'div[itemprop="articleBody"]'
 
+# -- Sphinx Tabs configuration -----------------------------------------------
+
+sphinx_tabs_disable_tab_closing = True
+
 # -- General configuration ---------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
