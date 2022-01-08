@@ -16,6 +16,7 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import datetime
 import sphinx_rtd_theme
 try:
     import versionwarning
@@ -27,8 +28,9 @@ except ModuleNotFoundError:
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
-copyright = '2018-2022, NLnet Labs'
-author = 'NLnet Labs (CC-BY 3.0)'
+year = datetime.datetime.now().year
+copyright = f'2018–{year}, NLnet Labs'
+author = 'NLnet Labs'
 
 # The short X.Y version
 version = '0.10.3'
