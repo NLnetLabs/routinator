@@ -63,7 +63,8 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx_tabs.tabs',
     'sphinx_copybutton',
-    'sphinx.ext.intersphinx'
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.autosectionlabel'
 ]
 if versionbanner:
     extensions.append('versionwarning.extension')
@@ -71,6 +72,8 @@ if versionbanner:
 intersphinx_mapping = {
     'rtrtr': ('https://rtrtr.docs.nlnetlabs.nl/en/stable/', None)
 }
+
+autosectionlabel_prefix_document = True
 
 # Add any paths that contain templates here, relative to this directory.
 
