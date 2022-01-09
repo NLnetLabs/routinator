@@ -70,7 +70,8 @@ if versionbanner:
     extensions.append('versionwarning.extension')
 
 intersphinx_mapping = {
-    'rtrtr': ('https://rtrtr.docs.nlnetlabs.nl/en/stable/', None)
+    'rtrtr': ('https://rtrtr.docs.nlnetlabs.nl/en/stable/', None),
+    'krill': ('https://krill.docs.nlnetlabs.nl/en/stable/', None)
 }
 
 autosectionlabel_prefix_document = True
