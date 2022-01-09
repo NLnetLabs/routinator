@@ -1,5 +1,3 @@
-.. _doc_routinator_validity_checker:
-
 Validity Checker
 ================
 
@@ -64,8 +62,8 @@ of VRPs that caused the result is included:
     }
 
 If you run the HTTP service in daemon mode, validation information is also
-available via the :ref:`user interface <doc_routinator_ui>` and at the
-``/validity`` API endpoint.
+available via the :doc:`user interface<user-interface>` and at the ``/validity``
+API endpoint.
 
 Reading Input From a File
 -------------------------

@@ -1,5 +1,3 @@
-.. _doc_routinator_initialisation:
-
 Initialisation
 ==============
 
@@ -63,7 +61,7 @@ Preparing for Production Environments
 By default, the repository and TAL directory will be created under
 :file:`$HOME/.rpki-cache`. You can change their location using the
 :option:`--repository-dir` and :option:`--tal-dir` options, or by using a
-:ref:`configuration file <doc_routinator_configuration>`. 
+:doc:`configuration file<configuration>`. 
 
 In the most common scenario, you will want to install the TALs of the five RIRs.
 To do this, run the following command:
@@ -93,9 +91,9 @@ Trust Anchor Locator files into it:
 
    routinator init --rir-tals --accept-arin-rpa
 
-If you are using a :ref:`configuration file <doc_routinator_configuration>` to
-specify the default location of the repository and TAL directories, make sure to
-refer to it during initialisation using the :option:`--config` option, e.g.:
+If you are using a :doc:`configuration file<configuration>` to specify the
+default location of the repository and TAL directories, make sure to refer to it
+during initialisation using the :option:`--config` option, e.g.:
 
 .. code-block:: bash
 
@@ -130,8 +128,8 @@ To see if Routinator has been initialised correctly and your firewall allows the
 required outbound connections on ports 443 and 873, it is recommended to perform
 an initial test run. You can do this by having Routinator print a validated ROA
 payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v`
-twice to increase the :ref:`log level <doc_routinator_logging>` to *debug*. This
-way you can verify if Routinator establishes connections as expected:
+twice to increase the :doc:`log level<logging>` to *debug*. This way you can
+verify if Routinator establishes connections as expected:
 
 .. code-block:: bash
 

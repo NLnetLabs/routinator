@@ -1,5 +1,3 @@
-.. _doc_routinator_logging:
-
 Logging
 =======
 
@@ -33,11 +31,10 @@ debug
 Interactive Mode
 ----------------
 
-When running :ref:`interactively <doc_routinator_interactive>` logging
-information will be printed to standard error by default. You can redirect
-logging to syslog using the :option:`--syslog` option, or to a file with the
-:option:`--logfile` option. You can influence the amount of information returned
-with these options:
+When running :doc:`interactively<interactive>` logging information will be
+printed to standard error by default. You can redirect logging to syslog using
+the :option:`--syslog` option, or to a file with the :option:`--logfile` option.
+You can influence the amount of information returned with these options:
 
 .. option:: -v, --verbose
 
@@ -54,14 +51,14 @@ with these options:
 Detached Server Mode
 --------------------
 
-When running Routinator detached in :ref:`server mode <doc_routinator_daemon>`
+When running Routinator detached in :doc:`server mode <daemon>`
 logging to syslog is implied. Using the :option:`--syslog-facility` option you
 can specify the syslog facility to use, which is *daemon* by default. You also
 redirect logging output to a file using the :option:`--logfile` option.
 
 .. Tip:: Though almost all settings are available as command line options, you
          would likely want to configure logging options in the
-         :ref:`configuration file <doc_routinator_configuration>`.
+         :doc:`configuration file<configuration>`.
 
 When you run the HTTP service logging information is also available at the
 :command:`/log` path. This will produce logging output of the last validation

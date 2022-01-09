@@ -1,5 +1,3 @@
-.. _doc_routinator_dump:
-
 Dumping Stored Data
 ===================
 

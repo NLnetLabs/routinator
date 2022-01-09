@@ -1,5 +1,3 @@
-.. _doc_routinator_data_processing:
-
 Data Processing
 ===============
 

@@ -1,5 +1,3 @@
-.. _doc_routinator_installation:
-
 Installation
 ============
 
@@ -655,4 +653,4 @@ Notes
 
 In case you want to build a statically linked Routinator, or you have an
 Operating System where special care needs to be taken, such as OpenBSD and
-CentOS 6, please refer to the :ref:`doc_routinator_installation_notes`.
+CentOS 6, please refer to the :doc:`installation-notes`.

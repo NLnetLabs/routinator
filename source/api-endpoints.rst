@@ -1,5 +1,3 @@
-.. _doc_routinator_api:
-
 API Endpoints
 =============
 
@@ -36,7 +34,6 @@ The service supports GET requests with the following paths:
      session and serial. If *reset* is *true*, the *withdrawn* member is not
      present.
 
-In addition, the :command:`/log` endpoint returns :ref:`logging
-<doc_routinator_logging>` information and the :command:`/metrics`,
-:command:`/status` and :command:`/version` endpoints provide :ref:`monitoring
-<doc_routinator_monitoring>` data.
+In addition, the :command:`/log` endpoint returns :doc:`logging<logging>`
+information and the :command:`/metrics`, :command:`/status` and
+:command:`/version` endpoints provide :doc:`monitoring<monitoring>` data.

@@ -1,5 +1,3 @@
-.. _doc_routinator_monitoring:
-
 Monitoring
 ==========
 
@@ -58,8 +56,8 @@ HTTP server
   - The number of HTTP requests
 
   Refer to the Reference section for a complete overview for all metrics in the
-  :ref:`JSON format <doc_routinator_metrics_json>` and the :ref:`Prometheus format
-  <doc_routinator_metrics_prometheus>`. 
+  :doc:`JSON format<json-metrics>` and the :doc:`Prometheus
+  format<prometheus-metrics>`.
 
 .. _doc_routinator_monitoring_grafana:
 

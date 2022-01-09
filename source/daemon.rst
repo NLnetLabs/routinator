@@ -1,5 +1,3 @@
-.. _doc_routinator_daemon:
-
 Running as a Daemon
 ===================
 
@@ -37,7 +35,7 @@ By default Routinator will stay attached to your terminal and log to standard
 error. You can provide the :option:`--detach` option to run it in the background
 instead, in which case logging information is written to syslog. To learn more
 about what kind of information is returned and how to influence what is logged
-and where, refer to the :ref:`Logging <doc_routinator_logging>` section.
+and where, refer to the :doc:`logging` section.
 
 
 .. Attention::  On Linux systems there is an overlap between IPv4 and IPv6. You

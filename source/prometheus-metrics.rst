@@ -1,11 +1,9 @@
-.. _doc_routinator_metrics_prometheus:
-
 Prometheus Metrics
 ==================
 
-Routinator's :ref:`monitoring service <doc_routinator_monitoring>` provides 
-comprehensive metrics in Prometheus format at the :command:`/metrics` endpoint.
-Here you can find an overview of all metrics and their meaning.
+Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
+metrics in Prometheus format at the :command:`/metrics` endpoint. Here you can
+find an overview of all metrics and their meaning.
 
 ``routinator_last_update_start``
     Seconds since the start of the last update.
@@ -98,7 +96,7 @@ trust anchor or ``uri`` for repositories:
     
 ``routinator_{ta,repository}_locally_filtered_vrps_total``
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are filtered
-    as the result of a :ref:`local exception <doc_routinator_local_exceptions>`.
+    as the result of a :doc:`local exception <local-exceptions>`.
 
 ``routinator_{ta,repository}_duplicate_vrps_total``
     The number of duplicate :term:`VRPs <Validated ROA Payload (VRP)>`

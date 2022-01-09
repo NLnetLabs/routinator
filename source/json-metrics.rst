@@ -1,11 +1,9 @@
-.. _doc_routinator_metrics_json:
-
 JSON Metrics
 ============
 
-Routinator's :ref:`monitoring service <doc_routinator_monitoring>` provides
-comprehensive metrics in JSON format :command:`/api/v1/status` endpoint. Here
-you can find an overview of all metrics and their meaning.
+Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
+metrics in JSON format :command:`/api/v1/status` endpoint. Here you can find an
+overview of all metrics and their meaning.
 
 The JSON metrics consist of an object with the following members:
 
@@ -50,8 +48,7 @@ The JSON metrics consist of an object with the following members:
 
 ``vrpsAddedLocally``
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` added to the
-    final data set from :ref:`local exceptions
-    <doc_routinator_local_exceptions>`.
+    final data set from :doc:`local exceptions<local-exceptions>`.
 
 ``rsync``
     Metrics for updates via rsync.
@@ -97,8 +94,7 @@ RPKI repository. They contain the following information:
 
 ``vrpsLocallyFiltered``
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are filtered
-    as the result of a :ref:`local exception
-    <doc_routinator_local_exceptions>`.
+    as the result of a :doc:`local exception<local-exceptions>`.
 
 ``vrpsDuplicate``
     The number of duplicate :term:`VRPs <Validated ROA Payload (VRP)>`

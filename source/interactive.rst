@@ -1,5 +1,3 @@
-.. _doc_routinator_interactive:
-
 Running Interactively
 =====================
 
@@ -11,8 +9,7 @@ Running Interactively
 
 Routinator can perform RPKI validation as a one-time operation and print a
 validated ROA payload (VRP) list in various formats using the :subcmd:`vrps`
-subcommand and specifying the :ref:`desired format
-<doc_routinator_output_formats>`. 
+subcommand and specifying the :doc:`desired format<output-formats>`. 
 
 For example, to print the VRPs in CSV format to standard output, run:
 
@@ -29,8 +26,7 @@ To generate a file with with the validated ROA payloads in JSON format, run:
 During the validation process, logging information will be printed to standard
 error. You can influence the amount of details returned with the
 :option:`--verbose` and :option:`--quiet` options. To learn more about what kind
-of information returned, refer to the :ref:`Logging <doc_routinator_logging>`
-section.
+of information returned, refer to the :doc:`logging` section.
 
 In case you are looking for specific information in the output, Routinator
 allows you to add selectors to see if a prefix or ASN is covered or matched by a

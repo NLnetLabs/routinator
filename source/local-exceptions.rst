@@ -1,5 +1,3 @@
-.. _doc_routinator_local_exceptions:
-
 Local Exceptions
 ================
 

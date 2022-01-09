@@ -1,5 +1,3 @@
-.. _doc_routinator_rtr_service:
-
 RTR Service
 ===========
 
@@ -11,8 +9,7 @@ launched as an RTR server, routers with support for route origin validation
 .. Tip:: If you would like to run the RTR server as a separate daemon, for
          example because you want to centralise validation and distribute
          processed data to various locations where routers can connect, then
-         NLnet Labs provides `RTRTR
-         <https://www.nlnetlabs.nl/projects/rpki/rtrtr/>`_.
+         NLnet Labs provides :doc:`RTRTR<rtrtr:index>`.
 
 In order to start the RTR server at 192.0.2.13 and 2001:0DB8::13 on port 3323,
 run Routinator using the :subcmd:`server` subcommand:

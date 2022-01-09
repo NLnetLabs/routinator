@@ -1,5 +1,3 @@
-.. _doc_routinator_installation_notes:
-
 Installation Notes
 ==================
 
@@ -21,7 +19,7 @@ Routinator currently has the following features:
 ``socks`` —  *Enabled* by default
     Allow the configuration of a SOCKS proxy.
 ``ui``  —  *Enabled* by default
-    Download and build the the `routinator-ui <https://crates.io/crates/routinator-ui>`_ crate to run the :ref:`user interface <doc_routinator_ui>`.
+    Download and build the the `routinator-ui <https://crates.io/crates/routinator-ui>`_ crate to run the :doc:`user interface<user-interface>`.
 ``native-tls`` —  *Disabled* by default
     Use the native TLS implementation of your system instead of `rustls <https://github.com/rustls/rustls>`_.
 ``rta`` —  *Disabled* by default

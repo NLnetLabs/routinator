@@ -1,13 +1,10 @@
-.. _doc_routinator_http_service:
-
 HTTP Service
 ============
 
-In addition to the various :ref:`VRP output formats
-<doc_routinator_output_formats>`, Routinator's HTTP server also provides a
-:ref:`user interface <doc_routinator_ui>`, an :ref:`API <doc_routinator_api>`,
-:ref:`monitoring <doc_routinator_monitoring>` and :ref:`logging
-<doc_routinator_logging>` endpoints. 
+In addition to the various :doc:`VRP output formats<output-formats>`,
+Routinator's HTTP server also provides a :doc:`user interface<user-interface>`,
+an :doc:`API<api-endpoints>`, :doc:`monitoring<monitoring>` and
+:doc:`logging<logging>` endpoints. 
 
 The HTTP server is not enabled by default for security reasons, nor does it have
 a default host or port. This service is intended to run on your internal network
@@ -21,9 +18,9 @@ run:
 
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
-After fetching and verifying all RPKI data, paths are available for each 
-:ref:`VRP output format <doc_routinator_output_formats>`. For example, at the
-:command:`/csv` path you can fetch a list of all VRPs in CSV format.
+After fetching and verifying all RPKI data, paths are available for each
+:doc:`VRP output format <output-formats>`. For example, at the :command:`/csv`
+path you can fetch a list of all VRPs in CSV format.
 
 .. code-block:: text
 
