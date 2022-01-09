@@ -63,9 +63,14 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx_tabs.tabs',
     'sphinx_copybutton',
+    'sphinx.ext.intersphinx'
 ]
 if versionbanner:
     extensions.append('versionwarning.extension')
+
+intersphinx_mapping = {
+    'rtrtr': ('https://rtrtr.docs.nlnetlabs.nl/en/stable/', None)
+}
 
 # Add any paths that contain templates here, relative to this directory.
 
