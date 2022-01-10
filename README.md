@@ -1,5 +1,7 @@
 # Routinator
 
+<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
+
 [![](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
 [![Docker](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-docker.yml/badge.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
@@ -10,12 +12,10 @@
 [![](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
-<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
-
 Introducing ‘Routinator 3000,’ lightweight RPKI relying party software written
 in Rust. Routinator is a full featured software package that runs as a service
-which periodically downloads and verifies RPKI data. The built-in HTTP server 
-offers a user interface and API endpoints for various file formats, as 
+which periodically downloads and verifies RPKI data. The built-in HTTP server
+offers a user interface and API endpoints for various file formats, as
 well as logging, status and Prometheus metrics.
 
 Routinator has a built-in an RTR server allowing routers supporting route origin
@@ -29,45 +29,114 @@ If you have feedback, we would love to hear from you. Don’t hesitate to [creat
 an issue on Github](https://github.com/NLnetLabs/routinator/issues/new) or post
 a message on our [RPKI mailing
 list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki) or [Discord
-server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the 
+server](https://discord.gg/8dvKB5Ykhy). You can learn more by reading the
 [Routinator documentation](https://routinator.docs.nlnetlabs.nl/) and the
 [RPKI technology documentation](https://rpki.readthedocs.io/) on Read the Docs.
 
 ## Quick Start with Binary Packages
 
-On the NLnet Labs software package repository we provide Routinator packages for
-amd64/x86_64 architectures running Debian and Ubuntu, as well as Red Hat 
-Enterprise Linux and CentOS.
+Getting started with Routinator is really easy by installing a binary package
+for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL), CentOS and
+Rocky Linux. The [NLnet Labs software package
+repository](https://packages.nlnetlabs.nl) currently has packages available for
+the `amd64`/`x86_64` architecture only. 
 
-### Installing on Debian/Ubuntu
 
-Add the line below that corresponds to your operating system to your
-`/etc/apt/sources.list` or `/etc/apt/sources.list.d/`
+### Debian
 
-```bash
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ stretch main
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ buster main
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/debian/ bullseye main
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ xenial main
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ bionic main
-deb [arch=amd64] https://packages.nlnetlabs.nl/linux/ubuntu/ focal main
-```
+Our software package repository has binary packages available for Debian 9
+(stretch), 10 (buster) and 11 (bullseye).
 
-Then run the following commands to add the public key and update the repository 
-list
+First update the `apt` package index: 
 
 ```bash
-wget -qO- https://packages.nlnetlabs.nl/aptkey.asc | sudo apt-key add -
 sudo apt update
 ```
 
-You can then install Routinator by running this command
+Then install packages to allow ``apt`` to use a repository over HTTPS:
+
+```bash
+sudo apt install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+```
+
+Add the GPG key from NLnet Labs:
+
+```bash
+curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
+```
+
+Now, use the following command to set up the *main* repository:
+
+```bash
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
+$(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+```
+
+Update the ``apt`` package index once more: 
+
+```bash
+sudo apt update
+```
+
+You can then install Routinator by running this command:
 
 ```bash
 sudo apt install routinator
 ```
 
-### Installing on RHEL/CentOS
+### Ubuntu
+
+Our software package repository has binary packages available for Ubuntu 16.x
+(Xenial Xerus), 18.x (Bionic Beaver) and 20.x (Focal Fossa).
+
+First update the `apt` package index:
+
+```bash
+sudo apt update
+```
+
+Then install packages to allow ``apt`` to use a repository over HTTPS:
+
+```bash
+sudo apt install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+```
+
+Add the GPG key from NLnet Labs:
+
+```bash
+curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
+```
+
+Now, use the following command to set up the *main* repository:
+
+```bash
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
+$(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+```
+
+Update the ``apt`` package index once more:
+
+```bash
+sudo apt update
+```
+
+You can then install Routinator by running this command:
+
+```bash
+sudo apt install routinator
+```
+
+### RHEL/CentOS
 
 Create a file named `/etc/yum.repos.d/nlnetlabs.repo`, enter this configuration
 and save it:
@@ -161,7 +230,7 @@ Routinator 0.7.1 and newer are shipped with updated Trust Anchor Locators
 (TALs). Once you have upgraded from an older version of Routinator, make sure
 to install the new TALs using
 
-```
+```bash
 routinator init --force
 ```
 
@@ -444,7 +513,7 @@ port can be launched using
 routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323 --http 192.0.2.13:9556
 ```
 
-A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is 
+A [sample Grafana dashboard](https://grafana.com/grafana/dashboards/11922) is
 available to get started.
 
 ## User Interface
