@@ -48,6 +48,8 @@ if versionbanner:
 # -- Sphinx Tabs configuration -----------------------------------------------
 
 sphinx_tabs_disable_tab_closing = True
+sphinx_tabs_disable_css_loading = True
+
 
 # -- General configuration ---------------------------------------------------
 
