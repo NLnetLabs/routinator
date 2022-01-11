@@ -60,6 +60,29 @@ On a Debian (and presumably Ubuntu) system, enter the following:
    rustup target add x86_64-unknown-linux-musl
    cargo build --target=x86_64-unknown-linux-musl --release
 
+Using tmpfs for the RPKI Cache
+------------------------------
+
+The full RPKI data set consists of hundreds of thousands of small files. This
+causes a considerable amount of disk I/O with each validation run. In some cases
+it may be desirable to store the cache in volatile memory using ``tmpfs``.
+
+If you have installed Routinator using a binary package, by default the RPKI
+cache dirctory will be in :file:`/var/lib/routinator/rpki-cache`. You can change
+this location with the :option:`repository-dir` option in the
+:doc:`configuration file<configuration>`.
+
+You should allocate at least 2GB for the cache, but giving it 4GB will allow
+ample margin for future growth:
+
+.. code-block:: bash
+
+    mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
+
+Note that every time you restart the machine the cache will be lost, which means
+that Routinator will have to build it up from scracth. Depending on network
+topology this usually takes about ten minutes.
+
 Platform Specific Instructions
 ------------------------------
 
