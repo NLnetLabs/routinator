@@ -651,6 +651,7 @@ be in your path, too.
 Notes
 -----
 
-In case you want to build a statically linked Routinator, or you have an
+In case you want to enable or disable certain features, build a statically
+linked Routinator, store the RPKI cache on a `tmpfs` file system, or you have an
 Operating System where special care needs to be taken, such as OpenBSD and
 CentOS 6, please refer to the :doc:`installation-notes`.
