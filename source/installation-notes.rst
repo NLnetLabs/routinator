@@ -77,7 +77,7 @@ ample margin for future growth:
 
 .. code-block:: bash
 
-    mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
+    mount -t tmpfs -o size=3G tmpfs /var/lib/routinator/rpki-cache
 
 Note that every time you restart the machine the cache will be lost, which means
 that Routinator will have to build it up from scratch. Depending on network
