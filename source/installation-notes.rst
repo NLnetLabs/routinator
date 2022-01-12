@@ -60,7 +60,7 @@ On a Debian (and presumably Ubuntu) system, enter the following:
    rustup target add x86_64-unknown-linux-musl
    cargo build --target=x86_64-unknown-linux-musl --release
 
-Using tmpfs for the RPKI Cache
+Using Tmpfs for the RPKI Cache
 ------------------------------
 
 The full RPKI data set consists of hundreds of thousands of small files. This
@@ -85,13 +85,20 @@ allow ample margin for future growth:
 
     sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
 
-Keep in mind that every time you restart the machine, the contents of the
+The ``tmpfs`` will behave just like a regular disk, so if it runs out of space
+Routinator will do a clean crash, stopping validation, the API, user interface 
+and most importantly the RTR server, ensuring that no stale data will be
+served to your routers. 
+
+Also keep in mind that every time you restart the machine, the contents of the
 ``tmpfs`` file system will be lost. This means that Routinator will have to
 rebuild its cache from scratch. This is not a problem, other than it having to
 download several gigabytes of data, which usually takes about ten minutes to
 complete. During this time the API and user interface will be unavailable, as
-well as the RTR server. Your routers should be configured to have a secondary
-relying party instance available at all times.
+well as the RTR server. 
+
+Note that your routers should be configured to have a secondary relying party
+instance available at all times.
 
 Platform Specific Instructions
 ------------------------------
