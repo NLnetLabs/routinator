@@ -64,24 +64,32 @@ Using tmpfs for the RPKI Cache
 ------------------------------
 
 The full RPKI data set consists of hundreds of thousands of small files. This
-causes a considerable amount of disk I/O with each validation run. In some cases
-it may be desirable to store the cache in volatile memory using ``tmpfs``.
+causes a considerable amount of disk I/O with each validation run. If this is
+undesirable in your setup, you can choose to store the cache in volatile memory
+using the `tmpfs file system
+<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
-If you have installed Routinator using a binary package, by default the RPKI
-cache dirctory will be in :file:`/var/lib/routinator/rpki-cache`. You can change
-this location with the :option:`repository-dir` option in the
-:doc:`configuration file<configuration>`.
+When setting this up, you should make sure to only put the directory for the
+local RPKI cache in ``tmpfs`` and not the directory where the Trust Anchor
+Locators reside. Both locations are set in the :ref:`configuration file
+<doc_routinator_manpage_configfile>` with the :option:`repository-dir` and
+:option:`tal-dir` options, respectively.
 
-You should allocate at least 3GB for the cache, but giving it 4GB will allow
-ample margin for future growth:
+If you have installed Routinator using a package, by default the RPKI cache
+directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that as
+an example. Note that the directory you choose must exist before the mount can
+be done. You should allocate at least 3GB for the cache, but giving it 4GB will
+allow ample margin for future growth:
 
 .. code-block:: bash
 
-    mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
+    sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
 
-Note that every time you restart the machine the cache will be lost, which means
-that Routinator will have to build it up from scratch. Depending on network
-topology this usually takes about ten minutes.
+Keep in mind that every time you restart the machine, the contents of the
+``tmpfs`` file system will be lost. This means that Routinator will have to
+rebuild its cache from scratch. This is not a problem, other than it having to
+download several gigabytes of data, which usually takes about ten minutes to
+complete.
 
 Platform Specific Instructions
 ------------------------------
