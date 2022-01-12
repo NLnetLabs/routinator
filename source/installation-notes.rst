@@ -94,7 +94,7 @@ Also keep in mind that every time you restart the machine, the contents of the
 ``tmpfs`` file system will be lost. This means that Routinator will have to
 rebuild its cache from scratch. This is not a problem, other than it having to
 download several gigabytes of data, which usually takes about ten minutes to
-complete. During this time the all services will be unavailble.
+complete. During this time all services will be unavailble.
 
 Note that your routers should be configured to have a secondary relying party
 instance available at all times.
