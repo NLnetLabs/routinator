@@ -28,12 +28,12 @@ The JSON metrics consist of an object with the following members:
     
 ``tals``
     Metrics for each configured trust anchor. In most cases these will be the
-    five Regional Internet Registries, but will include the trust anchors of
-    any configured :ref:`testbeds <doc_routinator_testbed>` as well.
+    five Regional Internet Registries, but will include the trust anchors of any
+    configured :ref:`testbeds <initialisation:preparing for test environments>`
+    as well.
 
-    Each element of this object contains a
-    :ref:`publication metrics value <doc_routinator_metrics_json_publication>`
-    as described below.
+    Each element of this object contains a :ref:`publication metrics value
+    <json-metrics:publication metrics>` as described below.
 
 ``repositories``
     Metrics for each repository encountered during validation. Note that the
@@ -41,41 +41,37 @@ The JSON metrics consist of an object with the following members:
     If the repository failed to update, then these numbers are from the stored
     old data.
 
-    Each element of this object contains a
-    :ref:`publication metrics value <doc_routinator_metrics_json_publication>`
-    as described below. In addition, there is a member ``type`` that
-    describes whether the repository is an RRDP or rsync repository.
+    Each element of this object contains a :ref:`publication metrics value
+    <json-metrics:publication metrics>` as described below. In addition, there
+    is a member ``type`` that describes whether the repository is an RRDP or
+    rsync repository.
 
 ``vrpsAddedLocally``
-    The number of :term:`VRPs <Validated ROA Payload (VRP)>` added to the
-    final data set from :doc:`local exceptions<local-exceptions>`.
+    The number of :term:`VRPs <Validated ROA Payload (VRP)>` added to the final
+    data set from :doc:`local exceptions<local-exceptions>`.
 
 ``rsync``
     Metrics for updates via rsync.
 
-    This is an object with one element for each repository that was
-    updated via rsync during the last validation run. Each element contains
-    an :ref:`rsync update metrics value <doc_routinator_metrics_json_rsync>`
-    as described below.
+    This is an object with one element for each repository that was updated via
+    rsync during the last validation run. Each element contains an :ref:`rsync
+    update metrics value <json-metrics:rsync update metrics>` as described
+    below.
 
 ``rrdp``
     Metrics for updates via RRDP.
 
-    This is an object with one element for each repository that was
-    updated via rsync during the last validation run. Each element contains
-    an :ref:`RRDP update metrics value <doc_routinator_metrics_json_rrdp>`
-    as described below.
+    This is an object with one element for each repository that was updated via
+    rsync during the last validation run. Each element contains an :ref:`RRDP
+    update metrics value <json-metrics:rrdp update metrics>` as described below.
 
 ``rtr``
     Metrics for the built-in RTR server. See
-    :ref:`RTR metrics <doc_routinator_metrics_json_rtr>` below.
+    :ref:`RTR metrics <json-metrics:rtr server metrics>` below.
 
 ``http``
     Metrics for the built-in HTTP server. See
-    :ref:`HTTP metrics <doc_routinator_metrics_json_http>` below.
-
-
-.. _doc_routinator_metrics_json_publication:
+    :ref:`HTTP metrics <json-metrics:http server metrics>` below.
 
 Publication Metrics
 """""""""""""""""""
@@ -206,9 +202,6 @@ RPKI repository. They contain the following information:
     Revocation Lists (.crl), manifests (.mft), ROAs (.roa), or Ghostbuster 
     Records (.gbr).
 
-
-.. _doc_routinator_metrics_json_rsync:
-
 Rsync Update Metrics
 """"""""""""""""""""
 
@@ -222,9 +215,6 @@ For each repository updated via rsync the following values are given.
 
 ``duration``
     The duration the rsync process was running in seconds.
-
-
-.. _doc_routinator_metrics_json_rrdp:
 
 RRDP Update Metrics
 """""""""""""""""""
@@ -276,9 +266,6 @@ For each repository updated via RRDP the following values are given.
     If this is not ``null``, it provides a reason why a snapshot was used
     instead of a delta as a short explanatory string.
 
-
-.. _doc_routinator_metrics_json_rtr:
-
 RTR Server Metrics
 """"""""""""""""""
 
@@ -312,9 +299,6 @@ clients seen by the RTR server providing the following information for them.
 
 ``read`` and ``written``
    Bytes read from and written to clients from that address.
-
-
-.. _doc_routinator_metrics_json_http:
 
 HTTP Server Metrics
 """""""""""""""""""

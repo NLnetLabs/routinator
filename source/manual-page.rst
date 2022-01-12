@@ -826,8 +826,6 @@ anchors by adding and removing files in this directory. If you add files, make
 sure they are in the format described by :rfc:`7730` or the upcoming
 :rfc:`8630`.
 
-.. _doc_routinator_manpage_configfile:
-
 Configuration File
 ------------------
 
@@ -1306,8 +1304,6 @@ relaxed decoding mode.
               those strings are in some places used to carry encoded content
               themselves, such an encoding does make parsing significantly more
               difficult. At least one CA does produce such broken-up strings.
-
-.. _manpage_signals:
 
 Signals
 -------

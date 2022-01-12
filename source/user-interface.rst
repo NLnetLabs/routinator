@@ -63,8 +63,6 @@ developed and hosted by NLnet Labs at `bgp-api.net
     <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five Regional 
     Internet Registries. These are updated daily.
 
-.. _doc_routinator_reverse_proxy:
-
 Reverse Proxy with NGINX
 ------------------------
 

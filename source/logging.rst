@@ -21,7 +21,7 @@ warn
 info
       Information about events and data that could be considered abnormal but do
       not influence the set of VRPs  produced. For example, when filtering of
-      :ref:`unsafe VRPs <doc_routinator_unsafe_vrps>` is disabled, the unsafe
+      :ref:`unsafe VRPs <data-processing:unsafe vrps>` is disabled, the unsafe
       VRPs are logged with this level.
 
 debug

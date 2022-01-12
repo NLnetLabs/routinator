@@ -27,8 +27,6 @@ Communication between Routinator and the router using the RPKI-RTR protocol is
 done via plain TCP. Below, there is an explanation how to secure the transport
 using either SSH or TLS.
 
-.. _doc_routinator_rtr_secure_transport:
-
 Secure Transports
 -----------------
 

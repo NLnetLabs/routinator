@@ -72,7 +72,7 @@ using the `tmpfs file system
 When setting this up, you should make sure to only put the directory for the
 local RPKI cache in ``tmpfs`` and not the directory where the Trust Anchor
 Locators reside. Both locations are set in the :ref:`configuration file
-<doc_routinator_manpage_configfile>` with the :option:`repository-dir` and
+<manual-page:configuration file>` with the :option:`repository-dir` and
 :option:`tal-dir` options, respectively.
 
 If you have installed Routinator using a package, by default the RPKI cache

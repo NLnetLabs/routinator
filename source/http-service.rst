@@ -9,7 +9,8 @@ an :doc:`API<api-endpoints>`, :doc:`monitoring<monitoring>` and
 The HTTP server is not enabled by default for security reasons, nor does it have
 a default host or port. This service is intended to run on your internal network
 and doesn't offer HTTPS natively. If this is a requirement, you can for example
-run Routinator behind a :ref:`reverse proxy <doc_routinator_reverse_proxy>`.
+run Routinator behind a :ref:`reverse proxy <user-interface:reverse proxy with
+nginx>`.
 
 In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port 8323,
 run:

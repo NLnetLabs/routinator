@@ -18,9 +18,6 @@ find an overview of all metrics and their meaning.
     The current serial number for data served to
     :term:`RTR <RPKI-to-Router (RPKI-RTR)>` clients.
 
-    
-.. _doc_routinator_metrics_prometheus_publication:
-
 Publication Metrics
 """""""""""""""""""
 
@@ -36,15 +33,16 @@ file of the RRDP repository, or the base URI of the rsync repository.
     The number of :term:`publication points <Publication Point>` per trust
     anchor. In most cases these will be the five Regional Internet Registries,
     but will include the trust anchors of any configured :ref:`testbeds
-    <doc_routinator_testbed>` as well. 
+    <initialisation:preparing for test environments>` as well. 
     
     This metric has two labels: either ``name`` or ``uri``, followed by the
     ``state`` which is *valid* or *rejected*.
 
 ``routinator_{ta,repository}_objects_total``
     Metrics for each configured trust anchor. In most cases these will be the
-    five Regional Internet Registries, but will include the trust anchors of
-    any configured :ref:`testbeds <doc_routinator_testbed>` as well. 
+    five Regional Internet Registries, but will include the trust anchors of any
+    configured :ref:`testbeds <initialisation:preparing for test environments>`
+    as well. 
     
     This metric has three labels: either ``name`` or ``uri``, followed by
     ``type`` for the type of object, e.g. *crl*, and lastly ``state`` describing
@@ -113,8 +111,6 @@ trust anchor or ``uri`` for repositories:
     your routers. This is the total number of VRPs, minus the ones that are
     locally filtered, duplicate, and, if configured to be dropped, unsafe.
 
-.. _doc_routinator_metrics_prometheus_rsync:
-
 Rsync Update Metrics
 """"""""""""""""""""
 
@@ -129,8 +125,6 @@ For each repository updated via rsync the following values are given.
 ``routinator_rsync_duration``
     The duration the rsync process was running in seconds.
 
-.. _doc_routinator_metrics_prometheus_rrdp:
-    
 RRDP Update Metrics
 """""""""""""""""""
 
@@ -169,9 +163,6 @@ repository.
     The serial number stated by the RRDP server for the current data set.
     With each update the serial number is increased by one.
 
-    
-.. _doc_routinator_metrics_prometheus_rtr:
-
 RTR Server Metrics
 """"""""""""""""""
 
@@ -189,8 +180,6 @@ enabled or not.
 ``routinator_rtr_bytes_written``
    The total number of bytes written to RTR connections. In other words,
    describes how much data has been sent to clients.
-
-.. _doc_routinator_metrics_prometheus_http:
 
 HTTP Server Metrics
 """""""""""""""""""

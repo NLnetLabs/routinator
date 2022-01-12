@@ -13,7 +13,7 @@ can of course also start both.
 
 .. Note:: Routinator will not reread the trust anchor locators after it has
           started the service. Thus, if you add or change a TAL you must restart
-          Routinator or send it a :ref:`SIGUSR1 <manpage_signals>`.
+          Routinator or send it a :ref:`SIGUSR1 <manual-page:signals>`.
 
 If you're running Routinator on the IPv4 address 192.0.2.13 and you want to
 start the HTTP server on port 8323 and the RTR server on port 3323, run:

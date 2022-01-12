@@ -48,7 +48,7 @@ optional configuration file, which will be largely similar to this:
 You can override these defaults, as well as configure a great number of
 additional options using either command line arguments or via the configuration
 file. To get an overview of all available options, please refer to the
-:ref:`configuration file <doc_routinator_manpage_configfile>` section of the
+:ref:`configuration file <manual-page:configuration file>` section of the
 :doc:`manual-page`, which can be also  viewed by running
 :command:`routinator man`.
 

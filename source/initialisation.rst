@@ -104,8 +104,6 @@ If you decide you cannot agree to the ARIN RPA terms, you can use the
 to include the ARIN TAL you can add it to your current installation using the
 :option:`--force` option, to force the installation of all TALs.
 
-.. _doc_routinator_testbed:
-
 Preparing for Test Environments
 """""""""""""""""""""""""""""""
 
