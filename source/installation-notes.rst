@@ -72,12 +72,12 @@ cache dirctory will be in :file:`/var/lib/routinator/rpki-cache`. You can change
 this location with the :option:`repository-dir` option in the
 :doc:`configuration file<configuration>`.
 
-You should allocate at least 2GB for the cache, but giving it 4GB will allow
+You should allocate at least 3GB for the cache, but giving it 4GB will allow
 ample margin for future growth:
 
 .. code-block:: bash
 
-    mount -t tmpfs -o size=3G tmpfs /var/lib/routinator/rpki-cache
+    mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
 
 Note that every time you restart the machine the cache will be lost, which means
 that Routinator will have to build it up from scratch. Depending on network
