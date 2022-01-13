@@ -6,9 +6,15 @@ Breaking Changes
 
 Bug Fixes
 
+* Encountering stray files at the top level of the rsync cache directory
+  will not cause Routinator to exit any more. Instead, it will just delete
+  those files. ([#675])
+
 New
 
 Other Changes
+
+[#675]: https://github.com/NLnetLabs/routinator/pull/675
 
 
 # 0.10.2 ‘Skuffet, men ikke overrasket’
