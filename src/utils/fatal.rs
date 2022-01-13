@@ -214,6 +214,19 @@ pub fn remove_file(path: &Path) -> Result<(), Failed> {
 }
 
 
+//------------ remove_all ----------------------------------------------------
+
+/// Removes a file or a directory tree.
+pub fn remove_all(path: &Path) -> Result<(), Failed> {
+    if path.is_dir() {
+        remove_dir_all(path)
+    }
+    else {
+        remove_file(path)
+    }
+}
+
+
 //------------ rename --------------------------------------------------------
 
 /// Renames a file or directory.

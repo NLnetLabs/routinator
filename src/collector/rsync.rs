@@ -364,7 +364,7 @@ impl<'a> Run<'a> {
             };
 
             if !keep {
-                fatal::remove_dir_all(entry.path())?;
+                fatal::remove_all(entry.path())?;
             }
         }
 
@@ -395,7 +395,7 @@ impl<'a> Run<'a> {
             };
 
             if !keep {
-                fatal::remove_dir_all(entry.path())?;
+                fatal::remove_all(entry.path())?;
             }
             else {
                 keep_host = true;
