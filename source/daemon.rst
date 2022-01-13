@@ -5,11 +5,17 @@ Routinator can run as a service that periodically fetches RPKI data, verifies it
 and makes the resulting data set available through the built-in HTTP server and
 via the RTR protocol. 
 
-The server is not enabled by default for security reasons, nor does it have a
-default host or port. You can start the Routinator service using the
-:subcmd:`server` subcommand and specifying to start the HTTP server with the
-:option:`--http` option and the RTR server with the :option:`--rtr` option. You
-can of course also start both.
+If you have installed Routinator through the `NLnet Labs software package
+repository <https://packages.nlnetlabs.nl>`_, the RTR and HTTP servers are only
+available on localhost for security reasons. You will have to explicitly change
+this setting in the :doc:`configuration file<configuration>` to make the
+services available to other machines.
+
+When you have installed Routinator using Cargo, no servers are enbled by default
+at all. You can start the Routinator service using the :subcmd:`server`
+subcommand and specifying to start the HTTP server with the :option:`--http`
+option and the RTR server with the :option:`--rtr` option. You can of course
+also start both.
 
 .. Note:: Routinator will not reread the trust anchor locators after it has
           started the service. Thus, if you add or change a TAL you must restart

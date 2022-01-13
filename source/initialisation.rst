@@ -1,10 +1,17 @@
 Initialisation
 ==============
 
-Before running Routinator for the first time, you must prepare the working
-environment. You do this using the :subcmd:`init` subcommand. This will prepare
-both the directory for the local RPKI cache, as well as the directory where the
-:term:`Trust Anchor Locator (TAL)` files reside.
+If you have installed Routinator through the `NLnet Labs software package
+repository <https://packages.nlnetlabs.nl>`_, the initialisation script
+``routinator-init`` is meant set the application up to run as a system service
+with the user ``routinator``, periodically fetching and validating ROAs from the
+five RIR Trust Anchors and making the validated data available via the RTR and
+HTTP server. It also requires using a :doc:`configuration file<configuration>`.
+
+In case you have built Routinator using Cargo, you must also first prepare the
+directory for the local RPKI cache, as well as the directory where the
+:term:`Trust Anchor Locator (TAL)` files reside. In this case you use the
+:subcmd:`init` subcommand, as explained below.
 
 Trust Anchor Locators
 ---------------------

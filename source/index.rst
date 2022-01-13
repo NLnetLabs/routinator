@@ -47,6 +47,7 @@ service-level agreement available.
    installation
    installation-notes
    initialisation
+   configuration
    
 .. toctree::
    :maxdepth: 2
@@ -55,18 +56,8 @@ service-level agreement available.
 
    data-processing
    output-formats
-   configuration
    local-exceptions
    logging
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Interactive
-   :name: toc-interactive
-
-   interactive
-   validity-checker
-   dump
 
 .. toctree::
    :maxdepth: 2
@@ -80,6 +71,15 @@ service-level agreement available.
    api-endpoints
    monitoring
    
+.. toctree::
+   :maxdepth: 2
+   :caption: Interactive
+   :name: toc-interactive
+
+   interactive
+   validity-checker
+   dump
+
 .. toctree::
    :maxdepth: 2
    :caption: Reference

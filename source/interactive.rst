@@ -11,6 +11,12 @@ Routinator can perform RPKI validation as a one-time operation and print a
 validated ROA payload (VRP) list in various formats using the :subcmd:`vrps`
 subcommand and specifying the :doc:`desired format<output-formats>`. 
 
+.. Warning:: If you have installed Routinator through the `NLnet Labs software 
+             package repository <https://packages.nlnetlabs.nl>`_, the
+             installation script will set up the application to run as a
+             service. You should not run Routinator as a daemon and
+             interactively at the same time on the same machine. 
+
 For example, to print the VRPs in CSV format to standard output, run:
 
 .. code-block:: text
