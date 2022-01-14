@@ -4,17 +4,17 @@ Manual Page
 Synopsis
 --------
 
-:program:`routinator` [``options``] ``init`` [``init-options``]
+:program:`routinator` [``options``] :subcmd:`init` [``init-options``]
 
-:program:`routinator` [``options``] ``vrps`` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
+:program:`routinator` [``options``] :subcmd:`vrps` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
 
-:program:`routinator` [``options``] ``validate`` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
+:program:`routinator` [``options``] :subcmd:`validate` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
 
-:program:`routinator` [``options``] ``server`` [``server-options``]
+:program:`routinator` [``options``] :subcmd:`server` [``server-options``]
 
-:program:`routinator` [``options``] ``update`` [``update-options``]
+:program:`routinator` [``options``] :subcmd:`update` [``update-options``]
 
-:program:`routinator` ``man`` [:samp:`-o {file}`]
+:program:`routinator` :subcmd:`man` [:samp:`-o {file}`]
 
 :program:`routinator` ``-h``
 
