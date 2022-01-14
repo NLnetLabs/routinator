@@ -1,17 +1,35 @@
 Initialisation
 ==============
 
-If you have installed Routinator through the `NLnet Labs software package
-repository <https://packages.nlnetlabs.nl>`_, the initialisation script
-``routinator-init`` is meant set the application up to run as a system service
-with the user ``routinator``, periodically fetching and validating ROAs from the
-five RIR Trust Anchors and making the validated data available via the RTR and
-HTTP server. It also requires using a :doc:`configuration file<configuration>`.
+Before running Routinator for the first time, you must prepare the working
+environment. You do this using the :subcmd:`init` subcommand. This will create
+the directory for the :term:`Trust Anchor Locator (TAL)` files and copy the
+desired TALs into it, and create the directory for the local RPKI cache.
 
-In case you have built Routinator using Cargo, you must also first prepare the
-directory for the local RPKI cache, as well as the directory where the
-:term:`Trust Anchor Locator (TAL)` files reside. In this case you use the
-:subcmd:`init` subcommand, as explained below.
+If you have installed Routinator using a package from our software package
+repository, the application is set up to run as a system service with the user
+*routinator*. We have included an initialisation script named
+``routinator-init`` to make the setup process easy for you. The script is meant
+to prepare Routinator for production environments, periodically fetching and
+validating ROAs from the five RIR Trust Anchors and making the validated data
+available via the RTR and HTTP server. 
+
+The ``routinator-init`` script invokes the :subcmd:`init` subcommand as the user
+*routinator* and takes the pre-installed :doc:`configuration
+file<configuration>` located in ``/etc/routinator/routinator.conf`` into
+consideration. The config file explicitly sets the TAL and RPKI cache
+directories and enables the HTTP and RTR servers on localhost.
+
+When you run it, you'll see what it does:
+
+.. code-block:: text
+
+   Running command as user routinator: routinator --config /etc/routinator/routinator.conf init 
+
+In case you have built Routinator using Cargo, you also have to perform the
+initialisation steps, but in this case you invoke the :subcmd:`init` subcommand
+directly. It will also provide you with some additional options, as explained
+below. 
 
 Trust Anchor Locators
 ---------------------
@@ -126,15 +144,45 @@ initialised Routinator, enter:
 
    routinator init --force --tal arin-ote
 
-Performing a Test Run
----------------------
+.. Tip:: If you have installed Routinator using a package, you can make use of
+         the ``routinator-init`` script to achieve the same:
 
-To see if Routinator has been initialised correctly and your firewall allows the
-required outbound connections on ports 443 and 873, it is recommended to perform
-an initial test run. You can do this by having Routinator print a validated ROA
-payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v`
-twice to increase the :doc:`log level<logging>` to *debug*. This way you can
-verify if Routinator establishes connections as expected:
+         .. code-block:: text
+
+            routinator-init --force --tal arin-ote
+
+Verifying Initialisation
+------------------------
+
+You should verify if Routinator has been initialised correctly and your firewall
+allows the required outbound connections on ports 443 and 873. From a cold
+start, it will take ten to fifteen minutes to do the first validation run that
+builds up the validated cache. Subsequent runs will be much faster, because only
+the changes between the repositories and the validated cache need to be
+processed.
+
+If you have installed Routinator from a package and run it as a service, you can
+check the status using:
+
+.. code-block:: bash
+
+   sudo systemctl status routinator
+
+And check the logs using:
+
+.. code-block:: bash
+
+   sudo journalctl --unit=routinator
+
+.. Important:: Because it is expected that the state of the entire RPKI is not 
+               perfect as all times, you may see several warnings about objects
+               that are either stale or failed cryptographic verification, or
+               repositories that are temporarily unavailable. 
+
+If you have installed and initialised Routinator manually it is recommended to
+perform an initial test run. You can do this by having Routinator print a
+validated ROA payload (VRP) list with the :subcmd:`vrps` subcommand, and using
+:option:`-v` twice to increase the :doc:`log level<logging>` to *debug*:
 
 .. code-block:: bash
 
@@ -143,16 +191,6 @@ verify if Routinator establishes connections as expected:
 Now, you can see how Routinator connects to the RPKI trust anchors, downloads
 the the contents of the repositories to your machine, verifies it and produces a
 list of VRPs in the default CSV format to standard output. 
-
-.. Important:: Because it is expected that the state of the entire RPKI is not 
-               perfect as all times, you may see several warnings during the
-               process about objects that are either stale or failed
-               cryptographic verification, or repositories that are temporarily
-               unavailable. 
-
-From a cold start, this process will take a couple of minutes. Subsequent
-verification runs will be much faster, because only the changes between the
-repositories and the validated cache need to be processed:
 
 .. code-block:: text
 
