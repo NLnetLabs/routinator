@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.10.3-dev"
+version = "0.11.0-dev"
 dependencies = [
  "bytes",
  "chrono",
