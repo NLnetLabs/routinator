@@ -188,7 +188,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
 
   sudo timedatectl set-timezone UTC
 
-5.	Remove postfix as it is unneeded:
+5.	Remove :program:`postfix` as it is unneeded:
 
 .. code-block:: bash
 
@@ -217,7 +217,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
 
   sudo htpasswd -c /etc/nginx/.htpasswd <username>
 
-10.	Start Nginx and set it up so it starts at boot:
+10.	Start :program:`Nginx` and set it up so it starts at boot:
 
 .. code-block:: bash
 
@@ -225,7 +225,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   sudo systemctl enable nginx
 
 
-11.	Add the user "routinator", create the ``/opt/routinator`` directory and assign it to the "routinator" user and group:
+11.	Add the user *routinator*, create the :file:`/opt/routinator` directory and assign it to the *routinator* user and group:
 
 .. code-block:: bash
 
@@ -233,13 +233,13 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   sudo mkdir /opt/routinator
   sudo chown routinator:routinator /opt/routinator
 
-12.	Sudo into the routinator user:
+12.	Sudo into the *routinator* user:
 
 .. code-block:: bash
 
   sudo su - routinator
 
-13.	Install Routinator and add it to the ``$PATH`` for user "routinator":
+13.	Install Routinator and add it to the ``$PATH`` for user *routinator*:
 
 .. code-block:: bash
 
@@ -248,7 +248,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   Edit the PATH line to include "/home/routinator/.cargo/bin"
   PATH=$PATH:$HOME/.local/bin:$HOME/bin:/home/routinator/.cargo/bin
 
-14.	Initialise Routinator, accept the ARIN TAL and exit back to the user with ``sudo``:
+14.	Initialise Routinator, accept the ARIN TAL and exit back to the user with :command:`sudo`:
 
 .. code-block:: bash
 
@@ -283,7 +283,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
             /home/routinator/.cargo/bin/routinator -v -b /opt/routinator server \
             --http 127.0.0.1:8080 --rtr 172.16.47.235:8323 --rtr [2001:db8::43]:8323
 
-16.	Configure SELinux to allow connections to localhost and to allow rsync to write to the ``/opt/routinator`` directory:
+16.	Configure SELinux to allow connections to localhost and to allow :program:`rsync` to write to the ``/opt/routinator`` directory:
 
 .. code-block:: bash
 
@@ -298,7 +298,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   sudo systemctl enable routinator.service
   sudo systemctl start routinator.service
 
-18.	Set up the firewall to permit ssh, HTTPS and port 8323 for the RTR protocol:
+18.	Set up the firewall to permit :program:`ssh`, HTTPS and port 8323 for the RTR protocol:
 
 .. code-block:: bash
 
@@ -317,4 +317,4 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
       source address="<peering router IPv6 loopback subnet>" port port=8323 protocol=tcp accept'
   sudo firewall-cmd --reload
 
-19. Navigate to ``https://<IP address of rpki-validator>/metrics`` to see if it's working. You should authenticate with the username and password that you provided in step 10 of setting up the RPKI Validation Server.
+19. Navigate to :samp:`https://{<IP-address>}/metrics` to see if it's working. You should authenticate with the username and password that you provided in step 10 of setting up the RPKI Validation Server.

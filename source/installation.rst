@@ -619,8 +619,8 @@ Routinator relies on a relatively new version of Rust, currently  1.52 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called :program:`rustup`.
 
-Assuming you already have ``curl`` installed, you can install :program:`rustup`
-and Rust by simply entering:
+Assuming you already have :program:`curl` installed, you can install
+:program:`rustup` and Rust by simply entering:
 
 .. code-block:: text
 

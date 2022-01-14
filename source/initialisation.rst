@@ -20,16 +20,26 @@ file<configuration>` located in ``/etc/routinator/routinator.conf`` into
 consideration. The config file explicitly sets the TAL and RPKI cache
 directories and enables the HTTP and RTR servers on localhost.
 
-When you run it, you'll see what it does:
-
-.. code-block:: text
-
-   Running command as user routinator: routinator --config /etc/routinator/routinator.conf init 
-
-In case you have built Routinator using Cargo, you also have to perform the
+All of options for the :subcmd:`init` subcommand can be appended to the
+:program:`routinator-init` script, which are described in detail below. In case
+you have built Routinator using Cargo you also have to perform the
 initialisation steps, but in this case you invoke the :subcmd:`init` subcommand
-directly. It will also provide you with some additional options, as explained
-below. 
+directly.
+
+.. Important:: In conclusion, there is a subtle difference in the initialisation
+               commands depending on how you installed Routinator.
+
+               When installed using a package, you would for example enter:
+
+               .. code-block:: text
+
+                  routinator-init --list-tals
+
+               When built using Cargo, you would use:
+
+               .. code-block:: text
+
+                  routinator init --list-tals
 
 Trust Anchor Locators
 ---------------------
@@ -143,14 +153,6 @@ initialised Routinator, enter:
 .. code-block:: bash
 
    routinator init --force --tal arin-ote
-
-.. Tip:: If you have installed Routinator using a package, you can make use of
-         the :program:`routinator-init` script to ensure the *routinator* user
-         and configuration file are taken into account:
-
-         .. code-block:: text
-
-            routinator-init --force --tal arin-ote
 
 Verifying Initialisation
 ------------------------
