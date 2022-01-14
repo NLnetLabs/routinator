@@ -7,27 +7,23 @@ the directory for the :term:`Trust Anchor Locator (TAL)` files and copy the
 desired TALs into it, and create the directory for the local RPKI cache.
 
 If you have installed Routinator using a package from our software package
-repository, the application is set up to run as a system service with the user
-*routinator*. We have included an initialisation script named
-:program:`routinator-init` to make the setup process easy for you. The script is
-meant to prepare Routinator for production environments, periodically fetching
-and validating ROAs from the five RIR Trust Anchors and making the validated
-data available via the RTR and HTTP server. 
+repository, the application is configured to run as a system service with the
+user *routinator*. We have included an initialisation script named
+:program:`routinator-init` and pre-installed a :doc:`configuration
+file<configuration>` located in ``/etc/routinator/routinator.conf`` to make the
+setup process easy for you. The configuration is meant to prepare Routinator for
+production environments, explicitly setting the TAL and RPKI cache directories
+and enabling the HTTP and RTR servers on localhost. 
 
 The :program:`routinator-init` script invokes the :subcmd:`init` subcommand as
-the user *routinator* and takes the pre-installed :doc:`configuration
-file<configuration>` located in ``/etc/routinator/routinator.conf`` into
-consideration. The config file explicitly sets the TAL and RPKI cache
-directories and enables the HTTP and RTR servers on localhost.
+the user *routinator* and takes configuration file into consideration. All of
+options for the :subcmd:`init` subcommand can be appended to the
+:program:`routinator-init` script, which are described below. If you have built
+Routinator using Cargo you also have to perform the initialisation steps, but in
+this case you invoke the :subcmd:`init` subcommand directly.
 
-All of options for the :subcmd:`init` subcommand can be appended to the
-:program:`routinator-init` script, which are described in detail below. In case
-you have built Routinator using Cargo you also have to perform the
-initialisation steps, but in this case you invoke the :subcmd:`init` subcommand
-directly.
-
-.. Important:: In conclusion, there is a subtle difference in the initialisation
-               commands depending on how you installed Routinator.
+.. Important:: There is a subtle difference in the initialisation commands 
+               depending on how you installed Routinator.
 
                When installed using a package, you would for example enter:
 
@@ -87,7 +83,7 @@ This displays the following overview:
 Preparing for Production Environments
 """""""""""""""""""""""""""""""""""""
 
-.. WARNING:: Using the TAL from ARIN requires you to read and accept their 
+.. Warning:: Using the TAL from ARIN requires you to read and accept their 
              `Relying Party Agreement
              <https://www.arin.net/resources/manage/rpki/tal/>`_ before you can
              use it. Running the :subcmd:`init` subcommand will provide you with
@@ -126,13 +122,13 @@ Trust Anchor Locator files into it:
 
    routinator init --rir-tals --accept-arin-rpa
 
-If you are using a :doc:`configuration file<configuration>` to specify the
-default location of the repository and TAL directories, make sure to refer to it
-during initialisation using the :option:`--config` option, e.g.:
+If you built Routinator using Cargo and set up a :doc:`configuration
+file<configuration>` before initialisation, make sure to refer to it using the
+:option:`--config` option, e.g.:
 
 .. code-block:: bash
 
-   routinator --config /etc/routinator/routinator.conf init --rir-tals --accept-arin-rpa
+   routinator --config /home/routinator/routinator.conf init --rir-tals --accept-arin-rpa
 
 If you decide you cannot agree to the ARIN RPA terms, you can use the
 :option:`--skip-tal` option to exclude the TAL. If, at a later point, you wish

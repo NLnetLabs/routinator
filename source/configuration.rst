@@ -6,8 +6,8 @@ running it with the defaults will work just fine. You can specify options as
 :ref:`command line arguments <manual-page:options>`, but you can also use a
 :ref:`configuration file <manual-page:configuration file>`.
 
-For specifying options in the configuration file, Routinator uses the `TOML
-format <https://github.com/toml-lang/toml>`_. Its entries are named similarly to
+Routinator uses the `TOML format <https://github.com/toml-lang/toml>`_ for
+specifying options in the configuration file. Its entries are named similarly to
 the command line options. A complete sample configuration file showing all the
 default values can be found in the `repository
 <https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example>`_.
@@ -20,9 +20,9 @@ Routinator Installed From a Package
 -----------------------------------
 
 As explained in the :doc:`initialisation` section, the installation script will
-create a user *routinator* and place a configuration file at
-:file:`/etc/routinator/routinator.conf`. It contains the following options that
-are set explicitly:
+run as the user *routinator* and refer to the configuration file
+:file:`/etc/routinator/routinator.conf` which contains the following
+pre-configured options:
 
 .. code-block:: text
 
@@ -37,9 +37,9 @@ devices on your network.
 
 The service script that starts Routinator uses the :option:`--config` option to
 explicitly refer to this configuration file, so any desired changes should be
-made here. If you would like to know what the other settings are that Routinator
-runs with in addition to those in the config file, you can check with the
-:subcmd:`config` subcommand. 
+made here. If you would like to know what default settings Routinator runs with
+in addition to the settings in the config file, you can check with the
+:subcmd:`config` subcommand:
 
 .. code-block:: bash
 
@@ -49,11 +49,12 @@ This output will also provide you with the correct syntax in case you want to
 make changes.
 
 .. Important:: Once you have started Routinator with ``sudo systemctl enable 
-               --now routinator`` you should not invoke validation runs from the
-               command line using ``routinator vrps``. If there is information
+               --now routinator`` you should not invoke
+               :doc:`interactive<interactive>` validation runs from the command
+               line using ``routinator vrps``. If there is specific information
                you would like to have from Routinator, you should retrieve it
                via the :doc:`user interface<user-interface>` or one of the
-               :doc:`API endpoints<api-endpoints>`.
+               :doc:`HTTP endpoints<http-service>`.
 
 Routinator Built with Cargo
 ---------------------------
@@ -73,7 +74,8 @@ You can view the default settings Routinator runs with using:
    routinator config
 
 It will return the list of defaults in the same notation that is used by the
-configuration file, which will be largely similar to this:
+:ref:`configuration file <manual-page:configuration file>`, which will be
+largely similar to this and can serve as a starting point for making your own:
 
 .. code-block:: text
 
@@ -107,43 +109,4 @@ configuration file, which will be largely similar to this:
     unknown-objects = "warn"
     unsafe-vrps = "warn"
     validation-threads = 4
-
-For example, if you want Routinator to refresh every 15 minutes and run as an
-RTR server on 192.0.2.13 and 2001:0DB8::13 on port 3323, in addition to
-providing an HTTP server on port 9556, simply take the output from
-:program:`routinator config` and change the ``refresh``, ``rtr-listen`` and
-``http-listen`` values in your favourite text editor:
-
-.. code-block:: text
-   :emphasize-lines: 8,12,21
-
-    allow-dubious-hosts = false
-    dirty = false
-    disable-rrdp = false
-    disable-rsync = false
-    exceptions = []
-    expire = 7200
-    history-size = 10
-    http-listen = ["192.0.2.13:9556", "[2001:0DB8::13]:9556"]
-    log = "default"
-    log-level = "WARN"
-    max-object-size = 20000000
-    refresh = 900
-    repository-dir = "/Users/routinator/.rpki-cache/repository"
-    retry = 600
-    rrdp-fallback-time = 3600
-    rrdp-proxies = []
-    rrdp-root-certs = []
-    rsync-command = "rsync"
-    rsync-timeout = 300
-    rtr-client-metrics = false
-    rtr-listen = ["192.0.2.13:3323", "[2001:0DB8::13]:3323"]
-    rtr-tcp-keepalive = 60
-    stale = "reject"
-    strict = false
-    syslog-facility = "daemon"
-    systemd-listen = false
-    tal-dir = "/Users/routinator/.rpki-cache/tals"
-    unknown-objects = "warn"
-    unsafe-vrps = "warn"
-    validation-threads = 4
+    
