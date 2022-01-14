@@ -61,7 +61,7 @@ redirect logging output to a file using the :option:`--logfile` option.
          :doc:`configuration file<configuration>`.
 
 When you run the HTTP service logging information is also available at the
-:command:`/log` path. This will produce logging output of the last validation
+``/log`` path. This will produce logging output of the last validation
 run. The log level matches that set upon start. Note that the output is
 collected after each validation run and is therefore only available after the
 initial run has concluded.

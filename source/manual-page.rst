@@ -4,21 +4,21 @@ Manual Page
 Synopsis
 --------
 
-:command:`routinator` [options] ``init`` [``init-options``]
+:program:`routinator` [``options``] ``init`` [``init-options``]
 
-:command:`routinator` [options] ``vrps`` [``vrps-options``] [:option:`-o` ``output-file``] [:option:`-f` ``format``]
+:program:`routinator` [``options``] ``vrps`` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
 
-:command:`routinator` [options] ``validate`` [validate-options] [:option:`-a` ``asn``] [:option:`-p` ``prefix``]
+:program:`routinator` [``options``] ``validate`` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
 
-:command:`routinator` [options] ``server`` [server-options]
+:program:`routinator` [``options``] ``server`` [``server-options``]
 
-:command:`routinator` [options] ``update`` [update-options]
+:program:`routinator` [``options``] ``update`` [``update-options``]
 
-:command:`routinator` man [:option:`-o` ``file``]
+:program:`routinator` ``man`` [:samp:`-o {file}`]
 
-:command:`routinator` :option:`-h`
+:program:`routinator` ``-h``
 
-:command:`routinator` :option:`-V`
+:program:`routinator` ``-V``
 
 Description
 -----------
@@ -756,7 +756,7 @@ These can be requested by providing different commands on the command line.
        data.
 
        As such, the command really is a shortcut for running
-       :command:`routinator` :subcmd:`vrps` :option:`-f` ``none``.
+       :program:`routinator` :subcmd:`vrps` :option:`-f` ``none``.
 
        .. option:: --complete
 

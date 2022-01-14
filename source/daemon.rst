@@ -5,11 +5,10 @@ Routinator can run as a service that periodically fetches RPKI data, verifies it
 and makes the resulting data set available through the built-in HTTP server and
 via the RTR protocol. 
 
-If you have installed Routinator through the `NLnet Labs software package
-repository <https://packages.nlnetlabs.nl>`_, the RTR and HTTP servers are only
-available on localhost for security reasons. You will have to explicitly change
-this setting in the :doc:`configuration file<configuration>` to make the
-services available to other machines.
+If you have installed Routinator through our software package repository, the
+RTR and HTTP servers are only available on localhost for security reasons. You
+will have to explicitly change this setting in the :doc:`configuration
+file<configuration>` to make the services available to other machines.
 
 When you have installed Routinator using Cargo, no servers are enbled by default
 at all. You can start the Routinator service using the :subcmd:`server`

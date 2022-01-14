@@ -9,13 +9,13 @@ desired TALs into it, and create the directory for the local RPKI cache.
 If you have installed Routinator using a package from our software package
 repository, the application is set up to run as a system service with the user
 *routinator*. We have included an initialisation script named
-``routinator-init`` to make the setup process easy for you. The script is meant
-to prepare Routinator for production environments, periodically fetching and
-validating ROAs from the five RIR Trust Anchors and making the validated data
-available via the RTR and HTTP server. 
+:program:`routinator-init` to make the setup process easy for you. The script is
+meant to prepare Routinator for production environments, periodically fetching
+and validating ROAs from the five RIR Trust Anchors and making the validated
+data available via the RTR and HTTP server. 
 
-The ``routinator-init`` script invokes the :subcmd:`init` subcommand as the user
-*routinator* and takes the pre-installed :doc:`configuration
+The :program:`routinator-init` script invokes the :subcmd:`init` subcommand as
+the user *routinator* and takes the pre-installed :doc:`configuration
 file<configuration>` located in ``/etc/routinator/routinator.conf`` into
 consideration. The config file explicitly sets the TAL and RPKI cache
 directories and enables the HTTP and RTR servers on localhost.
@@ -145,7 +145,8 @@ initialised Routinator, enter:
    routinator init --force --tal arin-ote
 
 .. Tip:: If you have installed Routinator using a package, you can make use of
-         the ``routinator-init`` script to achieve the same:
+         the :program:`routinator-init` script to ensure the *routinator* user
+         and configuration file are taken into account:
 
          .. code-block:: text
 

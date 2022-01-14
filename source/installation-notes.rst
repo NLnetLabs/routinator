@@ -40,16 +40,16 @@ following command:
 Statically Linked Routinator
 ----------------------------
 
-While Rust binaries are mostly statically linked, they depend on :command:`libc`
-which, as least as :command:`glibc` that is standard on Linux systems, is
+While Rust binaries are mostly statically linked, they depend on :program:`libc`
+which, as least as :program:`glibc` that is standard on Linux systems, is
 somewhat difficult to link statically. This is why Routinator binaries are
-actually dynamically linked on :command:`glibc` systems and can only be
-transferred between systems with the same :command:`glibc` versions.
+actually dynamically linked on :program:`glibc` systems and can only be
+transferred between systems with the same :program:`glibc` versions.
 
 However, Rust can build binaries based on the alternative implementation named
-:command:`musl` that can easily be statically linked. Building such binaries is
-easy with :command:`rustup`. You need to install :command:`musl` and the correct
-:command:`musl` target such as ``x86_64-unknown-linux-musl`` for x86\_64 Linux
+:program:`musl` that can easily be statically linked. Building such binaries is
+easy with :program:`rustup`. You need to install :program:`musl` and the correct
+:program:`musl` target such as ``x86_64-unknown-linux-musl`` for x86\_64 Linux
 systems. Then you can just build Routinator for that target.
 
 On a Debian (and presumably Ubuntu) system, enter the following:
@@ -70,7 +70,7 @@ using the `tmpfs file system
 <https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
 When setting this up, you should make sure to only put the directory for the
-local RPKI cache in ``tmpfs`` and not the directory where the Trust Anchor
+local RPKI cache in *tmpfs* and not the directory where the Trust Anchor
 Locators reside. Both locations are set in the :ref:`configuration file
 <manual-page:configuration file>` with the ``repository-dir`` and ``tal-dir``
 options, respectively.
@@ -85,13 +85,13 @@ allow ample margin for future growth:
 
     sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
 
-``tmpfs`` will behave just like a regular disk, so if it runs out of space
+*Tmpfs* will behave just like a regular disk, so if it runs out of space
 Routinator will do a clean crash, stopping validation, the API, HTTP server 
 and most importantly the RTR server, ensuring that no stale data will be
 served to your routers. 
 
 Also keep in mind that every time you restart the machine, the contents of the
-``tmpfs`` file system will be lost. This means that Routinator will have to
+*tmpfs* file system will be lost. This means that Routinator will have to
 rebuild its cache from scratch. This is not a problem, other than it having to
 download several gigabytes of data, which usually takes about ten minutes to
 complete. During this time all services will be unavailble.
@@ -106,7 +106,7 @@ Platform Specific Instructions
          `Ansible playbook <https://github.com/GEANT/rpki-validation-tools>`_
          defining a role to deploy Routinator on Ubuntu.
 
-For some platforms, :command:`rustup` cannot provide binary releases to install
+For some platforms, :program:`rustup` cannot provide binary releases to install
 directly. The `Rust Platform Support
 <https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_ page lists
 several platforms where official binary releases are not available, but Rust is

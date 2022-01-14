@@ -2,7 +2,7 @@ Prometheus Metrics
 ==================
 
 Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
-metrics in Prometheus format at the :command:`/metrics` endpoint. Here you can
+metrics in Prometheus format at the ``/metrics`` endpoint. Here you can
 find an overview of all metrics and their meaning.
 
 ``routinator_last_update_start``

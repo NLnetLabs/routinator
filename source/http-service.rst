@@ -20,8 +20,8 @@ run:
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
 After fetching and verifying all RPKI data, paths are available for each
-:doc:`VRP output format <output-formats>`. For example, at the :command:`/csv`
-path you can fetch a list of all VRPs in CSV format.
+:doc:`VRP output format <output-formats>`. For example, at the ``/csv`` path you
+can fetch a list of all VRPs in CSV format.
 
 .. code-block:: text
 

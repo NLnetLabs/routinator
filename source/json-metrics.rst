@@ -2,7 +2,7 @@ JSON Metrics
 ============
 
 Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
-metrics in JSON format :command:`/api/v1/status` endpoint. Here you can find an
+metrics in JSON format ``/api/v1/status`` endpoint. Here you can find an
 overview of all metrics and their meaning.
 
 The JSON metrics consist of an object with the following members:

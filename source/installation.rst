@@ -34,13 +34,13 @@ or build from Cargo, Rust's build system and package manager.
        Our software package repository has binary packages available for 
        Debian 9 (stretch), 10 (buster) and 11 (bullseye).
        
-       First update the ``apt`` package index: 
+       First update the :program:`apt` package index: 
 
        .. code-block:: bash
 
           sudo apt update
 
-       Then install packages to allow ``apt`` to use a repository over HTTPS:
+       Then install packages to allow :program:`apt` to use a repository over HTTPS:
 
        .. code-block:: bash
 
@@ -64,7 +64,7 @@ or build from Cargo, Rust's build system and package manager.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
           $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
 
-       Update the ``apt`` package index once more: 
+       Update the :program:`apt` package index once more: 
 
        .. code-block:: bash
 
@@ -113,13 +113,13 @@ or build from Cargo, Rust's build system and package manager.
        Our software package repository has binary packages available for Ubuntu
        16.x (Xenial Xerus), 18.x (Bionic Beaver) and 20.x (Focal Fossa).
        
-       First update the ``apt`` package index: 
+       First update the :program:`apt` package index: 
 
        .. code-block:: bash
 
           sudo apt update
 
-       Then install packages to allow ``apt`` to use a repository over HTTPS:
+       Then install packages to allow :program:`apt` to use a repository over HTTPS:
 
        .. code-block:: bash
 
@@ -143,7 +143,7 @@ or build from Cargo, Rust's build system and package manager.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
           $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
 
-       Update the ``apt`` package index once more: 
+       Update the :program:`apt` package index once more: 
 
        .. code-block:: bash
 
@@ -448,7 +448,7 @@ a specific version, if needed.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
           $(lsb_release -cs)-proposed main" | sudo tee /etc/apt/sources.list.d/nlnetlabs-proposed.list > /dev/null
 
-       Make sure to update the ``apt`` package index:
+       Make sure to update the :program:`apt` package index:
 
        .. code-block:: bash
 
@@ -483,7 +483,7 @@ a specific version, if needed.
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
           $(lsb_release -cs)-proposed main" | sudo tee /etc/apt/sources.list.d/nlnetlabs-proposed.list > /dev/null
 
-       Make sure to update the ``apt`` package index:
+       Make sure to update the :program:`apt` package index:
 
        .. code-block:: bash
 
@@ -581,7 +581,7 @@ programming language that Routinator has been written in.
 rsync
 """""
 
-Currently, Routinator requires the :command:`rsync` executable to be in your
+Currently, Routinator requires the :program:`rsync` executable to be in your
 path. Due to the nature of rsync, it is unclear which particular version you
 need at the very least, but whatever is being shipped with current Linux and
 \*BSD distributions, as well as macOS should be fine. Alternatively, you can
@@ -617,9 +617,9 @@ an overview of the various support levels.
 While some system distributions include Rust as system packages,
 Routinator relies on a relatively new version of Rust, currently 1.47 or
 newer. We therefore suggest to use the canonical Rust installation via a
-tool called :command:`rustup`.
+tool called :program:`rustup`.
 
-Assuming you already have ``curl`` installed, you can install :command:`rustup`
+Assuming you already have ``curl`` installed, you can install :program:`rustup`
 and Rust by simply entering:
 
 .. code-block:: text

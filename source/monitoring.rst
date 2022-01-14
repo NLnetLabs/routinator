@@ -11,10 +11,10 @@ and HTTP on 8323, use the following command:
 
 The HTTP service has these monitoring endpoints on the following paths:
 
-:command:`/version`
+``/version``
     Returns the version of the Routinator instance
 
-:command:`/metrics`
+``/metrics``
     Exposes exhaustive time series data specifically for `Prometheus
     <https://prometheus.io/>`_, containing metrics on all trust anchors,
     repositories, RRDP and rsync connections, as well as RTR and HTTP sessions.
@@ -22,12 +22,12 @@ The HTTP service has these monitoring endpoints on the following paths:
     <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>`_
     is allocated for the exporter.
      
-:command:`/api/v1/status`
+``/api/v1/status``
     Returns exhaustive information in JSON format on all trust anchors,
     repositories, RRDP and rsync connections, as well as RTR and HTTP sessions.
     This data set provides the source for the Routinator user interface.
 
-:command:`/status`
+``/status``
     Returns a subset of the metrics information in a concise plain text format
 
 Metrics

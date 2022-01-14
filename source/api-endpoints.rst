@@ -2,26 +2,26 @@ API Endpoints
 =============
 
 .. versionchanged:: 0.9
-   The :command:`/api/v1/status` path
+   The ``/api/v1/status`` path
 .. versionadded:: 0.9
-   The :command:`/json-delta` path
+   The ``/json-delta`` path
 
 The service supports GET requests with the following paths:
 
-:command:`/api/v1/status`
+``/api/v1/status``
      Returns exhaustive information in JSON format on all trust anchors,
      repositories, RRDP and rsync connections, as well as RTR and HTTP sessions.
      This data set provides the source for the Routinator user interface.
 
-:command:`/api/v1/validity/as-number/prefix`
+``/api/v1/validity/as-number/prefix``
      Returns a JSON object describing whether the route announcement given by 
      its origin AS Number and address prefix is RPKI valid, invalid, or not 
      found. A complete list of VRPs that caused the result is included.
      
-:command:`/validity?asn=as-number&prefix=prefix`
+``/validity?asn=as-number&prefix=prefix``
      Same as above but with a more form-friendly calling convention.
      
-:command:`/json-delta, /json-delta?sessionsession?serial=serial`
+``/json-delta, /json-delta?sessionsession?serial=serial``
      Returns a JSON object with the changes since the dataset version identified
      by the *session* and *serial* query parameters. If a delta cannot be
      produced from that version, the full data set is returned and the member
@@ -34,6 +34,6 @@ The service supports GET requests with the following paths:
      session and serial. If *reset* is *true*, the *withdrawn* member is not
      present.
 
-In addition, the :command:`/log` endpoint returns :doc:`logging<logging>`
-information and the :command:`/metrics`, :command:`/status` and
-:command:`/version` endpoints provide :doc:`monitoring<monitoring>` data.
+In addition, the ``/log`` endpoint returns :doc:`logging<logging>`
+information and the ``/metrics``, ``/status`` and
+``/version`` endpoints provide :doc:`monitoring<monitoring>` data.
