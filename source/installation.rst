@@ -615,7 +615,7 @@ not all of them are equally supported. The official `Rust Platform Support
 an overview of the various support levels.
 
 While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently 1.47 or
+Routinator relies on a relatively new version of Rust, currently  1.52 or
 newer. We therefore suggest to use the canonical Rust installation via a
 tool called :program:`rustup`.
 
