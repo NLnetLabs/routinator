@@ -5,6 +5,7 @@ pub mod date;
 pub mod dump;
 pub mod fatal;
 pub mod json;
+pub mod net;
 pub mod str;
 pub mod tls;
 pub mod uri;

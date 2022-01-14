@@ -3,7 +3,7 @@
 use std::io;
 use std::convert::Infallible;
 use std::future::Future;
-use std::net::TcpListener as StdListener;
+use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -14,12 +14,15 @@ use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
 use crate::config::Config;
 use crate::error::ExitError;
 use crate::metrics::{HttpServerMetrics, SharedRtrServerMetrics};
 use crate::payload::SharedHistory;
 use crate::process::LogOutput;
+use crate::utils::{net, tls};
+use crate::utils::tls::MaybeTlsTcpStream;
 use super::handle_request;
 
 
@@ -33,24 +36,42 @@ pub fn http_listener(
     config: &Config,
 ) -> Result<impl Future<Output = ()>, ExitError> {
     let metrics = Arc::new(HttpServerMetrics::default());
+
+    // Binding needs to have happened before dropping privileges
+    // during detach. So we do this here synchronously.
     let mut listeners = Vec::new();
     for addr in &config.http_listen {
-        // Binding needs to have happened before dropping privileges
-        // during detach. So we do this here synchronously.
-        let listener = match StdListener::bind(addr) {
-            Ok(listener) => listener,
-            Err(err) => {
-                error!("Fatal: error listening on {}: {}", addr, err);
-                return Err(ExitError::Generic);
-            }
-        };
-        if let Err(err) = listener.set_nonblocking(true) {
-            error!("Fatal: error switching {} to nonblocking: {}", addr, err);
-            return Err(ExitError::Generic);
+        listeners.push((*addr, None, net::bind(addr)?));
+    }
+    if !config.http_tls_listen.is_empty() {
+        let tls_config = create_tls_config(config)?;
+        for addr in &config.http_tls_listen {
+            listeners.push(
+                (*addr, Some(tls_config.clone()), net::bind(addr)?)
+            );
         }
-        listeners.push(listener);
     }
     Ok(_http_listener(origins, metrics, rtr_metrics, log, listeners))
+}
+
+fn create_tls_config(
+    config: &Config
+) -> Result<Arc<tls::ServerConfig>, ExitError> {
+    let key_path = match config.http_tls_key.as_ref() {
+        Some(path) => path.as_ref(),
+        None => {
+            error!("Missing rtr-tls-key option for HTTP TLS server.");
+            return Err(ExitError::Generic)
+        }
+    };
+    let cert_path = match config.http_tls_cert.as_ref() {
+        Some(path) => path.as_ref(),
+        None => {
+            error!("Missing rtr-tls-cert option for HTTP TLS server.");
+            return Err(ExitError::Generic)
+        }
+    };
+    tls::create_server_config("HTTP", key_path, cert_path).map(Arc::new)
 }
 
 async fn _http_listener(
@@ -58,21 +79,23 @@ async fn _http_listener(
     metrics: Arc<HttpServerMetrics>,
     rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
-    listeners: Vec<StdListener>
+    listeners: Vec<(SocketAddr, Option<Arc<tls::ServerConfig>>, StdListener)>,
 ) {
+    // If there are no listeners, just never return.
     if listeners.is_empty() {
         pending::<()>().await;
+        return;
     }
-    else {
-        let _ = select_all(
-            listeners.into_iter().map(|listener| {
-                tokio::spawn(single_http_listener(
-                    listener, origins.clone(), metrics.clone(),
-                    rtr_metrics.clone(), log.clone()
-                ))
-            })
-        ).await;
-    }
+
+    let _ = select_all(
+        listeners.into_iter().map(|(addr, tls_config, listener)| {
+            tokio::spawn(single_http_listener(
+                addr, tls_config, listener,
+                origins.clone(), metrics.clone(),
+                rtr_metrics.clone(), log.clone(),
+            ))
+        })
+    ).await;
 }
 
 /// Returns a future for a single HTTP listener.
@@ -82,6 +105,8 @@ async fn _http_listener(
 /// It will listen bind a Hyper server onto `addr` and produce any data
 /// served from `origins`.
 async fn single_http_listener(
+    addr: SocketAddr,
+    tls_config: Option<Arc<tls::ServerConfig>>,
     listener: StdListener,
     origins: SharedHistory,
     metrics: Arc<HttpServerMetrics>,
@@ -112,14 +137,15 @@ async fn single_http_listener(
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Failed on HTTP listener: {}", err);
+                error!("Failed on listening on {}: {}", addr,err);
                 return
             }
         },
+        tls: tls_config.map(Into::into),
         metrics: metrics.clone(),
     };
     if let Err(err) = Server::builder(listener).serve(make_service).await {
-        error!("HTTP server error: {}", err);
+        error!("Fatal error in HTTP server {}: {}", addr, err);
     }
 }
 
@@ -128,6 +154,7 @@ async fn single_http_listener(
 
 struct HttpAccept {
     sock: TcpListener,
+    tls: Option<TlsAcceptor>,
     metrics: Arc<HttpServerMetrics>,
 }
 
@@ -146,7 +173,7 @@ impl Accept for HttpAccept {
             Poll::Ready(Ok((sock, _addr))) => {
                 self.metrics.inc_conn_open();
                 Poll::Ready(Some(Ok(HttpStream {
-                    sock,
+                    sock: MaybeTlsTcpStream::new(sock, self.tls.as_ref()),
                     metrics: self.metrics.clone()
                 })))
             }
@@ -159,7 +186,7 @@ impl Accept for HttpAccept {
 
 
 struct HttpStream {
-    sock: TcpStream,
+    sock: MaybeTlsTcpStream,
     metrics: Arc<HttpServerMetrics>,
 }
 
