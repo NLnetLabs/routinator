@@ -36,6 +36,9 @@ For community support and exchanging operational experiences we provide a
 support services <https://www.nlnetlabs.nl/services/contracts/>`_ with a
 service-level agreement available.
 
+Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
+<https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.
+
 .. Tip::  To learn more about Resource Public Key Infrastructure, please refer 
           to the `RPKI Community Documentation <https://rpki.readthedocs.io/>`_.
 
