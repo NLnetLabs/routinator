@@ -3,10 +3,13 @@ Routinator – *main* branch
 
 .. only:: html
 
-    |docsupdated| |discord| |twitter|
-
+    |docsupdated| |license| |discord| |twitter|
+    
     .. |docsupdated| image:: https://img.shields.io/github/last-commit/NLnetLabs/routinator-manual.svg?label=docs%20updated
                 :target: https://github.com/NLnetLabs/routinator-manual/commits/main
+
+    .. |license| image:: https://img.shields.io/github/license/nlnetlabs/routinator
+                :target: https://github.com/NLnetLabs/routinator/blob/main/LICENSE
 
     .. |discord| image:: https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord
                 :target: https://discord.gg/8dvKB5Ykhy
