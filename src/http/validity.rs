@@ -3,8 +3,9 @@
 use std::str::FromStr;
 use std::sync::Arc;
 use hyper::{Body, Request, Response};
-use rpki::repository::resources::AsId;
-use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
+use routecore::addr::Prefix;
+use rpki::repository::resources::Asn;
+use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::validity::RouteValidity;
 use super::errors::bad_request;
 
@@ -105,11 +106,11 @@ fn validity_check(
 fn validity(
     asn: &str, prefix: &str, current: Arc<PayloadSnapshot>
 ) -> Response<Body> {
-    let asn = match AsId::from_str(asn) {
+    let asn = match Asn::from_str(asn) {
         Ok(asn) => asn,
         Err(_) => return bad_request()
     };
-    let prefix = match AddressPrefix::from_str(prefix) {
+    let prefix = match Prefix::from_str(prefix) {
         Ok(prefix) => prefix,
         Err(_) => return bad_request()
     };

@@ -24,7 +24,8 @@ use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use log::{error, info};
-use rpki::repository::resources::AsId;
+use routecore::addr;
+use rpki::repository::resources::Asn;
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
@@ -36,7 +37,7 @@ use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
 use crate::output::OutputFormat;
-use crate::payload::{AddressPrefix, PayloadSnapshot, SharedHistory};
+use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
@@ -761,7 +762,7 @@ impl Vrps {
         let mut res = output::Selection::new();
         if let Some(list) = matches.values_of("select-prefix") {
             for value in list {
-                match AddressPrefix::from_str(value) {
+                match addr::Prefix::from_str(value) {
                     Ok(some) => res.push_origin_prefix(some),
                     Err(_) => {
                         error!(
@@ -775,7 +776,7 @@ impl Vrps {
         }
         if let Some(list) = matches.values_of("select-asn") {
             for value in list {
-                match AsId::from_str(value) {
+                match Asn::from_str(value) {
                     Ok(asn) => res.push_origin_asn(asn),
                     Err(_) => {
                         error!(
@@ -876,7 +877,7 @@ pub struct Validate {
 /// What route(s) should we validate, please?
 enum ValidateWhat {
     /// Validate a single route with the given prefix and ASN.
-    Single(AddressPrefix, AsId),
+    Single(addr::Prefix, Asn),
 
     /// Validate the routes provided in the given file.
     File(PathBuf),
@@ -961,7 +962,7 @@ impl Validate {
                                 return Err(Failed)
                             }
                         };
-                        match AddressPrefix::from_str(prefix) {
+                        match addr::Prefix::from_str(prefix) {
                             Ok(prefix) => prefix,
                             Err(err) => {
                                 error!("illegal address prefix: {}", err);
@@ -977,7 +978,7 @@ impl Validate {
                                 return Err(Failed)
                             }
                         };
-                        match AsId::from_str(asn) {
+                        match Asn::from_str(asn) {
                             Ok(asn) => asn,
                             Err(_) => {
                                 error!("illegal AS number");

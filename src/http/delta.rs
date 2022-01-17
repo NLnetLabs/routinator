@@ -7,9 +7,8 @@ use std::sync::Arc;
 use futures::stream;
 use hyper::{Body, Request, Response};
 use rpki::rtr::Serial;
-use crate::payload::{
-    PayloadDelta, PayloadSnapshot, RouteOrigin, SharedHistory
-};
+use rpki::rtr::payload::Payload;
+use crate::payload::{PayloadDelta, PayloadSnapshot, SharedHistory};
 use super::errors::{bad_request, initial_validation};
 
 //------------ handle_get ----------------------------------------------------
@@ -129,8 +128,8 @@ struct DeltaStream {
 
     /// The position of the next item in the delta.
     ///
-    /// If this is `Ok(_)`, we are working with the announced origins. If this
-    /// is `Err(_)` we are working with the withdrawn origins.
+    /// If this is `Ok(_)`, we are working with announced payload. If this
+    /// is `Err(_)` we are working with withdrawn payload.
     pos: Result<usize, usize>,
 }
 
@@ -155,7 +154,7 @@ impl DeltaStream {
         session: u64, from_serial: Serial, to_serial: Serial,
     ) {
         write!(vec, "\
-            {{
+            {{\
             \n  \"reset\": false,\
             \n  \"session\": \"{}\",\
             \n  \"serial\": {},\
@@ -176,21 +175,42 @@ impl DeltaStream {
     }
 
     /// Appends an origin to the vec.
-    fn append_origin(
+    fn append_payload(
         vec: &mut Vec<u8>,
-        origin: RouteOrigin,
+        payload: &Payload,
         first: bool
     ) {
         if !first {
             vec.push(b',')
         }
-        write!(vec, "\
-            \n    {{ \"asn\": \"{} \", \"prefix\": \"{}/{}\", \
-                     \"maxLength\": {} }}",
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length()
-        ).unwrap()
+        match *payload {
+            Payload::Origin(ref origin) => {
+                write!(vec, "\
+                    \n    {{\
+                    \n        \"type\": \"routeOrigin\",\
+                    \n        \"asn\": \"{}\",\
+                    \n        \"prefix\": \"{}/{}\",\
+                    \n        \"maxLength\": {}\
+                    \n    }}",
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len()
+                ).unwrap()
+            },
+            Payload::RouterKey(ref key) => {
+                write!(vec, "\
+                    \n    {{\
+                    \n        \"type\": \"routerKey\",\
+                    \n        \"keyIdentifier\": \"{}\",\
+                    \n        \"asn\": \"{}\",\
+                    \n        \"keyInfo\": \"{}\"
+                    \n    }}",
+                    key.key_identifier,
+                    key.asn,
+                    key.key_info,
+                ).unwrap()
+            }
+        }
     }
 
     /// Appends the footer to the vec.
@@ -211,10 +231,10 @@ impl Iterator for DeltaStream {
             }
             match self.pos {
                 Ok(pos) => {
-                    match delta.announced_origins().get(pos) {
-                        Some(origin) => {
-                            Self::append_origin(
-                                &mut vec, *origin, pos == 0,
+                    match delta.announce().get(pos) {
+                        Some(payload) => {
+                            Self::append_payload(
+                                &mut vec, payload, pos == 0,
                             );
                             self.pos = Ok(pos + 1);
                         }
@@ -225,10 +245,10 @@ impl Iterator for DeltaStream {
                     }
                 }
                 Err(pos) => {
-                    match delta.withdrawn_origins().get(pos) {
-                        Some(origin) => {
-                            Self::append_origin(
-                                &mut vec, *origin, pos == 0,
+                    match delta.withdraw().get(pos) {
+                        Some(payload) => {
+                            Self::append_payload(
+                                &mut vec, payload, pos == 0,
                             );
                             self.pos = Err(pos + 1);
                         }
@@ -306,10 +326,10 @@ impl Iterator for SnapshotStream {
             if vec.len() > 64000 {
                 return Some(vec)
             }
-            match snapshot.origins().get(self.pos) {
-                Some(&(origin, _)) => {
-                    DeltaStream::append_origin(
-                        &mut vec, origin, self.pos == 0,
+            match snapshot.payload().get(self.pos) {
+                Some(&(ref payload, _)) => {
+                    DeltaStream::append_payload(
+                        &mut vec, payload, self.pos == 0,
                     );
                     self.pos += 1;
                 }
