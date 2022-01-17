@@ -1510,10 +1510,10 @@ mod test {
             ).into()
         }
         let o0 = origin(10, "10.0.0.0/10", 10);
-        let o1 = origin(11, "10.0.0.0/11", 10);
-        let o2 = origin(12, "10.0.0.0/12", 10);
-        let o3 = origin(13, "10.0.0.0/13", 10);
-        let o4 = origin(14, "10.0.0.0/14", 10);
+        let o1 = origin(11, "10.0.0.0/11", 11);
+        let o2 = origin(12, "10.0.0.0/12", 12);
+        let o3 = origin(13, "10.0.0.0/13", 13);
+        let o4 = origin(14, "10.0.0.0/14", 14);
 
         let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
         let mut current = SnapshotBuilder::default();
