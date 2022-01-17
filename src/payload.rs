@@ -878,11 +878,8 @@ impl Iterator for SnapshotOriginsIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.0.next()? {
-                Payload::Origin(origin) => {
-                    return Some(*origin)
-                }
-                _ => { }
+            if let Payload::Origin(origin) = self.0.next()? {
+                return Some(*origin)
             }
         }
     }
@@ -1501,6 +1498,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::mutable_key_type)]
     fn payload_delta_construct() {
         fn origin(as_id: u32, prefix: &str, max_len: u8) -> Payload {
             RouteOrigin::new(
