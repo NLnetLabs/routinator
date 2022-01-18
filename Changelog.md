@@ -14,6 +14,10 @@ New
 
 Other Changes
 
+* Update the NLnet Labs RPKI testbed TAL to the one used by the new
+  server. ([#637])
+
+[#637]: https://github.com/NLnetLabs/routinator/pull/637
 [#675]: https://github.com/NLnetLabs/routinator/pull/675
 
 
