@@ -243,6 +243,9 @@ pub struct PublicationMetrics {
     /// The number of invalid manifests.
     pub invalid_manifests: u32,
 
+    /// The number of premature manifests.
+    pub premature_manifests: u32,
+
     /// The number of stale manifests.
     pub stale_manifests: u32,
 
@@ -313,6 +316,7 @@ impl<'a> ops::AddAssign<&'a Self> for PublicationMetrics {
 
         self.valid_manifests += other.valid_manifests;
         self.invalid_manifests += other.invalid_manifests;
+        self.premature_manifests += other.premature_manifests;
         self.stale_manifests += other.stale_manifests;
         self.missing_manifests += other.missing_manifests;
         self.valid_crls += other.valid_crls;
