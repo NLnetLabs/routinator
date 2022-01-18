@@ -2,4 +2,4 @@
 **/*.rs.bk
 /rpki-cache/repository
 /.cargo
-doc/manual/build/
+/doc/manual/build/
