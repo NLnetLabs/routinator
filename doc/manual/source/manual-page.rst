@@ -643,11 +643,35 @@ These can be requested by providing different commands on the command line.
               enclosed in square brackets. You can provide the option multiple
               times to let Routinator listen on multiple address-port pairs.
 
+       .. option:: --rtr-tls=addr:port
+
+              Specifies a local address and port to listen of for incoming
+              TLS-encrypted RTR connections.
+
+              The private key and server certificate given via the
+              :option:`--rtr-tls-key` and :option:`--rtr-tls-cert` or their
+              equivalent config file options will be used for connections.
+
+              The option can be given multiple times, but the same key and
+              certificate will be used for all connections.
+
        .. option:: --http=addr:port
 
               Specifies the address and port to listen on for incoming HTTP
               connections.  See `HTTP Service`_ below for more information on
               the HTTP service provided by Routinator.
+
+       .. option:: --http-tls=addr:port
+
+              Specifies a local address and port to listen of for incoming
+              TLS-encrypted HTTP connections.
+
+              The private key and server certificate given via the
+              :option:`--http-tls-key` and :option:`--http-tls-cert` or their
+              equivalent config file options will be used for connections.
+
+              The option can be given multiple times, but the same key and
+              certificate will be used for all connections.
 
        .. option:: --listen-systemd
 
@@ -672,6 +696,30 @@ These can be requested by providing different commands on the command line.
               every RTR client. Clients are identified by their RTR source IP
               address. This is disabled by default to avoid accidentally leaking
               information about the local network topology.
+
+       .. option:: --rtr-tls-key
+
+              Specifies the path to a file containing the private key to be
+              used for RTR-over-TLS connections. The file has to contain
+              exactly one private key encoded in PEM format.
+
+       .. option:: --rtr-tls-cert
+
+              Specifies the path to a file containing the server certificates
+              to be used for RTR-over-TLS connections. The file has to contain
+              one or more certificates encoded in PEM format.
+
+       .. option:: --http-tls-key
+
+              Specifies the path to a file containing the private key to be
+              used for HTTP-over-TLS connections. The file has to contain
+              exactly one private key encoded in PEM format.
+
+       .. option:: --http-tls-cert
+
+              Specifies the path to a file containing the server certificates
+              to be used for HTTP-over-TLS connections. The file has to contain
+              one or more certificates encoded in PEM format.
 
        .. option:: --refresh=seconds
 
@@ -1034,14 +1082,28 @@ values can be overridden via the command line options.
             syslog. The default value if this entry is missing is *daemon*.
 
       rtr-listen
-            An array of string values each providing the address and port which the
-            RTR daemon should listen on in TCP mode. Address and port should be
-            separated by a colon. IPv6 address should be enclosed in square brackets.
+            An array of string values each providing an address and port
+            on which the RTR server should listen in TCP mode. Address and
+            port should be separated by a colon. IPv6 address should be
+            enclosed in square brackets.
+
+      rtr-tls-listen
+            An array of string values each providing an address and port
+            on which the RTR server should listen in TLS mode. Address and
+            port should be separated by a colon. IPv6 address should be
+            enclosed in square brackets.
 
       http-listen
-            An array of string values each providing the address and port which the
-            HTTP service should listen on. Address and port should be separated by a
-            colon. IPv6 address should be enclosed in square brackets.
+            An array of string values each providing an address and port
+            on which the HTTP server should listene. Address and
+            port should be separated by a colon. IPv6 address should be
+            enclosed in square brackets.
+
+      http-tls-listen
+            An array of string values each providing an address and port
+            on which the HTTP server should listen in TLS mode. Address and
+            port should be separated by a colon. IPv6 address should be
+            enclosed in square brackets.
 
       listen-systemd
             The RTR TCP listening socket will be acquired from systemd via socket
@@ -1059,6 +1121,26 @@ values can be overridden via the command line options.
             A boolean value specifying whether server metrics should include separate
             metrics for every RTR client. If the value is missing, no RTR client
             metrics will be provided.
+
+      rtr-tls-key
+            A string value providing the path to a file containing the private
+            key to be used by the RTR server in TLS mode. The file must
+            contain one private key in PEM format.
+
+      rtr-tls-cert
+            A string value providing the path to a file containing the
+            server certificates to be used by the RTR server in TLS mode. The
+            file must contain one or more certificates in PEM format.
+
+      http-tls-key
+            A string value providing the path to a file containing the private
+            key to be used by the HTTP server in TLS mode. The file must
+            contain one private key in PEM format.
+
+      http-tls-cert
+            A string value providing the path to a file containing the
+            server certificates to be used by the HTTP server in TLS mode.
+            The file must contain one or more certificates in PEM format.
 
       refresh
             An integer value specifying the number of seconds Routinator should wait
