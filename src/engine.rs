@@ -967,6 +967,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         // Phew: All good.
+        self.metrics.valid_crls += 1;
         Ok(Some((crl_uri, crl, crl_bytes)))
     }
 
