@@ -93,6 +93,13 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 
 [package.metadata.deb.variants.minimal]
 
+# Cross compilation variants:
+# Note: we have to specifiy dependencies manually because we don't run cargo-deb
+# on the target platform and so it cannot determine the dependencies correctly
+# for us.
+[package.metadata.deb.variants.minimal-cross]
+depends = "adduser, passwd"
+
 [package.metadata.generate-rpm]
 # "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
 # complain with "invalid-license".

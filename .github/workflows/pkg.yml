@@ -31,11 +31,48 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
+  # Cross-compile packages in a separate job so that we can run it on the GitHub Actions runner host directly rather
+  # than inside a Docker container (as is done by the `pkg` workflow). We do this because we use `cargo cross` to handle
+  # the complexity of using the right compile-time tooling and dependencies for cross compilation to work, and 
+  # `cargo cross` works by launching its own Docker container. Trying to launch a Docker container from within a Docker
+  # container, the so-called Docker-in-Docker scenario, is more difficult for `cargo cross` to handle correctly and
+  # didn't work when I tried it, even with `CROSS_DOCKER_IN_DOCKER=true` set in the environment, hence this approach.
+  #
+  # See: https://github.com/rust-embedded/cross#docker-in-docker
+  cross:
+    strategy:
+      matrix:
+        target:
+          - 'armv7-unknown-linux-musleabihf'
+          - 'aarch64-unknown-linux-musl'
+    name: cross
+    runs-on: ubuntu-latest
+    steps:
+    # Git clone the code in the branch we were invoked on.
+    - name: Checkout repository
+      uses: actions/checkout@v1
+
+    - name: Install cargo cross      
+      run: |
+        cargo install cross
+    - name: Cross compile
+      env:
+        CROSS_TARGET: ${{ matrix.target }}
+      run: |
+        cross build --locked --release --target ${CROSS_TARGET}
+    - name: Upload built binaries
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ matrix.target }}
+        path: |
+          target/${{ matrix.target }}/release/routinator
+          
   # Use the cargo-deb and cargo-generate-rpm Rust crates to build Debian and RPM
   # packages respectively for installing Routinator. See:
   #   - https://github.com/mmstick/cargo-deb
   #   - https://github.com/cat-in-136/cargo-generate-rpm
   pkg:
+    needs: cross
     strategy:
       matrix:
         image: # can't use complex values here, only primitive values are allowed
@@ -47,6 +84,17 @@ jobs:
           - "debian:bullseye" # debian/11
           - 'centos:7'
           - 'centos:8'
+        target:
+          - 'x86_64'
+        include:
+          # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
+          # Raspbian 11 is based.
+          - image: 'debian:bullseye'
+            target: 'armv7-unknown-linux-musleabihf'
+
+          # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
+          - image: 'debian:buster'
+            target: 'aarch64-unknown-linux-musl'
     env:
       CARGO_DEB_VER: 1.28.0
       CARGO_GENERATE_RPM_VER: 0.4.0
@@ -120,7 +168,7 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ matrix.image }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ matrix.image }}-${{ matrix.target}}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     # Speed up tooling installation by only re-downloading and re-building
     # dependent crates if we change the version of the tool that we are using.
@@ -159,9 +207,20 @@ jobs:
             ;;
         esac
 
+    - name: Download cross compiled binaries
+      if: ${{ matrix.target != 'x86_64' }}
+      id: download
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ matrix.target }}
+        path: target/${{ matrix.target }}/release
+
     # Instruct cargo-deb or cargo-generate-rpm to build the Debian package using the config section
     # in Cargo.toml for the specified "variant".
     - name: Create the package
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
+        CROSS_TARGET: ${{ matrix.target }}
       run: |
         # Debian
         # =========================================================================================
@@ -207,11 +266,6 @@ jobs:
 
         case ${OS_NAME} in
           debian|ubuntu)
-            case ${OS_REL} in
-              xenial|bionic|stretch) VARIANT_NAME="minimal" ;;
-              *)                     VARIANT_NAME="" ;;
-            esac
-
             case ${{ github.event_name }} in
               pull_request) MAINTAINER="${{ github.actor }} <unknown@email.address>" ;;
               push)         MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>" ;;
@@ -230,12 +284,24 @@ jobs:
             echo "routinator (${PKG_ROUTINATOR_VER}) unstable; urgency=medium" >target/debian/changelog
             echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>target/debian/changelog
             echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>target/debian/changelog
+
+            if [[ "${CROSS_TARGET}" == "x86_64" ]]; then
+              EXTRA_CARGO_DEB_ARGS=
+              case ${OS_REL} in
+                xenial|bionic|stretch) VARIANT_NAME="minimal" ;;
+                *)                     VARIANT_NAME="" ;;
+              esac
+            else
+              EXTRA_CARGO_DEB_ARGS="--no-build --no-strip --target ${CROSS_TARGET} --output target/debian"
+              VARIANT_NAME="minimal-cross"
+            fi
+
             DEB_VER="${PKG_ROUTINATOR_VER}-1${OS_REL}"
 
             if [[ "${VARIANT_NAME}" == "" ]]; then
-              cargo deb --deb-version ${DEB_VER} -v -- --locked
+              cargo deb --deb-version ${DEB_VER} -v ${EXTRA_CARGO_DEB_ARGS} -- --locked
             else
-              cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v -- --locked
+              cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v ${EXTRA_CARGO_DEB_ARGS} -- --locked
             fi
             ;;
           centos)
@@ -263,15 +329,22 @@ jobs:
             cargo generate-rpm
             ;;
         esac
-      env:
-        MATRIX_IMAGE: ${{ matrix.image }}
 
     # See what O/S specific linting tools think of our package.
     - name: Verify the DEB package
+      env:
+        CROSS_TARGET: ${{ matrix.target }}
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
-            lintian -v target/debian/*.deb
+            dpkg --info target/debian/*.deb
+            if [[ "${CROSS_TARGET}" == "x86_64" ]]; then
+              EXTRA_LINTIAN_ARGS=
+            else
+              EXTRA_LINTIAN_ARGS="--suppress-tags unstripped-binary-or-object,statically-linked-binary"
+            fi
+            lintian --version
+            lintian -v ${EXTRA_LINTIAN_ARGS} target/debian/*.deb
             ;;
           centos)
             # cargo generate-rpm creates RPMs that rpmlint considers to have
@@ -289,10 +362,22 @@ jobs:
     - name: Upload package
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}
+        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
         path: |
           target/debian/*.deb
           target/generate-rpm/*.rpm
+
+    # Delete the temporary artifact that contains binaries produced by the `cross` job that ran before us. All artifacts
+    # existing once the workflow completes are expected by the packages.nlnetlabs.nl scripting to contain DEB or RPM or
+    # other supported package archives, not intermediate artifacts such as binaries to be packaged. Failure to delete
+    # this temporary artifact will cause later publication to packages.nlnetlabs.nl using artifacts from this workflow
+    # run to fail.
+    - name: Delete temporary cross compiled binaries artifact
+      if: ${{ matrix.target != 'x86_64' }}
+      id: delete
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: ${{ matrix.target }}
 
   # Download and sanity check on target operating systems the packages created
   # by previous jobs (see above). Don't test on GH runners as they come with
@@ -328,6 +413,8 @@ jobs:
         # exclude:
         #   - image: 'debian:bullseye'
         #     mode: 'upgrade-from-published'
+        target:
+          - 'x86_64'
     steps:
     # Set some environment variables that will be available to "run" steps below
     # in this job, and some output variables that will be available in GH Action
@@ -351,7 +438,7 @@ jobs:
     - name: Download package
       uses: actions/download-artifact@v2
       with:
-        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}
+        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
 
     - name: Add current user to LXD group
       run: |
