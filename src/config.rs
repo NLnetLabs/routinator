@@ -238,8 +238,14 @@ pub struct Config {
     /// Addresses to listen on for RTR TCP transport connections.
     pub rtr_listen: Vec<SocketAddr>,
 
-    /// Addresses to listen on for HTTP monitoring connectsion.
+    /// Addresses to listen on for RTR TLS transport connections.
+    pub rtr_tls_listen: Vec<SocketAddr>,
+
+    /// Addresses to listen on for HTTP connections.
     pub http_listen: Vec<SocketAddr>,
+
+    /// Addresses to listen on for HTTP TLS connections.
+    pub http_tls_listen: Vec<SocketAddr>,
 
     /// Whether to get the listening sockets from systemd.
     pub systemd_listen: bool,
@@ -251,6 +257,18 @@ pub struct Config {
 
     /// Should we publish detailed RTR client statistics?
     pub rtr_client_metrics: bool,
+
+    /// Path to the RTR TLS private key.
+    pub rtr_tls_key: Option<PathBuf>,
+
+    /// Path to the RTR TLS server certificate.
+    pub rtr_tls_cert: Option<PathBuf>,
+
+    /// Path to the HTTP TLS private key.
+    pub http_tls_key: Option<PathBuf>,
+
+    /// Path to the HTTP TLS server certificate.
+    pub http_tls_cert: Option<PathBuf>,
 
     /// The log levels to be logged.
     pub log_level: LevelFilter,
@@ -516,8 +534,24 @@ impl Config {
             .multiple(true)
             .number_of_values(1)
         )
+        .arg(Arg::with_name("rtr-tls-listen")
+            .long("rtr-tls")
+            .value_name("ADDR:PORT")
+            .help("Listen on address/port for RTR")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
+        )
         .arg(Arg::with_name("http-listen")
             .long("http")
+            .value_name("ADDR:PORT")
+            .help("Listen on address/port for HTTP")
+            .takes_value(true)
+            .multiple(true)
+            .number_of_values(1)
+        )
+        .arg(Arg::with_name("http-tls-listen")
+            .long("http-tls")
             .value_name("ADDR:PORT")
             .help("Listen on address/port for HTTP")
             .takes_value(true)
@@ -537,6 +571,30 @@ impl Config {
         .arg(Arg::with_name("rtr-client-metrics")
             .long("rtr-client-metrics")
             .help("Include RTR client information in metrics")
+        )
+        .arg(Arg::with_name("rtr-tls-key")
+            .long("rtr-tls-key")
+            .value_name("FILE")
+            .help("The private key to use for RTR over TLS")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("rtr-tls-cert")
+            .long("rtr-tls-cert")
+            .value_name("FILE")
+            .help("The certificate to use for RTR over TLS")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("http-tls-key")
+            .long("http-tls-key")
+            .value_name("FILE")
+            .help("The private key to use for HTTP over TLS")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("http-tls-cert")
+            .long("http-tls-cert")
+            .value_name("FILE")
+            .help("The certificate to use for HTTP over TLS")
+            .takes_value(true)
         )
         .arg(Arg::with_name("pid-file")
             .long("pid-file")
@@ -897,6 +955,20 @@ impl Config {
             }
         }
 
+        // rtr_tls_listen
+        if let Some(list) = matches.values_of("rtr-tls_listen") {
+            self.rtr_tls_listen = Vec::new();
+            for value in list {
+                match SocketAddr::from_str(value) {
+                    Ok(some) => self.rtr_tls_listen.push(some),
+                    Err(_) => {
+                        error!("Invalid value for rtr-tls: {}", value);
+                        return Err(Failed);
+                    }
+                }
+            }
+        }
+
         // http_listen
         if let Some(list) = matches.values_of("http-listen") {
             self.http_listen = Vec::new();
@@ -905,6 +977,20 @@ impl Config {
                     Ok(some) => self.http_listen.push(some),
                     Err(_) => {
                         error!("Invalid value for http: {}", value);
+                        return Err(Failed);
+                    }
+                }
+            }
+        }
+
+        // http_tls_listen
+        if let Some(list) = matches.values_of("http-tls-listen") {
+            self.http_tls_listen = Vec::new();
+            for value in list {
+                match SocketAddr::from_str(value) {
+                    Ok(some) => self.http_tls_listen.push(some),
+                    Err(_) => {
+                        error!("Invalid value for http-tls: {}", value);
                         return Err(Failed);
                     }
                 }
@@ -929,6 +1015,26 @@ impl Config {
         // rtr_client_metrics
         if matches.is_present("rtr-client-metrics") {
             self.rtr_client_metrics = true
+        }
+
+        // rtr_tls_key
+        if let Some(path) = matches.value_of("rtr-tls-key") {
+            self.rtr_tls_key = Some(cur_dir.join(path))
+        }
+
+        // rtr_tls_cert
+        if let Some(path) = matches.value_of("rtr-tls-cert") {
+            self.rtr_tls_cert = Some(cur_dir.join(path))
+        }
+
+        // http_tls_key
+        if let Some(path) = matches.value_of("http-tls-key") {
+            self.http_tls_key = Some(cur_dir.join(path))
+        }
+
+        // http_tls_cert
+        if let Some(path) = matches.value_of("http-tls-cert") {
+            self.http_tls_cert = Some(cur_dir.join(path))
         }
 
         // pid_file
@@ -1107,8 +1213,16 @@ impl Config {
                 file.take_from_str_array("rtr-listen")?
                     .unwrap_or_else(Vec::new)
             },
+            rtr_tls_listen: {
+                file.take_from_str_array("rtr-tls-listen")?
+                    .unwrap_or_else(Vec::new)
+            },
             http_listen: {
                 file.take_from_str_array("http-listen")?
+                    .unwrap_or_else(Vec::new)
+            },
+            http_tls_listen: {
+                file.take_from_str_array("http-tls-listen")?
                     .unwrap_or_else(Vec::new)
             },
             systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
@@ -1122,6 +1236,10 @@ impl Config {
             rtr_client_metrics: {
                 file.take_bool("rtr-client-metrics")?.unwrap_or(false)
             },
+            rtr_tls_key: file.take_path("rtr-tls-key")?,
+            rtr_tls_cert: file.take_path("rtr-tls-cert")?,
+            http_tls_key: file.take_path("http-tls-key")?,
+            http_tls_cert: file.take_path("http-tls-cert")?,
             log_level: {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
@@ -1265,10 +1383,16 @@ impl Config {
             expire: Duration::from_secs(DEFAULT_EXPIRE),
             history_size: DEFAULT_HISTORY_SIZE,
             rtr_listen: Vec::new(),
+            rtr_tls_listen: Vec::new(),
             http_listen: Vec::new(),
+            http_tls_listen: Vec::new(),
             systemd_listen: false,
             rtr_tcp_keepalive: DEFAULT_RTR_TCP_KEEPALIVE,
             rtr_client_metrics: false,
+            rtr_tls_key: None,
+            rtr_tls_cert: None,
+            http_tls_key: None,
+            http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             pid_file: None,
@@ -1460,9 +1584,25 @@ impl Config {
             )
         );
         res.insert(
+            "rtr-tls-listen".into(),
+            toml::Value::Array(
+                self.rtr_tls_listen.iter().map(|a| {
+                    a.to_string().into()
+                }).collect()
+            )
+        );
+        res.insert(
             "http-listen".into(),
             toml::Value::Array(
                 self.http_listen.iter().map(|a| a.to_string().into()).collect()
+            )
+        );
+        res.insert(
+            "http-tls-listen".into(),
+            toml::Value::Array(
+                self.http_tls_listen.iter().map(|a| {
+                    a.to_string().into()
+                }).collect()
             )
         );
         res.insert("systemd-listen".into(), self.systemd_listen.into());
@@ -1476,6 +1616,30 @@ impl Config {
             "rtr-client-metrics".into(),
             self.rtr_client_metrics.into()
         );
+        if let Some(ref path) = self.rtr_tls_key {
+            res.insert(
+                "rtr-tls-key".into(),
+                path.display().to_string().into()
+            );
+        }
+        if let Some(ref path) = self.rtr_tls_cert {
+            res.insert(
+                "rtr-tls-cert".into(),
+                path.display().to_string().into()
+            );
+        }
+        if let Some(ref path) = self.http_tls_key {
+            res.insert(
+                "http-tls-key".into(),
+                path.display().to_string().into()
+            );
+        }
+        if let Some(ref path) = self.http_tls_cert {
+            res.insert(
+                "http-tls-cert".into(),
+                path.display().to_string().into()
+            );
+        }
         res.insert("log-level".into(), self.log_level.to_string().into());
         match self.log_target {
             #[cfg(unix)]

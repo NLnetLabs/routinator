@@ -1,1509 +1,1531 @@
-.TH "routinator" "1" "November 9, 2021" "NLnet Labs" "routinator 0.10.2
-.\"
-.\" routinator.1 -- RPKI Relying Party software
-.\"
-.\" Copyright (c) 2021, NLnet Labs.
-.\"
-.\" See LICENSE for the license.
-.\"
-.\"
-.SH "NAME"
-.B routinator
-\- RPKI relying party software
-.SH "SYNOPSIS"
-.B routinator
-[options]
-.B init
-.RB [ init-options ]
-.PP
-.B routinator
-[options]
-.B vrps
-[vrps-options]
-.RB [ \-o
-.IR output-file ]
-.RB [ \-f
-.IR format ]
-.PP
-.B routinator
-[options]
-.B validate
-[validate-options]
-.RB [ \-a
-.IR asn ]
-.RB [ \-p
-.IR prefix ]
-.PP
-.B routinator
-[options]
-.B server
-[server-options]
-.PP
-.B routinator
-[options]
-.B update
-[update-options]
-.PP
-.B routinator
-.B man
-.RB [ \-o
-.IR file ]
-.PP
-.B routinator
-.B -h
-.PP
-.B routinator
-.B -V
-
-
-.SH "DESCRIPTION"
-Routinator
-collects and processes Resource Public Key Infrastructure (RPKI) data. It
-validates the Route Origin Attestations contained in the data and makes
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "ROUTINATOR" "1" "Jan 18, 2022" "0.10.3" "Routinator"
+.SH NAME
+routinator \- RPKI relying party software
+.SH SYNOPSIS
+.sp
+\fBroutinator\fP [\fBoptions\fP] \fI\%init\fP [\fBinit\-options\fP]
+.sp
+\fBroutinator\fP [\fBoptions\fP] \fI\%vrps\fP [\fBvrps\-options\fP] [\fB\-o \fP\fIoutput\-file\fP] [\fB\-f \fP\fIformat\fP]
+.sp
+\fBroutinator\fP [\fBoptions\fP] \fI\%validate\fP [\fBvalidate\-options\fP] [\fB\-a \fP\fIasn\fP] [\fB\-p \fP\fIprefix\fP]
+.sp
+\fBroutinator\fP [\fBoptions\fP] \fI\%server\fP [\fBserver\-options\fP]
+.sp
+\fBroutinator\fP [\fBoptions\fP] \fI\%update\fP [\fBupdate\-options\fP]
+.sp
+\fBroutinator\fP \fI\%man\fP [\fB\-o \fP\fIfile\fP]
+.sp
+\fBroutinator\fP \fB\-h\fP
+.sp
+\fBroutinator\fP \fB\-V\fP
+.SH DESCRIPTION
+.sp
+Routinator collects and processes Resource Public Key Infrastructure (RPKI)
+data. It validates the Route Origin Attestations contained in the data and makes
 them available to your BGP routing workflow.
-.P
-It can run in one-shot mode outputting a list of validated ROA
-payloads in various formats, as a server for the RPKI-to-Router (RTR)
-protocol that many routers implement to access the data, or via HTTP.
-.P
-These modes and additional operations can be chosen via commands. For
-the available commands, see
-.B COMMANDS
-below.
-
-
-.SH "OPTIONS"
-.P
+.sp
+It can run in one\-shot mode outputting a list of validated ROA payloads in
+various formats, as a server for the RPKI\-to\-Router (RTR) protocol that many
+routers implement to access the data, or via HTTP.
+.sp
+These modes and additional operations can be chosen via commands. For the
+available commands, see \fI\%Commands\fP below.
+.SH OPTIONS
+.sp
 The available options are:
-
+.INDENT 0.0
 .TP
-.BI \-c\  path \fR,\ \fB\-\-config= path
+.B \-c path, \-\-config=path
 Provides the path to a file containing basic configuration. If this option
-is not given, Routinator will try to use
-.I $HOME/.routinator.conf
-if that exists. If that doesn't exist, either, default values for the
-options as described here are used.
-.IP
-See
-.B CONFIGURATION FILE
-below for more information on the format and contents of the configuration
-file.
-
+is not given, Routinator will try to use \fB$HOME/.routinator.conf\fP if
+that exists. If that doesn\(aqt exist, either, default values for the options
+as described here are used.
+.sp
+See \fI\%Configuration File\fP below for more information on the format and
+contents of the configuration file.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-b\  dir \fR,\ \fB\-\-base\-dir= dir
+.B \-b dir, \-\-base\-dir=dir
 Specifies the base directory to keep status information in. Unless
-overwritten by the
-.B -r
-or
-.B -t
-options, the local repository will be kept in the subdirectory
-.I repository
-and the TALs will be kept in the subdirectory
-.I tals\fR.
-.IP
-If omitted, the base directory defaults to
-.I $HOME/.rpki-cache\fR.
-
+overwritten by the \fI\%\-r\fP or \fI\%\-t\fP options, the local
+repository will be kept in the sub\-directory \fBrepository\fP and the
+TALs will be kept in the sub\-directory \fBtals\fP\&.
+.sp
+If omitted, the base directory defaults to \fB$HOME/.rpki\-cache\fP\&.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-r\  dir \fR,\ \fB\-\-repository\-dir= dir
-Specifies the directory to keep the local repository in. This is the place
-where Routinator stores the RPKI data it has collected and thus is a copy of
-all the data referenced via the trust anchors.
-
+.B \-r dir, \-\-repository\-dir=dir
+Specifies the directory to keep the local repository in. This is
+the place where Routinator stores the RPKI data it has collected
+and thus is a copy of all the data referenced via the trust
+anchors.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-t\  dir \fR,\ \fB\-\-tal\-dir= dir
-Specifies the directory containing the trust anchor locators (TALs) to use.
-Trust anchor locators are the starting points for collecting and validating
-RPKI data. See
-.B TRUST ANCHOR LOCATORS
-for more information on what should be present in this directory.
-
+.B \-t dir, \-\-tal\-dir=dir
+Specifies the directory containing the trust anchor locators (TALs) to
+use. Trust anchor locators are the starting points for collecting and
+validating RPKI data. See \fI\%Trust Anchor Locators\fP for more information
+on what should be present in this directory.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-x\  file \fR,\ \fB\-\-exceptions= file
+.B \-x file, \-\-exceptions=file
 Provides the path to a local exceptions file. The option can be used
 multiple times to specify more than one file to use. Each file is a JSON
-file as described in RFC 8416. It lists both route origins that should be
-filtered out of the output as well as origins that should be added.
-
+file as described in \fI\%RFC 8416\fP\&. It lists both route origins that should
+be filtered out of the output as well as origins that should be added.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-\-strict
-If this option is present, the repository will be validated in strict mode
-following the requirements laid out by the standard documents very closely.
-With the current RPKI repository, using this option will lead to a rather
-large amount of invalid route origins and should therefore not be used in
-practice.
-.IP
-See
-.B RELAXED DECODING
-below for more information.
-
+.B \-\-strict
+If this option is present, the repository will be validated in strict
+mode following the requirements laid out by the standard documents very
+closely. With the current RPKI repository, using this option will lead to
+a rather large amount of invalid route origins and should therefore not be
+used in practice.
+.sp
+See \fI\%Relaxed Decoding\fP below for more information.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --stale= policy
+.B \-\-stale=policy
 This option defines how deal with stale objects. In RPKI, manifests and
-CRLs can be stale if the time given in their
-.I next-update
-field is in the past, indicating that an update to the object was
-scheduled but didn't happen. This can be because of an operational issue
-at the issuer or an attacker trying to replay old objects.
-.IP
+CRLs can be stale if the time given in their \fInext\-update\fP field is in the
+past, indicating that an update to the object was scheduled but didn\(aqt
+happen. This can be because of an operational issue at the issuer or an
+attacker trying to replay old objects.
+.sp
 There are three possible policies that define how Routinator should treat
 stale objects.
-.IP
-A policy of
-.I reject
-instructs Routinator to consider all stale objects invalid. This will
-result in all material published by the CA issuing this manifest and CRL
-to be invalid including all material of any child CA. 
-.IP
-The
-.I warn
-policy will allow Routinator to consider any stale object to be valid. It
-will, however, print a warning in the log allowing an operator to follow
-up on the issue.
-.IP
-Finally, the
-.I accept
-policy will cause Routinator to quietly accept any stale object as valid.
-.IP
-In Routinator 0.8.0 and newer, 
-.I reject
-is the default policy if the option is not provided. In version 0.7.0 the
-default for this option was 
-.I warn.
-In all previous versions
-.I warn
-was hard-wired.
-
+.sp
+A policy of \fIreject\fP instructs Routinator to consider all stale objects
+invalid. This will result in all material published by the CA issuing this
+manifest and CRL to be invalid including all material of any child CA.
+.sp
+The \fIwarn\fP policy will allow Routinator to consider any stale object to be
+valid. It will, however, print a warning in the log allowing an operator
+to follow up on the issue.
+.sp
+Finally, the \fIaccept\fP policy will cause Routinator to quietly accept any
+stale object as valid.
+.sp
+In Routinator 0.8.0 and newer, \fIreject\fP is the default policy if the
+option is not provided. In version 0.7.0 the default for this option
+was \fIwarn\fP\&. In all previous versions \fIwarn\fP was hard\-wired.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --unsafe-vrps= policy
+.B \-\-unsafe\-vrps=policy
 This option defines how to deal with "unsafe VRPs." If the address prefix
-of a VRP overlaps with any resources assigned to a CA that has been rejected
-because if failed to validate completely, the VRP is said to be unsafe since
-using it may lead to legitimate routes being flagged as RPKI invalid.
-.IP
+of a VRP overlaps with any resources assigned to a CA that has been
+rejected because if failed to validate completely, the VRP is said to be
+unsafe since using it may lead to legitimate routes being flagged as RPKI
+invalid.
+.sp
 There are three options how to deal with unsafe VRPs:
-.IP
-A policy of
-.I reject
-will filter out these VRPs. Warnings will be logged to indicate which VRPs
-have been filtered
-.IP
-The
-.I warn
-policy will log warnings for unsafe VRPs but will add them to the valid VRPs.
-.IP
-Finally, the
-.I accept
-policy will quietly add unsafe VRPs to the valid VRPs.
-.IP
-Currently, the default policy is
-.I warn
-in order to gain operational experience with the frequency and impact of
-unsafe VRPs. This default may change in future version.
-.IP
-For more information on the process of validation implemented in Routinator,
-see the section
-.B VALIDATION
-below.
-
+.sp
+A policy of \fIreject\fP will filter out these VRPs. Warnings will be logged
+to indicate which VRPs have been filtered
+.sp
+The \fIwarn\fP policy will log warnings for unsafe VRPs but will add them to
+the valid VRPs.
+.sp
+Finally, the \fIaccept\fP policy will quietly add unsafe VRPs to the valid
+VRPs.
+.sp
+Currently, the default policy is \fIwarn\fP in order to gain operational
+experience with the frequency and impact of unsafe VRPs. This default may
+change in future versions.
+.sp
+For more information on the process of validation implemented in
+Routinator, see the section \fI\%Validation\fP below.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --unknown-objects= policy
-Defines how to deal with unknown types of RPKI objects. Currently, only
-certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
+.B \-\-unknown\-objects=policy
+Defines how to deal with unknown types  of  RPKI  objects.  Currently,
+only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
 Ghostbuster Records (.gbr) are allowed to appear in the RPKI repository.
-.IP
+.sp
 There are, once more, three policies for dealing with an object of any
 other type:
-.IP
-The
-.I reject
-policy will reject the object as well as the entire CA. Consequently, an
-unknown object appearing in a CA will mark all other objects issued by the
-CA as invalid as well.
-.IP
-The policy of
-.I warn
-will log a warning, ignore the object, and accept all known
-objects issued by the CA.
-.IP
-The similar policy of
-.I accept
-will quietly ignore the object and accept all known objects issued by the CA.
-.IP
-The default policy if the option is missing is
-.IR warn .
-.IP
-Note that even if unknown objects are accepted, they must appear in the
+.sp
+The \fIreject\fP policy will reject the object as well as the entire CA.
+Consequently, an unknown object appearing in a CA will mark all other
+objects issued by the CA as invalid as well.
+.sp
+The policy of \fIwarn\fP will log a warning, ignore the object, and accept all
+known objects issued by the CA.
+.sp
+The similar policy of \fIaccept\fP will quietly ignore the object and accept
+all known objects issued by the CA.
+.sp
+The default policy if the option is missing is \fIwarn\fP\&.
+.sp
+Note that even if unknown objects are accepted, they must appear in  the
 manifest and the hash over their content must match the one given in the
-manifest. If the hash does not match, the CA and all its objects are still
-rejected.
-
+manifest. If the hash does not match, the CA and all its objects are
+still rejected.
+.UNINDENT
+.INDENT 0.0
 .TP
-.B --allow-dubious-hosts
-As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI data
-with dubious host names. In particular, it will reject the name
-.IR localhost,
-URIs that consist of IP addresses, and a host name that contains an
-explicit port.
-.IP
+.B \-\-allow\-dubious\-hosts
+As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI
+data with dubious host names. In particular, it will reject the name
+\fIlocalhost\fP, host names that consist of IP addresses, and a host name that
+contains an explicit port.
+.sp
 This option allows to disable this filtering.
-
+.UNINDENT
+.INDENT 0.0
 .TP
-.B --fresh
-Delete and reinitialize the local data storage before starting. This option
-should be used when Routinator fails after reporting corrupt data storage.
-
+.B \-\-fresh
+Delete and re\-initialize the local data storage before starting. This
+option should be used when Routinator fails after reporting corrupt
+data storage.
+.UNINDENT
+.INDENT 0.0
 .TP
-.B --disable-rsync
+.B \-\-disable\-rsync
 If this option is present, rsync is disabled and only RRDP will be used.
-
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-\-rsync\-command= command
-Provides the command to run for rsync. This is only the command itself.
-If you need to provide options to rsync, use the
-.B rsync\-args
+.B \-\-rsync\-command=command
+Provides the command to run for rsync. This is only the command itself. If
+you need to provide options to rsync, use the \fBrsync\-args\fP
 configuration file setting instead.
-.IP
-If this option is not given, Routinator will simply run
-.I rsync
-and hope that it is in the path.
-
+.sp
+If this option is not given, Routinator will simply run rsync and hope
+that it is in the path.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-\-rsync\-timeout= seconds
-Sets the number of seconds an rsync command is allowed to run before it is
-terminated early. This protects against hanging rsync commands that prevent
-Routinator from continuing. The default is 300 seconds which should be long
-enough except for very slow networks.
-
+.B \-\-rsync\-timeout=seconds
+Sets the number of seconds an rsync command is allowed to run before it
+is terminated early. This protects against hanging rsync commands that
+prevent Routinator from continuing. The default is 300 seconds which
+should be long enough except for very slow networks.
+.UNINDENT
+.INDENT 0.0
 .TP
-.B --disable-rrdp
+.B \-\-disable\-rrdp
 If this option is present, RRDP is disabled and only rsync will be used.
-
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-fallback-time= seconds
+.B \-\-rrdp\-fallback\-time=seconds
 Sets the maximum time in seconds since a last successful update of an RRDP
 repository before Routinator falls back to using rsync. The default is
-3600 seconds. If the given value is smaller than twice the refresh time, it
-is silently increased to that value.
-.IP
-The actual time is chosen at random between the refresh time and this value
-in order to spread out load on the rsync server. 
-
+3600 seconds. If the given value is smaller than twice the refresh time,
+it is silently increased to that value.
+.sp
+The actual time is chosen at random between the refresh time and this
+value in order to spread out load on the rsync server.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-max-delta-count= count
-If the number of deltas necessary to update an RRDP repository is
-larger than the value provided by this option, the snapshot is used instead.
-If the option is missing, the default of 100 is used.
-
+.B \-\-rrdp\-max\-delta\-count=count
+If the number of deltas necessary to update an RRDP repository is larger
+than the value provided by this option, the snapshot is used instead. If
+the option is missing, the default of 100 is used.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-timeout= seconds
-Sets the timeout in seconds for any RRDP-related network operation, i.e.,
-connects, reads, and writes. If this option is omitted, the default timeout
-of 300 seconds is used. Set the option to 0 to disable the timeout.
-
+.B \-\-rrdp\-timeout=seconds
+Sets the timeout in seconds for any RRDP\-related network operation, i.e.,
+connects, reads, and writes. If this option is omitted, the default
+timeout of 300 seconds is used. Set the option to 0 to disable the
+timeout.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-connect-timeout= seconds
-Sets the timeout in seconds for RRDP connect requests. If omitted, the general
-timeout will be used.
-
+.B \-\-rrdp\-connect\-timeout=seconds
+Sets the timeout in seconds for RRDP connect requests. If omitted, the
+general timeout will be used.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-local-addr= addr
-If present, sets the local address that the RRDP client should bind to when
-doing outgoing requests.
-
+.B \-\-rrdp\-local\-addr=addr
+If present, sets the local address that the RRDP client should bind to
+when doing outgoing requests.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-root-cert= path
+.B \-\-rrdp\-root\-cert=path
 This option provides a path to a file that contains a certificate in PEM
 encoding that should be used as a trusted certificate for HTTPS server
 authentication. The option can be given more than once.
-.IP
-Providing this option does
-.I not
-disable the set of regular HTTPS authentication trust certificates.
-
+.sp
+Providing this option does \fInot\fP disable the set of regular HTTPS
+authentication trust certificates.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-proxy= uri
-This option provides the URI of a proxy to use for all HTTP connections made
-by the RRDP client. It can be either an HTTP or a SOCKS URI. The option can
-be given multiple times in which case proxies are tried in the given order.
-
+.B \-\-rrdp\-proxy=uri
+This option provides the URI of a proxy to use for all HTTP connections
+made by the RRDP client. It can be either an HTTP or a SOCKS URI. The
+option can be given multiple times in which case proxies are tried in the
+given order.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --rrdp-keep-responses= path
+.B \-\-rrdp\-keep\-responses=path
 If this option is enabled, the bodies of all HTTPS responses received from
-RRDP servers will be stored under
-.IR path .
-The sub-path will be constructed using the components of the requested URI.
-For the responses to the notification files, the timestamp is appended to
-the path to make it possible to distinguish the series of requests made over
-time.
-
+RRDP servers will be stored under \fIpath\fP\&. The sub\-path will be constructed
+using the components of the requested URI. For the responses to the
+notification files, the timestamp is appended to the path to make it
+possible to distinguish the series of requests made over time.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --max-object-size= bytes
+.B \-\-max\-object\-size=BYTES
 Limits the size of individual objects received via either rsync or RRDP to
 the given number of bytes. The default value if this option is not present
 is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
-
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI --max-ca-depth= count
+.B \-\-max\-ca\-depth=count
 The maximum number of CAs a given CA may be away from a trust anchor
 certificate before it is rejected. The default value is 32.
-
+.UNINDENT
+.INDENT 0.0
 .TP
-.B --dirty
-If this option is present, unused files and directories will not be deleted
-from the repository directory after each validation run.
+.B \-\-dirty
+If this option is present, unused files and directories will not be
+deleted from the repository directory after each validation run.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-\-validation\-threads= count
+.B \-\-validation\-threads=count
 Sets the number of threads to distribute work to for validation. Note that
 the current processing model validates trust anchors all in one go, so you
 are likely to see less than that number of threads used throughout the
 validation run.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-v ,\  \fB\-\-verbose
+.B \-v, \-\-verbose
 Print more information. If given twice, even more information is printed.
-.IP
-More specifically, a single
-.B -v
-increases the log level from the default of
-.I warn
-to
-.I info\fR,
-specifying it more than once increases it to
-.I debug\fR.
-.IP
-See
-.B LOGGING
-below for more information on what information is logged at the different
-levels.
+.sp
+More specifically, a single \fI\%\-v\fP increases the log level from the
+default of \fIwarn\fP to \fIinfo\fP, specifying it more than once increases it to
+\fIdebug\fP\&.
+.sp
+See \fI\%LOGGING\fP below for more information on what information is logged at
+the different levels.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-q ,\  \fB\-\-quiet
+.B \-q, \-\-quiet
 Print less information. Given twice, print nothing at all.
-.IP
-A single
-.B -q
-will drop the log level to
-.I error\fR.
-Repeating
-.B -q
-more than once turns logging off completely.
+.sp
+A single \fI\%\-q\fP will drop the log level to \fIerror\fP\&. Repeating
+\fI\%\-q\fP more than once turns logging off completely.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-\-syslog
+.B \-\-syslog
 Redirect logging output to syslog.
-.IP
+.sp
 This option is implied if a command is used that causes Routinator to run
 in daemon mode.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-\-syslog-facility= facility
-If logging to syslog is used, this option can be used to specify the syslog
-facility to use. The default is
-.I daemon\fR.
+.B \-\-syslog\-facility=facility
+If logging to syslog is used, this option can be used to specify the
+syslog facility to use. The default is \fIdaemon\fP\&.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-\-logfile= path
+.B \-\-logfile=path
 Redirect logging output to the given file.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-h , " \-\-help"
+.B \-h, \-\-help
 Print some help information.
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR \-V , " \-\-version
+.B \-V, \-\-version
 Print version information.
-
-
+.UNINDENT
 .SH COMMANDS
+.sp
 Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
-
-.SS init
+.INDENT 0.0
+.TP
+.B init
 Prepares the local repository directories and the TAL directory for running
-Routinator. Specifically, makes sure the local repository directory exists,
-and creates the TAL directory and fills it with the desired TALs.
-.P
-For more information about TALs, see
-.B TRUST ANCHOR LOCATORS
-below.
+Routinator.  Specifically,  makes sure the local repository directory
+exists, and creates the TAL directory and fills it with the desired TALs.
+.sp
+For more information about TALs, see \fI\%Trust Anchor Locators\fP below.
+.INDENT 7.0
 .TP
-.BR -f ,\ \fB --force
-Forces installation of the TALs even if the TAL directory already exists.
+.B \-f, \-\-force
+Forces installation of the TALs even if the TAL directory already
+exists.
+.UNINDENT
+.INDENT 7.0
 .TP
-.B --rir-tals
-Selects the production TALs of the five RIRs for installation. If no other
-TAL selection options are provided, this option is assumed.
+.B \-\-rir\-tals
+Selects the production TALs of the five RIRs for installation. If
+no other TAL selection options are provided, this option is assumed.
+.UNINDENT
+.INDENT 7.0
 .TP
-.B --rir-test-tals
+.B \-\-rir\-test\-tals
 Selects the bundled TALs for RIR testbeds for installation.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --tal= name
+.B \-\-tal=name
 Selects the bundled TAL with the provided name for installation.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --skip-tal= name
+.B \-\-skip\-tal=name
 Deselects the bundled TAL with the given name.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --list-tals
-List all bundled TALs and exit. The list also shows which TALs are selected
-by the
-.B --rir-tals
-and
-.B --rir-test-tals
+.B \-\-list\-tals
+List all bundled TALs and exit. The list also shows which TALs are
+selected by the \fI\%\-\-rir\-tals\fP and \fI\%\-\-rir\-test\-tals\fP
 options.
+.UNINDENT
+.INDENT 7.0
 .TP
-.B --accept-arin-rpa
-Before you can use the ARIN TAL, you need to agree to the ARIN Relying Party
-Agreement (RPA). You can find it at
-.I https://www.arin.net/resources/manage/rpki/rpa.pdf
-and explicitly agree to it via this option. This explicit agreement is
-necessary in order to install the ARIN TAL.
-
-.SS vrps
+.B \-\-accept\-arin\-rpa
+Before you can use the ARIN TAL, you need to agree to the ARIN
+Relying Party Agreement (RPA). You can find it at
+\fI\%https://www.arin.net/resources/manage/rpki/rpa.pdf\fP and explicitly
+agree to it via this option. This explicit agreement is necessary in
+order to install the ARIN TAL.
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B vrps
 This command requests that Routinator update the local repository and then
 validate the Route Origin Attestations in the repository and output the
-valid route origins, which are also known as Validated ROA Payload or VRPs,
+valid route origins, which are also known as Validated ROA Payloads or VRPs,
 as a list.
+.INDENT 7.0
 .TP
-.BI -o\  file \fR,\ \fB\-\-output= file
-Specifies the output file to write the list to. If this option is missing
-or file is
-.I "-"
-the list is printed to standard output.
+.B \-o file, \-\-output=file
+Specifies the output file to write the list to. If this option is
+missing or file is \fB\-\fP the list is printed to standard output.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI -f\  format \fR,\ \fB\-\-format= format
-The output format to use. Routinator currently supports the following formats:
-.RS
+.B \-f format, \-\-format=format
+The output format to use. Routinator currently supports the
+following formats:
+.INDENT 7.0
 .TP
 .B csv
-The list is formatted as lines of comma-separated values of the autonomous
-system number, the prefix in slash notation, the maximum prefix length, and
-an abbreviation for the trust anchor the entry is derived from. The latter is
-the name of the TAL file without the extension
-.IR ".tal" .
-This can be overwritten with the
-.I tal-labels
-config file option.
-.IP
-This is the default format used if the
-.B -f
-option is missing.
-
+The list is formatted as lines of comma\-separated values of
+the autonomous system number, the prefix in slash notation,
+the maximum prefix length, and an abbreviation for the
+trust anchor the entry is derived from. The latter is the
+name of the TAL file without the extension \fI\&.tal\fP\&. This can be
+overwritten with the \fItal\-labels\fP config file option.
+.sp
+This is the default format used if the \fI\%\-f\fP option
+is missing.
 .TP
 .B csvcompat
-The same as
-.I csv
-except that all fields are embedded in double quotes and the autonomous system
-number is given without the prefix
-.IR AS .
-This format is pretty much identical to the CSV produced by the RIPE NCC RPKI
-Validator.
-
+The same as \fIcsv\fP except that all fields are embedded in
+double quotes and the autonomous system number is given
+without the prefix \fBAS\fP\&. This format is pretty much
+identical to the CSV produced by the RIPE NCC Validator.
 .TP
 .B csvext
-An extended version of
-.I csv
-each line contains these comma-separated values: the rsync URI of the ROA
-the line is taken from (or "N/A" if it isn't from a ROA), the autonomous
-system number, the prefix in slash notation, the maximum prefix length, the
-not-before date and not-after date of the validity of the ROA.
-.IP
-This format was used in the RIPE NCC RPKI Validator version 1. That version
-produces one file per trust anchor. This is not currently supported by
-Routinator -- all entries will be in one single output file.
-
+An extended version of csv each line contains these
+comma\-separated values: the rsync URI of the ROA the line
+is taken from (or "N/A" if it isn\(aqt from a ROA), the
+autonomous system number, the prefix in slash notation, the
+maximum prefix length, the not\-before date and not\-after
+date of the validity of the ROA.
+.sp
+This format was used in the RIPE NCC RPKI Validator version
+1. That version produces one file per trust anchor. This is
+not currently supported by Routinator \-\- all entries will
+be in one single output file.
 .TP
 .B json
-The output is in JSON format. The list is placed into a member named 
-.I "roas"
-which contains an array of objects with four elements each: The autonomous
-system number of the network authorized to originate a prefix in
-.IR "asn" ,
-the prefix in slash notation in
-.IR "prefix" ,
-the maximum prefix length of the announced route in
-.IR "maxLength" ,
-and the trust anchor from which the authorization was derived in
-.IR "ta" .
-This format is identical to that produced by the RIPE NCC RPKI Validator
-except for different naming of the trust anchor. Routinator uses the name
-of the TAL file without the extension
-.IR ".tal"
-whereas the RIPE NCC Validator has a dedicated name for each.
-.IP
-The output object also includes a member named
-.I "metadata"
-which provides additional information. Currently, this is a member
-.I "generated"
-which provides the time the list was generated as a Unix timestamp, and a
-member
-.I "generatedTime"
-which provides the same time but in the standard ISO date format.
-
+The list is placed into a JSON object with a single
+element \fIroas\fP which contains an array of objects with
+four elements each: The autonomous system number of the
+network authorized to originate a prefix in \fIasn\fP, the
+prefix in slash notation in \fIprefix\fP, the maximum prefix
+length of the announced route in \fImaxLength\fP, and the
+trust anchor from which the authorization was derived in
+\fIta\fP\&. This format is identical to that produced by the RIPE
+NCC RPKI Validator except for different naming of the
+trust anchor. Routinator uses the name of the TAL file
+without the extension \fI\&.tal\fP whereas the RIPE NCC Validator
+has a dedicated name for each.
+.sp
+The output object also includes a member named \fImetadata\fP
+which provides additional information. Currently, this is a
+member \fIgenerated\fP which provides the time the list was
+generated as a Unix timestamp, and a member \fIgeneratedTime\fP
+which provides the same time but in the standard ISO date
+format.
 .TP
 .B jsonext
-The output is in JSON format. The list is placed into a member named 
-.I "roas"
-which contains an array of objects with four elements each: The autonomous
-system number of the network authorized to originate a prefix in
-.IR "asn" ,
-the prefix in slash notation in
-.IR "prefix" ,
-the maximum prefix length of the announced route in
-.IR "maxLength" .
-.IP
-Extensive information about the source of the object is given the array
-.IR "source".
-Each item in that array is an object providing details of
-a source of the VRP. The object will have a
-.I "type"
-of
-.I "roa"
-if it was derived from a valid ROA object or
-.I "exception"
-if it was an assertion in a local exception file.
-.IP
-For ROAs,
-.I "uri"
-provides the rsync URI of the ROA,
-.I "validity"
-provides the validity of the ROA itself, and
-.I "chainValidity"
-the validity considering the validity of the certificates along the validation
-chain.
-.IP
-For assertions from local exceptions,
-.I "path"
-will provide the path of the local exceptions file and, optionally,
-.I "comment"
+The list is placed into a JSON object with a single element
+\fIroas\fP which contains an array of objects with four elements
+each: The autonomous system number of the network authorized
+to originate a prefix in \fIasn\fP, the prefix in slash notation
+in \fIprefix\fP, the maximum prefix length of the announced route
+in \fImaxLength\fP\&.
+.sp
+Extensive information about the source of the object is given
+in the array \fIsource\fP\&. Each item in that array is an object
+providing details of a source of the VRP. The object will have
+a \fItype\fP of \fIroa\fP if it was derived from a valid ROA object or
+\fIexception\fP if it was an assertion in a local exception file.
+.sp
+For ROAs, \fIuri\fP provides the rsync URI of the ROA, \fIvalidity\fP
+provides the validity of the ROA itself, and \fIchainValidity\fP
+the validity considering the validity of the certificates
+along the validation chain.
+.sp
+For  assertions from local exceptions, \fIpath\fP will provide the
+path of the local exceptions file and, optionally, \fIcomment\fP
 will provide the comment if given for the assertion.
-.IP
-The output object also includes a member named
-.I "metadata"
-which provides additional information. Currently, this is a member
-.I "generated"
-which provides the time the list was generated as a Unix timestamp, and a
-member
-.I "generatedTime"
-which provides the same time but in the standard ISO date format.
-.IP
-Please note that because of this additional information, output in
-.B jsonext
-format will be quite large.
-
+.sp
+The output object also includes a member named \fImetadata\fP
+which provides additional information. Currently, this is a
+member \fIgenerated\fP which provides the time the list was
+generated as a Unix timestamp, and a member \fIgeneratedTime\fP
+which provides the same time but in the standard ISO date
+format.
+.sp
+Please note that because of this additional information,
+output in \fBjsonext\fP format will be quite large.
 .TP
 .B openbgpd
-Choosing this format causes Routinator to produce a
-.I "roa-set"
+Choosing this format causes Routinator to produce a \fIroa\-set\fP
 configuration item for the OpenBGPD configuration.
 .TP
 .B bird1
-Choosing this format causes Routinator to produce a
-.I "roa table"
-configuration item for the BIRD1 configuration.
+Choosing this format causes Routinator to produce a \fIroa
+table\fP configuration item for the BIRD1 configuration.
 .TP
 .B bird2
-Choosing this format causes Routinator to produce a
-.I "route table"
-configuration item for the BIRD2 configuration.
+Choosing this format causes Routinator to produce a \fIroa
+table\fP configuration item for the BIRD2 configuration.
 .TP
 .B rpsl
-This format produces a list of RPSL objects with the authorization in the
-fields
-.IR route ,
-.IR origin ,
-and
-.IR source .
-In addition, the fields
-.IR descr ,
-.IR mnt-by ,
-.IR created ,
-and
-.IR last-modified ,
-are present with more or less meaningful values.
+This format produces a list of RPSL objects with the
+authorization in the fields \fIroute\fP, \fIorigin\fP, and
+\fIsource\fP\&. In addition, the fields \fIdescr\fP, \fImnt\-by\fP,
+\fIcreated\fP, and \fIlast\-modified\fP, are present with more or
+less meaningful values.
 .TP
 .B summary
-This format produces a summary of the content of the RPKI repository. For
-each trust anchor, it will print the number of verified ROAs and VRPs. Note
-that this format does not take filters into account. It will always provide
-numbers for the complete repository.
+This format produces a summary of the content of the RPKI
+repository. For each trust anchor, it will print the number
+of verified ROAs and VRPs. Note that this format does not
+take filters into account. It will always provide numbers
+for the complete repository.
 .TP
 .B none
 This format produces no output whatsoever.
-.RE
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
 .TP
-.BR \-n ,\  \-\-noupdate
+.B \-n, \-\-noupdate
 The repository will not be updated before producing the list.
+.UNINDENT
+.INDENT 7.0
 .TP
 .B \-\-complete
-If any of the rsync commands needed to update the repository failed, complete
-the operation but provide exit status 2. If this option is not given, the
-operation will complete with exit status 0 in this case.
+If any of the rsync commands needed to update the repository failed,
+complete the operation but provide exit status 2. If this option is
+not given, the operation will complete with exit status 0 in this
+case.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-a \ asn\fR,\  \-\-select\-asn= asn
-Only output VRPs for the given ASN. The option can be given multiple times,
-in which case VRPs for all provided ASNs are provided. ASNs can be given with
-or without the prefix
-.IR AS .
+.B \-a asn, \-\-select\-asn=asn
+Only output VRPs for the given ASN. The option can be given multiple
+times, in which case VRPs for all provided ASNs are provided. ASNs
+can be given with or without the prefix \fIAS\fP\&.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-p \ prefix\fR,\  \-\-select\-prefix= prefix
-Only output VRPs with an address prefix that covers the given prefix, i.e.,
-whose prefix is equal to or less specific than the given prefix. This will
-include VRPs regardless of their ASN and max length. In other words, the
-output will include all VRPs that need to be considered when deciding whether
-an announcement for the prefix is RPKI valid or invalid.
-.IP
-The option can be given multiple times, in which case VRPs for all prefixes
-are provided. It can also be combined with one or more ASN selections. Then
-all matching VRPs are included. That is, selectors combine as "or" not "and."
-
-.SS validate
-This command can be used to perform RPKI route origin validation for one or
-more route announcements. Routinator will determine whether the provided
-announcements are RPKI valid, invalid, or not found.
-
-.PP
+.B \-p prefix, \-\-select\-prefix=prefix
+Only output VRPs with an address prefix that covers the given
+prefix, i.e., whose prefix is equal to or less specific than the
+given prefix. This will include VRPs regardless of their ASN and
+max length. In other words, the output will include all VRPs
+that need to be considered when deciding whether an announcement
+for the prefix is RPKI valid or invalid.
+.sp
+The option can be given multiple times, in which case VRPs for all
+prefixes are provided. It can also be combined with one or more ASN
+selections. Then all matching VRPs are included. That is, selectors
+combine as "or" not "and".
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B validate
+This command can be used to perform RPKI route origin validation for one
+or more route announcements. Routinator will determine whether the
+provided announcements are RPKI valid, invalid, or not found.
+.sp
 A single route announcement can be given directly on the command line:
-
+.INDENT 7.0
 .TP
-.BI \-a \ asn\fR,\  \-\-asn= asn
-The AS number of the autonomous system that originated the route
-announcement. ASNs can be given with
-or without the prefix
-.IR AS .
-
+.B \-a asn, \-\-asn=asn
+The AS Number of the autonomous system that originated the route
+announcement. ASNs can be given with or without the prefix \fIAS\fP\&.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-p \ prefix\fR,\  \-\-prefix= prefix
+.B \-p prefix, \-\-prefix=prefix
 The address prefix the route announcement is for.
-
+.UNINDENT
+.INDENT 7.0
 .TP
-.BR \-j ,\  \-\-json
-A detailed analysis on the reasoning behind the validation is printed in
-JSON format including lists of the VRPs that caused the particular result.
-If this option is omitted, Routinator will only print the determined
-state.
-
-.PP
+.B \-j, \-\-json
+A detailed analysis on the reasoning behind the validation is
+printed in JSON format including lists of the VRPs that caused
+the particular result. If this option is omitted, Routinator
+will only print the determined state.
+.UNINDENT
+.sp
 Alternatively, a list of route announcements can be read from a file or
 standard input.
-
+.INDENT 7.0
 .TP
-.BI -i \ file\fR,\  --input= file
-If present, input is read from the given file. If the file is given is a
-single dash, input is read from standard input.
-
+.B \-i file, \-\-input=file
+If present, input is read from the given file. If the file is
+given is a single dash, input is read from standard output.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BR \-j ,\  \-\-json
-If this option is provided, the input is assumed to be JSON format. It should
-consist of a single object with one member
-.I  routes
-which contains an array of objects. Each object describes one route
-announcement through its
-.I prefix
-and
-.I asn
-members which contain a prefix and originating AS number as strings,
-respectively.
-
-.IP
-If the option is not provided, the input is assumed to consist of simple
-plain text with one route announcement per line, provided as a prefix followed
-by an ASCII-art arrow
-.I =>
-surrounded by white space and followed by the AS number of originating
-autonomous system.
-
-.PP
+.B \-j, \-\-json
+If this option is provided, the input is assumed to be JSON
+format. It should consist of a single object with one  member
+\fIroutes\fP  which contains an array of objects. Each object
+describes one route announcement through its \fIprefix\fP and \fIasn\fP
+members which contain a prefix and originating AS Number as
+strings, respectively.
+.sp
+If the option is not provided, the input is assumed to consist of
+simple plain text with one route announcement per line, provided
+as a prefix followed by an ASCII\-art arrow => surrounded by white
+space and followed by the AS Number of originating autonomous
+system.
+.UNINDENT
+.sp
 The following additional options are available independently of the input
 method.
-
+.INDENT 7.0
 .TP
-.BI -o \ file\fR,\  --output= file
-Output is written to the provided file. If the option is omitted or
-.I file
-is given as a single dash, output is written to standard output.
-
-
+.B \-o file, \-\-output=file
+Output is written to the provided file. If the option is omitted
+or \fIfile\fP is given as a single dash, output is written to standard
+output.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BR \-n ,\  \-\-noupdate
+.B \-n, \-\-noupdate
 The repository will not be updated before performing validation.
+.UNINDENT
+.INDENT 7.0
 .TP
 .B \-\-complete
-If any of the rsync commands needed to update the repository failed, complete
-the operation but provide exit status 2. If this option is not given, the
-operation will complete with exit status 0 in this case.
-
-.SS server
-This command causes Routinator to act as a server for the RPKI-to-Router
-(RTR) and HTTP protocols. In this mode, Routinator will read all the TALs
-(See
-.B TRUST ANCHOR LOCATORS
-below) and will stay attached to the terminal unless the
-.B -d
-option is given.
-.PP
-The server will periodically update the local repository, every ten minutes
-by default, notify any clients of changes, and let them fetch validated data.
-It will not, however, reread the trust anchor locators. Thus, if you update
-them, you will have to restart Routinator.
-.PP
-You can provide a number of addresses and ports to listen on for RTR and HTTP
-through command line options or their configuration file equivalent.
-Currently, Routinator will only start listening on these ports after an
-initial validation run has finished.
-.PP
-It will not listen on any sockets unless explicitly specified. It
-will still run and periodically update the repository. This might be useful
-for use with
-.B vrps
-mode with the
-.B -n
-option.
+If any of the rsync commands needed to update the repository
+failed, complete the operation but provide exit status 2. If this
+option is not given, the operation will complete with exit status
+0 in this case.
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
 .TP
-.BR -d ,\ \fB --detach
-If present, Routinator will detach from the terminal after a successful start.
+.B server
+This command causes Routinator to act as a server for the RPKI\-to\-Router
+(RTR) and HTTP protocols. In this mode, Routinator will read all
+the TALs (See \fI\%Trust Anchor Locators\fP below) and will stay attached to
+the terminal unless the \fI\%\-d\fP option is given.
+.sp
+The server will periodically update the local repository, every ten
+minutes by default, notify any clients of changes, and let them fetch
+validated data. It will not, however, reread the trust anchor locators.
+Thus, if you update them, you will have to restart Routinator.
+.sp
+You can provide a number of addresses and ports to listen on for RTR
+and HTTP through command line options or their configuration file
+equivalent. Currently, Routinator will only start listening on these
+ports after an initial validation run has finished.
+.sp
+It will not listen on any sockets unless explicitly specified. It will
+still run and periodically update the repository. This might be useful
+for use with \fI\%vrps\fP mode with the \fI\%\-n\fP option.
+.INDENT 7.0
 .TP
-.BI \-\-rtr=  addr:port
-Specifies a local address and port to listen on for incoming RTR connections.
-.IP
-Routinator supports both protocol version 0 defined in RFC 6810 and version
-1 defined in RFC 8210. However, it does not support router keys introduced
-in version 1. IPv6 addresses must be enclosed in square brackets. You can
-provide the option multiple times to let Routinator listen on multiple
-address-port pairs.
+.B \-d, \-\-detach
+If present, Routinator will detach from the terminal after a
+successful start.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-http= addr:port
-Specifies the address and port to listen on for incoming HTTP connections.
-See
-.B HTTP SERVICE
-below for more information on the HTTP service provided by Routinator.
+.B \-\-rtr=addr:port
+Specifies a local address and port to listen on for incoming RTR
+connections.
+.sp
+Routinator supports both protocol version 0 defined in \fI\%RFC 6810\fP
+and version 1 defined in \fI\%RFC 8210\fP\&. However, it does not support
+router keys introduced in version 1.  IPv6 addresses must be
+enclosed in square brackets. You can provide the option multiple
+times to let Routinator listen on multiple address\-port pairs.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-listen\-systemd
+.B \-\-rtr\-tls=addr:port
+Specifies a local address and port to listen of for incoming
+TLS\-encrypted RTR connections.
+.sp
+The private key and server certificate given via the
+\fI\%\-\-rtr\-tls\-key\fP and \fI\%\-\-rtr\-tls\-cert\fP or their
+equivalent config file options will be used for connections.
+.sp
+The option can be given multiple times, but the same key and
+certificate will be used for all connections.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-http=addr:port
+Specifies the address and port to listen on for incoming HTTP
+connections.  See \fI\%HTTP Service\fP below for more information on
+the HTTP service provided by Routinator.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-http\-tls=addr:port
+Specifies a local address and port to listen of for incoming
+TLS\-encrypted HTTP connections.
+.sp
+The private key and server certificate given via the
+\fI\%\-\-http\-tls\-key\fP and \fI\%\-\-http\-tls\-cert\fP or their
+equivalent config file options will be used for connections.
+.sp
+The option can be given multiple times, but the same key and
+certificate will be used for all connections.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-listen\-systemd
 The RTR listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd's socket units to allow a
-Routinator running as a regular user to bind to the default RTR port 323.
-.IP
-Currently, all TCP listener sockets handed over by systemd will be used for
-the RTR protocol.
+activation. Use this option together with systemd\(aqs socket units
+to allow a Routinator running as a regular user to bind to the
+default RTR port 323.
+.sp
+Currently, all TCP listener sockets handed over by systemd will
+be used for the RTR protocol.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-rtr\-tcp\-keepalive= seconds
+.B \-\-rtr\-tcp\-keepalive=seconds
 The number of seconds to wait before sending a TCP keepalive on an
-established RTR connection. By default, TCP keepalive is enabled on all RTR
-connections with an idle time of 60 seconds. Set this option to 0 to disable
-keepalives.
+established RTR  connection. By  default, TCP keepalive is
+enabled on all RTR connections with an idle time of 60 seconds.
+Set this option to 0 to disable keepalives.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --rtr-client-metrics
-If provided, the server metrics will include separate metrics for every RTR
-client. Clients are identified by their RTR source IP address. This is
-disabled by default to avoid accidentally leaking information about the
-local network topology.
+.B \-\-rtr\-client\-metrics
+If provided, the server metrics will include separate metrics for
+every RTR client. Clients are identified by their RTR source IP
+address. This is disabled by default to avoid accidentally leaking
+information about the local network topology.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-refresh= seconds
-The amount of seconds the server should wait after having finished updating
-and validating the local repository before starting to update again. The
-next update will start earlier if objects in the repository expire earlier.
-The default value is 600 seconds.
+.B \-\-rtr\-tls\-key
+Specifies the path to a file containing the private key to be
+used for RTR\-over\-TLS connections. The file has to contain
+exactly one private key encoded in PEM format.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-retry= seconds
-The amount of seconds to suggest to an RTR client to wait before trying to
-request data again if that failed. The default value is 600 seconds,
-as recommended in RFC 8210.
+.B \-\-rtr\-tls\-cert
+Specifies the path to a file containing the server certificates
+to be used for RTR\-over\-TLS connections. The file has to contain
+one or more certificates encoded in PEM format.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-expire= seconds
-The amount of seconds to an RTR client can keep using data if it cannot
-refresh it. After that time, the client should discard the data. Note that
-this value was introduced in version 1 of the RTR protocol and is thus not
-relevant for clients that only implement version 0. The default value, as
-recommended in RFC 8210, is 7200 seconds.
+.B \-\-http\-tls\-key
+Specifies the path to a file containing the private key to be
+used for HTTP\-over\-TLS connections. The file has to contain
+exactly one private key encoded in PEM format.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-history= count
-In RTR, a client can request to only receive the changes that happened since
-the last version of the data it had seen. This option sets how many change
-sets the server will at most keep. If a client requests changes from an older
-version, it will get the current full set.
-.IP
-Note that routers typically stay connected with their RTR server and therefore
-really only ever need one single change set. Additionally, if RTR server or
-router are restarted, they will have a new session with new change sets and
-need to exchange a full data set, too. Thus, increasing the value probably
-only ever increases memory consumption.
-.IP
+.B \-\-http\-tls\-cert
+Specifies the path to a file containing the server certificates
+to be used for HTTP\-over\-TLS connections. The file has to contain
+one or more certificates encoded in PEM format.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-refresh=seconds
+The amount of seconds the server should wait after having finished
+updating and validating the local repository before starting to
+update again. The next update will be earlier if objects in the
+repository expire earlier. The default value is 600 seconds.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-retry=seconds
+The amount of seconds to suggest to an RTR client to wait before
+trying to request data again if that failed. The default value
+is 600 seconds, as recommended in \fI\%RFC 8210\fP\&.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-expire=seconds
+The amount of seconds to an RTR client can keep using data if it
+cannot refresh it. After that time, the client should discard the
+data. Note that this value was introduced in version 1 of the RTR
+protocol and is thus not relevant for clients that only implement
+version 0. The default value, as recommended in \fI\%RFC 8210\fP, is
+7200 seconds.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-history=count
+In RTR, a client can request to only receive the changes that
+happened since the last version of the data it had seen. This
+option sets how many change sets the server will at most keep. If
+a client requests changes from an older version, it will get the
+current full set.
+.sp
+Note that routers typically stay connected with their RTR server
+and therefore really only ever need one single change set.
+Additionally, if RTR server or router are restarted, they will
+have a new session with new change sets and need to exchange a
+full data set, too. Thus, increasing the value probably only ever
+increases memory consumption.
+.sp
 The default value is 10.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-pid\-file= path
-States a file which will be used in server mode to store the processes PID.
-While the process is running, it will keep the file locked.
+.B \-\-pid\-file=path
+States a file which will be used in daemon mode to store the
+processes PID. While the process is running, it will keep the
+file locked.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-working\-dir= path
-The working directory for server process. If provided, Routinator
-will change to this directory.
+.B \-\-working\-dir=path
+The working directory for the daemon process. In daemon mode,
+Routinator will change to this directory while detaching from the
+terminal.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI \-\-chroot= path
-The root directory for server mode. If this option is provided, Routinator
-will change its root directory to the given directory. This
-will only work if all other paths provided via the configuration or command
-line options are under this directory.
+.B \-\-chroot=path
+The root directory for the daemon process. If this option is
+provided, the daemon process will change its root directory to the
+given directory. This will only work if all other paths provided
+via the configuration or command line options are under this
+directory.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --user= user-name
-The name of the user to change to for server mode. It this option is
-provided, Routinator will run as that user after the listening sockets for
-HTTP and RTR have been created. This may cause problems, if the user is not
-allowed to write to the directory given as repository directory or is not
-allowed to read the TAL directory or local exception files.
+.B \-\-user=user\-name
+The name of the user to change to for server mode. It this option
+is provided, Routinator will run as that user after the listening
+sockets for HTTP and RTR have been created. This may cause
+problems, if the user is not allowed to write to the directory
+given as repository directory or is not allowed to read the TAL
+directory or local exception files.
+.UNINDENT
+.INDENT 7.0
 .TP
-.BI --group= group-name
-The name of the group to change to for server mode. It this option is
-provided, Routinator will run as that group after the listening sockets for
-HTTP and RTR have been created.
-
-.SS update
-Updates the local repository by resyncing all known publication points. The
-command will also validate the updated repository to discover any new
-publication points that appear in the repository and fetch their data.
-.PP
+.B \-\-group=group\-name
+The name of the group to change to for server mode. It this option
+is provided, Routinator will run as that group after the listening
+sockets for HTTP and RTR have been created.
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B update
+Updates the local repository by resyncing all known publication points.
+The command will also validate the updated repository to discover any
+new publication points that appear in the repository and fetch their
+data.
+.sp
 As such, the command really is a shortcut for running
-.B routinator vrps -f none\fR.
+\fBroutinator\fP \fI\%vrps\fP \fI\%\-f\fP \fBnone\fP\&.
+.INDENT 7.0
 .TP
 .B \-\-complete
-If any of the rsync commands needed to update the repository failed, complete
-the operation but provide exit status 2. If this option is not given, the
-operation will complete with exit status 0 in this case.
-
-.SS dump
-Writes the contents of all stored data to the file system. This is primarily
-intended for debugging but can be used to get access to the view of the RPKI
-data that Routinator currently sees.
-
+If any of the rsync commands needed to update the repository
+failed, Routinator completes the operation and exits with status
+code 2. If this option is not given, the operation will complete
+with exit status 0 in this case.
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
 .TP
-.BI \-o \ dir\fR,\ \-\-output= dir
-Write the output to the given directory. If the option is omitted, the current
-directory is used.
-
-.PP
+.B dump
+Writes the content of all stored data to the file system. This is
+primarily intended for debugging but can be used to get access to the
+view of the RPKI data that Routinator currently sees.
+.INDENT 7.0
+.TP
+.B \-o dir, \-\-output=dir
+Write the output to the given directory. If the option is omitted,
+the current directory is used.
+.UNINDENT
+.sp
 Three directories will be created in the output directory:
-
-.PP
-The
-.I rrdp
-directory will contain all the files collected via RRDP from the various
-repositories. Each repository is stored in its own directory. The mapping
-between rpkiNotify URI and path is provided in the
-.I repositories.json
-file. For each repository, the files are stored in a directory structure
-based on the components of the file’s rsync URI.
-
-.PP
-The
-.I rsync
-directory contains all the files collected via rsync. The files are stored
-in a directory structure based on the components of the file’s rsync URI.
-
-.PP
-The
-.I store
-directory contains all the files used for validation. Files collected via
-RRDP or rsync are copied to the store if they are correctly referenced by
-a valid manifest. This part contains one directory for each RRDP repository
-similarly structured to the
-.I rrdp
-directory and one additional directory
-.I rsync
-that contains files collected via rsync.
-
-.SS man
+.sp
+The \fIrrdp\fP directory will contain all the files collected via RRDP from
+the various repositories. Each repository is stored in its own directory.
+The mapping between rpkiNotify URI and path is provided in the
+\fIrepositories.json\fP file. For each repository, the files are stored in
+a directory structure based on the components of the file as rsync URI.
+.sp
+The \fIrsync\fP directory contains all the files collected via rsync. The
+files are stored in a directory structure based on the components of the
+file\(aqs rsync URI.
+.sp
+The \fIstore\fP directory contains all the files used for validation. Files
+collected via RRDP  or rsync are copied to the store if they are
+correctly referenced by a valid manifest. This part contains one
+directory for each RRDP repository similarly structured to the \fIrrdp\fP
+directory and one additional directory \fIrsync\fP that contains files
+collected via rsync.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B man
 Displays the manual page, i.e., this page.
+.INDENT 7.0
 .TP
-.BI -o\  file \fR,\ \fB\-\-output= file
-If this option is provided, the manual page will be written to the given
-file instead of displaying it. Use
-.I "-"
-to output the manual page to standard output.
-
-
+.B \-o file, \-\-output=file
+If this option is provided, the manual page will be written to the
+given file instead of displaying it. Use \- to output the manual
+page to standard output.
+.UNINDENT
+.UNINDENT
 .SH TRUST ANCHOR LOCATORS
-RPKI uses trust anchor locators, or TALs, to identify the location and
-public keys of the trusted root CA certificates. Routinator keeps these
-TALs in files in the TAL directory which can be set by the
-.B \-t
-option. If the
-.B \-b
-option is used instead, the TAL directory will be in the subdirectory
-.I tals
-under the directory specified in this option. The default location, if
-no options are used at all is
-.I $HOME/.rpki-cache/tals\fR.
-.P
-Routinator comes with a set of commonly used TALs that can be used to
-populate the TAL directory via the
-.B init
-command. By default, the command will install the TALs of the five Regional
-Internet Registries (RIRs) necessary for the complete global RPKI repository.
-.P
+.sp
+RPKI uses trust anchor locators, or TALs, to identify the location and public
+keys of the trusted root CA certificates. Routinator keeps these TALs in files
+in the TAL directory which can be set by the  \fI\%\-t\fP option. If the
+\fI\%\-b\fP option is used instead, the TAL directory will be in the
+subdirectory \fItals\fP under the directory specified in this option. The default
+location, if no options are used at all is \fB$HOME/.rpki\-cache/tals\fP\&.
+.sp
+Routinator comes with a set of commonly used TALs that can be used to populate
+the TAL directory via the init command. By default, the command will install
+the TALs of the five Regional Internet Registries (RIRs) necessary for the
+complete global RPKI repository.
+.sp
 If the directory does exist, Routinator will use all files with an extension
-of
-.I .tal
-in this directory. This means that you can add and remove trust anchors by
-adding and removing files in this directory. If you add files, make sure they
-are in the format described by RFC 7730 or RFC 8630.
-
+of \fI\&.tal\fP in this directory. This means that you can add and remove trust
+anchors by adding and removing files in this directory. If you add files, make
+sure they are in the format described by \fI\%RFC 7730\fP or the upcoming
+\fI\%RFC 8630\fP\&.
 .SH CONFIGURATION FILE
-Instead of providing all options on the command line, they can also be
-provided through a configuration file. Such a file can be selected through
-the
-.B -c
-option. If no configuration file is specified this way but a file named
-.I $HOME/.routinator.conf
-is present, this file is used.
-.PP
-The configuration file is a file in TOML format. In short, it consists of
-a sequence of key-value pairs, each on its own line. Strings are to be
-enclosed in double quotes. Lists can be given by enclosing a comma-separated
-list of values in square brackets.
-.PP
-The configuration file can contain the following entries. All path values
-are interpreted relative to the directory the configuration file is located.
-in. All values can be overwritten via the command line options.
+.sp
+Instead of providing all options on the command line, they can also be provided
+through a configuration file. Such a file can be selected through the
+\fI\%\-c\fP option. If no configuration file is specified this way but a file
+named \fB$HOME/.routinator.conf\fP is present, this file is used.
+.sp
+The configuration file is a file in TOML format. In short, it consists of a
+sequence of key\-value pairs, each on its own line. Strings are to be enclosed in
+double quotes. Lists can be given by enclosing a comma\-separated list of values
+in square brackets.
+.sp
+The configuration file can contain the following entries. All path values are
+interpreted relative to the directory the configuration file is located in. All
+values can be overridden via the command line options.
+.INDENT 0.0
 .TP
-.B repository-dir
-A string containing the path to the directory to store the local repository
-in. This entry is mandatory.
+.B repository\-dir
+A string containing the path to the directory to store the local
+repository in. This entry is mandatory.
 .TP
-.B tal-dir
-A string containing the path to the directory that contains the Trust Anchor
-Locators. This entry is mandatory.
+.B tal\-dir
+A string containing the path to the directory that contains the Trust
+Anchor Locators. This entry is mandatory.
 .TP
 .B exceptions
-A string or a list of strings, each containing the path to a file with local
+A list of strings, each containing the path to a file with local
 exceptions. If missing, no local exception files are used.
 .TP
 .B strict
-A boolean specifying whether strict validation should be employed. If missing,
-strict validation will not be used.
-
+A boolean specifying whether strict validation should be employed. If
+missing, strict validation will not be used.
 .TP
 .B stale
 A string specifying the policy for dealing with stale objects.
-.RS
+.INDENT 7.0
 .TP
-.I reject
-Consider all stale objects invalid rendering all material published by the CA
-issuing the stale object to be invalid including all material of any child CA.
-This is the default policy if the value is missing.
+.B reject
+Consider all stale objects invalid rendering all material published
+by the CA issuing the stale object to be invalid including all
+material of any child CA. This is the default policy if the value
+is missing.
 .TP
-.I warn
+.B warn
 Consider stale objects to be valid but print a warning to the log.
 .TP
-.I accept
+.B accept
 Quietly consider stale objects valid.
-.RE
-
+.UNINDENT
 .TP
-.B unsafe-vrps
+.B unsafe\-vrps
 A string specifying the policy for dealing with unsafe VRPs.
-.RS
+.INDENT 7.0
 .TP
-.I reject
+.B reject
 Filter unsafe VRPs and add warning messages to the log.
 .TP
-.I warn
-Warn about unsafe VRPs in the log but add them to the final set of VRPs.
-This is the default policy if the value is missing.
+.B warn
+Warn about unsafe VRPs in the log but add them to the final set of
+VRPs. This is the default policy if the value is missing.
 .TP
-.I accept
+.B accept
 Quietly add unsafe VRPs to the final set of VRPs.
-.RE
-
+.UNINDENT
 .TP
-.B unknown-objects
+.B unknown\-objects
 A string specifying the policy for dealing with unknown RPKI object types.
-.RS
+.INDENT 7.0
 .TP
-.I reject
+.B reject
 Reject the object and its issuing CA.
 .TP
-.I warn
+.B warn
 Warn about the object but ignore it and accept the issuing CA.
 This is the default policy if the value is missing.
 .TP
-.I accept
+.B accept
 Quietly ignore the object and accept the issuing CA.
-.RE
-
+.UNINDENT
 .TP
-.B allow-dubious-hosts
-A boolean value that, if present and true, disables Routinator's filtering of
-dubious host names in rsync and HTTPS URIs from RPKI data.
-
+.B allow\-dubious\-hosts
+A boolean value that, if present and true, disables Routinator\(aqs filtering
+of dubious host names in rsync and HTTPS URIs from RPKI data.
 .TP
-.B disable-rsync
+.B disable\-rsync
 A boolean value that, if present and true, turns off the use of rsync.
-
 .TP
-.B rsync-command
+.B rsync\-command
 A string specifying the command to use for running rsync. The default is
-simply
-.IR rsync .
+simply \fIrsync\fP\&.
 .TP
-.B rsync-args
-A list of strings containing the arguments to be passed to the rsync command.
-Each string is an argument of its own.
-.IP
-If this
-option is not provided, Routinator will try to find out if your rsync
-understands the
-.B \-\-contimeout
-option and, if so, will set it to 10 thus letting connection attempts time
-out after ten seconds. If your rsync is too old to support this option, no
-arguments are used.
+.B rsync\-args
+A list of strings containing the arguments to be passed to the rsync
+command. Each string is an argument of its own.
+.sp
+If this option is not provided, Routinator will try to find out if your
+rsync understands the \fB\-\-contimeout\fP option and, if so, will set it to
+10 thus letting connection attempts time out after ten seconds. If your
+rsync is too old to support this option, no arguments are used.
 .TP
-.B rsync-timeout
-An integer value specifying the number of seconds an rsync command is allowed to
-run before it is being terminated. The default if the value is missing is
-300 seconds.
-
+.B rsync\-timeout
+An integer value specifying the number seconds an rsync command is allowed
+to run before it is being terminated. The default if the value is missing
+is 300 seconds.
 .TP
-.B disable-rrdp
+.B disable\-rrdp
 A boolean value that, if present and true, turns off the use of RRDP.
-
 .TP
-.BI rrdp-fallback-time
+.B rrdp\-fallback\-time
 An integer value specifying the maximum number of seconds since a last
 successful update of an RRDP repository before Routinator falls back to
 using rsync. The default in case the value is missing is 3600 seconds. If
 the value provided is smaller than twice the refresh time, it is silently
 increased to that value.
-
 .TP
-.BI rrdp-max-delta-count
+.B rrdp\-max\-delta\-count
 An integer value that specifies the maximum number of deltas necessary to
-update an RRDP repository before using the snapshot instead.
-If the value is missing, the default of 100 is used.
-
+update an RRDP repository before using the snapshot instead. If the value
+is missing, the default of 100 is used.
 .TP
-.B rrdp-timeout
+.B rrdp\-timeout
 An integer value that provides a timeout in seconds for all individual
-RRDP-related network operations, i.e., connects, reads, and writes. If the
-value is missing, a default timeout of 300 seconds will be used. Set the value
-to 0 to turn the timeout off.
-
+RRDP\-related network operations, i.e., connects, reads, and writes. If the
+value is missing, a default timeout of 300 seconds will be used. Set the
+value to 0 to turn the timeout off.
 .TP
-.B rrdp-connect-timeout
+.B rrdp\-connect\-timeout
 An integer value that, if present, sets a separate timeout in seconds for
 RRDP connect requests only.
-
 .TP
-.B rrdp-local-addr
-A string value that provides the local address to be used by RRDP connections.
-
+.B rrdp\-local\-addr
+A string value that provides the local address to be used by RRDP
+connections.
 .TP
-.B rrdp-root-certs
-A list of strings each providing a path to a file containing a trust anchor
-certificate for HTTPS authentication of RRDP connections. In addition to the
-certificates provided via this option, the system's own trust store is used.
-
+.B rrdp\-root\-certs
+A list of strings each providing a path to a file containing a trust
+anchor certificate for HTTPS authentication of RRDP connections. In
+addition to the certificates provided via this option, the system\(aqs own
+trust store is used.
 .TP
-.B rrdp-proxies
+.B rrdp\-proxies
 A list of string each providing the URI for a proxy for outgoing RRDP
-connections. The proxies are tried in order for each request. HTTP and SOCKS5
-proxies are supported.
-
+connections. The proxies are tried in order for each request. HTTP and
+SOCKS5 proxies are supported.
 .TP
-.B rrdp-keep-responses
-A string containing a path to a directory into which the bodies of all HTTPS
-responses received from RRDP servers will be stored.
-The sub-path will be constructed using the components of the requested URI.
-For the responses to the notification files, the timestamp is appended to
-the path to make it possible to distinguish the series of requests made over
-
+.B rrdp\-keep\-responses
+A string containing a path to a directory into which the bodies of all
+HTTPS responses received from RRDP servers will be stored. The sub\-path
+will be constructed using the components of the requested URI. For the
+responses to the notification files, the timestamp is appended to the path
+to make it possible to distinguish the series of requests made over time.
 .TP
-.B max-object-size
+.B max\-object\-size
 An integer value that provides a limit for the size of individual objects
-received via either rsync or RRDP to the given number of bytes. The default
-value if this option is not present is 20,000,000 (i.e., 20 MBytes). A value
-of 0 disables the limit.
-
+received via either rsync or RRDP to the given number of bytes. The
+default value if this option is not present is 20,000,000 (i.e., 20
+MBytes). A value of 0 disables the limit.
 .TP
-.B max-ca-depth
-An integer value that specifies the maximum number of CAs a given CA may be
-away from a trust anchor certificate before it is rejected. If the option is
-missing, a default of 32 will be used.
-
+.B max\-ca\-depth
+An integer value that specifies the maximum number of CAs a given CA may
+be away from a trust anchor certificate before it is rejected. If the
+option is missing, a default of 32 will be used.
 .TP
 .B dirty
-A boolean value which, if true, specifies that unused files and directories
-should not be deleted from the repository directory after each validation run.
-If left out, its value will be false and unused files will be deleted.
+A boolean value which, if true, specifies that unused files and
+directories should not be deleted from the repository directory after each
+validation run. If left out, its value will be false and unused files
+will be deleted.
 .TP
-.B validation-threads
+.B validation\-threads
 An integer value specifying the number of threads to be used during
 validation of the repository. If this value is missing, the number of CPUs
 in the system is used.
 .TP
-.B log-level
-A string value specifying the maximum log level for which log messages should
-be emitted. The default is
-.IR warn .
-.IP
-See
-.B LOGGING
-below for more information on what information is logged at the different
-levels.
+.B log\-level
+A string value specifying the maximum log level for which log messages
+should be emitted. The default is \fIwarn\fP\&.
+.sp
+See \fI\%LOGGING\fP below for more information on what information is logged at
+the different levels.
 .TP
 .B log
-A string specifying where to send log messages to. This can be one of the
-following values:
-.RS
+A string specifying where to send log messages to. This can be
+one of the following values:
+.INDENT 7.0
 .TP
-.I default
-Log messages will be sent to standard error if Routinator stays attached to
-the terminal or to syslog if it runs in daemon mode.
+.B default
+Log messages will be sent to standard error if Routinator
+stays attached to the terminal or to syslog if it runs in
+daemon mode.
 .TP
-.I stderr
+.B stderr
 Log messages will be sent to standard error.
 .TP
-.I syslog
+.B syslog
 Log messages will be sent to syslog.
 .TP
-.I file
-Log messages will be sent to the file specified through the
-.B log-file
-configuration file entry.
-.RE
-.IP
-The default if this value is missing is, unsurprisingly,
-.IR default .
+.B file
+Log messages will be sent to the file specified through
+the log\-file configuration file entry.
+.UNINDENT
+.sp
+The default if this value is missing is, unsurprisingly, \fIdefault\fP\&.
 .TP
-.B log-file
+.B log\-file
 A string value containing the path to a file to which log messages will be
-appended if the
-.B log
-configuration value is set to
-.IR file .
-In this case, the value is mandatory.
+appended if the log configuration value is set to file. In this case, the
+value is mandatory.
 .TP
-.B syslog-facility
-A string value specifying the syslog facility to use for logging to syslog.
-The default value if this entry is missing is
-.IR daemon .
+.B syslog\-facility
+A string value specifying the syslog facility to use for logging to
+syslog. The default value if this entry is missing is \fIdaemon\fP\&.
 .TP
-.B rtr-listen
-An array of string values each providing the address and port which the RTR
-daemon should listen on in TCP mode. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square brackets.
+.B rtr\-listen
+An array of string values each providing an address and port
+on which the RTR server should listen in TCP mode. Address and
+port should be separated by a colon. IPv6 address should be
+enclosed in square brackets.
 .TP
-.B http-listen
-An array of string values each providing the address and port which the HTTP
-service should listen on. Address and port should be separated by
-a colon. IPv6 address should be enclosed in square brackets.
+.B rtr\-tls\-listen
+An array of string values each providing an address and port
+on which the RTR server should listen in TLS mode. Address and
+port should be separated by a colon. IPv6 address should be
+enclosed in square brackets.
 .TP
-.B listen-systemd
+.B http\-listen
+An array of string values each providing an address and port
+on which the HTTP server should listene. Address and
+port should be separated by a colon. IPv6 address should be
+enclosed in square brackets.
+.TP
+.B http\-tls\-listen
+An array of string values each providing an address and port
+on which the HTTP server should listen in TLS mode. Address and
+port should be separated by a colon. IPv6 address should be
+enclosed in square brackets.
+.TP
+.B listen\-systemd
 The RTR TCP listening socket will be acquired from systemd via socket
-activation. Use this option together with systemd's socket units to allow a
+activation. Use this option together with systemd\(aqs socket units to allow
 Routinator running as a regular user to bind to the default RTR port 323.
 .TP
-.B rtr-tcp-keepalive
+.B rtr\-tcp\-keepalive
 An integer value specifying the number of seconds to wait before sending a
 TCP keepalive on an established RTR connection. If this option is missing,
-TCP keepalive will be enabled on all RTR connections with an idle time of 60
-seconds. If this option is present and set to zero, TCP keepalives are
+TCP keepalive will be enabled on all RTR connections with an idle time of
+60 seconds. If this option is present and set to zero, TCP keepalives are
 disabled.
 .TP
-.BI rtr-client-metrics
+.B rtr\-client\-metrics
 A boolean value specifying whether server metrics should include separate
 metrics for every RTR client. If the value is missing, no RTR client
 metrics will be provided.
 .TP
+.B rtr\-tls\-key
+A string value providing the path to a file containing the private
+key to be used by the RTR server in TLS mode. The file must
+contain one private key in PEM format.
+.TP
+.B rtr\-tls\-cert
+A string value providing the path to a file containing the
+server certificates to be used by the RTR server in TLS mode. The
+file must contain one or more certificates in PEM format.
+.TP
+.B http\-tls\-key
+A string value providing the path to a file containing the private
+key to be used by the HTTP server in TLS mode. The file must
+contain one private key in PEM format.
+.TP
+.B http\-tls\-cert
+A string value providing the path to a file containing the
+server certificates to be used by the HTTP server in TLS mode.
+The file must contain one or more certificates in PEM format.
+.TP
 .B refresh
 An integer value specifying the number of seconds Routinator should wait
-between consecutive validation runs in server mode. The next validation run
-will happen earlier, if objects expire earlier. The default is 600 seconds.
+between consecutive validation runs in server mode. The next validation
+run will happen earlier, if objects expire earlier. The default is 600
+seconds.
 .TP
 .B retry
-An integer value specifying the number of seconds an RTR client is requested
-to wait after it failed to receive a data set. The default is 600 seconds.
+An integer value specifying the number of seconds an RTR client is
+requested to wait after it failed to receive a data set. The default is
+600 seconds.
 .TP
 .B expire
-An integer value specifying the number of seconds an RTR client is requested
-to use a data set if it cannot get an update before throwing it away and
-continuing with no data at all. The default is 7200 seconds.
-if it cannot get an update before throwing it away and
-continuing with no data at all. The default is 7200 seconds.
+An integer value specifying the number of seconds an RTR client is
+requested to use a data set if it cannot get an update before throwing it
+away and continuing with no data at all. The default is 7200 seconds if it
+cannot get an update before throwing it away and continuing with no data
+at all. The default is 7200 seconds.
 .TP
-.B history-size
+.B history\-size
 An integer value specifying how many change sets Routinator should keep in
 RTR server mode. The default is 10.
 .TP
-.B pid-file
+.B pid\-file
 A string value containing a path pointing to the PID file to be used in
-server mode.
+daemon mode.
 .TP
-.B working-dir
-A string value containing a path to the working directory for server mode.
+.B working\-dir
+A string value containing a path to the working directory for the daemon
+process.
 .TP
 .B chroot
-A string value containing the path Routinator should use as its root
-directory in server mode.
+A string value containing the path any daemon process should use as its
+root directory.
 .TP
 .B user
-A string value containing the name of the user to change to in server mode.
-
+A string value containing the user name a daemon process should run as.
 .TP
 .B group
-A string value containing the name of the group to change to in server mode.
-
+A string value containing the group name a daemon process should run as.
 .TP
-.B tal-label
+.B tal\-label
 An array containing arrays of two string values mapping the name of a TAL
 file (without the path but including the extension) as given by the first
-string to the name of the TAL to be included where the TAL is referenced in
-output as given by the second string.
-
-If the option is missing or if a TAL isn't mentioned in the option,
-Routinator will construct a name for the TAL by using its file name (without
-the path) and dropping the extension.
-
-
+string to the name of the TAL to be included where the TAL is referenced
+in output as given by the second string.
+.sp
+If the options missing or if a TAL isn\(aqt mentioned in the option,
+Routinator will construct a name for the TAL by using its file name
+(without the path) and dropping the extension.
+.UNINDENT
 .SH HTTP SERVICE
+.sp
 Routinator can provide an HTTP service allowing to fetch the Validated ROA
-Payload in various formats. The service does not support HTTPS and should
-only be used within the local network.
-.P
-The service only supports GET requests with the following
-paths:
-
+Payload in various formats. The service does not support HTTPS and should only
+be used within the local network.
+.sp
+The service only supports GET requests with the following paths:
+.INDENT 0.0
 .TP
-.B /metrics
+.B  /metrics
 Returns a set of monitoring metrics in the format used by Prometheus.
 .TP
-.B /status
+.B  /status
 Returns the current status of the Routinator instance. This is similar to
-the output of the
-.B /metrics
-endpoint but in a more human friendly format.
+the output of the \fB/metrics\fP endpoint but in a more human friendly
+format.
+.UNINDENT
+.INDENT 0.0
 .TP
 .B /api/v1/status
 Returns the current status in JSON format.
+.UNINDENT
+.INDENT 0.0
 .TP
-.B /log
-Returns the logging output of the last validation run. The log level matches
-that set upon start.
-.IP
-Note that the output is collected after each validation run and is therefore
-only available after the initial run has concluded.
+.B  /log
+Returns the logging output of the last validation run. The log level
+matches that set upon start.
+.sp
+Note that the output is collected after each validation run and is
+therefore only available after the initial run has concluded.
 .TP
-.B /version
+.B  /version
 Returns the version of the Routinator instance.
+.UNINDENT
+.INDENT 0.0
 .TP
-.B /api/v1/validity/\fIas-number\fB/\fIprefix
+.B /api/v1/validity/as\-number/prefix
 Returns a JSON object describing whether the route announcement given by
-its origin AS number and address prefix is RPKI valid, invalid, or not found.
-The returned object is compatible with that provided by the RIPE NCC RPKI
-Validator. For more information, see
-.I https://www.ripe.net/support/documentation/developer-documentation/rpki-validator-api
-
+its origin AS Number and address prefix is RPKI valid, invalid, or not
+found.  The returned object is compatible with that provided by the RIPE
+NCC RPKI Validator. For more information, see
+\fI\%https://ripe.net/support/documentation/developer\-documentation/rpki\-validator\-api\fP
 .TP
-.B /validity?asn=\fIas-number\fB&prefix=\fIprefix
-Same as above but with a more form-friendly calling convention.
-
+.B /validity?asn=as\-number&prefix=prefix
+Same as above but with a more form\-friendly calling convention.
 .TP
-.BR /json-delta ,\  /json-delta?session\fIsession\fB?serial=\fIserial
-Returns a JSON object with the changes since the dataset version identified
-by the
-.I session
-and
-.I serial
-query parameters. If a delta cannot be produced from that version, the full
-data set is returned and the member
-.I reset
-in the object will be set to
-.IR true .
-In either case, the members
-.I session
-and
-.I serial
-identify the version of the data set returned and their values should be
-passed as the query parameters in a future request.
-.IP
-The members
-.I announced
-and
-.I withdrawn
-contain arrays with route origins that have been announced and withdrawn,
-respectively, since the provided session and serial. If
-.I reset
-is
-.IR true ,
-the
-.I withdrawn
-member is not present.
-
-.P
+.B /json\-delta, /json\-delta?sessionsession?serial=serial
+Returns a JSON object with the changes since the dataset version
+identified by the \fIsession\fP and \fIserial\fP query parameters. If a delta
+cannot be produced from that version, the full data set is returned and
+the member \fIreset\fP in the object will be set to \fItrue\fP\&. In either case,
+the members \fIsession\fP and \fIserial\fP identify the version of the data set
+returned and their values should be passed as the query parameters in a
+future request.
+.sp
+The members \fIannounced\fP and \fIwithdrawn\fP contain arrays with route origins
+that have been announced and withdrawn, respectively, since the provided
+session and serial. If \fIreset\fP is \fItrue\fP, the \fIwithdrawn\fP member is not
+present.
+.UNINDENT
+.sp
 In addition, the current set of VRPs is available for each output format
 at a path with the same name as the output format. E.g., the CSV output is
-available at
-.BR /csv .
-.P
-These paths accept selector expressions to
-limit the VRPs returned in the form of a query string. The field
-.B select-asn
-can be used to select ASNs and the field
-.B select-prefix
-can be used to select prefixes. The fields can be repeated multiple
-times.
-.P
+available at \fB/csv\fP\&.
+.sp
+These paths accept selector expressions to limit the VRPs returned in the form
+of a query string. The field \fBselect\-asn\fP can be used to filter for ASNs and
+the field \fBselect\-prefix\fP can be used to filter for prefixes. The fields can
+be repeated multiple times.
+.sp
 This works in the same way as the options of the same name to the
-.B vrps
-command.
-
+\fI\%vrps\fP command.
 .SH LOGGING
+.sp
 In order to allow diagnosis of the VRP data set as well as its overall health,
 Routinator logs an extensive amount of information. The log levels used by
 syslog are utilized to allow filtering this information for particular use
 cases.
-.P
+.sp
 The log levels represent the following information:
+.INDENT 0.0
 .TP
-.I error
+.B error
 Information related to events that prevent Routinator from continuing to
 operate at all as well as all issues related to local configuration even
 if Routinator will continue to run.
 .TP
-.I warn
+.B warn
 Information about events and data that influences the set of VRPs produced
-by Routinator. This includes failures to communicate with repository servers,
-or encountering invalid objects.
+by Routinator. This includes failures to communicate with repository
+servers, or encountering invalid objects.
 .TP
-.I info
+.B info
 Information about events and data that could be considered abnormal but do
-not influence the set of VRPs produced. For example, when filtering of unsafe
-VRPs is disabled, the unsafe VRPs are logged with this level.
+not influence the set of VRPs produced. For example, when filtering of
+unsafe VRPs is disabled, the unsafe VRPs are logged with this level.
 .TP
-.I debug
+.B debug
 Information about the internal state of Routinator that may be useful for,
 well, debugging.
-
+.UNINDENT
 .SH VALIDATION
-In
-.B vrps
-and
-.B server
-mode, Routinator will produce a set of VRPs from the data published in the
-RPKI repository. It will walk over all certification authorities (CAs)
-starting with those referred to in the configured TALs.
-.P
+.sp
+In \fI\%vrps\fP and \fI\%server\fP mode, Routinator will produce a set of
+VRPs from the data published in the RPKI repository. It will walk over all
+certification authorities (CAs) starting with those referred to in the
+configured TALs.
+.sp
 Each CA is checked whether all its published objects are present, correctly
-encoded, and have been signed by the CA. If any of the objects fail this
-check, the entire CA will be rejected. If an object of an unknown type is
-encountered, the behaviour depends on the
-.B unknown-objects
-policy. If this policy has a value of
-.I reject
-the entire CA will be rejected. In this case, only certificates (.cer), CRLs
-(.crl), manifestes (.mft), ROAs (.roa), and Ghostbuster records (.gbr) will
-be accepted.
-.P
-If a CA is rejected, none of its ROAs will
-be added to the VRP set but also none of its child CAs will be considered
-at all; their published data will not be fetched or validated.
-.P
-If a prefix has its ROAs published by different CAs, this will lead to some
-of its VRPs being dropped while others are still added. If the VRP for the
+encoded, and have been signed by the CA. If any of the objects fail this check,
+the entire CA will be rejected. If an object of an unknown  type  is
+encountered, the behaviour depends on the \fBunknown\-objects\fP policy. If this
+policy has a value of \fIreject\fP the entire CA will be rejected. In this case,
+only certificates (.cer), CRLs (.crl), manifestes (.mft), ROAs (.roa), and
+Ghostbuster records (.gbr) will be accepted.
+.sp
+If  a CA is rejected, none of its ROAs will be added to the VRP set but also
+none of its child CAs will be considered at all; their published data will not
+be fetched or validated.
+.sp
+If  a prefix has its ROAs published by different CAs, this will lead to some of
+its VRPs being dropped while others are still added. If the VRP for the
 legitimately announced route is among those having been dropped, the route
 becomes RPKI invalid. This can happen both by operator error or through an
 active attack.
-.P
-In addition, if a VRP for a less specific prefix exists that covers the
-prefix of the dropped VRP, the route will be invalidated by the less specific
-VRP.
-.P
-Because of this risk of accidentally or maliciously invalidating routes,
-VRPs that have address prefixes overlapping with resources of rejected CAs
-are called
-.I unsafe VRPs.
-.P
+.sp
+In addition, if a VRP for a less specific prefix exists that covers the prefix
+of the dropped VRP, the route will be invalidated by the less specific VRP.
+.sp
+Because of this risk of accidentally or maliciously invalidating routes, VRPs
+that have address prefixes overlapping with resources of rejected CAs are called
+\fIunsafe VRPs\fP\&.
+.sp
 In order to avoid these situations and instead fall back to an RPKI unknown
-state for such routes, Routinator allows to filter out these unsafe VRPs.
-This can be enabled via the
-.BI --unsafe-vrps= reject
-command line option or setting
-.BI unsafe-vrps= "reject"
-in the config file.
-.P
+state for such routes, Routinator allows to filter out these unsafe VRPs. This
+can be enabled via the \fB\-\-unsafe\-vrps=reject\fP command line option or setting
+\fBunsafe\-vrps=reject\fP in the config file.
+.sp
 By default, this filter is currently disabled but warnings are logged about
 unsafe VRPs. This allows to assess the operation impact of such a filter.
-Depending on this assessment, the default may change in future version.
-.P
-One exception from this rule are CAs that have the full address space
-assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out
-all VRPs. These prefixes are used by the RIR trust anchors to avoid having to
-update these often. However, each RIR has its own address space so losing all
-VRPs should something happen to a trust anchor is unnecessary.
-
+Depending on this assessment, the default may change in future versions.
+.sp
+One exception from this rule are CAs that have the full address space assigned,
+i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out all VRPs.
+These prefixes are used by the RIR trust anchors to avoid having to update these
+often. However, each RIR has its own address space so losing all VRPs should
+something happen to a trust anchor is unnecessary.
 .SH RELAXED DECODING
-The documents defining RPKI include a number of very strict rules
-regarding the formatting of the objects published in the RPKI repository.
-However, because RPKI reuses existing technology, real-world applications
-produce objects that do not follow these strict requirements.
-.PP
+.sp
+The documents defining RPKI include a number of very strict rules regarding the
+formatting of the objects published in the RPKI repository. However, because
+RPKI reuses existing technology, real\-world applications produce objects that
+do not follow these strict requirements.
+.sp
 As a consequence, a significant portion of the RPKI repository is actually
 invalid if the rules are followed. We therefore introduce two decoding
-modes: strict and relaxed. Strict mode rejects any object that does not
-pass all checks laid out by the relevant RFCs. Relaxed mode ignores a
-number of these checks.
-.PP
-Note that none of the violations accepted in relaxed mode endanger the
-integrity or security of the objects. All signatures are always validated
-as strictly as necessary.
-.PP
-This section documents the violations we encountered and are dealing with in
+modes: strict and relaxed. Strict mode rejects any object that does not pass all
+checks laid out by the relevant RFCs. Relaxed mode ignores a number of these
+checks.
+.sp
+This memo documents the violations we encountered and are dealing with in
 relaxed decoding mode.
-
-.SS Resource Certificates (RFC 6487)
-
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.TP
+Resource Certificates (\fI\%RFC 6487\fP)
 Resource certificates are defined as a profile on the more general
-Internet PKI certificates defined in RFC 5280.
-
+Internet PKI certificates defined in \fI\%RFC 5280\fP\&.
+.INDENT 7.0
 .TP
 .B Subject and Issuer
 The RFC restricts the type used for CommonName attributes to
-PrintableString, allowing only a subset of ASCII characters, while RFC
-5280 allows a number of additional string types. At least one CA produces
-resource certificates with Utf8Strings.
-.IP
-In relaxed mode, we will only check that the general structure of the
-issuer and subject fields are correct and allow any number and types of
-attributes. This seems justified since RPKI explicitly does not use these
-fields.
-
-.SS Signed Objects (RFC 6488)
-Signed objects are defined as a profile on CMS messages defined in RFC
-5652.
+PrintableString, allowing only a subset of ASCII characters,
+while \fI\%RFC 5280\fP allows a number of additional string types. At
+least one CA produces resource certificates with Utf8Strings.
+.sp
+In relaxed mode, we will only check that the general structure of
+the issuer and subject fields are correct and allow any number and
+types of attributes. This seems justified since RPKI explicitly
+does not use these fields.
+.UNINDENT
+.TP
+Signed Objects (\fI\%RFC 6488\fP)
+Signed objects are defined as a profile on CMS messages defined in
+\fI\%RFC 5652\fP\&.
+.INDENT 7.0
 .TP
 .B DER Encoding
-RFC 6488 demands all signed objects to be DER encoded while the more
-general CMS format allows any BER encoding -- DER is a stricter subset of
-the more general BER. At least one CA does indeed produce BER encoded
-signed objects.
-.IP
+\fI\%RFC 6488\fP demands all signed objects to be DER encoded while the
+more general CMS format allows any BER encoding \-\- DER is a
+stricter subset of the more general BER. At least one CA does
+indeed produce BER encoded signed objects.
+.sp
 In relaxed mode, we will allow BER encoding.
-.IP
-Note that this isn't just nitpicking. In BER encoding, octet strings can
-be broken up into a sequence of substrings. Since those strings are in
-some places used to carry encoded content themselves, such an encoding
-does make parsing significantly more difficult. At least one CA does
-produce such broken up strings.
-
+.sp
+Note that this isn\(aqt just nit\-picking. In BER encoding, octet
+strings can be broken up into a sequence of sub\-strings. Since
+those strings are in some places used to carry encoded content
+themselves, such an encoding does make parsing significantly more
+difficult. At least one CA does produce such broken\-up strings.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.UNINDENT
 .SH SIGNALS
-.SS SIGUSR1: Reload TALs and restart validation
+.INDENT 0.0
+.TP
+.B SIGUSR1: Reload TALs and restart validation
 When receiving SIGUSR1, Routinator will attempt to reload the TALs and, if
 that succeeds, restart validation. If loading the TALs fails, Routinator will
 exit.
-
+.UNINDENT
 .SH EXIT STATUS
-Upon success, the exit status 0 is returned. If any fatal error happens,
-the exit status will be 1. Some commands provide a
-.B --complete
-option which will cause the exit status to be 2 if any of the rsync commands
-to update the repository fail.
-
+.sp
+Upon success, the exit status 0 is returned. If any fatal error happens, the
+exit status will be 1. Some commands provide a \fI\%\-\-complete\fP option which
+will cause the exit status to be 2 if any of the rsync commands to update the
+repository fail.
 .SH AUTHOR
-.P
-Jaap Akkerhuis wrote the original version of this manual page,
-Martin Hoffmann extended it for later versions.
-
-.SH BUGS
-Sure.
-
+Jaap Akkerhuis wrote the original version of this manual page, Martin Hoffmann extended it for later versions.
+.SH COPYRIGHT
+2018–2022, NLnet Labs
+.\" Generated by docutils manpage writer.
+.
