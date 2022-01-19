@@ -4,6 +4,8 @@
 
 Breaking Changes
 
+* The minimal supported Rust version is now 1.52. ([#681])
+
 Bug Fixes
 
 * Encountering stray files at the top level of the rsync cache directory
