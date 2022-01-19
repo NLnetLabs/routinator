@@ -185,13 +185,16 @@ pub fn create_parent_all(path: &Path) -> Result<(), Failed> {
 
 /// Removes a directory tree.
 pub fn remove_dir_all(path: &Path) -> Result<(), Failed> {
-    fs::remove_dir_all(path).map_err(|err| {
-        error!(
-            "Fatal: failed to remove directory tree {}: {}",
-            path.display(), err
-        );
-        Failed
-    })
+    if let Err(err) = fs::remove_dir_all(path) {
+        if err.kind() != io::ErrorKind::NotFound {
+            error!(
+                "Fatal: failed to remove directory tree {}: {}",
+                path.display(), err
+            );
+            return Err(Failed)
+        }
+    }
+    Ok(())
 }
 
 
