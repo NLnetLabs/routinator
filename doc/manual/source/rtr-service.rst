@@ -45,17 +45,17 @@ requirements are described in detail in :rfc:`6810#section-7.2`. There is an
 :abbr:`IANA (Internet Assigned Numbers Authority)`-assigned default port for
 rpki-rtr-tls as well, in this case 324.
 
-Currently, very few routers have implemented suport for TLS, but it may be
-especially useful to the TLS connections when deploying our RTR data proxy
-:doc:`RTRTR <rtrtr:index>`, as RTR data may be flowing across the public
+Currently, very few routers have implemented support for TLS, but it may be
+especially useful to use secure connections when deploying our RTR data proxy
+:doc:`RTRTR <rtrtr:index>`, as data may be flowing across the public
 Internet.
 
-In this example we'll start Routinator's RTR server to listen on 192.0.2.13
-and 2001:0DB8::13 and use port 3324 to make not use a priviledged port. Use
-the :option:`--rtr-tls` to specify this is a TLS connection and the
-:option:`--rtr-tls-cert` option to specify the path to a file containing the
-server certificates to be used. This file has to contain one or more
-certificates encoded in PEM format:
+In this example we'll start Routinator's RTR server listening on the IP
+addresses 192.0.2.13 and 2001:0DB8::13 and use port 3324 to make sure it's
+not a priviledged port. Use the :option:`--rtr-tls` to indicate that this is
+a TLS connection and the :option:`--rtr-tls-cert` option to specify the path
+to a file containing the server certificates to be used. This file has to
+contain one or more certificates encoded in PEM format:
 
 .. code-block:: text
 
@@ -63,8 +63,8 @@ certificates encoded in PEM format:
                      --rtr-tls [2001:0DB8::13]:3324 \
                      --rtr-tls-cert "/path/to/rtr-cert.pem"
 
-There is one additional option you can use. The :option:`--rtr-tls-key`
-option specifies the path to a file containing the private key to be used for
+There is one additional option you can use. With :option:`--rtr-tls-key`
+you can specify the path to a file containing the private key to be used for
 RTR-over-TLS connections. The file has to contain exactly one private key
 encoded in PEM format. 
 
