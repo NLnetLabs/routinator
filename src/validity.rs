@@ -3,9 +3,11 @@
 use std::{fmt, io};
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use rpki::repository::resources::AsId;
+use routecore::addr;
+use rpki::repository::resources::Asn;
+use rpki::rtr::payload::RouteOrigin;
 use serde::Deserialize;
-use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
+use crate::payload::{OriginInfo, PayloadSnapshot};
 use crate::utils::date::format_iso_date;
 
 
@@ -67,7 +69,7 @@ impl<'a> RouteValidityList<'a> {
 
     pub fn iter_state(
         &self
-    ) -> impl Iterator<Item = (AddressPrefix, AsId, RouteState)> + '_ {
+    ) -> impl Iterator<Item = (addr::Prefix, Asn, RouteState)> + '_ {
         self.routes.iter().map(|route| {
             (route.prefix, route.asn, route.state())
         })
@@ -81,36 +83,36 @@ impl<'a> RouteValidityList<'a> {
 #[derive(Clone, Debug)]
 pub struct RouteValidity<'a> {
     /// The address prefix of the route announcement.
-    prefix: AddressPrefix,
+    prefix: addr::Prefix,
 
     /// The origin AS number of the route announcement.
-    asn: AsId,
+    asn: Asn,
 
     /// Indexes of the matched VRPs in `origins`.
-    matched: Vec<&'a (RouteOrigin, OriginInfo)>,
+    matched: Vec<(RouteOrigin, &'a OriginInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the ´asn`.
-    bad_asn: Vec<&'a (RouteOrigin, OriginInfo)>,
+    bad_asn: Vec<(RouteOrigin, &'a OriginInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the prefix length.
-    bad_len: Vec<&'a (RouteOrigin, OriginInfo)>,
+    bad_len: Vec<(RouteOrigin, &'a OriginInfo)>,
 }
 
 impl<'a> RouteValidity<'a> {
     pub fn new(
-        prefix: AddressPrefix,
-        asn: AsId,
+        prefix: addr::Prefix,
+        asn: Asn,
         snapshot: &'a PayloadSnapshot
     ) -> Self {
         let mut matched = Vec::new();
         let mut bad_asn = Vec::new();
         let mut bad_len = Vec::new();
-        for item in snapshot.origins().iter() {
-            if item.0.prefix().covers(prefix) {
-                if prefix.address_length() > item.0.max_length() {
+        for item in snapshot.origins() {
+            if item.0.prefix.prefix().covers(prefix) {
+                if prefix.len() > item.0.prefix.resolved_max_len() {
                     bad_len.push(item);
                 }
-                else if item.0.as_id() != asn {
+                else if item.0.asn != asn {
                     bad_asn.push(item);
                 }
                 else {
@@ -121,11 +123,11 @@ impl<'a> RouteValidity<'a> {
         RouteValidity { prefix, asn, matched, bad_asn, bad_len }
     }
 
-    pub fn prefix(&self) -> AddressPrefix {
+    pub fn prefix(&self) -> addr::Prefix {
         self.prefix
     }
 
-    pub fn asn(&self) -> AsId {
+    pub fn asn(&self) -> Asn {
         self.asn
     }
 
@@ -177,15 +179,15 @@ impl<'a> RouteValidity<'a> {
         }
     }
 
-    pub fn matched(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
+    pub fn matched(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
         &self.matched
     }
 
-    pub fn bad_asn(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
+    pub fn bad_asn(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
         &self.bad_asn
     }
 
-    pub fn bad_len(&self) -> &[&'a (RouteOrigin, OriginInfo)] {
+    pub fn bad_len(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
         &self.bad_len
     }
 
@@ -267,7 +269,7 @@ impl<'a> RouteValidity<'a> {
     fn write_vrps_json<W: io::Write>(
         indent: &str,
         category: &str,
-        vrps: &[&'a (RouteOrigin, OriginInfo)],
+        vrps: &[(RouteOrigin, &'a OriginInfo)],
         target: &mut W
     ) -> Result<(), io::Error> {
         write!(target, "{}      \"{}\": [", indent, category)?;
@@ -288,9 +290,9 @@ impl<'a> RouteValidity<'a> {
                 {indent}          \"prefix\": \"{}\",\n\
                 {indent}          \"max_length\": \"{}\"\n\
                 {indent}        }}",
-                item.0.as_id(),
-                item.0.prefix(),
-                item.0.max_length(),
+                item.0.asn,
+                item.0.prefix.prefix(),
+                item.0.prefix.resolved_max_len(),
                 indent = indent
             )?
         }
@@ -380,7 +382,7 @@ impl RequestList {
 
             let prefix = match tokens.next() {
                 Some(prefix) => {
-                    match AddressPrefix::from_str(prefix) {
+                    match addr::Prefix::from_str(prefix) {
                         Ok(prefix) => prefix,
                         Err(_) => {
                             return Err(io::Error::new(
@@ -420,7 +422,7 @@ impl RequestList {
 
             let asn = match tokens.next() {
                 Some(asn) => {
-                    match AsId::from_str(asn) {
+                    match Asn::from_str(asn) {
                         Ok(asn) => asn,
                         Err(_) => {
                             return Err(io::Error::new(
@@ -471,7 +473,7 @@ impl RequestList {
     }
 
     /// Creates a request list with a single entry.
-    pub fn single(prefix: AddressPrefix, asn: AsId) -> Self {
+    pub fn single(prefix: addr::Prefix, asn: Asn) -> Self {
         RequestList {
             routes: vec![Request { prefix, asn }]
         }
@@ -493,10 +495,10 @@ impl RequestList {
 #[derive(Clone, Debug, Deserialize)]
 struct Request {
     /// The address prefix of the route announcement.
-    prefix: AddressPrefix,
+    prefix: addr::Prefix,
 
     /// The origin AS number of the route announcement.
-    asn: AsId,
+    asn: Asn,
 }
 
 

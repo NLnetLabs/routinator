@@ -72,9 +72,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bcder"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c16eb8ab9a5deef7188129b3ea73775a67fa07cc153ebe8d4b08ea21985d9c5b"
+checksum = "52e7c3bae57b01ec5b1b028af1f77b7d41dd2bd97a41bab7968739b5329c0e39"
 dependencies = [
  "backtrace",
  "bytes",
@@ -967,6 +967,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "routecore"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe765d4ebcd1b76cdc7b23cbf3f747841861293bc885e47e0fae1095232f1089"
+dependencies = [
+ "bcder",
+ "serde",
+]
+
+[[package]]
 name = "routinator"
 version = "0.11.0-dev"
 dependencies = [
@@ -988,6 +998,7 @@ dependencies = [
  "rand",
  "reqwest",
  "ring",
+ "routecore",
  "routinator-ui",
  "rpki",
  "rustc_version",
@@ -1016,9 +1027,8 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718f0d99ad56874728162d2f082e43c2cb378ab62b87202cdf806b9fd13b2d0a"
+version = "0.14.2-dev"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=main#e80a5435a5456a5d39e4924b7aaba110a39b981c"
 dependencies = [
  "base64",
  "bcder",
@@ -1028,7 +1038,9 @@ dependencies = [
  "log",
  "quick-xml",
  "ring",
+ "routecore",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "untrusted",

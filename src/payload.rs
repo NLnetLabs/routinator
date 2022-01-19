@@ -4,34 +4,26 @@
 /// repository as well as complete sets of this data, diffs between
 /// consecutive versions of such sets, and the history of sets and diffs.
 
-use std::{cmp, error, fmt, ops};
-use std::cmp::Ordering;
+use std::{cmp, ops};
 use std::collections::hash_map;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::hash::Hash;
-use std::net::{AddrParseError, IpAddr};
-use std::num::ParseIntError;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
 use log::{info, warn};
+use routecore::addr;
 use rpki::repository::cert::ResourceCert;
-use rpki::repository::resources::{
-    AsId, IpBlock, IpBlocks, IpBlocksBuilder, Prefix
-};
-use rpki::repository::roa::{
-    FriendlyRoaIpAddress, RouteOriginAttestation
-};
+use rpki::repository::resources::{IpBlock, IpBlocks, IpBlocksBuilder};
+use rpki::repository::roa::RouteOriginAttestation;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
 use rpki::repository::x509::{Time, Validity};
-use rpki::rtr::payload::{Action, Ipv4Prefix, Ipv6Prefix, Payload, Timing};
-use rpki::rtr::server::VrpSource;
+use rpki::rtr::payload::{Action, Payload, RouteOrigin, Timing};
+use rpki::rtr::server::{PayloadDiff, PayloadSet, PayloadSource};
 use rpki::rtr::state::{Serial, State};
 use rpki::uri;
-use serde::{Deserialize, Deserializer};
 use crate::config::{Config, FilterPolicy};
 use crate::engine::{CaCert, ProcessPubPoint, ProcessRun};
 use crate::error::Failed;
@@ -188,8 +180,8 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
 /// processing.
 #[derive(Clone, Debug)]
 struct PubPoint {
-    /// The list of valid ROA origins and their ROA information.
-    origins: Vec<(RouteOrigin, Arc<RoaInfo>)>,
+    /// The list of valid payload and its ROA information.
+    payload: Vec<(Payload, Arc<RoaInfo>)>,
 
     /// The time when the publication point needs to be refreshed.
     refresh: Time,
@@ -199,10 +191,10 @@ struct PubPoint {
     /// We need this for restarting processing.
     orig_refresh: Time,
 
-    /// The index of the TALs for these origins in the metrics.
+    /// The index of the TALs for the payload in the metrics.
     tal_index: usize,
 
-    /// The index of the repository containing these origins in the metrics.
+    /// The index of the repository containing the payload in the metrics.
     repository_index: Option<usize>,
 }
 
@@ -211,7 +203,7 @@ impl PubPoint {
     fn new_ta(cert: &CaCert, tal_index: usize) -> Self {
         let refresh = cert.cert().validity().not_after(); 
         PubPoint {
-            origins: Vec::new(),
+            payload: Vec::new(),
             refresh,
             orig_refresh: refresh,
             tal_index,
@@ -225,7 +217,7 @@ impl PubPoint {
             parent.refresh, cert.cert().validity().not_after()
         );
         PubPoint {
-            origins: Vec::new(),
+            payload: Vec::new(),
             refresh,
             orig_refresh: refresh,
             tal_index: parent.tal_index,
@@ -235,7 +227,7 @@ impl PubPoint {
 
     /// Returns whether there is nothing published via this point.
     pub fn is_empty(&self) -> bool {
-        self.origins.is_empty()
+        self.payload.is_empty()
     }
 
     /// Updates the refresh time to be no later than the given time.
@@ -245,18 +237,18 @@ impl PubPoint {
 
     /// Restarts processing for the publication point.
     fn restart(&mut self) {
-        self.origins.clear();
+        self.payload.clear();
         self.refresh = self.orig_refresh;
     }
 
-    /// Adds the content of a ROA to the origins.
+    /// Adds the content of a ROA to the payload.
     fn add_roa(
         &mut self,
         roa: RouteOriginAttestation,
         info: Arc<RoaInfo>,
     ) {
-        self.origins.extend(roa.iter().map(|prefix| {
-            (RouteOrigin::from_roa(roa.as_id(), prefix), info.clone())
+        self.payload.extend(roa.iter_origins().map(|origin| {
+            (origin.into(), info.clone())
         }));
     }
 }
@@ -317,12 +309,15 @@ pub struct RejectedResources {
 
 impl RejectedResources {
     /// Checks whether a prefix should be kept.
-    pub fn keep_prefix(&self, prefix: AddressPrefix) -> bool {
+    pub fn keep_prefix(&self, prefix: addr::Prefix) -> bool {
+        let raw = rpki::repository::resources::Prefix::new(
+            prefix.addr(), prefix.len()
+        );
         if prefix.is_v4() {
-            !self.v4.intersects_block(prefix)
+            !self.v4.intersects_block(raw)
         }
         else {
-            !self.v6.intersects_block(prefix)
+            !self.v6.intersects_block(raw)
         }
     }
 }
@@ -390,9 +385,9 @@ impl SharedHistory {
         if let Some(delta) = delta {
             // Data has changed.
             info!(
-                "Delta with {} announced and {} withdrawn origins.",
-                delta.announced_origins.len(),
-                delta.withdrawn_origins.len(),
+                "Delta with {} announced and {} withdrawn items.",
+                delta.announce.len(),
+                delta.withdraw.len(),
             );
             history.current = Some(snapshot.into_snapshot().into());
             history.push_delta(delta);
@@ -451,11 +446,11 @@ impl SharedHistory {
 }
 
 
-//--- VrpSource
+//--- PayloadSource
 
-impl VrpSource for SharedHistory {
-    type FullIter = SnapshotVrpIter;
-    type DiffIter = DeltaVrpIter;
+impl PayloadSource for SharedHistory {
+    type Set = SnapshotVrpIter;
+    type Diff = DeltaVrpIter;
 
     fn ready(&self) -> bool {
         self.read().is_active()
@@ -466,7 +461,7 @@ impl VrpSource for SharedHistory {
         State::from_parts(read.rtr_session(), read.serial())
     }
 
-    fn full(&self) -> (State, Self::FullIter) {
+    fn full(&self) -> (State, Self::Set) {
         let read = self.read();
         (
             State::from_parts(read.rtr_session(), read.serial()),
@@ -474,7 +469,7 @@ impl VrpSource for SharedHistory {
         )
     }
 
-    fn diff(&self, state: State) -> Option<(State, Self::DiffIter)> {
+    fn diff(&self, state: State) -> Option<(State, Self::Diff)> {
         let read = self.read();
         if read.rtr_session() != state.session() {
             return None
@@ -730,10 +725,10 @@ impl PayloadHistory {
 /// The complete set of validated payload data.
 #[derive(Clone, Debug)]
 pub struct PayloadSnapshot {
-    /// A list of route origins.
+    /// A list of RPKI payload.
     ///
-    /// This list contains an ordered sequence of unique origins.
-    origins: Vec<(RouteOrigin, OriginInfo)>,
+    /// This list contains an ordered sequence of unique payload.
+    payload: Vec<(Payload, OriginInfo)>,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -780,9 +775,21 @@ impl PayloadSnapshot {
         self.refresh
     }
 
-    /// Returns an slice of all the route origins.
-    pub fn origins(&self) -> &[(RouteOrigin, OriginInfo)] {
-        &self.origins
+    /// Returns an slice of the payload.
+    pub fn payload(&self) -> &[(Payload, OriginInfo)] {
+        &self.payload
+    }
+
+    /// Returns an iterator over the route origins.
+    pub fn origins(
+        &self
+    ) -> impl Iterator<Item = (RouteOrigin, &OriginInfo)> + '_ {
+        self.payload().iter().filter_map(|item| {
+            match item.0 {
+                Payload::Origin(origin) => Some((origin, &item.1)),
+                _ => None
+            }
+        })
     }
 
     /// Converts a shared snapshot into a VRP iterator.
@@ -793,7 +800,7 @@ impl PayloadSnapshot {
     /// Returns a snapshot builder based in this snapshot.
     fn to_builder(&self) -> SnapshotBuilder {
         SnapshotBuilder {
-            origins: self.origins.iter().cloned().collect(),
+            payload: self.payload.iter().cloned().collect(),
             created: self.created,
             refresh: self.refresh,
         }
@@ -806,7 +813,7 @@ impl PayloadSnapshot {
 impl Default for PayloadSnapshot {
     fn default() -> Self {
         PayloadSnapshot {
-            origins: Vec::new(),
+            payload: Vec::new(),
             created: Utc::now(),
             refresh: None
         }
@@ -831,7 +838,7 @@ pub struct SnapshotVrpIter {
     /// The shared snapshot.
     snapshot: Arc<PayloadSnapshot>,
 
-    /// The position of the next item within the origins of the snapshot.
+    /// The position of the next item within the payload of the snapshot.
     pos: usize,
 }
 
@@ -843,15 +850,38 @@ impl SnapshotVrpIter {
             pos: 0
         }
     }
+
+    /// Converts the iterator into one that only return origins.
+    pub fn origins(self) -> SnapshotOriginsIter {
+        SnapshotOriginsIter(self)
+    }
 }
 
-impl Iterator for SnapshotVrpIter {
-    type Item = Payload;
+impl PayloadSet for SnapshotVrpIter {
+    fn next(&mut self) -> Option<&Payload> {
+        let res = &self.snapshot.payload.get(self.pos)?.0;
+        self.pos += 1;
+        Some(res)
+
+    }
+}
+
+
+//------------ SnapshotOriginsIter -------------------------------------------
+
+/// An iterator over only the route origins in a snapshot.
+#[derive(Clone, Debug)]
+pub struct SnapshotOriginsIter(SnapshotVrpIter);
+
+impl Iterator for SnapshotOriginsIter {
+    type Item = RouteOrigin;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = self.snapshot.origins.get(self.pos)?;
-        self.pos += 1;
-        Some(res.0.to_payload())
+        loop {
+            if let Payload::Origin(origin) = self.0.next()? {
+                return Some(*origin)
+            }
+        }
     }
 }
 
@@ -861,8 +891,8 @@ impl Iterator for SnapshotVrpIter {
 /// The representation of a snapshot during history updates.
 #[derive(Clone, Debug)]
 struct SnapshotBuilder {
-    /// A set of route origins.
-    origins: HashMap<RouteOrigin, OriginInfo>,
+    /// A set of RPKI payload.
+    payload: HashMap<Payload, OriginInfo>,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -888,7 +918,7 @@ impl SnapshotBuilder {
         unsafe_vrps: FilterPolicy
     ) -> Self {
         let mut res = SnapshotBuilder {
-            origins: HashMap::new(),
+            payload: HashMap::new(),
             created: metrics.time,
             refresh: None
         };
@@ -901,36 +931,38 @@ impl SnapshotBuilder {
                 metrics, pub_point.tal_index, pub_point.repository_index
             );
             
-            for (origin, roa_info) in pub_point.origins {
+            for (payload, roa_info) in pub_point.payload {
                 point_metrics.update(|m| m.valid += 1);
 
-                // Does the origih have rejected resources?
-                if !rejected.keep_prefix(origin.prefix()) {
-                    point_metrics.update(|m| m.marked_unsafe += 1);
-                    if unsafe_vrps != FilterPolicy::Accept {
-                        warn!(
-                            "Filtering potentially unsafe VRP \
-                             ({}/{}-{}, {})",
-                            origin.address(),
-                            origin.address_length(),
-                            origin.max_length(),
-                            origin.as_id()
-                        );
-                    }
-                    if unsafe_vrps == FilterPolicy::Reject {
-                        continue
+                if let Payload::Origin(origin) = payload {
+                    // Does the origin have rejected resources?
+                    if !rejected.keep_prefix(origin.prefix.prefix()) {
+                        point_metrics.update(|m| m.marked_unsafe += 1);
+                        if unsafe_vrps != FilterPolicy::Accept {
+                            warn!(
+                                "Filtering potentially unsafe VRP \
+                                 ({}/{}-{}, {})",
+                                origin.prefix.addr(),
+                                origin.prefix.prefix_len(),
+                                origin.prefix.resolved_max_len(),
+                                origin.asn
+                            );
+                        }
+                        if unsafe_vrps == FilterPolicy::Reject {
+                            continue
+                        }
                     }
                 }
 
                 // Is the origin to be filtered locally?
-                if !exceptions.keep_origin(origin) {
+                if !exceptions.keep_payload(&payload) {
                     point_metrics.update(|m| m.locally_filtered += 1);
                     continue
                 }
 
                 // Insert the origin. If we have it already, we need to
                 // update its info instead.
-                match res.origins.entry(origin) {
+                match res.payload.entry(payload) {
                     hash_map::Entry::Vacant(entry) => {
                         entry.insert(roa_info.into());
                         point_metrics.update(|m| m.contributed += 1);
@@ -944,8 +976,8 @@ impl SnapshotBuilder {
         }
 
         // Add the assertions from the local exceptions.
-        for (origin, info) in exceptions.origin_assertions() {
-            match res.origins.entry(origin) {
+        for (origin, info) in exceptions.assertions() {
+            match res.payload.entry(origin.clone()) {
                 hash_map::Entry::Vacant(entry) => {
                     entry.insert(info.into());
                     metrics.local.contributed += 1;
@@ -972,10 +1004,10 @@ impl SnapshotBuilder {
 
     /// Converts the builder into a snapshot.
     fn into_snapshot(self) -> PayloadSnapshot {
-        let mut origins: Vec<_> = self.origins.into_iter().collect();
-        origins.sort_by(|left, right| left.0.cmp(&right.0));
+        let mut payload: Vec<_> = self.payload.into_iter().collect();
+        payload.sort_by(|left, right| left.0.cmp(&right.0));
         PayloadSnapshot {
-            origins,
+            payload,
             created: self.created,
             refresh: self.refresh,
         }
@@ -985,7 +1017,7 @@ impl SnapshotBuilder {
 impl Default for SnapshotBuilder {
     fn default() -> Self {
         SnapshotBuilder {
-            origins: HashMap::new(),
+            payload: HashMap::new(),
             created: Utc::now(),
             refresh: None
         }
@@ -1037,15 +1069,15 @@ pub struct PayloadDelta {
     /// be resulting in when applied.
     serial: Serial,
 
-    /// Route origins to be added by this delta.
+    /// Payload to be added by this delta.
     ///
     /// The vec is ordered.
-    announced_origins: Vec<RouteOrigin>,
+    announce: Vec<Payload>,
 
-    /// Route origins to be removed by this delta.
+    /// Payload to be removed by this delta.
     ///
     /// This vec is orderd.
-    withdrawn_origins: Vec<RouteOrigin>,
+    withdraw: Vec<Payload>,
 }
 
 impl PayloadDelta {
@@ -1055,13 +1087,13 @@ impl PayloadDelta {
     fn construct(
         current: &SnapshotBuilder, next: &SnapshotBuilder, serial: Serial
     ) -> Option<Self> {
-        let announce = added_keys(&next.origins, &current.origins);
-        let withdraw = added_keys(&current.origins, &next.origins);
+        let announce = added_keys(&next.payload, &current.payload);
+        let withdraw = added_keys(&current.payload, &next.payload);
         if !announce.is_empty() || !withdraw.is_empty() {
             Some(PayloadDelta {
                 serial: serial.add(1),
-                announced_origins: announce,
-                withdrawn_origins: withdraw,
+                announce,
+                withdraw,
             })
         }
         else {
@@ -1073,8 +1105,8 @@ impl PayloadDelta {
     pub fn empty(serial: Serial) -> Self {
         PayloadDelta {
             serial,
-            announced_origins: Vec::new(),
-            withdrawn_origins: Vec::new(),
+            announce: Vec::new(),
+            withdraw: Vec::new(),
         }
     }
 
@@ -1082,7 +1114,7 @@ impl PayloadDelta {
     ///
     /// A delta is empty if there is nothing announced and nothing withdrawn.
     pub fn is_empty(&self) -> bool {
-        self.announced_origins.is_empty() && self.withdrawn_origins.is_empty()
+        self.announce.is_empty() && self.withdraw.is_empty()
     }
 
     /// Returns the target serial number of the delta.
@@ -1090,14 +1122,14 @@ impl PayloadDelta {
         self.serial
     }
 
-    /// Returns a slice with the route origins announced by this delta.
-    pub fn announced_origins(&self) ->  &[RouteOrigin] {
-        &self.announced_origins
+    /// Returns a slice with the payload announced by this delta.
+    pub fn announce(&self) ->  &[Payload] {
+        &self.announce
     }
 
-    /// Returns a slice with the route origins withdrawn by this delta.
-    pub fn withdrawn_origins(&self) ->  &[RouteOrigin] {
-        &self.withdrawn_origins
+    /// Returns a slice with the payload withdrawn by this delta.
+    pub fn withdraw(&self) ->  &[Payload] {
+        &self.withdraw
     }
 }
 
@@ -1127,28 +1159,32 @@ impl DeltaVrpIter {
     }
 }
 
-impl Iterator for DeltaVrpIter {
-    type Item = (Action, Payload);
-
-    fn next(&mut self) -> Option<Self::Item> {
+impl PayloadDiff for DeltaVrpIter {
+    fn next(&mut self) -> Option<(&Payload, Action)> {
         match self.pos {
             Ok(pos) => {
-                match self.delta.announced_origins.get(pos) {
+                match self.delta.announce.get(pos) {
                     Some(res) => {
                         self.pos = Ok(pos + 1);
-                        Some((Action::Announce, res.to_payload()))
+                        Some((res, Action::Announce))
                     }
                     None => {
                         self.pos = Err(0);
-                        self.next()
+                        match self.delta.withdraw.get(pos) {
+                            Some(res) => {
+                                self.pos = Err(pos + 1);
+                                Some((res, Action::Withdraw))
+                            }
+                            None => None
+                        }
                     }
                 }
             }
             Err(pos) => {
-                match self.delta.withdrawn_origins.get(pos) {
+                match self.delta.withdraw.get(pos) {
                     Some(res) => {
                         self.pos = Err(pos + 1);
-                        Some((Action::Withdraw, res.to_payload()))
+                        Some((res, Action::Withdraw))
                     }
                     None => None
                 }
@@ -1166,11 +1202,11 @@ struct DeltaMerger {
     /// The target serial number of the combined diff.
     serial: Serial,
 
-    /// The set of added route origins.
-    announced_origins: HashSet<RouteOrigin>,
+    /// The set of added payload.
+    announce: HashSet<Payload>,
 
-    /// The set of removed route origins.
-    withdrawn_origins: HashSet<RouteOrigin>,
+    /// The set of removed payload.
+    withdraw: HashSet<Payload>,
 }
 
 impl DeltaMerger {
@@ -1194,33 +1230,31 @@ impl DeltaMerger {
     fn new(delta: &PayloadDelta) -> Self {
         DeltaMerger {
             serial: delta.serial,
-            announced_origins:
-                delta.announced_origins.iter().cloned().collect(),
-            withdrawn_origins:
-                delta.withdrawn_origins.iter().cloned().collect(),
+            announce: delta.announce.iter().cloned().collect(),
+            withdraw: delta.withdraw.iter().cloned().collect(),
         }
     }
 
     /// Merges a diff.
     ///
-    /// After, the serial number will be that of `diff`. Address origins that
-    /// are in `diff`’s announce list are added to the merger’s announce set
-    /// unless they are in the merger’s withdraw set, in which case they are
-    /// removed from the merger’s withdraw set. Origins in `diff`’s withdraw
-    /// set are removed from the merger’s announce set if they are in it or
+    /// After, the serial number will be that of `diff`. Payload that is
+    /// in `diff`’s announce list is added to the merger’s announce set
+    /// unless it is in the merger’s withdraw set, in which case it is
+    /// removed from the merger’s withdraw set. Payload in `diff`’s withdraw
+    /// set is removed from the merger’s announce set if it is in it or
     /// added to the merger’s withdraw set otherwise.
     ///
     /// (This looks much simpler in code than in prose …)
     fn merge(&mut self, delta: &PayloadDelta) {
         self.serial = delta.serial;
-        for origin in &delta.announced_origins {
-            if !self.withdrawn_origins.remove(origin) {
-                self.announced_origins.insert(*origin);
+        for origin in &delta.announce {
+            if !self.withdraw.remove(origin) {
+                self.announce.insert(origin.clone());
             }
         }
-        for origin in &delta.withdrawn_origins {
-            if !self.announced_origins.remove(origin) {
-                self.withdrawn_origins.insert(*origin);
+        for origin in &delta.withdraw {
+            if !self.announce.remove(origin) {
+                self.withdraw.insert(origin.clone());
             }
         }
     }
@@ -1229,364 +1263,11 @@ impl DeltaMerger {
     fn into_delta(self) -> Arc<PayloadDelta> {
         Arc::new(PayloadDelta {
             serial: self.serial,
-            announced_origins: self.announced_origins.into_iter().collect(),
-            withdrawn_origins: self.withdrawn_origins.into_iter().collect(),
+            announce: self.announce.into_iter().collect(),
+            withdraw: self.withdraw.into_iter().collect(),
         })
     }
 }
-
-
-//------------ RouteOrigin ---------------------------------------------------
-
-/// A validated route origin authorization.
-///
-/// This is what RFC 6811 calls a ‘Validated ROA Payload.’ It consists of an
-/// IP address prefix, a maximum length, and the origin AS number.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct RouteOrigin {
-    /// The origin AS number.
-    as_id: AsId,
-
-    /// The IP address prefix.
-    prefix: AddressPrefix,
-
-    /// The maximum authorized prefix length of a route.
-    max_length: u8,
-}
-
-impl RouteOrigin {
-    /// Creates a new route origin from its components.
-    pub fn new(
-        as_id: AsId,
-        prefix: AddressPrefix,
-        max_length: u8,
-    ) -> Self {
-        RouteOrigin { as_id, prefix, max_length }
-    }
-
-    /// Creates a new route origin from information from a ROA.
-    fn from_roa(as_id: AsId, prefix: FriendlyRoaIpAddress) -> Self {
-        Self::new(as_id, prefix.into(), prefix.max_length())
-    }
-
-    /// Returns the AS number authorized to originate a route.
-    pub fn as_id(self) -> AsId {
-        self.as_id
-    }
-
-    /// Returns the prefix of this authorization.
-    pub fn prefix(self) -> AddressPrefix {
-        self.prefix
-    }
-
-    /// Returns the address part of the prefix of this authorization.
-    pub fn address(self) -> IpAddr {
-        self.prefix.address()
-    }
-
-    /// Returns the minimum prefix length of this authorization.
-    pub fn address_length(self) -> u8 {
-        self.prefix.address_length()
-    }
-
-    /// Returns the maximum prefix length of this authorization.
-    pub fn max_length(self) -> u8 {
-        self.max_length
-    }
-
-    /// Returns an RTR payload value for this route origin.
-    pub fn to_payload(self) -> Payload {
-        match self.address() {
-            IpAddr::V4(addr) => {
-                Payload::V4(Ipv4Prefix {
-                    prefix: addr,
-                    prefix_len: self.address_length(),
-                    max_len: self.max_length(),
-                    asn: self.as_id().into(),
-                })
-            }
-            IpAddr::V6(addr) => {
-                Payload::V6(Ipv6Prefix {
-                    prefix: addr,
-                    prefix_len: self.address_length(),
-                    max_len: self.max_length(),
-                    asn: self.as_id().into(),
-                })
-            }
-        }
-    }
-}
-
-
-//--- PartialOrd and Ord
-
-impl PartialOrd for RouteOrigin {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RouteOrigin {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // The sort order attempts to avoid races in consumers that don’t
-        // apply changes atomically. It keeps more specifics first and the
-        // same prefixes together.
-        //
-        // XXX This could probably be improved.
-        match self.max_length.cmp(&other.max_length) {
-            Ordering::Less => return Ordering::Greater,
-            Ordering::Greater => return Ordering::Less,
-            Ordering::Equal => { }
-        }
-        match self.prefix.cmp(&other.prefix) {
-            Ordering::Less => return Ordering::Less,
-            Ordering::Greater => return Ordering::Greater,
-            Ordering::Equal => { }
-        }
-        self.as_id.cmp(&other.as_id)
-    }
-}
-
-
-//------------ AddressPrefix -------------------------------------------------
-
-/// An IP address prefix: an IP address and a prefix length.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct AddressPrefix {
-    addr: IpAddr,
-    len: u8,
-}
-
-impl AddressPrefix {
-    /// Creates a new prefix from an address and a length.
-    pub fn new(addr: IpAddr, len: u8) -> Result<Self, AddressPrefixError> {
-        if (addr.is_ipv4() && len > 32) || len > 128 {
-            return Err(AddressPrefixError::LengthOverflow)
-        }
-        let res = AddressPrefix { addr, len };
-        if !res.is_host_zero() {
-            Err(AddressPrefixError::NonZeroHost)
-        }
-        else {
-            Ok(res)
-        }
-    }
-
-    /// Returns whether the host portion of the address is all zeros.
-    fn is_host_zero(self) -> bool {
-        match self.addr {
-            IpAddr::V4(addr) => {
-                u32::from(addr).trailing_zeros()
-                    >= 32u32.saturating_sub(self.len.into())
-            }
-            IpAddr::V6(addr) => {
-                u128::from(addr).trailing_zeros()
-                    >= 128u32.saturating_sub(self.len.into())
-            }
-        }
-    }
-
-    /// Returns whether the prefix is for an IPv4 address.
-    pub fn is_v4(self) -> bool {
-        self.addr.is_ipv4()
-    }
-
-    /// Returns whether the prefix is for an IPv6 address.
-    pub fn is_v6(self) -> bool {
-        self.addr.is_ipv6()
-    }
-
-    /// Returns the IP address part of a prefix.
-    pub fn address(self) -> IpAddr {
-        self.addr
-    }
-
-    /// Returns the length part of a prefix.
-    pub fn address_length(self) -> u8 {
-        self.len
-    }
-
-    /// Returns whether the prefix `self` covers  the prefix `other`.
-    pub fn covers(self, other: Self) -> bool {
-        match (self.addr, other.addr) {
-            (IpAddr::V4(left), IpAddr::V4(right)) => {
-                if self.len > 31 && other.len > 31 {
-                    left == right
-                }
-                else if self.len > other.len {
-                    false
-                }
-                else {
-                    let left = u32::from(left)
-                             & !(::std::u32::MAX >> self.len);
-                    let right = u32::from(right)
-                              & !(::std::u32::MAX >> self.len);
-                    left == right
-                }
-            }
-            (IpAddr::V6(left), IpAddr::V6(right)) => {
-                if self.len > 127 && other.len > 127 {
-                    left == right
-                }
-                else if self.len > other.len {
-                    false
-                }
-                else {
-                    let left = u128::from(left)
-                             & !(::std::u128::MAX >> self.len);
-                    let right = u128::from(right)
-                              & !(::std::u128::MAX >> self.len);
-                    left == right
-                }
-            }
-            _ => false
-        }
-    }
-}
-
-
-//--- From
-
-impl From<FriendlyRoaIpAddress> for AddressPrefix {
-    fn from(addr: FriendlyRoaIpAddress) -> Self {
-        AddressPrefix {
-            addr: addr.address(),
-            len: addr.address_length(),
-        }
-    }
-}
-
-impl From<AddressPrefix> for IpBlock {
-    fn from(src: AddressPrefix) -> Self {
-        Prefix::new(src.addr, src.len).into()
-    }
-}
-
-impl FromStr for AddressPrefix {
-    type Err = ParsePrefixError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut iter = s.splitn(2, '/');
-        let addr = iter.next().ok_or(ParsePrefixError::Empty)?;
-        if addr.is_empty() {
-            return Err(ParsePrefixError::Empty)
-        }
-        let len = iter.next().ok_or(ParsePrefixError::MissingLen)?;
-        let addr = IpAddr::from_str(addr).map_err(
-            ParsePrefixError::InvalidAddr
-        )?;
-        let len = u8::from_str(len).map_err(
-            ParsePrefixError::InvalidLen
-        )?;
-        AddressPrefix::new(addr, len).map_err(
-            ParsePrefixError::InvalidPrefix
-        )
-    }
-}
-
-impl<'de> Deserialize<'de> for AddressPrefix {
-    fn deserialize<D: Deserializer<'de>>(
-        deserializer: D
-    ) -> Result<Self, D::Error> {
-        struct Visitor;
-
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = AddressPrefix;
-
-            fn expecting(
-                &self, formatter: &mut fmt::Formatter
-            ) -> fmt::Result {
-                write!(formatter, "a string with a IPv4 or IPv6 prefix")
-            }
-
-            fn visit_str<E: serde::de::Error>(
-                self, v: &str
-            ) -> Result<Self::Value, E> {
-                AddressPrefix::from_str(v).map_err(E::custom)
-            }
-        }
-
-        deserializer.deserialize_str(Visitor)
-    }
-}
-
-impl fmt::Display for AddressPrefix {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}/{}", self.addr, self.len)
-    }
-}
-
-
-//------------ AddressPrefixError --------------------------------------------
-
-/// Creating an address prefix failed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum AddressPrefixError {
-    /// The prefix length is longer than allowed for the address family.
-    LengthOverflow,
-
-    /// The host portion of the address has non-zero bits set.
-    NonZeroHost,
-}
-
-impl fmt::Display for AddressPrefixError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match *self {
-            AddressPrefixError::LengthOverflow => {
-                "prefix length too large"
-            }
-            AddressPrefixError::NonZeroHost => {
-                "non-zero host portion"
-            }
-        })
-    }
-}
-
-impl error::Error for AddressPrefixError { }
-
-
-//------------ ParsePrefixError ---------------------------------------
-
-/// Creating an IP address prefix from a string has failed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ParsePrefixError {
-    /// The value parsed was empty.
-    Empty,
-
-    /// The length portion after a slash was missing.
-    MissingLen,
-
-    /// The address portion is invalid.
-    InvalidAddr(AddrParseError),
-
-    /// The length portion is invalid.
-    InvalidLen(ParseIntError),
-
-    /// The combined prefix is invalid.
-    InvalidPrefix(AddressPrefixError),
-}
-
-impl fmt::Display for ParsePrefixError{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ParsePrefixError::Empty => f.write_str("empty string"),
-            ParsePrefixError::MissingLen => {
-                f.write_str("missing length portion")
-            }
-            ParsePrefixError::InvalidAddr(err) => {
-                write!(f, "invalid address: {}", err)
-            }
-            ParsePrefixError::InvalidLen(err) => {
-                write!(f, "invalid length: {}", err)
-            }
-            ParsePrefixError::InvalidPrefix(err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for ParsePrefixError { }
 
 
 //============ Part Three. Payload Source Information ========================
@@ -1747,7 +1428,7 @@ impl RoaInfo {
 //============ Part Four. The Attic ==========================================
 
 /// Returns the keys in `this` that are not in `other` as a vec.
-fn added_keys<K: Copy + Hash + Eq, V>(
+fn added_keys<K: Clone + Hash + Eq, V>(
     this: &HashMap<K, V>, other: &HashMap<K, V>
 ) -> Vec<K> {
     this.keys().filter(|key| !other.contains_key(key)).cloned().collect()
@@ -1758,10 +1439,11 @@ fn added_keys<K: Copy + Hash + Eq, V>(
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
     use super::*;
 
-    fn make_prefix(s: &str, l: u8) -> AddressPrefix {
-        AddressPrefix::new(s.parse().unwrap(), l).unwrap()
+    fn make_prefix(s: &str, l: u8) -> addr::Prefix {
+        addr::Prefix::new(s.parse().unwrap(), l).unwrap()
     }
 
     #[test]
@@ -1816,37 +1498,40 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::mutable_key_type)]
     fn payload_delta_construct() {
-        fn origin(as_id: u32, prefix: &str, max_len: u8) -> RouteOrigin {
+        fn origin(as_id: u32, prefix: &str, max_len: u8) -> Payload {
             RouteOrigin::new(
+                addr::MaxLenPrefix::new(
+                    addr::Prefix::from_str(prefix).unwrap(),
+                    Some(max_len)
+                ).unwrap(),
                 as_id.into(),
-                AddressPrefix::from_str(prefix).unwrap(),
-                max_len
-            )
+            ).into()
         }
         let o0 = origin(10, "10.0.0.0/10", 10);
-        let o1 = origin(11, "10.0.0.0/11", 10);
-        let o2 = origin(12, "10.0.0.0/12", 10);
-        let o3 = origin(13, "10.0.0.0/13", 10);
-        let o4 = origin(14, "10.0.0.0/14", 10);
+        let o1 = origin(11, "10.0.0.0/11", 11);
+        let o2 = origin(12, "10.0.0.0/12", 12);
+        let o3 = origin(13, "10.0.0.0/13", 13);
+        let o4 = origin(14, "10.0.0.0/14", 14);
 
         let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
         let mut current = SnapshotBuilder::default();
-        current.origins.insert(o0, info.clone());
-        current.origins.insert(o1, info.clone());
-        current.origins.insert(o2, info.clone());
-        current.origins.insert(o3, info.clone());
+        current.payload.insert(o0.clone(), info.clone());
+        current.payload.insert(o1.clone(), info.clone());
+        current.payload.insert(o2.clone(), info.clone());
+        current.payload.insert(o3.clone(), info.clone());
         let mut next = SnapshotBuilder::default();
-        next.origins.insert(o0, info.clone());
-        next.origins.insert(o2, info.clone());
-        next.origins.insert(o4, info);
+        next.payload.insert(o0, info.clone());
+        next.payload.insert(o2, info.clone());
+        next.payload.insert(o4.clone(), info);
         let delta = PayloadDelta::construct(
             &current, &next, 12.into()
         ).unwrap();
 
         assert_eq!(delta.serial, Serial::from(13));
-        let mut add: HashSet<_> = delta.announced_origins.into_iter().collect();
-        let mut sub: HashSet<_> = delta.withdrawn_origins.into_iter().collect();
+        let mut add: HashSet<_> = delta.announce.into_iter().collect();
+        let mut sub: HashSet<_> = delta.withdraw.into_iter().collect();
 
         assert!(add.remove(&o4));
         assert!(add.is_empty());
@@ -1874,99 +1559,6 @@ mod test {
                 )
             ).into_iter().collect::<HashSet<_>>(),
             HashSet::from_iter(vec![1, 3].into_iter()),
-        );
-    }
-
-    #[test]
-    fn prefix_from_str() {
-        // good prefixes
-        assert_eq!(
-            AddressPrefix::from_str("0.0.0.0/0").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("0.0.0.0").unwrap(), 0
-            ).unwrap()
-        );
-        assert_eq!(
-            AddressPrefix::from_str("10.0.0.0/8").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("10.0.0.0").unwrap(), 8
-            ).unwrap()
-        );
-        assert_eq!(
-            AddressPrefix::from_str("10.0.0.0/32").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("10.0.0.0").unwrap(), 32
-            ).unwrap()
-        );
-        assert_eq!(
-            AddressPrefix::from_str("::/0").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("::").unwrap(), 0
-            ).unwrap()
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8::/32").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("2001:db8::").unwrap(), 32
-            ).unwrap()
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8::/128").unwrap(),
-            AddressPrefix::new(
-                IpAddr::from_str("2001:db8::").unwrap(), 128
-            ).unwrap()
-        );
-
-        // empty
-        assert_eq!(
-            AddressPrefix::from_str("").unwrap_err(),
-            ParsePrefixError::Empty
-        );
-
-        // missing length
-        assert_eq!(
-            AddressPrefix::from_str("10.0.0.0").unwrap_err(),
-            ParsePrefixError::MissingLen
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8::").unwrap_err(),
-            ParsePrefixError::MissingLen
-        );
-
-        // prefix length overflow
-        assert_eq!(
-            AddressPrefix::from_str("10.0.0.0/33").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::LengthOverflow)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8::/129").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::LengthOverflow)
-        );
-
-        // non-zero host
-        assert_eq!(
-            AddressPrefix::from_str("10.128.0.0/8").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("10.0.0.1/8").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("10.192.0.0/9").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8:8000::/32").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8::1/32").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
-        );
-        assert_eq!(
-            AddressPrefix::from_str("2001:db8:4000::/33").unwrap_err(),
-            ParsePrefixError::InvalidPrefix(AddressPrefixError::NonZeroHost)
         );
     }
 }

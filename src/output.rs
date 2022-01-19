@@ -6,10 +6,11 @@ use std::sync::Arc;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::{error, info};
-use rpki::repository::resources::AsId;
-use crate::payload;
+use routecore::addr;
+use rpki::repository::resources::Asn;
+use rpki::rtr::payload::{Payload, RouteOrigin};
 use crate::error::Failed;
-use crate::payload::{AddressPrefix, OriginInfo, PayloadSnapshot, RouteOrigin};
+use crate::payload::{OriginInfo, PayloadSnapshot};
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
 
@@ -208,13 +209,13 @@ impl Selection {
         for (key, value) in form_urlencoded::parse(query.as_ref()) {
             if key == "select-prefix" || key == "filter-prefix" {
                 res.origins.push(
-                    SelectOrigin::Prefix(AddressPrefix::from_str(&value)?)
+                    SelectOrigin::Prefix(addr::Prefix::from_str(&value)?)
                 );
             }
             else if key == "select-asn" || key == "filter-asn" {
                 res.origins.push(
-                    SelectOrigin::AsId(
-                        AsId::from_str(&value).map_err(|_| QueryError)?
+                    SelectOrigin::Asn(
+                        Asn::from_str(&value).map_err(|_| QueryError)?
                     )
                 );
             }
@@ -227,12 +228,12 @@ impl Selection {
     }
 
     /// Add an origin ASN to select.
-    pub fn push_origin_asn(&mut self, asn: AsId) {
-        self.origins.push(SelectOrigin::AsId(asn))
+    pub fn push_origin_asn(&mut self, asn: Asn) {
+        self.origins.push(SelectOrigin::Asn(asn))
     }
 
     /// Add a origin prefix to select.
-    pub fn push_origin_prefix(&mut self, prefix: AddressPrefix) {
+    pub fn push_origin_prefix(&mut self, prefix: addr::Prefix) {
         self.origins.push(SelectOrigin::Prefix(prefix))
     }
 
@@ -260,18 +261,20 @@ impl AsRef<Selection> for Selection {
 #[derive(Clone, Copy, Debug)]
 enum SelectOrigin {
     /// Include resources related to the given ASN.
-    AsId(AsId),
+    Asn(Asn),
 
     /// Include resources related to the given prefix.
-    Prefix(AddressPrefix),
+    Prefix(addr::Prefix),
 }
 
 impl SelectOrigin {
     /// Returns whether this rule selects payload.
     fn include_origin(self, origin: RouteOrigin) -> bool {
         match self {
-            SelectOrigin::AsId(as_id) => origin.as_id() == as_id,
-            SelectOrigin::Prefix(prefix) => origin.prefix().covers(prefix),
+            SelectOrigin::Asn(asn) => origin.asn == asn,
+            SelectOrigin::Prefix(prefix) => {
+                origin.prefix.prefix().covers(prefix)
+            }
         }
     }
 }
@@ -331,9 +334,12 @@ where
             StreamState::Origin { mut index, first } => {
                 loop {
                     let (origin, info) = match
-                        self.snapshot.as_ref().origins().get(index)
+                        self.snapshot.as_ref().payload().get(index)
                     {
-                        Some(item) => (item.0, &item.1),
+                        Some(&(Payload::Origin(origin), ref info)) => {
+                            (origin, info)
+                        },
+                        Some(_) => continue,
                         None => {
                             self.formatter.footer(
                                 self.metrics.as_ref(), target
@@ -389,8 +395,8 @@ impl Iterator for OutputStream<
 #[derive(Debug)]
 pub struct QueryError;
 
-impl From<payload::ParsePrefixError> for QueryError {
-    fn from(_: payload::ParsePrefixError) -> Self {
+impl From<addr::ParsePrefixError> for QueryError {
+    fn from(_: addr::ParsePrefixError) -> Self {
         QueryError
     }
 }
@@ -447,9 +453,9 @@ impl<W: io::Write> Formatter<W> for Csv {
         &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "{},{}/{},{},{}",
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length(),
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
             info.tal_name().unwrap_or("N/A"),
         )
     }
@@ -473,9 +479,9 @@ impl<W: io::Write> Formatter<W> for CompatCsv {
         &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length(),
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
             info.tal_name().unwrap_or("N/A"),
         )
     }
@@ -515,9 +521,9 @@ impl<W: io::Write> Formatter<W> for ExtendedCsv {
     ) -> Result<(), io::Error> {
         write!(target, "{},{},{}/{},{},",
             info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length(),
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
         )?;
         match info.validity() {
             Some(validity) => {
@@ -568,9 +574,9 @@ impl<W: io::Write> Formatter<W> for Json {
         write!(target,
             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
             \"maxLength\": {}, \"ta\": \"{}\" }}",
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length(),
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
             info.tal_name().unwrap_or("N/A"),
         )
     }
@@ -613,9 +619,9 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target,
             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
             \"maxLength\": {}, \"source\": [",
-            origin.as_id(),
-            origin.address(), origin.address_length(),
-            origin.max_length(),
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
         )?;
 
         let mut first = true;
@@ -694,12 +700,14 @@ impl<W: io::Write> Formatter<W> for Openbgpd {
         &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(
-            target, "    {}/{}", origin.address(), origin.address_length()
+            target, "    {}/{}",
+            origin.prefix.addr(), origin.prefix.prefix_len(),
         )?;
-        if origin.address_length() < origin.max_length() {
-            write!(target, " maxlen {}", origin.max_length())?;
+        let max_len = origin.prefix.resolved_max_len();
+        if origin.prefix.prefix_len() < max_len {
+            write!(target, " maxlen {}", max_len)?;
         }
-        writeln!(target, " source-as {}", u32::from(origin.as_id()))
+        writeln!(target, " source-as {}", u32::from(origin.asn))
     }
 }
 
@@ -713,9 +721,9 @@ impl<W: io::Write> Formatter<W> for Bird1 {
         &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "roa {}/{} max {} as {};",
-            origin.address(), origin.address_length(),
-            origin.max_length(),
-            u32::from(origin.as_id())
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
+            u32::from(origin.asn)
         )
     }
 }
@@ -730,9 +738,9 @@ impl<W: io::Write> Formatter<W> for Bird2 {
         &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "route {}/{} max {} as {};",
-            origin.address(), origin.address_length(),
-            origin.max_length(),
-            u32::from(origin.as_id())
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
+            u32::from(origin.asn)
         )
     }
 }
@@ -770,10 +778,10 @@ impl<W: io::Write> Formatter<W> for Rpsl {
             "\n{}: {}/{}\norigin: {}\n\
             descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
             last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
-            if origin.address().is_ipv4() { "route" }
+            if origin.prefix.addr().is_ipv4() { "route" }
             else { "route6" },
-            origin.address(), origin.address_length(),
-            origin.as_id(), now, now,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.asn, now, now,
             info.tal_name().map(|name| {
                 name.to_uppercase()
             }).unwrap_or_else(|| "N/A".into())
