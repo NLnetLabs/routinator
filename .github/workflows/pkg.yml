@@ -94,7 +94,7 @@ jobs:
           # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
           - image: 'debian:buster'
             target: 'aarch64-unknown-linux-musl'
-      env:
+    env:
       CARGO_DEB_VER: 1.28.0
       CARGO_GENERATE_RPM_VER: 0.4.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
