@@ -32,7 +32,7 @@ various formats, as a server for the RPKI-to-Router (RTR) protocol that many
 routers implement to access the data, or via HTTP.
 
 These modes and additional operations can be chosen via commands. For the
-available commands, see `Commands`_ below.
+available commands, see `COMMANDS`_ below.
 
 Options
 -------
@@ -46,7 +46,7 @@ The available options are:
       :file:`$HOME/.routinator.conf` if that exists. If that doesn't exist,
       either, default values for the options as described here are used.
 
-      See `Configuration File`_ below for more information on the format and
+      See `CONFIGURATION FILE`_ below for more information on the format and
       contents of the configuration file.
 
 .. option:: -b dir, --base-dir=dir
@@ -69,7 +69,7 @@ The available options are:
 
       Specifies the directory containing the trust anchor locators (TALs) to
       use. Trust anchor locators are the starting points for collecting and
-      validating RPKI data. See `Trust Anchor Locators`_ for more information
+      validating RPKI data. See `TRUST ANCHOR LOCATORS`_ for more information
       on what should be present in this directory.
 
 .. option:: -x file, --exceptions=file
@@ -88,7 +88,7 @@ The available options are:
       to a rather large amount of invalid route origins and should therefore
       not be used in practice.
 
-      See `Relaxed Decoding`_ below for more information.
+      See `RELAXED DECODING`_ below for more information.
 
 .. option:: --stale=policy
 
@@ -141,7 +141,7 @@ The available options are:
       may change in future versions.
 
       For more information on the process of validation implemented in
-      Routinator, see the section `Validation`_ below.
+      Routinator, see the section `VALIDATION`_ below.
 
 .. option:: --unknown-objects=policy
 
@@ -349,7 +349,7 @@ These can be requested by providing different commands on the command line.
     directory exists, and creates the TAL directory and fills it with the
     desired TALs.
 
-    For more information about TALs, see `Trust Anchor Locators`_ below.
+    For more information about TALs, see `TRUST ANCHOR LOCATORS`_ below.
 
     .. option:: -f, --force
 
@@ -625,7 +625,7 @@ These can be requested by providing different commands on the command line.
 
        This command causes Routinator to act as a server for the
        RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
-       read all the TALs (See `Trust Anchor Locators`_ below) and will stay
+       read all the TALs (See `TRUST ANCHOR LOCATORS`_ below) and will stay
        attached to the terminal unless the :option:`-d` option is given.
 
        The server will periodically update the local repository, every ten
@@ -675,7 +675,7 @@ These can be requested by providing different commands on the command line.
        .. option:: --http=addr:port
 
               Specifies the address and port to listen on for incoming HTTP
-              connections.  See `HTTP Service`_ below for more information on
+              connections.  See `HTTP SERVICE`_ below for more information on
               the HTTP service provided by Routinator.
 
        .. option:: --http-tls=addr:port
