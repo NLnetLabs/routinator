@@ -645,7 +645,7 @@ These can be requested by providing different commands on the command line.
 
        .. option:: --rtr-tls=addr:port
 
-              Specifies a local address and port to listen of for incoming
+              Specifies a local address and port to listen for incoming
               TLS-encrypted RTR connections.
 
               The private key and server certificate given via the
