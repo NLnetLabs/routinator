@@ -79,7 +79,6 @@ priority = "optional"
 assets = [
     ["target/release/routinator", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/routinator/", "644"],
-    ["doc/misc.md", "usr/share/doc/routinator/misc.md", "644"],
     ["doc/routinator.1", "usr/share/man/man1/routinator.1", "644"],
     ["etc/routinator.conf.system-service", "etc/routinator/routinator.conf", "644"],
     ["pkg/common/service.preset", "/lib/systemd/system-preset/50-routinator.preset", "644"],
@@ -92,13 +91,6 @@ conf-files = ["/etc/routinator/routinator.conf"]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = false }
 
 [package.metadata.deb.variants.minimal]
-
-# Cross compilation variants:
-# Note: we have to specifiy dependencies manually because we don't run cargo-deb
-# on the target platform and so it cannot determine the dependencies correctly
-# for us.
-[package.metadata.deb.variants.minimal-cross]
-depends = "adduser, passwd"
 
 [package.metadata.generate-rpm]
 # "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
