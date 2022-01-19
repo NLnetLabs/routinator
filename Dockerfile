@@ -1,5 +1,5 @@
 # -- stage 0: some configuration
-ARG BASE_IMG=alpine:3.13.5
+ARG BASE_IMG=alpine:3.15
 
 # -- stage 1: build static routinator with musl libc for alpine
 FROM ${BASE_IMG} as build
