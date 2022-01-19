@@ -267,9 +267,16 @@ jobs:
         case ${OS_NAME} in
           debian|ubuntu)
             case ${{ github.event_name }} in
-              pull_request) MAINTAINER="${{ github.actor }} <unknown@email.address>" ;;
-              push)         MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>" ;;
-              *)            echo 2>&1 "ERROR: Unexpected GitHub Actions event"; exit 1 ;;
+              pull_request | workflow_dispatch)
+                MAINTAINER="${{ github.event.sender.login }} <pkg@nlnetlabs.nl>"
+                ;;
+              push)
+                MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>"
+                ;;
+              *)
+                echo 2>&1 "ERROR: Unexpected GitHub Actions event"
+                exit 1
+                ;;
             esac
 
             # Generate the RFC 5322 format date by hand instead of using date --rfc-email
