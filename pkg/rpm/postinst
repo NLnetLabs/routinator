@@ -18,7 +18,7 @@ if [ $1 -eq 1 ] ; then
     # According to the CentOS 7 useradd man page:
     # --user-group causes a group by the same name as the user to be created
     # --create-home should force creation of a home dir even for a system account.
-    useradd --system --home-dir ${R_HOME_DIR} --system --create-home --user-group ${R_USER}
+    useradd --home-dir ${R_HOME_DIR} --system --create-home --user-group ${R_USER}
 
     # Ensure that the home directory has the correct ownership
     chown -R ${R_USER}:${R_GROUP} ${R_HOME_DIR}
