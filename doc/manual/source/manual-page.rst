@@ -24,15 +24,15 @@ Description
 -----------
 
 Routinator collects and processes Resource Public Key Infrastructure (RPKI)
-data. It validates the Route Origin Attestations contained in the data and makes
-them available to your BGP routing workflow.
+data. It validates the Route Origin Attestations contained in the data and
+makes them available to your BGP routing workflow.
 
 It can run in one-shot mode outputting a list of validated ROA payloads in
 various formats, as a server for the RPKI-to-Router (RTR) protocol that many
 routers implement to access the data, or via HTTP.
 
 These modes and additional operations can be chosen via commands. For the
-available commands, see `Commands`_ below.
+available commands, see `COMMANDS`_ below.
 
 Options
 -------
@@ -41,12 +41,12 @@ The available options are:
 
 .. option:: -c path, --config=path
 
-      Provides the path to a file containing basic configuration. If this option
-      is not given, Routinator will try to use :file:`$HOME/.routinator.conf` if
-      that exists. If that doesn't exist, either, default values for the options
-      as described here are used.
+      Provides the path to a file containing basic configuration. If this
+      option is not given, Routinator will try to use
+      :file:`$HOME/.routinator.conf` if that exists. If that doesn't exist,
+      either, default values for the options as described here are used.
 
-      See `Configuration File`_ below for more information on the format and
+      See `CONFIGURATION FILE`_ below for more information on the format and
       contents of the configuration file.
 
 .. option:: -b dir, --base-dir=dir
@@ -69,47 +69,49 @@ The available options are:
 
       Specifies the directory containing the trust anchor locators (TALs) to
       use. Trust anchor locators are the starting points for collecting and
-      validating RPKI data. See `Trust Anchor Locators`_ for more information
+      validating RPKI data. See `TRUST ANCHOR LOCATORS`_ for more information
       on what should be present in this directory.
 
 .. option:: -x file, --exceptions=file
 
       Provides the path to a local exceptions file. The option can be used
-      multiple times to specify more than one file to use. Each file is a JSON
-      file as described in :rfc:`8416`. It lists both route origins that should
-      be filtered out of the output as well as origins that should be added.
+      multiple times to specify more than one file to use. Each file is a
+      JSON file as described in :rfc:`8416`. It lists both route origins that
+      should be filtered out of the output as well as origins that should be
+      added.
 
 .. option:: --strict
 
       If this option is present, the repository will be validated in strict
       mode following the requirements laid out by the standard documents very
-      closely. With the current RPKI repository, using this option will lead to
-      a rather large amount of invalid route origins and should therefore not be
-      used in practice.
+      closely. With the current RPKI repository, using this option will lead
+      to a rather large amount of invalid route origins and should therefore
+      not be used in practice.
 
-      See `Relaxed Decoding`_ below for more information.
+      See `RELAXED DECODING`_ below for more information.
 
 .. option:: --stale=policy
 
       This option defines how deal with stale objects. In RPKI, manifests and
-      CRLs can be stale if the time given in their *next-update* field is in the
-      past, indicating that an update to the object was scheduled but didn't
-      happen. This can be because of an operational issue at the issuer or an
-      attacker trying to replay old objects.
+      CRLs can be stale if the time given in their *next-update* field is in
+      the past, indicating that an update to the object was scheduled but
+      didn't happen. This can be because of an operational issue at the
+      issuer or an attacker trying to replay old objects.
 
-      There are three possible policies that define how Routinator should treat
-      stale objects.
+      There are three possible policies that define how Routinator should
+      treat stale objects.
 
       A policy of *reject* instructs Routinator to consider all stale objects
-      invalid. This will result in all material published by the CA issuing this
-      manifest and CRL to be invalid including all material of any child CA. 
+      invalid. This will result in all material published by the CA issuing
+      this manifest and CRL to be invalid including all material of any child
+      CA. 
 
-      The *warn* policy will allow Routinator to consider any stale object to be
-      valid. It will, however, print a warning in the log allowing an operator
-      to follow up on the issue. 
+      The *warn* policy will allow Routinator to consider any stale object to
+      be valid. It will, however, print a warning in the log allowing an
+      operator to follow up on the issue. 
 
-      Finally, the *accept* policy will cause Routinator to quietly accept any
-      stale object as valid.
+      Finally, the *accept* policy will cause Routinator to quietly accept
+      any stale object as valid.
       
       In Routinator 0.8.0 and newer, *reject* is the default policy if the 
       option is not provided. In version 0.7.0 the default for this option 
@@ -117,35 +119,36 @@ The available options are:
 
 .. option:: --unsafe-vrps=policy
 
-      This option defines how to deal with "unsafe VRPs." If the address prefix
-      of a VRP overlaps with any resources assigned to a CA that has been
-      rejected because if failed to validate completely, the VRP is said to be
-      unsafe since using it may lead to legitimate routes being flagged as RPKI
-      invalid.
+      This option defines how to deal with "unsafe VRPs." If the address
+      prefix of a VRP overlaps with any resources assigned to a CA that has
+      been rejected because if failed to validate completely, the VRP is said
+      to be unsafe since using it may lead to legitimate routes being flagged
+      as RPKI invalid.
 
       There are three options how to deal with unsafe VRPs:
 
-      A policy of *reject* will filter out these VRPs. Warnings will be logged
-      to indicate which VRPs have been filtered
+      A policy of *reject* will filter out these VRPs. Warnings will be
+      logged to indicate which VRPs have been filtered
 
-      The *warn* policy will log warnings for unsafe VRPs but will add them to
-      the valid VRPs.
+      The *warn* policy will log warnings for unsafe VRPs but will add them
+      to the valid VRPs.
 
       Finally, the *accept* policy will quietly add unsafe VRPs to the valid
       VRPs.
 
       Currently, the default policy is *warn* in order to gain operational
-      experience with the frequency and impact of unsafe VRPs. This default may
-      change in future versions.
+      experience with the frequency and impact of unsafe VRPs. This default
+      may change in future versions.
 
       For more information on the process of validation implemented in
-      Routinator, see the section `Validation`_ below.
+      Routinator, see the section `VALIDATION`_ below.
 
 .. option:: --unknown-objects=policy
 
       Defines how to deal with unknown types  of  RPKI  objects.  Currently,
-      only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
-      Ghostbuster Records (.gbr) are allowed to appear in the RPKI repository.
+      only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa),
+      and Ghostbuster Records (.gbr) are allowed to appear in the RPKI
+      repository.
 
       There are, once more, three policies for dealing with an object of any
       other type:
@@ -154,25 +157,25 @@ The available options are:
       Consequently, an unknown object appearing in a CA will mark all other
       objects issued by the CA as invalid as well.
 
-      The policy of *warn* will log a warning, ignore the object, and accept all
-      known objects issued by the CA.
-
-      The similar policy of *accept* will quietly ignore the object and accept
+      The policy of *warn* will log a warning, ignore the object, and accept
       all known objects issued by the CA.
+
+      The similar policy of *accept* will quietly ignore the object and
+      accept all known objects issued by the CA.
 
       The default policy if the option is missing is *warn*.
 
-      Note that even if unknown objects are accepted, they must appear in  the
-      manifest and the hash over their content must match the one given in the
-      manifest. If the hash does not match, the CA and all its objects are
-      still rejected.
+      Note that even if unknown objects are accepted, they must appear in
+      the manifest and the hash over their content must match the one given
+      in the manifest. If the hash does not match, the CA and all its objects
+      are still rejected.
 
 .. option:: --allow-dubious-hosts
 
       As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI
       data with dubious host names. In particular, it will reject the name
-      *localhost*, host names that consist of IP addresses, and a host name that
-      contains an explicit port.
+      *localhost*, host names that consist of IP addresses, and a host name
+      that contains an explicit port.
 
       This option allows to disable this filtering.
 
@@ -184,12 +187,13 @@ The available options are:
 
 .. option:: --disable-rsync
 
-      If this option is present, rsync is disabled and only RRDP will be used.
+      If this option is present, rsync is disabled and only RRDP will be
+      used.
 
 .. option:: --rsync-command=command
 
-      Provides the command to run for rsync. This is only the command itself. If
-      you need to provide options to rsync, use the ``rsync-args``
+      Provides the command to run for rsync. This is only the command itself.
+      If you need to provide options to rsync, use the ``rsync-args``
       configuration file setting instead.
 
       If this option is not given, Routinator will simply run rsync and hope
@@ -204,30 +208,31 @@ The available options are:
 
 .. option:: --disable-rrdp
 
-      If this option is present, RRDP is disabled and only rsync will be used.
+      If this option is present, RRDP is disabled and only rsync will be
+      used.
 
 .. option:: --rrdp-fallback-time=seconds
 
-      Sets the maximum time in seconds since a last successful update of an RRDP
-      repository before Routinator falls back to using rsync. The default is
-      3600 seconds. If the given value is smaller than twice the refresh time,
-      it is silently increased to that value.
+      Sets the maximum time in seconds since a last successful update of an
+      RRDP repository before Routinator falls back to using rsync. The
+      default is 3600 seconds. If the given value is smaller than twice the
+      refresh time, it is silently increased to that value.
       
       The actual time is chosen at random between the refresh time and this
       value in order to spread out load on the rsync server.
 
 .. option:: --rrdp-max-delta-count=count
 
-      If the number of deltas necessary to update an RRDP repository is larger
-      than the value provided by this option, the snapshot is used instead. If
-      the option is missing, the default of 100 is used.
+      If the number of deltas necessary to update an RRDP repository is
+      larger than the value provided by this option, the snapshot is used
+      instead. If the option is missing, the default of 100 is used.
 
 .. option:: --rrdp-timeout=seconds
 
-      Sets the timeout in seconds for any RRDP-related network operation, i.e.,
-      connects, reads, and writes. If this option is omitted, the default
-      timeout of 300 seconds is used. Set the option to 0 to disable the 
-      timeout.
+      Sets the timeout in seconds for any RRDP-related network operation,
+      i.e., connects, reads, and writes. If this option is omitted, the
+      default timeout of 300 seconds is used. Set the option to 0 to disable
+      the timeout.
 
 .. option:: --rrdp-connect-timeout=seconds
 
@@ -241,9 +246,9 @@ The available options are:
 
 .. option:: --rrdp-root-cert=path
 
-      This option provides a path to a file that contains a certificate in PEM
-      encoding that should be used as a trusted certificate for HTTPS server
-      authentication. The option can be given more than once.
+      This option provides a path to a file that contains a certificate in
+      PEM encoding that should be used as a trusted certificate for HTTPS
+      server authentication. The option can be given more than once.
 
       Providing this option does *not* disable the set of regular HTTPS
       authentication trust certificates.
@@ -252,22 +257,24 @@ The available options are:
 
       This option provides the URI of a proxy to use for all HTTP connections
       made by the RRDP client. It can be either an HTTP or a SOCKS URI. The
-      option can be given multiple times in which case proxies are tried in the
-      given order.
+      option can be given multiple times in which case proxies are tried in
+      the given order.
 
 .. option:: --rrdp-keep-responses=path
 
-      If this option is enabled, the bodies of all HTTPS responses received from
-      RRDP servers will be stored under *path*. The sub-path will be constructed
-      using the components of the requested URI. For the responses to the
-      notification files, the timestamp is appended to the path to make it
-      possible to distinguish the series of requests made over time.
+      If this option is enabled, the bodies of all HTTPS responses received
+      from RRDP servers will be stored under *path*. The sub-path will be
+      constructed using the components of the requested URI. For the
+      responses to the notification files, the timestamp is appended to the
+      path to make it possible to distinguish the series of requests made
+      over time.
 
 .. option:: --max-object-size=BYTES
 
-      Limits the size of individual objects received via either rsync or RRDP to
-      the given number of bytes. The default value if this option is not present
-      is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable the limit.
+      Limits the size of individual objects received via either rsync or RRDP
+      to the given number of bytes. The default value if this option is not
+      present is 20,000,000 (i.e., 20 MBytes). Use a value of 0 to disable
+      the limit.
 
 .. option:: --max-ca-depth=count
 
@@ -281,21 +288,22 @@ The available options are:
 
 .. option:: --validation-threads=count
 
-      Sets the number of threads to distribute work to for validation. Note that
-      the current processing model validates trust anchors all in one go, so you
-      are likely to see less than that number of threads used throughout the
-      validation run.
+      Sets the number of threads to distribute work to for validation. Note
+      that the current processing model validates trust anchors all in one
+      go, so you are likely to see less than that number of threads used
+      throughout the validation run.
 
 .. option:: -v, --verbose
 
-      Print more information. If given twice, even more information is printed.
+      Print more information. If given twice, even more information is
+      printed.
 
-      More specifically, a single :option:`-v` increases the log level from the
-      default of *warn* to *info*, specifying it more than once increases it to
-      *debug*.
+      More specifically, a single :option:`-v` increases the log level from
+      the default of *warn* to *info*, specifying it more than once increases
+      it to *debug*.
       
-      See `LOGGING`_ below for more information on what information is logged at
-      the different levels.
+      See `LOGGING`_ below for more information on what information is logged
+      at the different levels.
 
 .. option:: -q, --quiet
 
@@ -308,8 +316,8 @@ The available options are:
 
       Redirect logging output to syslog.
 
-      This option is implied if a command is used that causes Routinator to run
-      in daemon mode.
+      This option is implied if a command is used that causes Routinator to
+      run in daemon mode.
 
 .. option:: --syslog-facility=facility
 
@@ -336,11 +344,12 @@ These can be requested by providing different commands on the command line.
 
 .. subcmd:: init
 
-    Prepares the local repository directories and the TAL directory for running
-    Routinator.  Specifically,  makes sure the local repository directory
-    exists, and creates the TAL directory and fills it with the desired TALs.
+    Prepares the local repository directories and the TAL directory for
+    running Routinator.  Specifically,  makes sure the local repository
+    directory exists, and creates the TAL directory and fills it with the
+    desired TALs.
 
-    For more information about TALs, see `Trust Anchor Locators`_ below.
+    For more information about TALs, see `TRUST ANCHOR LOCATORS`_ below.
 
     .. option:: -f, --force
 
@@ -350,7 +359,8 @@ These can be requested by providing different commands on the command line.
     .. option:: --rir-tals
     
            Selects the production TALs of the five RIRs for installation. If
-           no other TAL selection options are provided, this option is assumed.
+           no other TAL selection options are provided, this option is
+           assumed.
 
     .. option:: --rir-test-tals
     
@@ -367,7 +377,7 @@ These can be requested by providing different commands on the command line.
     .. option:: --list-tals
     
            List all bundled TALs and exit. The list also shows which TALs are
-           selected by the :option:`--rir-tals` and :option:`--rir-test-tals` 
+           selected by the :option:`--rir-tals` and :option:`--rir-test-tals`
            options.
 
     .. option:: --accept-arin-rpa
@@ -375,15 +385,15 @@ These can be requested by providing different commands on the command line.
            Before you can use the ARIN TAL, you need to agree to the ARIN
            Relying Party Agreement (RPA). You can find it at
            https://www.arin.net/resources/manage/rpki/rpa.pdf and explicitly
-           agree to it via this option. This explicit agreement is necessary in
-           order to install the ARIN TAL.
+           agree to it via this option. This explicit agreement is necessary
+           in order to install the ARIN TAL.
 
 .. subcmd:: vrps
 
-    This command requests that Routinator update the local repository and then
-    validate the Route Origin Attestations in the repository and output the
-    valid route origins, which are also known as Validated ROA Payloads or VRPs,
-    as a list.
+    This command requests that Routinator update the local repository and
+    then validate the Route Origin Attestations in the repository and output
+    the valid route origins, which are also known as Validated ROA Payloads
+    or VRPs, as a list.
 
     .. option:: -o file, --output=file
 
@@ -400,8 +410,8 @@ These can be requested by providing different commands on the command line.
                   the autonomous system number, the prefix in slash notation,
                   the maximum prefix length, and an abbreviation for the
                   trust anchor the entry is derived from. The latter is the
-                  name of the TAL file without the extension *.tal*. This can be
-                  overwritten with the *tal-labels* config file option.
+                  name of the TAL file without the extension *.tal*. This can
+                  be overwritten with the *tal-labels* config file option.
 
                   This is the default format used if the :option:`-f` option
                   is missing.
@@ -426,18 +436,18 @@ These can be requested by providing different commands on the command line.
                   be in one single output file.
 
            json
-                  The list is placed into a JSON object with a single
-                  element *roas* which contains an array of objects with
-                  four elements each: The autonomous system number of the
-                  network authorized to originate a prefix in *asn*, the
-                  prefix in slash notation in *prefix*, the maximum prefix
-                  length of the announced route in *maxLength*, and the
-                  trust anchor from which the authorization was derived in
-                  *ta*. This format is identical to that produced by the RIPE
-                  NCC RPKI Validator except for different naming of the
-                  trust anchor. Routinator uses the name of the TAL file
-                  without the extension *.tal* whereas the RIPE NCC Validator
-                  has a dedicated name for each.
+                  The list is placed into a JSON object with a single element
+                  *roas* which contains an array of objects with four
+                  elements each: The autonomous system number of the network
+                  authorized to originate a prefix in *asn*, the prefix in
+                  slash notation in *prefix*, the maximum prefix length of
+                  the announced route in *maxLength*, and the trust anchor
+                  from which the authorization was derived in *ta*. This
+                  format is identical to that produced by the RIPE NCC RPKI
+                  Validator except for different naming of the trust anchor.
+                  Routinator uses the name of the TAL file without the
+                  extension *.tal* whereas the RIPE NCC Validator has a
+                  dedicated name for each.
 
                   The output object also includes a member named *metadata*
                   which provides additional information. Currently, this is a
@@ -448,26 +458,28 @@ These can be requested by providing different commands on the command line.
 
            jsonext
                   The list is placed into a JSON object with a single element
-                  *roas* which contains an array of objects with four elements
-                  each: The autonomous system number of the network authorized
-                  to originate a prefix in *asn*, the prefix in slash notation 
-                  in *prefix*, the maximum prefix length of the announced route 
-                  in *maxLength*.
+                  *roas* which contains an array of objects with four
+                  elements each: The autonomous system number of the network
+                  authorized to originate a prefix in *asn*, the prefix in
+                  slash notation in *prefix*, the maximum prefix length of
+                  the announced route in *maxLength*.
 
-                  Extensive information about the source of the object is given 
-                  in the array *source*. Each item in that array is an object 
-                  providing details of a source of the VRP. The object will have
-                  a *type* of *roa* if it was derived from a valid ROA object or 
-                  *exception* if it was an assertion in a local exception file.
+                  Extensive information about the source of the object is
+                  given in the array *source*. Each item in that array is an
+                  object providing details of a source of the VRP. The object
+                  will have a *type* of *roa* if it was derived from a valid
+                  ROA object or *exception* if it was an assertion in a local
+                  exception file.
 
-                  For ROAs, *uri* provides the rsync URI of the ROA, *validity*
-                  provides the validity of the ROA itself, and *chainValidity*
-                  the validity considering the validity of the certificates 
-                  along the validation chain.
+                  For ROAs, *uri* provides the rsync URI of the ROA,
+                  *validity* provides the validity of the ROA itself, and
+                  *chainValidity* the validity considering the validity of
+                  the certificates along the validation chain.
 
-                  For  assertions from local exceptions, *path* will provide the 
-                  path of the local exceptions file and, optionally, *comment*
-                  will provide the comment if given for the assertion.
+                  For  assertions from local exceptions, *path* will provide
+                  the path of the local exceptions file and, optionally,
+                  *comment* will provide the comment if given for the
+                  assertion.
 
                   The output object also includes a member named *metadata*
                   which provides additional information. Currently, this is a
@@ -476,12 +488,13 @@ These can be requested by providing different commands on the command line.
                   which provides the same time but in the standard ISO date
                   format.
                   
-                  Please note that because of this additional information, 
+                  Please note that because of this additional information,
                   output in ``jsonext`` format will be quite large.
 
            openbgpd
-                  Choosing this format causes Routinator to produce a *roa-set*
-                  configuration item for the OpenBGPD configuration.
+                  Choosing this format causes Routinator to produce a
+                  *roa-set* configuration item for the OpenBGPD
+                  configuration.
 
            bird1
                   Choosing this format causes Routinator to produce a *roa
@@ -514,43 +527,44 @@ These can be requested by providing different commands on the command line.
 
     .. option:: --complete
 
-           If any of the rsync commands needed to update the repository failed,
-           complete the operation but provide exit status 2. If this option is
-           not given, the operation will complete with exit status 0 in this
-           case.
+           If any of the rsync commands needed to update the repository
+           failed, complete the operation but provide exit status 2. If this
+           option is not given, the operation will complete with exit status
+           0 in this case.
 
     .. option:: -a asn, --select-asn=asn
 
-           Only output VRPs for the given ASN. The option can be given multiple
-           times, in which case VRPs for all provided ASNs are provided. ASNs
-           can be given with or without the prefix *AS*.
+           Only output VRPs for the given ASN. The option can be given
+           multiple times, in which case VRPs for all provided ASNs are
+           provided. ASNs can be given with or without the prefix *AS*.
 
     .. option:: -p prefix, --select-prefix=prefix
 
            Only output VRPs with an address prefix that covers the given
            prefix, i.e., whose prefix is equal to or less specific than the
            given prefix. This will include VRPs regardless of their ASN and
-           max length. In other words, the output will include all VRPs
-           that need to be considered when deciding whether an announcement
-           for the prefix is RPKI valid or invalid.
+           max length. In other words, the output will include all VRPs that
+           need to be considered when deciding whether an announcement for
+           the prefix is RPKI valid or invalid.
 
-           The option can be given multiple times, in which case VRPs for all 
-           prefixes are provided. It can also be combined with one or more ASN
-           selections. Then all matching VRPs are included. That is, selectors
-           combine as "or" not "and".
+           The option can be given multiple times, in which case VRPs for all
+           prefixes are provided. It can also be combined with one or more
+           ASN selections. Then all matching VRPs are included. That is,
+           selectors combine as "or" not "and".
 
 .. subcmd:: validate
 
-       This command can be used to perform RPKI route origin validation for one
-       or more route announcements. Routinator will determine whether the
+       This command can be used to perform RPKI route origin validation for
+       one or more route announcements. Routinator will determine whether the
        provided announcements are RPKI valid, invalid, or not found.
        
        A single route announcement can be given directly on the command line:
 
        .. option:: -a asn, --asn=asn
 
-              The AS Number of the autonomous system that originated the route
-              announcement. ASNs can be given with or without the prefix *AS*.
+              The AS Number of the autonomous system that originated the
+              route announcement. ASNs can be given with or without the
+              prefix *AS*.
 
        .. option:: -p prefix, --prefix=prefix
 
@@ -563,8 +577,8 @@ These can be requested by providing different commands on the command line.
               the particular result. If this option is omitted, Routinator
               will only print the determined state.
 
-       Alternatively, a list of route announcements can be read from a file or
-       standard input.
+       Alternatively, a list of route announcements can be read from a file
+       or standard input.
 
        .. option:: -i file, --input=file
        
@@ -580,43 +594,45 @@ These can be requested by providing different commands on the command line.
               members which contain a prefix and originating AS Number as
               strings, respectively.
 
-              If the option is not provided, the input is assumed to consist of
-              simple plain text with one route announcement per line, provided
-              as a prefix followed by an ASCII-art arrow => surrounded by white
-              space and followed by the AS Number of originating autonomous
-              system.
+              If the option is not provided, the input is assumed to consist
+              of simple plain text with one route announcement per line,
+              provided as a prefix followed by an ASCII-art arrow =>
+              surrounded by white space and followed by the AS Number of
+              originating autonomous system.
 
-       The following additional options are available independently of the input
-       method.
+       The following additional options are available independently of the
+       input method.
 
        .. option:: -o file, --output=file
        
-              Output is written to the provided file. If the option is omitted
-              or *file* is given as a single dash, output is written to standard
-              output.
+              Output is written to the provided file. If the option is
+              omitted or *file* is given as a single dash, output is written
+              to standard output.
 
        .. option:: -n, --noupdate
 
-              The repository will not be updated before performing validation.
+              The repository will not be updated before performing
+              validation.
 
        .. option:: --complete
 
               If any of the rsync commands needed to update the repository
-              failed, complete the operation but provide exit status 2. If this
-              option is not given, the operation will complete with exit status
-              0 in this case.
+              failed, complete the operation but provide exit status 2. If
+              this option is not given, the operation will complete with exit
+              status 0 in this case.
 
 .. subcmd:: server
 
-       This command causes Routinator to act as a server for the RPKI-to-Router
-       (RTR) and HTTP protocols. In this mode, Routinator will read all
-       the TALs (See `Trust Anchor Locators`_ below) and will stay attached to
-       the terminal unless the :option:`-d` option is given.
+       This command causes Routinator to act as a server for the
+       RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
+       read all the TALs (See `TRUST ANCHOR LOCATORS`_ below) and will stay
+       attached to the terminal unless the :option:`-d` option is given.
 
        The server will periodically update the local repository, every ten
        minutes by default, notify any clients of changes, and let them fetch
-       validated data. It will not, however, reread the trust anchor locators.
-       Thus, if you update them, you will have to restart Routinator.
+       validated data. It will not, however, reread the trust anchor
+       locators. Thus, if you update them, you will have to restart
+       Routinator.
 
        You can provide a number of addresses and ports to listen on for RTR
        and HTTP through command line options or their configuration file
@@ -634,14 +650,15 @@ These can be requested by providing different commands on the command line.
 
        .. option:: --rtr=addr:port
 
-              Specifies a local address and port to listen on for incoming RTR
-              connections.
+              Specifies a local address and port to listen on for incoming
+              RTR connections.
 
-              Routinator supports both protocol version 0 defined in :rfc:`6810`
-              and version 1 defined in :rfc:`8210`. However, it does not support
-              router keys introduced in version 1.  IPv6 addresses must be
-              enclosed in square brackets. You can provide the option multiple
-              times to let Routinator listen on multiple address-port pairs.
+              Routinator supports both protocol version 0 defined in
+              :rfc:`6810` and version 1 defined in :rfc:`8210`. However, it
+              does not support router keys introduced in version 1.  IPv6
+              addresses must be enclosed in square brackets. You can provide
+              the option multiple times to let Routinator listen on multiple
+              address-port pairs.
 
        .. option:: --rtr-tls=addr:port
 
@@ -658,7 +675,7 @@ These can be requested by providing different commands on the command line.
        .. option:: --http=addr:port
 
               Specifies the address and port to listen on for incoming HTTP
-              connections.  See `HTTP Service`_ below for more information on
+              connections.  See `HTTP SERVICE`_ below for more information on
               the HTTP service provided by Routinator.
 
        .. option:: --http-tls=addr:port
@@ -675,27 +692,28 @@ These can be requested by providing different commands on the command line.
 
        .. option:: --listen-systemd
 
-              The RTR listening socket will be acquired from systemd via socket
-              activation. Use this option together with systemd's socket units
-              to allow a Routinator running as a regular user to bind to the
-              default RTR port 323.
+              The RTR listening socket will be acquired from systemd via
+              socket activation. Use this option together with systemd's
+              socket units to allow a Routinator running as a regular user to
+              bind to the default RTR port 323.
 
               Currently, all TCP listener sockets handed over by systemd will
               be used for the RTR protocol.
 
        .. option:: --rtr-tcp-keepalive=seconds
         
-              The number of seconds to wait before sending a TCP keepalive on an
-              established RTR  connection. By  default, TCP keepalive is
+              The number of seconds to wait before sending a TCP keepalive on
+              an established RTR  connection. By  default, TCP keepalive is
               enabled on all RTR connections with an idle time of 60 seconds. 
               Set this option to 0 to disable keepalives.
 
        .. option:: --rtr-client-metrics
        
-              If provided, the server metrics will include separate metrics for
-              every RTR client. Clients are identified by their RTR source IP
-              address. This is disabled by default to avoid accidentally leaking
-              information about the local network topology.
+              If provided, the server metrics will include separate metrics
+              for every RTR client. Clients are identified by their RTR
+              source IP address. This is disabled by default to avoid
+              accidentally leaking information about the local network
+              topology.
 
        .. option:: --rtr-tls-key
 
@@ -706,8 +724,8 @@ These can be requested by providing different commands on the command line.
        .. option:: --rtr-tls-cert
 
               Specifies the path to a file containing the server certificates
-              to be used for RTR-over-TLS connections. The file has to contain
-              one or more certificates encoded in PEM format.
+              to be used for RTR-over-TLS connections. The file has to
+              contain one or more certificates encoded in PEM format.
 
        .. option:: --http-tls-key
 
@@ -718,45 +736,46 @@ These can be requested by providing different commands on the command line.
        .. option:: --http-tls-cert
 
               Specifies the path to a file containing the server certificates
-              to be used for HTTP-over-TLS connections. The file has to contain
-              one or more certificates encoded in PEM format.
+              to be used for HTTP-over-TLS connections. The file has to
+              contain one or more certificates encoded in PEM format.
 
        .. option:: --refresh=seconds
 
-              The amount of seconds the server should wait after having finished
-              updating and validating the local repository before starting to
-              update again. The next update will be earlier if objects in the
-              repository expire earlier. The default value is 600 seconds.
+              The amount of seconds the server should wait after having
+              finished updating and validating the local repository before
+              starting to update again. The next update will be earlier if
+              objects in the repository expire earlier. The default value is
+              600 seconds.
 
        .. option:: --retry=seconds
 
-              The amount of seconds to suggest to an RTR client to wait before
-              trying to request data again if that failed. The default value
-              is 600 seconds, as recommended in :rfc:`8210`.
+              The amount of seconds to suggest to an RTR client to wait
+              before trying to request data again if that failed. The default
+              value is 600 seconds, as recommended in :rfc:`8210`.
 
        .. option:: --expire=seconds
 
-              The amount of seconds to an RTR client can keep using data if it
-              cannot refresh it. After that time, the client should discard the
-              data. Note that this value was introduced in version 1 of the RTR
-              protocol and is thus not relevant for clients that only implement
-              version 0. The default value, as recommended in :rfc:`8210`, is
-              7200 seconds.
+              The amount of seconds to an RTR client can keep using data if
+              it cannot refresh it. After that time, the client should
+              discard the data. Note that this value was introduced in
+              version 1 of the RTR protocol and is thus not relevant for
+              clients that only implement version 0. The default value, as
+              recommended in :rfc:`8210`, is 7200 seconds.
 
        .. option:: --history=count
 
               In RTR, a client can request to only receive the changes that
               happened since the last version of the data it had seen. This
-              option sets how many change sets the server will at most keep. If
-              a client requests changes from an older version, it will get the
-              current full set.
+              option sets how many change sets the server will at most keep.
+              If a client requests changes from an older version, it will get
+              the current full set.
 
-              Note that routers typically stay connected with their RTR server
-              and therefore really only ever need one single change set.
-              Additionally, if RTR server or router are restarted, they will
-              have a new session with new change sets and need to exchange a
-              full data set, too. Thus, increasing the value probably only ever
-              increases memory consumption.
+              Note that routers typically stay connected with their RTR
+              server and therefore really only ever need one single change
+              set. Additionally, if RTR server or router are restarted, they
+              will have a new session with new change sets and need to
+              exchange a full data set, too. Thus, increasing the value
+              probably only ever increases memory consumption.
 
               The default value is 10.
 
@@ -769,39 +788,39 @@ These can be requested by providing different commands on the command line.
        .. option:: --working-dir=path
 
               The working directory for the daemon process. In daemon mode,
-              Routinator will change to this directory while detaching from the
-              terminal.
+              Routinator will change to this directory while detaching from
+              the terminal.
 
        .. option:: --chroot=path
 
               The root directory for the daemon process. If this option is
-              provided, the daemon process will change its root directory to the
-              given directory. This will only work if all other paths provided
-              via the configuration or command line options are under this
-              directory.
+              provided, the daemon process will change its root directory to
+              the given directory. This will only work if all other paths
+              provided via the configuration or command line options are
+              under this directory.
 
        .. option:: --user=user-name
 
-              The name of the user to change to for server mode. It this option
-              is provided, Routinator will run as that user after the listening
-              sockets for HTTP and RTR have been created. This may cause
-              problems, if the user is not allowed to write to the directory
-              given as repository directory or is not allowed to read the TAL
-              directory or local exception files.
+              The name of the user to change to for server mode. It this
+              option is provided, Routinator will run as that user after the
+              listening sockets for HTTP and RTR have been created. This may
+              cause problems, if the user is not allowed to write to the
+              directory given as repository directory or is not allowed to
+              read the TAL directory or local exception files.
 
        .. option:: --group=group-name
 
-              The name of the group to change to for server mode. It this option
-              is provided, Routinator will run as that group after the listening
-              sockets for HTTP and RTR have been created.
+              The name of the group to change to for server mode. It this
+              option is provided, Routinator will run as that group after the
+              listening sockets for HTTP and RTR have been created.
 
 
 .. subcmd:: update
 
-       Updates the local repository by resyncing all known publication points.
-       The command will also validate the updated repository to discover any
-       new publication points that appear in the repository and fetch their
-       data.
+       Updates the local repository by resyncing all known publication
+       points. The command will also validate the updated repository to
+       discover any new publication points that appear in the repository and
+       fetch their data.
 
        As such, the command really is a shortcut for running
        :program:`routinator` :subcmd:`vrps` :option:`-f` ``none``.
@@ -809,9 +828,9 @@ These can be requested by providing different commands on the command line.
        .. option:: --complete
 
               If any of the rsync commands needed to update the repository
-              failed, Routinator completes the operation and exits with status
-              code 2. If this option is not given, the operation will complete
-              with exit status 0 in this case.
+              failed, Routinator completes the operation and exits with
+              status code 2. If this option is not given, the operation will
+              complete with exit status 0 in this case.
 
 .. subcmd:: dump
 
@@ -826,18 +845,19 @@ These can be requested by providing different commands on the command line.
               
        Three directories will be created in the output directory:
        
-       The *rrdp* directory will contain all the files collected via RRDP from
-       the various repositories. Each repository is stored in its own directory.
-       The mapping between rpkiNotify URI and path is provided in the
-       *repositories.json* file. For each repository, the files are stored in
-       a directory structure based on the components of the file as rsync URI.
+       The *rrdp* directory will contain all the files collected via RRDP
+       from the various repositories. Each repository is stored in its own
+       directory. The mapping between rpkiNotify URI and path is provided in
+       the *repositories.json* file. For each repository, the files are
+       stored in a directory structure based on the components of the file as
+       rsync URI.
        
        The *rsync* directory contains all the files collected via rsync. The
-       files are stored in a directory structure based on the components of the
-       file's rsync URI.
+       files are stored in a directory structure based on the components of
+       the file's rsync URI.
 
-       The *store* directory contains all the files used for validation. Files
-       collected via RRDP  or rsync are copied to the store if they are
+       The *store* directory contains all the files used for validation.
+       Files collected via RRDP  or rsync are copied to the store if they are
        correctly referenced by a valid manifest. This part contains one
        directory for each RRDP repository similarly structured to the *rrdp*
        directory and one additional directory *rsync* that contains files
@@ -849,47 +869,47 @@ These can be requested by providing different commands on the command line.
 
        .. option:: -o file, --output=file
 
-              If this option is provided, the manual page will be written to the
-              given file instead of displaying it. Use - to output the manual
-              page to standard output.
+              If this option is provided, the manual page will be written to
+              the given file instead of displaying it. Use - to output the
+              manual page to standard output.
 
 Trust Anchor Locators
 ---------------------
 
 RPKI uses trust anchor locators, or TALs, to identify the location and public
-keys of the trusted root CA certificates. Routinator keeps these TALs in files
-in the TAL directory which can be set by the  :option:`-t` option. If the
-:option:`-b` option is used instead, the TAL directory will be in the
+keys of the trusted root CA certificates. Routinator keeps these TALs in
+files in the TAL directory which can be set by the  :option:`-t` option. If
+the :option:`-b` option is used instead, the TAL directory will be in the
 subdirectory *tals* under the directory specified in this option. The default
 location, if no options are used at all is :file:`$HOME/.rpki-cache/tals`.
 
-Routinator comes with a set of commonly used TALs that can be used to populate
-the TAL directory via the init command. By default, the command will install
-the TALs of the five Regional Internet Registries (RIRs) necessary for the 
-complete global RPKI repository.
+Routinator comes with a set of commonly used TALs that can be used to
+populate the TAL directory via the init command. By default, the command will
+install the TALs of the five Regional Internet Registries (RIRs) necessary
+for the complete global RPKI repository.
 
 If the directory does exist, Routinator will use all files with an extension
 of *.tal* in this directory. This means that you can add and remove trust
-anchors by adding and removing files in this directory. If you add files, make
-sure they are in the format described by :rfc:`7730` or the upcoming
+anchors by adding and removing files in this directory. If you add files,
+make sure they are in the format described by :rfc:`7730` or the upcoming
 :rfc:`8630`.
 
 Configuration File
 ------------------
 
-Instead of providing all options on the command line, they can also be provided
-through a configuration file. Such a file can be selected through the
-:option:`-c` option. If no configuration file is specified this way but a file
-named :file:`$HOME/.routinator.conf` is present, this file is used.
+Instead of providing all options on the command line, they can also be
+provided through a configuration file. Such a file can be selected through
+the :option:`-c` option. If no configuration file is specified this way but a
+file named :file:`$HOME/.routinator.conf` is present, this file is used.
 
 The configuration file is a file in TOML format. In short, it consists of a
-sequence of key-value pairs, each on its own line. Strings are to be enclosed in
-double quotes. Lists can be given by enclosing a comma-separated list of values
-in square brackets.
+sequence of key-value pairs, each on its own line. Strings are to be enclosed
+in double quotes. Lists can be given by enclosing a comma-separated list of
+values in square brackets.
 
 The configuration file can contain the following entries. All path values are
-interpreted relative to the directory the configuration file is located in. All
-values can be overridden via the command line options.
+interpreted relative to the directory the configuration file is located in.
+All values can be overridden via the command line options.
 
 .. Glossary::
 
@@ -898,28 +918,29 @@ values can be overridden via the command line options.
             repository in. This entry is mandatory.
 
       tal-dir
-            A string containing the path to the directory that contains the Trust
-            Anchor Locators. This entry is mandatory.
+            A string containing the path to the directory that contains the
+            Trust Anchor Locators. This entry is mandatory.
 
       exceptions
             A list of strings, each containing the path to a file with local
             exceptions. If missing, no local exception files are used.
 
       strict
-            A boolean specifying whether strict validation should be employed. If
-            missing, strict validation will not be used.
+            A boolean specifying whether strict validation should be
+            employed. If missing, strict validation will not be used.
 
       stale
             A string specifying the policy for dealing with stale objects.
 
             reject
-                  Consider all stale objects invalid rendering all material published
-                  by the CA issuing the stale object to be invalid including all
-                  material of any child CA. This is the default policy if the value 
-                  is missing.
+                  Consider all stale objects invalid rendering all material
+                  published by the CA issuing the stale object to be invalid
+                  including all material of any child CA. This is the default
+                  policy if the value is missing.
 
             warn
-                  Consider stale objects to be valid but print a warning to the log.
+                  Consider stale objects to be valid but print a warning to
+                  the log.
 
             accept
                   Quietly consider stale objects valid.
@@ -931,125 +952,133 @@ values can be overridden via the command line options.
                   Filter unsafe VRPs and add warning messages to the log.
 
             warn
-                  Warn about unsafe VRPs in the log but add them to the final set of
-                  VRPs. This is the default policy if the value is missing.
+                  Warn about unsafe VRPs in the log but add them to the final
+                  set of VRPs. This is the default policy if the value is
+                  missing.
 
             accept
                   Quietly add unsafe VRPs to the final set of VRPs.
 
       unknown-objects
-            A string specifying the policy for dealing with unknown RPKI object types.
+            A string specifying the policy for dealing with unknown RPKI
+            object types.
 
             reject
                   Reject the object and its issuing CA.
 
             warn
-                  Warn about the object but ignore it and accept the issuing CA.
-                  This is the default policy if the value is missing.
+                  Warn about the object but ignore it and accept the issuing
+                  CA. This is the default policy if the value is missing.
 
             accept
                   Quietly ignore the object and accept the issuing CA.
 
       allow-dubious-hosts
-            A boolean value that, if present and true, disables Routinator's filtering
-            of dubious host names in rsync and HTTPS URIs from RPKI data.
+            A boolean value that, if present and true, disables Routinator's
+            filtering of dubious host names in rsync and HTTPS URIs from RPKI
+            data.
 
       disable-rsync
-            A boolean value that, if present and true, turns off the use of rsync.
+            A boolean value that, if present and true, turns off the use of
+            rsync.
 
       rsync-command
-            A string specifying the command to use for running rsync. The default is
-            simply *rsync*.
+            A string specifying the command to use for running rsync. The
+            default is simply *rsync*.
 
       rsync-args
-            A list of strings containing the arguments to be passed to the rsync
-            command. Each string is an argument of its own.
+            A list of strings containing the arguments to be passed to the
+            rsync command. Each string is an argument of its own.
 
-            If this option is not provided, Routinator will try to find out if your
-            rsync understands the ``--contimeout`` option and, if so, will set it to
-            10 thus letting connection attempts time out after ten seconds. If your
-            rsync is too old to support this option, no arguments are used.
+            If this option is not provided, Routinator will try to find out
+            if your rsync understands the ``--contimeout`` option and, if so,
+            will set it to 10 thus letting connection attempts time out after
+            ten seconds. If your rsync is too old to support this option, no
+            arguments are used.
 
       rsync-timeout
-            An integer value specifying the number seconds an rsync command is allowed
-            to run before it is being terminated. The default if the value is missing
-            is 300 seconds.
+            An integer value specifying the number seconds an rsync command
+            is allowed to run before it is being terminated. The default if
+            the value is missing is 300 seconds.
 
       disable-rrdp
-            A boolean value that, if present and true, turns off the use of RRDP.
+            A boolean value that, if present and true, turns off the use of
+            RRDP.
 
       rrdp-fallback-time
-            An integer value specifying the maximum number of seconds since a last
-            successful update of an RRDP repository before Routinator falls back to
-            using rsync. The default in case the value is missing is 3600 seconds. If
-            the value provided is smaller than twice the refresh time, it is silently
-            increased to that value.
+            An integer value specifying the maximum number of seconds since a
+            last successful update of an RRDP repository before Routinator
+            falls back to using rsync. The default in case the value is
+            missing is 3600 seconds. If the value provided is smaller than
+            twice the refresh time, it is silently increased to that value.
 
       rrdp-max-delta-count
-            An integer value that specifies the maximum number of deltas necessary to
-            update an RRDP repository before using the snapshot instead. If the value
-            is missing, the default of 100 is used.
+            An integer value that specifies the maximum number of deltas
+            necessary to update an RRDP repository before using the snapshot
+            instead. If the value is missing, the default of 100 is used.
 
       rrdp-timeout
-            An integer value that provides a timeout in seconds for all individual
-            RRDP-related network operations, i.e., connects, reads, and writes. If the
-            value is missing, a default timeout of 300 seconds will be used. Set the
-            value to 0 to turn the timeout off.
+            An integer value that provides a timeout in seconds for all
+            individual RRDP-related network operations, i.e., connects,
+            reads, and writes. If the value is missing, a default timeout of
+            300 seconds will be used. Set the value to 0 to turn the timeout
+            off.
 
       rrdp-connect-timeout
-            An integer value that, if present, sets a separate timeout in seconds for
-            RRDP connect requests only.
+            An integer value that, if present, sets a separate timeout in
+            seconds for RRDP connect requests only.
 
       rrdp-local-addr
             A string value that provides the local address to be used by RRDP
             connections.
 
       rrdp-root-certs
-            A list of strings each providing a path to a file containing a trust
-            anchor certificate for HTTPS authentication of RRDP connections. In
-            addition to the certificates provided via this option, the system's own
-            trust store is used.
+            A list of strings each providing a path to a file containing a
+            trust anchor certificate for HTTPS authentication of RRDP
+            connections. In addition to the certificates provided via this
+            option, the system's own trust store is used.
 
       rrdp-proxies
-            A list of string each providing the URI for a proxy for outgoing RRDP
-            connections. The proxies are tried in order for each request. HTTP and
-            SOCKS5 proxies are supported.
+            A list of string each providing the URI for a proxy for outgoing
+            RRDP connections. The proxies are tried in order for each
+            request. HTTP and SOCKS5 proxies are supported.
 
       rrdp-keep-responses
-            A string containing a path to a directory into which the bodies of all
-            HTTPS responses received from RRDP servers will be stored. The sub-path
-            will be constructed using the components of the requested URI. For the
-            responses to the notification files, the timestamp is appended to the path
-            to make it possible to distinguish the series of requests made over time.
+            A string containing a path to a directory into which the bodies
+            of all HTTPS responses received from RRDP servers will be stored.
+            The sub-path will be constructed using the components of the
+            requested URI. For the responses to the notification files, the
+            timestamp is appended to the path to make it possible to
+            distinguish the series of requests made over time.
 
       max-object-size
-            An integer value that provides a limit for the size of individual objects
-            received via either rsync or RRDP to the given number of bytes. The
-            default value if this option is not present is 20,000,000 (i.e., 20
-            MBytes). A value of 0 disables the limit.
+            An integer value that provides a limit for the size of individual
+            objects received via either rsync or RRDP to the given number of
+            bytes. The default value if this option is not present is
+            20,000,000 (i.e., 20 MBytes). A value of 0 disables the limit.
 
       max-ca-depth
-            An integer value that specifies the maximum number of CAs a given CA may
-            be away from a trust anchor certificate before it is rejected. If the
-            option is missing, a default of 32 will be used.
+            An integer value that specifies the maximum number of CAs a given
+            CA may be away from a trust anchor certificate before it is
+            rejected. If the option is missing, a default of 32 will be used.
 
       dirty
             A boolean value which, if true, specifies that unused files and
-            directories should not be deleted from the repository directory after each
-            validation run. If left out, its value will be false and unused files
-            will be deleted.
+            directories should not be deleted from the repository directory
+            after each validation run. If left out, its value will be false
+            and unused files will be deleted.
 
       validation-threads
-            An integer value specifying the number of threads to be used during
-            validation of the repository. If this value is missing, the number of CPUs
-            in the system is used.
+            An integer value specifying the number of threads to be used
+            during validation of the repository. If this value is missing,
+            the number of CPUs in the system is used.
 
       log-level
-            A string value specifying the maximum log level for which log messages
-            should be emitted. The default is *warn*.
+            A string value specifying the maximum log level for which log
+            messages should be emitted. The default is *warn*.
 
-            See `LOGGING`_ below for more information on what information is logged at
-            the different levels.
+            See `LOGGING`_ below for more information on what information is
+            logged at the different levels.
 
       log
             A string specifying where to send log messages to. This can be
@@ -1070,22 +1099,24 @@ values can be overridden via the command line options.
                   Log messages will be sent to the file specified through
                   the log-file configuration file entry.
 
-            The default if this value is missing is, unsurprisingly, *default*.
+            The default if this value is missing is, unsurprisingly,
+            *default*.
 
       log-file
-            A string value containing the path to a file to which log messages will be
-            appended if the log configuration value is set to file. In this case, the
-            value is mandatory.
+            A string value containing the path to a file to which log
+            messages will be appended if the log configuration value is set
+            to file. In this case, the value is mandatory.
 
       syslog-facility
-            A string value specifying the syslog facility to use for logging to
-            syslog. The default value if this entry is missing is *daemon*.
+            A string value specifying the syslog facility to use for logging
+            to syslog. The default value if this entry is missing is
+            *daemon*.
 
       rtr-listen
-            An array of string values each providing an address and port
-            on which the RTR server should listen in TCP mode. Address and
-            port should be separated by a colon. IPv6 address should be
-            enclosed in square brackets.
+            An array of string values each providing an address and port on
+            which the RTR server should listen in TCP mode. Address and port
+            should be separated by a colon. IPv6 address should be enclosed
+            in square brackets.
 
       rtr-tls-listen
             An array of string values each providing an address and port
@@ -1106,98 +1137,103 @@ values can be overridden via the command line options.
             enclosed in square brackets.
 
       listen-systemd
-            The RTR TCP listening socket will be acquired from systemd via socket
-            activation. Use this option together with systemd's socket units to allow
-            Routinator running as a regular user to bind to the default RTR port 323.
+            The RTR TCP listening socket will be acquired from systemd via
+            socket activation. Use this option together with systemd's socket
+            units to allow Routinator running as a regular user to bind to
+            the default RTR port 323.
 
       rtr-tcp-keepalive
-            An integer value specifying the number of seconds to wait before sending a
-            TCP keepalive on an established RTR connection. If this option is missing,
-            TCP keepalive will be enabled on all RTR connections with an idle time of
-            60 seconds. If this option is present and set to zero, TCP keepalives are
-            disabled.
+            An integer value specifying the number of seconds to wait before
+            sending a TCP keepalive on an established RTR connection. If this
+            option is missing, TCP keepalive will be enabled on all RTR
+            connections with an idle time of 60 seconds. If this option is
+            present and set to zero, TCP keepalives are disabled.
 
       rtr-client-metrics
-            A boolean value specifying whether server metrics should include separate
-            metrics for every RTR client. If the value is missing, no RTR client
-            metrics will be provided.
+            A boolean value specifying whether server metrics should include
+            separate metrics for every RTR client. If the value is missing,
+            no RTR client metrics will be provided.
 
       rtr-tls-key
-            A string value providing the path to a file containing the private
-            key to be used by the RTR server in TLS mode. The file must
-            contain one private key in PEM format.
+            A string value providing the path to a file containing the
+            private key to be used by the RTR server in TLS mode. The file
+            must contain one private key in PEM format.
 
       rtr-tls-cert
-            A string value providing the path to a file containing the
-            server certificates to be used by the RTR server in TLS mode. The
-            file must contain one or more certificates in PEM format.
+            A string value providing the path to a file containing the server
+            certificates to be used by the RTR server in TLS mode. The file
+            must contain one or more certificates in PEM format.
 
       http-tls-key
-            A string value providing the path to a file containing the private
-            key to be used by the HTTP server in TLS mode. The file must
-            contain one private key in PEM format.
+            A string value providing the path to a file containing the
+            private key to be used by the HTTP server in TLS mode. The file
+            must contain one private key in PEM format.
 
       http-tls-cert
-            A string value providing the path to a file containing the
-            server certificates to be used by the HTTP server in TLS mode.
-            The file must contain one or more certificates in PEM format.
+            A string value providing the path to a file containing the server
+            certificates to be used by the HTTP server in TLS mode. The file
+            must contain one or more certificates in PEM format.
 
       refresh
-            An integer value specifying the number of seconds Routinator should wait
-            between consecutive validation runs in server mode. The next validation
-            run will happen earlier, if objects expire earlier. The default is 600
-            seconds.
+            An integer value specifying the number of seconds Routinator
+            should wait between consecutive validation runs in server mode.
+            The next validation run will happen earlier, if objects expire
+            earlier. The default is 600 seconds.
 
       retry
-            An integer value specifying the number of seconds an RTR client is
-            requested to wait after it failed to receive a data set. The default is
-            600 seconds.
+            An integer value specifying the number of seconds an RTR client
+            is requested to wait after it failed to receive a data set. The
+            default is 600 seconds.
 
       expire
-            An integer value specifying the number of seconds an RTR client is
-            requested to use a data set if it cannot get an update before throwing it
-            away and continuing with no data at all. The default is 7200 seconds if it
-            cannot get an update before throwing it away and continuing with no data
-            at all. The default is 7200 seconds.
+            An integer value specifying the number of seconds an RTR client
+            is requested to use a data set if it cannot get an update before
+            throwing it away and continuing with no data at all. The default
+            is 7200 seconds if it cannot get an update before throwing it
+            away and continuing with no data at all. The default is 7200
+            seconds.
 
       history-size
-            An integer value specifying how many change sets Routinator should keep in
-            RTR server mode. The default is 10.
+            An integer value specifying how many change sets Routinator
+            should keep in RTR server mode. The default is 10.
 
       pid-file
-            A string value containing a path pointing to the PID file to be used in
-            daemon mode.
+            A string value containing a path pointing to the PID file to be
+            used in daemon mode.
 
       working-dir
-            A string value containing a path to the working directory for the daemon
-            process.
+            A string value containing a path to the working directory for the
+            daemon process.
 
       chroot
-            A string value containing the path any daemon process should use as its
-            root directory.
+            A string value containing the path any daemon process should use
+            as its root directory.
 
       user
-            A string value containing the user name a daemon process should run as.
+            A string value containing the user name a daemon process should
+            run as.
 
       group
-            A string value containing the group name a daemon process should run as.
+            A string value containing the group name a daemon process should
+            run as.
 
       tal-label
-            An array containing arrays of two string values mapping the name of a TAL
-            file (without the path but including the extension) as given by the first
-            string to the name of the TAL to be included where the TAL is referenced
-            in output as given by the second string.
+            An array containing arrays of two string values mapping the name
+            of a TAL file (without the path but including the extension) as
+            given by the first string to the name of the TAL to be included
+            where the TAL is referenced in output as given by the second
+            string.
 
             If the options missing or if a TAL isn't mentioned in the option,
-            Routinator will construct a name for the TAL by using its file name
-            (without the path) and dropping the extension.
+            Routinator will construct a name for the TAL by using its file
+            name (without the path) and dropping the extension.
 
 HTTP Service
 ------------
 
 Routinator can provide an HTTP service allowing to fetch the Validated ROA
-Payload in various formats. The service does not support HTTPS and should only
-be used within the local network.
+Payload in various formats. The service does not support HTTPS and should
+only be used within the local network.
 
 The service only supports GET requests with the following paths:
 
@@ -1205,8 +1241,8 @@ The service only supports GET requests with the following paths:
       Returns a set of monitoring metrics in the format used by Prometheus.
 
 /status
-      Returns the current status of the Routinator instance. This is similar to
-      the output of the **/metrics** endpoint but in a more human friendly
+      Returns the current status of the Routinator instance. This is similar
+      to the output of the **/metrics** endpoint but in a more human friendly
       format.
 
 /api/v1/status
@@ -1223,10 +1259,10 @@ The service only supports GET requests with the following paths:
       Returns the version of the Routinator instance.
 
 /api/v1/validity/as-number/prefix
-      Returns a JSON object describing whether the route announcement given by
-      its origin AS Number and address prefix is RPKI valid, invalid, or not
-      found.  The returned object is compatible with that provided by the RIPE
-      NCC RPKI Validator. For more information, see
+      Returns a JSON object describing whether the route announcement given
+      by its origin AS Number and address prefix is RPKI valid, invalid, or
+      not found.  The returned object is compatible with that provided by the
+      RIPE NCC RPKI Validator. For more information, see
       https://ripe.net/support/documentation/developer-documentation/rpki-validator-api
 
 /validity?asn=as-number&prefix=prefix
@@ -1241,19 +1277,19 @@ The service only supports GET requests with the following paths:
       returned and their values should be passed as the query parameters in a
       future request.
 
-      The members *announced* and *withdrawn* contain arrays with route origins
-      that have been announced and withdrawn, respectively, since the provided
-      session and serial. If *reset* is *true*, the *withdrawn* member is not
-      present.
+      The members *announced* and *withdrawn* contain arrays with route
+      origins that have been announced and withdrawn, respectively, since the
+      provided session and serial. If *reset* is *true*, the *withdrawn*
+      member is not present.
 
-In addition, the current set of VRPs is available for each output format
-at a path with the same name as the output format. E.g., the CSV output is
+In addition, the current set of VRPs is available for each output format at a
+path with the same name as the output format. E.g., the CSV output is
 available at ``/csv``.
 
-These paths accept selector expressions to limit the VRPs returned in the form
-of a query string. The field ``select-asn`` can be used to filter for ASNs and
-the field ``select-prefix`` can be used to filter for prefixes. The fields can
-be repeated multiple times.
+These paths accept selector expressions to limit the VRPs returned in the
+form of a query string. The field ``select-asn`` can be used to filter for
+ASNs and the field ``select-prefix`` can be used to filter for prefixes. The
+fields can be repeated multiple times.
 
 This works in the same way as the options of the same name to the
 :subcmd:`vrps` command.
@@ -1261,31 +1297,31 @@ This works in the same way as the options of the same name to the
 Logging
 -------
 
-In order to allow diagnosis of the VRP data set as well as its overall health,
-Routinator logs an extensive amount of information. The log levels used by
-syslog are utilized to allow filtering this information for particular use
-cases.
+In order to allow diagnosis of the VRP data set as well as its overall
+health, Routinator logs an extensive amount of information. The log levels
+used by syslog are utilized to allow filtering this information for
+particular use cases.
 
 The log levels represent the following information:
 
 error
-      Information related to events that prevent Routinator from continuing to
-      operate at all as well as all issues related to local configuration even
-      if Routinator will continue to run.
+      Information related to events that prevent Routinator from continuing
+      to operate at all as well as all issues related to local configuration
+      even if Routinator will continue to run.
 
 warn
-      Information about events and data that influences the set of VRPs produced
-      by Routinator. This includes failures to communicate with repository
-      servers, or encountering invalid objects.
+      Information about events and data that influences the set of VRPs
+      produced by Routinator. This includes failures to communicate with
+      repository servers, or encountering invalid objects.
 
 info
-      Information about events and data that could be considered abnormal but do
-      not influence the set of VRPs produced. For example, when filtering of
-      unsafe VRPs is disabled, the unsafe VRPs are logged with this level.
+      Information about events and data that could be considered abnormal but
+      do not influence the set of VRPs produced. For example, when filtering
+      of unsafe VRPs is disabled, the unsafe VRPs are logged with this level.
 
 debug
-      Information about the internal state of Routinator that may be useful for,
-      well, debugging.
+      Information about the internal state of Routinator that may be useful
+      for, well, debugging.
 
 Validation
 ----------
@@ -1296,56 +1332,57 @@ certification authorities (CAs) starting with those referred to in the
 configured TALs.
 
 Each CA is checked whether all its published objects are present, correctly
-encoded, and have been signed by the CA. If any of the objects fail this check,
-the entire CA will be rejected. If an object of an unknown  type  is
+encoded, and have been signed by the CA. If any of the objects fail this
+check, the entire CA will be rejected. If an object of an unknown  type  is
 encountered, the behaviour depends on the ``unknown-objects`` policy. If this
 policy has a value of *reject* the entire CA will be rejected. In this case,
 only certificates (.cer), CRLs (.crl), manifestes (.mft), ROAs (.roa), and
 Ghostbuster records (.gbr) will be accepted.
 
-If  a CA is rejected, none of its ROAs will be added to the VRP set but also
-none of its child CAs will be considered at all; their published data will not
-be fetched or validated.
+If a CA is rejected, none of its ROAs will be added to the VRP set but also
+none of its child CAs will be considered at all; their published data will
+not be fetched or validated.
 
-If  a prefix has its ROAs published by different CAs, this will lead to some of
-its VRPs being dropped while others are still added. If the VRP for the
+If a prefix has its ROAs published by different CAs, this will lead to some
+of its VRPs being dropped while others are still added. If the VRP for the
 legitimately announced route is among those having been dropped, the route
 becomes RPKI invalid. This can happen both by operator error or through an
 active attack.
 
-In addition, if a VRP for a less specific prefix exists that covers the prefix
-of the dropped VRP, the route will be invalidated by the less specific VRP.
+In addition, if a VRP for a less specific prefix exists that covers the
+prefix of the dropped VRP, the route will be invalidated by the less specific
+VRP.
 
 Because of this risk of accidentally or maliciously invalidating routes, VRPs
-that have address prefixes overlapping with resources of rejected CAs are called
-*unsafe VRPs*.
+that have address prefixes overlapping with resources of rejected CAs are
+called *unsafe VRPs*.
 
 In order to avoid these situations and instead fall back to an RPKI unknown
-state for such routes, Routinator allows to filter out these unsafe VRPs. This
-can be enabled via the ``--unsafe-vrps=reject`` command line option or setting
-``unsafe-vrps=reject`` in the config file.
+state for such routes, Routinator allows to filter out these unsafe VRPs.
+This can be enabled via the ``--unsafe-vrps=reject`` command line option or
+setting ``unsafe-vrps=reject`` in the config file.
 
 By default, this filter is currently disabled but warnings are logged about
 unsafe VRPs. This allows to assess the operation impact of such a filter.
 Depending on this assessment, the default may change in future versions.
 
-One exception from this rule are CAs that have the full address space assigned,
-i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out all VRPs.
-These prefixes are used by the RIR trust anchors to avoid having to update these
-often. However, each RIR has its own address space so losing all VRPs should
-something happen to a trust anchor is unnecessary.
+One exception from this rule are CAs that have the full address space
+assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out
+all VRPs. These prefixes are used by the RIR trust anchors to avoid having to
+update these often. However, each RIR has its own address space so losing all
+VRPs should something happen to a trust anchor is unnecessary.
 
 Relaxed Decoding
 ----------------
 
-The documents defining RPKI include a number of very strict rules regarding the
-formatting of the objects published in the RPKI repository. However, because
-RPKI reuses existing technology, real-world applications produce objects that
-do not follow these strict requirements.
+The documents defining RPKI include a number of very strict rules regarding
+the formatting of the objects published in the RPKI repository. However,
+because RPKI reuses existing technology, real-world applications produce
+objects that do not follow these strict requirements.
 
 As a consequence, a significant portion of the RPKI repository is actually
-invalid if the rules are followed. We therefore introduce two decoding
-modes: strict and relaxed. Strict mode rejects any object that does not pass all
+invalid if the rules are followed. We therefore introduce two decoding modes:
+strict and relaxed. Strict mode rejects any object that does not pass all
 checks laid out by the relevant RFCs. Relaxed mode ignores a number of these
 checks.
 
@@ -1361,21 +1398,22 @@ relaxed decoding mode.
        Subject and Issuer
               The RFC restricts the type used for CommonName attributes to
               PrintableString, allowing only a subset of ASCII characters,
-              while :rfc:`5280` allows a number of additional string types. At
-              least one CA produces resource certificates with Utf8Strings.
+              while :rfc:`5280` allows a number of additional string types.
+              At least one CA produces resource certificates with
+              Utf8Strings.
 
-              In relaxed mode, we will only check that the general structure of
-              the issuer and subject fields are correct and allow any number and
-              types of attributes. This seems justified since RPKI explicitly
-              does not use these fields.
+              In relaxed mode, we will only check that the general structure
+              of the issuer and subject fields are correct and allow any
+              number and types of attributes. This seems justified since RPKI
+              explicitly does not use these fields.
 
    Signed Objects (:rfc:`6488`)
        Signed objects are defined as a profile on CMS messages defined in
        :rfc:`5652`.
 
        DER Encoding
-              :rfc:`6488` demands all signed objects to be DER encoded while the
-              more general CMS format allows any BER encoding -- DER is a
+              :rfc:`6488` demands all signed objects to be DER encoded while
+              the more general CMS format allows any BER encoding -- DER is a
               stricter subset of the more general BER. At least one CA does
               indeed produce BER encoded signed objects.
 
@@ -1384,21 +1422,22 @@ relaxed decoding mode.
               Note that this isn't just nit-picking. In BER encoding, octet
               strings can be broken up into a sequence of sub-strings. Since
               those strings are in some places used to carry encoded content
-              themselves, such an encoding does make parsing significantly more
-              difficult. At least one CA does produce such broken-up strings.
+              themselves, such an encoding does make parsing significantly
+              more difficult. At least one CA does produce such broken-up
+              strings.
 
 Signals
 -------
 
 SIGUSR1: Reload TALs and restart validation
    When receiving SIGUSR1, Routinator will attempt to reload the TALs and, if
-   that succeeds, restart validation. If loading the TALs fails, Routinator will
-   exit.
+   that succeeds, restart validation. If loading the TALs fails, Routinator
+   will exit.
 
 Exit Status
 -----------
 
 Upon success, the exit status 0 is returned. If any fatal error happens, the
-exit status will be 1. Some commands provide a :option:`--complete` option which
-will cause the exit status to be 2 if any of the rsync commands to update the
-repository fail.
+exit status will be 1. Some commands provide a :option:`--complete` option
+which will cause the exit status to be 2 if any of the rsync commands to
+update the repository fail.
