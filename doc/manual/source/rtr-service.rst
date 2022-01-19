@@ -2,47 +2,74 @@ RTR Service
 ===========
 
 Routinator has a built-in server for the RPKI-to-Router (RTR) protocol. It
-supports :RFC:`8210` as well as the older version described in :RFC:`6810`. When
-launched as an RTR server, routers with support for route origin validation
-(ROV) can connect to Routinator to fetch the processed data. 
+supports :RFC:`8210` as well as the older version described in :RFC:`6810`.
+When launched as an RTR server, routers with support for route origin
+validation (ROV) can connect to Routinator to fetch the processed data. 
 
 .. Tip:: If you would like to run the RTR server as a separate daemon, for
          example because you want to centralise validation and distribute
          processed data to various locations where routers can connect, then
          NLnet Labs provides :doc:`RTRTR<rtrtr:index>`.
 
-In order to start the RTR server at 192.0.2.13 and 2001:0DB8::13 on port 3323,
-run Routinator using the :subcmd:`server` subcommand:
+In order to start the RTR server at 192.0.2.13 and 2001:0DB8::13 on port
+3323, run Routinator using the :subcmd:`server` subcommand:
 
 .. code-block:: text
 
    routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323
 
 Please note that port 3323 is not the :abbr:`IANA (Internet Assigned Numbers
-Authority)`-assigned default port for the protocol,  which would be 323. But as
-this is a privileged port, you would need to be running Routinator as root when
-otherwise there is no reason to do that. 
+Authority)`-assigned default port for the protocol, which would be 323. But
+as this is a privileged port, you would need to be running Routinator as root
+when otherwise there is no reason to do that. 
 
-TLS Connections
----------------
+Secure Transport
+----------------
 
-It's possible to use RTR-over-TLS connections with Routinator using the
-:option:`--rtr-tls` option. Using the same example as above, the command is:
+.. versionadded:: 0.11.0
+   RTR-over-TLS connections 
+
+Although there is no mandatory-to-implement transport that provides
+authentication and integrity protection, :rfc:`6810#section-7` defines a
+number of secure transports for RPKI-RTR that can be used to secure
+communications. This includes TLS, SSH, TCP MD5 and TCP-AO transports. 
+
+Routinator currently has native support for TLS connections, and can be
+configured to use `SSH`_ with some additional tooling.
+
+TLS
+"""
+
+It's possible to natively use RTR-over-TLS connections with Routinator. The
+requirements are described in detail in :rfc:`6810#section-7.2`. There is an
+:abbr:`IANA (Internet Assigned Numbers Authority)`-assigned default port for
+rpki-rtr-tls as well, in this case 324.
+
+Currently, very few routers have implemented suport for TLS, but it may be
+especially useful to the TLS connections when deploying our RTR data proxy
+:doc:`RTRTR <rtrtr:index>`, as RTR data may be flowing across the public
+Internet.
+
+In this example we'll start Routinator's RTR server to listen on 192.0.2.13
+and 2001:0DB8::13 and use port 3324 to make not use a priviledged port. Use
+the :option:`--rtr-tls` to specify this is a TLS connection and the
+:option:`--rtr-tls-cert` option to specify the path to a file containing the
+server certificates to be used. This file has to contain one or more
+certificates encoded in PEM format:
 
 .. code-block:: text
 
-   routinator server --rtr-tls 192.0.2.13:3323 --rtr-tls [2001:0DB8::13]:3323
+   routinator server --rtr-tls 192.0.2.13:3324 \
+                     --rtr-tls [2001:0DB8::13]:3324 \
+                     --rtr-tls-cert "/path/to/rtr-cert.pem"
 
-There are two additional options you can use. First, the
-:option:`--rtr-tls-key` option specifies the path to a file containing the
-private key to be used for RTR-over-TLS connections. The file has to contain
-exactly one private key encoded in PEM format. Secondly, the
-:option:`--rtr-tls-cert` specifies the path to a file containing the server
-certificates to be used for RTR-over-TLS connections. The file has to contain
-one or more certificates encoded in PEM format.
+There is one additional option you can use. The :option:`--rtr-tls-key`
+option specifies the path to a file containing the private key to be used for
+RTR-over-TLS connections. The file has to contain exactly one private key
+encoded in PEM format. 
 
-SSH Connections
----------------
+SSH
+"""
 
 These instructions were contributed by `Wild Kat <https://github.com/wk>`_.
 
