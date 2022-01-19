@@ -562,6 +562,7 @@ fn json_publication_metrics(
     target.member_raw("rejectedPublicationPoints", metrics.rejected_points);
     target.member_raw("validManifests", metrics.valid_manifests);
     target.member_raw("invalidManifests", metrics.invalid_manifests);
+    target.member_raw("prematureManifests", metrics.premature_manifests);
     target.member_raw("staleManifests", metrics.stale_manifests);
     target.member_raw("missingManifests", metrics.missing_manifests);
     target.member_raw("validCRLs", metrics.valid_crls);

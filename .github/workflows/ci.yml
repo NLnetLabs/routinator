@@ -13,10 +13,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [1.47.0, stable, beta, nightly]
+        rust: [1.52.0, stable, beta, nightly]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
     - name: Install Rust
       uses: hecrj/setup-rust-action@v1
       with:

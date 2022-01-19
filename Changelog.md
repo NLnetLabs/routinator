@@ -4,17 +4,36 @@
 
 Breaking Changes
 
+* The minimal supported Rust version is now 1.52. ([#681])
+
 Bug Fixes
 
 * Encountering stray files at the top level of the rsync cache directory
   will not cause Routinator to exit any more. Instead, it will just delete
   those files. ([#675])
+* Don’t exit when a directory to be deleted doesn’t exist. In particular,
+  this fixes an error in the `dump` command. ([#682])
+* Counts all valid CRLs during a validation run. ([#683])
 
 New
 
+* Add TLS support to the RTR and HTTP servers. ([#677])
+* Reject so-called premature manifests, i.e., manifests that have an issue
+  time before the current time. This is a new requirement in
+  [draft-ietf-sidrops-6486bis]. ([#681])
+
 Other Changes
 
+* Update the NLnet Labs RPKI testbed TAL to the one used by the new
+  server. ([#637])
+
+[#637]: https://github.com/NLnetLabs/routinator/pull/637
 [#675]: https://github.com/NLnetLabs/routinator/pull/675
+[#677]: https://github.com/NLnetLabs/routinator/pull/677
+[#681]: https://github.com/NLnetLabs/routinator/pull/681
+[#682]: https://github.com/NLnetLabs/routinator/pull/682
+[#683]: https://github.com/NLnetLabs/routinator/pull/683
+[draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 
 
 # 0.10.2 ‘Skuffet, men ikke overrasket’

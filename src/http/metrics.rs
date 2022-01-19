@@ -187,6 +187,10 @@ fn object_metrics<'a>(
             .value(metrics.invalid_manifests);
         target.multi(metric).label(group.label(), name)
             .label("type", "manifest")
+            .label("state", "premature")
+            .value(metrics.premature_manifests);
+        target.multi(metric).label(group.label(), name)
+            .label("type", "manifest")
             .label("state", "stale")
             .value(metrics.stale_manifests);
         target.multi(metric).label(group.label(), name)

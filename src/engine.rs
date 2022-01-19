@@ -822,6 +822,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 return Ok(None)
             }
         };
+
+        if content.this_update() < Time::now() {
+            self.metrics.premature_manifests += 1;
+            warn!("{}: premature manifest", self.cert.rpki_manifest());
+            return Ok(None)
+        }
+
         if content.is_stale() {
             self.metrics.stale_manifests += 1;
             match self.run.validation.stale {
@@ -967,6 +974,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         // Phew: All good.
+        self.metrics.valid_crls += 1;
         Ok(Some((crl_uri, crl, crl_bytes)))
     }
 
