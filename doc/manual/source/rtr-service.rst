@@ -52,21 +52,22 @@ Internet.
 
 In this example we'll start Routinator's RTR server listening on the IP
 addresses 192.0.2.13 and 2001:0DB8::13 and use port 3324 to make sure it's
-not a priviledged port. Use the :option:`--rtr-tls` to indicate that this is
-a TLS connection and the :option:`--rtr-tls-cert` option to specify the path
-to a file containing the server certificates to be used. This file has to
-contain one or more certificates encoded in PEM format:
+not a priviledged port. 
+
+First, indidate that you want a TLS connection with the :option:`--rtr-tls`
+option. Then use the :option:`--rtr-tls-cert` option to specify the path to a
+file containing the server certificates to be used. This file has to contain
+one or more certificates encoded in PEM format. Lastly, use the
+:option:`--rtr-tls-key` option to specify the path to a file containing the
+private key to be used for RTR-over-TLS connections. The file has to contain
+exactly one private key encoded in PEM format:
 
 .. code-block:: text
 
    routinator server --rtr-tls 192.0.2.13:3324 \
                      --rtr-tls [2001:0DB8::13]:3324 \
-                     --rtr-tls-cert "/path/to/rtr-cert.pem"
-
-There is one additional option you can use. With :option:`--rtr-tls-key`
-you can specify the path to a file containing the private key to be used for
-RTR-over-TLS connections. The file has to contain exactly one private key
-encoded in PEM format. 
+                     --rtr-tls-cert "/path/to/rtr-cert.pem" \
+                     --rtr-tls-key "/path/to/tls-key.pem"
 
 SSH
 """
