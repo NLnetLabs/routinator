@@ -20,7 +20,7 @@ New
 * Add TLS support to the RTR and HTTP servers. ([#677])
 * Reject so-called premature manifests, i.e., manifests that have an issue
   time before the current time. This is a new requirement in
-  [draft-ietf-sidrops-6486bis]. ([#681])
+  [draft-ietf-sidrops-6486bis]. ([#681], [#690])
 
 Other Changes
 
@@ -33,6 +33,7 @@ Other Changes
 [#681]: https://github.com/NLnetLabs/routinator/pull/681
 [#682]: https://github.com/NLnetLabs/routinator/pull/682
 [#683]: https://github.com/NLnetLabs/routinator/pull/683
+[#690]: https://github.com/NLnetLabs/routinator/pull/690
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 
 
