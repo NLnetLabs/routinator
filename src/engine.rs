@@ -823,7 +823,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
-        if content.this_update() < Time::now() {
+        if content.this_update() > Time::now() {
             self.metrics.premature_manifests += 1;
             warn!("{}: premature manifest", self.cert.rpki_manifest());
             return Ok(None)
