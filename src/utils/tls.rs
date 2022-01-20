@@ -95,11 +95,11 @@ pub fn create_server_config(
 
 //------------ TlsTcpStream --------------------------------------------------
 
-/// A TLS stream that behaves like a regular TCP stream.
-///
-/// Specifically, `AsyncRead` and `AsyncWrite` will return `Poll::NotReady`
-/// until the TLS accept machinery has concluded.
 pin_project! {
+    /// A TLS stream that behaves like a regular TCP stream.
+    ///
+    /// Specifically, `AsyncRead` and `AsyncWrite` will return `Poll::NotReady`
+    /// until the TLS accept machinery has concluded.
     #[project = TlsTcpStreamProj]
     enum TlsTcpStream {
         /// The TLS handshake is going on.
