@@ -23,8 +23,8 @@ Authority)`-assigned default port for the protocol, which would be 323. But
 as this is a privileged port, you would need to be running Routinator as root
 when otherwise there is no reason to do that. 
 
-Secure Transport
-----------------
+Secure Transports
+-----------------
 
 .. versionadded:: 0.11.0
    RTR-over-TLS connections 
@@ -37,8 +37,8 @@ communications. This includes TLS, SSH, TCP MD5 and TCP-AO transports.
 Routinator currently has native support for TLS connections, and can be
 configured to use `SSH`_ with some additional tooling.
 
-TLS
-"""
+TLS Transport
+"""""""""""""
 
 It's possible to natively use RTR-over-TLS connections with Routinator. The
 requirements are described in detail in :rfc:`6810#section-7.2`. There is an
@@ -69,8 +69,8 @@ exactly one private key encoded in PEM format:
                      --rtr-tls-cert "/path/to/rtr-cert.pem" \
                      --rtr-tls-key "/path/to/tls-key.pem"
 
-SSH
-"""
+SSH Transport
+"""""""""""""
 
 These instructions were contributed by `Wild Kat <https://github.com/wk>`_.
 
