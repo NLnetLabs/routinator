@@ -69,10 +69,12 @@ exactly one private key encoded in PEM format:
                      --rtr-tls-cert "/path/to/rtr-cert.pem" \
                      --rtr-tls-key "/path/to/tls-key.pem"
 
-.. Note:: If you are setting up RTRTR with an 
-          :ref:`RTR-TLS Unit<rtrtr:configuration:rtr unit>`, make sure you 
-          copy the certificate and refer to it in the unit using the 
-          ``cacerts`` configuration option.
+If you want to connect to Routinator with RTRTR using an :ref:`RTR-TLS
+Unit<rtrtr:configuration:rtr unit>`, a certificate that is trusted by the
+usual set of web trust anchors will work with no additional configuration. In
+case you generated a self-signed certificate for Routinator, make sure to
+copy the certificate to your machine running RTRTR and refer to the path of
+the file in your unit using the ``cacerts`` configuration option. 
 
 SSH Transport
 """""""""""""
