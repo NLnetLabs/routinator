@@ -69,6 +69,11 @@ exactly one private key encoded in PEM format:
                      --rtr-tls-cert "/path/to/rtr-cert.pem" \
                      --rtr-tls-key "/path/to/tls-key.pem"
 
+.. Note:: If you are setting up RTRTR with an 
+          :ref:`RTR-TLS Unit<rtrtr:configuration:rtr unit>`, make sure you 
+          copy the certificate and refer to it in the unit using the 
+          ``cacerts`` configuration option.
+
 SSH Transport
 """""""""""""
 
