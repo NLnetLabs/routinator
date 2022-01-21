@@ -96,10 +96,24 @@ pub fn create_server_config(
 //------------ TlsTcpStream --------------------------------------------------
 
 pin_project! {
+    /// A TLS stream that behaves like a regular TCP stream.
+    ///
+    /// Specifically, `AsyncRead` and `AsyncWrite` will return `Poll::NotReady`
+    /// until the TLS accept machinery has concluded.
     #[project = TlsTcpStreamProj]
     enum TlsTcpStream {
+        /// The TLS handshake is going on.
         Accept { #[pin] fut: Accept<TcpStream> },
+
+        /// We have a working TLS stream.
         Stream { #[pin] fut: TlsStream<TcpStream> },
+
+        /// TLS handshake has failed.
+        ///
+        /// Because hyper still wants to do a clean flush and shutdown, we
+        /// need to still work in this state. For read and write, we just
+        /// keep returning the clean shutdown indiciation of zero length
+        /// operations.
         Empty,
     }
 }
@@ -126,8 +140,7 @@ impl TlsTcpStream {
                     }
                 }
             }
-            TlsTcpStreamProj::Stream { .. } => Poll::Ready(Ok(self)),
-            TlsTcpStreamProj::Empty => panic!("polling a concluded future")
+            _ => Poll::Ready(Ok(self)),
         }
     }
 }
@@ -146,6 +159,7 @@ impl AsyncRead for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_read(cx, buf)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }
@@ -165,6 +179,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_write(cx, buf)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(0)) }
             _ => unreachable!()
         }
     }
@@ -181,6 +196,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_flush(cx)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }
@@ -197,6 +213,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_shutdown(cx)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }
