@@ -66,8 +66,8 @@ exactly one private key encoded in PEM format:
 
    routinator server --rtr-tls 192.0.2.13:3324 \
                      --rtr-tls [2001:0DB8::13]:3324 \
-                     --rtr-tls-cert "/path/to/rtr-cert.pem" \
-                     --rtr-tls-key "/path/to/tls-key.pem"
+                     --rtr-tls-cert "/path/to/rtr-tls.crt" \
+                     --rtr-tls-key "/path/to/rtr-tls.key"
 
 If you want to connect to Routinator with RTRTR using an :ref:`RTR-TLS
 Unit<rtrtr:configuration:rtr unit>`, a certificate that is trusted by the
