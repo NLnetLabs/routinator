@@ -35,7 +35,7 @@ number of secure transports for RPKI-RTR that can be used to secure
 communications. This includes TLS, SSH, TCP MD5 and TCP-AO transports. 
 
 Routinator currently has native support for TLS connections, and can be
-configured to use `SSH`_ with some additional tooling.
+configured to use `SSH Transport`_ with some additional tooling.
 
 TLS Transport
 """""""""""""
