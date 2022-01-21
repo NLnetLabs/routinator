@@ -956,7 +956,7 @@ impl Config {
         }
 
         // rtr_tls_listen
-        if let Some(list) = matches.values_of("rtr-tls_listen") {
+        if let Some(list) = matches.values_of("rtr-tls-listen") {
             self.rtr_tls_listen = Vec::new();
             for value in list {
                 match SocketAddr::from_str(value) {
