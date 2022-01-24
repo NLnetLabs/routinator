@@ -10,7 +10,7 @@ use routecore::addr;
 use rpki::repository::resources::Asn;
 use rpki::rtr::payload::{Payload, RouteOrigin};
 use crate::error::Failed;
-use crate::payload::{OriginInfo, PayloadSnapshot};
+use crate::payload::{PayloadInfo, PayloadSnapshot};
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
 
@@ -339,7 +339,10 @@ where
                         Some(&(Payload::Origin(origin), ref info)) => {
                             (origin, info)
                         },
-                        Some(_) => continue,
+                        Some(_) => {
+                            index += 1;
+                            continue;
+                        }
                         None => {
                             self.formatter.footer(
                                 self.metrics.as_ref(), target
@@ -428,7 +431,7 @@ trait Formatter<W> {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error>;
 
     fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
@@ -450,7 +453,7 @@ impl<W: io::Write> Formatter<W> for Csv {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "{},{}/{},{},{}",
             origin.asn,
@@ -476,7 +479,7 @@ impl<W: io::Write> Formatter<W> for CompatCsv {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
             origin.asn,
@@ -517,7 +520,7 @@ impl<W: io::Write> Formatter<W> for ExtendedCsv {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target, "{},{},{}/{},{},",
             info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
@@ -569,7 +572,7 @@ impl<W: io::Write> Formatter<W> for Json {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target,
             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
@@ -614,7 +617,7 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target,
             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
@@ -626,7 +629,7 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
 
         let mut first = true;
         for item in info {
-            if let Some(roa) = item.roa_info() {
+            if let Some(roa) = item.publish_info() {
                 if !first {
                     write!(target, ", ")?;
                 }
@@ -697,7 +700,7 @@ impl<W: io::Write> Formatter<W> for Openbgpd {
     }
 
     fn origin(
-        &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(
             target, "    {}/{}",
@@ -718,7 +721,7 @@ struct Bird1;
 
 impl<W: io::Write> Formatter<W> for Bird1 {
     fn origin(
-        &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "roa {}/{} max {} as {};",
             origin.prefix.addr(), origin.prefix.prefix_len(),
@@ -735,7 +738,7 @@ struct Bird2;
 
 impl<W: io::Write> Formatter<W> for Bird2 {
     fn origin(
-        &self, origin: RouteOrigin, _info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "route {}/{} max {} as {};",
             origin.prefix.addr(), origin.prefix.prefix_len(),
@@ -769,7 +772,7 @@ impl Rpsl {
 
 impl<W: io::Write> Formatter<W> for Rpsl {
     fn origin(
-        &self, origin: RouteOrigin, info: &OriginInfo, target: &mut W
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         let now = Utc::now().format_with_items(
             Self::TIME_ITEMS.iter().cloned()
@@ -803,19 +806,21 @@ impl Summary {
     ) -> Result<(), io::Error> {
         line(format_args!("Summary at {}", metrics.time))?;
         for tal in &metrics.tals {
+            let vrps = tal.payload.vrps();
             line(format_args!(
                 "{}: {} verified ROAs, {} verified VRPs, \
                  {} unsafe VRPs, {} final VRPs.",
-                tal.name(), tal.publication.valid_roas, tal.vrps.valid,
-                tal.vrps.marked_unsafe, tal.vrps.contributed
+                tal.name(), tal.publication.valid_roas, vrps.valid,
+                vrps.marked_unsafe, vrps.contributed
             ))?;
         }
         line(format_args!(
             "total: {} verified ROAs, {} verified VRPs, \
              {} unsafe VRPs, {} final VRPs.",
             metrics.publication.valid_roas,
-            metrics.vrps.valid, metrics.vrps.marked_unsafe,
-            metrics.vrps.contributed,
+            metrics.payload.vrps().valid,
+            metrics.payload.vrps().marked_unsafe,
+            metrics.payload.vrps().contributed,
         ))
     }
 
@@ -837,7 +842,7 @@ impl<W: io::Write> Formatter<W> for Summary {
     }
 
     fn origin(
-        &self, _origin: RouteOrigin, _info: &OriginInfo, _target: &mut W
+        &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
     ) -> Result<(), io::Error> {
         Ok(())
     }
@@ -851,7 +856,7 @@ struct NoOutput;
 
 impl<W: io::Write> Formatter<W> for NoOutput {
     fn origin(
-        &self, _origin: RouteOrigin, _info: &OriginInfo, _target: &mut W
+        &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
     ) -> Result<(), io::Error> {
         Ok(())
     }

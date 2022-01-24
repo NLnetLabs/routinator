@@ -126,8 +126,7 @@ impl TlsTcpStream {
                     }
                 }
             }
-            TlsTcpStreamProj::Stream { .. } => Poll::Ready(Ok(self)),
-            TlsTcpStreamProj::Empty => panic!("polling a concluded future")
+            _ => Poll::Ready(Ok(self)),
         }
     }
 }
@@ -146,6 +145,7 @@ impl AsyncRead for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_read(cx, buf)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }
@@ -165,6 +165,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_write(cx, buf)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(0)) }
             _ => unreachable!()
         }
     }
@@ -181,6 +182,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_flush(cx)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }
@@ -197,6 +199,7 @@ impl AsyncWrite for TlsTcpStream {
             TlsTcpStreamProj::Stream { fut } => {
                 fut.poll_shutdown(cx)
             }
+            TlsTcpStreamProj::Empty => { Poll::Ready(Ok(())) }
             _ => unreachable!()
         }
     }

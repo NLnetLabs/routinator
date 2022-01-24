@@ -15,17 +15,19 @@ use chrono::{DateTime, Utc};
 use crossbeam_queue::SegQueue;
 use log::{info, warn};
 use routecore::addr;
-use rpki::repository::cert::ResourceCert;
-use rpki::repository::resources::{IpBlock, IpBlocks, IpBlocksBuilder};
+use routecore::bgpsec::KeyIdentifier;
+use rpki::repository::cert::{Cert, ResourceCert};
+use rpki::repository::resources::{AsBlocks, IpBlock, IpBlocks, IpBlocksBuilder};
 use rpki::repository::roa::RouteOriginAttestation;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
 use rpki::repository::x509::{Time, Validity};
-use rpki::rtr::payload::{Action, Payload, RouteOrigin, Timing};
+use rpki::rtr::payload::{Action, Payload, RouteOrigin, RouterKey, Timing};
+use rpki::rtr::pdu::RouterKeyInfo;
 use rpki::rtr::server::{PayloadDiff, PayloadSet, PayloadSource};
 use rpki::rtr::state::{Serial, State};
 use rpki::uri;
 use crate::config::{Config, FilterPolicy};
-use crate::engine::{CaCert, ProcessPubPoint, ProcessRun};
+use crate::engine::{CaCert, Engine, ProcessPubPoint, ProcessRun};
 use crate::error::Failed;
 use crate::metrics::{Metrics, VrpMetrics};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -40,7 +42,7 @@ use crate::slurm::{ExceptionInfo, LocalExceptions};
 //------------ ValidationReport ----------------------------------------------
 
 /// The result of a validation run.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ValidationReport {
     /// The data from all the valid publication points.
     ///
@@ -53,12 +55,31 @@ pub struct ValidationReport {
     /// If a publication point is rejected, the resources from its CA
     /// certificate are added to this.
     rejected: RejectedResourcesBuilder,
+
+    /// Should we include BGPsec router keys?
+    enable_bgpsec: bool,
 }
 
 impl ValidationReport {
     /// Creates a new, empty validation report.
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(enable_bgpsec: bool) -> Self {
+        ValidationReport {
+            pub_points: Default::default(),
+            rejected: Default::default(),
+            enable_bgpsec
+        }
+    }
+
+    /// Creates a new validation report by running the engine.
+    pub fn process(
+        engine: &Engine, enable_bgpsec: bool
+    ) -> Result<(Self, Metrics), Failed> {
+        let report = Self::new(enable_bgpsec);
+        let mut run = engine.start(&report)?;
+        run.process()?;
+        run.cleanup()?;
+        let metrics = run.done();
+        Ok((report, metrics))
     }
 }
 
@@ -129,6 +150,55 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         ))
     }
 
+    fn process_ee_cert(
+        &mut self, uri: &uri::Rsync, cert: Cert, ca_cert: &CaCert,
+    ) -> Result<(), Failed> {
+        if !self.report.enable_bgpsec {
+            return Ok(())
+        }
+        if
+            cert.as_resources().is_inherited()
+            || !cert.as_resources().is_present()
+        {
+            warn!(
+                "{}: router certificate does not contain AS resources.", uri
+            );
+            return Ok(())
+        }
+        let asns = match cert.as_resources().to_blocks() {
+            Ok(blocks) => blocks,
+            Err(_) => {
+                warn!(
+                    "{}: router certificate contains invalid AS resources.",
+                    uri
+                );
+                return Ok(())
+            }
+        };
+        let id = cert.subject_key_identifier();
+        let key = cert.subject_public_key_info();
+        if !key.allow_router_cert() {
+            warn!(
+                "{}: router certifcate has invalid key algorithm.", uri
+            );
+            return Ok(())
+        }
+        let key = match RouterKeyInfo::new(key.to_info_bytes()) {
+            Ok(key) => key,
+            Err(_) => {
+                warn!(
+                    "{}: excessively large key in router certificate.", uri
+                );
+                return Ok(())
+            }
+        };
+        self.pub_point.update_refresh(cert.validity().not_after());
+        self.pub_point.add_router_key(
+            asns, id, key, Arc::new(PublishInfo::ee_cert(&cert, uri, ca_cert))
+        );
+        Ok(())
+    }
+
     fn process_roa(
         &mut self,
         _uri: &uri::Rsync,
@@ -137,7 +207,7 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
     ) -> Result<(), Failed> {
         self.pub_point.update_refresh(cert.validity().not_after());
         self.pub_point.add_roa(
-            route, Arc::new(RoaInfo::new(&cert, self.validity))
+            route, Arc::new(PublishInfo::signed_object(&cert, self.validity))
         );
         Ok(())
     }
@@ -180,8 +250,8 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
 /// processing.
 #[derive(Clone, Debug)]
 struct PubPoint {
-    /// The list of valid payload and its ROA information.
-    payload: Vec<(Payload, Arc<RoaInfo>)>,
+    /// The list of valid payload and its publish information.
+    payload: Vec<(Payload, Arc<PublishInfo>)>,
 
     /// The time when the publication point needs to be refreshed.
     refresh: Time,
@@ -245,10 +315,23 @@ impl PubPoint {
     fn add_roa(
         &mut self,
         roa: RouteOriginAttestation,
-        info: Arc<RoaInfo>,
+        info: Arc<PublishInfo>,
     ) {
         self.payload.extend(roa.iter_origins().map(|origin| {
             (origin.into(), info.clone())
+        }));
+    }
+
+    /// Adds the content of a router key to the payload.
+    fn add_router_key(
+        &mut self,
+        asns: AsBlocks,
+        key_id: KeyIdentifier,
+        key_info: RouterKeyInfo,
+        info: Arc<PublishInfo>,
+    ) {
+        self.payload.extend(asns.iter_asns().map(|asn| {
+            (RouterKey::new(key_id, asn, key_info.clone()).into(), info.clone())
         }));
     }
 }
@@ -728,7 +811,7 @@ pub struct PayloadSnapshot {
     /// A list of RPKI payload.
     ///
     /// This list contains an ordered sequence of unique payload.
-    payload: Vec<(Payload, OriginInfo)>,
+    payload: Vec<(Payload, PayloadInfo)>,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -776,14 +859,14 @@ impl PayloadSnapshot {
     }
 
     /// Returns an slice of the payload.
-    pub fn payload(&self) -> &[(Payload, OriginInfo)] {
+    pub fn payload(&self) -> &[(Payload, PayloadInfo)] {
         &self.payload
     }
 
     /// Returns an iterator over the route origins.
     pub fn origins(
         &self
-    ) -> impl Iterator<Item = (RouteOrigin, &OriginInfo)> + '_ {
+    ) -> impl Iterator<Item = (RouteOrigin, &PayloadInfo)> + '_ {
         self.payload().iter().filter_map(|item| {
             match item.0 {
                 Payload::Origin(origin) => Some((origin, &item.1)),
@@ -892,7 +975,7 @@ impl Iterator for SnapshotOriginsIter {
 #[derive(Clone, Debug)]
 struct SnapshotBuilder {
     /// A set of RPKI payload.
-    payload: HashMap<Payload, OriginInfo>,
+    payload: HashMap<Payload, PayloadInfo>,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -927,11 +1010,12 @@ impl SnapshotBuilder {
         // Process all publication points from the report.
         while let Some(pub_point) = report.pub_points.pop() {
             res.update_refresh(pub_point.refresh);
-            let mut point_metrics = AllVrpMetrics::new(
-                metrics, pub_point.tal_index, pub_point.repository_index
-            );
             
             for (payload, roa_info) in pub_point.payload {
+                let mut point_metrics = AllVrpMetrics::new(
+                    metrics, pub_point.tal_index, pub_point.repository_index,
+                    &payload
+                );
                 point_metrics.update(|m| m.valid += 1);
 
                 if let Payload::Origin(origin) = payload {
@@ -968,7 +1052,7 @@ impl SnapshotBuilder {
                         point_metrics.update(|m| m.contributed += 1);
                     }
                     hash_map::Entry::Occupied(mut entry) => {
-                        entry.get_mut().add_roa(roa_info);
+                        entry.get_mut().add_published(roa_info);
                         point_metrics.update(|m| m.duplicate += 1);
                     }
                 }
@@ -976,21 +1060,22 @@ impl SnapshotBuilder {
         }
 
         // Add the assertions from the local exceptions.
-        for (origin, info) in exceptions.assertions() {
-            match res.payload.entry(origin.clone()) {
+        for (payload, info) in exceptions.assertions() {
+            match res.payload.entry(payload.clone()) {
                 hash_map::Entry::Vacant(entry) => {
                     entry.insert(info.into());
-                    metrics.local.contributed += 1;
-                    metrics.vrps.contributed += 1;
+                    metrics.local.for_payload(payload).contributed += 1;
+                    metrics.payload.for_payload(payload).contributed += 1;
                 }
                 hash_map::Entry::Occupied(mut entry) => {
                     entry.get_mut().add_local(info);
-                    metrics.local.duplicate += 1;
-                    metrics.vrps.duplicate += 1;
+                    metrics.local.for_payload(payload).duplicate += 1;
+                    metrics.payload.for_payload(payload).duplicate += 1;
                 }
             }
         }
 
+        metrics.finalize();
         res
     }
 
@@ -1036,15 +1121,21 @@ struct AllVrpMetrics<'a> {
 
 impl<'a> AllVrpMetrics<'a> {
     fn new(
-        metrics: &'a mut Metrics, tal_index: usize, repo_index: Option<usize>
+        metrics: &'a mut Metrics, tal_index: usize, repo_index: Option<usize>,
+        payload: &Payload,
     ) -> Self {
         AllVrpMetrics {
-            tal: &mut metrics.tals[tal_index].vrps,
+            tal: metrics.tals[tal_index].payload.for_payload(payload),
             repo: match repo_index {
-                Some(index) => Some(&mut metrics.repositories[index].vrps),
+                Some(index) => {
+                    Some(
+                        metrics.repositories[index]
+                            .payload.for_payload(payload)
+                    )
+                }
                 None => None
             },
-            all: &mut metrics.vrps,
+            all: metrics.payload.for_payload(payload),
         }
     }
 
@@ -1276,41 +1367,41 @@ impl DeltaMerger {
 // presented. This part contains the types for that.
 
 
-//------------ OriginInfo ----------------------------------------------------
+//------------ PayloadInfo ---------------------------------------------------
 
-/// Information about the source of a route origin authorization.
+/// Information about the sources of a payload item.
 #[derive(Clone, Debug)]
-pub struct OriginInfo {
+pub struct PayloadInfo {
     /// The head of a linked list of origin infos.
     ///
-    /// We are abusing `Result` here to distinguish between origins from ROAs
-    /// and from local exceptions. If you squint real hard, this even kind of
-    /// makes sense.
-    head: Result<Arc<RoaInfo>, Arc<ExceptionInfo>>,
+    /// We are abusing `Result` here to distinguish between origins from
+    /// published objects and from local exceptions. If you squint real hard,
+    /// this even kind of makes sense.
+    head: Result<Arc<PublishInfo>, Arc<ExceptionInfo>>,
 
     /// The tail of the linked list.
-    tail: Option<Box<OriginInfo>>,
+    tail: Option<Box<PayloadInfo>>,
 }
 
 
-impl OriginInfo {
-    fn add_roa(&mut self, info: Arc<RoaInfo>) {
-        self.tail = Some(Box::new(OriginInfo {
+impl PayloadInfo {
+    fn add_published(&mut self, info: Arc<PublishInfo>) {
+        self.tail = Some(Box::new(PayloadInfo {
             head: Ok(info),
             tail: self.tail.take()
         }));
     }
 
     fn add_local(&mut self, info: Arc<ExceptionInfo>) {
-        self.tail = Some(Box::new(OriginInfo {
+        self.tail = Some(Box::new(PayloadInfo {
             head: Err(info),
             tail: self.tail.take()
         }));
     }
 
     /// Returns an iterator over the chain of information.
-    pub fn iter(&self) -> OriginInfoIter {
-        OriginInfoIter { info: Some(self) }
+    pub fn iter(&self) -> PayloadInfoIter {
+        PayloadInfoIter { info: Some(self) }
     }
 
     /// Returns the name of the first TAL if available.
@@ -1329,8 +1420,8 @@ impl OriginInfo {
         self.head.as_ref().map(|info| info.roa_validity).ok()
     }
 
-    /// Returns the ROA info if available.
-    pub fn roa_info(&self) -> Option<&RoaInfo> {
+    /// Returns the published object info if available.
+    pub fn publish_info(&self) -> Option<&PublishInfo> {
         match self.head {
             Ok(ref info) => Some(info),
             Err(_) => None
@@ -1349,23 +1440,23 @@ impl OriginInfo {
 
 //--- From
 
-impl From<Arc<RoaInfo>> for OriginInfo {
-    fn from(src: Arc<RoaInfo>) -> Self {
-        OriginInfo { head: Ok(src), tail: None }
+impl From<Arc<PublishInfo>> for PayloadInfo {
+    fn from(src: Arc<PublishInfo>) -> Self {
+        PayloadInfo { head: Ok(src), tail: None }
     }
 }
 
-impl From<Arc<ExceptionInfo>> for OriginInfo {
+impl From<Arc<ExceptionInfo>> for PayloadInfo {
     fn from(src: Arc<ExceptionInfo>) -> Self {
-        OriginInfo { head: Err(src), tail: None }
+        PayloadInfo { head: Err(src), tail: None }
     }
 }
 
 //--- IntoIterator
 
-impl<'a> IntoIterator for &'a OriginInfo {
-    type Item = &'a OriginInfo;
-    type IntoIter = OriginInfoIter<'a>;
+impl<'a> IntoIterator for &'a PayloadInfo {
+    type Item = &'a PayloadInfo;
+    type IntoIter = PayloadInfoIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -1373,16 +1464,16 @@ impl<'a> IntoIterator for &'a OriginInfo {
 }
 
 
-//------------ OriginInfoIter ------------------------------------------------
+//------------ PayloadInfoIter -----------------------------------------------
 
 /// An iterator over origin information.
 #[derive(Clone, Debug)]
-pub struct OriginInfoIter<'a> {
-    info: Option<&'a OriginInfo>,
+pub struct PayloadInfoIter<'a> {
+    info: Option<&'a PayloadInfo>,
 }
 
-impl<'a> Iterator for OriginInfoIter<'a> {
-    type Item = &'a OriginInfo;
+impl<'a> Iterator for PayloadInfoIter<'a> {
+    type Item = &'a PayloadInfo;
 
     fn next(&mut self) -> Option<Self::Item> {
         let res = self.info?;
@@ -1392,11 +1483,11 @@ impl<'a> Iterator for OriginInfoIter<'a> {
 }
 
 
-//------------ RoaInfo -------------------------------------------------------
+//------------ PublishInfo ---------------------------------------------------
 
-/// Information about the ROA an origin came from.
+/// Information about the published object payload came from.
 #[derive(Clone, Debug)]
-pub struct RoaInfo {
+pub struct PublishInfo {
     /// The TAL the ROA is derived from.
     pub tal: Arc<TalInfo>,
 
@@ -1410,10 +1501,10 @@ pub struct RoaInfo {
     pub chain_validity: Validity,
 }
 
-impl RoaInfo {
+impl PublishInfo {
     /// Creates a new origin info from the EE certificate of a ROA
-    fn new(cert: &ResourceCert, ca_validity: Validity) -> Self {
-        RoaInfo {
+    fn signed_object(cert: &ResourceCert, ca_validity: Validity) -> Self {
+        PublishInfo {
             tal: cert.tal().clone(),
             uri: cert.signed_object().cloned().map(|mut uri| {
                 uri.unshare(); uri
@@ -1422,6 +1513,16 @@ impl RoaInfo {
             chain_validity: cert.validity().trim(ca_validity),
         }
     }
+
+    fn ee_cert(cert: &Cert, uri: &uri::Rsync, ca_cert: &CaCert) -> Self {
+        PublishInfo {
+            tal: ca_cert.cert().tal().clone(),
+            uri: Some(uri.clone()),
+            roa_validity: cert.validity(),
+            chain_validity: cert.validity().trim(ca_cert.combined_validity())
+        }
+    }
+
 }
 
 
@@ -1515,7 +1616,7 @@ mod test {
         let o3 = origin(13, "10.0.0.0/13", 13);
         let o4 = origin(14, "10.0.0.0/14", 14);
 
-        let info = OriginInfo::from(Arc::new(ExceptionInfo::default()));
+        let info = PayloadInfo::from(Arc::new(ExceptionInfo::default()));
         let mut current = SnapshotBuilder::default();
         current.payload.insert(o0.clone(), info.clone());
         current.payload.insert(o1.clone(), info.clone());

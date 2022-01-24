@@ -105,7 +105,7 @@ async fn handle_metrics(
     );
     vrp_metrics(
         &mut target, Group::Ta,
-        metrics.tals.iter().map(|m| (m.tal.name(), &m.vrps))
+        metrics.tals.iter().map(|m| (m.tal.name(), m.payload.vrps()))
     );
 
     // Per-repository metrics.
@@ -119,7 +119,7 @@ async fn handle_metrics(
     );
     vrp_metrics(
         &mut target, Group::Repository,
-        metrics.repositories.iter().map(|m| (m.uri.as_ref(), &m.vrps))
+        metrics.repositories.iter().map(|m| (m.uri.as_ref(), m.payload.vrps()))
     );
 
     // Locally added VRPs
@@ -129,7 +129,7 @@ async fn handle_metrics(
             "VRPs added from local exceptions",
             MetricType::Gauge
         ),
-        metrics.local.contributed
+        metrics.local.vrps().contributed
     );
 
     // Collector metrics.
@@ -591,20 +591,21 @@ fn deprecated_metrics(target: &mut Target, metrics: &Metrics) {
     target.header(vrps_duplicate);
     for tal in &metrics.tals {
         let name = tal.tal.name();
+        let vrps = tal.payload.vrps();
         target.multi(valid_roas).label("tal", name).value(
             tal.publication.valid_roas
         );
         target.multi(total_vrps).label("tal", name).value(
-            tal.vrps.valid
+            vrps.valid
         );
         target.multi(vrps_unsafe).label("tal", name).value(
-            tal.vrps.marked_unsafe
+            vrps.marked_unsafe
         );
         target.multi(vrps_filtered).label("tal", name).value(
-            tal.vrps.locally_filtered
+            vrps.locally_filtered
         );
         target.multi(vrps_duplicate).label("tal", name).value(
-            tal.vrps.duplicate
+            vrps.duplicate
         );
     }
 
@@ -612,7 +613,7 @@ fn deprecated_metrics(target: &mut Target, metrics: &Metrics) {
         Metric::new(
             "vrps_final", "final number of VRPs", MetricType::Gauge
         ),
-        metrics.vrps.contributed
+        metrics.payload.vrps().contributed
     );
 
     // Overall number of stale objects

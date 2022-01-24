@@ -37,7 +37,7 @@ use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
 use crate::output::OutputFormat;
-use crate::payload::{PayloadSnapshot, SharedHistory};
+use crate::payload::{PayloadSnapshot, SharedHistory, ValidationReport};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
@@ -546,7 +546,8 @@ impl Server {
                 ) {
                     Ok(exceptions) => {
                         if Self::process_once(
-                            &validation, &history, &mut notify, exceptions
+                            process.config(), &validation, &history,
+                            &mut notify, exceptions,
                         ).is_err() {
                             break;
                         }
@@ -615,14 +616,17 @@ impl Server {
     }
 
     fn process_once(
-        validation: &Engine,
+        config: &Config,
+        engine: &Engine,
         history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
     ) -> Result<(), Failed> {
         info!("Starting a validation run.");
         history.mark_update_start();
-        let (report, metrics) = validation.process_origins()?;
+        let (report, metrics) = ValidationReport::process(
+            engine, config.enable_bgpsec
+        )?;
         let must_notify = history.update(
             report, &exceptions, metrics,
         );
@@ -799,11 +803,13 @@ impl Vrps {
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(process.config(), !self.noupdate)?;
-        validation.ignite()?;
+        let mut engine = Engine::new(process.config(), !self.noupdate)?;
+        engine.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
-        let (report, mut metrics) = validation.process_origins()?;
+        let (report, mut metrics) = ValidationReport::process(
+            &engine, process.config().enable_bgpsec
+        )?;
         let vrps = PayloadSnapshot::from_report(
             report,
             &exceptions,
@@ -1071,10 +1077,12 @@ impl Validate {
     fn get_snapshot(
         &self, process: Process
     ) -> Result<PayloadSnapshot, ExitError> {
-        let mut validation = Engine::new(process.config(), !self.noupdate)?;
-        validation.ignite()?;
+        let mut engine = Engine::new(process.config(), !self.noupdate)?;
+        engine.ignite()?;
         process.switch_logging(false, false)?;
-        let (report, mut metrics) = validation.process_origins()?;
+        let (report, mut metrics) = ValidationReport::process(
+            &engine, process.config().enable_bgpsec
+        )?;
         let snapshot = PayloadSnapshot::from_report(
             report,
             &LocalExceptions::load(process.config(), false)?,
@@ -1319,10 +1327,12 @@ impl Update {
     ///
     /// Which turns out is just a shortcut for `vrps` with no output.
     fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(process.config(), true)?;
-        validation.ignite()?;
+        let mut engine = Engine::new(process.config(), true)?;
+        engine.ignite()?;
         process.switch_logging(false, false)?;
-        let (_, metrics) = validation.process_origins()?;
+        let (_, metrics) = ValidationReport::process(
+            &engine, process.config().enable_bgpsec
+        )?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
         }
