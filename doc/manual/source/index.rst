@@ -1,5 +1,5 @@
-Routinator – *main* branch
-==========================
+Routinator 3000
+===============
 
 .. only:: html
 
