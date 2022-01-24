@@ -9,7 +9,7 @@ interface<user-interface>`, an :doc:`API<api-endpoints>`,
 The HTTP server is not enabled by default for security reasons, nor does it
 have a default host or port. This service natively supports `TLS Transport`_
 as well, but the endpoints are set up in such a way that it's easy to
-configure a :ref:`reverse proxy <http-service:reverse proxy with nginx>` as
+configure a :ref:`reverse proxy <http-service:using a reverse proxy>` as
 well.
 
 In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port
