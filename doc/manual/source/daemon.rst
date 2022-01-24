@@ -46,15 +46,10 @@ what is logged and where, refer to the :doc:`logging` section.
 
 
 .. Attention::  On Linux systems there is an overlap between IPv4 and IPv6. 
-                You can’t bind to all interfaces on both address families on
-                the same port. For example, this command will result in a 
-                *‘address already in use’* error: 
-
-                .. code-block:: text
-
-                   routinator server --rtr 0.0.0.0:3323 --rtr [::]:3323
-                   
-                Instead, to listen to both IPv4 and IPv6 you can simply enter:
+                You can’t bind to all interfaces on both address families,
+                i.e. ``0.0.0.0`` and ``[::]``, as it will result in a 
+                *‘address already in use’* error. Instead, to listen to both
+                IPv4 and IPv6 you can simply enter:
                 
                 .. code-block:: text
 
