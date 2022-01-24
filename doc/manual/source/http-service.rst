@@ -84,14 +84,20 @@ reverse proxy to serve HTTPS data. This way you'll be using a production
 grade web server that for example allows automation of certificate renewal.
 
 For convenience, all the files and folders for the :doc:`user
-interface<user-interface>` are hosted under the ``/ui`` path. This allows you
-to just expose the UI and not any of the other paths, such as those serving
-the various :doc:`VRP output formats<output-formats>`.
+interface<user-interface>` are hosted under the ``/ui`` path and the
+:doc:`API endpoints<api-endpoints>` are under ``/api``. For example, this
+allows you to just expose the UI and not any of the other paths, such as
+those serving the various :doc:`VRP output formats<output-formats>`.
 
 In this example we'll use NGINX, but other web servers will allow a similar,
 simple configuration. To only expose the user interface, this is what your
 configuration needs at a minimum when running it on the same server as
-Routinator runs on, using port 8323:
+Routinator runs on, using port 8323.
+
+Using the ``=`` modifier, the first entry only forwards if the path is
+*exactly* ``/`` so that paths not explicitely mentioned, such as ``/json``,
+are not forwarded. For more information, please refer to the `NGINX
+documentation <https://nginx.org/en/docs/http/server_names.html>`_.
 
 .. code-block:: text
 
@@ -104,3 +110,4 @@ Routinator runs on, using port 8323:
     location /api {
       proxy_pass http://127.0.0.1:8323/api;
     } 
+
