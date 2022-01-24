@@ -16,6 +16,7 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import toml
 import datetime
 import sphinx_rtd_theme
 try:
@@ -24,7 +25,6 @@ try:
 except ModuleNotFoundError:
     versionbanner = False
 
-
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
@@ -32,10 +32,12 @@ year = datetime.datetime.now().year
 copyright = f'2018–{year}, NLnet Labs'
 author = 'NLnet Labs'
 
+semver = toml.load('../../../Cargo.toml')
+
 # The short X.Y version
-version = '0.11.0'
+version = semver.get('package').get('version')
 # The full version, including alpha/beta/rc tags
-release = '0.11.0-dev'
+release = version
 
 # -- Version Warning Banner configuration ------------------------------------
 if versionbanner:
