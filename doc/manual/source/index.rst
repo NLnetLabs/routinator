@@ -18,38 +18,34 @@ Routinator
                 :target: https://twitter.com/routinator3000/
 
 Routinator 3000 is free, open source :abbr:`RPKI (Resource Public Key
-Infrastructure)` Relying Party software written by `NLnet Labs
-<https://nlnetlabs.nl>`_ in the Rust programming language. Routinator is a
-full featured software package that runs as a service which periodically
-downloads and verifies RPKI data. The built-in HTTP server offers a user
-interface and API endpoints for various file formats, as well as logging,
-status and Prometheus metrics.
+Infrastructure)` Relying Party software made by `NLnet Labs
+<https://nlnetlabs.nl>`_. The software is written in Rust, a programming
+language designed for performance and memory safety.
 
-Routinator has a built-in an RTR server allowing routers supporting route
-origin validation (ROV) to connect to it to fetch verified RPKI data. Note
-that if you would like to run the RTR server as a separate daemon, for
-example because you want to centralise validation and distribute processed
-data to various locations where routers can connect, then NLnet Labs provides
-:doc:`RTRTR <rtrtr:index>`.
+Full-featured, lightweight and secure
+   Routinator runs as a service and periodically downloads and verifies RPKI
+   data. The built-in HTTPS server offers a user interface, API endpoints for
+   various file formats, as well as logging, status and Prometheus metrics.
 
-If you run into a problem with Routinator or you have a feature request,
-please `create an issue on Github
-<https://github.com/NLnetLabs/routinator/issues>`_. For community support and
-exchanging operational experiences we provide a `mailing list
-<https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_ and a `Discord server
-<https://discord.gg/8dvKB5Ykhy>`_. There are also `professional support
-services <https://www.nlnetlabs.nl/services/contracts/>`_ with a
-service-level agreement available.
+Flexible RPKI-to-Router (RTR) support
+   Routinator has a built-in an RTR server to let routers fetch verified
+   RPKI data. You can also run RTR as a separate daemon using our RPKI data
+   proxy :doc:`RTRTR <rtrtr:index>`, letting you centralise validation and
+   securely distribute processed data to various locations.
 
-Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
-<https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.
-
-.. Tip::  To learn more about Resource Public Key Infrastructure, please 
-          refer to the `RPKI Community Documentation
-          <https://rpki.readthedocs.io/>`_.
+Open source with community and professional support
+   We provide a `mailing list
+   <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_ and `Discord server
+   <https://discord.gg/8dvKB5Ykhy>`_  for community support and to exchange
+   operational experiences. NLnet Labs also offers `professional support
+   services <https://www.nlnetlabs.nl/services/contracts/>`_ with a
+   service-level agreement. Routinator is liberally licensed under the `BSD
+   3-Clause license
+   <https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: Getting Started
    :name: toc-getting-started
 
@@ -60,6 +56,7 @@ Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
    
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: Core
    :name: toc-core
 
@@ -70,6 +67,7 @@ Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: Service
    :name: toc-service
 
@@ -82,6 +80,7 @@ Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
    
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: Interactive
    :name: toc-interactive
 
@@ -91,6 +90,7 @@ Routinator by NLnet Labs is licensed under the `BSD 3-Clause license
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: Reference
    :name: toc-reference
    
