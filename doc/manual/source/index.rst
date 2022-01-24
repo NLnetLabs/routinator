@@ -1,5 +1,5 @@
-Routinator 3000
-===============
+Routinator
+==========
 
 .. only:: html
 
