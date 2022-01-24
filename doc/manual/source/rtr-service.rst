@@ -40,10 +40,9 @@ configured to use `SSH Transport`_ with some additional tooling.
 TLS Transport
 """""""""""""
 
-It's possible to natively use RTR-over-TLS connections with Routinator. The
-requirements are described in detail in :rfc:`6810#section-7.2`. There is an
-:abbr:`IANA (Internet Assigned Numbers Authority)`-assigned default port for
-rpki-rtr-tls as well, in this case 324.
+It's possible to natively use RTR-over-TLS connections with Routinator. There
+is an :abbr:`IANA (Internet Assigned Numbers Authority)`-assigned default
+port for rpki-rtr-tls as well, in this case 324.
 
 Currently, very few routers have implemented support for TLS, but it may be
 especially useful to use secure connections when deploying our RTR data proxy
