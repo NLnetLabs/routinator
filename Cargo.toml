@@ -31,8 +31,7 @@ rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.16.12"
 routecore       = "0.1.1"
-#rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch = "main", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
-rpki            = { path = "../main.rpki", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch = "main", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 rustls-pemfile  = "0.2.1"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
