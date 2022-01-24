@@ -1028,6 +1028,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.14.2-dev"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=main#114acc9f8ebe68ad70076e767368464115262423"
 dependencies = [
  "base64",
  "bcder",
