@@ -13,6 +13,9 @@ The application will stay attached to your terminal unless you provide the
 user interface from the example above will be available at 
 http://192.0.2.13:8323/.
 
+For more information, such as configuring TLS or using a reverse proxy,
+please refer to the :doc:`http-service` section.
+
 Prefix Check
 ------------
 
