@@ -3,10 +3,10 @@ Routinator |version|
 
 .. only:: html
 
-    |docsupdated| |license| |discord| |twitter|
+    |lastcommit| |license| |discord| |twitter|
     
-    .. |docsupdated| image:: https://img.shields.io/github/last-commit/NLnetLabs/routinator-manual.svg?label=docs%20updated
-                :target: https://github.com/NLnetLabs/routinator-manual/commits/main
+    .. |lastcommit| image:: https://img.shields.io/github/last-commit/nlnetlabs/routinator
+                :target: https://github.com/NLnetLabs/routinator
 
     .. |license| image:: https://img.shields.io/github/license/nlnetlabs/routinator
                 :target: https://github.com/NLnetLabs/routinator/blob/main/LICENSE
