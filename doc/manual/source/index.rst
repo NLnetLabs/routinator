@@ -38,7 +38,7 @@ Flexible RPKI-to-Router (RTR) support
    proxy :doc:`RTRTR <rtrtr:index>`, letting you centralise validation and
    securely distribute processed data to various locations.
 
-Open source with community and professional support
+Open source with professional support services
    NLnet Labs offers `professional support services
    <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level
    agreement. We also provide a `mailing list
