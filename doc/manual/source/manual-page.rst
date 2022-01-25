@@ -1067,7 +1067,7 @@ All values can be overridden via the command line options.
             CA may be away from a trust anchor certificate before it is
             rejected. If the option is missing, a default of 32 will be used.
 
-      enable-dnssec
+      enable-bgpsec
             A boolean value specifying whether BGPsec router keys should be
             included in the published dataset. If false or missing, no router
             keys will be included.
