@@ -281,6 +281,11 @@ The available options are:
       The maximum number of CAs a given CA may be away from a trust anchor
       certificate before it is rejected. The default value is 32.
 
+.. option:: --enable-bgpsec
+
+      If this option is present, BGPsec router keys will be processed
+      during validation and included in the produced data set.
+
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -1061,6 +1066,11 @@ All values can be overridden via the command line options.
             An integer value that specifies the maximum number of CAs a given
             CA may be away from a trust anchor certificate before it is
             rejected. If the option is missing, a default of 32 will be used.
+
+      enable-dnssec
+            A boolean value specifying whether BGPsec router keys should be
+            included in the published dataset. If false or missing, no router
+            keys will be included.
 
       dirty
             A boolean value which, if true, specifies that unused files and
