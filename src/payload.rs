@@ -472,13 +472,17 @@ impl SharedHistory {
                 delta.announce.len(),
                 delta.withdraw.len(),
             );
-            history.current = Some(snapshot.into_snapshot().into());
+            history.current = Some(
+                PayloadSnapshot::from_builder(snapshot).into()
+            );
             history.push_delta(delta);
             true
         }
         else if current.is_none() {
             // This is the first snapshot ever.
-            history.current = Some(snapshot.into_snapshot().into());
+            history.current = Some(
+                PayloadSnapshot::from_builder(snapshot).into()
+            );
             true
         }
         else {
@@ -532,7 +536,7 @@ impl SharedHistory {
 //--- PayloadSource
 
 impl PayloadSource for SharedHistory {
-    type Set = SnapshotVrpIter;
+    type Set = SnapshotArcIter;
     type Diff = DeltaVrpIter;
 
     fn ready(&self) -> bool {
@@ -548,7 +552,7 @@ impl PayloadSource for SharedHistory {
         let read = self.read();
         (
             State::from_parts(read.rtr_session(), read.serial()),
-            SnapshotVrpIter::new(read.current.clone().unwrap_or_default())
+            read.current.clone().unwrap_or_default().arc_iter(),
         )
     }
 
@@ -811,7 +815,13 @@ pub struct PayloadSnapshot {
     /// A list of RPKI payload.
     ///
     /// This list contains an ordered sequence of unique payload.
+    ///
+    /// It is ordered in such a way that origins are first, followed by
+    /// router keys.
     payload: Vec<(Payload, PayloadInfo)>,
+
+    /// The index of the first router key variant in `payload`.
+    router_key_index: usize,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -825,6 +835,41 @@ impl PayloadSnapshot {
     /// Creates a new, empty snapshot.
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Creates a new snapshot from a builder.
+    fn from_builder(
+        builder: SnapshotBuilder
+    ) -> Self {
+        let mut origin_num = 0;
+        let mut payload: Vec<_> = builder.payload.into_iter().map(|item| {
+            if let Payload::Origin(_) = item.0 {
+                origin_num += 1;
+            }
+            item
+        }).collect();
+        payload.sort_by(|left, right| {
+            match (&left.0, &right.0) {
+                (Payload::Origin(ref l), Payload::Origin(ref r)) => {
+                    l.cmp(r)
+                }
+                (Payload::RouterKey(ref l), Payload::RouterKey(ref r)) => {
+                    l.cmp(r)
+                }
+                (Payload::Origin(_), Payload::RouterKey(_)) => {
+                    cmp::Ordering::Less
+                }
+                (Payload::RouterKey(_), Payload::Origin(_)) => {
+                    cmp::Ordering::Greater
+                }
+            }
+        });
+        PayloadSnapshot {
+            payload,
+            router_key_index: origin_num,
+            created: builder.created,
+            refresh: builder.refresh,
+        }
     }
 
     /// Creates a new snapshot from a report.
@@ -841,9 +886,9 @@ impl PayloadSnapshot {
         metrics: &mut Metrics,
         unsafe_vrps: FilterPolicy
     ) -> Self {
-        SnapshotBuilder::from_report(
+        Self::from_builder(SnapshotBuilder::from_report(
             report, exceptions, metrics, unsafe_vrps
-        ).into_snapshot()
+        ))
     }
 
     /// Returns when this snapshot was created.
@@ -867,7 +912,7 @@ impl PayloadSnapshot {
     pub fn origins(
         &self
     ) -> impl Iterator<Item = (RouteOrigin, &PayloadInfo)> + '_ {
-        self.payload().iter().filter_map(|item| {
+        self.payload()[..self.router_key_index].iter().filter_map(|item| {
             match item.0 {
                 Payload::Origin(origin) => Some((origin, &item.1)),
                 _ => None
@@ -875,9 +920,35 @@ impl PayloadSnapshot {
         })
     }
 
-    /// Converts a shared snapshot into a VRP iterator.
-    pub fn into_vrp_iter(self: Arc<Self>) -> SnapshotVrpIter {
-        SnapshotVrpIter::new(self)
+    /// Returns an interator over the router keys.
+    pub fn router_keys(
+        &self
+    ) -> impl Iterator<Item = (&RouterKey, &PayloadInfo)> + '_ {
+        self.payload()[self.router_key_index..].iter().filter_map(|item| {
+            match item.0 {
+                Payload::RouterKey(ref key) => Some((key, &item.1)),
+                _ => None
+            }
+        })
+    }
+
+    /// Returns a shareable iterator over the payload.
+    pub fn arc_iter(self: Arc<Self>) -> SnapshotArcIter {
+        let end = self.payload.len();
+        SnapshotArcIter::new(self, 0, end)
+    }
+
+    /// Returns a shareable iterator over the payload.
+    pub fn arc_origins_iter(self: Arc<Self>) -> SnapshotArcOriginsIter {
+        let end = self.router_key_index;
+        SnapshotArcOriginsIter(SnapshotArcIter::new(self, 0, end))
+    }
+
+    /// Returns a shareable iterator over the payload.
+    pub fn arc_router_keys_iter(self: Arc<Self>) -> SnapshotArcRouterKeysIter {
+        let start = self.router_key_index;
+        let end = self.payload.len();
+        SnapshotArcRouterKeysIter(SnapshotArcIter::new(self, start, end))
     }
 
     /// Returns a snapshot builder based in this snapshot.
@@ -897,6 +968,7 @@ impl Default for PayloadSnapshot {
     fn default() -> Self {
         PayloadSnapshot {
             payload: Vec::new(),
+            router_key_index: 0,
             created: Utc::now(),
             refresh: None
         }
@@ -913,56 +985,123 @@ impl AsRef<PayloadSnapshot> for PayloadSnapshot {
 }
 
 
-//----------- SnapshotVrpIter ------------------------------------------------
+//----------- SnapshotArcIter ------------------------------------------------
 
 /// An iterator over the VRPs of a shared snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotVrpIter {
+pub struct SnapshotArcIter {
     /// The shared snapshot.
     snapshot: Arc<PayloadSnapshot>,
 
     /// The position of the next item within the payload of the snapshot.
     pos: usize,
+
+    /// The end item of the (open) range of items to iterate over.
+    end: usize,
 }
 
-impl SnapshotVrpIter {
+impl SnapshotArcIter {
     /// Creates a new iterator from a shared snapshot.
-    fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
-        SnapshotVrpIter {
+    fn new(snapshot: Arc<PayloadSnapshot>, start: usize, end: usize) -> Self {
+        assert!(start < end);
+        assert!(end <= snapshot.payload.len());
+        SnapshotArcIter {
             snapshot,
-            pos: 0
+            pos: start,
+            end,
         }
     }
-
-    /// Converts the iterator into one that only return origins.
-    pub fn origins(self) -> SnapshotOriginsIter {
-        SnapshotOriginsIter(self)
-    }
 }
 
-impl PayloadSet for SnapshotVrpIter {
-    fn next(&mut self) -> Option<&Payload> {
-        let res = &self.snapshot.payload.get(self.pos)?.0;
+impl SnapshotArcIter {
+    pub fn next_with_info(&mut self) -> Option<(&Payload, &PayloadInfo)> {
+        if self.pos >= self.end {
+            return None
+        }
+        let res = &self.snapshot.payload[self.pos];
         self.pos += 1;
-        Some(res)
+        Some((&res.0, &res.1))
+    }
 
+    fn filter_map_next<'s, F, R>(
+        &'s mut self, op: F
+    ) -> Option<(R, &'s PayloadInfo)>
+    where
+        F: Fn(&'s Payload) -> Option<R>,
+        R: 's,
+    {
+        loop {
+            if self.pos >= self.end {
+                return None
+            }
+            let (ref res, ref info) = self.snapshot.payload[self.pos];
+            self.pos += 1;
+            if let Some(res) = op(res) {
+                return Some((res, info))
+            }
+        }
+    }
+}
+
+impl PayloadSet for SnapshotArcIter {
+    fn next(&mut self) -> Option<&Payload> {
+        self.next_with_info().map(|(res, _)| res)
     }
 }
 
 
-//------------ SnapshotOriginsIter -------------------------------------------
+//------------ SnapshotArcOriginsIter ----------------------------------------
 
 /// An iterator over only the route origins in a snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotOriginsIter(SnapshotVrpIter);
+pub struct SnapshotArcOriginsIter(SnapshotArcIter);
 
-impl Iterator for SnapshotOriginsIter {
+impl SnapshotArcOriginsIter {
+    pub fn next_with_info(&mut self) -> Option<(RouteOrigin, &PayloadInfo)> {
+        self.0.filter_map_next(|payload| match *payload {
+            Payload::Origin(origin) => Some(origin),
+            _ => None
+        })
+    }
+}
+
+impl Iterator for SnapshotArcOriginsIter {
     type Item = RouteOrigin;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Payload::Origin(origin) = self.0.next()? {
                 return Some(*origin)
+            }
+        }
+    }
+}
+
+
+//------------ SnapshotArcRouterKeysIter -------------------------------------
+
+/// An iterator over only the route origins in a snapshot.
+#[derive(Clone, Debug)]
+pub struct SnapshotArcRouterKeysIter(SnapshotArcIter);
+
+impl SnapshotArcRouterKeysIter {
+    pub fn next_with_info(&mut self) -> Option<(&RouterKey, &PayloadInfo)> {
+        self.0.filter_map_next(|payload| match *payload {
+            Payload::RouterKey(ref key) => Some(key),
+            _ => None
+        })
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<&RouterKey> {
+        loop {
+            if self.0.pos >= self.0.end {
+                return None
+            }
+            let res = &self.0.snapshot.payload[self.0.pos].0;
+            self.0.pos += 1;
+            if let Payload::RouterKey(ref key) = res {
+                return Some(key)
             }
         }
     }
@@ -1084,17 +1223,6 @@ impl SnapshotBuilder {
         self.refresh = match self.refresh {
             Some(old) => Some(cmp::min(old, refresh)),
             None => Some(refresh)
-        }
-    }
-
-    /// Converts the builder into a snapshot.
-    fn into_snapshot(self) -> PayloadSnapshot {
-        let mut payload: Vec<_> = self.payload.into_iter().collect();
-        payload.sort_by(|left, right| left.0.cmp(&right.0));
-        PayloadSnapshot {
-            payload,
-            created: self.created,
-            refresh: self.refresh,
         }
     }
 }

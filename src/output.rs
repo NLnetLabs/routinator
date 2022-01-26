@@ -8,9 +8,12 @@ use chrono::format::{Item, Numeric, Pad};
 use log::{error, info};
 use routecore::addr;
 use rpki::repository::resources::Asn;
-use rpki::rtr::payload::{Payload, RouteOrigin};
+use rpki::rtr::payload::{RouteOrigin, RouterKey};
 use crate::error::Failed;
-use crate::payload::{PayloadInfo, PayloadSnapshot};
+use crate::payload::{
+    PayloadInfo, PayloadSnapshot, SnapshotArcOriginsIter,
+    SnapshotArcRouterKeysIter,
+};
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
 
@@ -135,11 +138,40 @@ impl OutputFormat {
         metrics: &Metrics,
         target: &mut W,
     ) -> Result<(), io::Error> {
-        let mut stream = OutputStream::new(
-            self, snapshot, selection, metrics
-        );
-        while stream.write_next(target)? { }
-        Ok(())
+        let formatter = self.formatter();
+        let mut first = true;
+        formatter.header(snapshot, metrics, target)?;
+        for (origin, info) in snapshot.origins() {
+            if let Some(selection) = selection {
+                if !selection.include_origin(origin) {
+                    continue
+                }
+            }
+            if first {
+                first = false;
+            }
+            else {
+                formatter.delimiter(target)?;
+            }
+            formatter.origin(origin, info, target)?;
+        }
+        formatter.intermission(target)?;
+        let mut first = true;
+        for (key, info) in snapshot.router_keys() {
+            if let Some(selection) = selection {
+                if !selection.include_router_key(key) {
+                    continue
+                }
+            }
+            if first {
+                first = false;
+            }
+            else {
+                formatter.delimiter(target)?;
+            }
+            formatter.router_key(key, info, target)?;
+        }
+        formatter.footer(metrics, target)
     }
 
     /// Creates an output stream for this format.
@@ -237,10 +269,20 @@ impl Selection {
         self.origins.push(SelectOrigin::Prefix(prefix))
     }
 
-    /// Returns whether payload should be included in output.
+    /// Returns whether an origin should be included in output.
     pub fn include_origin(&self, origin: RouteOrigin) -> bool {
         for select in &self.origins {
             if select.include_origin(origin) {
+                return true
+            }
+        }
+        false
+    }
+
+    /// Returns whether a router key should be included in output.
+    pub fn include_router_key(&self, key: &RouterKey) -> bool {
+        for select in &self.origins {
+            if select.include_router_key(key) {
                 return true
             }
         }
@@ -277,38 +319,40 @@ impl SelectOrigin {
             }
         }
     }
+
+    fn include_router_key(self, key: &RouterKey) -> bool {
+        match self {
+            SelectOrigin::Asn(asn) => key.asn == asn,
+            _ => false
+        }
+    }
 }
 
 
 //------------ OutputStream --------------------------------------------------
 
-struct OutputStream<Snap, Sel, Met, Target> {
-    snapshot: Snap,
+struct OutputStream<Target> {
+    snapshot: Arc<PayloadSnapshot>,
     state: StreamState,
     formatter: Box<dyn Formatter<Target> + Send>,
-    selection: Option<Sel>,
-    metrics: Met,
+    selection: Option<Selection>,
+    metrics: Arc<Metrics>,
 }
 
 enum StreamState {
     Header,
-    Origin { index: usize, first: bool },
+    Origin { iter: SnapshotArcOriginsIter, first: bool },
+    Key { iter: SnapshotArcRouterKeysIter, first: bool },
     Done,
 }
 
-impl<Snap, Sel, Met, Target> OutputStream<Snap, Sel, Met, Target>
-where
-    Snap: AsRef<PayloadSnapshot>,
-    Sel: AsRef<Selection>,
-    Met: AsRef<Metrics>,
-    Target: io::Write,
-{
+impl<Target: io::Write> OutputStream<Target> {
     /// Creates a new output stream.
     fn new(
         format: OutputFormat,
-        snapshot: Snap,
-        selection: Option<Sel>,
-        metrics: Met,
+        snapshot: Arc<PayloadSnapshot>,
+        selection: Option<Selection>,
+        metrics: Arc<Metrics>,
     ) -> Self {
         OutputStream {
             snapshot,
@@ -321,59 +365,87 @@ where
 
     /// Writes the next item to the target.
     ///
-    /// Returns whether it wrote an item.
+    /// Returns whether there is more to write.
     fn write_next(&mut self, target: &mut Target) -> Result<bool, io::Error> {
-        match self.state {
+        let (res, next) = match self.state {
             StreamState::Header => {
                 self.formatter.header(
-                    self.snapshot.as_ref(), self.metrics.as_ref(), target
+                    &self.snapshot, &self.metrics, target
                 )?;
-                self.state = StreamState::Origin { index: 0, first: true };
-                Ok(true)
+                (
+                    true,
+                    StreamState::Origin {
+                        iter: self.snapshot.clone().arc_origins_iter(),
+                        first: true,
+                    }
+                )
             }
-            StreamState::Origin { mut index, first } => {
+            StreamState::Origin { ref mut iter, ref mut first } => {
                 loop {
-                    let (origin, info) = match
-                        self.snapshot.as_ref().payload().get(index)
-                    {
-                        Some(&(Payload::Origin(origin), ref info)) => {
-                            (origin, info)
-                        },
-                        Some(_) => {
-                            index += 1;
-                            continue;
+                    let (origin, info) = match iter.next_with_info() {
+                        Some((origin, info)) => (origin, info),
+                        None => {
+                            self.formatter.intermission(target)?;
+                            break
                         }
+                    };
+                    if let Some(selection) = self.selection.as_ref() {
+                        if !selection.include_origin(origin) {
+                            continue
+                        }
+                    }
+                    if *first {
+                        *first = false;
+                    }
+                    else {
+                        self.formatter.delimiter(target)?;
+                    }
+                    self.formatter.origin(origin, info, target)?;
+                    return Ok(true)
+                }
+                (
+                    true,
+                    StreamState::Key {
+                        iter: self.snapshot.clone().arc_router_keys_iter(),
+                        first: true
+                    }
+                )
+            }
+            StreamState::Key { ref mut iter, ref mut first } => {
+                loop {
+                    let (key, info) = match iter.next_with_info() {
+                        Some((key, info)) => (key, info),
                         None => {
                             self.formatter.footer(
                                 self.metrics.as_ref(), target
                             )?;
-                            self.state = StreamState::Done;
                             break
                         }
                     };
-                    index += 1;
                     if let Some(selection) = self.selection.as_ref() {
-                        if !selection.as_ref().include_origin(origin) {
+                        if !selection.include_router_key(key) {
                             continue
                         }
                     }
-                    if !first {
+                    if *first {
+                        *first = false;
+                    }
+                    else {
                         self.formatter.delimiter(target)?;
                     }
-                    self.formatter.origin(origin, info, target)?;
-                    self.state = StreamState::Origin { index, first: false };
-                    break
+                    self.formatter.router_key(key, info, target)?;
+                    return Ok(true)
                 }
-                Ok(true)
+                (true, StreamState::Done)
             }
-            StreamState::Done => Ok(false)
-        }
+            StreamState::Done => return Ok(false)
+        };
+        self.state = next;
+        Ok(res)
     }
 }
 
-impl Iterator for OutputStream<
-    Arc<PayloadSnapshot>, Selection, Arc<Metrics>, Vec<u8>
-> {
+impl Iterator for OutputStream<Vec<u8>> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -423,16 +495,28 @@ trait Formatter<W> {
         Ok(())
     }
 
+    fn origin(
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error>;
+
+    fn intermission(
+        &self, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
+    fn router_key(
+        &self, _key: &RouterKey, _info: &PayloadInfo, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
     fn footer(
         &self, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
         let _ = (metrics, target);
         Ok(())
     }
-
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error>;
 
     fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         let _ = target;
@@ -594,39 +678,10 @@ impl<W: io::Write> Formatter<W> for Json {
 
 struct ExtendedJson;
 
-impl<W: io::Write> Formatter<W> for ExtendedJson {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+impl ExtendedJson {
+    fn payload_info(
+        info: &PayloadInfo, target: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        writeln!(target,
-            "{{\
-            \n  \"metadata\": {{\
-            \n    \"generated\": {},\
-            \n    \"generatedTime\": \"{}\"\
-            \n  }},\
-            \n  \"roas\": [",
-            metrics.time.timestamp(),
-            format_iso_date(metrics.time)
-        )
-    }
-
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "\n  ]\n}}")
-    }
-
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-            \"maxLength\": {}, \"source\": [",
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-        )?;
-
         let mut first = true;
         for item in info {
             if let Some(roa) = item.publish_info() {
@@ -672,8 +727,62 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
                 write!(target, " }}")?;
             }
         }
+        Ok(())
+    }
+}
 
+impl<W: io::Write> Formatter<W> for ExtendedJson {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            "{{\
+            \n  \"metadata\": {{\
+            \n    \"generated\": {},\
+            \n    \"generatedTime\": \"{}\"\
+            \n  }},\
+            \n  \"roas\": [",
+            metrics.time.timestamp(),
+            format_iso_date(metrics.time)
+        )
+    }
+
+    fn origin(
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+            \"maxLength\": {}, \"source\": [",
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
+        )?;
+        Self::payload_info(info, target)?;
         write!(target, "] }}")
+    }
+
+    fn intermission(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, "\n  ],\n  \"routerKeys\": [")
+    }
+
+    fn router_key(
+        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+            \"routerPublicKey\": \"{}\", \"source\": [",
+            key.asn,
+            key.key_identifier,
+            key.key_info,
+        )?;
+        Self::payload_info(info, target)?;
+        write!(target, "] }}")
+    }
+
+    fn footer(
+        &self, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "\n  ]\n}}")
     }
 
     fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
