@@ -915,21 +915,46 @@ impl Summary {
     ) -> Result<(), io::Error> {
         line(format_args!("Summary at {}", metrics.time))?;
         for tal in &metrics.tals {
-            let vrps = tal.payload.vrps();
+            line(format_args!("{}: ", tal.name()))?;
             line(format_args!(
-                "{}: {} verified ROAs, {} verified VRPs, \
-                 {} unsafe VRPs, {} final VRPs.",
-                tal.name(), tal.publication.valid_roas, vrps.valid,
-                vrps.marked_unsafe, vrps.contributed
+                "            ROAs: {:7} verified;",
+                tal.publication.valid_roas
+            ))?;
+            line(format_args!(
+                "            VRPs: {:7} verified, {:7} unsafe, {:7} final;",
+                tal.payload.vrps().valid,
+                tal.payload.vrps().marked_unsafe,
+                tal.payload.vrps().contributed
+            ))?;
+            line(format_args!(
+                "    router certs: {:7} verified;",
+                tal.publication.valid_ee_certs,
+            ))?;
+            line(format_args!(
+                "     router keys: {:7} verified, {:7} final.",
+                tal.payload.router_keys.valid,
+                tal.payload.router_keys.contributed
             ))?;
         }
+        line(format_args!("\ntotal: "))?;
         line(format_args!(
-            "total: {} verified ROAs, {} verified VRPs, \
-             {} unsafe VRPs, {} final VRPs.",
-            metrics.publication.valid_roas,
+            "            ROAs: {:7} verified;",
+            metrics.publication.valid_roas
+        ))?;
+        line(format_args!(
+            "            VRPs: {:7} verified, {:7} unsafe, {:7} final;",
             metrics.payload.vrps().valid,
             metrics.payload.vrps().marked_unsafe,
-            metrics.payload.vrps().contributed,
+            metrics.payload.vrps().contributed
+        ))?;
+        line(format_args!(
+            "    router certs: {:7} verified;",
+            metrics.publication.valid_ee_certs,
+        ))?;
+        line(format_args!(
+            "     router keys: {:7} verified, {:7} final.",
+            metrics.payload.router_keys.valid,
+            metrics.payload.router_keys.contributed
         ))
     }
 
