@@ -366,7 +366,7 @@ fn payload_metrics<'a>(
             ("router_keys", &metrics.router_keys),
         ];
 
-        for (type_name, metrics) in types {
+        for (type_name, metrics) in &types {
             target.multi(valid_metric)
                 .label(group.label(), name)
                 .label("type", type_name)
