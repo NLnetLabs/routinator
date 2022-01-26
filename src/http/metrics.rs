@@ -5,8 +5,9 @@ use std::fmt::Write;
 use chrono::Utc;
 use hyper::{Body, Request, Response};
 use crate::metrics::{
-    HttpServerMetrics, Metrics, PublicationMetrics, RrdpRepositoryMetrics,
-    RsyncModuleMetrics, SharedRtrServerMetrics, VrpMetrics
+    HttpServerMetrics, Metrics, PayloadMetrics, PublicationMetrics,
+    RrdpRepositoryMetrics, RsyncModuleMetrics, SharedRtrServerMetrics,
+    VrpMetrics
 };
 use crate::payload::SharedHistory;
 use super::errors::initial_validation;
@@ -107,6 +108,10 @@ async fn handle_metrics(
         &mut target, Group::Ta,
         metrics.tals.iter().map(|m| (m.tal.name(), m.payload.vrps()))
     );
+    payload_metrics(
+        &mut target, Group::Ta,
+        metrics.tals.iter().map(|m| (m.tal.name(), &m.payload))
+    );
 
     // Per-repository metrics.
     pub_point_metrics(
@@ -120,6 +125,10 @@ async fn handle_metrics(
     vrp_metrics(
         &mut target, Group::Repository,
         metrics.repositories.iter().map(|m| (m.uri.as_ref(), m.payload.vrps()))
+    );
+    payload_metrics(
+        &mut target, Group::Repository,
+        metrics.repositories.iter().map(|m| (m.uri.as_ref(), &m.payload))
     );
 
     // Locally added VRPs
@@ -304,6 +313,85 @@ fn vrp_metrics<'a>(
             .value(metrics.contributed);
     }
 }
+
+fn payload_metrics<'a>(
+    target: &mut Target, group: Group,
+    metrics: impl Iterator<Item = (&'a str, &'a PayloadMetrics)>
+) {
+    let valid_metric = Metric::with_prefix(
+        group.prefix(), "valid_payload_total",
+        ("overall number of payload elements per ", group.help()),
+        MetricType::Gauge
+    );
+    let unsafe_metric = Metric::with_prefix(
+        group.prefix(), "unsafe_payload_total",
+        (
+            "payload items overlapping with rejected publication points per ",
+            group.help()
+        ),
+        MetricType::Gauge
+    );
+    let filtered_metric = Metric::with_prefix(
+        group.prefix(), "locally_filtered_payload_total",
+        (
+            "number of payload items filtered out by local exceptions per ",
+            group.help()
+        ),
+        MetricType::Gauge
+    );
+    let duplicate_metric = Metric::with_prefix(
+        group.prefix(), "duplicate_payload_total",
+        ("number of duplicate payload items per ", group.help()),
+        MetricType::Gauge
+    );
+    let contributed_metric = Metric::with_prefix(
+        group.prefix(), "contributed_payload_total",
+        (
+            "number of payload items contributed to the final set per ",
+            group.help()
+        ),
+        MetricType::Gauge
+    );
+
+    target.header(valid_metric);
+    target.header(unsafe_metric);
+    target.header(filtered_metric);
+    target.header(duplicate_metric);
+    target.header(contributed_metric);
+
+    for (name, metrics) in metrics {
+        let types = [
+            ("route_origins_ipv4", &metrics.v4_origins),
+            ("route_origins_ipv6", &metrics.v6_origins),
+            ("router_keys", &metrics.router_keys),
+        ];
+
+        for (type_name, metrics) in types {
+            target.multi(valid_metric)
+                .label(group.label(), name)
+                .label("type", type_name)
+                .value(metrics.valid);
+            target.multi(unsafe_metric)
+                .label(group.label(), name)
+                .label("type", type_name)
+                .value(metrics.marked_unsafe);
+            target.multi(filtered_metric)
+                .label(group.label(), name)
+                .label("type", type_name)
+                .value(metrics.locally_filtered);
+            target.multi(duplicate_metric)
+                .label(group.label(), name)
+                .label("type", type_name)
+                .value(metrics.duplicate);
+            target.multi(contributed_metric)
+                .label(group.label(), name)
+                .label("type", type_name)
+                .value(metrics.contributed);
+        }
+    }
+}
+
+
 
 fn rrdp_metrics(target: &mut Target, metrics: &[RrdpRepositoryMetrics]) {
     let status = Metric::new(
