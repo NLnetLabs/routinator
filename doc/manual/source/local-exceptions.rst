@@ -12,70 +12,68 @@ output, as well as origins that should be added, in a file using JSON notation
 according to the :abbr:`SLURM (Simplified Local Internet Number Resource
 Management with the RPKI)` standard specified in :RFC:`8416`.
 
-A full example file is provided below. This, along with an empty one is
-available in the repository at `/test/slurm
-<https://github.com/NLnetLabs/routinator/tree/master/test/slurm>`_.
+Here is an example file you can use as a starting point for building your
+own:
 
 .. code-block:: json
 
-   {
-     "slurmVersion": 1,
-     "validationOutputFilters": {
-      "prefixFilters": [
-        {
-         "prefix": "192.0.2.0/24",
-         "comment": "All VRPs encompassed by prefix"
-        },
-        {
-         "asn": 64496,
-         "comment": "All VRPs matching ASN"
-        },
-        {
-         "prefix": "198.51.100.0/24",
-         "asn": 64497,
-         "comment": "All VRPs encompassed by prefix, matching ASN"
-        }
-      ],
-      "bgpsecFilters": [
-        {
-         "asn": 64496,
-         "comment": "All keys for ASN"
-        },
-        {
-         "SKI": "Zm9v",
-         "comment": "Key matching Router SKI"
-        },
-        {
-         "asn": 64497,
-         "SKI": "YmFy",
-         "comment": "Key for ASN 64497 matching Router SKI"
-        }
-      ]
-     },
-     "locallyAddedAssertions": {
-      "prefixAssertions": [
-        {
-         "asn": 64496,
-         "prefix": "198.51.100.0/24",
-         "comment": "My other important route"
-        },
-        {
-         "asn": 64496,
-         "prefix": "2001:DB8::/32",
-         "maxPrefixLength": 48,
-         "comment": "My other important de-aggregated routes"
-        }
-      ],
-      "bgpsecAssertions": [
-        {
-         "asn": 64496,
-         "comment" : "My known key for my important ASN",
-         "SKI": "<some base64 SKI>",
-         "routerPublicKey": "<some base64 public key>"
-        }
-      ]
-     }
-   }
+    {
+      "slurmVersion": 1,
+      "validationOutputFilters": {
+        "prefixFilters": [
+          {
+            "prefix": "192.0.2.0/24",
+            "comment": "All VRPs encompassed by prefix"
+          },
+          {
+            "asn": 64496,
+            "comment": "All VRPs matching ASN"
+          },
+          {
+            "prefix": "198.51.100.0/24",
+            "asn": 64497,
+            "comment": "All VRPs encompassed by prefix, matching ASN"
+          }
+        ],
+        "bgpsecFilters": [
+          {
+            "asn": 64496,
+            "comment": "All keys for ASN"
+          },
+          {
+            "SKI": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA",
+            "comment": "Key matching Router SKI"
+          },
+          {
+            "asn": 64497,
+            "SKI": "ZGVhZGJlYXRkZWFkYmVhdGRlYWQ",
+            "comment": "Key for ASN matching SKI"
+          }
+        ]
+      },
+      "locallyAddedAssertions": {
+        "prefixAssertions": [
+          {
+            "asn": 64496,
+            "prefix": "198.51.100.0/24",
+            "comment": "My other important route"
+          },
+          {
+            "asn": 64496,
+            "prefix": "2001:DB8::/32",
+            "maxPrefixLength": 48,
+            "comment": "My de-aggregated route"
+          }
+        ],
+        "bgpsecAssertions": [
+          {
+            "asn": 64496,
+            "SKI": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA",
+            "routerPublicKey": "Ymx1YmI"
+          }
+        ]
+      }
+    }
 
 Use the :option:`--exceptions` option to refer to your file with local
 exceptions. Routinator verify that the JSON itself is valid, as well as the
