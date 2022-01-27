@@ -37,7 +37,7 @@ Routinator will report the resources used to sign the object:
 .. code-block:: text
 
     routinator rta acme-corp-byoip.rta
-    
+
     192.0.2.0/24
     203.0.113.0/24
     2001:db8::/48 
@@ -66,9 +66,11 @@ dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
 or by setting ``enable-bgpsec`` to True in the :doc:`configuration
 file<configuration>`.
 
-In the ``jsonext`` :doc:`output format<output-formats>`, the information will
-be placed in a JSON file that contains a member named *routerKeys* which 
-contains an array of objects with detailed information, e.g.:
+BGPsec information will be exposed via RTR, as well as in the SLURM and
+``jsonext`` :doc:`output format<output-formats>`. In ``jsonext``, the
+information will be placed in a JSON file that contains a member named
+*routerKeys* which contains an array of objects with detailed information,
+e.g.:
 
 .. code-block:: json 
 
