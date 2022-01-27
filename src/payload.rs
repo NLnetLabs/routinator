@@ -1675,6 +1675,24 @@ mod test {
         addr::Prefix::new(s.parse().unwrap(), l).unwrap()
     }
 
+    fn origin(as_id: u32, prefix: &str, max_len: u8) -> Payload {
+        RouteOrigin::new(
+            addr::MaxLenPrefix::new(
+                addr::Prefix::from_str(prefix).unwrap(),
+                Some(max_len)
+            ).unwrap(),
+            as_id.into(),
+        ).into()
+    }
+
+    fn router_key(key_id: u32, asn: u32, key_info: u32) -> Payload {
+        Payload::router_key(
+            KeyIdentifier::from_str(&format!("{:040}", key_id)).unwrap(),
+            asn.into(),
+            RouterKeyInfo::new(format!("{}", key_info).into()).unwrap(),
+        )
+    }
+
     #[test]
     fn address_prefix_covers_v4() {
         let outer = make_prefix("10.0.0.0", 16);
@@ -1729,15 +1747,6 @@ mod test {
     #[test]
     #[allow(clippy::mutable_key_type)]
     fn payload_delta_construct() {
-        fn origin(as_id: u32, prefix: &str, max_len: u8) -> Payload {
-            RouteOrigin::new(
-                addr::MaxLenPrefix::new(
-                    addr::Prefix::from_str(prefix).unwrap(),
-                    Some(max_len)
-                ).unwrap(),
-                as_id.into(),
-            ).into()
-        }
         let o0 = origin(10, "10.0.0.0/10", 10);
         let o1 = origin(11, "10.0.0.0/11", 11);
         let o2 = origin(12, "10.0.0.0/12", 12);
@@ -1790,5 +1799,77 @@ mod test {
             HashSet::from_iter(vec![1, 3].into_iter()),
         );
     }
-}
 
+    #[test]
+    /// Tests the order of data in a snapshot.
+    ///
+    /// Creates a snapshot via a builder and then checks that the various
+    /// iterators produce correct output.
+    ///
+    /// This assumes that `RouteOrigin` and `RouterKey` order correctly.
+    fn snapshot_order() {
+        // Start with some payload in ‘random’ order.
+        let payload = vec![
+            origin(13, "10.0.0.0/11", 13),
+            origin(10, "10.0.0.0/10", 10),
+            router_key(22, 22, 22),
+            router_key(24, 24, 24),
+            origin(12, "10.0.0.0/11", 12),
+            origin(11, "10.0.0.0/11", 11),
+            router_key(23, 23, 23),
+        ];
+
+        // Add it to a snapshot.
+        let mut builder = SnapshotBuilder::default();
+        for item in &payload {
+            builder.payload.insert(
+                item.clone(),
+                 PayloadInfo::from(Arc::new(ExceptionInfo::default())),
+            );
+        }
+        let snapshot = PayloadSnapshot::from_builder(builder);
+
+        // Check that we have all origins.
+        let mut origins = payload.iter().filter_map(|item| {
+            match item {
+                Payload::Origin(origin) => Some(origin.clone()),
+                _ => None
+            }
+        }).collect::<Vec<_>>();
+        origins.sort();
+        let mut origins_iter = origins.iter();
+        for item in snapshot.origins() {
+            assert_eq!(item.0, *origins_iter.next().unwrap())
+        }
+        assert!(origins_iter.next().is_none());
+
+        // Check that we have all router keys.
+        let mut keys = payload.iter().filter_map(|item| {
+            match item {
+                Payload::RouterKey(key) => Some(key.clone()),
+                _ => None
+            }
+        }).collect::<Vec<_>>();
+        keys.sort();
+        let mut keys_iter = keys.iter();
+        for item in snapshot.router_keys() {
+            assert_eq!(item.0, keys_iter.next().unwrap())
+        }
+        assert!(keys_iter.next().is_none());
+
+        // Check that the arc iters work, too.
+        let snapshot = Arc::new(snapshot);
+        let mut origins_iter = origins.iter();
+        for item in snapshot.clone().arc_origins_iter() {
+            assert_eq!(item, *origins_iter.next().unwrap())
+        }
+        assert!(origins_iter.next().is_none());
+
+        let mut keys_iter = keys.iter();
+        let mut arc_iter = snapshot.clone().arc_router_keys_iter();
+        while let Some(item) = arc_iter.next() {
+            assert_eq!(item, keys_iter.next().unwrap())
+        }
+        assert!(keys_iter.next().is_none());
+    }
+}
