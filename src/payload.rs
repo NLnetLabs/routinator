@@ -937,19 +937,33 @@ impl SnapshotBuilder {
                 if let Payload::Origin(origin) = payload {
                     // Does the origin have rejected resources?
                     if !rejected.keep_prefix(origin.prefix.prefix()) {
-                        point_metrics.update(|m| m.marked_unsafe += 1);
-                        if unsafe_vrps != FilterPolicy::Accept {
-                            warn!(
-                                "Filtering potentially unsafe VRP \
-                                 ({}/{}-{}, {})",
-                                origin.prefix.addr(),
-                                origin.prefix.prefix_len(),
-                                origin.prefix.resolved_max_len(),
-                                origin.asn
-                            );
-                        }
-                        if unsafe_vrps == FilterPolicy::Reject {
-                            continue
+                        match unsafe_vrps {
+                            FilterPolicy::Accept => {
+                                // Don’t count, don’t warn ...
+                            }
+                            FilterPolicy::Warn => {
+                                point_metrics.update(|m| m.marked_unsafe += 1);
+                                info!(
+                                    "Encountered potentially unsafe VRP \
+                                     ({}/{}-{}, {})",
+                                    origin.prefix.addr(),
+                                    origin.prefix.prefix_len(),
+                                    origin.prefix.resolved_max_len(),
+                                    origin.asn
+                                );
+                            }
+                            FilterPolicy::Reject => {
+                                point_metrics.update(|m| m.marked_unsafe += 1);
+                                warn!(
+                                    "Filtering potentially unsafe VRP \
+                                     ({}/{}-{}, {})",
+                                    origin.prefix.addr(),
+                                    origin.prefix.prefix_len(),
+                                    origin.prefix.resolved_max_len(),
+                                    origin.asn
+                                );
+                                continue
+                            }
                         }
                     }
                 }
