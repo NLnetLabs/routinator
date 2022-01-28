@@ -195,10 +195,14 @@ rpsl
       
 summary
       This format produces a summary of the content of the RPKI repository.
-      For each trust anchor, it will print the number of verified ROAs and
-      VRPs. Note that this format does not take filters into account. It will
-      always provide numbers for the complete repository.
+      It does not take filters into account and will always provide numbers
+      for the complete repository. 
       
+      For each trust anchor, it will print the number of verified ROAs and
+      VRPs, as well as router certificates and keys. Note that router keys
+      will only be verified and included in the totals if you have enabled
+      :ref:`advanced-features:bgpsec`.
+            
       .. code-block:: text
       
         Summary at 2022-01-28 08:37:27.046365 UTC
