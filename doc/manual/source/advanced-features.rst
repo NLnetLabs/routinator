@@ -76,7 +76,7 @@ key indentifier containing the hash over the certificate in hex digits in
 Extensive information about the source of the object is given in the array
 *source*. Each item in that array is an object providing details of a source
 of the router key. The object will have a type of *roa* if it was derived
-from a valid ROA object or *exception* if it was an assertion in a local
+from a valid object or *exception* if it was an assertion in a local
 exception file.
 
 For router certificates, *uri* provides the rsync URI of the corresponding
