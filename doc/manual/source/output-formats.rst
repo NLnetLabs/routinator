@@ -199,10 +199,35 @@ summary
       
       .. code-block:: text
       
-         Summary at 2021-05-04 08:16:17.979912 UTC
-         afrinic: 1403 verified ROAs, 2072 verified VRPs, 0 unsafe VRPs, 2039 final VRPs.
-         lacnic: 7250 verified ROAs, 14862 verified VRPs, 0 unsafe VRPs, 13554 final VRPs.
-         apnic: 14567 verified ROAs, 70454 verified VRPs, 0 unsafe VRPs, 70369 final VRPs.
-         ripe: 23495 verified ROAs, 125031 verified VRPs, 0 unsafe VRPs, 125029 final VRPs.
-         arin: 30026 verified ROAs, 35806 verified VRPs, 0 unsafe VRPs, 30207 final VRPs.
-         total: 76741 verified ROAs, 248225 verified VRPs, 0 unsafe VRPs, 241198 final VRPs.
+        Summary at 2022-01-28 08:37:27.046365 UTC
+        afrinic: 
+                    ROAs:    3587 verified;
+                    VRPs:    4545 verified,       3 unsafe,    4466 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+        lacnic: 
+                    ROAs:   11744 verified;
+                    VRPs:   23628 verified,       0 unsafe,   21235 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+        apnic: 
+                    ROAs:   18612 verified;
+                    VRPs:   85992 verified,       0 unsafe,   85711 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+        ripe: 
+                    ROAs:   27195 verified;
+                    VRPs:  149164 verified,      17 unsafe,  149162 final;
+            router certs:       2 verified;
+             router keys:       2 verified,       2 final.
+        arin: 
+                    ROAs:   41500 verified;
+                    VRPs:   50495 verified,       5 unsafe,    1812 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+
+        total: 
+                    ROAs:  141922 verified;
+                    VRPs:  361536 verified,      25 unsafe,  307434 final;
+            router certs:       2 verified;
+             router keys:       2 verified,       2 final.
