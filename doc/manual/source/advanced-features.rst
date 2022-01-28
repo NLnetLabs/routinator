@@ -67,13 +67,28 @@ or by setting ``enable-bgpsec`` to True in the :doc:`configuration
 file<configuration>`.
 
 BGPsec information will be exposed via RTR, as well as in the SLURM and
-``jsonext`` :doc:`output format<output-formats>`. In ``jsonext``, the
-information will be placed in a JSON file that contains a member named
-*routerKeys* which contains an array of objects with detailed information,
-e.g.:
+``jsonext`` :doc:`output format<output-formats>`. 
+
+In ``jsonext``, the information will be placed in a JSON file that contains a
+member named *routerKeys* which contains an array of objects with four
+elements each: The authorised Autonomous System number in *asn*, the subject
+key indentifier containing the hash over the certificate in hex digits in
+*SKI* and the public key of the router certificate in *routerPublicKey*.
+
+Extensive information about the source of the object is given in the array
+*source*. Each item in that array is an object providing details of a source
+of the router key. The object will have a type of *roa* if it was derived
+from a valid ROA object or *exception* if it was an assertion in a local
+exception file.
+
+For router certificates, *uri* provides the rsync URI of the corresponding
+object, *validity* provides the validity of the certificate itself, and
+*chainValidity* the validity considering the validity of the certificates
+along the validation chain.
 
 .. code-block:: json 
 
+   {
     "routerKeys": [{
             "asn": "AS65535",
             "SKI": "E2F075EC50E9F2EFCED81D44491D25D42A298D89",
@@ -90,22 +105,6 @@ e.g.:
                     "notAfter": "2022-08-06T00:00:00Z"
                 }
             }]
-        },
-        {
-            "asn": "AS65535",
-            "SKI": "7D75C49F1835B858FA98D1134742FBE889B55D0B",
-            "routerPublicKey": "l9AQcDQgAE4FxJr0n2bux1uoZIzmxqKuAGUhKnr7VLLDgrE--X1Evl-QWw2kZYvIadPjLuFXp5eHWTNVAN22FUU3db_RKpE2wMFkwEwYHKj0CAQYIKoZIzj0D2",
-            "source": [{
-                "type": "roa",
-                "uri": "rsync://acmecorp.example.net/rpki/RIPE-NLACMECORP/j6mK0R8dC3Nzl9duFcSfSFvoibV.cer",
-                "validity": {
-                    "notBefore": "2021-08-06T16:02:46Z",
-                    "notAfter": "2022-08-06T16:05:44Z"
-                },
-                "chainValidity": {
-                    "notBefore": "2022-01-26T15:45:51Z",
-                    "notAfter": "2022-07-01T00:00:00Z"
-                }
-            }]
         }
     ]
+   }

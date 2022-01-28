@@ -89,22 +89,27 @@ json
          }
 
 jsonext
-      The output is in JSON format. The list is placed into a member named
-      *roas* which contains an array of objects with four elements each:: The
-      autonomous system number of the network authorised to originate a
+      The output is in JSON format. The list is has a member named *roas*
+      which contains an array of objects with four elements each: The
+      Autonomous System number of the network authorised to originate a
       prefix in *asn*, the prefix in slash notation  in *prefix*, the maximum
       prefix length of the announced route  in *maxLength*.
       
       Extensive information about the source of the object is given in the
       array *source*. Each item in that array is an object providing details
-      of a source of the VRP. The object will have a type of roa if it was
-      derived from a valid ROA object or exception if it was an assertion in
-      a local exception file.
+      of a source of the VRP. The object will have a type of *roa* if it was
+      derived from a valid ROA object or *exception* if it was an assertion
+      in a local exception file.
 
       For ROAs, *uri* provides the rsync URI of the ROA, *validity* provides
       the validity of the ROA itself, and *chainValidity* the validity
       considering the validity of the certificates along the validation
       chain.
+
+      If you have enabled BGPsec there will be a member named *routerKeys*
+      containing an array of objects with detailed information for each
+      router certificate. For a complete desciption, refer to the
+      :ref:`advanced-features:bgpsec` section.
 
       For assertions from :doc:`local exceptions<local-exceptions>`, *path*
       will provide the path of the local exceptions file and, optionally,
