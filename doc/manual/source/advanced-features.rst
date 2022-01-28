@@ -64,10 +64,8 @@ with Routinator is not enabled by default.
 You can let Routinator process router keys and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
 or by setting ``enable-bgpsec`` to True in the :doc:`configuration
-file<configuration>`.
-
-BGPsec information will be exposed via RTR, as well as in the SLURM and
-``jsonext`` :doc:`output format<output-formats>`. 
+file<configuration>`. BGPsec information will be exposed via RTR, as well as
+in the SLURM and ``jsonext`` :doc:`output format<output-formats>`. 
 
 In ``jsonext``, the information will be placed in a JSON file that contains a
 member named *routerKeys* which contains an array of objects with four
