@@ -365,20 +365,19 @@ impl<Target: io::Write> OutputStream<Target> {
 
     /// Writes the next item to the target.
     ///
-    /// Returns whether there is more to write.
+    /// Returns `Ok(true)` if something was written and there may be more
+    /// data. Returns `Ok(false)` if nothing was written and there also is
+    /// no more data.
     fn write_next(&mut self, target: &mut Target) -> Result<bool, io::Error> {
-        let (res, next) = match self.state {
+        let next = match self.state {
             StreamState::Header => {
                 self.formatter.header(
                     &self.snapshot, &self.metrics, target
                 )?;
-                (
-                    true,
-                    StreamState::Origin {
-                        iter: self.snapshot.clone().arc_origins_iter(),
-                        first: true,
-                    }
-                )
+                StreamState::Origin {
+                    iter: self.snapshot.clone().arc_origins_iter(),
+                    first: true,
+                }
             }
             StreamState::Origin { ref mut iter, ref mut first } => {
                 loop {
@@ -403,13 +402,10 @@ impl<Target: io::Write> OutputStream<Target> {
                     self.formatter.origin(origin, info, target)?;
                     return Ok(true)
                 }
-                (
-                    true,
-                    StreamState::Key {
-                        iter: self.snapshot.clone().arc_router_keys_iter(),
-                        first: true
-                    }
-                )
+                StreamState::Key {
+                    iter: self.snapshot.clone().arc_router_keys_iter(),
+                    first: true
+                }
             }
             StreamState::Key { ref mut iter, ref mut first } => {
                 loop {
@@ -436,12 +432,12 @@ impl<Target: io::Write> OutputStream<Target> {
                     self.formatter.router_key(key, info, target)?;
                     return Ok(true)
                 }
-                (true, StreamState::Done)
+                StreamState::Done
             }
             StreamState::Done => return Ok(false)
         };
         self.state = next;
-        Ok(res)
+        Ok(true)
     }
 }
 

@@ -290,22 +290,6 @@ impl Engine {
         ))
     }
 
-    /*
-    /// Performs a route origin validation run.
-    ///
-    /// Returns the result of the run and the run’s metrics.
-    pub fn process_origins(
-        &self
-    ) -> Result<(ValidationReport, Metrics), Failed> {
-        let report = ValidationReport::new();
-        let mut run = self.start(&report)?;
-        run.process()?;
-        run.cleanup()?;
-        let metrics = run.done();
-        Ok((report, metrics))
-    }
-    */
-
     /// Dumps the content of the collector and store owned by the engine.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         self.store.dump(dir)?;

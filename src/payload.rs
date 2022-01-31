@@ -1638,7 +1638,7 @@ impl<'a> Iterator for PayloadInfoIter<'a> {
 
 //------------ PublishInfo ---------------------------------------------------
 
-/// Information about the published object payload came from.
+/// Information about the published object a payload item came from.
 #[derive(Clone, Debug)]
 pub struct PublishInfo {
     /// The TAL the ROA is derived from.

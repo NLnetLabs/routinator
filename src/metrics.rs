@@ -444,7 +444,7 @@ impl ops::AddAssign for PayloadMetrics {
 
 //------------ VrpMetrics ----------------------------------------------------
 
-/// Individual metrics the generated payload.
+/// Individual metrics regarding the generated payload.
 #[derive(Clone, Debug, Default)]
 pub struct VrpMetrics {
     /// The total number of valid VRPs.
