@@ -676,7 +676,7 @@ struct ExtendedJson;
 
 impl ExtendedJson {
     fn payload_info(
-        info: &PayloadInfo, target: &mut impl io::Write
+        info: &PayloadInfo, rpki_type: &str, target: &mut impl io::Write
     ) -> Result<(), io::Error> {
         let mut first = true;
         for item in info {
@@ -687,7 +687,10 @@ impl ExtendedJson {
                 else {
                     first = false;
                 }
-                write!(target, " {{ \"type\": \"roa\", \"uri\": ")?;
+                write!(target,
+                    " {{ \"type\": \"{}\", \"uri\": ",
+                    rpki_type,
+                )?;
                 match roa.uri.as_ref() {
                     Some(uri) => write!(target, "\"{}\"", uri)?,
                     None => write!(target, "null")?
@@ -753,7 +756,7 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
             origin.prefix.addr(), origin.prefix.prefix_len(),
             origin.prefix.resolved_max_len(),
         )?;
-        Self::payload_info(info, target)?;
+        Self::payload_info(info, "roa", target)?;
         write!(target, "] }}")
     }
 
@@ -771,7 +774,7 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
             key.key_identifier,
             key.key_info,
         )?;
-        Self::payload_info(info, target)?;
+        Self::payload_info(info, "cer", target)?;
         write!(target, "] }}")
     }
 
