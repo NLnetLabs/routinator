@@ -812,16 +812,17 @@ impl PayloadHistory {
 /// The complete set of validated payload data.
 #[derive(Clone, Debug)]
 pub struct PayloadSnapshot {
-    /// A list of RPKI payload.
+    /// A list of route origins.
     ///
-    /// This list contains an ordered sequence of unique payload.
-    ///
-    /// It is ordered in such a way that origins are first, followed by
-    /// router keys.
-    payload: Vec<(Payload, PayloadInfo)>,
+    /// The list contains an ordered sequence of unique origins wrapped in
+    /// the payload enum. This is necessary for the RTR server.
+    origins: Vec<(Payload, PayloadInfo)>,
 
-    /// The index of the first router key variant in `payload`.
-    router_key_index: usize,
+    /// A list of router keys.
+    ///
+    /// The list contains an ordered sequence of unique rouer keys wrapped in
+    /// the payload enum. This is necessary for the RTR server.
+    router_keys: Vec<(Payload, PayloadInfo)>,
 
     /// The time when this snapshot was created.
     created: DateTime<Utc>,
@@ -841,32 +842,23 @@ impl PayloadSnapshot {
     fn from_builder(
         builder: SnapshotBuilder
     ) -> Self {
-        let mut origin_num = 0;
-        let mut payload: Vec<_> = builder.payload.into_iter().map(|item| {
-            if let Payload::Origin(_) = item.0 {
-                origin_num += 1;
-            }
-            item
-        }).collect();
-        payload.sort_by(|left, right| {
-            match (&left.0, &right.0) {
-                (Payload::Origin(ref l), Payload::Origin(ref r)) => {
-                    l.cmp(r)
+        let mut origins = Vec::new();
+        let mut keys = Vec::new();
+        for (payload, info) in builder.payload.into_iter() {
+            match payload {
+                Payload::Origin(origin) => {
+                    origins.push((Payload::Origin(origin), info))
                 }
-                (Payload::RouterKey(ref l), Payload::RouterKey(ref r)) => {
-                    l.cmp(r)
-                }
-                (Payload::Origin(_), Payload::RouterKey(_)) => {
-                    cmp::Ordering::Less
-                }
-                (Payload::RouterKey(_), Payload::Origin(_)) => {
-                    cmp::Ordering::Greater
+                Payload::RouterKey(key) => {
+                    keys.push((Payload::RouterKey(key), info))
                 }
             }
-        });
+        }
+        origins.sort_by(|left, right| left.0.cmp(&right.0));
+        keys.sort_by(|left, right| left.0.cmp(&right.0));
         PayloadSnapshot {
-            payload,
-            router_key_index: origin_num,
+            origins,
+            router_keys: keys,
             created: builder.created,
             refresh: builder.refresh,
         }
@@ -904,18 +896,21 @@ impl PayloadSnapshot {
     }
 
     /// Returns an slice of the payload.
-    pub fn payload(&self) -> &[(Payload, PayloadInfo)] {
-        &self.payload
+    pub fn payload(
+        &self
+    ) -> impl Iterator<Item = (&Payload, &PayloadInfo)> {
+        self.origins.iter().chain(self.router_keys.iter())
+            .map(|item| (&item.0, &item.1))
     }
 
     /// Returns an iterator over the route origins.
     pub fn origins(
         &self
     ) -> impl Iterator<Item = (RouteOrigin, &PayloadInfo)> + '_ {
-        self.payload()[..self.router_key_index].iter().filter_map(|item| {
+        self.origins.iter().map(|item| {
             match item.0 {
-                Payload::Origin(origin) => Some((origin, &item.1)),
-                _ => None
+                Payload::Origin(origin) => (origin, &item.1),
+                _ => panic!("non-origin in origin set")
             }
         })
     }
@@ -924,37 +919,35 @@ impl PayloadSnapshot {
     pub fn router_keys(
         &self
     ) -> impl Iterator<Item = (&RouterKey, &PayloadInfo)> + '_ {
-        self.payload()[self.router_key_index..].iter().filter_map(|item| {
+        self.router_keys.iter().map(|item| {
             match item.0 {
-                Payload::RouterKey(ref key) => Some((key, &item.1)),
-                _ => None
+                Payload::RouterKey(ref key) => (key, &item.1),
+                _ => panic!("non-router key in router key set")
             }
         })
     }
 
-    /// Returns a shareable iterator over the payload.
+    /// Returns an iterator over the payload of a shared snapshot.
     pub fn arc_iter(self: Arc<Self>) -> SnapshotArcIter {
-        let end = self.payload.len();
-        SnapshotArcIter::new(self, 0, end)
+        SnapshotArcIter::new(self)
     }
 
-    /// Returns a shareable iterator over the payload.
+    /// Returns an iterator over the origins of a shared snapshot.
     pub fn arc_origins_iter(self: Arc<Self>) -> SnapshotArcOriginsIter {
-        let end = self.router_key_index;
-        SnapshotArcOriginsIter(SnapshotArcIter::new(self, 0, end))
+        SnapshotArcOriginsIter::new(self)
     }
 
-    /// Returns a shareable iterator over the payload.
+    /// Returns an iterator over the router keys of a shared snapshot.
     pub fn arc_router_keys_iter(self: Arc<Self>) -> SnapshotArcRouterKeysIter {
-        let start = self.router_key_index;
-        let end = self.payload.len();
-        SnapshotArcRouterKeysIter(SnapshotArcIter::new(self, start, end))
+        SnapshotArcRouterKeysIter::new(self)
     }
 
     /// Returns a snapshot builder based in this snapshot.
     fn to_builder(&self) -> SnapshotBuilder {
         SnapshotBuilder {
-            payload: self.payload.iter().cloned().collect(),
+            payload: self.payload().map(|item| {
+                (item.0.clone(), item.1.clone())
+            }).collect(),
             created: self.created,
             refresh: self.refresh,
         }
@@ -967,8 +960,8 @@ impl PayloadSnapshot {
 impl Default for PayloadSnapshot {
     fn default() -> Self {
         PayloadSnapshot {
-            payload: Vec::new(),
-            router_key_index: 0,
+            origins: Vec::new(),
+            router_keys: Vec::new(),
             created: Utc::now(),
             refresh: None
         }
@@ -993,51 +986,39 @@ pub struct SnapshotArcIter {
     /// The shared snapshot.
     snapshot: Arc<PayloadSnapshot>,
 
-    /// The position of the next item within the payload of the snapshot.
-    pos: usize,
-
-    /// The end item of the (open) range of items to iterate over.
-    end: usize,
+    /// The list and position of the next item.
+    next: PayloadIndex,
 }
 
 impl SnapshotArcIter {
     /// Creates a new iterator from a shared snapshot.
-    fn new(snapshot: Arc<PayloadSnapshot>, start: usize, end: usize) -> Self {
-        assert!(start < end);
-        assert!(end <= snapshot.payload.len());
+    fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
         SnapshotArcIter {
             snapshot,
-            pos: start,
-            end,
+            next: Default::default()
         }
     }
 }
 
 impl SnapshotArcIter {
     pub fn next_with_info(&mut self) -> Option<(&Payload, &PayloadInfo)> {
-        if self.pos >= self.end {
-            return None
-        }
-        let res = &self.snapshot.payload[self.pos];
-        self.pos += 1;
-        Some((&res.0, &res.1))
-    }
-
-    fn filter_map_next<'s, F, R>(
-        &'s mut self, op: F
-    ) -> Option<(R, &'s PayloadInfo)>
-    where
-        F: Fn(&'s Payload) -> Option<R>,
-        R: 's,
-    {
-        loop {
-            if self.pos >= self.end {
-                return None
+        match self.next {
+            PayloadIndex::Origin(idx) => {
+                // Can’t use `origins.get` here because lifetimes.
+                if idx >= self.snapshot.origins.len() {
+                    self.next = PayloadIndex::Key(0);
+                    self.next_with_info()
+                }
+                else {
+                    self.next = self.next.inc();
+                    let res = &self.snapshot.origins[idx];
+                    Some((&res.0, &res.1))
+                }
             }
-            let (ref res, ref info) = self.snapshot.payload[self.pos];
-            self.pos += 1;
-            if let Some(res) = op(res) {
-                return Some((res, info))
+            PayloadIndex::Key(idx) => {
+                let res = self.snapshot.router_keys.get(idx)?;
+                self.next = self.next.inc();
+                Some((&res.0, &res.1))
             }
         }
     }
@@ -1050,18 +1031,60 @@ impl PayloadSet for SnapshotArcIter {
 }
 
 
+//------------ PayloadIndex --------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+enum PayloadIndex {
+    Origin(usize),
+    Key(usize),
+}
+
+impl PayloadIndex {
+    /// Increments the enclosed counter.
+    ///
+    /// Does not swith to the other variant or anything fancy like that.
+    fn inc(self) -> Self {
+        match self {
+            PayloadIndex::Origin(index) => PayloadIndex::Origin(index + 1),
+            PayloadIndex::Key(index) => PayloadIndex::Key(index + 1)
+        }
+    }
+}
+
+impl Default for PayloadIndex {
+    fn default() -> Self {
+        PayloadIndex::Origin(0)
+    }
+}
+
+
 //------------ SnapshotArcOriginsIter ----------------------------------------
 
 /// An iterator over only the route origins in a snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotArcOriginsIter(SnapshotArcIter);
+pub struct SnapshotArcOriginsIter {
+    /// The snapshot we are working with.
+    snapshot: Arc<PayloadSnapshot>,
+
+    /// The position of the next item in the snapshot’s origins list.
+    next: usize,
+}
 
 impl SnapshotArcOriginsIter {
+    fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
+        Self {
+            snapshot,
+            next: 0
+        }
+    }
+
     pub fn next_with_info(&mut self) -> Option<(RouteOrigin, &PayloadInfo)> {
-        self.0.filter_map_next(|payload| match *payload {
-            Payload::Origin(origin) => Some(origin),
-            _ => None
-        })
+        let res = self.snapshot.origins.get(self.next)?;
+        self.next += 1;
+        match res.0 {
+            Payload::Origin(origin) => Some((origin, &res.1)),
+            _ => panic!("non-origin in origin set")
+        }
     }
 }
 
@@ -1069,11 +1092,7 @@ impl Iterator for SnapshotArcOriginsIter {
     type Item = RouteOrigin;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Payload::Origin(origin) = self.0.next()? {
-                return Some(*origin)
-            }
-        }
+        self.next_with_info().map(|item| item.0)
     }
 }
 
@@ -1082,28 +1101,34 @@ impl Iterator for SnapshotArcOriginsIter {
 
 /// An iterator over only the route origins in a snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotArcRouterKeysIter(SnapshotArcIter);
+pub struct SnapshotArcRouterKeysIter {
+    /// The snapshot we are working with.
+    snapshot: Arc<PayloadSnapshot>,
+
+    /// The position of the next item in the snapshot’s key list.
+    next: usize,
+}
 
 impl SnapshotArcRouterKeysIter {
+    fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
+        Self {
+            snapshot,
+            next: 0
+        }
+    }
+
     pub fn next_with_info(&mut self) -> Option<(&RouterKey, &PayloadInfo)> {
-        self.0.filter_map_next(|payload| match *payload {
-            Payload::RouterKey(ref key) => Some(key),
-            _ => None
-        })
+        let res = self.snapshot.router_keys.get(self.next)?;
+        self.next += 1;
+        match res.0 {
+            Payload::RouterKey(ref key) => Some((key, &res.1)),
+            _ => panic!("non-router key in router key set")
+        }
     }
 
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&RouterKey> {
-        loop {
-            if self.0.pos >= self.0.end {
-                return None
-            }
-            let res = &self.0.snapshot.payload[self.0.pos].0;
-            self.0.pos += 1;
-            if let Payload::RouterKey(ref key) = res {
-                return Some(key)
-            }
-        }
+        self.next_with_info().map(|item| item.0)
     }
 }
 
