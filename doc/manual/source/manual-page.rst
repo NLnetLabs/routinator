@@ -462,24 +462,41 @@ These can be requested by providing different commands on the command line.
                   format.
 
            jsonext
-                  The list is placed into a JSON object with a single element
-                  *roas* which contains an array of objects with four
+                  The list is placed into a JSON object with two members:
+                  *roas* contains the validated route origin
+                  authorizations and *routerKeys* contains the validated 
+                  BGPsec router keys. This second member is also present when
+                  BGPsec has not been enabled, it will simply be always empty.
+
+                  The *roas* member contains an array of objects with four
                   elements each: The autonomous system number of the network
                   authorized to originate a prefix in *asn*, the prefix in
                   slash notation in *prefix*, the maximum prefix length of
-                  the announced route in *maxLength*.
+                  the announced route in *maxLength*, and extended
+                  information about the source of the authorization in
+                  *source*. 
 
-                  Extensive information about the source of the object is
-                  given in the array *source*. Each item in that array is an
-                  object providing details of a source of the VRP. The object
-                  will have a *type* of *roa* if it was derived from a valid
-                  ROA object or *exception* if it was an assertion in a local
-                  exception file.
+                  The *routerKeys* member contains an array of objects with
+                  four elements each: The autonomous system using the router
+                  key is given in *asn*, the key identifier as a string of
+                  hexadecimal digits in *SKI*, the actual public key as a
+                  Base 64 encoded string in *routerPublicKey*, and extended
+                  information about the source of the key is contained in
+                  *source*.
 
-                  For ROAs, *uri* provides the rsync URI of the ROA,
-                  *validity* provides the validity of the ROA itself, and
-                  *chainValidity* the validity considering the validity of
-                  the certificates along the validation chain.
+                  This source information the same for route origins and
+                  router keys. It consists of an array. Each item in that
+                  array is an object providing details of a source.
+                  The object will have a *type* of *roa* if it was derived
+                  from a valid ROA object, *cer* if it was derived from
+                  a published router certificate, or *exception* if it was an
+                  assertion in a local exception file.
+
+                  For RPKI objects, *uri* provides the rsync URI of the ROA
+                  or router certificate, *validity* provides the validity of
+                  the ROA itself, and *chainValidity* the validity
+                  considering the validity of the certificates along the
+                  validation chain.
 
                   For  assertions from local exceptions, *path* will provide
                   the path of the local exceptions file and, optionally,
