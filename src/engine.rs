@@ -245,6 +245,9 @@ impl Engine {
                 "No TALs found in TAL directory. Starting anyway."
             );
         }
+        res.sort_by(|left, right| {
+            left.info().name().cmp(right.info().name())
+        });
         self.tals = res;
         Ok(())
     }
