@@ -179,7 +179,7 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         let key = cert.subject_public_key_info();
         if !key.allow_router_cert() {
             warn!(
-                "{}: router certifcate has invalid key algorithm.", uri
+                "{}: router certificate has invalid key algorithm.", uri
             );
             return Ok(())
         }
