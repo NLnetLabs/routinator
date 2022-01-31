@@ -1857,14 +1857,14 @@ mod test {
         // Check that we have all origins.
         let mut origins = payload.iter().filter_map(|item| {
             match item {
-                Payload::Origin(origin) => Some(origin.clone()),
+                Payload::Origin(origin) => Some(origin),
                 _ => None
             }
         }).collect::<Vec<_>>();
         origins.sort();
         let mut origins_iter = origins.iter();
         for item in snapshot.origins() {
-            assert_eq!(item.0, *origins_iter.next().unwrap())
+            assert_eq!(&item.0, *origins_iter.next().unwrap())
         }
         assert!(origins_iter.next().is_none());
 
@@ -1886,12 +1886,12 @@ mod test {
         let snapshot = Arc::new(snapshot);
         let mut origins_iter = origins.iter();
         for item in snapshot.clone().arc_origins_iter() {
-            assert_eq!(item, *origins_iter.next().unwrap())
+            assert_eq!(&item, *origins_iter.next().unwrap())
         }
         assert!(origins_iter.next().is_none());
 
         let mut keys_iter = keys.iter();
-        let mut arc_iter = snapshot.clone().arc_router_keys_iter();
+        let mut arc_iter = snapshot.arc_router_keys_iter();
         while let Some(item) = arc_iter.next() {
             assert_eq!(item, keys_iter.next().unwrap())
         }
