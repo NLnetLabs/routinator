@@ -62,7 +62,7 @@ impl<T> Mutex<T> {
         Mutex(StdMutex::new(t))
     }
 
-    /// Consumes the mutes, returning the underlying data.
+    /// Consumes the mutex, returning the underlying data.
     ///
     /// # Panics
     ///
