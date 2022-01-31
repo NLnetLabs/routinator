@@ -820,8 +820,8 @@ pub struct PayloadSnapshot {
 
     /// A list of router keys.
     ///
-    /// The list contains an ordered sequence of unique rouer keys wrapped in
-    /// the payload enum. This is necessary for the RTR server.
+    /// The list contains an ordered sequence of unique router keys wrapped
+    /// in the payload enum. This is necessary for the RTR server.
     router_keys: Vec<(Payload, PayloadInfo)>,
 
     /// The time when this snapshot was created.
