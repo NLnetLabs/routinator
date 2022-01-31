@@ -266,18 +266,7 @@ jobs:
 
         case ${OS_NAME} in
           debian|ubuntu)
-            case ${{ github.event_name }} in
-              pull_request | workflow_dispatch)
-                MAINTAINER="${{ github.event.sender.login }} <pkg@nlnetlabs.nl>"
-                ;;
-              push)
-                MAINTAINER="${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>"
-                ;;
-              *)
-                echo 2>&1 "ERROR: Unexpected GitHub Actions event"
-                exit 1
-                ;;
-            esac
+            MAINTAINER="The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
 
             # Generate the RFC 5322 format date by hand instead of using date --rfc-email
             # because that option doesn't exist on Ubuntu 16.04 and Debian 9
