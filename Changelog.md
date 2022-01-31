@@ -13,7 +13,10 @@ Bug Fixes
   those files. ([#675])
 * Don’t exit when a directory to be deleted doesn’t exist. In particular,
   this fixes an error in the `dump` command. ([#682])
-* Counts all valid CRLs during a validation run. ([#683])
+* Count all valid CRLs for metrics generation during a validation run.
+  ([#683])
+* Don’t claim filtering of unsafe VRPs when the policy is `warn`. (Only
+  the log message was wrong, no VRPs were filtered in this case.) ([#699])
 
 New
 
@@ -34,6 +37,7 @@ Other Changes
 [#682]: https://github.com/NLnetLabs/routinator/pull/682
 [#683]: https://github.com/NLnetLabs/routinator/pull/683
 [#690]: https://github.com/NLnetLabs/routinator/pull/690
+[#699]: https://github.com/NLnetLabs/routinator/pull/699
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 
 
