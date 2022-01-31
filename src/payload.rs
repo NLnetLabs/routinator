@@ -854,8 +854,8 @@ impl PayloadSnapshot {
                 }
             }
         }
-        origins.sort_by(|left, right| left.0.cmp(&right.0));
-        keys.sort_by(|left, right| left.0.cmp(&right.0));
+        origins.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        keys.sort_unstable_by(|left, right| left.0.cmp(&right.0));
         PayloadSnapshot {
             origins,
             router_keys: keys,
