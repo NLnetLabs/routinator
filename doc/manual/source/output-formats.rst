@@ -216,14 +216,19 @@ summary
                     VRPs:    4545 verified,       3 unsafe,    4466 final;
             router certs:       0 verified;
              router keys:       0 verified,       0 final.
-        lacnic: 
-                    ROAs:   11744 verified;
-                    VRPs:   23628 verified,       0 unsafe,   21235 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
         apnic: 
                     ROAs:   18612 verified;
                     VRPs:   85992 verified,       0 unsafe,   85711 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+        arin: 
+                    ROAs:   41500 verified;
+                    VRPs:   50495 verified,       5 unsafe,    1812 final;
+            router certs:       0 verified;
+             router keys:       0 verified,       0 final.
+        lacnic: 
+                    ROAs:   11744 verified;
+                    VRPs:   23628 verified,       0 unsafe,   21235 final;
             router certs:       0 verified;
              router keys:       0 verified,       0 final.
         ripe: 
@@ -231,11 +236,6 @@ summary
                     VRPs:  149164 verified,      17 unsafe,  149162 final;
             router certs:       2 verified;
              router keys:       2 verified,       2 final.
-        arin: 
-                    ROAs:   41500 verified;
-                    VRPs:   50495 verified,       5 unsafe,    1812 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
 
         total: 
                     ROAs:  141922 verified;
