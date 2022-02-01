@@ -22,252 +22,259 @@ generated in a wide range of output formats for various use cases.
          :doc:`configuration file <configuration>` lets you create a mapping
          between the file name and your desired label.
 
-csv
-      The list is formatted as lines of comma-separated values of the prefix
-      in slash notation, the maximum prefix length, the autonomous system
-      number, and the name of the trust anchor the entry is derived from. 
-      
-      .. code-block:: text
-         
-         ASN,IP Prefix,Max Length,Trust Anchor
-         AS196615,2001:7fb:fd03::/48,48,ripe
-         AS196615,2001:7fb:fd04::/48,48,ripe
-         AS196615,93.175.147.0/24,24,ripe
-      
-csvcompat
-       This is the same as the *csv* format except that all fields are
-       embedded in double quotes and the autonomous system number is given
-       without the prefix *AS*. This format is pretty much identical to the
-       CSV format produced by the RIPE NCC RPKI Validator.
-       
-       .. code-block:: text
+.. glossary::
+
+    csv
+          The list is formatted as lines of comma-separated values of the
+          prefix in slash notation, the maximum prefix length, the autonomous
+          system number, and the name of the trust anchor the entry is
+          derived from. 
           
-          "ASN","IP Prefix","Max Length","Trust Anchor"
-          "196615","2001:7fb:fd03::/48","48","ripe"
-          "196615","2001:7fb:fd04::/48","48","ripe"
-          "196615","93.175.147.0/24","24","ripe"
-          
-csvext
-      This is an extended version of the *csv* format, which was used by the
-      RIPE NCC RPKI Validator 1.x. Each line contains these comma-separated
-      values: the rsync URI of the ROA the line is taken from (or "N/A" if it
-      isn't from a ROA), the autonomous system number, the prefix in slash
-      notation, the maximum prefix length, and lastly the not-before and
-      not-after date of the validity of the ROA.
-      
-      .. code-block:: text
-         
-         URI,ASN,IP Prefix,Max Length,Not Before,Not After
-         rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd03::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
-         rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd04::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
-         rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
-           
-json
-      The output is in JSON format. The list is placed into a member named
-      *roas* which contains an array of objects with four elements each: The
-      autonomous system number of the network authorised to originate a
-      prefix in *asn*, the prefix in slash notation in *prefix*, the maximum
-      prefix length of the announced route in *maxLength*, and the trust
-      anchor from which the authorisation was derived in *ta*. This format of
-      the *roas* element is identical to that produced by the RIPE NCC RPKI
-      Validator except for different naming of the trust anchor. 
-      
-      The output object also includes a member named *metadata* which
-      provides additional information. Currently, this is a member
-      *generated* which provides the time the list was generated as a Unix
-      timestamp, and a member *generatedTime* which provides the same time
-      but in the standard ISO date format.
-      
-      .. code-block:: text
-         
-         {
-           "metadata": {
-             "generated": 1626853335,
-             "generatedTime": "2021-07-21T07:42:15Z"
-           },
-           "roas": [
-             { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
-             { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
-             { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
-           ]
-         }
-
-jsonext
-      The list is placed into a JSON object with three members:
-
-        - *roas* contains the validated route origin authorisations,
-        - *routerKeys* contains the validated :ref:`advanced-features:bgpsec`
-          router keys, and 
-        - *metadata* contains some information about the validation run
-          itself.
-
-      All three members are always present, even if
-      :ref:`advanced-features:bgpsec` has not been enabled. In this case,
-      *routerKeys* will simply be empty.
-
-      The *roas* member contains an array of objects with four elements each: 
-      
-        - *asn* lists the autonomous system number of the network authorised
-          to originate a prefix,
-        - *prefix* has the prefix in slash notation,
-        - *maxLength* states the maximum prefix length of the announced
-          route, and
-        - *source* contains information about the source of the
-          authorisation.
-
-      The *routerKeys* member contains an array of objects with
-      four elements each: 
-      
-        - *asn* lists the autonomous system using the router key,
-        - *SKI* has the key identifier as a string of hexadecimal digits,
-        - *routerPublicKey* has the actual public key as a Base 64 encoded 
-          string, and
-        - *source* contains extended information about the source of the key.
-
-      This source information the same for route origins and router keys. It
-      consists of an array. Each item in that array is an object providing
-      details of a source. The object will have a *type* of *roa* if it was
-      derived from a valid ROA object, *cer* if it was derived from a
-      published router certificate, or *exception* if it was an assertion in
-      a local exception file.
-
-      For RPKI objects, *uri* provides the rsync URI of the ROA or router
-      certificate, *validity* provides the validity of the ROA itself, and
-      *chainValidity* the validity considering the validity of the
-      certificates along the validation chain.
-
-      For  assertions from local exceptions, *path* will provide the path of
-      the local exceptions file and, optionally, *comment* will provide the
-      comment if given for the assertion.
-
-      The output object also includes a member named *metadata* which
-      provides additional information. Currently, this is a member
-      *generated* which provides the time the list was generated as a Unix
-      timestamp, and a member *generatedTime* which provides the same time
-      but in the standard ISO date format.
-
-      Please note that because of this additional information, output in
-      ``jsonext`` format will be quite large.
-      
-      .. code-block:: text
-      
-          {
-            "metadata": {
-              "generated": 1626853335,
-              "generatedTime": "2021-07-21T07:42:15Z"
-            },
-            "roas": [{
-              "asn": "AS196615",
-              "prefix": "93.175.147.0/24",
-              "maxLength": 24,
-              "source": [{
-                "type": "roa",
-                "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
-                "validity": {
-                  "notBefore": "2021-01-01T04:39:56Z",
-                  "notAfter": "2022-07-01T00:00:00Z"
-                },
-                "chainValidity": {
-                  "notBefore": "2021-05-06T12:51:30Z",
-                  "notAfter": "2022-07-01T00:00:00Z"
-                }
-              }]
-            }],
-            "routerKeys": [
-
-            ]
-          }
-
-openbgpd
-      Choosing this format causes Routinator to produce a *roa-set*
-      configuration item for the OpenBGPD configuration.
-      
-      .. code-block:: text
-         
-         roa-set {
-             2001:7fb:fd03::/48 source-as 196615
-             2001:7fb:fd04::/48 source-as 196615
-             93.175.147.0/24 source-as 196615
-         }
-         
-bird1
-      Choosing this format causes Routinator to produce a ROA table
-      configuration item for use with BIRD 1.6.
-      
-      .. code-block:: text
-         
-         roa 2001:7fb:fd03::/48 max 48 as 196615;
-         roa 2001:7fb:fd04::/48 max 48 as 196615;
-         roa 93.175.147.0/24 max 24 as 196615;
-
-bird2
-      Choosing this format causes Routinator to produce a route table
-      configuration item for BIRD 2.0 configuration.
-      
-      .. code-block:: text
-         
-         route 2001:7fb:fd03::/48 max 48 as 196615;
-         route 2001:7fb:fd04::/48 max 48 as 196615;
-         route 93.175.147.0/24 max 24 as 196615;
-
-rpsl
-      This format produces a list of :abbr:`RPSL (Routing Policy
-      Specification Language)` objects with the authorisation in the fields
-      *route*, *origin*, and *source*. In addition, the fields *descr*,
-      *mnt-by*, *created*, and *last-modified*, are present with more or less
-      meaningful values.
-      
-      .. code-block:: text
-         
-         route: 93.175.147.0/24
-         origin: AS196615
-         descr: RPKI attestation 
-         mnt-by: NA
-         created: 2021-05-07T14:28:17Z
-         last-modified: 2021-05-07T14:28:17Z
-         source: ROA-RIPE-RPKI-ROOT
-      
-summary
-      This format produces a summary of the content of the RPKI repository.
-      It does not take filters into account and will always provide numbers
-      for the complete repository. 
-      
-      For each trust anchor, it will print the number of verified ROAs and
-      VRPs, as well as router certificates and keys. Note that router keys
-      will only be verified and included in the totals if you have enabled
-      :ref:`advanced-features:bgpsec`.
+          .. code-block:: text
             
-      .. code-block:: text
-      
-        Summary at 2022-01-28 08:37:27.046365 UTC
-        afrinic: 
-                    ROAs:    3587 verified;
-                    VRPs:    4545 verified,       3 unsafe,    4466 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
-        apnic: 
-                    ROAs:   18612 verified;
-                    VRPs:   85992 verified,       0 unsafe,   85711 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
-        arin: 
-                    ROAs:   41500 verified;
-                    VRPs:   50495 verified,       5 unsafe,    1812 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
-        lacnic: 
-                    ROAs:   11744 verified;
-                    VRPs:   23628 verified,       0 unsafe,   21235 final;
-            router certs:       0 verified;
-             router keys:       0 verified,       0 final.
-        ripe: 
-                    ROAs:   27195 verified;
-                    VRPs:  149164 verified,      17 unsafe,  149162 final;
-            router certs:       2 verified;
-             router keys:       2 verified,       2 final.
+            ASN,IP Prefix,Max Length,Trust Anchor
+            AS196615,2001:7fb:fd03::/48,48,ripe
+            AS196615,2001:7fb:fd04::/48,48,ripe
+            AS196615,93.175.147.0/24,24,ripe
+          
+    csvcompat
+          This is the same as the *csv* format except that all fields are
+          embedded in double quotes and the autonomous system number is given
+          without the prefix *AS*. This format is pretty much identical to
+          the CSV format produced by the RIPE NCC RPKI Validator.
+          
+          .. code-block:: text
+              
+              "ASN","IP Prefix","Max Length","Trust Anchor"
+              "196615","2001:7fb:fd03::/48","48","ripe"
+              "196615","2001:7fb:fd04::/48","48","ripe"
+              "196615","93.175.147.0/24","24","ripe"
+              
+    csvext
+          This is an extended version of the *csv* format, which was used by
+          the RIPE NCC RPKI Validator 1.x. Each line contains these
+          comma-separated values: the rsync URI of the ROA the line is taken
+          from (or "N/A" if it isn't from a ROA), the autonomous system
+          number, the prefix in slash notation, the maximum prefix length,
+          and lastly the not-before and not-after date of the validity of the
+          ROA.
+          
+          .. code-block:: text
+            
+            URI,ASN,IP Prefix,Max Length,Not Before,Not After
+            rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd03::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
+            rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,2001:7fb:fd04::/48,48,2021-05-03 14:51:30,2022-07-01 00:00:00
+            rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
+              
+    json
+          The output is in JSON format. The list is placed into a member
+          named *roas* which contains an array of objects with four elements
+          each: The autonomous system number of the network authorised to
+          originate a prefix in *asn*, the prefix in slash notation in
+          *prefix*, the maximum prefix length of the announced route in
+          *maxLength*, and the trust anchor from which the authorisation was
+          derived in *ta*. This format of the *roas* element is identical to
+          that produced by the RIPE NCC RPKI Validator except for different
+          naming of the trust anchor. 
+          
+          The output object also includes a member named *metadata* which
+          provides additional information. Currently, this is a member
+          *generated* which provides the time the list was generated as a
+          Unix timestamp, and a member *generatedTime* which provides the
+          same time but in the standard ISO date format.
+          
+          .. code-block:: text
+            
+            {
+              "metadata": {
+                "generated": 1626853335,
+                "generatedTime": "2021-07-21T07:42:15Z"
+              },
+              "roas": [
+                { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
+                { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
+                { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
+              ]
+            }
 
-        total: 
-                    ROAs:  141922 verified;
-                    VRPs:  361536 verified,      25 unsafe,  307434 final;
-            router certs:       2 verified;
-             router keys:       2 verified,       2 final.
+    jsonext
+          The list is placed into a JSON object with three members:
+
+            - *roas* contains the validated route origin authorisations,
+            - *routerKeys* contains the validated
+              :ref:`advanced-features:bgpsec` router keys, and 
+            - *metadata* contains some information about the validation run
+              itself.
+
+          All three members are always present, even if
+          :ref:`advanced-features:bgpsec` has not been enabled. In this case,
+          *routerKeys* will simply be empty.
+
+          The *roas* member contains an array of objects with four elements
+          each: 
+          
+            - *asn* lists the autonomous system number of the network
+              authorised to originate a prefix,
+            - *prefix* has the prefix in slash notation,
+            - *maxLength* states the maximum prefix length of the announced
+              route, and
+            - *source* contains information about the source of the
+              authorisation.
+
+          The *routerKeys* member contains an array of objects with
+          four elements each: 
+          
+            - *asn* lists the autonomous system using the router key,
+            - *SKI* has the key identifier as a string of hexadecimal digits,
+            - *routerPublicKey* has the actual public key as a Base 64
+              encoded string, and
+            - *source* contains extended information about the source of the
+              key.
+
+          This source information the same for route origins and router keys.
+          It consists of an array. Each item in that array is an object
+          providing details of a source. The object will have a *type* of
+          *roa* if it was derived from a valid ROA object, *cer* if it was
+          derived from a published router certificate, or *exception* if it
+          was an assertion in a local exception file.
+
+          For RPKI objects, *uri* provides the rsync URI of the ROA or router
+          certificate, *validity* provides the validity of the ROA itself,
+          and *chainValidity* the validity considering the validity of the
+          certificates along the validation chain.
+
+          For  assertions from local exceptions, *path* will provide the path
+          of the local exceptions file and, optionally, *comment* will
+          provide the comment if given for the assertion.
+
+          The output object also includes a member named *metadata* which
+          provides additional information. Currently, this is a member
+          *generated* which provides the time the list was generated as a
+          Unix timestamp, and a member *generatedTime* which provides the
+          same time but in the standard ISO date format.
+
+          Please note that because of this additional information, output in
+          ``jsonext`` format will be quite large.
+          
+          .. code-block:: text
+          
+              {
+                "metadata": {
+                  "generated": 1626853335,
+                  "generatedTime": "2021-07-21T07:42:15Z"
+                },
+                "roas": [{
+                  "asn": "AS196615",
+                  "prefix": "93.175.147.0/24",
+                  "maxLength": 24,
+                  "source": [{
+                    "type": "roa",
+                    "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
+                    "validity": {
+                      "notBefore": "2021-01-01T04:39:56Z",
+                      "notAfter": "2022-07-01T00:00:00Z"
+                    },
+                    "chainValidity": {
+                      "notBefore": "2021-05-06T12:51:30Z",
+                      "notAfter": "2022-07-01T00:00:00Z"
+                    }
+                  }]
+                }],
+                "routerKeys": [
+
+                ]
+              }
+
+    openbgpd
+          Choosing this format causes Routinator to produce a *roa-set*
+          configuration item for the OpenBGPD configuration.
+          
+          .. code-block:: text
+            
+            roa-set {
+                2001:7fb:fd03::/48 source-as 196615
+                2001:7fb:fd04::/48 source-as 196615
+                93.175.147.0/24 source-as 196615
+            }
+            
+    bird1
+          Choosing this format causes Routinator to produce a ROA table
+          configuration item for use with BIRD 1.6.
+          
+          .. code-block:: text
+            
+            roa 2001:7fb:fd03::/48 max 48 as 196615;
+            roa 2001:7fb:fd04::/48 max 48 as 196615;
+            roa 93.175.147.0/24 max 24 as 196615;
+
+    bird2
+          Choosing this format causes Routinator to produce a route table
+          configuration item for BIRD 2.0 configuration.
+          
+          .. code-block:: text
+            
+            route 2001:7fb:fd03::/48 max 48 as 196615;
+            route 2001:7fb:fd04::/48 max 48 as 196615;
+            route 93.175.147.0/24 max 24 as 196615;
+
+    rpsl
+          This format produces a list of :abbr:`RPSL (Routing Policy
+          Specification Language)` objects with the authorisation in the
+          fields *route*, *origin*, and *source*. In addition, the fields
+          *descr*, *mnt-by*, *created*, and *last-modified*, are present with
+          more or less meaningful values.
+          
+          .. code-block:: text
+            
+            route: 93.175.147.0/24
+            origin: AS196615
+            descr: RPKI attestation 
+            mnt-by: NA
+            created: 2021-05-07T14:28:17Z
+            last-modified: 2021-05-07T14:28:17Z
+            source: ROA-RIPE-RPKI-ROOT
+          
+    summary
+          This format produces a summary of the content of the RPKI
+          repository. It does not take filters into account and will always
+          provide numbers for the complete repository. 
+          
+          For each trust anchor, it will print the number of verified ROAs
+          and VRPs, as well as router certificates and keys. Note that router
+          keys will only be verified and included in the totals if you have
+          enabled :ref:`advanced-features:bgpsec`.
+                
+          .. code-block:: text
+          
+            Summary at 2022-01-28 08:37:27.046365 UTC
+            afrinic: 
+                        ROAs:    3587 verified;
+                        VRPs:    4545 verified,       3 unsafe,    4466 final;
+                router certs:       0 verified;
+                 router keys:       0 verified,       0 final.
+            apnic: 
+                        ROAs:   18612 verified;
+                        VRPs:   85992 verified,       0 unsafe,   85711 final;
+                router certs:       0 verified;
+                 router keys:       0 verified,       0 final.
+            arin: 
+                        ROAs:   41500 verified;
+                        VRPs:   50495 verified,       5 unsafe,    1812 final;
+                router certs:       0 verified;
+                 router keys:       0 verified,       0 final.
+            lacnic: 
+                        ROAs:   11744 verified;
+                        VRPs:   23628 verified,       0 unsafe,   21235 final;
+                router certs:       0 verified;
+                 router keys:       0 verified,       0 final.
+            ripe: 
+                        ROAs:   27195 verified;
+                        VRPs:  149164 verified,      17 unsafe,  149162 final;
+                router certs:       2 verified;
+                 router keys:       2 verified,       2 final.
+
+            total: 
+                        ROAs:  141922 verified;
+                        VRPs:  361536 verified,      25 unsafe,  307434 final;
+                router certs:       2 verified;
+                 router keys:       2 verified,       2 final.
