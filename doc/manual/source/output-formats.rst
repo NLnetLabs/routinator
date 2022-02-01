@@ -7,6 +7,10 @@ VRP Output Formats
 .. versionadded:: 0.10
    Metadata in ``json`` and ``jsonext`` format
 
+.. versionadded:: 0.11
+   :ref:`advanced-features:bgpsec` information in ``jsonext`` and ``summary``
+   formats
+
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be
 generated in a wide range of output formats for various use cases.
