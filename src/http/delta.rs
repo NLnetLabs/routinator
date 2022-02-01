@@ -8,7 +8,9 @@ use futures::stream;
 use hyper::{Body, Request, Response};
 use rpki::rtr::Serial;
 use rpki::rtr::payload::Payload;
-use crate::payload::{PayloadDelta, PayloadSnapshot, SharedHistory};
+use crate::payload::{
+    PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
+};
 use super::errors::{bad_request, initial_validation};
 
 //------------ handle_get ----------------------------------------------------
@@ -277,13 +279,10 @@ struct SnapshotStream {
     /// the very first iteration.
     header: Option<Vec<u8>>,
 
-    /// The snapshot we work on.
+    /// An iterator over the snapshot we work on.
     ///
     /// This is set to `None` to fuse the iterator.
-    snapshot: Option<Arc<PayloadSnapshot>>,
-
-    /// The position of the next item in the delta.
-    pos: usize,
+    iter: Option<SnapshotArcIter>,
 }
 
 impl SnapshotStream {
@@ -295,8 +294,7 @@ impl SnapshotStream {
         Self::append_header(&mut vec, session, to_serial);
         SnapshotStream {
             header: Some(vec),
-            snapshot: Some(snapshot),
-            pos: 0
+            iter: Some(snapshot.arc_iter()),
         }
     }
 
@@ -320,18 +318,20 @@ impl Iterator for SnapshotStream {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let snapshot = self.snapshot.as_ref()?;
+        use rpki::rtr::server::PayloadSet;
+
+        let iter = self.iter.as_mut()?;
+        let first = self.header.is_some();
         let mut vec = self.header.take().unwrap_or_else(Vec::new);
         loop {
             if vec.len() > 64000 {
                 return Some(vec)
             }
-            match snapshot.payload().get(self.pos) {
-                Some(&(ref payload, _)) => {
+            match iter.next() {
+                Some(payload) => {
                     DeltaStream::append_payload(
-                        &mut vec, payload, self.pos == 0,
+                        &mut vec, payload, first,
                     );
-                    self.pos += 1;
                 }
                 None => {
                     break
@@ -339,7 +339,7 @@ impl Iterator for SnapshotStream {
             }
         }
 
-        self.snapshot = None;
+        self.iter = None;
         DeltaStream::append_footer(&mut vec);
         Some(vec)
     }

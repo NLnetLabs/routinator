@@ -212,6 +212,9 @@ pub struct Config {
     /// Maxium length of the CA chain.
     pub max_ca_depth: usize,
 
+    /// Whether to process BGPsec router keys.
+    pub enable_bgpsec: bool,
+
     /// Whether to not cleanup the repository directory after a validation run.
     ///
     /// If this is `false` and update has not been disabled otherwise, all
@@ -452,6 +455,10 @@ impl Config {
             .value_name("BYTES")
             .help("Maximum size of downloaded objects (0 for no limit)")
             .takes_value(true)
+        )
+        .arg(Arg::with_name("enable-bgpsec")
+            .long("enable-bgpsec")
+            .help("Include BGPsec router keys in the data set")
         )
         .arg(Arg::with_name("dirty-repository")
             .long("dirty")
@@ -830,6 +837,11 @@ impl Config {
             self.max_ca_depth = value;
         }
 
+        // enable_bgpsec
+        if matches.is_present("enable-bgpsec") {
+            self.enable_bgpsec = true
+        }
+
         // dirty_repository
         if matches.is_present("dirty-repository") {
             self.dirty_repository = true
@@ -1185,6 +1197,7 @@ impl Config {
                 file.take_usize("max-ca-depth")?
                     .unwrap_or(DEFAULT_MAX_CA_DEPTH)
             },
+            enable_bgpsec: file.take_bool("enable-bgpsec")?.unwrap_or(false),
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1376,6 +1389,7 @@ impl Config {
             rrdp_keep_responses: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             max_ca_depth: DEFAULT_MAX_CA_DEPTH,
+            enable_bgpsec: false,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: ::num_cpus::get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1568,6 +1582,7 @@ impl Config {
         res.insert("max-ca-depth".into(),
             (self.max_ca_depth as i64).into()
         );
+        res.insert("enable-bgpsec".into(), self.enable_bgpsec.into());
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
             "validation-threads".into(),

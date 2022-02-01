@@ -14,6 +14,7 @@ use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, TimeZone, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
+use rpki::rtr::payload::Payload;
 use rpki::rtr::state::Serial;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -43,11 +44,11 @@ pub struct Metrics {
     /// Overall publication metrics.
     pub publication: PublicationMetrics,
 
-    /// VRP metrics for local exceptions.
-    pub local: VrpMetrics,
+    /// Payload metrics for local exceptions.
+    pub local: PayloadMetrics,
 
-    /// Overall VRP metrics.
-    pub vrps: VrpMetrics,
+    /// Overall payload metrics.
+    pub payload: PayloadMetrics,
 }
 
 impl Metrics {
@@ -61,8 +62,20 @@ impl Metrics {
             repositories: Vec::new(),
             publication: Default::default(),
             local: Default::default(),
-            vrps: Default::default(),
+            payload: Default::default(),
         }
+    }
+
+    /// Finalizes the metrics.
+    pub fn finalize(&mut self) {
+        for metric in &mut self.tals {
+            metric.finalize();
+        }
+        for metric in &mut self.repositories {
+            metric.finalize();
+        }
+        self.local.finalize();
+        self.payload.finalize();
     }
 
     /// Returns the time the metrics were created as a Unix timestamp.
@@ -182,7 +195,7 @@ pub struct TalMetrics {
     pub publication: PublicationMetrics,
 
     /// The VRP metrics.
-    pub vrps: VrpMetrics,
+    pub payload: PayloadMetrics,
 }
 
 impl TalMetrics {
@@ -190,8 +203,12 @@ impl TalMetrics {
         TalMetrics {
             tal,
             publication: Default::default(),
-            vrps: Default::default(),
+            payload: Default::default(),
         }
+    }
+
+    pub fn finalize(&mut self) {
+        self.payload.finalize();
     }
 
     pub fn name(&self) -> &str {
@@ -212,7 +229,7 @@ pub struct RepositoryMetrics {
     pub publication: PublicationMetrics,
 
     /// The VRP metrics.
-    pub vrps: VrpMetrics,
+    pub payload: PayloadMetrics,
 }
 
 impl RepositoryMetrics {
@@ -220,8 +237,12 @@ impl RepositoryMetrics {
         RepositoryMetrics {
             uri,
             publication: Default::default(),
-            vrps: Default::default(),
+            payload: Default::default(),
         }
+    }
+
+    pub fn finalize(&mut self) {
+        self.payload.finalize();
     }
 }
 
@@ -342,9 +363,88 @@ impl ops::AddAssign for PublicationMetrics {
 }
 
 
+//------------ PayloadMetrics ------------------------------------------------
+
+/// Metrics regarding the generated payload set.
+#[derive(Clone, Debug, Default)]
+pub struct PayloadMetrics {
+    /// The metrics for IPv4 prefix origins.
+    pub v4_origins: VrpMetrics,
+
+    /// The metrics for IPv6 prefix origins.
+    pub v6_origins: VrpMetrics,
+
+    /// The metrics for all prefix origins.
+    pub origins: VrpMetrics,
+
+    /// The metrics for router keys.
+    pub router_keys: VrpMetrics,
+
+    /// The metrics for all payload items.
+    pub all: VrpMetrics,
+}
+
+impl PayloadMetrics {
+    /// Finalizes the metrics by summing up the generated attributes.
+    pub fn finalize(&mut self) {
+        self.origins = self.v4_origins.clone();
+        self.origins += &self.v6_origins;
+        self.all = self.origins.clone();
+        self.all += &self.router_keys;
+    }
+
+    /// Returns the metrics for VRPs.
+    ///
+    /// There’s a method for this because we aren’t quite sure whether it
+    /// is supposed to refer to `self.origins` or `self.all`. This way, we
+    /// can easily switch.
+    ///
+    /// Currently, the method returns the metrics for origins.
+    pub fn vrps(&self) -> &VrpMetrics {
+        &self.origins
+    }
+
+    /// Returns a mutable reference to the metrics for the given payload.
+    pub fn for_payload(&mut self, payload: &Payload) -> &mut VrpMetrics {
+        match payload {
+            Payload::Origin(ref origin) if origin.prefix.addr().is_ipv4() => {
+                &mut self.v4_origins
+            }
+            Payload::Origin(_) => &mut self.v6_origins,
+            Payload::RouterKey(_) => &mut self.router_keys,
+        }
+    }
+}
+
+impl ops::Add for PayloadMetrics {
+    type Output = Self;
+
+    fn add(mut self, other: Self) -> Self::Output {
+        self += other;
+        self
+    }
+}
+
+impl<'a> ops::AddAssign<&'a Self> for PayloadMetrics {
+    fn add_assign(&mut self, other: &'a Self) {
+        self.v4_origins += &other.v4_origins;
+        self.v6_origins += &other.v6_origins;
+        self.origins += &other.origins;
+        self.router_keys += &other.router_keys;
+        self.all += &other.all;
+    }
+}
+
+impl ops::AddAssign for PayloadMetrics {
+    fn add_assign(&mut self, other: Self) {
+        self.add_assign(&other)
+    }
+}
+
+
 //------------ VrpMetrics ----------------------------------------------------
 
-/// Metrics regarding the generated VRP set.
+/// Individual metrics regarding the generated payload.
 #[derive(Clone, Debug, Default)]
 pub struct VrpMetrics {
     /// The total number of valid VRPs.

@@ -45,7 +45,6 @@ use crate::error::Failed;
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
-use crate::payload::ValidationReport;
 use crate::store::{Store, StoredManifest, StoredObject, StoredPoint};
 use crate::utils::str::str_from_ascii;
 
@@ -289,20 +288,6 @@ impl Engine {
             self.store.start(),
             processor
         ))
-    }
-
-    /// Performs a route origin validation run.
-    ///
-    /// Returns the result of the run and the run’s metrics.
-    pub fn process_origins(
-        &self
-    ) -> Result<(ValidationReport, Metrics), Failed> {
-        let report = ValidationReport::new();
-        let mut run = self.start(&report)?;
-        run.process()?;
-        run.cleanup()?;
-        let metrics = run.done();
-        Ok((report, metrics))
     }
 
     /// Dumps the content of the collector and store owned by the engine.
@@ -1031,7 +1016,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// Tries to validate a stored manifest.
     ///
     /// This is similar to
-    /// [`validate_collecteded_manifest`][Self::validate_collected_manifest]
+    /// [`validate_collected_manifest`][Self::validate_collected_manifest]
     /// but has less hassle with the CRL because that is actually included in
     /// the stored manifest.
     fn validate_stored_manifest(
@@ -1332,7 +1317,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             return Ok(())
         }
         manifest.metrics.valid_ee_certs += 1;
-        self.processor.process_ee_cert(uri, cert)?;
+        self.processor.process_ee_cert(uri, cert, self.cert)?;
         Ok(())
     }
 
@@ -1883,9 +1868,9 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
     /// The method is given both the URI and the certificate. If it
     /// returns an error, the entire processing run will be aborted.
     fn process_ee_cert(
-        &mut self, uri: &uri::Rsync, cert: Cert
+        &mut self, uri: &uri::Rsync, cert: Cert, ca_cert: &CaCert,
     ) -> Result<(), Failed> {
-        let _ = (uri, cert);
+        let _ = (uri, cert, ca_cert);
         Ok(())
     }
  

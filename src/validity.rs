@@ -7,7 +7,7 @@ use routecore::addr;
 use rpki::repository::resources::Asn;
 use rpki::rtr::payload::RouteOrigin;
 use serde::Deserialize;
-use crate::payload::{OriginInfo, PayloadSnapshot};
+use crate::payload::{PayloadInfo, PayloadSnapshot};
 use crate::utils::date::format_iso_date;
 
 
@@ -89,13 +89,13 @@ pub struct RouteValidity<'a> {
     asn: Asn,
 
     /// Indexes of the matched VRPs in `origins`.
-    matched: Vec<(RouteOrigin, &'a OriginInfo)>,
+    matched: Vec<(RouteOrigin, &'a PayloadInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the ´asn`.
-    bad_asn: Vec<(RouteOrigin, &'a OriginInfo)>,
+    bad_asn: Vec<(RouteOrigin, &'a PayloadInfo)>,
 
     /// Indexes of covering VRPs that don’t match because of the prefix length.
-    bad_len: Vec<(RouteOrigin, &'a OriginInfo)>,
+    bad_len: Vec<(RouteOrigin, &'a PayloadInfo)>,
 }
 
 impl<'a> RouteValidity<'a> {
@@ -179,15 +179,15 @@ impl<'a> RouteValidity<'a> {
         }
     }
 
-    pub fn matched(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
+    pub fn matched(&self) -> &[(RouteOrigin, &'a PayloadInfo)] {
         &self.matched
     }
 
-    pub fn bad_asn(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
+    pub fn bad_asn(&self) -> &[(RouteOrigin, &'a PayloadInfo)] {
         &self.bad_asn
     }
 
-    pub fn bad_len(&self) -> &[(RouteOrigin, &'a OriginInfo)] {
+    pub fn bad_len(&self) -> &[(RouteOrigin, &'a PayloadInfo)] {
         &self.bad_len
     }
 
@@ -269,7 +269,7 @@ impl<'a> RouteValidity<'a> {
     fn write_vrps_json<W: io::Write>(
         indent: &str,
         category: &str,
-        vrps: &[(RouteOrigin, &'a OriginInfo)],
+        vrps: &[(RouteOrigin, &'a PayloadInfo)],
         target: &mut W
     ) -> Result<(), io::Error> {
         write!(target, "{}      \"{}\": [", indent, category)?;

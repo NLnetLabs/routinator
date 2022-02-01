@@ -6,7 +6,8 @@ use chrono::{Duration, Utc};
 use clap::{crate_name, crate_version};
 use hyper::{Body, Request, Response};
 use crate::metrics::{
-    HttpServerMetrics, PublicationMetrics, SharedRtrServerMetrics, VrpMetrics
+    HttpServerMetrics, PayloadMetrics, PublicationMetrics,
+    SharedRtrServerMetrics, VrpMetrics,
 };
 use crate::payload::SharedHistory;
 use crate::utils::json::JsonBuilder;
@@ -104,35 +105,43 @@ async fn handle_status(
     writeln!(res).unwrap();
 
     // vrps
-    writeln!(res, "vrps: {}", metrics.vrps.valid).unwrap();
+    writeln!(res, "vrps: {}", metrics.payload.vrps().valid).unwrap();
 
     // vrps-per-tal
     write!(res, "vrps-per-tal: ").unwrap();
     for tal in &metrics.tals {
-        write!(res, "{}={} ", tal.name(), tal.vrps.valid).unwrap();
+        write!(res, "{}={} ", tal.name(), tal.payload.vrps().valid).unwrap();
     }
     writeln!(res).unwrap();
 
     // unsafe-filtered-vrps
-    writeln!(res, "unsafe-vrps: {}", metrics.vrps.marked_unsafe).unwrap();
+    writeln!(res,
+        "unsafe-vrps: {}",
+        metrics.payload.vrps().marked_unsafe
+    ).unwrap();
 
     // unsafe-vrps-per-tal
     write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
     for tal in &metrics.tals {
-        write!(res, "{}={} ",tal.name(), tal.vrps.marked_unsafe).unwrap();
+        write!(res,
+            "{}={} ",
+            tal.name(),
+            tal.payload.vrps().marked_unsafe
+        ).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-filtered-vrps
-    writeln!(res, "locally-filtered-vrps: {}",
-        metrics.vrps.locally_filtered
+    writeln!(res,
+        "locally-filtered-vrps: {}",
+        metrics.payload.vrps().locally_filtered
     ).unwrap();
 
     // locally-filtered-vrps-per-tal
     write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
     for tal in &metrics.tals {
         write!(res, "{}={} ",
-            tal.name(), tal.vrps.locally_filtered
+            tal.name(), tal.payload.vrps().locally_filtered
         ).unwrap();
     }
     writeln!(res).unwrap();
@@ -140,22 +149,29 @@ async fn handle_status(
     // duplicate-vrps-per-tal
     write!(res, "duplicate-vrps-per-tal: ").unwrap();
     for tal in &metrics.tals {
-        write!(res, "{}={} ", tal.name(), tal.vrps.duplicate).unwrap();
+        write!(
+            res, "{}={} ", tal.name(), tal.payload.vrps().duplicate
+        ).unwrap();
     }
     writeln!(res).unwrap();
 
     // locally-added-vrps
     writeln!(
-        res, "locally-added-vrps: {}", metrics.local.contributed
+        res, "locally-added-vrps: {}", metrics.local.vrps().contributed
     ).unwrap();
 
     // final-vrps
-    writeln!(res, "final-vrps: {}", metrics.vrps.contributed).unwrap();
+    writeln!(res,
+        "final-vrps: {}",
+        metrics.payload.vrps().contributed
+    ).unwrap();
 
     // final-vrps-per-tal
     write!(res, "final-vrps-per-tal: ").unwrap();
     for tal in &metrics.tals {
-        write!(res, "{}={} ", tal.name(), tal.vrps.contributed).unwrap();
+        write!(
+            res, "{}={} ", tal.name(), tal.payload.vrps().contributed
+        ).unwrap();
     }
     writeln!(res).unwrap();
 
@@ -353,7 +369,7 @@ async fn handle_api_status(
         target.member_object("tals", |target| {
             for tal in &metrics.tals {
                 target.member_object(tal.tal.name(), |target| {
-                    json_vrp_metrics(target, &tal.vrps);
+                    json_payload_metrics(target, &tal.payload);
                     json_publication_metrics(
                         target, &tal.publication
                     );
@@ -373,7 +389,7 @@ async fn handle_api_status(
                     else {
                         target.member_str("type", "other");
                     }
-                    json_vrp_metrics(target, &repo.vrps);
+                    json_payload_metrics(target, &repo.payload);
                     json_publication_metrics(
                         target, &repo.publication
                     );
@@ -381,7 +397,10 @@ async fn handle_api_status(
             }
         });
 
-        target.member_raw("vrpsAddedLocally", metrics.local.contributed);
+        target.member_raw(
+            "vrpsAddedLocally",
+            metrics.local.vrps().contributed
+        );
 
         target.member_object("rsync", |target| {
             for metrics in &metrics.rsync {
@@ -579,12 +598,37 @@ fn json_publication_metrics(
     target.member_raw("otherObjects", metrics.others);
 }
 
-fn json_vrp_metrics(target: &mut JsonBuilder, vrps: &VrpMetrics) {
-    target.member_raw("vrpsTotal", vrps.valid);
-    target.member_raw("vrpsUnsafe", vrps.marked_unsafe);
-    target.member_raw("vrpsLocallyFiltered", vrps.locally_filtered);
-    target.member_raw("vrpsDuplicate", vrps.duplicate);
-    target.member_raw("vrpsFinal", vrps.contributed);
+fn json_payload_metrics(target: &mut JsonBuilder, payload: &PayloadMetrics) {
+    target.member_raw("vrpsTotal", payload.vrps().valid);
+    target.member_raw("vrpsUnsafe", payload.vrps().marked_unsafe);
+    target.member_raw("vrpsLocallyFiltered", payload.vrps().locally_filtered);
+    target.member_raw("vrpsDuplicate", payload.vrps().duplicate);
+    target.member_raw("vrpsFinal", payload.vrps().contributed);
+    target.member_object("payload", |target| {
+        target.member_object("routeOriginsIPv4", |target| {
+            json_vrps_metrics(target, &payload.v4_origins, true)
+        });
+        target.member_object("routeOriginsIPv6", |target| {
+            json_vrps_metrics(target, &payload.v6_origins, true)
+        });
+        target.member_object("routerKeys", |target| {
+            json_vrps_metrics(target, &payload.router_keys, false)
+        });
+    });
+}
+
+fn json_vrps_metrics(
+    target: &mut JsonBuilder,
+    vrps: &VrpMetrics,
+    include_unsafe: bool,
+) {
+    target.member_raw("total", vrps.valid);
+    if include_unsafe {
+        target.member_raw("unsafe", vrps.marked_unsafe);
+    }
+    target.member_raw("locallyFiltered", vrps.locally_filtered);
+    target.member_raw("duplicate", vrps.duplicate);
+    target.member_raw("final", vrps.contributed);
 }
 
 
