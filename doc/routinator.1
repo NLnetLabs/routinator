@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Jan 31, 2022" "0.10.3" "Routinator"
+.TH "ROUTINATOR" "1" "Feb 01, 2022" "0.10.3" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -529,11 +529,15 @@ which provides the same time but in the standard ISO date
 format.
 .TP
 .B jsonext
-The list is placed into a JSON object with two members:
+The list is placed into a JSON object with three members:
 \fIroas\fP contains the validated route origin
-authorizations and \fIrouterKeys\fP contains the validated
-BGPsec router keys. This second member is also present when
-BGPsec has not been enabled, it will simply be always empty.
+authorizations, \fIrouterKeys\fP contains the validated
+BGPsec router keys, and \fImetadata\fP contains some infromation
+about the validation run itself.
+.sp
+All three members are always present, even if BGPsec has
+not been enabled. In this case, \fIrouterKeys\fP will simply
+be empty.
 .sp
 The \fIroas\fP member contains an array of objects with four
 elements each: The autonomous system number of the network

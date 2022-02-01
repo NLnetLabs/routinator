@@ -462,11 +462,15 @@ These can be requested by providing different commands on the command line.
                   format.
 
            jsonext
-                  The list is placed into a JSON object with two members:
+                  The list is placed into a JSON object with three members:
                   *roas* contains the validated route origin
-                  authorizations and *routerKeys* contains the validated 
-                  BGPsec router keys. This second member is also present when
-                  BGPsec has not been enabled, it will simply be always empty.
+                  authorizations, *routerKeys* contains the validated 
+                  BGPsec router keys, and *metadata* contains some infromation
+                  about the validation run itself.
+
+                  All three members are always present, even if BGPsec has
+                  not been enabled. In this case, *routerKeys* will simply
+                  be empty.
 
                   The *roas* member contains an array of objects with four
                   elements each: The autonomous system number of the network
