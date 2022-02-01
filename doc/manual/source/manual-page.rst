@@ -465,7 +465,7 @@ These can be requested by providing different commands on the command line.
                   The list is placed into a JSON object with three members:
                   *roas* contains the validated route origin
                   authorizations, *routerKeys* contains the validated 
-                  BGPsec router keys, and *metadata* contains some infromation
+                  BGPsec router keys, and *metadata* contains some information
                   about the validation run itself.
 
                   All three members are always present, even if BGPsec has
