@@ -48,8 +48,8 @@ A validation run will be started before returning the result, making sure you
 get the latest information. If you would like a result from the current cache,
 you can use the :option:`--noupdate` option.
 
-Here is an example selecting VRPs related to a specific ASN, produced in JSON
-format:
+Here is an example selecting VRPs related to a specific ASN, produced in
+:term:`json` format:
 
 .. code-block:: text
 

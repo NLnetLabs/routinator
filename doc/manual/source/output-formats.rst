@@ -2,14 +2,14 @@ VRP Output Formats
 ==================
 
 .. versionadded:: 0.9
-   The ``jsonext`` format
+   The :term:`jsonext` format
    
 .. versionadded:: 0.10
-   Metadata in ``json`` and ``jsonext`` format
+   Metadata in :term:`json` and :term:`jsonext` format
 
 .. versionadded:: 0.11
-   :ref:`advanced-features:bgpsec` information in ``jsonext`` and ``summary``
-   formats
+   :ref:`advanced-features:bgpsec` information in :term:`jsonext` and 
+   :term:`summary` formats
 
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be
@@ -154,7 +154,7 @@ generated in a wide range of output formats for various use cases.
           same time but in the standard ISO date format.
 
           Please note that because of this additional information, output in
-          ``jsonext`` format will be quite large.
+          :term:`jsonext` format will be quite large.
           
           .. code-block:: text
           
