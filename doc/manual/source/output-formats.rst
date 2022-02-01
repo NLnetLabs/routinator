@@ -89,31 +89,52 @@ json
          }
 
 jsonext
-      The output is in JSON format. The list is has a member named *roas*
-      which contains an array of objects with four elements each: The
-      Autonomous System number of the network authorised to originate a
-      prefix in *asn*, the prefix in slash notation  in *prefix*, the maximum
-      prefix length of the announced route  in *maxLength*.
+      The list is placed into a JSON object with three members:
+
+        - *roas* contains the validated route origin authorisations,
+        - *routerKeys* contains the validated :ref:`advanced-features:bgpsec`
+          router keys, and 
+        - *metadata* contains some information about the validation run
+          itself.
+
+      All three members are always present, even if
+      :ref:`advanced-features:bgpsec` has not been enabled. In this case,
+      *routerKeys* will simply be empty.
+
+      The *roas* member contains an array of objects with four elements each: 
       
-      Extensive information about the source of the object is given in the
-      array *source*. Each item in that array is an object providing details
-      of a source of the VRP. The object will have a type of *roa* if it was
-      derived from a valid ROA object or *exception* if it was an assertion
-      in a local exception file.
+        - *asn* lists the autonomous system number of the network authorised
+          to originate a prefix,
+        - *prefix* has the prefix in slash notation,
+        - *maxLength* states the maximum prefix length of the announced
+          route, and
+        - *source* contains information about the source of the
+          authorisation.
 
-      For ROAs, *uri* provides the rsync URI of the ROA, *validity* provides
-      the validity of the ROA itself, and *chainValidity* the validity
-      considering the validity of the certificates along the validation
-      chain.
+      The *routerKeys* member contains an array of objects with
+      four elements each: 
+      
+        - *asn* lists the autonomous system using the router key,
+        - *SKI* has the key identifier as a string of hexadecimal digits,
+        - *routerPublicKey* has the actual public key as a Base 64 encoded 
+          string, and
+        - *source* contains extended information about the source of the key.
 
-      If you have enabled BGPsec there will be a member named *routerKeys*
-      containing an array of objects with detailed information for each
-      router certificate. For a complete desciption, refer to the
-      :ref:`advanced-features:bgpsec` section.
+      This source information the same for route origins and router keys. It
+      consists of an array. Each item in that array is an object providing
+      details of a source. The object will have a *type* of *roa* if it was
+      derived from a valid ROA object, *cer* if it was derived from a
+      published router certificate, or *exception* if it was an assertion in
+      a local exception file.
 
-      For assertions from :doc:`local exceptions<local-exceptions>`, *path*
-      will provide the path of the local exceptions file and, optionally,
-      *comment* will provide the comment if given for the assertion.
+      For RPKI objects, *uri* provides the rsync URI of the ROA or router
+      certificate, *validity* provides the validity of the ROA itself, and
+      *chainValidity* the validity considering the validity of the
+      certificates along the validation chain.
+
+      For  assertions from local exceptions, *path* will provide the path of
+      the local exceptions file and, optionally, *comment* will provide the
+      comment if given for the assertion.
 
       The output object also includes a member named *metadata* which
       provides additional information. Currently, this is a member
@@ -121,7 +142,8 @@ jsonext
       timestamp, and a member *generatedTime* which provides the same time
       but in the standard ISO date format.
 
-      Please note that the output in ``jsonext`` format will be quite large.
+      Please note that because of this additional information, output in
+      ``jsonext`` format will be quite large.
       
       .. code-block:: text
       
@@ -146,7 +168,10 @@ jsonext
                   "notAfter": "2022-07-01T00:00:00Z"
                 }
               }]
-            }]
+            }],
+            "routerKeys": [
+
+            ]
           }
 
 openbgpd

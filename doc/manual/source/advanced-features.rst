@@ -65,29 +65,33 @@ You can let Routinator process router keys and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
 or by setting ``enable-bgpsec`` to True in the :doc:`configuration
 file<configuration>`. BGPsec information will be exposed via RTR, as well as
-in the SLURM and ``jsonext`` :doc:`output format<output-formats>`. 
-
-In ``jsonext``, the information will be placed in a JSON file that contains a
-member named *routerKeys* which contains an array of objects with four
-elements each: The authorised Autonomous System number in *asn*, the subject
-key indentifier containing the hash over the certificate in hex digits in
-*SKI* and the public key of the router certificate in *routerPublicKey*.
-
-Extensive information about the source of the object is given in the array
-*source*. Each item in that array is an object providing details of a source
-of the router key. The object will have a type of *roa* if it was derived
-from a valid object or *exception* if it was an assertion in a local
-exception file.
-
-For router certificates, *uri* provides the rsync URI of the corresponding
-object, *validity* provides the validity of the certificate itself, and
-*chainValidity* the validity considering the validity of the certificates
-along the validation chain.
+in the SLURM and ``jsonext`` :doc:`output format<output-formats>`, e.g.: 
 
 .. code-block:: json 
 
-   {
-    "routerKeys": [{
+    {
+        "metadata": {
+            "generated": 1626853335,
+            "generatedTime": "2021-07-21T07:42:15Z"
+        },
+        "roas": [{
+            "asn": "AS196615",
+            "prefix": "93.175.147.0/24",
+            "maxLength": 24,
+            "source": [{
+                "type": "roa",
+                "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
+                "validity": {
+                    "notBefore": "2021-01-01T04:39:56Z",
+                    "notAfter": "2022-07-01T00:00:00Z"
+                },
+                "chainValidity": {
+                    "notBefore": "2021-05-06T12:51:30Z",
+                    "notAfter": "2022-07-01T00:00:00Z"
+                }
+            }]
+        }],
+        "routerKeys": [{
             "asn": "AS65535",
             "SKI": "E2F075EC50E9F2EFCED81D44491D25D42A298D89",
             "routerPublicKey": "kwEwYHKoZIzj0CAtig5-QfEKpTtFgiqfiAFQg--LAQerAH2Mpp-GucoDAGBbhIqMFQYIKoZIzj0DAQcDQgAEgFcjQ_D33wNPsXxnAGb-mtZ7XQrVO9DQ6UlASh",
@@ -103,6 +107,5 @@ along the validation chain.
                     "notAfter": "2022-08-06T00:00:00Z"
                 }
             }]
-        }
-    ]
-   }
+        }]
+    }
