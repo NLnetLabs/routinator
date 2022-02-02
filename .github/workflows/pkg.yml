@@ -434,7 +434,19 @@ jobs:
 
         echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
         echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
-        echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
+
+        case ${MATRIX_IMAGE} in
+          centos:8)
+            # the CentOS 8 LXD image no longer exists since CentOS 8 hit EOL.
+            # there's also no Rocky Linux (a CentOS 8 compatible O/S) LXD image
+            # either, but there is an Alma Linux (another CentOS 8 compatible
+            # O/S) LXD image so use that for testing.
+            echo "LXC_IMAGE=images:almalinux/8/cloud" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
+            ;;
+        esac
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
