@@ -4,12 +4,15 @@ VRP Output Formats
 .. versionadded:: 0.9
    The :term:`jsonext` format
    
-.. versionadded:: 0.10
+.. versionchanged:: 0.10
    Metadata in :term:`json` and :term:`jsonext` format
 
 .. versionadded:: 0.11
+   The :term:`SLURM` format.
+
+.. versionchanged:: 0.11
    :ref:`advanced-features:bgpsec` information in :term:`jsonext` and 
-   :term:`summary` formats
+   :term:`summary` formats.
 
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be
@@ -184,6 +187,47 @@ generated in a wide range of output formats for various use cases.
 
                 ]
               }
+
+    slurm
+          The list is formatted as locally added assertions of a :doc:`local
+          exceptions<local-exceptions>` file defined by :RFC:`8416` (also
+          known as SLURM). The produced file will have empty validation
+          output filters.
+
+          .. code-block:: text
+
+            {
+              "slurmVersion": 1,
+              "validationOutputFilters": {
+                "prefixFilters": [ ],
+                "bgpsecFilters": [ ]
+              },
+              "locallyAddedAssertions": {
+                "prefixAssertions": [
+                  {
+                    "asn": 196615,
+                    "prefix": "93.175.147.0/24",
+                    "maxPrefixLength": 24,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd03::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd04::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  }
+                ],
+                "bgpsecAssertions": [
+
+                ]
+              }
+            }
 
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
