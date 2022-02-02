@@ -125,6 +125,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    # Allow CentOS 8 to continue working now that it is EOL
+    # See: https://stackoverflow.com/a/70930049
+    - name: CentOS 8 EOL workaround
+      if: matrix.image == 'centos:8'
+      run: |
+        sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
+
+
     # Install Rust the hard way rather than using a GH Action because the action
     # doesn't work inside a Docker container.
     - name: Install Rust
@@ -150,11 +158,6 @@ jobs:
             apt-get install -y build-essential jq lintian pkg-config
             ;;
           centos)
-            if [[ "${MATRIX_IMAGE}" == "centos:8" ]]; then
-              # allow CentOS 8 to continue working now that it is EOL
-              # see: https://stackoverflow.com/a/70930049
-              sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
-            fi
             yum install epel-release -y
             yum update -y
             yum install -y jq rpmlint
