@@ -152,6 +152,8 @@ a virgin system, you can install Rust using these steps:
 SELinux using CentOS 7
 """"""""""""""""""""""
 
+.. sectionauthor:: Rich Compton <Rich.Compton@charter.com>
+
 This guide, contributed by `Rich Compton
 <https://github.com/racompton/routinator_centos7_install>`_, describes how to
 run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
