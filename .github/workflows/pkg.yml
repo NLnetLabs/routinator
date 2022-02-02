@@ -150,6 +150,11 @@ jobs:
             apt-get install -y build-essential jq lintian pkg-config
             ;;
           centos)
+            if [[ "${MATRIX_IMAGE}" == "centos:8" ]]; then
+              # allow CentOS 8 to continue working now that it is EOL
+              # see: https://stackoverflow.com/a/70930049
+              sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
+            fi
             yum install epel-release -y
             yum update -y
             yum install -y jq rpmlint
@@ -479,6 +484,11 @@ jobs:
             sg lxd -c "lxc exec testcon -- apt-get install -y -o Dpkg::Options::=\"--force-confnew\" apt-transport-https ca-certificates man sudo wget"
             ;;
           centos)
+            if [[ "${MATRIX_IMAGE}" == "centos:8" ]]; then
+              # allow CentOS 8 to continue working now that it is EOL
+              # see: https://stackoverflow.com/a/70930049
+              sg lxd -c "lxc exec testcon -- sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*"
+            fi
             sg lxd -c "lxc exec testcon -- yum update -y"
             sg lxd -c "lxc exec testcon -- yum install -y man"
             ;;
