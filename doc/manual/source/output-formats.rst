@@ -33,7 +33,7 @@ generated in a wide range of output formats for various use cases.
 
             -  The prefix in slash notation, 
             -  the maximum prefix length, 
-            -  the autonomous system number, and 
+            -  the Autonomous System Number, and 
             -  the name of the trust anchor the entry is derived from. 
           
           .. code-block:: text
@@ -45,7 +45,7 @@ generated in a wide range of output formats for various use cases.
           
     csvcompat
           This is the same as the *csv* format except that all fields are
-          embedded in double quotes and the autonomous system number is given
+          embedded in double quotes and the Autonomous System Number is given
           without the prefix *AS*. This format is pretty much identical to
           the CSV format produced by the RIPE NCC RPKI Validator.
           
@@ -63,7 +63,7 @@ generated in a wide range of output formats for various use cases.
           
             - The rsync URI of the ROA the line is taken from (or "N/A" if it
               isn't from a ROA), 
-            - the autonomous system number, 
+            - the Autonomous System Number, 
             - the prefix in slash notation, 
             - the maximum prefix length, and 
             - the not-before and not-after date of the validity of the ROA.
@@ -80,7 +80,7 @@ generated in a wide range of output formats for various use cases.
           named *roas* which contains an array of objects with four elements
           each: 
           
-            - *asn* lists the autonomous system number of the network
+            - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
             - *prefix* has the prefix in slash notation,
             - *maxLength* states the maximum prefix length of the announced
@@ -128,7 +128,7 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements
           each: 
           
-            - *asn* lists the autonomous system number of the network
+            - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
             - *prefix* has the prefix in slash notation,
             - *maxLength* states the maximum prefix length of the announced
