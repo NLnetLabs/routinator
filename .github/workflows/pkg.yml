@@ -132,7 +132,6 @@ jobs:
       run: |
         sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
 
-
     # Install Rust the hard way rather than using a GH Action because the action
     # doesn't work inside a Docker container.
     - name: Install Rust
