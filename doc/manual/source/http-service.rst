@@ -76,6 +76,8 @@ one private key encoded in PEM format:
                      --http-tls-cert "/path/to/http-tls.crt" \
                      --http-tls-key "/path/to/http-tls.key"
 
+.. versionadded:: 0.11
+
 Using a Reverse Proxy
 ---------------------
 

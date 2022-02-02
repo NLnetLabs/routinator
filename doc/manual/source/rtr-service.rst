@@ -26,9 +26,6 @@ when otherwise there is no reason to do that.
 Secure Transports
 -----------------
 
-.. versionadded:: 0.11.0
-   RTR-over-TLS connections 
-
 Although there is no mandatory-to-implement transport that provides
 authentication and integrity protection, :rfc:`6810#section-7` defines a
 number of secure transports for RPKI-RTR that can be used to secure
@@ -75,6 +72,8 @@ configuration. In case you generated a self-signed certificate for
 Routinator, make sure to copy the certificate to your machine running RTRTR
 and refer to the path of the file in your unit using the ``cacerts``
 configuration option. 
+
+.. versionadded:: 0.11.0
 
 SSH Transport
 """""""""""""

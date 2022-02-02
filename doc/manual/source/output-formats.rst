@@ -1,19 +1,6 @@
 VRP Output Formats
 ==================
 
-.. versionadded:: 0.9
-   The :term:`jsonext` format
-   
-.. versionchanged:: 0.10
-   Metadata in :term:`json` and :term:`jsonext` format
-
-.. versionadded:: 0.11
-   The :term:`SLURM` format.
-
-.. versionchanged:: 0.11
-   :ref:`advanced-features:bgpsec` information in :term:`jsonext` and 
-   :term:`summary` formats.
-
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be
 generated in a wide range of output formats for various use cases.
@@ -112,6 +99,9 @@ generated in a wide range of output formats for various use cases.
               ]
             }
 
+          .. versionchanged:: 0.10
+             Add the *metadata* member
+
     jsonext
           The list is placed into a JSON object with three members:
 
@@ -199,6 +189,12 @@ generated in a wide range of output formats for various use cases.
 
                 ]
               }
+            
+          .. versionadded:: 0.9
+          .. versionchanged:: 0.10
+             Add the *metadata* member
+          .. versionchanged:: 0.11
+             Add :ref:`advanced-features:bgpsec` information
 
     slurm
           The list is formatted as locally added assertions of a :doc:`local
@@ -240,6 +236,8 @@ generated in a wide range of output formats for various use cases.
                 ]
               }
             }
+
+          .. versionadded:: 0.11
 
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
@@ -334,3 +332,7 @@ generated in a wide range of output formats for various use cases.
                         VRPs:  361536 verified,      25 unsafe,  307434 final;
                 router certs:       2 verified;
                  router keys:       2 verified,       2 final.
+
+          .. versionchanged:: 0.11
+             Reformat, sort alphabetically and add 
+             :ref:`advanced-features:bgpsec` information

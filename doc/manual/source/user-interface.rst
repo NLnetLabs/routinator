@@ -65,3 +65,7 @@ developed and hosted by NLnet Labs at `bgp-api.net
   - Resource allocations retrieved from `statistics 
     <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five Regional 
     Internet Registries. These are updated daily.
+
+.. versionadded:: 0.8.3
+.. versionchanged:: 0.10
+   The Prefix Check

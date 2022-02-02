@@ -17,9 +17,6 @@ ports 443 and 873, respectively.
 Quick Start
 -----------
 
-.. versionadded:: 0.9
-   RPM packages
-
 Getting started with Routinator is really easy by installing a binary package
 for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL), CentOS and
 Rocky Linux. The `NLnet Labs software package repository
@@ -335,6 +332,9 @@ or build from Cargo, Rust's build system and package manager.
        .. code-block:: text
 
           routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
+
+.. versionadded:: 0.9
+   RPM packages
 
 Updating
 --------

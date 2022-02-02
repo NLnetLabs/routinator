@@ -1,11 +1,6 @@
 API Endpoints
 =============
 
-.. versionchanged:: 0.9
-   The ``/api/v1/status`` path
-.. versionadded:: 0.9
-   The ``/json-delta`` path
-
 The service supports GET requests with the following paths:
 
 ``/api/v1/status``
@@ -37,3 +32,8 @@ The service supports GET requests with the following paths:
 In addition, the ``/log`` endpoint returns :doc:`logging<logging>`
 information and the ``/metrics``, ``/status`` and
 ``/version`` endpoints provide :doc:`monitoring<monitoring>` data.
+
+.. versionchanged:: 0.9
+   The ``/api/v1/status`` path
+.. versionadded:: 0.9
+   The ``/json-delta`` path

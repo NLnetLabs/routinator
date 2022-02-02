@@ -8,8 +8,6 @@ Force to improve and augment RPKI.
 Resource Tagged Attestations
 ----------------------------
 
-.. versionadded:: 0.8.0
-
 Resource Tagged Attestations (RTAs) allow any arbitrary file to be signed
 ‘with resources’ by one or more parties. The RTA object is a separate file
 that cryptographically connects the document with a set of resources. The
@@ -51,10 +49,10 @@ Routinator will report the resources used to sign the object:
     - `A proof-of-concept for constructing and validating RTAs
       <https://github.com/APNIC-net/rpki-rta-demo>`_
 
+.. versionadded:: 0.8.0
+
 BGPsec
 ------
-
-.. versionadded:: 0.11.0
 
 The goal of BGPsec, as described in :RFC:`8209`, is to provide full AS path
 validation. For this operators will need to publish BGPsec router keys in the
@@ -109,3 +107,5 @@ in the :term:`SLURM` and :term:`jsonext` output format, e.g.:
             }]
         }]
     }
+
+.. versionadded:: 0.11.0
