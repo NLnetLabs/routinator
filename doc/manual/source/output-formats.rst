@@ -98,7 +98,7 @@ generated in a wide range of output formats for various use cases.
           Unix timestamp, and a member *generatedTime* which provides the
           same time but in the standard ISO date format.
           
-          .. code-block:: text
+          .. code-block:: json
             
             {
               "metadata": {
@@ -171,7 +171,7 @@ generated in a wide range of output formats for various use cases.
           Please note that because of this additional information, output in
           :term:`jsonext` format will be quite large.
           
-          .. code-block:: text
+          .. code-block:: json
           
               {
                 "metadata": {
@@ -206,7 +206,7 @@ generated in a wide range of output formats for various use cases.
           known as SLURM). The produced file will have empty validation
           output filters.
 
-          .. code-block:: text
+          .. code-block:: json
 
             {
               "slurmVersion": 1,

@@ -24,7 +24,7 @@ run as the user *routinator* and refer to the configuration file
 :file:`/etc/routinator/routinator.conf` which contains the following
 pre-configured options:
 
-.. code-block:: text
+.. code-block:: toml
 
    repository-dir = "/var/lib/routinator/rpki-cache"
    tal-dir = "/var/lib/routinator/tals"
@@ -77,7 +77,7 @@ It will return the list of defaults in the same notation that is used by the
 :ref:`configuration file <manual-page:configuration file>`, which will be
 largely similar to this and can serve as a starting point for making your own:
 
-.. code-block:: text
+.. code-block:: toml
 
     allow-dubious-hosts = false
     dirty = false
