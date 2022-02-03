@@ -53,7 +53,7 @@ Open source with professional support services
 .. image:: img/routinator_badge.svg
    :width: 60%
    :align: center
-   :alt: Ruinator 3000
+   :alt: Routinator 3000
 
 .. toctree::
    :maxdepth: 2
@@ -62,7 +62,7 @@ Open source with professional support services
    :name: toc-getting-started
 
    installation
-   installation-notes
+   building
    initialisation
    configuration
    

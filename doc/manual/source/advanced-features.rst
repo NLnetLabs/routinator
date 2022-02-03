@@ -22,7 +22,7 @@ provider. The document authorising BYOIP could be signed using RTA.
 RTA objects can be generated using Krill, the RPKI Certificate Authority
 software from NLnet Labs, and you can use the MyAPNIC hosted service. The
 objects can be validated using Routinator if it is built with RTA support,
-using the :ref:`features<installation-notes:enabling or disabling features>`
+using the :ref:`features<building:enabling or disabling features>`
 functionality provided by Cargo:
 
 .. code-block:: text
