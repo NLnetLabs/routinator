@@ -19,13 +19,14 @@ Binary Packages
 
 Getting started with Routinator is really easy by installing a binary package
 for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL) and
-compatible systems such as Rocky Linux. The `NLnet Labs software package
-repository <https://packages.nlnetlabs.nl>`_ currently has packages available
-for the ``amd64``/``x86_64`` architecture only. Alternatively, you can run
-with Docker. 
+compatible systems such as Rocky Linux. Alternatively, you can run with
+Docker. Packages and Docker images are currently available for the
+``amd64``/``x86_64`` architecture only.
 
-If you want to build Routinator using Cargo, Rust's build system and package
-manager, please refer to the :doc:`building` section.
+If you have specific preferences or requirements, you can also build
+Routinator using Cargo, Rust's build system and package manager. Cargo lets
+you to run Routinator on almost any operating system and CPU architecture.
+Refer to the :doc:`building` section to get started.
 
 .. tabs::
 

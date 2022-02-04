@@ -3,15 +3,14 @@ Building From Source
 
 In addition to meeting the :ref:`system requirements <installation:System
 Requirements>`, there are three things you need to build Routinator: rsync, a
-C toolchain and Rust. You can run Routinator on any system where you can
-fulfil these requirements, no matter which operating system or CPU
-architecture you have.
+C toolchain and Rust. You can run Routinator on any operating system and CPU
+architecture where you can fulfil these requirements.
 
 Dependencies
 ------------
 
-You need rsync because some RPKI repositories still use it as its main
-means of distribution. Some of the cryptographic primitives used by
+To get started you need rsync because some RPKI repositories still use it as
+its main means of distribution. Some of the cryptographic primitives used by
 Routinator require a C toolchain. Lastly, you need Rust because that’s the
 programming language that Routinator has been written in.
 
@@ -63,21 +62,25 @@ Assuming you already have :program:`curl` installed, you can install
 
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-Alternatively, visit the `official Rust website
+Alternatively, visit the `Rust website
 <https://www.rust-lang.org/tools/install>`_ for other installation methods.
 
 Building and Updating
 ---------------------
 
-Routinator is available as a distributable, compressed file with the source
-code of the package called a *crate* and is published on `crates.io
-<https://crates.io/crates/routinator>`_, the Rust package registry. 
+In Rust, a library or executable program such as Routinator is called a
+*crate*. Crates are published on `crates.io
+<https://crates.io/crates/routinator>`_, the Rust package registry. Cargo is
+the Rust package manager. It is a tool that allows Rust packages to declare
+their various dependencies and ensure that you’ll always get a repeatable
+build. 
 
-Cargo is name of the Rust package manager. You use the :program:`cargo`
-command to install and update Routinator. By default you install from 
-crates.io, but you can for example also install from a specific Git URL.
+Cargo fetches and builds Routinator’s dependencies into an executable binary
+for your platform. By default you install from crates.io, but you can for
+example also install from a specific Git URL, as explained below.
 
-Installing Routinator from crates.io is as simple as running:
+Installing the latest Routinator release from crates.io is as simple as
+running:
 
 .. code-block:: text
 
@@ -87,17 +90,20 @@ The command will build Routinator and install it in the same directory that
 Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator
 will be in your path, too.
 
-If you want to install the latest version of Routinator, it’s recommended to
-update Rust to the latest version first, using:
+.. Note:: Before you can use Routinator, you must first 
+          :doc:`initialise<initialisation>` the application.
 
 Updating
 """"""""
+
+If you want to update to the latest version of Routinator, it’s recommended
+to update Rust itself as well, using:
 
 .. code-block:: text
 
     rustup update
 
-Use the ``--force`` option to  overwrite an existing version with the latest
+Use the ``--force`` option to overwrite an existing version with the latest
 Routinator release:
 
 .. code-block:: text
@@ -117,20 +123,20 @@ use the ``--force`` option to overwrite an existing version:
 
 All new features of Routinator are built on a branch and merged via a `pull
 request <https://github.com/NLnetLabs/routinator/pulls>`_, allowing you to
-easily try them out using Cargo. If you want to try the a specific branch
-from the repository you can use the ``--git`` and ``--branch`` options:
+easily try them out using Cargo. If you want to try a specific branch from
+the repository you can use the ``--git`` and ``--branch`` options:
 
 .. code-block:: text
 
     cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
     
-For more installation options refer to the `Cargo book
-<https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
+.. Seealso:: For more installation options refer to the `Cargo book
+             <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
 
 Enabling or Disabling Features
-------------------------------
+""""""""""""""""""""""""""""""
 
-When you build Routinator yourself using Cargo, `"features"
+When you build Routinator, `"features"
 <https://doc.rust-lang.org/cargo/reference/features.html>`_ provide a
 mechanism to express conditional compilation and optional dependencies. The
 Routinator package defines a set of named features in the ``[features]``
@@ -150,8 +156,8 @@ Routinator currently has the following features:
     Use the native TLS implementation of your system instead of `rustls
     <https://github.com/rustls/rustls>`_.
 ``rta`` —  *Disabled* by default
-    Let Routinator validate `Resource Tagged Attestations (RTAs)
-    <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_.
+    Let Routinator validate :ref:`advanced-features:Resource Tagged
+    Attestations`.
     
 To disable the features that are enabled by default, use the
 ``--no-default-features`` option. You can then choose which features you want
