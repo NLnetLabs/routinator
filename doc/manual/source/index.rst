@@ -17,7 +17,7 @@ Routinator |version|
     .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
                 :target: https://twitter.com/routinator3000/
 
-Routinator 3000 is free, open source :abbr:`RPKI (Resource Public Key
+Routinator 3000 is free, open-source :abbr:`RPKI (Resource Public Key
 Infrastructure)` Relying Party software made by `NLnet Labs
 <https://nlnetlabs.nl>`_. The project is written in Rust, a programming
 language designed for performance and memory safety.
@@ -38,7 +38,7 @@ Flexible RPKI-to-Router (RTR) support
    :doc:`RTRTR <rtrtr:index>`, letting you centralise validation and securely
    distribute processed data to various locations.
 
-Open source with professional support services
+Open-source with professional support services
    NLnet Labs offers `professional support and consultancy services
    <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level
    agreement. We also provide a `mailing list
