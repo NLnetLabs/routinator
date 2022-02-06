@@ -49,13 +49,13 @@ with in addition to the settings in the config file, you can check with the
 This output will also provide you with the correct syntax in case you want to
 make changes.
 
-.. Important:: Once you have started Routinator with ``sudo systemctl enable 
-               --now routinator`` you should not invoke
-               :doc:`interactive<interactive>` validation runs from the 
-               command line using ``routinator vrps``. If there is specific
-               information you would like to have from Routinator, you should
-               retrieve it via the :doc:`user interface<user-interface>` or 
-               one of the :doc:`HTTP endpoints<http-service>`.
+.. Important:: Once you have started Routinator as a system service you 
+               should not invoke :doc:`interactive<interactive>` validation 
+               runs from the command line using ``routinator vrps``. If there
+               is specific information you would like to have from 
+               Routinator, you should retrieve it via the 
+               :doc:`user interface<user-interface>` or one of the 
+               :doc:`HTTP endpoints<http-service>`.
 
 Routinator Built with Cargo
 ---------------------------

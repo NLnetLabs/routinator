@@ -23,17 +23,17 @@ compatible systems such as Rocky Linux. Alternatively, you can run with
 Docker. Packages and Docker images are currently available for the
 ``amd64``/``x86_64`` architecture only.
 
-If you have specific preferences or requirements, you can also build
-Routinator using Cargo, Rust's build system and package manager. Cargo lets
-you to run Routinator on almost any operating system and CPU architecture.
-Refer to the :doc:`building` section to get started.
+You can also build Routinator from the source code using Cargo, Rust's build
+system and package manager. Cargo lets you to run Routinator on almost any
+operating system and CPU architecture. Refer to the :doc:`building` section
+to get started.
 
 .. tabs::
 
    .. group-tab:: Debian
 
-       Our software package repository has binary packages available for 
-       Debian 9 (stretch), 10 (buster) and 11 (bullseye).
+       The NLnet Labs software package repository has binary packages
+       available for Debian 9 (stretch), 10 (buster) and 11 (bullseye).
        
        First update the :program:`apt` package index: 
 
@@ -79,17 +79,16 @@ Refer to the :doc:`building` section to get started.
 
        Before running Routinator for the first time, you must prepare the
        directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. To learn more, refer 
-       to the :doc:`initialisation` section.
-       
-       After entering this command, **follow the instructions** provided
-       about the ARIN TAL:
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
 
        .. code-block:: bash
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
@@ -114,9 +113,9 @@ Refer to the :doc:`building` section to get started.
 
    .. group-tab:: Ubuntu
 
-       Our software package repository has binary packages available for
-       Ubuntu 16.x (Xenial Xerus), 18.x (Bionic Beaver) and 20.x (Focal
-       Fossa).
+       The NLnet Labs software package repository has binary packages
+       available for Ubuntu 16.x (Xenial Xerus), 18.x (Bionic Beaver) and
+       20.x (Focal Fossa).
        
        First update the :program:`apt` package index: 
 
@@ -162,17 +161,16 @@ Refer to the :doc:`building` section to get started.
 
        Before running Routinator for the first time, you must prepare the
        directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. To learn more, refer
-       to the :doc:`initialisation` section.
-       
-       After entering this command, **follow the instructions** provided
-       about the ARIN TAL:
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
 
        .. code-block:: bash
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
@@ -197,11 +195,12 @@ Refer to the :doc:`building` section to get started.
 
    .. group-tab:: RHEL/CentOS
 
-       Our software package repository has binary packages available for RHEL
-       7 and 8, or a compatible operating system such as Rocky Linux.
+       The NLnet Labs software package repository has binary packages
+       available for RHEL 7 and 8 and compatible operating system such as
+       Rocky Linux.
        
-       First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter
-       this configuration and save it:
+       First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
+       enter this configuration and save it:
        
        .. code-block:: text
        
@@ -224,17 +223,16 @@ Refer to the :doc:`building` section to get started.
 
        Before running Routinator for the first time, you must prepare the
        directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. To learn more, refer 
-       to the :doc:`initialisation` section.
-       
-       After entering this command, **follow the instructions** provided
-       about the ARIN TAL:
+       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
+       command, **follow the instructions** provided about the ARIN TAL:
 
        .. code-block:: bash
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
@@ -418,8 +416,8 @@ a specific version, if needed.
        add the *proposed* repository to the existing *main* repository
        described earlier. 
        
-       Assuming you already have followed the steps to install regular releases,
-       run this command to add the additional repository:
+       Assuming you already have followed the steps to install regular
+       releases, run this command to add the additional repository:
 
        .. code-block:: bash
 

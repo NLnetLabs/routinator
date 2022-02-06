@@ -1,22 +1,6 @@
 Routinator |version|
 ====================
 
-.. only:: html
-
-    |lastcommit| |license| |discord| |twitter|
-    
-    .. |lastcommit| image:: https://img.shields.io/github/last-commit/nlnetlabs/routinator
-                :target: https://github.com/NLnetLabs/routinator
-
-    .. |license| image:: https://img.shields.io/github/license/nlnetlabs/routinator
-                :target: https://github.com/NLnetLabs/routinator/blob/main/LICENSE
-
-    .. |discord| image:: https://img.shields.io/discord/818584154278199396?label=rpki%20on%20discord&logo=discord
-                :target: https://discord.gg/8dvKB5Ykhy
-
-    .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
-                :target: https://twitter.com/routinator3000/
-
 Routinator 3000 is free, open-source :abbr:`RPKI (Resource Public Key
 Infrastructure)` Relying Party software made by `NLnet Labs
 <https://nlnetlabs.nl>`_. The project is written in Rust, a programming
@@ -41,13 +25,25 @@ Flexible RPKI-to-Router (RTR) support
 Open-source with professional support services
    NLnet Labs offers `professional support and consultancy services
    <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level
-   agreement. We also provide a `mailing list
-   <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_ and `Discord server
-   <https://discord.gg/8dvKB5Ykhy>`_ for community support and to exchange
-   operational experiences. Routinator is liberally licensed under the `BSD
-   3-Clause license
+   agreement. Community support is available on `Discord
+   <https://discord.gg/8dvKB5Ykhy>`_, `Twitter
+   <https://twitter.com/routinator3000/>`_ and our `mailing list
+   <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_. Routinator is
+   liberally licensed under the `BSD 3-Clause license
    <https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.
 
+   .. only:: html
+
+      |discord| |twitter|
+      
+      .. |discord| image:: https://img.shields.io/discord/818584154278199396   
+         :alt: Discord
+         :target: https://discord.gg/8dvKB5Ykhy
+
+      .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
+         :alt: Twitter
+         :target: https://twitter.com/routinator3000/
+                
 |
 
 .. image:: img/routinator_badge.svg
