@@ -47,8 +47,7 @@ Rust
 
 The Rust compiler runs on, and compiles to, a great number of platforms,
 though not all of them are equally supported. The official `Rust Platform
-Support <https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_
-page provides an overview of the various support levels.
+Support`_ page provides an overview of the various support levels.
 
 While some system distributions include Rust as system packages, Routinator
 relies on a relatively new version of Rust, currently 1.52 or newer. We
@@ -203,12 +202,13 @@ Platform Specific Instructions
          defining a role to deploy Routinator on Ubuntu.
 
 For some platforms, :program:`rustup` cannot provide binary releases to
-install directly. The `Rust Platform Support
-<https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_ page lists
+install directly. The `Rust Platform Support`_ page lists
 several platforms where official binary releases are not available, but Rust
 is still guaranteed to build. For these platforms, automated tests are not
 run so it’s not guaranteed to produce a working build, but they often work to
 quite a good degree.
+
+.. _Rust Platform Support:  https://doc.rust-lang.org/nightly/rustc/platform-support.html
 
 OpenBSD
 """""""
