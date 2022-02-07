@@ -125,6 +125,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    # Allow CentOS 8 to continue working now that it is EOL
+    # See: https://stackoverflow.com/a/70930049
+    - name: CentOS 8 EOL workaround
+      if: matrix.image == 'centos:8'
+      run: |
+        sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
+
     # Install Rust the hard way rather than using a GH Action because the action
     # doesn't work inside a Docker container.
     - name: Install Rust
@@ -427,7 +434,17 @@ jobs:
 
         echo "OS_NAME=${OS_NAME}" >> $GITHUB_ENV
         echo "OS_REL=${OS_REL}" >> $GITHUB_ENV
-        echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
+
+        case ${MATRIX_IMAGE} in
+          centos:8)
+            # the CentOS 8 LXD image no longer exists since CentOS 8 hit EOL.
+            # use the Rocky Linux (a CentOS 8 compatible O/S) LXD image instead.
+            echo "LXC_IMAGE=images:rockylinux/8/cloud" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
+            ;;
+        esac
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
 
@@ -479,6 +496,11 @@ jobs:
             sg lxd -c "lxc exec testcon -- apt-get install -y -o Dpkg::Options::=\"--force-confnew\" apt-transport-https ca-certificates man sudo wget"
             ;;
           centos)
+            if [[ "${MATRIX_IMAGE}" == "centos:8" ]]; then
+              # allow CentOS 8 to continue working now that it is EOL
+              # see: https://stackoverflow.com/a/70930049
+              sg lxd -c "lxc exec testcon -- sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*"
+            fi
             sg lxd -c "lxc exec testcon -- yum update -y"
             sg lxd -c "lxc exec testcon -- yum install -y man"
             ;;
