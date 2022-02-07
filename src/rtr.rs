@@ -2,7 +2,7 @@
 
 use std::io;
 use std::future::Future;
-use std::net::{SocketAddr, TcpListener as StdListener};
+use std::net::{TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -30,22 +30,28 @@ use crate::utils::tls::MaybeTlsTcpStream;
 pub fn rtr_listener(
     history: SharedHistory,
     metrics: SharedRtrServerMetrics,
-    config: &Config
+    config: &Config,
+    extra_listener: Option<StdListener>,
 ) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
     let sender = NotifySender::new();
 
     // Binding needs to have happened before dropping privileges
     // during detach. So we do this here synchronously.
     let mut listeners = Vec::new();
+    if let Some(extra) = extra_listener {
+        listeners.push((String::from("systemd socket"), None, extra));
+    }
     for addr in &config.rtr_listen {
-        listeners.push((*addr, None, net::bind(addr)?));
+        listeners.push((format!("{}", addr), None, net::bind(addr)?));
     }
     if !config.rtr_tls_listen.is_empty() {
         let tls_config = create_tls_config(config)?;
         for addr in &config.rtr_tls_listen {
-            listeners.push(
-                (*addr, Some(tls_config.clone()), net::bind(addr)?)
-            );
+            listeners.push((
+                format!("{}", addr),
+                Some(tls_config.clone()),
+                net::bind(addr)?
+            ));
         }
     }
     Ok((sender.clone(), _rtr_listener(
@@ -77,7 +83,7 @@ async fn _rtr_listener(
     origins: SharedHistory,
     metrics: SharedRtrServerMetrics,
     sender: NotifySender,
-    listeners: Vec<(SocketAddr, Option<Arc<tls::ServerConfig>>, StdListener)>,
+    listeners: Vec<(String, Option<Arc<tls::ServerConfig>>, StdListener)>,
     keepalive: Option<Duration>,
 ) {
     // If there are no listeners, just never return.
@@ -97,7 +103,7 @@ async fn _rtr_listener(
 }
 
 async fn single_rtr_listener(
-    addr: SocketAddr,
+    addr: String,
     tls: Option<Arc<tls::ServerConfig>>,
     listener: StdListener,
     origins: SharedHistory,
