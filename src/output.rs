@@ -258,6 +258,7 @@ impl Selection {
             }
             else if key == "include" {
                 for value in value.split(',') {
+                    #[allow(clippy::single_match)]
                     match value {
                         "more-specifics" => res.more_specifics = true,
                         _ => { }
