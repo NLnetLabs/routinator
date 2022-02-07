@@ -57,42 +57,61 @@ This will produce the following output:
       ]
     }
 
-When you query for a prefix, by default Routinator will return the exact
-match, as well as less specific prefixes. In case you also want more more
-specifics to be displayed, the ``more-specifics`` query string can be used.
+More Specific Prefixes
+""""""""""""""""""""""
 
-For example, when querying for 93.175.144.0/20 and requesting more specific
-prefixes, we'll get all of the IPv4 VRPs for the RIPE NCC RIS anchors and 
-beacons in this range:
+When you query for a prefix, by default Routinator will return the exact
+match, as well as less specifics. The reason is that a VRP of an overlapping
+less specific prefix could also make the BGP announcement *RPKI Valid*, if
+the :term:`Maximum Prefix Length (MaxLength)` is set to allow this.
+
+In some cases you may want more specifics to be displayed as well. For this
+the ``more-specifics`` query string can be used. For example, when querying
+for 82.221.32.0/20:
 
 .. code-block:: text
 
-   curl http://192.0.2.13:8323/json?select-prefix=93.175.144.0/20&include=more-specifics
+   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20
 
-This will produce the following output:
+Routinator will return the exact match and the VRP for the less specific /17
+prefix:
 
 .. code-block:: json
 
    {
       "metadata": {
-         "generated": 1644252691,
-         "generatedTime": "2022-02-07T16:51:31Z"
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
       },
       "roas": [
-         { "asn": "AS12654", "prefix": "93.175.146.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.148.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.149.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.150.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.151.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.152.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12654", "prefix": "93.175.153.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS12859", "prefix": "93.175.159.0/24", "maxLength": 24, "ta": "ripe" },
-         { "asn": "AS201965", "prefix": "93.175.159.0/24", "maxLength": 24, "ta": "ripe" }
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
       ]
    }
 
-.. versionadded:: 0.11
+When including the ``more-specifics`` parameter in the same query:
+
+.. code-block:: text
+
+   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20&include=more-specifics
+
+You will now see that a more specific /23 prefix is returned as well:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
+      },
+      "roas": [
+         { "asn": "AS44515", "prefix": "82.221.46.0/23", "maxLength": 23, "ta": "ripe" },
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
+      ]
+   }
+
+.. versionchanged:: 0.11
    ``more-specifics`` query parameter
 
 TLS Transport
@@ -117,6 +136,8 @@ one private key encoded in PEM format:
                      --http-tls [2001:0DB8::13]:8324 \
                      --http-tls-cert "/path/to/http-tls.crt" \
                      --http-tls-key "/path/to/http-tls.key"
+
+.. versionadded:: 0.11
 
 Using a Reverse Proxy
 ---------------------
