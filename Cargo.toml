@@ -13,6 +13,7 @@ readme = "README.md"
 build = "build.rs"
 
 [dependencies]
+base64          = "0.13.0"
 bytes           = "1.0.0"
 chrono          = "0.4.11"
 clap            = { version = "2.33.0", features = [ "wrap_help" ] }
