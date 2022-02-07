@@ -1,6 +1,7 @@
 /// Support for the RPKI-to-Router Protocol.
 
 use std::io;
+use std::convert::TryFrom;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
@@ -134,9 +135,12 @@ impl RtrStream {
     fn new(
         sock: TcpStream,
         tls: Option<&TlsAcceptor>,
-        _keepalive: Option<Duration>,
+        keepalive: Option<Duration>,
         server_metrics: SharedRtrServerMetrics,
     ) -> Result<Self, io::Error> {
+        if let Some(duration) = keepalive {
+            Self::set_keepalive(&sock, duration)?
+        }
         let metrics = Arc::new(RtrClientMetrics::new(sock.local_addr()?.ip()));
         let client_metrics = metrics.clone();
         tokio::spawn(async move {
@@ -146,6 +150,32 @@ impl RtrStream {
             sock: MaybeTlsTcpStream::new(sock, tls),
             metrics
         })
+    }
+
+    #[cfg(unix)]
+    fn set_keepalive(
+        sock: &TcpStream, duration: Duration
+    ) -> Result<(), io::Error>{
+        use nix::sys::socket::{setsockopt, sockopt};
+
+        let fd = std::os::unix::io::AsRawFd::as_raw_fd(sock);
+
+        (|fd, duration: Duration| {
+            setsockopt(
+                fd, sockopt::TcpKeepInterval,
+                &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+            )?;
+            setsockopt(fd, sockopt::KeepAlive, &true)
+        })(fd, duration).map_err(|err| {
+            io::Error::new(io::ErrorKind::Other, err)
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn set_keepalive(
+        _sock: &TcpStream, _duration: Duration
+    ) -> Result<(), io::Error>{
+        Ok(())
     }
 }
 
