@@ -19,17 +19,21 @@ In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
 After fetching and verifying all RPKI data, paths are available for each
-:doc:`VRP output format <output-formats>`. For example, at the ``/csv`` path
-you can fetch a list of all VRPs in CSV format.
+:doc:`VRP output format <output-formats>`. For example, at the ``/json`` path
+you can fetch a list of all VRPs in JSON format.
 
 .. code-block:: text
 
-   curl http://192.0.2.13:8323/csv
+   curl http://192.0.2.13:8323/json
+
+Query Parameters
+----------------
 
 These paths accept selector expressions to limit the VRPs returned in the
-form of a query string. You can use ``select-asn`` to select ASNs and
+form of a query parameter. You can use ``select-asn`` to select ASNs and
 ``select-prefix`` to select prefixes. These expressions can be repeated
-multiple times. 
+multiple times. The output for each additional parameter will be added to the
+results.
 
 For example, to only show the VRPs in JSON format authorising AS196615, use:
 
@@ -52,6 +56,41 @@ This will produce the following output:
          { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
       ]
     }
+
+When you query for a prefix, by default Routinator will return the exact
+match, as well as less specific prefixes. In case you also want more more
+specifics to be displayed, the ``more-specifics`` query string can be used.
+
+For example, when querying for 93.175.144.0/20 and requesting more specific
+prefixes, we'll get all of the IPv4 VRPs for the RIPE NCC RIS anchors and 
+beacons in this range:
+
+.. code-block:: text
+
+   curl http://192.0.2.13:8323/json?select-prefix=93.175.144.0/20&include=more-specifics
+
+This will produce the following output:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644252691,
+         "generatedTime": "2022-02-07T16:51:31Z"
+      },
+      "roas": [
+         { "asn": "AS12654", "prefix": "93.175.146.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.148.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.149.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.150.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.151.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.152.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12654", "prefix": "93.175.153.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS12859", "prefix": "93.175.159.0/24", "maxLength": 24, "ta": "ripe" },
+         { "asn": "AS201965", "prefix": "93.175.159.0/24", "maxLength": 24, "ta": "ripe" }
+      ]
+   }
 
 TLS Transport
 -------------
