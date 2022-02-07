@@ -5,33 +5,39 @@ use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use futures::stream;
-use hyper::{Body, Request, Response};
+use hyper::{Body, Method, Request};
 use rpki::rtr::Serial;
 use rpki::rtr::payload::Payload;
 use crate::payload::{
     PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
 };
-use super::errors::{bad_request, initial_validation};
+use super::response::{ContentType, Response, ResponseBuilder};
 
 //------------ handle_get ----------------------------------------------------
 
-pub fn handle_get(
+pub fn handle_get_or_head(
     req: &Request<Body>,
     history: &SharedHistory,
-) -> Option<Response<Body>> {
+) -> Option<Response> {
     if req.uri().path() != "/json-delta" {
         return None
     }
     let history = history.read();
 
     if !history.is_active() {
-        return Some(initial_validation())
+        return Some(Response::initial_validation())
     }
 
     let version = match version_from_query(req.uri().query()) {
         Ok(version) => version,
         Err(response) => return Some(response)
     };
+
+    if *req.method() == Method::HEAD {
+        return Some(
+            ResponseBuilder::ok().content_type(ContentType::JSON).empty()
+        )
+    }
 
     if let Some((session, serial)) = version {
         if session == history.session() {
@@ -45,14 +51,14 @@ pub fn handle_get(
 
     let snapshot = match history.current() {
         Some(snapshot) => snapshot,
-        None => return Some(initial_validation()),
+        None => return Some(Response::initial_validation()),
     };
     Some(handle_reset(history.session(), history.serial(), snapshot))
 }
 
 fn version_from_query(
     query: Option<&str>
-) -> Result<Option<(u64, Serial)>, Response<Body>> {
+) -> Result<Option<(u64, Serial)>, Response> {
     let query = match query {
         Some(query) => query,
         None => return Ok(None)
@@ -63,50 +69,50 @@ fn version_from_query(
     for (key, value) in form_urlencoded::parse(query.as_ref()) {
         if key == "session" {
             if session.is_some() {
-                return Err(bad_request());
+                return Err(Response::bad_request());
             }
-            session = Some(u64::from_str(&value).map_err(|_| bad_request())?);
+            session = Some(u64::from_str(&value).map_err(|_| {
+                Response::bad_request()
+            })?);
         }
         else if key == "serial" {
             if serial.is_some() {
-                return Err(bad_request());
+                return Err(Response::bad_request());
             }
-            serial = Some(Serial::from_str(&value).map_err(|_| bad_request())?);
+            serial = Some(Serial::from_str(&value).map_err(|_| {
+                Response::bad_request()
+            })?);
         }
         else {
-            return Err(bad_request());
+            return Err(Response::bad_request());
         }
     }
     match (session, serial) {
         (Some(session), Some(serial)) => Ok(Some((session, serial))),
         (None, None) => Ok(None),
-        _ => Err(bad_request())
+        _ => Err(Response::bad_request())
     }
 }
 
 fn handle_delta(
     session: u64, from_serial: Serial, to_serial: Serial,
     delta: Arc<PayloadDelta>
-) -> Response<Body> {
-    Response::builder()
-    .header("Content-Type", "application/json")
+) -> Response {
+    ResponseBuilder::ok().content_type(ContentType::JSON)
     .body(Body::wrap_stream(stream::iter(
         DeltaStream::new(session, from_serial, to_serial, delta)
         .map(Result::<_, Infallible>::Ok)
     )))
-    .unwrap()
 }
 
 fn handle_reset(
     session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>
-) -> Response<Body> {
-    Response::builder()
-    .header("Content-Type", "application/json")
+) -> Response {
+    ResponseBuilder::ok().content_type(ContentType::JSON)
     .body(Body::wrap_stream(stream::iter(
         SnapshotStream::new(session, to_serial, snapshot)
         .map(Result::<_, Infallible>::Ok)
     )))
-    .unwrap()
 }
 
 

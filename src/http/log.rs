@@ -1,29 +1,27 @@
 //! Handles endpoints related to the log.
 
-use hyper::{Body, Request, Response};
+use hyper::{Body, Method, Request};
 use crate::process::LogOutput;
+use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
-pub fn handle_get(
+pub fn handle_get_or_head(
     req: &Request<Body>,
     log: Option<&LogOutput>,
-) -> Option<Response<Body>> {
+) -> Option<Response> {
     if req.uri().path() == "/log" {
-        Some(
-            Response::builder()
-            .header("Content-Type", "text/plain;charset=UTF-8")
-            .body(
-                if let Some(log) = log {
-                    log.get_output().into()
-                }
-                else {
-                    Body::empty()
-                }
-            )
-            .unwrap()
-        )
+        let res = ResponseBuilder::ok().content_type(ContentType::JSON);
+        if *req.method() == Method::HEAD {
+            Some(res.empty())
+        }
+        else {
+            match log {
+                Some(log) => Some(res.body(log.get_output())),
+                None => Some(res.empty())
+            }
+        }
     }
     else {
         None

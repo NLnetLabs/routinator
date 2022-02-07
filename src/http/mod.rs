@@ -8,13 +8,14 @@
 //! [`http_listener`]: fn.http_listener.html
 
 pub use self::listener::http_listener;
+pub use self::response::ContentType;
 
 mod delta;
-mod errors;
 mod listener;
 mod log;
 mod metrics;
 mod payload;
+mod response;
 mod status;
 mod ui;
 mod validity;
@@ -22,11 +23,11 @@ mod validity;
 
 //------------ handle_request ------------------------------------------------
 
-use hyper::{Body, Method, Request, Response};
+use hyper::{Body, Method, Request};
 use crate::metrics::{HttpServerMetrics, SharedRtrServerMetrics};
 use crate::payload::SharedHistory;
 use crate::process::LogOutput;
-use self::errors::{method_not_allowed, not_found};
+use self::response::Response;
 
 
 async fn handle_request(
@@ -35,40 +36,40 @@ async fn handle_request(
     metrics: &HttpServerMetrics,
     rtr_metrics: &SharedRtrServerMetrics,
     log: Option<&LogOutput>,
-) -> Response<Body> {
+) -> Response {
     metrics.inc_requests();
-    if *req.method() != Method::GET {
-        return method_not_allowed()
+    if *req.method() != Method::GET && *req.method() != Method::HEAD {
+        return Response::method_not_allowed()
     }
 
-    if let Some(response) = payload::handle_get(&req, origins) {
+    if let Some(response) = payload::handle_get_or_head(&req, origins) {
         return response
     }
-    if let Some(response) = delta::handle_get(&req, origins) {
+    if let Some(response) = delta::handle_get_or_head(&req, origins) {
         return response
     }
-    if let Some(response) = log::handle_get(&req, log) {
+    if let Some(response) = log::handle_get_or_head(&req, log) {
         return response
     }
-    if let Some(response) = metrics::handle_get(
+    if let Some(response) = metrics::handle_get_or_head(
         &req, origins, metrics, rtr_metrics
     ).await {
         return response
     }
-    if let Some(response) = status::handle_get(
+    if let Some(response) = status::handle_get_or_head(
         &req, origins, metrics, rtr_metrics
     ).await {
         return response
     }
-    if let Some(response) = validity::handle_get(&req, origins) {
+    if let Some(response) = validity::handle_get_or_head(&req, origins) {
         return response
     }
 
     #[cfg(feature = "ui")]
-    if let Some(response) = ui::handle_get(&req) {
+    if let Some(response) = ui::handle_get_or_head(&req) {
         return response
     }
     
-    not_found()
+    Response::not_found()
 }
 
