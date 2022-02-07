@@ -1,7 +1,6 @@
 /// Support for the RPKI-to-Router Protocol.
 
 use std::io;
-use std::convert::TryFrom;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
@@ -156,9 +155,9 @@ impl RtrStream {
     fn set_keepalive(
         sock: &TcpStream, duration: Duration
     ) -> Result<(), io::Error>{
+        use std::convert::TryFrom;
+        use std::os::unix::io::AsRawFd;
         use nix::sys::socket::{setsockopt, sockopt};
-
-        let fd = std::os::unix::io::AsRawFd::as_raw_fd(sock);
 
         (|fd, duration: Duration| {
             setsockopt(
@@ -166,7 +165,7 @@ impl RtrStream {
                 &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
             )?;
             setsockopt(fd, sockopt::KeepAlive, &true)
-        })(fd, duration).map_err(|err| {
+        })(sock.as_raw_fd(), duration).map_err(|err| {
             io::Error::new(io::ErrorKind::Other, err)
         })
     }
