@@ -54,7 +54,7 @@ resources allocated to the same organisation.
     Prefixes related to your query
 
 Routinator does not perform the BGP and allocation lookups itself, but relies on
-the open source `roto-api <https://github.com/NLnetLabs/roto-api>`_ service,
+the open-source `roto-api <https://github.com/NLnetLabs/roto-api>`_ service,
 developed and hosted by NLnet Labs at `bgp-api.net 
 <https://rest.bgp-api.net/api/v1/>`_. The service uses these data sources:
 

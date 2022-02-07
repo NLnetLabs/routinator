@@ -7,20 +7,21 @@ running it with the defaults will work just fine. You can specify options as
 :ref:`configuration file <manual-page:configuration file>`.
 
 Routinator uses the `TOML format <https://github.com/toml-lang/toml>`_ for
-specifying options in the configuration file. Its entries are named similarly to
-the command line options. A complete sample configuration file showing all the
-default values can be found in the `repository
+specifying options in the configuration file. Its entries are named similarly
+to the command line options. A complete sample configuration file showing all
+the default values can be found in the `repository
 <https://github.com/NLnetLabs/routinator/blob/master/etc/routinator.conf.example>`_.
 
 Routinator can run as a daemon but you can also use it interactively from the
 command line. However, there are several considerations with regards to how
-you've installed and how you intend to use Routinator, which we'll cover below.
+you've installed and how you intend to use Routinator, which we'll cover
+below.
 
 Routinator Installed From a Package
 -----------------------------------
 
-As explained in the :doc:`initialisation` section, the installation script will
-run as the user *routinator* and refer to the configuration file
+As explained in the :doc:`initialisation` section, the installation script
+will run as the user *routinator* and refer to the configuration file
 :file:`/etc/routinator/routinator.conf` which contains the following
 pre-configured options:
 
@@ -35,10 +36,10 @@ For security reasons the HTTP and RTR server will only listen on localhost,
 so you will have to change these values to make them accessible to other
 devices on your network.
 
-The service script that starts Routinator uses the :option:`--config` option to
-explicitly refer to this configuration file, so any desired changes should be
-made here. If you would like to know what default settings Routinator runs with
-in addition to the settings in the config file, you can check with the
+The service script that starts Routinator uses the :option:`--config` option
+to explicitly refer to this configuration file, so any desired changes should
+be made here. If you would like to know what default settings Routinator runs
+with in addition to the settings in the config file, you can check with the
 :subcmd:`config` subcommand:
 
 .. code-block:: bash
@@ -48,24 +49,24 @@ in addition to the settings in the config file, you can check with the
 This output will also provide you with the correct syntax in case you want to
 make changes.
 
-.. Important:: Once you have started Routinator with ``sudo systemctl enable 
-               --now routinator`` you should not invoke
-               :doc:`interactive<interactive>` validation runs from the command
-               line using ``routinator vrps``. If there is specific information
-               you would like to have from Routinator, you should retrieve it
-               via the :doc:`user interface<user-interface>` or one of the
+.. Important:: Once you have started Routinator as a system service you 
+               should not invoke :doc:`interactive<interactive>` validation 
+               runs from the command line using ``routinator vrps``. If there
+               is specific information you would like to have from 
+               Routinator, you should retrieve it via the 
+               :doc:`user interface<user-interface>` or one of the 
                :doc:`HTTP endpoints<http-service>`.
 
 Routinator Built with Cargo
 ---------------------------
 
-If you have built Routinator using Cargo, you have made your own decisions with
-regards to the user that it runs as and the privileges it has. There is no
-default configuration file, as it is your choice if you want to use one.
+If you have built Routinator using Cargo, you have made your own decisions
+with regards to the user that it runs as and the privileges it has. There is
+no default configuration file, as it is your choice if you want to use one.
 
-If you run Routinator without referring to a configuration file it will check if
-there is a :file:`$HOME/.routinator.conf` file and if it exists, use it. If no
-configuration file is available, the default values are used.
+If you run Routinator without referring to a configuration file it will check
+if there is a :file:`$HOME/.routinator.conf` file and if it exists, use it.
+If no configuration file is available, the default values are used.
 
 You can view the default settings Routinator runs with using:
 
@@ -75,7 +76,8 @@ You can view the default settings Routinator runs with using:
 
 It will return the list of defaults in the same notation that is used by the
 :ref:`configuration file <manual-page:configuration file>`, which will be
-largely similar to this and can serve as a starting point for making your own:
+largely similar to this and can serve as a starting point for making your
+own:
 
 .. code-block:: toml
 
@@ -110,3 +112,41 @@ largely similar to this and can serve as a starting point for making your own:
     unsafe-vrps = "warn"
     validation-threads = 4
     
+Using Tmpfs for the RPKI Cache
+------------------------------
+
+The full RPKI data set consists of hundreds of thousands of small files. This
+causes a considerable amount of disk I/O with each validation run. If this is
+undesirable in your setup, you can choose to store the cache in volatile
+memory using the `tmpfs file system
+<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
+
+When setting this up, you should make sure to only put the directory for the
+local RPKI cache in *tmpfs* and not the directory where the Trust Anchor
+Locators reside. Both locations are set in the :ref:`configuration file
+<manual-page:configuration file>` with the ``repository-dir`` and ``tal-dir``
+options, respectively.
+
+If you have installed Routinator using a package, by default the RPKI cache
+directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
+as an example. Note that the directory you choose must exist before the mount
+can be done. You should allocate at least 3GB for the cache, but giving it
+4GB will allow ample margin for future growth:
+
+.. code-block:: bash
+
+    sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
+
+*Tmpfs* will behave just like a regular disk, so if it runs out of space
+Routinator will do a clean crash, stopping validation, the API, HTTP server
+and most importantly the RTR server, ensuring that no stale data will be
+served to your routers. 
+
+Also keep in mind that every time you restart the machine, the contents of
+the *tmpfs* file system will be lost. This means that Routinator will have to
+rebuild its cache from scratch. This is not a problem, other than it having
+to download several gigabytes of data, which usually takes about ten minutes
+to complete. During this time all services will be unavailble.
+
+Note that your routers should be configured to have a secondary relying party
+instance available at all times.
