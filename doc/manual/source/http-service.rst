@@ -92,6 +92,9 @@ This will produce the following output:
       ]
    }
 
+.. versionadded:: 0.11
+   ``more-specifics`` query parameter
+
 TLS Transport
 -------------
 
