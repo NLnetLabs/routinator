@@ -10,6 +10,7 @@ use routecore::addr;
 use rpki::repository::resources::Asn;
 use rpki::rtr::payload::{RouteOrigin, RouterKey};
 use crate::error::Failed;
+use crate::http::ContentType;
 use crate::payload::{
     PayloadInfo, PayloadSnapshot, SnapshotArcOriginsIter,
     SnapshotArcRouterKeysIter,
@@ -119,14 +120,14 @@ impl OutputFormat {
     }
 
     /// Returns the media type string for this output format.
-    pub fn content_type(self) -> &'static str {
+    pub fn content_type(self) -> ContentType {
         match self {
             OutputFormat::Csv | OutputFormat::CompatCsv |
             OutputFormat::ExtendedCsv
-                => "text/csv;charset=utf-8;header=present",
+                => ContentType::CSV,
             OutputFormat::Json | OutputFormat::ExtendedJson
-                => "application/json",
-            _ => "text/plain;charset=utf-8",
+                => ContentType::JSON,
+            _ => ContentType::TEXT,
         }
     }
 
@@ -221,7 +222,11 @@ impl FromStr for OutputFormat {
 /// A set of rules defining which payload to include in output.
 #[derive(Clone, Debug, Default)]
 pub struct Selection {
+    /// The list of selection conditions.
     origins: Vec<SelectOrigin>,
+
+    /// Should we include more specific prefixes in the output?
+    more_specifics: bool,
 }
 
 impl Selection {
@@ -251,6 +256,14 @@ impl Selection {
                     )
                 );
             }
+            else if key == "include" {
+                for value in value.split(',') {
+                    match value {
+                        "more-specifics" => res.more_specifics = true,
+                        _ => { }
+                    }
+                }
+            }
             else {
                 return Err(QueryError)
             }
@@ -272,7 +285,7 @@ impl Selection {
     /// Returns whether an origin should be included in output.
     pub fn include_origin(&self, origin: RouteOrigin) -> bool {
         for select in &self.origins {
-            if select.include_origin(origin) {
+            if select.include_origin(origin, self.more_specifics) {
                 return true
             }
         }
@@ -311,11 +324,14 @@ enum SelectOrigin {
 
 impl SelectOrigin {
     /// Returns whether this rule selects payload.
-    fn include_origin(self, origin: RouteOrigin) -> bool {
+    fn include_origin(
+        self, origin: RouteOrigin, more_specifics: bool
+    ) -> bool {
         match self {
             SelectOrigin::Asn(asn) => origin.asn == asn,
             SelectOrigin::Prefix(prefix) => {
                 origin.prefix.prefix().covers(prefix)
+                || (more_specifics && prefix.covers(origin.prefix.prefix()))
             }
         }
     }
