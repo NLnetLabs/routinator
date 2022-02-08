@@ -28,4 +28,4 @@ store
     repository similarly structured to the :file:`rrdp` directory and one
     additional directory :file:`rsync` that contains files collected via rsync.
 
-.. versionadded:: 0.9
+.. versionadded:: 0.9.0

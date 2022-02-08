@@ -65,7 +65,7 @@ This results in:
       ]
     }
 
-.. deprecated:: 0.9
+.. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
-.. versionadded:: 0.10
+.. versionadded:: 0.10.0
    Metadata in JSON format

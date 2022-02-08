@@ -67,5 +67,5 @@ developed and hosted by NLnet Labs at `bgp-api.net
     Internet Registries. These are updated daily.
 
 .. versionadded:: 0.8.3
-.. versionchanged:: 0.10
+.. versionchanged:: 0.10.0
    The Prefix Check

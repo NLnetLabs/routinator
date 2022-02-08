@@ -99,7 +99,7 @@ generated in a wide range of output formats for various use cases.
               ]
             }
 
-          .. versionchanged:: 0.10
+          .. versionchanged:: 0.10.0
              Add the *metadata* member
 
     jsonext
@@ -190,10 +190,10 @@ generated in a wide range of output formats for various use cases.
                 ]
               }
             
-          .. versionadded:: 0.9
-          .. versionchanged:: 0.10
+          .. versionadded:: 0.9.0
+          .. versionchanged:: 0.10.0
              Add the *metadata* member
-          .. versionchanged:: 0.11
+          .. versionchanged:: 0.11.0
              Add :ref:`advanced-features:bgpsec` information
 
     slurm
@@ -237,7 +237,7 @@ generated in a wide range of output formats for various use cases.
               }
             }
 
-          .. versionadded:: 0.11
+          .. versionadded:: 0.11.0
 
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
@@ -333,6 +333,6 @@ generated in a wide range of output formats for various use cases.
                 router certs:       2 verified;
                  router keys:       2 verified,       2 final.
 
-          .. versionchanged:: 0.11
+          .. versionchanged:: 0.11.0
              Reformat, sort alphabetically and add 
              :ref:`advanced-features:bgpsec` information

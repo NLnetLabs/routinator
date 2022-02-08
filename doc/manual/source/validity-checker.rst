@@ -186,4 +186,4 @@ detailed analysis of the reasoning behind the outcome of each route:
     ]
   }
 
-.. versionadded:: 0.9
+.. versionadded:: 0.9.0

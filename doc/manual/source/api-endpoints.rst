@@ -33,7 +33,7 @@ In addition, the ``/log`` endpoint returns :doc:`logging<logging>`
 information and the ``/metrics``, ``/status`` and
 ``/version`` endpoints provide :doc:`monitoring<monitoring>` data.
 
-.. versionchanged:: 0.9
+.. versionchanged:: 0.9.0
    The ``/api/v1/status`` path
-.. versionadded:: 0.9
+.. versionadded:: 0.9.0
    The ``/json-delta`` path

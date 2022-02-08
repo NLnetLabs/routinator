@@ -291,7 +291,7 @@ to get started.
        The Routinator container is known to run successfully run under 
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
 
-.. versionadded:: 0.9
+.. versionadded:: 0.9.0
    RPM packages
 
 Updating

@@ -144,10 +144,10 @@ initialised Routinator, enter:
 
    routinator init --force --tal arin-ote
 
-.. versionadded:: 0.9
+.. versionadded:: 0.9.0
    :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
    :option:`--tal` and :option:`--skip-tal`
-.. deprecated:: 0.9
+.. deprecated:: 0.9.0
    ``--decline-arin-rpa``, use :option:`--skip-tal` instead
 
 Verifying Initialisation
