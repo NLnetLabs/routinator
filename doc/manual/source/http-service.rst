@@ -56,8 +56,8 @@ More Specific Prefixes
 
 When you query for a prefix, by default Routinator will return the exact
 match, as well as less specifics. The reason is that a VRP of an overlapping
-less specific prefix could also make the BGP announcement *RPKI Valid*, if
-the :term:`Maximum Prefix Length (MaxLength)` is set to allow this.
+less specific prefix can also affect the RPKI validity of a BGP announcement,
+depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
 
 In some cases you may want more specifics to be displayed as well. For this
 the ``more-specifics`` query string can be used. For example, when querying
