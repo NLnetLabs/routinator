@@ -1,30 +1,24 @@
 HTTP Service
 ============
 
+Routinator has a built-in HTTP server, which can be started with the
+:option:`--http` command line option or the :term:`http-listen` option in the
+configuration file. Routinator natively supports `TLS Transport`_ and the
+endpoints are set up in such a way that it's easy to configure a
+:ref:`reverse proxy <http-service:using a reverse proxy>` as well.
+
 In addition to the various :doc:`VRP output formats<output-formats>`,
 Routinator's HTTP server also provides a :doc:`user
 interface<user-interface>`, an :doc:`API<api-endpoints>`,
 :doc:`monitoring<monitoring>` and :doc:`logging<logging>` endpoints. 
 
-The HTTP server is not enabled by default for security reasons, nor does it
-have a default host or port. Routinator natively supports `TLS Transport`_,
-but the endpoints are set up in such a way that it's easy to configure a
-:ref:`reverse proxy <http-service:using a reverse proxy>` as well.
-
-In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port
-8323, run:
+After fetching and verifying all RPKI data for the first time, paths are
+available for each :doc:`VRP output format <output-formats>`. For example, at
+the ``/json`` path you can fetch a list of all VRPs in CSV format.
 
 .. code-block:: text
 
-   routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
-
-After fetching and verifying all RPKI data, paths are available for each
-:doc:`VRP output format <output-formats>`. For example, at the ``/csv`` path
-you can fetch a list of all VRPs in CSV format.
-
-.. code-block:: text
-
-   curl http://192.0.2.13:8323/csv
+   curl http://192.0.2.13:8323/json
 
 These paths accept selector expressions to limit the VRPs returned in the
 form of a query string. You can use ``select-asn`` to select ASNs and
