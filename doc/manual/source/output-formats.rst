@@ -55,6 +55,11 @@ generated in a wide range of output formats for various use cases.
             - the maximum prefix length, and 
             - the not-before and not-after date of the validity of the ROA.
           
+          .. Note:: This format is available for backwards compatibility
+                    reasons only. One particular limitation is that it does 
+                    not consider duplicate ROAs. Please use :term:`jsonext`
+                    as a comprehensive output format.
+
           .. code-block:: text
             
             URI,ASN,IP Prefix,Max Length,Not Before,Not After
