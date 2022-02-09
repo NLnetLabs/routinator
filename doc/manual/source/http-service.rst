@@ -1,6 +1,12 @@
 HTTP Service
 ============
 
+Routinator has a built-in HTTP server, which can be started with the
+:option:`--http` command line option or the :term:`http-listen` option in the
+configuration file. Routinator natively supports `TLS Transport`_ and the
+endpoints are set up in such a way that it's easy to configure a
+:ref:`reverse proxy <http-service:using a reverse proxy>` as well.
+
 In addition to the various :doc:`VRP output formats<output-formats>`,
 Routinator's HTTP server also provides a :doc:`user
 interface<user-interface>`, an :doc:`API<api-endpoints>`,
@@ -18,9 +24,9 @@ In order to start the HTTP server at 192.0.2.13 and 2001:0DB8::13 on port
 
    routinator server --http 192.0.2.13:8323 --http [2001:0DB8::13]:8323
 
-After fetching and verifying all RPKI data, paths are available for each
-:doc:`VRP output format <output-formats>`. For example, at the ``/json`` path
-you can fetch a list of all VRPs in JSON format.
+After fetching and verifying all RPKI data for the first time, paths are
+available for each :doc:`VRP output format <output-formats>`. For example, at
+the ``/json`` path you can fetch a list of all VRPs in CSV format.
 
 .. code-block:: text
 

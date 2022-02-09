@@ -1,27 +1,25 @@
 RTR Service
 ===========
 
-Routinator has a built-in server for the RPKI-to-Router (RTR) protocol. It
-supports :RFC:`8210` as well as the older version described in :RFC:`6810`.
-When launched as an RTR server, routers with support for route origin
-validation (ROV) can connect to Routinator to fetch the processed data. 
+Routinator has a built-in server for the RPKI-to-Router (RTR) protocol, which
+can be started with the :option:`--rtr` command line option or the
+:term:`rtr-listen` option in the configuration file. 
+
+Routinator supports RTR version 1 described in :RFC:`8210`, as well as the
+older version from :RFC:`6810`. After the first validation run has completed,
+routers with support for route origin validation (ROV) can connect to
+Routinator to fetch the processed data. 
 
 .. Tip:: If you would like to run the RTR server as a separate daemon, for
          example because you want to centralise validation and distribute
          processed data to various locations where routers can connect, then
          NLnet Labs provides :doc:`RTRTR<rtrtr:index>`.
 
-In order to start the RTR server at 192.0.2.13 and 2001:0DB8::13 on port
-3323, run Routinator using the :subcmd:`server` subcommand:
-
-.. code-block:: text
-
-   routinator server --rtr 192.0.2.13:3323 --rtr [2001:0DB8::13]:3323
-
-Please note that port 3323 is not the :abbr:`IANA (Internet Assigned Numbers
-Authority)`-assigned default port for the protocol, which would be 323. But
-as this is a privileged port, you would need to be running Routinator as root
-when otherwise there is no reason to do that. 
+In the examples throughout the documentation we use port 3323 for RTR
+connections, but please note that this is not the :abbr:`IANA (Internet
+Assigned Numbers Authority)`-assigned default port for the protocol, which
+would be 323. But as this is a privileged port, you would need to be running
+Routinator as *root* when otherwise there is no reason to do that. 
 
 Secure Transports
 -----------------
