@@ -519,7 +519,8 @@ impl Server {
 
         let history = SharedHistory::from_config(process.config());
         let (mut notify, rtr) = rtr_listener(
-            history.clone(), rtr_metrics.clone(), process.config()
+            history.clone(), rtr_metrics.clone(), process.config(),
+            process.get_listen_fd()?
         )?;
         let http = http_listener(
             history.clone(), rtr_metrics, log.clone(), process.config()

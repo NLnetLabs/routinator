@@ -2,6 +2,7 @@
 
 use std::{fs, io};
 use std::future::Future;
+use std::net::TcpListener;
 use std::path::Path;
 use std::sync::mpsc;
 use bytes::Bytes;
@@ -234,6 +235,32 @@ impl Process {
     /// administrator permissions and change the file system root.
     pub fn drop_privileges(&mut self) -> Result<(), Failed> {
         self.service.take().unwrap().drop_privileges(&mut self.config)
+    }
+
+    /// Returns the first listen socket passed into the process if available.
+    pub fn get_listen_fd(&self) -> Result<Option<TcpListener>, Failed> {
+        if self.config.systemd_listen {
+            match listenfd::ListenFd::from_env().take_tcp_listener(0) {
+                Ok(Some(res)) => Ok(Some(res)),
+                Ok(None) => {
+                    error!(
+                        "Fatal: systemd_listen enabled \
+                         but no socket available."
+                    );
+                    Err(Failed)
+                }
+                Err(err) => {
+                    error!(
+                        "Fatal: failed to get systemd_listen socket:  {}",
+                        err
+                    );
+                    Err(Failed)
+                }
+            }
+        }
+        else {
+            Ok(None)
+        }
     }
 }
 
