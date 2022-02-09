@@ -1,16 +1,6 @@
 VRP Output Formats
 ==================
 
-.. versionadded:: 0.9
-   The :term:`jsonext` format
-   
-.. versionadded:: 0.10
-   Metadata in :term:`json` and :term:`jsonext` format
-
-.. versionadded:: 0.11
-   :ref:`advanced-features:bgpsec` information in :term:`jsonext` and 
-   :term:`summary` formats
-
 Routinator can perform RPKI validation as a one-time operation or run as a
 daemon. In both operating modes validated ROA payloads (VRPs) can be
 generated in a wide range of output formats for various use cases.
@@ -26,9 +16,12 @@ generated in a wide range of output formats for various use cases.
 
     csv
           The list is formatted as lines of comma-separated values of the
-          prefix in slash notation, the maximum prefix length, the autonomous
-          system number, and the name of the trust anchor the entry is
-          derived from. 
+          following items:
+
+            -  The prefix in slash notation, 
+            -  the maximum prefix length, 
+            -  the Autonomous System Number, and 
+            -  the name of the trust anchor the entry is derived from. 
           
           .. code-block:: text
             
@@ -39,7 +32,7 @@ generated in a wide range of output formats for various use cases.
           
     csvcompat
           This is the same as the *csv* format except that all fields are
-          embedded in double quotes and the autonomous system number is given
+          embedded in double quotes and the Autonomous System Number is given
           without the prefix *AS*. This format is pretty much identical to
           the CSV format produced by the RIPE NCC RPKI Validator.
           
@@ -53,11 +46,14 @@ generated in a wide range of output formats for various use cases.
     csvext
           This is an extended version of the *csv* format, which was used by
           the RIPE NCC RPKI Validator 1.x. Each line contains these
-          comma-separated values: the rsync URI of the ROA the line is taken
-          from (or "N/A" if it isn't from a ROA), the autonomous system
-          number, the prefix in slash notation, the maximum prefix length,
-          and lastly the not-before and not-after date of the validity of the
-          ROA.
+          comma-separated values: 
+          
+            - The rsync URI of the ROA the line is taken from (or "N/A" if it
+              isn't from a ROA), 
+            - the Autonomous System Number, 
+            - the prefix in slash notation, 
+            - the maximum prefix length, and 
+            - the not-before and not-after date of the validity of the ROA.
           
           .. code-block:: text
             
@@ -69,13 +65,19 @@ generated in a wide range of output formats for various use cases.
     json
           The output is in JSON format. The list is placed into a member
           named *roas* which contains an array of objects with four elements
-          each: The autonomous system number of the network authorised to
-          originate a prefix in *asn*, the prefix in slash notation in
-          *prefix*, the maximum prefix length of the announced route in
-          *maxLength*, and the trust anchor from which the authorisation was
-          derived in *ta*. This format of the *roas* element is identical to
-          that produced by the RIPE NCC RPKI Validator except for different
-          naming of the trust anchor. 
+          each: 
+          
+            - *asn* lists the Autonomous System Number of the network
+              authorised to originate a prefix,
+            - *prefix* has the prefix in slash notation,
+            - *maxLength* states the maximum prefix length of the announced
+              route, and
+            - *ta* has the trust anchor from which the authorisation was
+              derived. 
+          
+          This format of the *roas* element is identical to that produced by
+          the RIPE NCC RPKI Validator except for different naming of the
+          trust anchor. 
           
           The output object also includes a member named *metadata* which
           provides additional information. Currently, this is a member
@@ -83,7 +85,7 @@ generated in a wide range of output formats for various use cases.
           Unix timestamp, and a member *generatedTime* which provides the
           same time but in the standard ISO date format.
           
-          .. code-block:: text
+          .. code-block:: json
             
             {
               "metadata": {
@@ -96,6 +98,9 @@ generated in a wide range of output formats for various use cases.
                 { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
               ]
             }
+
+          .. versionchanged:: 0.10.0
+             Add the *metadata* member
 
     jsonext
           The list is placed into a JSON object with three members:
@@ -113,7 +118,7 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements
           each: 
           
-            - *asn* lists the autonomous system number of the network
+            - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
             - *prefix* has the prefix in slash notation,
             - *maxLength* states the maximum prefix length of the announced
@@ -156,7 +161,7 @@ generated in a wide range of output formats for various use cases.
           Please note that because of this additional information, output in
           :term:`jsonext` format will be quite large.
           
-          .. code-block:: text
+          .. code-block:: json
           
               {
                 "metadata": {
@@ -184,6 +189,55 @@ generated in a wide range of output formats for various use cases.
 
                 ]
               }
+            
+          .. versionadded:: 0.9.0
+          .. versionchanged:: 0.10.0
+             Add the *metadata* member
+          .. versionchanged:: 0.11.0
+             Add :ref:`advanced-features:bgpsec` information
+
+    slurm
+          The list is formatted as locally added assertions of a :doc:`local
+          exceptions<local-exceptions>` file defined by :RFC:`8416` (also
+          known as SLURM). The produced file will have empty validation
+          output filters.
+
+          .. code-block:: json
+
+            {
+              "slurmVersion": 1,
+              "validationOutputFilters": {
+                "prefixFilters": [ ],
+                "bgpsecFilters": [ ]
+              },
+              "locallyAddedAssertions": {
+                "prefixAssertions": [
+                  {
+                    "asn": 196615,
+                    "prefix": "93.175.147.0/24",
+                    "maxPrefixLength": 24,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd03::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd04::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  }
+                ],
+                "bgpsecAssertions": [
+
+                ]
+              }
+            }
+
+          .. versionadded:: 0.11.0
 
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
@@ -278,3 +332,7 @@ generated in a wide range of output formats for various use cases.
                         VRPs:  361536 verified,      25 unsafe,  307434 final;
                 router certs:       2 verified;
                  router keys:       2 verified,       2 final.
+
+          .. versionchanged:: 0.11.0
+             Reformat, sort alphabetically and add 
+             :ref:`advanced-features:bgpsec` information

@@ -15,6 +15,9 @@ New
 * Reject so-called premature manifests, i.e., manifests that have an issue
   time before the current time. This is a new requirement in
   [draft-ietf-sidrops-6486bis]. ([#681], [#690])
+* Add a new output format `slurm` that produces a JSON file formatted
+  according to [RFC 8416] with the validated payload included in the
+  locally added assertions. ([#702])
 
 Bug Fixes
 
@@ -27,6 +30,11 @@ Bug Fixes
   ([#683])
 * Don’t claim filtering of unsafe VRPs when the policy is `warn`. (Only
   the log message was wrong, no VRPs were filtered in this case.) ([#699])
+* Use a TCP listener socket for the RTR server passed in via systemd
+  socket activation if configured. This was already implemented but got lost
+  a few versions ago. ([#709])
+* Enable TCP keepalive on RTR connections when configured. This, too, was
+  already implemented but got lost a few versions ago. ([#710])
 
 Other Changes
 
@@ -42,7 +50,11 @@ Other Changes
 [#690]: https://github.com/NLnetLabs/routinator/pull/690
 [#693]: https://github.com/NLnetLabs/routinator/pull/693
 [#699]: https://github.com/NLnetLabs/routinator/pull/699
+[#702]: https://github.com/NLnetLabs/routinator/pull/702
+[#709]: https://github.com/NLnetLabs/routinator/pull/709
+[#710]: https://github.com/NLnetLabs/routinator/pull/710
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
+[RFC 8416]: https://tools.ietf.org/html/rfc8416
 
 
 # 0.10.2 ‘Skuffet, men ikke overrasket’

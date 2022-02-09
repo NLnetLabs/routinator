@@ -8,8 +8,6 @@ Force to improve and augment RPKI.
 Resource Tagged Attestations
 ----------------------------
 
-.. versionadded:: 0.8.0
-
 Resource Tagged Attestations (RTAs) allow any arbitrary file to be signed
 ‘with resources’ by one or more parties. The RTA object is a separate file
 that cryptographically connects the document with a set of resources. The
@@ -24,7 +22,7 @@ provider. The document authorising BYOIP could be signed using RTA.
 RTA objects can be generated using Krill, the RPKI Certificate Authority
 software from NLnet Labs, and you can use the MyAPNIC hosted service. The
 objects can be validated using Routinator if it is built with RTA support,
-using the :ref:`features<installation-notes:enabling or disabling features>`
+using the :ref:`features<building:enabling or disabling features>`
 functionality provided by Cargo:
 
 .. code-block:: text
@@ -51,10 +49,10 @@ Routinator will report the resources used to sign the object:
     - `A proof-of-concept for constructing and validating RTAs
       <https://github.com/APNIC-net/rpki-rta-demo>`_
 
+.. versionadded:: 0.8.0
+
 BGPsec
 ------
-
-.. versionadded:: 0.11.0
 
 The goal of BGPsec, as described in :RFC:`8209`, is to provide full AS path
 validation. For this operators will need to publish BGPsec router keys in the
@@ -65,7 +63,7 @@ You can let Routinator process router keys and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
 or by setting ``enable-bgpsec`` to True in the :doc:`configuration
 file<configuration>`. BGPsec information will be exposed via RTR, as well as
-in the SLURM and :term:`jsonext` output format, e.g.: 
+in the :term:`SLURM` and :term:`jsonext` output format, e.g.: 
 
 .. code-block:: json 
 
@@ -109,3 +107,5 @@ in the SLURM and :term:`jsonext` output format, e.g.:
             }]
         }]
     }
+
+.. versionadded:: 0.11.0

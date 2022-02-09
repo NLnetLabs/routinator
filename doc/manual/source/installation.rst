@@ -5,34 +5,35 @@ System Requirements
 -------------------
 
 Routinator has minimal system requirements. When choosing a system, make sure
-you have 1GB of available memory and 4GB of disk space for the application. This
-will give you ample margin for the RPKI repositories to grow over time, as
-adoption increases. A powerful CPU is not required.
+you have 1GB of available memory and 4GB of disk space for the application.
+This will give you ample margin for the RPKI repositories to grow over time,
+as adoption increases. A powerful CPU is not required.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
-Routinator only needs to establish outbound connections via HTTPS and rsync, on
-ports 443 and 873, respectively. 
+Routinator only needs to establish outbound connections via HTTPS and rsync,
+on ports 443 and 873, respectively. 
 
-Quick Start
------------
-
-.. versionadded:: 0.9
-   RPM packages
+Binary Packages
+---------------
 
 Getting started with Routinator is really easy by installing a binary package
-for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL), CentOS and
-Rocky Linux. The `NLnet Labs software package repository
-<https://packages.nlnetlabs.nl>`_ currently has packages available for the
-``amd64``/``x86_64`` architecture only. Alternatively, you can run with Docker
-or build from Cargo, Rust's build system and package manager.
+for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL) and
+compatible systems such as Rocky Linux. Alternatively, you can run with
+Docker. Packages and Docker images are currently available for the
+``amd64``/``x86_64`` architecture only.
+
+You can also build Routinator from the source code using Cargo, Rust's build
+system and package manager. Cargo lets you to run Routinator on almost any
+operating system and CPU architecture. Refer to the :doc:`building` section
+to get started.
 
 .. tabs::
 
    .. group-tab:: Debian
 
-       Our software package repository has binary packages available for 
-       Debian 9 (stretch), 10 (buster) and 11 (bullseye).
+       The NLnet Labs software package repository has binary packages
+       available for Debian 9 (stretch), 10 (buster) and 11 (bullseye).
        
        First update the :program:`apt` package index: 
 
@@ -85,15 +86,17 @@ or build from Cargo, Rust's build system and package manager.
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
           sudo systemctl enable --now routinator
 
        By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in the
-       :doc:`configuration file<configuration>` located in
+       HTTP server on port 8323. These, and other values can be changed in
+       the :doc:`configuration file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -110,8 +113,9 @@ or build from Cargo, Rust's build system and package manager.
 
    .. group-tab:: Ubuntu
 
-       Our software package repository has binary packages available for Ubuntu
-       16.x (Xenial Xerus), 18.x (Bionic Beaver) and 20.x (Focal Fossa).
+       The NLnet Labs software package repository has binary packages
+       available for Ubuntu 16.x (Xenial Xerus), 18.x (Bionic Beaver) and
+       20.x (Focal Fossa).
        
        First update the :program:`apt` package index: 
 
@@ -164,15 +168,17 @@ or build from Cargo, Rust's build system and package manager.
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
           sudo systemctl enable --now routinator
 
        By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in the
-       :doc:`configuration file<configuration>` located in
+       HTTP server on port 8323. These, and other values can be changed in
+       the :doc:`configuration file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -189,12 +195,12 @@ or build from Cargo, Rust's build system and package manager.
 
    .. group-tab:: RHEL/CentOS
 
-       Our software package repository has binary packages available for
-       RHEL/CentOS 7 and 8, or a compatible operating system such as Rocky 
-       Linux.
+       The NLnet Labs software package repository has binary packages
+       available for RHEL 7 and 8 and compatible operating system such as
+       Rocky Linux.
        
-       First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`, enter
-       this configuration and save it:
+       First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
+       enter this configuration and save it:
        
        .. code-block:: text
        
@@ -224,15 +230,17 @@ or build from Cargo, Rust's build system and package manager.
 
           sudo routinator-init
 
-       After successful initialisation you can enable Routinator with:
+       To learn more about this process refer to the :doc:`initialisation`
+       section. After successful initialisation you can enable Routinator
+       with:
 
        .. code-block:: bash
 
           sudo systemctl enable --now routinator
 
        By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in the
-       :doc:`configuration file<configuration>` located in
+       HTTP server on port 8323. These, and other values can be changed in
+       the :doc:`configuration file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -251,11 +259,11 @@ or build from Cargo, Rust's build system and package manager.
 
        Due to the impracticality of complying with terms and conditions in an
        unsupervised Docker environment, before launching the container it is
-       necessary to first review and agree to the `ARIN Relying Party Agreement
-       (RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree,
-       you can let the Routinator Docker image install the :term:`Trust Anchor
-       Locator (TAL)` files into a mounted volume that is later reused for the
-       server.
+       necessary to first review and agree to the `ARIN Relying Party
+       Agreement (RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_.
+       If you agree, you can let the Routinator Docker image install the
+       :term:`Trust Anchor Locator (TAL)` files into a mounted volume that is
+       later reused for the server.
 
        First, create a Docker volume to persist the TAL files in:
 
@@ -270,9 +278,9 @@ or build from Cargo, Rust's build system and package manager.
           sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
               nlnetlabs/routinator init -f --accept-arin-rpa
 
-       Finally, launch the detached container named *routinator*, exposing the
-       :term:`RPKI-to-Router (RPKI-RTR)` protocol on port 3323 and HTTP on port
-       8323:
+       Finally, launch the detached container named *routinator*, exposing
+       the :term:`RPKI-to-Router (RPKI-RTR)` protocol on port 3323 and HTTP
+       on port 8323:
 
        .. code-block:: bash
 
@@ -283,58 +291,8 @@ or build from Cargo, Rust's build system and package manager.
        The Routinator container is known to run successfully run under 
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
 
-   .. group-tab:: Cargo
-
-       In this Quick Start we'll assume that you have a newly installed, recent
-       Linux distribution. Full instructions are in the 
-       `Installing From Source`_ and :doc:`initialisation` sections.
-       
-       First you will need to install rsync, the C toolchain and curl to fetch
-       Rust:
-
-       .. code-block:: bash
-
-          sudo apt install \
-            rsync \
-            build-essential \
-            curl
-
-       Rust is installed and managed by the ``rustup`` tool. To download Rustup
-       and install Rust, run the following command and follow the on-screen
-       instructions:
-
-       .. code-block:: bash
-
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-       To configure your current shell, run:
-
-       .. code-block:: bash
-
-          source $HOME/.cargo/env
-
-       You can then proceed to install Routinator:
-
-       .. code-block:: bash
-
-          cargo install --locked routinator
-
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          routinator init
-
-       After successful initialisation you can for example start Routinator as a
-       daemon with the :term:`RPKI-to-Router (RPKI-RTR)` server on port 3323 and
-       the HTTP server on port 8323:
-
-       .. code-block:: text
-
-          routinator server --rtr 192.0.2.13:3323 --http 192.0.2.13:8323
+.. versionadded:: 0.9.0
+   RPM packages
 
 Updating
 --------
@@ -356,8 +314,8 @@ Updating
 
           sudo apt policy routinator
 
-       You can upgrade an existing Routinator installation to the latest version
-       using:
+       You can upgrade an existing Routinator installation to the latest
+       version using:
 
        .. code-block:: text
 
@@ -378,8 +336,8 @@ Updating
 
           sudo apt policy routinator
 
-       You can upgrade an existing Routinator installation to the latest version
-       using:
+       You can upgrade an existing Routinator installation to the latest
+       version using:
 
        .. code-block:: text
 
@@ -387,8 +345,8 @@ Updating
 
    .. group-tab:: RHEL/CentOS
 
-       To update an existing Routinator installation, you can use this command 
-       to get an overview of the available versions:
+       To update an existing Routinator installation, you can use this
+       command to get an overview of the available versions:
         
        .. code-block:: bash
         
@@ -407,23 +365,7 @@ Updating
        .. code-block:: text
        
           docker run -it nlnetlabs/routinator:latest
-               
-   .. group-tab:: Cargo
 
-       If you want to install the latest version of Routinator using Cargo, it's
-       recommended to update Rust to the latest version first, using:
-               
-       .. code-block:: text
-
-          rustup update
-
-       Use the ``--force`` option to  overwrite an existing version with the
-       latest Routinator release:
-
-       .. code-block:: text
-
-          cargo install --locked --force routinator
-          
 Installing Specific Versions
 ----------------------------
 
@@ -435,9 +377,9 @@ a specific version, if needed.
 
    .. group-tab:: Debian
 
-       If you would like to try out release candidates of Routinator you can add
-       the *proposed* repository to the existing *main* repository described
-       earlier. 
+       If you would like to try out release candidates of Routinator you can
+       add the *proposed* repository to the existing *main* repository
+       described earlier. 
        
        Assuming you already have followed the steps to install regular releases,
        run this command to add the additional repository:
@@ -470,12 +412,12 @@ a specific version, if needed.
 
    .. group-tab:: Ubuntu
 
-       If you would like to try out release candidates of Routinator you can add
-       the *proposed* repository to the existing *main* repository described
-       earlier. 
+       If you would like to try out release candidates of Routinator you can
+       add the *proposed* repository to the existing *main* repository
+       described earlier. 
        
-       Assuming you already have followed the steps to install regular releases,
-       run this command to add the additional repository:
+       Assuming you already have followed the steps to install regular
+       releases, run this command to add the additional repository:
 
        .. code-block:: bash
 
@@ -541,117 +483,3 @@ a specific version, if needed.
        
           docker run -it nlnetlabs/routinator:v0.9.0-rc2
                
-   .. group-tab:: Cargo
-
-       All release versions of Routinator, as well as release candidates, are
-       available on `crates.io <https://crates.io/crates/routinator/versions>`_,
-       the Rust package registry. If you want to install a specific version of
-       Routinator using Cargo, explicitly use the ``--version`` option. If
-       needed, use the ``--force`` option to overwrite an existing version:
-               
-       .. code-block:: text
-
-          cargo install --locked --force routinator --version 0.9.0-rc2
-
-       All new features of Routinator are built on a branch and merged via a
-       `pull request <https://github.com/NLnetLabs/routinator/pulls>`_, allowing
-       you to easily try them out using Cargo. If you want to try the a specific
-       branch from the repository you can use the ``--git`` and ``--branch``
-       options:
-
-       .. code-block:: text
-
-          cargo install --git https://github.com/NLnetLabs/routinator.git --branch main
-          
-       For more installation options refer to the `Cargo book
-       <https://doc.rust-lang.org/cargo/commands/cargo-install.html#install-options>`_.
-
-Installing From Source
-----------------------
-
-There are three things you need to install and run Routinator: rsync, a C
-toolchain and Rust. You can install Routinator on any system where you can
-fulfil these requirements.
-
-You need rsync because some RPKI repositories still use it as its main
-means of distribution. Some of the cryptographic primitives used by
-Routinator require a C toolchain. Lastly, you need Rust because that’s the
-programming language that Routinator has been written in.
-
-rsync
-"""""
-
-Currently, Routinator requires the :program:`rsync` executable to be in your
-path. Due to the nature of rsync, it is unclear which particular version you
-need at the very least, but whatever is being shipped with current Linux and
-\*BSD distributions, as well as macOS should be fine. Alternatively, you can
-download rsync from `the Samba website <https://rsync.samba.org/>`_.
-
-On Windows, Routinator requires the rsync version that comes with
-`Cygwin <https://www.cygwin.com/>`_ – make sure to select rsync during the
-installation phase.
-
-C Toolchain
-"""""""""""
-
-Some of the libraries Routinator depends on require a C toolchain to be present.
-Your system probably has some easy way to install the minimum set of packages to
-build from C sources. For example, this command will install everything you need
-on Debian/Ubuntu:
-
-.. code-block:: text
-
-  apt install build-essential
-
-If you are unsure, try to run :command:`cc` on a command line. If there is a
-complaint about missing input files, you are probably good to go.
-
-Rust
-""""
-
-The Rust compiler runs on, and compiles to, a great number of platforms, though
-not all of them are equally supported. The official `Rust Platform Support
-<https://doc.rust-lang.org/nightly/rustc/platform-support.html>`_ page provides
-an overview of the various support levels.
-
-While some system distributions include Rust as system packages,
-Routinator relies on a relatively new version of Rust, currently  1.52 or
-newer. We therefore suggest to use the canonical Rust installation via a
-tool called :program:`rustup`.
-
-Assuming you already have :program:`curl` installed, you can install
-:program:`rustup` and Rust by simply entering:
-
-.. code-block:: text
-
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-Alternatively, visit the `official Rust website
-<https://www.rust-lang.org/tools/install>`_ for other installation methods.
-
-You can update your Rust installation later by running:
-
-.. code-block:: text
-
-  rustup update
-
-Building
-""""""""
-
-The easiest way to get Routinator is to leave it to Cargo by saying:
-
-.. code-block:: text
-
-  cargo install --locked routinator
-
-The command will build Routinator and install it in the same directory that
-Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator will
-be in your path, too.
-
-Notes
------
-
-In case you want to enable or disable certain features, build a statically
-linked Routinator, store the RPKI cache on a `tmpfs` file system, or you have an
-Operating System where special care needs to be taken, such as OpenBSD and
-CentOS 6, please refer to the :doc:`installation-notes`.

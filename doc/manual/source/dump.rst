@@ -1,8 +1,6 @@
 Dumping Stored Data
 ===================
 
-.. versionadded:: 0.9
-
 The :subcmd:`dump` subcommand writes the contents of all stored data to the file
 system. This is primarily intended for debugging but can be used to get access
 to the view of the RPKI data that Routinator currently sees. This subcommand has
@@ -29,3 +27,5 @@ store
     by a valid manifest. This part contains one directory for each RRDP
     repository similarly structured to the :file:`rrdp` directory and one
     additional directory :file:`rsync` that contains files collected via rsync.
+
+.. versionadded:: 0.9.0

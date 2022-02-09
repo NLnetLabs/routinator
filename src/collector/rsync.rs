@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command as StdCommand, ExitStatus, Stdio};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use futures::TryFutureExt;
@@ -30,6 +30,7 @@ use crate::config::Config;
 use crate::error::Failed;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::fatal;
+use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
 
 
@@ -235,7 +236,7 @@ impl<'a> Run<'a> {
     /// This does not mean the module is actually up-to-date or even available
     /// as an update may have failed.
     pub fn was_updated(&self, uri: &uri::Rsync) -> bool {
-        self.updated.read().unwrap().contains(Module::from_uri(uri).as_ref())
+        self.updated.read().contains(Module::from_uri(uri).as_ref())
     }
 
     /// Tries to update the module for the given URI.
@@ -251,22 +252,22 @@ impl<'a> Run<'a> {
         let module = Module::from_uri(uri);
 
         // If it is already up-to-date, return.
-        if self.updated.read().unwrap().contains(module.as_ref()) {
+        if self.updated.read().contains(module.as_ref()) {
             return
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
         // yet.
         let mutex = {
-            self.running.write().unwrap()
+            self.running.write()
             .entry(module.clone().into_owned()).or_default()
             .clone()
         };
         
         // Acquire the mutex. Once we have it, see if the module is up-to-date
         // which happens if someone else had it first.
-        let _lock = mutex.lock().unwrap();
-        if self.updated.read().unwrap().contains(module.as_ref()) {
+        let _lock = mutex.lock();
+        if self.updated.read().contains(module.as_ref()) {
             return
         }
 
@@ -285,14 +286,14 @@ impl<'a> Run<'a> {
             );
 
             // Insert into updated map and metrics.
-            self.metrics.lock().unwrap().push(metrics);
+            self.metrics.lock().push(metrics);
         }
 
         // Remove from running.
-        self.running.write().unwrap().remove(module.as_ref());
+        self.running.write().remove(module.as_ref());
 
         // Insert into updated map no matter what.
-        self.updated.write().unwrap().insert(module.into_owned());
+        self.updated.write().insert(module.into_owned());
     }
 
     /// Loads the file for the given URI.
@@ -345,7 +346,7 @@ impl<'a> Run<'a> {
         }
 
         // Add all modules we’ve used during this run to retain.
-        for module in self.updated.read().unwrap().iter() {
+        for module in self.updated.read().iter() {
             retain.add_from_uri(&module.to_uri());
         }
 
@@ -412,7 +413,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.rsync = self.metrics.into_inner().unwrap();
+        metrics.rsync = self.metrics.into_inner();
     }
 }
 

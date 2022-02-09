@@ -25,7 +25,7 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
@@ -48,6 +48,7 @@ use crate::utils::binio::{Compose, Parse};
 use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
+use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
 
 
@@ -350,7 +351,7 @@ impl<'a> Run<'a> {
     /// This does not mean the repository is actually up-to-date or even
     /// available as an update may have failed.
     pub fn was_updated(&self, notify_uri: &uri::Https) -> bool {
-        self.updated.read().unwrap().get(notify_uri).is_some()
+        self.updated.read().get(notify_uri).is_some()
     }
 
     /// Accesses an RRDP repository.
@@ -366,22 +367,22 @@ impl<'a> Run<'a> {
         &self, rpki_notify: &uri::Https
     ) -> Result<Option<Repository>, Failed> {
         // If we already tried updating, we can return already.
-        if let Some(repo) = self.updated.read().unwrap().get(rpki_notify) {
+        if let Some(repo) = self.updated.read().get(rpki_notify) {
             return Ok(repo.clone())
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
         // yet.
         let mutex = {
-            self.running.write().unwrap()
+            self.running.write()
             .entry(rpki_notify.clone()).or_default()
             .clone()
         };
 
         // Acquire the mutex. Once we have it, see if the repository is
         // up-to-date which happens if someone else had the mutex first.
-        let _lock = mutex.lock().unwrap();
-        if let Some(res) = self.updated.read().unwrap().get(rpki_notify) {
+        let _lock = mutex.lock();
+        if let Some(res) = self.updated.read().get(rpki_notify) {
             return Ok(res.clone())
         }
 
@@ -389,10 +390,10 @@ impl<'a> Run<'a> {
         let repository = Repository::try_update(self, rpki_notify.clone())?;
 
         // Remove from running.
-        self.running.write().unwrap().remove(rpki_notify);
+        self.running.write().remove(rpki_notify);
 
         // Insert into updated map and also return.
-        self.updated.write().unwrap().insert(
+        self.updated.write().insert(
             rpki_notify.clone(), repository.clone()
         );
         Ok(repository)
@@ -408,7 +409,7 @@ impl<'a> Run<'a> {
     ) -> Result<(), Failed> {
         // Add all the RRDP repositories we’ve tried during this run to be
         // kept.
-        for uri in self.updated.read().unwrap().keys() {
+        for uri in self.updated.read().keys() {
             retain.insert(uri.clone());
         }
 
@@ -493,7 +494,7 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, metrics: &mut Metrics) {
-        metrics.rrdp = self.metrics.into_inner().unwrap()
+        metrics.rrdp = self.metrics.into_inner()
     }
 }
 
@@ -609,7 +610,7 @@ impl Repository {
         let mut metrics = RrdpRepositoryMetrics::new(rpki_notify.clone());
         let is_updated = repo._update(run, state, &mut metrics)?;
         metrics.duration = SystemTime::now().duration_since(start_time);
-        run.metrics.lock().unwrap().push(metrics);
+        run.metrics.lock().push(metrics);
 
         if is_updated || is_current {
             Ok(Some(repo))
@@ -1394,7 +1395,7 @@ impl HttpClient {
     ///
     /// The method panics if the client hasn’t been ignited yet.
     fn client(&self) -> &Client {
-        self.client.as_ref().unwrap()
+        self.client.as_ref().expect("HTTP client has not been ignited")
     }
 
     /// Performs an HTTP GET request for the given URI.

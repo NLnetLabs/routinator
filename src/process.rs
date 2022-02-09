@@ -2,15 +2,16 @@
 
 use std::{fs, io};
 use std::future::Future;
+use std::net::TcpListener;
 use std::path::Path;
 use std::sync::mpsc;
-use std::sync::{Mutex, RwLock};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{error, LevelFilter};
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::error::Failed;
+use crate::utils::sync::{Mutex, RwLock};
 
 
 //------------ Process -------------------------------------------------------
@@ -235,6 +236,32 @@ impl Process {
     pub fn drop_privileges(&mut self) -> Result<(), Failed> {
         self.service.take().unwrap().drop_privileges(&mut self.config)
     }
+
+    /// Returns the first listen socket passed into the process if available.
+    pub fn get_listen_fd(&self) -> Result<Option<TcpListener>, Failed> {
+        if self.config.systemd_listen {
+            match listenfd::ListenFd::from_env().take_tcp_listener(0) {
+                Ok(Some(res)) => Ok(Some(res)),
+                Ok(None) => {
+                    error!(
+                        "Fatal: systemd_listen enabled \
+                         but no socket available."
+                    );
+                    Err(Failed)
+                }
+                Err(err) => {
+                    error!(
+                        "Fatal: failed to get systemd_listen socket:  {}",
+                        err
+                    );
+                    Err(Failed)
+                }
+            }
+        }
+        else {
+            Ok(None)
+        }
+    }
 }
 
 
@@ -296,12 +323,12 @@ impl LogOutput {
     }
 
     pub fn start(&self) {
-        self.current.write().expect("Log lock got poisoned").1 = Utc::now();
+        self.current.write().1 = Utc::now();
     }
 
     pub fn flush(&self) {
-        let queue = self.queue.lock().expect("Log queue lock got poisoned");
-        let started = self.current.read().expect("Log lock got poisoned").1;
+        let queue = self.queue.lock();
+        let started = self.current.read().1;
 
         let mut content = format!(
             "Log from validation run started at {}\n\n", started
@@ -309,11 +336,11 @@ impl LogOutput {
         for item in queue.try_iter() {
             content.push_str(&item)
         }
-        self.current.write().expect("Log lock got poisoned").0 = content.into();
+        self.current.write().0 = content.into();
     }
 
     pub fn get_output(&self) -> Bytes {
-        self.current.read().expect("Log lock got poisoned").0.clone()
+        self.current.read().0.clone()
     }
 }
 

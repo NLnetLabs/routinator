@@ -40,12 +40,6 @@ this case you invoke the :subcmd:`init` subcommand directly.
 Trust Anchor Locators
 ---------------------
 
-.. versionadded:: 0.9
-   :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
-   :option:`--tal` and :option:`--skip-tal`
-.. deprecated:: 0.9
-   ``--decline-arin-rpa``, use :option:`--skip-tal` instead
-
 Trust Anchor Locators (TALs) provide hints for the trust anchor certificates to
 be used both to discover and validate all RPKI content. There are five TALs, one
 for each Regional Internet Registry (RIR). For production environments these are
@@ -149,6 +143,12 @@ initialised Routinator, enter:
 .. code-block:: bash
 
    routinator init --force --tal arin-ote
+
+.. versionadded:: 0.9.0
+   :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
+   :option:`--tal` and :option:`--skip-tal`
+.. deprecated:: 0.9.0
+   ``--decline-arin-rpa``, use :option:`--skip-tal` instead
 
 Verifying Initialisation
 ------------------------

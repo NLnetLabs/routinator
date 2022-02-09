@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Feb 01, 2022" "0.10.3" "Routinator"
+.TH "ROUTINATOR" "1" "Feb 01, 2022" "0.11.0-dev" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -532,7 +532,7 @@ format.
 The list is placed into a JSON object with three members:
 \fIroas\fP contains the validated route origin
 authorizations, \fIrouterKeys\fP contains the validated
-BGPsec router keys, and \fImetadata\fP contains some infromation
+BGPsec router keys, and \fImetadata\fP contains some information
 about the validation run itself.
 .sp
 All three members are always present, even if BGPsec has
@@ -583,6 +583,12 @@ format.
 .sp
 Please note that because of this additional information,
 output in \fBjsonext\fP format will be quite large.
+.TP
+.B slurm
+The list is formatted as locally added assertions of a
+local exceptions file defined by RFC 8416 (also known as
+SLURM). The produced file will have empty validation
+output filters.
 .TP
 .B openbgpd
 Choosing this format causes Routinator to produce a

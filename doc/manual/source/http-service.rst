@@ -137,7 +137,7 @@ one private key encoded in PEM format:
                      --http-tls-cert "/path/to/http-tls.crt" \
                      --http-tls-key "/path/to/http-tls.key"
 
-.. versionadded:: 0.11
+.. versionadded:: 0.11.0
 
 Using a Reverse Proxy
 ---------------------
@@ -162,7 +162,7 @@ Using the ``=`` modifier, the first entry only forwards if the path is
 are not forwarded. For more information, please refer to the `NGINX
 documentation <https://nginx.org/en/docs/http/server_names.html>`_.
 
-.. code-block:: text
+.. code-block:: nginx
 
     location = / {
       proxy_pass http://127.0.0.1:8323/;

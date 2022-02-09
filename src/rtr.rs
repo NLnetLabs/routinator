@@ -2,7 +2,7 @@
 
 use std::io;
 use std::future::Future;
-use std::net::{SocketAddr, TcpListener as StdListener};
+use std::net::{TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -30,22 +30,28 @@ use crate::utils::tls::MaybeTlsTcpStream;
 pub fn rtr_listener(
     history: SharedHistory,
     metrics: SharedRtrServerMetrics,
-    config: &Config
+    config: &Config,
+    extra_listener: Option<StdListener>,
 ) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
     let sender = NotifySender::new();
 
     // Binding needs to have happened before dropping privileges
     // during detach. So we do this here synchronously.
     let mut listeners = Vec::new();
+    if let Some(extra) = extra_listener {
+        listeners.push((String::from("systemd socket"), None, extra));
+    }
     for addr in &config.rtr_listen {
-        listeners.push((*addr, None, net::bind(addr)?));
+        listeners.push((format!("{}", addr), None, net::bind(addr)?));
     }
     if !config.rtr_tls_listen.is_empty() {
         let tls_config = create_tls_config(config)?;
         for addr in &config.rtr_tls_listen {
-            listeners.push(
-                (*addr, Some(tls_config.clone()), net::bind(addr)?)
-            );
+            listeners.push((
+                format!("{}", addr),
+                Some(tls_config.clone()),
+                net::bind(addr)?
+            ));
         }
     }
     Ok((sender.clone(), _rtr_listener(
@@ -77,7 +83,7 @@ async fn _rtr_listener(
     origins: SharedHistory,
     metrics: SharedRtrServerMetrics,
     sender: NotifySender,
-    listeners: Vec<(SocketAddr, Option<Arc<tls::ServerConfig>>, StdListener)>,
+    listeners: Vec<(String, Option<Arc<tls::ServerConfig>>, StdListener)>,
     keepalive: Option<Duration>,
 ) {
     // If there are no listeners, just never return.
@@ -97,7 +103,7 @@ async fn _rtr_listener(
 }
 
 async fn single_rtr_listener(
-    addr: SocketAddr,
+    addr: String,
     tls: Option<Arc<tls::ServerConfig>>,
     listener: StdListener,
     origins: SharedHistory,
@@ -134,9 +140,12 @@ impl RtrStream {
     fn new(
         sock: TcpStream,
         tls: Option<&TlsAcceptor>,
-        _keepalive: Option<Duration>,
+        keepalive: Option<Duration>,
         server_metrics: SharedRtrServerMetrics,
     ) -> Result<Self, io::Error> {
+        if let Some(duration) = keepalive {
+            Self::set_keepalive(&sock, duration)?
+        }
         let metrics = Arc::new(RtrClientMetrics::new(sock.local_addr()?.ip()));
         let client_metrics = metrics.clone();
         tokio::spawn(async move {
@@ -146,6 +155,32 @@ impl RtrStream {
             sock: MaybeTlsTcpStream::new(sock, tls),
             metrics
         })
+    }
+
+    #[cfg(unix)]
+    fn set_keepalive(
+        sock: &TcpStream, duration: Duration
+    ) -> Result<(), io::Error>{
+        use std::convert::TryFrom;
+        use std::os::unix::io::AsRawFd;
+        use nix::sys::socket::{setsockopt, sockopt};
+
+        (|fd, duration: Duration| {
+            setsockopt(
+                fd, sockopt::TcpKeepInterval,
+                &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+            )?;
+            setsockopt(fd, sockopt::KeepAlive, &true)
+        })(sock.as_raw_fd(), duration).map_err(|err| {
+            io::Error::new(io::ErrorKind::Other, err)
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn set_keepalive(
+        _sock: &TcpStream, _duration: Duration
+    ) -> Result<(), io::Error>{
+        Ok(())
     }
 }
 

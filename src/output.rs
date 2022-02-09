@@ -1,6 +1,7 @@
 //! Output of validated RPKI payload.
 
 use std::{error, fmt, io};
+use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Utc;
@@ -49,6 +50,9 @@ pub enum OutputFormat {
     /// JSON format with extended information.
     ExtendedJson,
 
+    /// JSON format using the SLURM scheme.
+    Slurm,
+
     /// OpenBGPD configuration format.
     ///
     /// Specifically, this produces as `roa-set`.
@@ -88,6 +92,7 @@ impl OutputFormat {
         ("csvext", OutputFormat::ExtendedCsv),
         ("json", OutputFormat::Json),
         ("jsonext", OutputFormat::ExtendedJson),
+        ("slurm", OutputFormat::Slurm),
         ("openbgpd", OutputFormat::Openbgpd),
         ("bird1", OutputFormat::Bird1),
         ("bird2", OutputFormat::Bird2),
@@ -125,7 +130,8 @@ impl OutputFormat {
             OutputFormat::Csv | OutputFormat::CompatCsv |
             OutputFormat::ExtendedCsv
                 => ContentType::CSV,
-            OutputFormat::Json | OutputFormat::ExtendedJson
+            OutputFormat::Json | OutputFormat::ExtendedJson |
+            OutputFormat::Slurm
                 => ContentType::JSON,
             _ => ContentType::TEXT,
         }
@@ -192,6 +198,7 @@ impl OutputFormat {
             OutputFormat::ExtendedCsv => Box::new(ExtendedCsv),
             OutputFormat::Json => Box::new(Json),
             OutputFormat::ExtendedJson => Box::new(ExtendedJson),
+            OutputFormat::Slurm => Box::new(Slurm),
             OutputFormat::Openbgpd => Box::new(Openbgpd),
             OutputFormat::Bird1 => Box::new(Bird1),
             OutputFormat::Bird2 => Box::new(Bird2),
@@ -806,6 +813,97 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
     }
 }
 
+
+//------------ Slurm ---------------------------------------------------------
+
+struct Slurm;
+
+impl<W: io::Write> Formatter<W> for Slurm {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            "{{\
+            \n  \"slurmVersion\": 1,\
+            \n  \"validationOutputFilters\": {{\
+            \n    \"prefixFilters\": [ ],\
+            \n    \"bgpsecFilters\": [ ]\
+            \n  }},\
+            \n  \"locallyAddedAssertions\": {{\
+            \n    \"prefixAssertions\": ["
+        )
+    }
+
+    fn origin(
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            "      {{\
+            \n        \"asn\": {},\
+            \n        \"prefix\": \"{}/{}\",",
+            origin.asn.into_u32(),
+            origin.prefix.addr(), origin.prefix.prefix_len()
+        )?;
+        if let Some(max_len) = origin.prefix.max_len() {
+            writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
+        }
+        write!(target,
+            "        \"comment\": \"{}\"\
+            \n      }}",
+            info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn intermission(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target,
+            "\n    ],\
+             \n    \"bgpsecAssertions\": ["
+        )
+    }
+
+    fn router_key(
+        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+             "      {{\
+            \n        \"asn\": {},\
+            \n        \"SKI\": \"",
+            key.asn.into_u32(),
+        )?;
+        let mut enc = base64::write::EncoderWriter::new(
+            target, base64::URL_SAFE_NO_PAD
+        );
+        enc.write_all(key.key_identifier.as_slice())?;
+        let target = enc.finish()?;
+        write!(target, "\",\
+            \n        \"routerPublicKey\": \""
+        )?;
+        let mut enc = base64::write::EncoderWriter::new(
+            target, base64::URL_SAFE_NO_PAD
+        );
+        enc.write_all(key.key_identifier.as_slice())?;
+        let target = enc.finish()?;
+        write!(target, "\",\
+            \n        \"comment\": \"{}\"
+            \n      }}",
+            info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn footer(
+        &self, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+           "\n    ]\
+            \n  }}\
+            \n}}"
+        )
+    }
+
+    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+}
 
 //------------ Openbgpd ------------------------------------------------------
 

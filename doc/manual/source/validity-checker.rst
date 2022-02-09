@@ -68,8 +68,6 @@ API endpoint.
 Reading Input From a File
 -------------------------
 
-.. versionadded:: 0.9
-
 Routinator can also read input to validate from a file using the
 :option:`--input` option. If the file is given as a single dash, input is
 read from standard input. You can also save the results to a file using the
@@ -187,3 +185,5 @@ detailed analysis of the reasoning behind the outcome of each route:
       }
     ]
   }
+
+.. versionadded:: 0.9.0

@@ -12,65 +12,57 @@ the output, as well as origins that should be added, in a file using JSON
 notation according to the :abbr:`SLURM (Simplified Local Internet Number
 Resource Management with the RPKI)` standard specified in :RFC:`8416`.
 
-Here is an example file you can use as a starting point for building your
-own:
+You can use this `example file
+<https://github.com/NLnetLabs/rpki-rs/blob/main/test-data/slurm/full.json>`_
+as a starting point, but you can also build your own exceptions file based on
+existing VRPs in the global RPKI data set using the :term:`SLURM` output
+format in combination with the :option:`--select-asn` and
+:option:`--select-prefix` options. 
+
+.. seealso:: 
+  
+    - :doc:`interactive`
+
+For example, this command will create a SLURM file that always authorises all
+announcements that are currently done from AS196615:
+
+.. code-block:: text
+
+    routinator vrps --format slurm --select-asn 196615
+
+The output will look like this:
 
 .. code-block:: json
 
     {
       "slurmVersion": 1,
       "validationOutputFilters": {
-        "prefixFilters": [
-          {
-            "prefix": "192.0.2.0/24",
-            "comment": "All VRPs encompassed by prefix"
-          },
-          {
-            "asn": 64496,
-            "comment": "All VRPs matching ASN"
-          },
-          {
-            "prefix": "198.51.100.0/24",
-            "asn": 64497,
-            "comment": "All VRPs encompassed by prefix, matching ASN"
-          }
-        ],
-        "bgpsecFilters": [
-          {
-            "asn": 64496,
-            "comment": "All keys for ASN"
-          },
-          {
-            "SKI": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA",
-            "comment": "Key matching Router SKI"
-          },
-          {
-            "asn": 64497,
-            "SKI": "ZGVhZGJlYXRkZWFkYmVhdGRlYWQ",
-            "comment": "Key for ASN matching SKI"
-          }
-        ]
+        "prefixFilters": [ ],
+        "bgpsecFilters": [ ]
       },
       "locallyAddedAssertions": {
         "prefixAssertions": [
           {
-            "asn": 64496,
-            "prefix": "198.51.100.0/24",
-            "comment": "My other important route"
+            "asn": 196615,
+            "prefix": "93.175.147.0/24",
+            "maxPrefixLength": 24,
+            "comment": "ripe"
           },
           {
-            "asn": 64496,
-            "prefix": "2001:DB8::/32",
+            "asn": 196615,
+            "prefix": "2001:7fb:fd03::/48",
             "maxPrefixLength": 48,
-            "comment": "My de-aggregated route"
+            "comment": "ripe"
+          },
+          {
+            "asn": 196615,
+            "prefix": "2001:7fb:fd04::/48",
+            "maxPrefixLength": 48,
+            "comment": "ripe"
           }
         ],
         "bgpsecAssertions": [
-          {
-            "asn": 64496,
-            "SKI": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA",
-            "routerPublicKey": "Ymx1YmI"
-          }
+
         ]
       }
     }
@@ -83,3 +75,4 @@ run, so you can simply update the file whenever your exceptions change.
 In the metrics Routinator provides, there are counters indicating how many
 VRPs are added and excluded from the final data set as a result of your
 exceptions. 
+  

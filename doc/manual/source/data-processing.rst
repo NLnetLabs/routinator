@@ -4,9 +4,6 @@ Data Processing
 Fetching
 --------
 
-.. versionadded:: 0.9
-   Fallback from RRDP to rsync with :option:`--rrdp-fallback-time`
-
 There are two protocols in use to transport RPKI data: rsync and the :term:`RPKI
 Repository Delta Protocol (RRDP)`, which relies on HTTPS. RRDP was designed to
 be the successor to rsync in the RPKI. As almost all RPKI repositories currently
@@ -33,6 +30,9 @@ As a precaution, Routinator will not accept rsync and HTTPS URIs from
 will reject the name *localhost*, URIs that consist of IP addresses, and
 hostnames that contain an explicit port. You can change this behaviour with the
 :option:`--allow-dubious-hosts` option.
+
+.. versionchanged:: 0.9.0
+   Fallback from RRDP to rsync with :option:`--rrdp-fallback-time`
 
 RRDP Fallback
 """""""""""""
@@ -128,9 +128,6 @@ default may change in future version.
 Storing
 -------
 
-.. versionadded:: 0.9
-   The *store* and the :option:`--fresh` option
-
 To be resistant against accidental or malicious errors in the data published by
 repositories, Routinator retains two separate data sets: one that keeps the data
 of all publication points as it was received from their remote repository, and
@@ -149,3 +146,5 @@ first time:
 .. code-block:: text
 
     routinator --fresh vrps
+
+.. versionadded:: 0.9.0

@@ -517,6 +517,12 @@ These can be requested by providing different commands on the command line.
                   Please note that because of this additional information,
                   output in ``jsonext`` format will be quite large.
 
+           slurm
+                  The list is formatted as locally added assertions of a
+                  local exceptions file defined by RFC 8416 (also known as
+                  SLURM). The produced file will have empty validation
+                  output filters.
+
            openbgpd
                   Choosing this format causes Routinator to produce a
                   *roa-set* configuration item for the OpenBGPD
