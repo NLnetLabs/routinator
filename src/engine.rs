@@ -814,6 +814,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         if content.this_update() > Time::now() {
             self.metrics.premature_manifests += 1;
             warn!("{}: premature manifest", self.cert.rpki_manifest());
+            println!("manifest thisUpdate: {:?}", content.this_update());
+            println!("now: {:?}", Time::now());
             return Ok(None)
         }
 
