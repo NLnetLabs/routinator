@@ -105,7 +105,7 @@ You will now see that a more specific /23 prefix is returned as well:
       ]
    }
 
-.. versionchanged:: 0.11
+.. versionchanged:: 0.11.0
    ``more-specifics`` query parameter
 
 TLS Transport
