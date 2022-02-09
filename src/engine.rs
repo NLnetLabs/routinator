@@ -76,8 +76,7 @@ const CRL_CACHE_LIMIT: usize = 50;
 ///
 /// A run is started via the [`start`][Self::start] method, providing a
 /// processor that handles valid data. The method returns a [Run] value that
-/// drives the validation run. For route origin validation, a shortcut is
-/// available through [`process_origins`][Self::process_origins].
+/// drives the validation run.
 #[derive(Debug)]
 pub struct Engine {
     /// The directory to load TALs from.
