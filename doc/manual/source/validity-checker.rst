@@ -24,7 +24,7 @@ You can also add the :option:`--json` option:
    routinator validate --json --asn 12654 --prefix 93.175.147.0/24
    
 This will produce a detailed analysis of the reasoning behind the validation
-outcome is printed in JSON format. In case of an Invalid state, whether this
+outcome is printed in JSON format. In case of an *Invalid* state, whether this
 because the announcement is originated by an unauthorised AS, or if the prefix
 is more specific than the maximum prefix length allows. Lastly, a complete list
 of VRPs that caused the result is included:

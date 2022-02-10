@@ -10,7 +10,7 @@ HTTP and RTR servers are enabled by default via the :ref:`pre-installed
 configuration file <configuration:routinator installed from a package>`.
 However, they are only available on localhost for security reasons. You will
 have to explicitly change these options to make the services available to
-other machines.
+other network devices.
 
 If you have built Routinator using Cargo, no servers are enabled by default
 at all. From the command line you can start Routinator as a daemon using the

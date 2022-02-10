@@ -33,10 +33,11 @@ allows you to add selectors to see if a prefix or ASN is covered or matched by a
 VRP. You can do this using the :option:`--select-asn` and
 :option:`--select-prefix` options.
 
-When using :option:`--select-asn`, you can use both ``AS64511`` and ``64511`` as
-the notation. With :option:`--select-prefix`, the result will include VRPs
-regardless of their ASN and MaxLength. Both selector flags can be combined and
-used multiple times in a single query and will be treated as a logical *"or"*.
+When using :option:`--select-asn`, you can use both ``AS64511`` and ``64511``
+as the notation. With :option:`--select-prefix`, the result will include VRPs
+regardless of their ASN and MaxLength. Both selector flags can be combined
+and used multiple times in a single query. The output for each additional
+selector will be added to the results.
 
 A validation run will be started before returning the result, making sure you
 get the latest information. If you would like a result from the current cache,
@@ -67,5 +68,4 @@ This results in:
 
 .. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
-.. versionadded:: 0.10.0
-   Metadata in JSON format
+

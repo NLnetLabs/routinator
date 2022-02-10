@@ -17,7 +17,7 @@ and enabling the HTTP and RTR servers on localhost.
 
 The :program:`routinator-init` script invokes the :subcmd:`init` subcommand as
 the user *routinator* and takes configuration file into consideration. All of
-options for the :subcmd:`init` subcommand can be appended to the
+the options for the :subcmd:`init` subcommand can be appended to the
 :program:`routinator-init` script, which are described below. If you have built
 Routinator using Cargo you also have to perform the initialisation steps, but in
 this case you invoke the :subcmd:`init` subcommand directly.
@@ -178,10 +178,10 @@ And check the logs using:
                that are either stale or failed cryptographic verification, or
                repositories that are temporarily unavailable. 
 
-If you have installed and initialised Routinator manually it is recommended to
-perform an initial test run. You can do this by having Routinator print a
-validated ROA payload (VRP) list with the :subcmd:`vrps` subcommand, and using
-:option:`-v` twice to increase the :doc:`log level<logging>` to *debug*:
+If you have built Routinator using Cargo it is recommended to perform an
+initial test run. You can do this by having Routinator print a validated ROA
+payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v`
+twice to increase the :doc:`log level<logging>` to *debug*:
 
 .. code-block:: bash
 

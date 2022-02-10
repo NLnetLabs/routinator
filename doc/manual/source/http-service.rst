@@ -14,7 +14,7 @@ interface<user-interface>`, an :doc:`API<api-endpoints>`,
 
 After fetching and verifying all RPKI data for the first time, paths are
 available for each :doc:`VRP output format <output-formats>`. For example, at
-the ``/json`` path you can fetch a list of all VRPs in CSV format.
+the ``/json`` path you can fetch a list of all VRPs in JSON format.
 
 .. code-block:: text
 

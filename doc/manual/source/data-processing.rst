@@ -31,9 +31,6 @@ will reject the name *localhost*, URIs that consist of IP addresses, and
 hostnames that contain an explicit port. You can change this behaviour with the
 :option:`--allow-dubious-hosts` option.
 
-.. versionchanged:: 0.9.0
-   Fallback from RRDP to rsync with :option:`--rrdp-fallback-time`
-
 RRDP Fallback
 """""""""""""
 
@@ -46,6 +43,8 @@ exact moment fallback happens is picked randomly between the refresh time and
 the :option:`--rrdp-fallback-time` value. If rsync communication is
 unsuccessful too, the local cache is used until the objects go stale and
 ultimately expire. 
+
+.. versionadded:: 0.9.0
 
 Update Interval
 """""""""""""""

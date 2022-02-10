@@ -164,7 +164,7 @@ generated in a wide range of output formats for various use cases.
           same time but in the standard ISO date format.
 
           Please note that because of this additional information, output in
-          :term:`jsonext` format will be quite large.
+          jsonext format will be quite large.
           
           .. code-block:: json
           
@@ -197,7 +197,7 @@ generated in a wide range of output formats for various use cases.
             
           .. versionadded:: 0.9.0
           .. versionchanged:: 0.10.0
-             Add the *metadata* member
+             Add metadata
           .. versionchanged:: 0.11.0
              Add :ref:`advanced-features:bgpsec` information
 
