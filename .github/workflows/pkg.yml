@@ -268,8 +268,9 @@ jobs:
         # release but without having to decide what higher semver number to bump
         # to. In this case we do NOT want dash '-' to become '~' because `-`
         # is treated as higher and tilda is treated as lower.
-        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version' | tr '-' '~')
-        PKG_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
+        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
+        PKG_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | tr '-' '~')
+        PKG_ROUTINATOR_VER=$(echo $PKG_ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
 
         case ${OS_NAME} in
           debian|ubuntu)
@@ -313,7 +314,7 @@ jobs:
             strip -s target/release/routinator
 
             # Fix the version string to be used for the RPM package
-            sed -i -e "s/$ROUTINATOR_VER/$PKG_ROUTINATOR_VER/" Cargo.toml
+            sed -i -e "s/<RPM_PKG_VER_PLACEHOLDER>/$PKG_ROUTINATOR_VER/" Cargo.toml
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
