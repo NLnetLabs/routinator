@@ -20,8 +20,11 @@ Binary Packages
 Getting started with Routinator is really easy by installing a binary package
 for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL) and
 compatible systems such as Rocky Linux. Alternatively, you can run with
-Docker. Packages and Docker images are currently available for the
-``amd64``/``x86_64`` architecture only.
+Docker. 
+
+Currently we support the ``amd64``/``x86_64`` architecture for all packages
+and Docker images. Packages for Debian and Ubuntu are also available for the
+``armhf`` and ``arm64`` architectures.
 
 You can also build Routinator from the source code using Cargo, Rust's build
 system and package manager. Cargo lets you to run Routinator on almost any
@@ -293,6 +296,8 @@ to get started.
 
 .. versionadded:: 0.9.0
    RPM packages
+.. versionadded:: 0.11.0
+   Debian packages for ``armhf`` and ``arm64`` architecture
 
 Updating
 --------
