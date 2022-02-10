@@ -18,6 +18,12 @@ New
 * Add a new output format `slurm` that produces a JSON file formatted
   according to [RFC 8416] with the validated payload included in the
   locally added assertions. ([#702])
+* Make the (standard) JSON payload output available under
+  `/api/v1/origins` with the same URL parameters.([#707])
+* Add a new URI parameter `include=more-specifics` to all HTTP payload output
+  paths to include all route origins for prefixes that are more specifics of
+  the selected prefixes. ([#707])
+* Accept and process HEAD requests for all HTTP paths. ([#707])
 
 Bug Fixes
 
@@ -52,6 +58,7 @@ Other Changes
 [#699]: https://github.com/NLnetLabs/routinator/pull/699
 [#702]: https://github.com/NLnetLabs/routinator/pull/702
 [#709]: https://github.com/NLnetLabs/routinator/pull/709
+[#707]: https://github.com/NLnetLabs/routinator/pull/707
 [#710]: https://github.com/NLnetLabs/routinator/pull/710
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
