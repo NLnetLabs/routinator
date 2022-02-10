@@ -78,7 +78,7 @@ less specific prefix can also affect the RPKI validity of a BGP announcement,
 depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
 
 In some cases you may want more specifics to be displayed as well. For this
-the ``--more-specifics`` option can be used. For example, when querying
+the :option:`--more-specifics` option can be used. For example, when querying
 for 82.221.32.0/20:
 
 .. code-block:: text
@@ -101,7 +101,7 @@ prefix:
       ]
    }
 
-When including the ``--more-specifics`` option in the same query:
+When including the :option:`--more-specifics` option in the same query:
 
 .. code-block:: text
 
@@ -131,4 +131,4 @@ You will now see that a more specific /23 prefix is returned as well:
 .. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
 .. versionchanged:: 0.11.0
-   ``more-specifics`` query parameter
+   Add the :option:`--more-specifics` option
