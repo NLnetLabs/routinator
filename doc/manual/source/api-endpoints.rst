@@ -17,7 +17,7 @@ The HTTP service supports GET requests on the following paths:
 ``/validity?asn=as-number&prefix=prefix``
      Same as above but with a more form-friendly calling convention.
      
-``/json-delta, /json-delta?sessionsession?serial=serial``
+``/json-delta, /json-delta?session=session?serial=serial``
      Returns a JSON object with the changes since the dataset version
      identified by the *session* and *serial* query parameters. If a delta
      cannot be produced from that version, the full data set is returned and
