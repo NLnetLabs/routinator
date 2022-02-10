@@ -20,10 +20,14 @@ the ``/json`` path you can fetch a list of all VRPs in JSON format.
 
    curl http://192.0.2.13:8323/json
 
-These paths accept selector expressions to limit the VRPs returned in the
-form of a query string. You can use ``select-asn`` to select ASNs and
+Query Parameters
+----------------
+
+All paths accept selector expressions to limit the VRPs returned in the
+form of a query parameter. You can use ``select-asn`` to select ASNs and
 ``select-prefix`` to select prefixes. These expressions can be repeated
-multiple times. 
+multiple times. The output for each additional parameter will be added to the
+results.
 
 For example, to only show the VRPs in JSON format authorising AS196615, use:
 
@@ -46,6 +50,68 @@ This will produce the following output:
          { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
       ]
     }
+
+More Specific Prefixes
+""""""""""""""""""""""
+
+When you query for a prefix, by default Routinator will return the exact
+match, as well as less specifics. The reason is that a VRP of an overlapping
+less specific prefix can also affect the RPKI validity of a BGP announcement,
+depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
+
+In some cases you may want more specifics to be displayed as well. For this
+the ``more-specifics`` query string can be used. For example, when querying
+for 82.221.32.0/20:
+
+.. code-block:: text
+
+   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20
+
+Routinator will return the exact match and the VRP for the less specific /17
+prefix:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
+      },
+      "roas": [
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
+      ]
+   }
+
+When including the ``more-specifics`` parameter in the same query:
+
+.. code-block:: text
+
+   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20&include=more-specifics
+
+You will now see that a more specific /23 prefix is returned as well:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
+      },
+      "roas": [
+         { "asn": "AS44515", "prefix": "82.221.46.0/23", "maxLength": 23, "ta": "ripe" },
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
+      ]
+   }
+
+.. Tip:: The ``more-specifics`` parameter will also work if there is no
+         exactly matching or less specific prefix. In that case you
+         will get a list of all more specific VRPs covered by the prefix you
+         supplied in the query.
+
+.. versionchanged:: 0.11.0
+   ``more-specifics`` query parameter
 
 TLS Transport
 -------------

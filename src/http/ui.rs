@@ -5,8 +5,8 @@
 //! that represents a single file from the web resources.
 #![cfg(feature = "ui")]
 
-use bytes::Bytes;
-use hyper::{Body, Request, Response, StatusCode};
+use hyper::{Body, Method, Request};
+use super::response::{ContentType, Response, ResponseBuilder};
 
 // Sensible settings for BASE_URL are either:
 // "/"   => just route everything from the domain-name without further ado, or
@@ -21,23 +21,17 @@ use hyper::{Body, Request, Response, StatusCode};
 const BASE_URL: &str = "/ui";
 const CATCH_ALL_URL: &str = "index.html";
 
-pub fn handle_get(req: &Request<Body>) -> Option<Response<Body>> {
+pub fn handle_get_or_head(req: &Request<Body>) -> Option<Response> {
+    let head = *req.method() == Method::HEAD;
     if req.uri().path() == "/" {
-        return Some(
-            Response::builder()
-            .status(StatusCode::MOVED_PERMANENTLY)
-            .header("Content-Type", "text/plain")
-            .header("Location", "/ui/")
-            .body(Bytes::from("Moved permanently to /ui/").into())
-            .unwrap()
-        )
+        return Some(Response::moved_permanently("/ui/"))
     }
 
     let req_path = std::path::Path::new(req.uri().path());
     if let Ok(p) = req_path.strip_prefix(BASE_URL) {
         match routinator_ui::endpoints::ui_resource(p) {
             Some(endpoint) => {
-                Some(serve(endpoint.content, endpoint.content_type))
+                Some(serve(head, endpoint.content, endpoint.content_type))
             }
             None => {
                 // In order to have the frontend handle all routing and
@@ -52,26 +46,29 @@ pub fn handle_get(req: &Request<Body>) -> Option<Response<Body>> {
                         std::path::Path::new(CATCH_ALL_URL)
                     )
                 {
-                    Some(serve(default.content, default.content_type))
+                    Some(serve(head, default.content, default.content_type))
                 } else {
                     // if CATCH_ALL_URL is not defined in ui_resources
                     // we'll return a 404
-                    Some(super::not_found())
+                    Some(Response::not_found())
                 }
             }
         }
     } else {
         // This is the last handler in the chain, so if the requested URL did
         // not start with BASE_URL, we're returning 404.
-        Some(super::not_found())
+        Some(Response::not_found())
     }
 }
 
 /// Creates the response from data and the content type.
-fn serve(data: &'static [u8], ctype: &'static [u8]) -> Response<Body> {
-    Response::builder()
-        .header("Content-Type", ctype)
-        .body(data.into())
-        .unwrap()
+fn serve(head: bool, data: &'static [u8], ctype: &'static [u8]) -> Response {
+    let res = ResponseBuilder::ok().content_type(ContentType::external(ctype));
+    if head {
+        res.empty()
+    }
+    else {
+        res.body(data)
+    }
 }
 

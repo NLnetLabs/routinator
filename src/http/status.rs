@@ -4,28 +4,31 @@ use std::cmp;
 use std::fmt::Write;
 use chrono::{Duration, Utc};
 use clap::{crate_name, crate_version};
-use hyper::{Body, Request, Response};
+use hyper::{Body, Method, Request};
 use crate::metrics::{
     HttpServerMetrics, PayloadMetrics, PublicationMetrics,
     SharedRtrServerMetrics, VrpMetrics,
 };
 use crate::payload::SharedHistory;
 use crate::utils::json::JsonBuilder;
-use super::errors::initial_validation;
+use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
-pub async fn handle_get(
+pub async fn handle_get_or_head(
     req: &Request<Body>,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
-) -> Option<Response<Body>> {
+) -> Option<Response> {
+    let head = *req.method() == Method::HEAD;
     match req.uri().path() {
-        "/status" => Some(handle_status(history, http, rtr).await),
-        "/api/v1/status" => Some(handle_api_status(history, http, rtr).await),
-        "/version" => Some(handle_version()),
+        "/status" => Some(handle_status(head, history, http, rtr).await),
+        "/api/v1/status" => {
+            Some(handle_api_status(head, history, http, rtr).await)
+        },
+        "/version" => Some(handle_version(head)),
         _ => None
     }
 }
@@ -34,16 +37,17 @@ pub async fn handle_get(
 //------------ handle_status -------------------------------------------------
 
 async fn handle_status(
+    head: bool,
     history: &SharedHistory,
     server_metrics: &HttpServerMetrics,
     rtr_metrics: &SharedRtrServerMetrics,
-) -> Response<Body> {
+) -> Response {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return initial_validation(),
+                None => return Response::initial_validation(),
             },
             history.serial(),
             history.last_update_start(),
@@ -51,6 +55,11 @@ async fn handle_status(
             history.last_update_duration(),
         )
     };
+
+    if head {
+        return ResponseBuilder::ok().content_type(ContentType::TEXT).empty();
+    }
+
     let mut res = String::new();
     let now = Utc::now();
     let start = now.signed_duration_since(start);
@@ -312,26 +321,24 @@ async fn handle_status(
         server_metrics.requests()
     ).unwrap();
 
-    Response::builder()
-    .header("Content-Type", "text/plain")
-    .body(res.into())
-    .unwrap()
+    ResponseBuilder::ok().content_type(ContentType::TEXT).body(res)
 }
 
 
 //------------ handle_api_status ---------------------------------------------
 
 async fn handle_api_status(
+    head: bool,
     history: &SharedHistory,
     server_metrics: &HttpServerMetrics,
     rtr_metrics: &SharedRtrServerMetrics,
-) -> Response<Body> {
+) -> Response {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return initial_validation()
+                None => return Response::initial_validation()
             },
             history.serial(),
             history.last_update_start(),
@@ -339,6 +346,10 @@ async fn handle_api_status(
             history.last_update_duration(),
         )
     };
+
+    if head {
+        return ResponseBuilder::ok().content_type(ContentType::JSON).empty();
+    }
 
     let now = Utc::now();
     let detailed_rtr = rtr_metrics.detailed();
@@ -568,10 +579,7 @@ async fn handle_api_status(
         });
     });
    
-    Response::builder()
-        .header("Content-Type", "application/json")
-        .body(res.into())
-        .unwrap()
+    ResponseBuilder::ok().content_type(ContentType::JSON).body(res)
 }
 
 fn json_publication_metrics(
@@ -634,10 +642,13 @@ fn json_vrps_metrics(
 
 //------------ handle_version ------------------------------------------------
 
-fn handle_version() -> Response<Body> {
-    Response::builder()
-    .header("Content-Type", "text/plain")
-    .body(crate_version!().into())
-    .unwrap()
+fn handle_version(head: bool) -> Response {
+    let res = ResponseBuilder::ok().content_type(ContentType::TEXT);
+    if head {
+        res.empty()
+    }
+    else {
+        res.body(crate_version!())
+    }
 }
 

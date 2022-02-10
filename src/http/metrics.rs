@@ -3,26 +3,27 @@
 use std::{cmp, fmt};
 use std::fmt::Write;
 use chrono::Utc;
-use hyper::{Body, Request, Response};
+use hyper::{Body, Method, Request};
 use crate::metrics::{
     HttpServerMetrics, Metrics, PayloadMetrics, PublicationMetrics,
     RrdpRepositoryMetrics, RsyncModuleMetrics, SharedRtrServerMetrics,
     VrpMetrics
 };
 use crate::payload::SharedHistory;
-use super::errors::initial_validation;
+use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
-pub async fn handle_get(
+pub async fn handle_get_or_head(
     req: &Request<Body>,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
-) -> Option<Response<Body>> {
+) -> Option<Response> {
+    let head = *req.method() == Method::HEAD;
     match req.uri().path() {
-        "/metrics" => Some(handle_metrics(history, http, rtr).await),
+        "/metrics" => Some(handle_metrics(head, history, http, rtr).await),
         _ => None
     }
 }
@@ -31,16 +32,17 @@ pub async fn handle_get(
 //------------ handle_metrics ------------------------------------------------
 
 async fn handle_metrics(
+    head: bool,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
-) -> Response<Body> {
+) -> Response {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return initial_validation(),
+                None => return Response::initial_validation(),
             },
             history.serial(),
             history.last_update_start(),
@@ -48,6 +50,12 @@ async fn handle_metrics(
             history.last_update_duration(),
         )
     };
+
+    if head {
+        return ResponseBuilder::ok()
+            .content_type(ContentType::PROMETHEUS)
+            .empty()
+    }
 
     let mut target = Target::default();
 
@@ -391,8 +399,6 @@ fn payload_metrics<'a>(
     }
 }
 
-
-
 fn rrdp_metrics(target: &mut Target, metrics: &[RrdpRepositoryMetrics]) {
     let status = Metric::new(
         "rrdp_status",
@@ -724,11 +730,9 @@ struct Target {
 }
 
 impl Target {
-    pub fn into_response(self) -> Response<Body> {
-        Response::builder()
-        .header("Content-Type", "text/plain; version=0.0.4")
-        .body(self.buf.into())
-        .expect("finalizing HTTP response")
+    pub fn into_response(self) -> Response {
+        ResponseBuilder::ok().content_type(ContentType::PROMETHEUS)
+        .body(self.buf)
     }
 
     pub fn single(&mut self, metric: Metric, value: impl fmt::Display) {

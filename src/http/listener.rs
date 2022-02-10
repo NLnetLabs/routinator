@@ -128,7 +128,7 @@ async fn single_http_listener(
                     Ok::<_, Infallible>(handle_request(
                         req, &origins, &metrics, &rtr_metrics,
                         log.as_ref().map(|x| x.as_ref())
-                    ).await)
+                    ).await.into_hyper())
                 }
             }))
         }
