@@ -123,7 +123,7 @@ You will now see that a more specific /23 prefix is returned as well:
       ]
    }
 
-.. Tip:: The ``more-specifics`` parameter will also work if there is no
+.. Tip:: The :option:`--more-specifics` option will also work if there is no
          exactly matching or less specific prefix. In that case you
          will get a list of all more specific VRPs covered by the prefix you
          supplied in the query.
