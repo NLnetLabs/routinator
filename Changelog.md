@@ -23,6 +23,9 @@ New
 * Add a new URI parameter `include=more-specifics` to all HTTP payload output
   paths to include all route origins for prefixes that are more specifics of
   the selected prefixes. ([#707])
+* Add a new option `--more-specifics` to the `vrps` command to include all 
+  route origins for prefixes that are more specifics of the selected prefixes.
+  ([#714])
 * Accept and process HEAD requests for all HTTP paths. ([#707])
 
 Bug Fixes
@@ -60,6 +63,7 @@ Other Changes
 [#709]: https://github.com/NLnetLabs/routinator/pull/709
 [#707]: https://github.com/NLnetLabs/routinator/pull/707
 [#710]: https://github.com/NLnetLabs/routinator/pull/710
+[#714]: https://github.com/NLnetLabs/routinator/pull/714
 [draft-ietf-sidrops-6486bis]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-6486bis/
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 
