@@ -242,6 +242,11 @@ impl Selection {
         Selection::default()
     }
 
+    /// Sets whether to include more specific prefixes.
+    pub fn set_more_specifics(&mut self, more_specifics: bool) {
+        self.more_specifics = more_specifics
+    }
+
     /// Creates a selection from a HTTP query string.
     pub fn from_query(query: Option<&str>) -> Result<Option<Self>, QueryError> {
         let query = match query {

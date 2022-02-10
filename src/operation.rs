@@ -725,6 +725,11 @@ impl Vrps {
                 .multiple(true)
                 .number_of_values(1)
             )
+            .arg(Arg::with_name("more-specifics")
+                .short("m")
+                .long("more-specifics")
+                .help("Include more specific prefixes in selected output")
+            )
             .after_help(AFTER_HELP)
         )
     }
@@ -793,6 +798,7 @@ impl Vrps {
                 }
             }
         }
+        res.set_more_specifics(matches.is_present("more-specifics"));
         Ok(Some(res))
     }
 

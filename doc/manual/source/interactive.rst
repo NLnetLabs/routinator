@@ -28,6 +28,9 @@ error. You can influence the amount of details returned with the
 :option:`--verbose` and :option:`--quiet` options. To learn more about what kind
 of information returned, refer to the :doc:`logging` section.
 
+Query Options
+-------------
+
 In case you are looking for specific information in the output, Routinator
 allows you to add selectors to see if a prefix or ASN is covered or matched by a
 VRP. You can do this using the :option:`--select-asn` and
@@ -66,6 +69,66 @@ This results in:
       ]
     }
 
+More Specific Prefixes
+""""""""""""""""""""""
+
+When you query for a prefix, by default Routinator will return the exact
+match, as well as less specifics. The reason is that a VRP of an overlapping
+less specific prefix can also affect the RPKI validity of a BGP announcement,
+depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
+
+In some cases you may want more specifics to be displayed as well. For this
+the ``--more-specifics`` option can be used. For example, when querying
+for 82.221.32.0/20:
+
+.. code-block:: text
+
+   routinator vrps --format json --select-asn 82.221.32.0/20
+
+Routinator will return the exact match and the VRP for the less specific /17
+prefix:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
+      },
+      "roas": [
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
+      ]
+   }
+
+When including the ``--more-specifics`` option in the same query:
+
+.. code-block:: text
+
+   routinator vrps --format json --select-asn 82.221.32.0/20 --more-specifics
+
+You will now see that a more specific /23 prefix is returned as well:
+
+.. code-block:: json
+
+   {
+      "metadata": {
+         "generated": 1644266267,
+         "generatedTime": "2022-02-07T20:37:47Z"
+      },
+      "roas": [
+         { "asn": "AS44515", "prefix": "82.221.46.0/23", "maxLength": 23, "ta": "ripe" },
+         { "asn": "AS30818", "prefix": "82.221.32.0/20", "maxLength": 20, "ta": "ripe" },
+         { "asn": "AS44515", "prefix": "82.221.0.0/17", "maxLength": 17, "ta": "ripe" }
+      ]
+   }
+
+.. Tip:: The ``more-specifics`` parameter will also work if there is no
+         exactly matching or less specific prefix. In that case you
+         will get a list of all more specific VRPs covered by the prefix you
+         supplied in the query.
+
 .. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
-
+.. versionchanged:: 0.11.0
+   ``more-specifics`` query parameter

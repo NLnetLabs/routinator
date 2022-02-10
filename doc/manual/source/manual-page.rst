@@ -584,6 +584,17 @@ These can be requested by providing different commands on the command line.
            ASN selections. Then all matching VRPs are included. That is,
            selectors combine as "or" not "and".
 
+    .. option:: -m, --more-specifics
+
+           Include VRPs with prefixes that are more specifics of those given
+           by the :option:`-p` option. Without this option, only VRPs with
+           prefixes equal or less specific are included.
+
+           Note that VRPs with more specific prefixes have no influence on
+           whether a route is RPKI valid or invalid and therefore these VRPs
+           are of an informational nature only.
+        
+
 .. subcmd:: validate
 
        This command can be used to perform RPKI route origin validation for
@@ -1328,7 +1339,11 @@ form of a query string. The field ``select-asn`` can be used to filter for
 ASNs and the field ``select-prefix`` can be used to filter for prefixes. The
 fields can be repeated multiple times.
 
-This works in the same way as the options of the same name to the
+In addition, the query parameter ``include=more-specifics`` will cause the
+inclusion of VRPs for more specific prefixes of prefixes given via
+``select-prefix``.
+
+These parameters work in the same way as the options of the same name to the
 :subcmd:`vrps` command.
 
 Logging
