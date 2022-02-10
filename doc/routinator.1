@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Feb 01, 2022" "0.11.0-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Feb 10, 2022" "0.11.0-dev" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -655,6 +655,17 @@ The option can be given multiple times, in which case VRPs for all
 prefixes are provided. It can also be combined with one or more
 ASN selections. Then all matching VRPs are included. That is,
 selectors combine as "or" not "and".
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-m, \-\-more\-specifics
+Include VRPs with prefixes that are more specifics of those given
+by the \fI\%\-p\fP option. Without this option, only VRPs with
+prefixes equal or less specific are included.
+.sp
+Note that VRPs with more specific prefixes have no influence on
+whether a route is RPKI valid or invalid and therefore these VRPs
+are of an informational nature only.
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
@@ -1448,7 +1459,11 @@ form of a query string. The field \fBselect\-asn\fP can be used to filter for
 ASNs and the field \fBselect\-prefix\fP can be used to filter for prefixes. The
 fields can be repeated multiple times.
 .sp
-This works in the same way as the options of the same name to the
+In addition, the query parameter \fBinclude=more\-specifics\fP will cause the
+inclusion of VRPs for more specific prefixes of prefixes given via
+\fBselect\-prefix\fP\&.
+.sp
+These parameters work in the same way as the options of the same name to the
 \fI\%vrps\fP command.
 .SH LOGGING
 .sp
