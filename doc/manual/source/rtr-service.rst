@@ -46,7 +46,7 @@ Internet.
 
 In this example we'll start Routinator's RTR server listening on the IP
 addresses 192.0.2.13 and 2001:0DB8::13 and use port 3324 to make sure it's
-not a priviledged port. 
+not a privileged port. 
 
 First, indicate that you want a TLS connection with the :option:`--rtr-tls`
 option. Then use the :option:`--rtr-tls-cert` option to specify the path to a

@@ -116,12 +116,12 @@ You will now see that a more specific /23 prefix is returned as well:
 TLS Transport
 -------------
 
-Routinator offers native TLS suppport for both HTTP and :doc:`RTR
+Routinator offers native TLS support for both HTTP and :doc:`RTR
 connections<rtr-service>`. In this example we'll start Routinator's HTTPS
 server listening on the IP addresses 192.0.2.13 and 2001:0DB8::13 and use
 port 8324.
 
-First, indidate that you want a TLS connection with the :option:`--http-tls`
+First, indicate that you want a TLS connection with the :option:`--http-tls`
 option. Then use the :option:`--http-tls-cert` option to specify the path to
 a file containing the server certificates to be used. This file has to
 contain one or more certificates encoded in PEM format. Lastly, use the
@@ -157,7 +157,7 @@ configuration needs at a minimum when running it on the same server as
 Routinator runs on, using port 8323.
 
 Using the ``=`` modifier, the first entry only forwards if the path is
-*exactly* ``/`` so that paths not explicitely mentioned, such as ``/json``,
+*exactly* ``/`` so that paths not explicitly mentioned, such as ``/json``,
 are not forwarded. For more information, please refer to the `NGINX
 documentation <https://nginx.org/en/docs/http/server_names.html>`_.
 
