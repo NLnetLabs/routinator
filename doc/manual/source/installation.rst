@@ -22,10 +22,6 @@ for either Debian and Ubuntu or for Red Hat Enterprise Linux (RHEL) and
 compatible systems such as Rocky Linux. Alternatively, you can run with
 Docker. 
 
-Currently we support the ``amd64``/``x86_64`` architecture for all packages
-and Docker images. Packages for Debian and Ubuntu are also available for the
-``armhf`` and ``arm64`` architectures.
-
 You can also build Routinator from the source code using Cargo, Rust's build
 system and package manager. Cargo lets you to run Routinator on almost any
 operating system and CPU architecture. Refer to the :doc:`building` section
@@ -35,8 +31,16 @@ to get started.
 
    .. group-tab:: Debian
 
-       The NLnet Labs software package repository has binary packages
-       available for Debian 9 (stretch), 10 (buster) and 11 (bullseye).
+       To install a Routinator package, you need the 64-bit version of one of
+       these Debian versions:
+
+         -  Debian Bullseye 11
+         -  Debian Buster 10
+         -  Debian Stretch 9
+
+       Packages for the ``amd64``/``x86_64`` architecture are available for
+       all listed versions. In addition, we offer ``armhf`` architecture
+       packages for Debian/Raspbian Bullseye, and ``arm64`` for Buster.
        
        First update the :program:`apt` package index: 
 
@@ -116,9 +120,14 @@ to get started.
 
    .. group-tab:: Ubuntu
 
-       The NLnet Labs software package repository has binary packages
-       available for Ubuntu 16.x (Xenial Xerus), 18.x (Bionic Beaver) and
-       20.x (Focal Fossa).
+       To install a Routinator package, you need the 64-bit version of one of
+       these Ubuntu versions:
+
+         - Ubuntu Focal 20.04 (LTS)
+         - Ubuntu Bionic 18.04 (LTS)
+         - Ubuntu Xenial 16.04 (LTS)
+
+       Packages are available for the ``amd64``/``x86_64`` architecture only.
        
        First update the :program:`apt` package index: 
 
@@ -198,9 +207,9 @@ to get started.
 
    .. group-tab:: RHEL/CentOS
 
-       The NLnet Labs software package repository has binary packages
-       available for RHEL 7 and 8 and compatible operating system such as
-       Rocky Linux.
+       To install a Routinator package, you need a maintained version of RHEL
+       7 or 8, or compatible operating system such as Rocky Linux. Packages
+       are available for the ``amd64``/``x86_64`` architecture only.
        
        First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
        enter this configuration and save it:
@@ -260,6 +269,9 @@ to get started.
        
    .. group-tab:: Docker
 
+       Routinator Docker images are built with Alpine Linux for
+       ``amd64``/``x86_64`` architecture.
+       
        Due to the impracticality of complying with terms and conditions in an
        unsupervised Docker environment, before launching the container it is
        necessary to first review and agree to the `ARIN Relying Party
