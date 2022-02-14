@@ -207,9 +207,9 @@ to get started.
 
    .. group-tab:: RHEL/CentOS
 
-       To install a Routinator package, you need a maintained version of RHEL
-       7 or 8, or compatible operating system such as Rocky Linux. Packages
-       are available for the ``amd64``/``x86_64`` architecture only.
+       To install a Routinator package, you need Red Hat Enterprise Linux
+       (RHEL) 7 or 8, or compatible operating system such as Rocky Linux.
+       Packages are available for the ``amd64``/``x86_64`` architecture only.
        
        First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
        enter this configuration and save it:
@@ -273,12 +273,12 @@ to get started.
        ``amd64``/``x86_64`` architecture.
        
        Due to the impracticality of complying with terms and conditions in an
-       unsupervised Docker environment, before launching the container it is
-       necessary to first review and agree to the `ARIN Relying Party
-       Agreement (RPA) <https://www.arin.net/resources/manage/rpki/tal/>`_.
-       If you agree, you can let the Routinator Docker image install the
-       :term:`Trust Anchor Locator (TAL)` files into a mounted volume that is
-       later reused for the server.
+       unsupervised Docker environment, it is necessary to first review and
+       agree to the `ARIN Relying Party Agreement (RPA)
+       <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree, you
+       can let the Routinator Docker image install the :term:`Trust Anchor
+       Locator (TAL)` files into a mounted volume that is later reused for
+       the server.
 
        First, create a Docker volume to persist the TAL files in:
 
