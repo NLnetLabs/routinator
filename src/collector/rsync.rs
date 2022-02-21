@@ -516,33 +516,51 @@ impl RsyncCommand {
             command.stderr(Stdio::piped());
             command.kill_on_drop(true);
             let mut child = command.spawn()?;
-            let stdout = child.stdout.take();
-            let stderr = child.stderr.take();
-            let (status, stdout, stderr) = tokio::try_join!(
+            let stdout_pipe = child.stdout.take();
+            let stderr_pipe = child.stderr.take();
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let res = tokio::try_join!(
                 tokio::time::timeout(
                     self.timeout, child.wait()
                 ).map_err(|_| {
-                    warn!("{}: timed out.", source);
                     io::Error::new(
                         io::ErrorKind::TimedOut,
                         "rsync process reached time out"
                     )
                 }),
                 async {
-                    let mut target = Vec::new();
-                    if let Some(mut stdout) = stdout {
-                        tokio::io::copy(&mut stdout, &mut target).await?;
+                    if let Some(mut pipe) = stdout_pipe {
+                        tokio::io::copy(&mut pipe, &mut stdout).await?;
                     }
-                    Ok(target)
+                    Ok(())
                 },
                 async {
-                    let mut target = Vec::new();
-                    if let Some(mut stderr) = stderr {
-                        tokio::io::copy(&mut stderr, &mut target).await?;
+                    if let Some(mut pipe) = stderr_pipe {
+                        tokio::io::copy(&mut pipe, &mut stderr).await?;
                     }
-                    Ok(target)
+                    Ok(())
                 },
-            )?;
+            );
+            let status = match res {
+                Ok((Ok(status), _, _)) => {
+                    // Child has exited successfully with status.
+                    Ok(status)
+                }
+                Ok((Err(err), _, _)) => {
+                    // Waiting for child has failed with err.
+                    Err(err)
+                }
+                Err(err) => {
+                    if let Err(kill_err) = child.kill().await {
+                        warn!(
+                            "{}: Failed to kill rsync process: {}",
+                            source, kill_err
+                        );
+                    }
+                    Err(err)
+                }
+            };
             if !stderr.is_empty() {
                 String::from_utf8_lossy(&stderr).lines().for_each(|l| {
                     warn!("{}: {}", source, l);
