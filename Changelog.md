@@ -1,5 +1,12 @@
 # Change Log
 
+# Unreleased next version
+
+Bug Fixes
+
+Other Changes
+
+
 # 0.11.0-rc2
 
 Released 2022-02-21
@@ -10,6 +17,9 @@ Bug Fixes
   ([#719])
 * Improve the way timed out `rsync` processes are killed in an attempt to
   avoid them becoming zombies. ([#720])
+
+[#719]: https://github.com/NLnetLabs/routinator/pull/719
+[#720]: https://github.com/NLnetLabs/routinator/pull/720
 
 
 # 0.11.0-rc1
