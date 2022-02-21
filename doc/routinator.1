@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Feb 10, 2022" "0.11.0-rc1" "Routinator"
+.TH "ROUTINATOR" "1" "Feb 21, 2022" "0.11.0-rc2" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -1506,7 +1506,7 @@ encoded, and have been signed by the CA. If any of the objects fail this
 check, the entire CA will be rejected. If an object of an unknown  type  is
 encountered, the behaviour depends on the \fBunknown\-objects\fP policy. If this
 policy has a value of \fIreject\fP the entire CA will be rejected. In this case,
-only certificates (.cer), CRLs (.crl), manifestes (.mft), ROAs (.roa), and
+only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
 Ghostbuster records (.gbr) will be accepted.
 .sp
 If a CA is rejected, none of its ROAs will be added to the VRP set but also
