@@ -4,6 +4,11 @@
 
 Bug Fixes
 
+* Change the content type of the `/log` endpoint back to `text/plain`.
+  ([#719])
+* Improve the way timed out `rsync` processes are killed in an attempt to
+  avoid them becoming zombies. ([#720])
+
 Other Changes
 
 
