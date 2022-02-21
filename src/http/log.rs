@@ -12,7 +12,7 @@ pub fn handle_get_or_head(
     log: Option<&LogOutput>,
 ) -> Option<Response> {
     if req.uri().path() == "/log" {
-        let res = ResponseBuilder::ok().content_type(ContentType::JSON);
+        let res = ResponseBuilder::ok().content_type(ContentType::TEXT);
         if *req.method() == Method::HEAD {
             Some(res.empty())
         }
