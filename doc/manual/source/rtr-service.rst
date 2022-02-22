@@ -121,3 +121,39 @@ Make sure Routinator is running as an RTR server on localhost:
      username rpki
      password <password>
      transport ssh port 22
+
+Configuring Routers
+-------------------
+
+Route Origin Validation is supported on most hardware and software routers.
+This documentation does not provide authoritative information on how to
+configure each router, but aims to provide helpful pointers.
+
+Hardware Routers
+""""""""""""""""
+
+ - `Arista EOS <https://aristanetworks.force.com/AristaCommunity/s/article/bgp-origin-validation-rpki>`_
+ - `Cisco IOS and IOS XE <https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.pdf>`_
+ - `Cisco IOS-XR <https://www.cisco.com/c/en/us/td/docs/routers/asr9000/software/asr9k-r6-2/routing/configuration/guide/b-routing-cg-asr9000-62x/b-routing-cg-asr9000-62x_chapter_010.html#concept_A84818AD41744DFFBD094DA7FCD7FE8B>`_
+ - `Huawei VRP <https://support.huawei.com/enterprise/en/doc/EDOC1100055018/36627f51/improving-bgp-security>`_
+ - `Juniper Junos <https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html>`_
+ - `Nokia SR OS <https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_
+ - `MikroTik <https://help.mikrotik.com/docs/pages/viewpage.action?pageId=59277471>`_
+
+Software Routers
+""""""""""""""""
+
+ - `BIRD <https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.13>`_
+ - `FRRouting <https://docs.frrouting.org/en/latest/bgp.html#prefix-origin-validation-using-rpki>`_
+ - `GoBGP <https://github.com/osrg/gobgp/blob/master/docs/sources/rpki.md>`_
+ - `OpenBGPD <https://man.openbsd.org/bgpd.conf#SET_CONFIGURATION>`_
+ - `VyOS <https://docs.vyos.io/en/latest/configuration/protocols/rpki.html>`_
+
+.. seealso:: `Rejecting RPKI Invalid BGP Routes 
+             <https://bgpfilterguide.nlnog.net/guides/reject_invalids/>`_
+             in the NLNOG BGP Filter Guide.
+
+.. note:: For additions or corrections, please `open an issue 
+          <https://github.com/NLnetLabs/routinator/issues>`_ or `submit a
+          pull request 
+          <https://github.com/NLnetLabs/routinator/blob/main/doc/manual/source/rtr-service.rst>`_.
