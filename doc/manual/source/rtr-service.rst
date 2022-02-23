@@ -127,7 +127,7 @@ Configuring Routers
 
 Route Origin Validation is supported on most hardware and software routers.
 This documentation does not provide authoritative information on how to
-configure each router, but aims to provide helpful pointers.
+configure each router platform, but aims to provide helpful pointers.
 
 Hardware Routers
 """"""""""""""""
@@ -135,6 +135,7 @@ Hardware Routers
  - `Arista EOS <https://aristanetworks.force.com/AristaCommunity/s/article/bgp-origin-validation-rpki>`_
  - `Cisco IOS and IOS XE <https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.pdf>`_
  - `Cisco IOS-XR <https://www.cisco.com/c/en/us/td/docs/routers/asr9000/software/asr9k-r6-2/routing/configuration/guide/b-routing-cg-asr9000-62x/b-routing-cg-asr9000-62x_chapter_010.html#concept_A84818AD41744DFFBD094DA7FCD7FE8B>`_
+ - `Extreme Networks SLX-OS <https://documentation.extremenetworks.com/slxos/sw/20xx/20.3.1/l3config/GUID-D0B94396-6741-4799-921D-C8F5C5895CBC.shtml>`_
  - `Huawei VRP <https://support.huawei.com/enterprise/en/doc/EDOC1100055018/36627f51/improving-bgp-security>`_
  - `Juniper Junos <https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html>`_
  - `Nokia SR OS <https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_
