@@ -134,7 +134,7 @@ Hardware Routers
 
  - `Arista EOS <https://aristanetworks.force.com/AristaCommunity/s/article/bgp-origin-validation-rpki>`_
  - `Cisco IOS and IOS XE <https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.pdf>`_
- - `Cisco IOS-XR <https://www.cisco.com/c/en/us/td/docs/routers/asr9000/software/asr9k-r6-2/routing/configuration/guide/b-routing-cg-asr9000-62x/b-routing-cg-asr9000-62x_chapter_010.html#concept_A84818AD41744DFFBD094DA7FCD7FE8B>`_
+ - `Cisco IOS-XR <https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/217020-bgp-rpki-with-xr7-cisco8000-whitepaper.html>`_
  - `Extreme Networks SLX-OS <https://documentation.extremenetworks.com/slxos/sw/20xx/20.3.1/l3config/GUID-D0B94396-6741-4799-921D-C8F5C5895CBC.shtml>`_
  - `Huawei VRP <https://support.huawei.com/enterprise/en/doc/EDOC1100055018/36627f51/improving-bgp-security>`_
  - `Juniper Junos <https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html>`_
