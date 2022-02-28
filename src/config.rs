@@ -1125,7 +1125,7 @@ impl Config {
             cache_dir: file.take_mandatory_path("repository-dir")?,
             tal_dir: file.take_mandatory_path("tal-dir")?,
             exceptions: {
-                file.take_path_array("exceptions")?.unwrap_or_else(Vec::new)
+                file.take_path_array("exceptions")?.unwrap_or_default()
             },
             strict: file.take_bool("strict")?.unwrap_or(false),
             stale: {
@@ -1177,12 +1177,10 @@ impl Config {
             rrdp_local_addr: file.take_from_str("rrdp-local-addr")?,
             rrdp_root_certs: {
                 file.take_from_str_array("rrdp-root-certs")?
-                    .unwrap_or_else(Vec::new)
+                    .unwrap_or_default()
             },
             rrdp_proxies: {
-                file.take_string_array("rrdp-proxies")?.unwrap_or_else(
-                    Vec::new
-                )
+                file.take_string_array("rrdp-proxies")?.unwrap_or_default()
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
@@ -1223,20 +1221,18 @@ impl Config {
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
             rtr_listen: {
-                file.take_from_str_array("rtr-listen")?
-                    .unwrap_or_else(Vec::new)
+                file.take_from_str_array("rtr-listen")?.unwrap_or_default()
             },
             rtr_tls_listen: {
                 file.take_from_str_array("rtr-tls-listen")?
-                    .unwrap_or_else(Vec::new)
+                    .unwrap_or_default()
             },
             http_listen: {
-                file.take_from_str_array("http-listen")?
-                    .unwrap_or_else(Vec::new)
+                file.take_from_str_array("http-listen")?.unwrap_or_default()
             },
             http_tls_listen: {
                 file.take_from_str_array("http-tls-listen")?
-                    .unwrap_or_else(Vec::new)
+                    .unwrap_or_default()
             },
             systemd_listen: file.take_bool("systemd-listen")?.unwrap_or(false),
             rtr_tcp_keepalive: {

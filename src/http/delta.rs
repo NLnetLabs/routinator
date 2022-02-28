@@ -232,7 +232,7 @@ impl Iterator for DeltaStream {
 
     fn next(&mut self) -> Option<Self::Item> {
         let delta = self.delta.as_ref()?;
-        let mut vec = self.header.take().unwrap_or_else(Vec::new);
+        let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
                 return Some(vec)
@@ -328,7 +328,7 @@ impl Iterator for SnapshotStream {
 
         let iter = self.iter.as_mut()?;
         let first = self.header.is_some();
-        let mut vec = self.header.take().unwrap_or_else(Vec::new);
+        let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
                 return Some(vec)
