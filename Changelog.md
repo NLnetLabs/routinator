@@ -1,13 +1,24 @@
 # Change Log
 
-# 0.11.0
+## Unreleased next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Other Changes
+
+
+## 0.11.0
 
 Released 2022-02-28.
 
 No changes since 0.11.0-rc2.
 
 
-# 0.11.0-rc2
+## 0.11.0-rc2
 
 Released 2022-02-21
 
@@ -22,7 +33,7 @@ Bug Fixes
 [#720]: https://github.com/NLnetLabs/routinator/pull/720
 
 
-# 0.11.0-rc1
+## 0.11.0-rc1
 
 Released 2022-02-10.
 
@@ -92,7 +103,7 @@ Other Changes
 [RFC 8416]: https://tools.ietf.org/html/rfc8416
 
 
-# 0.10.2 ‘Skuffet, men ikke overrasket’
+## 0.10.2 ‘Skuffet, men ikke overrasket’
 
 Released 2021-11-09.
 
