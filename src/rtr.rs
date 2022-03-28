@@ -166,11 +166,15 @@ impl RtrStream {
         use nix::sys::socket::{setsockopt, sockopt};
 
         (|fd, duration: Duration| {
+            setsockopt(fd, sockopt::KeepAlive, &true)?;
+            setsockopt(
+                fd, sockopt::TcpKeepIdle,
+                &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+            )?;
             setsockopt(
                 fd, sockopt::TcpKeepInterval,
                 &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
-            )?;
-            setsockopt(fd, sockopt::KeepAlive, &true)
+            )
         })(sock.as_raw_fd(), duration).map_err(|err| {
             io::Error::new(io::ErrorKind::Other, err)
         })
