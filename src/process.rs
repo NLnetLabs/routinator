@@ -449,7 +449,7 @@ mod unix {
         fn create_pid_file(&mut self, path: &Path) -> Result<(), Failed> {
             let fd = match open(
                 path,
-                OFlag::O_WRONLY | OFlag::O_CREAT,
+                OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_TRUNC,
                 Mode::from_bits_truncate(0o666)
             ) {
                 Ok(fd) => fd,
