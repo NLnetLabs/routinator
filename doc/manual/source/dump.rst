@@ -38,3 +38,6 @@ ta
     as the file name with the extension ``.cer`` appended.
 
 .. versionadded:: 0.9.0
+.. versionchanged:: 0.11.1
+   Stored trust anchor certificates are dumped into the ``ta`` directory.
+
