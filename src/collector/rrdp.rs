@@ -2012,7 +2012,7 @@ impl RepositoryObject {
             Ok(target) => target,
             Err(err) => {
                 error!(
-                    "Failed to create RRDP target file {}: {}",
+                    "Failed to create target RRDP file {}: {}",
                     target_path.display(), err
                 );
                 return Err(Failed)
@@ -2020,14 +2020,14 @@ impl RepositoryObject {
         };
         if let Err(err) = rrdp::Hash::parse(&mut source) {
             error!(
-                "Failed to read RRDP source file {}: {}",
+                "Failed to read source RRDP file {}: {}",
                 source_path.display(), err
             );
             return Err(Failed)
         };
         if let Err(err) = io::copy(&mut source, &mut target) {
             error!(
-                "Failed to copy RRDP source file {}: {}",
+                "Failed to copy source RRDP file {}: {}",
                 source_path.display(), err
             );
             return Err(Failed)
