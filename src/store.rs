@@ -153,6 +153,7 @@ impl Store {
 
     /// Dumps the content of the store.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
+        self.dump_ta_certs(dir)?;
         let dir = dir.join("store");
         debug!("Dumping store content to {}", dir.display());
         fatal::remove_dir_all(&dir)?;
@@ -161,6 +162,20 @@ impl Store {
         self.dump_tree(&self.rrdp_repository_base(), &mut repos)?;
         self.dump_repository_json(repos)?;
         debug!("Store dump complete.");
+        Ok(())
+    }
+
+    /// Dumps all the stored trust anchor certificates.
+    fn dump_ta_certs(
+        &self,
+        target_base: &Path
+    ) -> Result<(), Failed> {
+        let source = self.path.join("ta");
+        let target = target_base.join("ta");
+        debug!("Dumping trust anchor certificates to {}", target.display());
+        fatal::remove_dir_all(&target)?;
+        fatal::copy_dir_all(&source, &target)?;
+        debug!("Trust anchor certificate dump complete.");
         Ok(())
     }
 

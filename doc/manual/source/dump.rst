@@ -28,4 +28,13 @@ store
     repository similarly structured to the :file:`rrdp` directory and one
     additional directory :file:`rsync` that contains files collected via rsync.
 
+ta
+    This directory contains the trust anchor certificates. Files are stored
+    in a directory structure two levels deep. The first level is the schema
+    portion of the certificate’s URI, i.e., ``https`` or ``rsync``, and the
+    second level is the authority portion of the URI, e.g., ``tal.apnic.net``.
+    Within this second level, the certificate is stored in a file that has
+    the hexadecimal encoding of the SHA-256 hash of the certificate’s URI
+    as the file name with the extension ``.cer`` appended.
+
 .. versionadded:: 0.9.0
