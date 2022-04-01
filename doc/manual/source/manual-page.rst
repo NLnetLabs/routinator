@@ -750,7 +750,7 @@ These can be requested by providing different commands on the command line.
               enabled on all RTR connections with an idle time of 60 seconds. 
               Set this option to 0 to disable keepalives.
 
-              On some systems, notably OpenBSD, this options only enables TCP
+              On some systems, notably OpenBSD, this option only enables TCP
               keepalives if set to any value other than 0. You will have to
               use the system's own mechanisms to change the idle times.
 
@@ -1201,7 +1201,7 @@ All values can be overridden via the command line options.
             connections with an idle time of 60 seconds. If this option is
             present and set to zero, TCP keepalives are disabled.
 
-            On some systems, notably OpenBSD, this options only enables TCP
+            On some systems, notably OpenBSD, this option only enables TCP
             keepalives if set to any value other than 0. You will have to
             use the system's own mechanisms to change the idle times.
 
