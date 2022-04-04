@@ -538,7 +538,7 @@ impl Server {
         validation.ignite()?;
 
         let join = thread::spawn(move || {
-            loop {
+            let err = loop {
                 if let Some(log) = log.as_ref() {
                     log.start();
                 }
@@ -550,7 +550,7 @@ impl Server {
                             process.config(), &validation, &history,
                             &mut notify, exceptions,
                         ).is_err() {
-                            break;
+                            break Err(Failed);
                         }
                         history.read().refresh_wait()
                     }
@@ -576,44 +576,49 @@ impl Server {
                                     "Fatal: Reloading TALs failed, \
                                      shutting down."
                                 );
-                                break;
+                                break Err(Failed);
                             }
                         }
                     }
                     Err(RecvTimeoutError::Timeout) => { }
                     Err(RecvTimeoutError::Disconnected) => {
-                        break;
+                        break Ok(());
                     }
                 }
-            }
+            };
             // An error here means the receiver is gone which is fine.
-            let _ = err_tx.send(());
+            let _ = err_tx.send(err);
         });
 
-        let _: Result<(), Failed> = runtime.block_on(async move {
+        let res: Result<(), Failed> = runtime.block_on(async move {
             let mut signal = SignalListener::new()?;
-            loop {
+            let res = loop {
                 tokio::select! {
                     sig = signal.next() => {
                         if sig_tx.send(sig).is_err() {
-                            break;
+                            break Err(Failed);
                         }
                     }
-                    _  = &mut err_rx => break,
-                    _ = &mut rtr => break,
-                    _ = &mut http => break,
+                    res = &mut err_rx => {
+                        match res {
+                            Ok(res) => break res,
+                            Err(_) => break Err(Failed)
+                        }
+                    }
+                    _ = &mut rtr => break Err(Failed),
+                    _ = &mut http => break Err(Failed),
                 }
-            }
+            };
             // Dropping sig_tx will lead to sig_rx failing and the thread
             // ending. The drop is actually not necessary because sig_tx was
             // moved here, but just in case a ref sneaks in later, let’s keep
             // it.
             drop(sig_tx);
-            Ok(())
+            res
         });
 
         let _ = join.join();
-        Ok(())
+        res.map_err(Into::into)
     }
 
     fn process_once(
