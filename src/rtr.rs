@@ -166,12 +166,37 @@ impl RtrStream {
         use nix::sys::socket::{setsockopt, sockopt};
 
         (|fd, duration: Duration| {
+            setsockopt(fd, sockopt::KeepAlive, &true)?;
+
+            // The attributes are copied from the definitions in
+            // nix::sys::socket::sockopt. Let’s hope they never change.
+
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            setsockopt(
+                fd, sockopt::TcpKeepAlive,
+                &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+            )?;
+
+            #[cfg(any(
+                target_os = "android",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "linux",
+                target_os = "nacl"
+            ))]
+            setsockopt(
+                fd, sockopt::TcpKeepIdle,
+                &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+            )?;
+
+            #[cfg(not(target_os = "openbsd"))]
             setsockopt(
                 fd, sockopt::TcpKeepInterval,
                 &u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
             )?;
-            setsockopt(fd, sockopt::KeepAlive, &true)
-        })(sock.as_raw_fd(), duration).map_err(|err| {
+
+            Ok(())
+        })(sock.as_raw_fd(), duration).map_err(|err: nix::errno::Errno| {
             io::Error::new(io::ErrorKind::Other, err)
         })
     }
