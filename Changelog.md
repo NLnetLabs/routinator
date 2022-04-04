@@ -6,9 +6,32 @@ Breaking Changes
 
 New
 
+* The `dump` command now also copies the stored trust anchor certificates.
+  The certificates are named in the same way as they are internally using
+  the hash over their URI. Please consult the [manual][dump-manual] for
+  details. ([#740])
+
 Bug Fixes
 
+* The `dump` command now removes the internal header before copying
+  the objects retained by the RRDP collector, i.e., the files copied into
+  the `rrdp` sub-directory now contain the actual DER encoded data only.
+  ([#735])
+* Correctly set the idle time for TCP keepalives on incoming RTR
+  connections on systems that support it. ([#736])
+* Fix an encoding error in the `/delta-json` output. ([#737])
+* Truncate the PID file before writing the current PID to it. ([#738])
+* Exit with a status of 1 if an error happened. ([#739])
+
 Other Changes
+
+[#735]: https://github.com/NLnetLabs/routinator/pull/735
+[#736]: https://github.com/NLnetLabs/routinator/pull/736
+[#737]: https://github.com/NLnetLabs/routinator/pull/737
+[#738]: https://github.com/NLnetLabs/routinator/pull/738
+[#739]: https://github.com/NLnetLabs/routinator/pull/739
+[#740]: https://github.com/NLnetLabs/routinator/pull/740
+[dump-manual]: https://routinator.docs.nlnetlabs.nl/en/v0.11.1-rc1/dump.html
 
 
 ## 0.11.0
