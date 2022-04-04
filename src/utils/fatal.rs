@@ -315,3 +315,35 @@ pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
     })
 }
 
+
+//------------ copy_dir_all --------------------------------------------------
+
+/// Copies the content of a directory.
+///
+/// Creates the target directory with `create_dir_all`.  Errors out if
+/// anything goes wrong.
+pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
+    create_dir_all(target)?;
+    for entry in read_dir(source)? {
+        let entry = entry?;
+        if entry.is_file() {
+            if let Err(err) = fs::copy(
+                entry.path(), &target.join(entry.file_name())
+            ) {
+                error!(
+                    "Fatal: failed to copy {}: {}",
+                    entry.path().display(), err
+                );
+                return Err(Failed)
+            }
+        }
+        else if entry.is_dir() {
+            copy_dir_all(
+                entry.path(),
+                &target.join(entry.file_name())
+            )?;
+        }
+    }
+    Ok(())
+}
+
