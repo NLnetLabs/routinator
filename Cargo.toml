@@ -66,6 +66,11 @@ ui = [ "routinator-ui" ]
 [profile.release]
 panic = "abort"
 
+[package.metadata.docs.rs]
+# Building the UI breaks docs.rs, so let’s not.
+no-default-features = true
+features = [ "socks" ]
+
 [package.metadata.deb]
 name = "routinator"
 maintainer = "The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
@@ -128,3 +133,4 @@ post_uninstall_script = "/usr/share/routinator/rpm/postuninst $*"
 [package.metadata.generate-rpm.requires]
 shadow-utils = "*"
 rsync = "*"
+
