@@ -327,7 +327,7 @@ impl Iterator for SnapshotStream {
         use rpki::rtr::server::PayloadSet;
 
         let iter = self.iter.as_mut()?;
-        let first = self.header.is_some();
+        let mut first = self.header.is_some();
         let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
@@ -343,6 +343,7 @@ impl Iterator for SnapshotStream {
                     break
                 }
             }
+            first = false;
         }
 
         self.iter = None;
