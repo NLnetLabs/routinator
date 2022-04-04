@@ -1,8 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.11.1-rc1
 
-Breaking Changes
+Released 2022-04-04.
 
 New
 
@@ -22,8 +22,6 @@ Bug Fixes
 * Fix an encoding error in the `/delta-json` output. ([#737])
 * Truncate the PID file before writing the current PID to it. ([#738])
 * Exit with a status of 1 if an error happened. ([#739])
-
-Other Changes
 
 [#735]: https://github.com/NLnetLabs/routinator/pull/735
 [#736]: https://github.com/NLnetLabs/routinator/pull/736

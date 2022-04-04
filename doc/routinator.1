@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Mar 29, 2022" "0.11.1-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Apr 04, 2022" "0.11.1-rc1" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -839,7 +839,7 @@ an established RTR  connection. By  default, TCP keepalive is
 enabled on all RTR connections with an idle time of 60 seconds.
 Set this option to 0 to disable keepalives.
 .sp
-On some systems, notably OpenBSD, this options only enables TCP
+On some systems, notably OpenBSD, this option only enables TCP
 keepalives if set to any value other than 0. You will have to
 use the system\(aqs own mechanisms to change the idle times.
 .UNINDENT
@@ -1314,7 +1314,7 @@ option is missing, TCP keepalive will be enabled on all RTR
 connections with an idle time of 60 seconds. If this option is
 present and set to zero, TCP keepalives are disabled.
 .sp
-On some systems, notably OpenBSD, this options only enables TCP
+On some systems, notably OpenBSD, this option only enables TCP
 keepalives if set to any value other than 0. You will have to
 use the system\(aqs own mechanisms to change the idle times.
 .TP
