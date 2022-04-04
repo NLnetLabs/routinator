@@ -128,17 +128,11 @@ impl Process {
         &self,
         facility: syslog::Facility
     ) -> Result<fern::Dispatch, Failed> {
-        let process = std::env::current_exe().ok().and_then(|path|
-            path.file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(ToString::to_string)
-        ).unwrap_or_else(|| String::from("routinator"));
-        let formatter = syslog::Formatter3164 {
-            facility,
-            hostname: None,
-            process,
-            pid: nix::unistd::getpid().as_raw()
-        };
+        let mut formatter = syslog::Formatter3164::default();
+        formatter.facility = facility;
+        if formatter.process.is_empty() {
+            formatter.process = String::from("routinator");
+        }
         let logger = syslog::unix(formatter.clone()).or_else(|_| {
             syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
         }).or_else(|_| {
