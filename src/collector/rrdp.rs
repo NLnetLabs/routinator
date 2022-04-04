@@ -203,15 +203,7 @@ impl Collector {
             else if entry.is_file() {
                 let target_path = target_path.join(entry.file_name());
                 fatal::create_parent_all(&target_path)?;
-                if let Err(err) = fs::copy(entry.path(), &target_path) {
-                    error!(
-                        "Fatal: failed to copy {} to {}: {}",
-                        entry.path().display(),
-                        target_path.display(),
-                        err
-                    );
-                    return Err(Failed)
-                }
+                RepositoryObject::dump(entry.path(), &target_path)?;
             }
         }
         Ok(())
@@ -1995,6 +1987,51 @@ impl RepositoryObject {
         io::copy(&mut reader, target)?;
         target.seek(SeekFrom::Start(0))?;
         reader.into_hash().compose(target)?;
+        Ok(())
+    }
+
+    /// Dumps an object to the given target path.
+    ///
+    /// The dumped object will only contain the real object data, not the
+    /// added hash.
+    pub fn dump(
+        source_path: &Path,
+        target_path: &Path,
+    ) -> Result<(), Failed> {
+        let mut source = match File::open(source_path) {
+            Ok(source) => source,
+            Err(err) => {
+                error!(
+                    "Failed to open source RRDP file {}: {}",
+                    source_path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        let mut target = match File::create(target_path) {
+            Ok(target) => target,
+            Err(err) => {
+                error!(
+                    "Failed to create target RRDP file {}: {}",
+                    target_path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        if let Err(err) = rrdp::Hash::parse(&mut source) {
+            error!(
+                "Failed to read source RRDP file {}: {}",
+                source_path.display(), err
+            );
+            return Err(Failed)
+        };
+        if let Err(err) = io::copy(&mut source, &mut target) {
+            error!(
+                "Failed to copy source RRDP file {}: {}",
+                source_path.display(), err
+            );
+            return Err(Failed)
+        }
         Ok(())
     }
 }
