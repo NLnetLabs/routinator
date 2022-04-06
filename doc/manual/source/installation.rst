@@ -123,6 +123,7 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Ubuntu versions:
 
+         - Ubuntu Jammy 22.04 (LTS)
          - Ubuntu Focal 20.04 (LTS)
          - Ubuntu Bionic 18.04 (LTS)
          - Ubuntu Xenial 16.04 (LTS)
