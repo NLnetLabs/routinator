@@ -418,6 +418,9 @@ jobs:
         # exclude:
         #   - image: 'debian:bullseye'
         #     mode: 'upgrade-from-published'
+        exclude:
+          - image: 'ubuntu:jammy'
+            mode: 'upgrade-from-published'
         target:
           - 'x86_64'
     steps:
