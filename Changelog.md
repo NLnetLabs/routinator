@@ -1,10 +1,10 @@
 # Change Log
 
-## Unreleased future version
+## 0.11.1
 
-Bug Fixes
+Released 2022-04-07
 
-Other Changes
+No changes since 0.11.1-rc1.
 
 
 ## 0.11.1-rc1
