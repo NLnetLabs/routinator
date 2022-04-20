@@ -1427,13 +1427,15 @@ impl PayloadDiff for DeltaVrpIter {
                         Some((res, Action::Announce))
                     }
                     None => {
-                        self.pos = Err(0);
-                        match self.delta.withdraw.get(pos) {
+                        match self.delta.withdraw.get(0) {
                             Some(res) => {
-                                self.pos = Err(pos + 1);
+                                self.pos = Err(1);
                                 Some((res, Action::Withdraw))
                             }
-                            None => None
+                            None => {
+                                self.pos = Err(0);
+                                None
+                            }
                         }
                     }
                 }
@@ -1911,4 +1913,66 @@ mod test {
         }
         assert!(keys_iter.next().is_none());
     }
+
+    #[test]
+    fn delta_vrp_iter() {
+        use crate::payload::Action::*;
+
+        fn collect(iter: &mut DeltaVrpIter) -> Vec<(Payload, Action)> {
+            let mut res = Vec::new();
+            while let Some((payload, action)) = iter.next() {
+                res.push((payload.clone(), action));
+            }
+            res
+        }
+
+        let mut delta = PayloadDelta {
+            serial: Default::default(),
+            announce: vec![
+                origin(64496, "192.0.2.0/24", 24),
+                origin(64497, "198.51.100.0/24", 24),
+                origin(64497, "192.0.2.0/24", 24),
+            ],
+            withdraw: vec![
+                origin(64496, "198.51.100.0/24", 24),
+                origin(64497, "2001:DB8::/32", 48),
+            ]
+        };
+        assert_eq!(
+            collect(&mut DeltaVrpIter::new(Arc::new(delta.clone()))),
+            vec![
+                (origin(64496, "192.0.2.0/24", 24), Announce),
+                (origin(64497, "198.51.100.0/24", 24), Announce),
+                (origin(64497, "192.0.2.0/24", 24), Announce),
+                (origin(64496, "198.51.100.0/24", 24), Withdraw),
+                (origin(64497, "2001:DB8::/32", 48), Withdraw)
+            ]
+        );
+
+        let mut no_announce = delta.clone();
+        no_announce.announce = Vec::new();
+        assert_eq!(
+            collect(&mut DeltaVrpIter::new(Arc::new(no_announce))),
+            vec![
+                (origin(64496, "198.51.100.0/24", 24), Withdraw),
+                (origin(64497, "2001:DB8::/32", 48), Withdraw)
+            ]
+        );
+
+        let mut no_withdraw = delta.clone();
+        no_withdraw.withdraw = Vec::new();
+        assert_eq!(
+            collect(&mut DeltaVrpIter::new(Arc::new(no_withdraw))),
+            vec![
+                (origin(64496, "192.0.2.0/24", 24), Announce),
+                (origin(64497, "198.51.100.0/24", 24), Announce),
+                (origin(64497, "192.0.2.0/24", 24), Announce),
+            ]
+        );
+
+        delta.announce = Vec::new();
+        delta.withdraw = Vec::new();
+        assert!(collect(&mut DeltaVrpIter::new(Arc::new(delta))).is_empty());
+    }
 }
+
