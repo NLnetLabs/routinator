@@ -7,7 +7,8 @@ Released 2022-04-20.
 Bug Fixes
 
 * Fixes an issue that caused the RTR server to possibly skip over some
-  withdrawn VRPs in response to a serial query. ([#747])
+  withdrawn VRPs in response to a serial query. (Found by Jay Borkenhagen,
+  [#747])
 
 [#747]: https://github.com/NLnetLabs/routinator/pull/747
 
