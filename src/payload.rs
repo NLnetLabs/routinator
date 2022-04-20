@@ -1427,13 +1427,15 @@ impl PayloadDiff for DeltaVrpIter {
                         Some((res, Action::Announce))
                     }
                     None => {
-                        self.pos = Err(0);
-                        match self.delta.withdraw.get(pos) {
+                        match self.delta.withdraw.get(0) {
                             Some(res) => {
-                                self.pos = Err(pos + 1);
+                                self.pos = Err(1);
                                 Some((res, Action::Withdraw))
                             }
-                            None => None
+                            None => {
+                                self.pos = Err(0);
+                                None
+                            }
                         }
                     }
                 }
