@@ -8,7 +8,12 @@ New
 
 Bug Fixes
 
+* Fixes an issue that caused the RTR server to possibly skip over some
+  withdrawn VRPs when in response to a serial query. ([#747])
+
 Other Changes
+
+[#747]: https://github.com/NLnetLabs/routinator/pull/747
 
 
 ## 0.11.1
