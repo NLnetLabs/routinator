@@ -311,6 +311,8 @@ to get started.
    RPM packages
 .. versionadded:: 0.11.0
    Debian packages for ``armhf`` and ``arm64`` architecture
+.. versionadded:: 0.11.2
+   Ubuntu packages for Jammy 22.04 (LTS)
 
 Updating
 --------
