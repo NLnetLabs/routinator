@@ -48,8 +48,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bcder"
-version = "0.7.0-dev"
-source = "git+https://github.com/NLnetLabs/bcder.git?branch=error-redesign#b7895fd8013d7fecfa82e260aff62506abeee96a"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f007d8acfb8ef7d219911c7164c025a6d3504735120fc5df59c3c479ab84ea51"
 dependencies = [
  "bytes",
  "smallvec",
@@ -563,7 +564,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c02b14f35d9f5f082fd0b1b34aa0ef32e3354c859c721d7f3325b3f79a42ba54"
 dependencies = [
  "libc",
- "uuid",
+ "uuid 0.8.2",
  "winapi",
 ]
 
@@ -787,9 +788,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8533f14c8382aaad0d592c812ac3b826162128b65662331e1127b45c3d18536b"
+checksum = "9279fbdacaad3baf559d8cabe0acc3d06e30ea14931af31af79578ac0946decc"
 dependencies = [
  "memchr",
 ]
@@ -922,8 +923,9 @@ dependencies = [
 
 [[package]]
 name = "routecore"
-version = "0.1.2-dev"
-source = "git+https://github.com/NLnetLabs/routecore.git?branch=better-bcder-errors#2db173c8b6a9081a72ad2d91613105f8cc56e0c6"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afd872857e85411c0ba7d18dfe650fc4864b292c02cde997e86c511314fdfc3"
 dependencies = [
  "bcder",
  "serde",
@@ -966,7 +968,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "toml",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -982,8 +984,9 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.15.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=better-errors#4f54ebaec6e930a20f3d37ebdcb41eec8c66c1e1"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43bd85abb0ba1badf18af3fd23390011bcd95dff583c2b8ce093594db398260c"
 dependencies = [
  "base64",
  "bcder",
@@ -999,7 +1002,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "untrusted",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -1475,6 +1478,12 @@ name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+
+[[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
 
 [[package]]
 name = "vcpkg"
