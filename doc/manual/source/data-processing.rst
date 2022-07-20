@@ -115,7 +115,7 @@ Unsafe VRPs
 """""""""""
 
 If the address prefix of a VRP overlaps with any resources assigned to a CA that
-has been rejected because if failed to validate completely, the VRP is said to
+has been rejected because it failed to validate completely, the VRP is said to
 be *unsafe* since using it may lead to legitimate routes being flagged as RPKI
 Invalid.
 
