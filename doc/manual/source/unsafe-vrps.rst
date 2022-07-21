@@ -16,7 +16,7 @@ all. This makes the occurrence of unsafe VRPs highly unlikely.
 When an organisation runs RPKI with their own CA, they can delegate a subset
 of their resources to another party, such as their customer, who in turn runs
 their own CA. Both parties can publish in a repository they host themselves,
-or one that is offered by a thrid party as a service. Because there are now
+or one that is offered by a third party as a service. Because there are now
 more variables at play, such as broken CAs or unavailable repositories, there
 is a possibility of Unsafe VRPs emerging.
 
