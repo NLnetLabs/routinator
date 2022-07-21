@@ -9,9 +9,9 @@ to legitimate routes being flagged as RPKI Invalid.
 In the Hosted RPKI systems that the five Regional Internet Registries offer,
 all certificates and ROAs reside within a single system and all related
 objects are published in a single repository. In addition, these systems do
-not allow sub-delegation of resources isn't possible. As a result, relying
-party software will normally fetch and validate the entire set of objects, or
-nothing at all. This makes the occurrence of unsafe VRPs highly unlikely.
+not allow sub-delegation of resources. As a result, relying party software
+will normally fetch and validate the entire set of objects, or nothing at
+all. This makes the occurrence of unsafe VRPs highly unlikely.
 
 When an organisation runs RPKI with their own CA, they can delegate a subset
 of their resources to another party, such as their customer, who in turn runs
