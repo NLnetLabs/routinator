@@ -1,10 +1,14 @@
 Unsafe VRPs
 ===========
 
-If the address prefix of a VRP overlaps with any resources assigned to a
-Certification Authority (CA) that has been rejected because it failed to
-validate completely, the VRP is said to be *unsafe* since using it may lead
-to legitimate routes being flagged as RPKI Invalid.
+Routinator is unique among relying party software in its ability to alert
+operators to a subtle condition we refer to as *"Unsafe VRPs"*.  We will
+explore that concept here.
+
+If the address prefix of a Validated ROA Payload (VRP) overlaps with any
+resources assigned to a Certification Authority (CA) that has been rejected
+because it failed to validate completely, the VRP is said to be *unsafe*
+since using it may lead to legitimate routes being flagged as RPKI Invalid.
 
 In the Hosted RPKI systems that the five Regional Internet Registries offer,
 all certificates and ROAs reside within a single system and all related
@@ -30,6 +34,7 @@ itself is broken, or because repository that hosts the ROA is unavailable for
 a prolonged period.
 
 Routinator has an :option:`--unsafe-vrps` option that specifies how to deal
-with these types of VRPs. Currently, the default policy is *warn* in order to
-gain operational experience with the frequency and impact of unsafe VRPs.
-This default may change in future version.
+with unsafe resources when conditions creating unsafe VRPs exist. Currently,
+the default policy is *warn* in order to gain operational experience with the
+frequency and impact of unsafe VRPs. This default may change in future
+version.
