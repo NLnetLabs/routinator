@@ -98,7 +98,7 @@ jobs:
             target: 'aarch64-unknown-linux-musl'
     env:
       CARGO_DEB_VER: 1.28.0
-      CARGO_GENERATE_RPM_VER: 0.4.0
+      CARGO_GENERATE_RPM_VER: 0.6.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
@@ -208,9 +208,7 @@ jobs:
       run: |
         case ${OS_NAME} in
           centos)
-            # Temporary workaround for https://github.com/cat-in-136/cargo-generate-rpm/issues/21
-            rustup toolchain install 1.52.0
-            cargo +1.52.0 install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
+            cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
             ;;
         esac
 
