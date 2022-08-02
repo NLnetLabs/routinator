@@ -333,7 +333,7 @@ jobs:
         esac
 
     # See what O/S specific linting tools think of our package.
-    - name: Verify the DEB package
+    - name: Verify the package
       env:
         CROSS_TARGET: ${{ matrix.target }}
       run: |
