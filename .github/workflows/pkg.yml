@@ -399,7 +399,7 @@ jobs:
           - "ubuntu:bionic"   # ubuntu/18.04
           - "ubuntu:focal"    # ubuntu/20.04
           - "ubuntu:jammy"    # ubuntu/22.04
-          - "debian:stretch"  # debian/9
+          # - "debian:stretch"  # debian/9 - LXC image is no longer available on images.linuxcontainers.org
           - "debian:buster"   # debian/10
           - "debian:bullseye" # debian/11
           - "centos:7"
