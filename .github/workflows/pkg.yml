@@ -316,19 +316,22 @@ jobs:
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
-            centos:7)
-              SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
-              ;;
-            *)
-              SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
-              ;;
+              centos:7)
+                SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
+                # yum install fails on older CentOS with the default LZMA compression used by cargo generate-rpm since v0.5.0
+                EXTRA_CARGO_GENERATE_RPM_ARGS="--payload-compress gzip"
+                ;;
+              *)
+                SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
+                EXTRA_CARGO_GENERATE_RPM_ARGS=""
+                ;;
             esac
 
             # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm
+            cargo generate-rpm ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
