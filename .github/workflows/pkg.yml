@@ -98,7 +98,7 @@ jobs:
             target: 'aarch64-unknown-linux-musl'
     env:
       CARGO_DEB_VER: 1.28.0
-      CARGO_GENERATE_RPM_VER: 0.6.0
+      CARGO_GENERATE_RPM_VER: 0.7.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
@@ -208,7 +208,7 @@ jobs:
       run: |
         case ${OS_NAME} in
           centos)
-            cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
+            cargo install cargo-generate-rpm --git https://github.com/cat-in-136/cargo-generate-rpm --branch metadata-overwrite --locked
             ;;
         esac
 
@@ -311,9 +311,6 @@ jobs:
             cargo build --release --locked
             strip -s target/release/routinator
 
-            # Fix the version string to be used for the RPM package
-            sed -i -e "s/<RPM_PKG_VER_PLACEHOLDER>/$PKG_ROUTINATOR_VER/" Cargo.toml
-
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
               centos:7)
@@ -331,7 +328,7 @@ jobs:
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm ${EXTRA_CARGO_GENERATE_RPM_ARGS}
+            cargo generate-rpm --metadata-overwrite-inline "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
