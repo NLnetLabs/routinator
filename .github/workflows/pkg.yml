@@ -97,7 +97,7 @@ jobs:
           - image: 'debian:buster'
             target: 'aarch64-unknown-linux-musl'
     env:
-      CARGO_DEB_VER: 1.28.0
+      CARGO_DEB_VER: 1.34.2 # Newer cargo-deb fails to compile with --no-default-features, see https://github.com/kornelski/cargo-deb/issues/43.
       CARGO_GENERATE_RPM_VER: 0.7.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
@@ -184,7 +184,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-deb
-        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
+        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}-${{ endsWith(matrix.image, 'xenial')}}
 
     - name: Cache Cargo Generate RPM if available
       id: cache-cargo-generate-rpm
@@ -199,8 +199,18 @@ jobs:
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
-            cargo install cargo-deb --version ${CARGO_DEB_VER}
-            ;;
+            if [[ "${OS_REL}" == "xenial" ]]; then
+              # Disable use of the default lzma feature which causes XZ compression to be used
+              # which then causes Lintian to fail with error:
+              #   E: krill: malformed-deb-archive newer compressed control.tar.xz
+              # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
+              # See: https://github.com/kornelski/cargo-deb/issues/12
+              EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
+            else
+              EXTRA_CARGO_INSTALL_ARGS=""
+            fi
+            cargo install cargo-deb --version ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
+          ;;
         esac
 
     - name: Install Cargo Generate RPM if needed
@@ -208,6 +218,7 @@ jobs:
       run: |
         case ${OS_NAME} in
           centos)
+            #cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
             cargo install cargo-generate-rpm --git https://github.com/cat-in-136/cargo-generate-rpm --branch metadata-overwrite --locked
             ;;
         esac
