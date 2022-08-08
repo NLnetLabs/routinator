@@ -161,7 +161,6 @@ impl RtrStream {
     fn set_keepalive(
         sock: &TcpStream, duration: Duration
     ) -> Result<(), io::Error>{
-        use std::convert::TryFrom;
         use std::os::unix::io::AsRawFd;
         use nix::sys::socket::{setsockopt, sockopt};
 
