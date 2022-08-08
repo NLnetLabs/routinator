@@ -170,29 +170,44 @@ generated in a wide range of output formats for various use cases.
           
               {
                 "metadata": {
-                  "generated": 1626853335,
-                  "generatedTime": "2021-07-21T07:42:15Z"
+                  "generated": 1658818561,
+                  "generatedTime": "2022-07-26T06:56:01Z"
                 },
                 "roas": [{
-                  "asn": "AS196615",
-                  "prefix": "93.175.147.0/24",
-                  "maxLength": 24,
+                    "asn": "AS211321",
+                    "prefix": "185.49.142.0/24",
+                    "maxLength": 24,
+                    "source": [{
+                      "type": "roa",
+                      "uri": "rsync://testbed.krill.cloud/repo/local-testbed-child/0/3138352e34392e3134322e302f32342d3234203d3e20323131333231.roa",
+                      "validity": {
+                        "notBefore": "2022-07-25T20:47:37Z",
+                        "notAfter": "2023-07-24T20:52:37Z"
+                      },
+                      "chainValidity": {
+                        "notBefore": "2022-07-25T20:47:37Z",
+                        "notAfter": "2023-02-24T12:31:01Z"
+                      }
+                    }]
+                  }
+                ],
+                "routerKeys": [{
+                  "asn": "AS211321",
+                  "SKI": "17316903F0671229E8808BA8E8AB0105FA915A07",
+                  "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET10FMBxP6P3r6aG_ICpfsktp7X6ylJIY8Kye6zkQhNOt0y-cRzYngH8MGzY3cXNvZ64z4CpZ22gf4teybGq8ow",
                   "source": [{
-                    "type": "roa",
-                    "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
+                    "type": "cer",
+                    "uri": "rsync://testbed.krill.cloud/repo/local-testbed-child/0/ROUTER-00033979-17316903F0671229E8808BA8E8AB0105FA915A07.cer",
                     "validity": {
-                      "notBefore": "2021-01-01T04:39:56Z",
-                      "notAfter": "2022-07-01T00:00:00Z"
+                      "notBefore": "2022-07-25T20:47:37Z",
+                      "notAfter": "2023-07-24T20:52:37Z"
                     },
                     "chainValidity": {
-                      "notBefore": "2021-05-06T12:51:30Z",
-                      "notAfter": "2022-07-01T00:00:00Z"
+                      "notBefore": "2022-07-25T20:47:37Z",
+                      "notAfter": "2023-02-24T12:31:01Z"
                     }
                   }]
-                }],
-                "routerKeys": [
-
-                ]
+                }]
               }
             
           .. versionadded:: 0.9.0
