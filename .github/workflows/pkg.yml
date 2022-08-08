@@ -328,7 +328,7 @@ jobs:
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm --metadata-overwrite-inline "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
+            cargo generate-rpm --set-metadata "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
