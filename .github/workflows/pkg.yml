@@ -191,7 +191,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-generate-rpm
-        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-${{ startsWith(${OS_REL}, "xenial")}}
+        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-${{ endsWith(matrix.image, "xenial")}}
 
     # Only install cargo-deb or cargo-generate-rpm if not already fetched from the cache.
     - name: Install Cargo Deb if needed
