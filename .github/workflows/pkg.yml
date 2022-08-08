@@ -199,8 +199,18 @@ jobs:
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
-            cargo install cargo-deb --version ${CARGO_DEB_VER}
-            ;;
+            if [[ "${OS_REL}" == "xenial" ]]; then
+              # Disable use of the default lzma feature which causes XZ compression to be used
+              # which then causes Lintian to fail with error:
+              #   E: krill: malformed-deb-archive newer compressed control.tar.xz
+              # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
+              # See: https://github.com/kornelski/cargo-deb/issues/12
+              EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
+            else
+              EXTRA_CARGO_INSTALL_ARGS=""
+            fi
+            cargo install cargo-deb --version ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
+          ;;
         esac
 
     - name: Install Cargo Generate RPM if needed
