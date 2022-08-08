@@ -5,7 +5,6 @@
 //! types we need.
 
 use std::{error, io, slice};
-use std::convert::TryFrom;
 use bytes::Bytes;
 use rpki::rrdp;
 use rpki::uri;
