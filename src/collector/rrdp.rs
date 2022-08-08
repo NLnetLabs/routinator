@@ -21,7 +21,6 @@
 
 use std::{cmp, error, fmt, fs, io};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};

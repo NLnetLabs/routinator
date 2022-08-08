@@ -97,8 +97,8 @@ jobs:
           - image: 'debian:buster'
             target: 'aarch64-unknown-linux-musl'
     env:
-      CARGO_DEB_VER: 1.28.0
-      CARGO_GENERATE_RPM_VER: 0.4.0
+      CARGO_DEB_VER: 1.34.2 # Newer cargo-deb fails to compile with --no-default-features, see https://github.com/kornelski/cargo-deb/issues/43.
+      CARGO_GENERATE_RPM_VER: 0.6.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
@@ -184,7 +184,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-deb
-        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}
+        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}-${{ endsWith(matrix.image, 'xenial')}}
 
     - name: Cache Cargo Generate RPM if available
       id: cache-cargo-generate-rpm
@@ -199,8 +199,18 @@ jobs:
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
-            cargo install cargo-deb --version ${CARGO_DEB_VER}
-            ;;
+            if [[ "${OS_REL}" == "xenial" ]]; then
+              # Disable use of the default lzma feature which causes XZ compression to be used
+              # which then causes Lintian to fail with error:
+              #   E: krill: malformed-deb-archive newer compressed control.tar.xz
+              # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
+              # See: https://github.com/kornelski/cargo-deb/issues/12
+              EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
+            else
+              EXTRA_CARGO_INSTALL_ARGS=""
+            fi
+            cargo install cargo-deb --version ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
+          ;;
         esac
 
     - name: Install Cargo Generate RPM if needed
@@ -208,9 +218,7 @@ jobs:
       run: |
         case ${OS_NAME} in
           centos)
-            # Temporary workaround for https://github.com/cat-in-136/cargo-generate-rpm/issues/21
-            rustup toolchain install 1.52.0
-            cargo +1.52.0 install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
+            cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
             ;;
         esac
 
@@ -318,24 +326,27 @@ jobs:
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
-            centos:7)
-              SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
-              ;;
-            *)
-              SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
-              ;;
+              centos:7)
+                SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
+                # yum install fails on older CentOS with the default LZMA compression used by cargo generate-rpm since v0.5.0
+                EXTRA_CARGO_GENERATE_RPM_ARGS="--payload-compress gzip"
+                ;;
+              *)
+                SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
+                EXTRA_CARGO_GENERATE_RPM_ARGS=""
+                ;;
             esac
 
             # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm
+            cargo generate-rpm ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
     # See what O/S specific linting tools think of our package.
-    - name: Verify the DEB package
+    - name: Verify the package
       env:
         CROSS_TARGET: ${{ matrix.target }}
       run: |
@@ -401,7 +412,7 @@ jobs:
           - "ubuntu:bionic"   # ubuntu/18.04
           - "ubuntu:focal"    # ubuntu/20.04
           - "ubuntu:jammy"    # ubuntu/22.04
-          - "debian:stretch"  # debian/9
+          # - "debian:stretch"  # debian/9 - LXC image is no longer available on images.linuxcontainers.org
           - "debian:buster"   # debian/10
           - "debian:bullseye" # debian/11
           - "centos:7"
