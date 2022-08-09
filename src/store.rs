@@ -70,11 +70,11 @@ use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use log::{debug, error, warn};
 use rand::random;
-use rpki::repository::Cert;
-use rpki::repository::crypto::digest::DigestAlgorithm;
+use rpki::crypto::digest::DigestAlgorithm;
+use rpki::repository::cert::Cert;
 use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
-use rpki::repository::x509::{Time, ValidationError};
+use rpki::repository::x509::Time;
 use rpki::uri;
 use crate::collector;
 use crate::config::Config;
@@ -1066,6 +1066,7 @@ impl StoredObject {
         Ok(())
     }
 
+    /* XXX WHY DOES THIS EXIST BUT IS UNUSED?
     /// Verifies that the object matches the given hash.
     ///
     /// This will be a simple comparison if both hashes use the same algorithm
@@ -1087,6 +1088,7 @@ impl StoredObject {
 
         hash.verify(&self.content)
     }
+    */
 
     /// Returns the URI of the object.
     pub fn uri(&self) -> &uri::Rsync {

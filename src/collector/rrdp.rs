@@ -36,7 +36,7 @@ use reqwest::header;
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rpki::{rrdp, uri};
-use rpki::repository::crypto::DigestAlgorithm;
+use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
 use crate::config::Config;
