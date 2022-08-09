@@ -1443,13 +1443,13 @@ impl ValidPointManifest {
 
         if *crl_uri != self.crl_uri {
             return Err(InspectionError::new(
-                "certifacte's CRL differs from manifest's"
+                "certificate's CRL differs from manifest's"
             ).into())
         }
 
         if self.crl.contains(cert.serial_number()) {
             return Err(InspectionError::new(
-                "certifacte has been revoked"
+                "certificate has been revoked"
             ).into())
         }
 
