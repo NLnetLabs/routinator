@@ -976,7 +976,10 @@ impl StoredManifest {
 ///
 /// This type collects all the data that is stored for regular objects of a
 /// publication point: the raw bytes of the object as well as its hash as
-/// stated on the publication point’s manifest.
+/// stated on the publication point’s manifest. This hash is currently not
+/// used since we only store objects when we know the publication point was
+/// valid. It is retained here solely for compatibility with the existing
+/// stored object format.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredObject {
     /// The URI of the object.
@@ -1065,30 +1068,6 @@ impl StoredObject {
 
         Ok(())
     }
-
-    /* XXX WHY DOES THIS EXIST BUT IS UNUSED?
-    /// Verifies that the object matches the given hash.
-    ///
-    /// This will be a simple comparison if both hashes use the same algorithm
-    /// (which currently is always true but may change in the future)
-    /// otherwise the object’s bytes are being hashed.
-    pub fn verify_hash(
-        &self, hash: &ManifestHash
-    ) -> Result<(), ValidationError> {
-        if let Some(stored_hash) = self.hash.as_ref() {
-            if hash.algorithm() == stored_hash.algorithm() {
-                if hash.as_slice() == stored_hash.as_slice() {
-                    return Ok(())
-                }
-                else {
-                    return Err(ValidationError)
-                }
-            }
-        }
-
-        hash.verify(&self.content)
-    }
-    */
 
     /// Returns the URI of the object.
     pub fn uri(&self) -> &uri::Rsync {
