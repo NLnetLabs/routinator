@@ -134,11 +134,7 @@ The available options are:
       to the valid VRPs.
 
       Finally, the *accept* policy will quietly add unsafe VRPs to the valid
-      VRPs.
-
-      Currently, the default policy is *warn* in order to gain operational
-      experience with the frequency and impact of unsafe VRPs. This default
-      may change in future versions.
+      VRPs. This is the default policy.
 
       For more information on the process of validation implemented in
       Routinator, see the section `VALIDATION`_ below.
@@ -1000,11 +996,11 @@ All values can be overridden via the command line options.
 
             warn
                   Warn about unsafe VRPs in the log but add them to the final
-                  set of VRPs. This is the default policy if the value is
-                  missing.
+                  set of VRPs.
 
             accept
-                  Quietly add unsafe VRPs to the final set of VRPs.
+                  Quietly add unsafe VRPs to the final set of VRPs.  This is
+                  the default policy if the value is missing.
 
       unknown-objects
             A string specifying the policy for dealing with unknown RPKI
