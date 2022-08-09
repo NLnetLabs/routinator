@@ -4,11 +4,16 @@
 
 Breaking Changes
 
+* Refactored error handling. Routinator now logs the reason why an object
+  failed verification or was otherwise rejected. ([#755])
+
 New
 
 Bug Fixes
 
 Other Changes
+
+[#755]: https://github.com/NLnetLabs/routinator/pull/755
 
 
 ## 0.11.2
