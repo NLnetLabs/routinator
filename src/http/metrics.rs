@@ -4,6 +4,7 @@ use std::{cmp, fmt};
 use std::fmt::Write;
 use chrono::Utc;
 use hyper::{Body, Method, Request};
+use crate::config::FilterPolicy;
 use crate::metrics::{
     HttpServerMetrics, Metrics, PayloadMetrics, PublicationMetrics,
     RrdpRepositoryMetrics, RsyncModuleMetrics, SharedRtrServerMetrics,
@@ -37,7 +38,7 @@ async fn handle_metrics(
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
 ) -> Response {
-    let (metrics, serial, start, done, duration) = {
+    let (metrics, serial, start, done, duration, unsafe_vrps) = {
         let history = history.read();
         (
             match history.metrics() {
@@ -48,6 +49,7 @@ async fn handle_metrics(
             history.last_update_start(),
             history.last_update_done(),
             history.last_update_duration(),
+            history.unsafe_vrps(),
         )
     };
 
@@ -113,11 +115,11 @@ async fn handle_metrics(
         metrics.tals.iter().map(|m| (m.tal.name(), &m.publication))
     );
     vrp_metrics(
-        &mut target, Group::Ta,
+        &mut target, Group::Ta, unsafe_vrps,
         metrics.tals.iter().map(|m| (m.tal.name(), m.payload.vrps()))
     );
     payload_metrics(
-        &mut target, Group::Ta,
+        &mut target, Group::Ta, unsafe_vrps,
         metrics.tals.iter().map(|m| (m.tal.name(), &m.payload))
     );
 
@@ -131,11 +133,11 @@ async fn handle_metrics(
         metrics.repositories.iter().map(|m| (m.uri.as_ref(), &m.publication))
     );
     vrp_metrics(
-        &mut target, Group::Repository,
+        &mut target, Group::Repository, unsafe_vrps,
         metrics.repositories.iter().map(|m| (m.uri.as_ref(), m.payload.vrps()))
     );
     payload_metrics(
-        &mut target, Group::Repository,
+        &mut target, Group::Repository, unsafe_vrps,
         metrics.repositories.iter().map(|m| (m.uri.as_ref(), &m.payload))
     );
 
@@ -158,7 +160,7 @@ async fn handle_metrics(
     http_metrics(&mut target, http);
 
     //  Deprecated metrics.
-    deprecated_metrics(&mut target, &metrics);
+    deprecated_metrics(&mut target, &metrics, unsafe_vrps);
 
     target.into_response()
 }
@@ -271,7 +273,7 @@ fn object_metrics<'a>(
 }
 
 fn vrp_metrics<'a>(
-    target: &mut Target, group: Group,
+    target: &mut Target, group: Group, unsafe_vrps: FilterPolicy,
     metrics: impl Iterator<Item = (&'a str, &'a VrpMetrics)>
 ) {
     let valid_metric = Metric::with_prefix(
@@ -304,15 +306,19 @@ fn vrp_metrics<'a>(
     );
 
     target.header(valid_metric);
-    target.header(unsafe_metric);
+    if unsafe_vrps.log() {
+        target.header(unsafe_metric);
+    }
     target.header(filtered_metric);
     target.header(duplicate_metric);
     target.header(contributed_metric);
     for (name, metrics) in metrics {
         target.multi(valid_metric).label(group.label(), name)
             .value(metrics.valid);
-        target.multi(unsafe_metric).label(group.label(), name)
-            .value(metrics.marked_unsafe);
+        if unsafe_vrps.log() {
+            target.multi(unsafe_metric).label(group.label(), name)
+                .value(metrics.marked_unsafe);
+        }
         target.multi(filtered_metric).label(group.label(), name)
             .value(metrics.locally_filtered);
         target.multi(duplicate_metric).label(group.label(), name)
@@ -323,7 +329,7 @@ fn vrp_metrics<'a>(
 }
 
 fn payload_metrics<'a>(
-    target: &mut Target, group: Group,
+    target: &mut Target, group: Group, unsafe_vrps: FilterPolicy,
     metrics: impl Iterator<Item = (&'a str, &'a PayloadMetrics)>
 ) {
     let valid_metric = Metric::with_prefix(
@@ -362,7 +368,9 @@ fn payload_metrics<'a>(
     );
 
     target.header(valid_metric);
-    target.header(unsafe_metric);
+    if unsafe_vrps.log() {
+        target.header(unsafe_metric);
+    }
     target.header(filtered_metric);
     target.header(duplicate_metric);
     target.header(contributed_metric);
@@ -379,10 +387,12 @@ fn payload_metrics<'a>(
                 .label(group.label(), name)
                 .label("type", type_name)
                 .value(metrics.valid);
-            target.multi(unsafe_metric)
-                .label(group.label(), name)
-                .label("type", type_name)
-                .value(metrics.marked_unsafe);
+            if unsafe_vrps.log() {
+                target.multi(unsafe_metric)
+                    .label(group.label(), name)
+                    .label("type", type_name)
+                    .value(metrics.marked_unsafe);
+            }
             target.multi(filtered_metric)
                 .label(group.label(), name)
                 .label("type", type_name)
@@ -655,7 +665,9 @@ fn http_metrics(target: &mut Target, metrics: &HttpServerMetrics) {
     );
 }
 
-fn deprecated_metrics(target: &mut Target, metrics: &Metrics) {
+fn deprecated_metrics(
+    target: &mut Target, metrics: &Metrics, unsafe_vrps: FilterPolicy,
+) {
     // Old-style per-TAL metrics.
     let valid_roas = Metric::new(
         "valid_roas", "number of valid ROAs seen", MetricType::Gauge
@@ -692,9 +704,11 @@ fn deprecated_metrics(target: &mut Target, metrics: &Metrics) {
         target.multi(total_vrps).label("tal", name).value(
             vrps.valid
         );
-        target.multi(vrps_unsafe).label("tal", name).value(
-            vrps.marked_unsafe
-        );
+        if unsafe_vrps.log() {
+            target.multi(vrps_unsafe).label("tal", name).value(
+                vrps.marked_unsafe
+            );
+        }
         target.multi(vrps_filtered).label("tal", name).value(
             vrps.locally_filtered
         );

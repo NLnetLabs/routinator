@@ -64,7 +64,7 @@ const DEFAULT_RTR_TCP_KEEPALIVE: Option<Duration>
 const DEFAULT_STALE_POLICY: FilterPolicy = FilterPolicy::Reject;
 
 /// The default unsafe-vrps policy.
-const DEFAULT_UNSAFE_VRPS_POLICY: FilterPolicy = FilterPolicy::Warn;
+const DEFAULT_UNSAFE_VRPS_POLICY: FilterPolicy = FilterPolicy::Accept;
 
 /// The default unknown-objects policy.
 const DEFAULT_UNKNOWN_OBJECTS_POLICY: FilterPolicy = FilterPolicy::Warn;
@@ -1827,6 +1827,15 @@ pub enum FilterPolicy {
 
     /// Quietly accept objects matched by the filter.
     Accept
+}
+
+impl FilterPolicy {
+    /// Does the filter policy require logging?
+    ///
+    /// This is true for reject and warn.
+    pub fn log(self) -> bool {
+        matches!(self, FilterPolicy::Reject | FilterPolicy::Warn)
+    }
 }
 
 impl FromStr for FilterPolicy {

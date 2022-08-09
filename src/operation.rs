@@ -631,7 +631,7 @@ impl Server {
         info!("Starting a validation run.");
         history.mark_update_start();
         let (report, metrics) = ValidationReport::process(
-            engine, config.enable_bgpsec
+            engine, config.unsafe_vrps.log(), config.enable_bgpsec
         )?;
         let must_notify = history.update(
             report, &exceptions, metrics,
@@ -820,7 +820,9 @@ impl Vrps {
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+            &engine,
+            process.config().unsafe_vrps.log(),
+            process.config().enable_bgpsec,
         )?;
         let vrps = PayloadSnapshot::from_report(
             report,
@@ -1093,7 +1095,9 @@ impl Validate {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+            &engine,
+            process.config().unsafe_vrps.log(),
+            process.config().enable_bgpsec,
         )?;
         let snapshot = PayloadSnapshot::from_report(
             report,
@@ -1343,7 +1347,9 @@ impl Update {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let (_, metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+            &engine,
+            process.config().unsafe_vrps.log(),
+            process.config().enable_bgpsec,
         )?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)

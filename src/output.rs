@@ -1040,9 +1040,8 @@ impl Summary {
                 tal.publication.valid_roas
             ))?;
             line(format_args!(
-                "            VRPs: {:7} verified, {:7} unsafe, {:7} final;",
+                "            VRPs: {:7} verified, {:7} final;",
                 tal.payload.vrps().valid,
-                tal.payload.vrps().marked_unsafe,
                 tal.payload.vrps().contributed
             ))?;
             line(format_args!(
@@ -1061,9 +1060,8 @@ impl Summary {
             metrics.publication.valid_roas
         ))?;
         line(format_args!(
-            "            VRPs: {:7} verified, {:7} unsafe, {:7} final;",
+            "            VRPs: {:7} verified, {:7} final;",
             metrics.payload.vrps().valid,
-            metrics.payload.vrps().marked_unsafe,
             metrics.payload.vrps().contributed
         ))?;
         line(format_args!(
