@@ -98,7 +98,7 @@ jobs:
             target: 'aarch64-unknown-linux-musl'
     env:
       CARGO_DEB_VER: 1.34.2 # Newer cargo-deb fails to compile with --no-default-features, see https://github.com/kornelski/cargo-deb/issues/43.
-      CARGO_GENERATE_RPM_VER: 0.7.0
+      CARGO_GENERATE_RPM_VER: 0.8.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
@@ -191,7 +191,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-generate-rpm
-        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-147e7d1
+        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}
 
     # Only install cargo-deb or cargo-generate-rpm if not already fetched from the cache.
     - name: Install Cargo Deb if needed
@@ -218,8 +218,7 @@ jobs:
       run: |
         case ${OS_NAME} in
           centos)
-            #cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
-            cargo install cargo-generate-rpm --git https://github.com/cat-in-136/cargo-generate-rpm --branch metadata-overwrite --locked
+            cargo install cargo-generate-rpm --version ${CARGO_GENERATE_RPM_VER} --locked
             ;;
         esac
 
@@ -321,6 +320,9 @@ jobs:
             # Build and strip Routinator as cargo generate-rpm doesn't do this for us
             cargo build --release --locked
             strip -s target/release/routinator
+
+            # TODO: It might be possible to replace the hacky copying of the service file below with some clever use of
+            # `--set-metadata` when invoking cargo generate-rpm.
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
