@@ -324,6 +324,7 @@ jobs:
             # TODO: It might be possible to replace the hacky copying of the service file below with some clever use of
             # `--set-metadata` when invoking cargo generate-rpm. Of particular interest is the new `--variant` command
             # line argument which might enable us to work the same way as we do for cargo deb above.
+            # See: https://github.com/cat-in-136/cargo-generate-rpm/issues/18
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
