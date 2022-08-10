@@ -1,5 +1,5 @@
 # -- stage 0: some configuration
-ARG BASE_IMG=alpine:3.15
+ARG BASE_IMG=alpine:3.16
 
 # -- stage 1: build static routinator with musl libc for alpine
 FROM ${BASE_IMG} as build
@@ -14,14 +14,13 @@ COPY . .
 # warnings when Cargo attempts to fetch from crates.io when building this
 # image on Docker Hub and GitHub Actions build machines. 
 RUN CARGO_HTTP_MULTIPLEXING=false cargo build \
-    --target x86_64-alpine-linux-musl \
     --release \
     --locked
 
 # -- stage 2: create alpine-based container with the static routinator
 #             executable
 FROM ${BASE_IMG}
-COPY --from=build /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator /usr/local/bin/
+COPY --from=build /tmp/routinator/target/release/routinator /usr/local/bin/
 
 # Build variables for uid and guid of user to run container
 ARG RUN_USER=routinator
