@@ -199,16 +199,16 @@ jobs:
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
-            #if [[ "${OS_REL}" == "xenial" ]]; then
-            #  # Disable use of the default lzma feature which causes XZ compression to be used
-            #  # which then causes Lintian to fail with error:
-            #  #   E: krill: malformed-deb-archive newer compressed control.tar.xz
-            #  # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
-            #  # See: https://github.com/kornelski/cargo-deb/issues/12
-            #  EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
-            #else
+            if [[ "${OS_REL}" == "xenial" ]]; then
+              # Disable use of the default lzma feature which causes XZ compression to be used
+              # which then causes Lintian to fail with error:
+              #   E: krill: malformed-deb-archive newer compressed control.tar.xz
+              # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
+              # See: https://github.com/kornelski/cargo-deb/issues/12
+              EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
+            else
               EXTRA_CARGO_INSTALL_ARGS=""
-            #fi
+            fi
             cargo install cargo-deb --git https://github.com/kornelski/cargo-deb.git --rev ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
           ;;
         esac
