@@ -98,7 +98,7 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 [package.metadata.deb.variants.minimal]
 
 # Cross compilation variants:
-# Note: we have to specifiy dependencies manually because we don't run cargo-deb
+# Note: we have to specify dependencies manually because we don't run cargo-deb
 # on the target platform and so it cannot determine the dependencies correctly
 # for us.
 [package.metadata.deb.variants.minimal-cross]
