@@ -9,11 +9,16 @@ Breaking Changes
 
 New
 
+* In the extended `jsonext` output format, the information for VRPs and
+  router keys derived from RPKI data has gained a new member `"tal"` that
+  shows the name of the TAL this object was published under. ([#765])
+
 Bug Fixes
 
 Other Changes
 
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
+[#765]: https://github.com/NLnetLabs/routinator/pull/765
 
 
 ## 0.11.2
