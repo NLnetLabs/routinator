@@ -97,7 +97,7 @@ jobs:
           - image: 'debian:buster'
             target: 'aarch64-unknown-linux-musl'
     env:
-      CARGO_DEB_VER: ec4e00358bc3cc1abc6d3dd10f9bbf58f31a2cf5
+      CARGO_DEB_VER: 1.38.4
       CARGO_GENERATE_RPM_VER: 0.6.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
@@ -209,7 +209,7 @@ jobs:
             else
               EXTRA_CARGO_INSTALL_ARGS=""
             fi
-            cargo install cargo-deb --git https://github.com/kornelski/cargo-deb.git --rev ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
+            cargo install cargo-deb --version ${CARGO_DEB_VER} --locked ${EXTRA_CARGO_INSTALL_ARGS}
           ;;
         esac
 
