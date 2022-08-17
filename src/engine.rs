@@ -29,14 +29,15 @@ use bytes::Bytes;
 use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
 use log::{debug, error, warn};
+use rpki::crypto::keys::KeyIdentifier;
 use rpki::repository::cert::{Cert, KeyUsage, ResourceCert};
 use rpki::repository::crl::Crl;
-use rpki::repository::crypto::keys::KeyIdentifier;
+use rpki::repository::error::{InspectionError, ValidationError};
 use rpki::repository::manifest::{Manifest, ManifestContent, ManifestHash};
 use rpki::repository::roa::{Roa, RouteOriginAttestation};
 use rpki::repository::sigobj::SignedObject;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
-use rpki::repository::x509::{Time, ValidationError, Validity};
+use rpki::repository::x509::{Time, Validity};
 use rpki::uri;
 use crate::{collector, store};
 use crate::config::{Config, FilterPolicy};
@@ -472,8 +473,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 task.tal.info().clone(), self.validation.strict
             ) {
                 Ok(cert) => CaCert::root(cert, uri.clone(), task.index),
-                Err(_) => {
-                    warn!("Trust anchor {}: doesn’t validate.", uri);
+                Err(err) => {
+                    warn!("Trust anchor {}: {}.", uri, err);
                     continue;
                 }
             };
@@ -793,9 +794,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             manifest_bytes.clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(_) => {
+            Err(err) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: failed to decode", self.cert.rpki_manifest());
+                warn!("{}: {}.", self.cert.rpki_manifest(), err);
                 return Ok(None)
             }
         };
@@ -803,9 +804,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.cert.cert(), self.run.validation.strict
         ) {
             Ok(some) => some,
-            Err(_) => {
+            Err(err) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: failed to validate", self.cert.rpki_manifest());
+                warn!("{}: {}.", self.cert.rpki_manifest(), err);
                 return Ok(None)
             }
         };
@@ -920,15 +921,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(crl_bytes.clone()) {
             Ok(crl) => crl,
-            Err(_) => {
+            Err(err) => {
                 self.metrics.invalid_crls += 1;
-                warn!("{}: failed to decode.", crl_uri);
+                warn!("{}: {}.", crl_uri, err);
                 return Ok(None)
             }
         };
-        if crl.validate(self.cert.cert().subject_public_key_info()).is_err() {
+        if let Err(err) = crl.verify_signature(
+            self.cert.cert().subject_public_key_info()
+        ) {
             self.metrics.invalid_crls += 1;
-            warn!("{}: failed to validate.", crl_uri);
+            warn!("{}: {}.", crl_uri, err);
             return Ok(None)
         }
         if crl.is_stale() {
@@ -982,7 +985,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 // We don’t seem to have this point in the store either.
                 // Warn and return.
                 warn!(
-                    "{}: No valid manifest found.",
+                    "{}: no valid manifest found.",
                     self.cert.rpki_manifest()
                 );
                 self.metrics.missing_manifests += 1;
@@ -1024,26 +1027,26 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     fn validate_stored_manifest(
         &mut self,
         stored_manifest: StoredManifest,
-    ) -> Result<ValidPointManifest, ValidationError> {
+    ) -> Result<ValidPointManifest, Failed> {
         // Decode and validate the manifest.
         let manifest = match Manifest::decode(
             stored_manifest.manifest().clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(_) => {
-                warn!("{}: failed to decode", self.cert.rpki_manifest());
+            Err(err) => {
+                warn!("{}: {}.", self.cert.rpki_manifest(), err);
                 self.metrics.invalid_manifests += 1;
-                return Err(ValidationError);
+                return Err(Failed);
             }
         };
         let (ee_cert, content) = match manifest.validate(
             self.cert.cert(), self.run.validation.strict
         ) {
             Ok(some) => some,
-            Err(_) => {
-                warn!("{}: failed to validate", self.cert.rpki_manifest());
+            Err(err) => {
+                warn!("{}: {}.", self.cert.rpki_manifest(), err);
                 self.metrics.invalid_manifests += 1;
-                return Err(ValidationError);
+                return Err(Failed);
             }
         };
         if content.is_stale() {
@@ -1052,7 +1055,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 FilterPolicy::Reject => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
                     self.metrics.invalid_manifests += 1;
-                    return Err(ValidationError);
+                    return Err(Failed);
                 }
                 FilterPolicy::Warn => {
                     warn!("{}: stale manifest", self.cert.rpki_manifest());
@@ -1071,25 +1074,27 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     self.cert.rpki_manifest()
                 );
                 self.metrics.invalid_manifests += 1;
-                return Err(ValidationError)
+                return Err(Failed)
             }
         };
 
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(stored_manifest.crl().clone()) {
             Ok(crl) => crl,
-            Err(_) => {
-                warn!("{}: failed to decode.", crl_uri);
+            Err(err) => {
+                warn!("{}: {}.", crl_uri, err);
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
-                return Err(ValidationError)
+                return Err(Failed)
             }
         };
-        if crl.validate(self.cert.cert().subject_public_key_info()).is_err() {
-            warn!("{}: failed to validate.", crl_uri);
+        if let Err(err) = crl.verify_signature(
+            self.cert.cert().subject_public_key_info()
+        ) {
+            warn!("{}: {}.", crl_uri, err);
             self.metrics.invalid_manifests += 1;
             self.metrics.invalid_crls += 1;
-            return Err(ValidationError)
+            return Err(Failed)
         }
         if crl.is_stale() {
             self.metrics.stale_crls += 1;
@@ -1098,7 +1103,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     warn!("{}: stale CRL.", crl_uri);
                     self.metrics.invalid_manifests += 1;
                     self.metrics.invalid_crls += 1;
-                    return Err(ValidationError)
+                    return Err(Failed)
                 }
                 FilterPolicy::Warn => {
                     warn!("{}: stale CRL.", crl_uri);
@@ -1122,7 +1127,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 self.cert.rpki_manifest()
             );
             self.metrics.invalid_manifests += 1;
-            return Err(ValidationError)
+            return Err(Failed)
         }
 
         self.metrics.valid_manifests += 1;
@@ -1219,8 +1224,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ) -> Result<(), Failed> {
         let cert = match Cert::decode(content) {
             Ok(cert) => cert,
-            Err(_) => {
-                warn!("{}: failed to decode.", uri);
+            Err(err) => {
+                warn!("{}: {}.", uri, err);
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
@@ -1250,13 +1255,14 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.cert.cert(), self.run.validation.strict
         ) {
             Ok(cert) => cert,
-            Err(_) => {
-                warn!("{}: CA certificate failed to validate.", uri);
+            Err(err) => {
+                warn!("{}: {}.", uri, err);
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
-        if manifest.check_crl(uri, &cert).is_err() {
+        if let Err(err) = manifest.check_crl(&cert) {
+            warn!("{}: {}.", uri, err);
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1307,14 +1313,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         &mut self, uri: &uri::Rsync, cert: Cert,
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
-        if cert.validate_router(
+        if let Err(err) = cert.validate_router(
             self.cert.cert(), self.run.validation.strict
-        ).is_err() {
-            warn!("{}: router certificate failed to validate.", uri);
+        ) {
+            warn!("{}: {}.", uri, err);
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         };
-        if manifest.check_crl(uri, &cert).is_err() {
+        if let Err(err) = manifest.check_crl(&cert) {
+            warn!("{}: {}.", uri, err);
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1332,8 +1339,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(roa) => roa,
-            Err(_) => {
-                warn!("{}: decoding failed.", uri);
+            Err(err) => {
+                warn!("{}: {}.", uri, err);
                 manifest.metrics.invalid_roas += 1;
                 return Ok(())
             }
@@ -1341,15 +1348,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         match roa.process(
             self.cert.cert(),
             self.run.validation.strict,
-            |cert| manifest.check_crl(uri, cert)
+            |cert| manifest.check_crl(cert)
         ) {
             Ok((cert, route)) => {
                 manifest.metrics.valid_roas += 1;
                 self.processor.process_roa(uri, cert, route)?
             }
-            Err(_) => {
+            Err(err) => {
                 manifest.metrics.invalid_roas += 1;
-                warn!("{}: validation failed.", uri)
+                warn!("{}: {}.", uri, err)
             }
         }
         Ok(())
@@ -1364,8 +1371,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(obj) => obj,
-            Err(_) => {
-                warn!("{}: decoding failed.", uri);
+            Err(err) => {
+                warn!("{}: {}.", uri, err);
                 manifest.metrics.invalid_gbrs += 1;
                 return Ok(())
             }
@@ -1373,15 +1380,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         match obj.process(
             self.cert.cert(),
             self.run.validation.strict,
-            |cert| manifest.check_crl(uri, cert)
+            |cert| manifest.check_crl(cert)
         ) {
             Ok((cert, content)) => {
                 manifest.metrics.valid_gbrs += 1;
                 self.processor.process_gbr(uri, cert, content)?
             }
-            Err(_) => {
+            Err(err) => {
                 manifest.metrics.invalid_gbrs += 1;
-                warn!("{}: validation failed.", uri)
+                warn!("{}: {}.", uri, err)
             }
         }
         Ok(())
@@ -1424,25 +1431,26 @@ struct ValidPointManifest {
 
 impl ValidPointManifest {
     /// Checks whether `cert` has been revoked.
-    fn check_crl(
-        &self, uri: &uri::Rsync, cert: &Cert
-    ) -> Result<(), ValidationError> {
+    fn check_crl(&self, cert: &Cert) -> Result<(), ValidationError> {
         let crl_uri = match cert.crl_uri() {
             Some(some) => some,
             None => {
-                warn!("{}: certificate has no CRL URI", uri);
-                return Err(ValidationError)
+                return Err(InspectionError::new(
+                    "certificate has no CRL URI"
+                ).into())
             }
         };
 
         if *crl_uri != self.crl_uri {
-            warn!("{}: certifacte's CRL differs from manifest's.", uri);
-            return Err(ValidationError)
+            return Err(InspectionError::new(
+                "certificate's CRL differs from manifest's"
+            ).into())
         }
 
         if self.crl.contains(cert.serial_number()) {
-            warn!("{}: certificate has been revoked.", uri);
-            return Err(ValidationError)
+            return Err(InspectionError::new(
+                "certificate has been revoked"
+            ).into())
         }
 
         Ok(())

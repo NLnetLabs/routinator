@@ -36,7 +36,7 @@ use reqwest::header;
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rpki::{rrdp, uri};
-use rpki::repository::crypto::DigestAlgorithm;
+use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
 use crate::config::Config;
@@ -1600,7 +1600,7 @@ impl HttpResponse {
         let start = if etag.starts_with(b"W/\"") {
             3
         }
-        else if etag.get(0) == Some(&b'"') {
+        else if etag.first() == Some(&b'"') {
             1
         }
         else {

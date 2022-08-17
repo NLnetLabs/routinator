@@ -1273,7 +1273,7 @@ All values can be overridden via the command line options.
             A string value containing the group name a daemon process should
             run as.
 
-      tal-label
+      tal-labels
             An array containing arrays of two string values mapping the name
             of a TAL file (without the path but including the extension) as
             given by the first string to the name of the TAL to be included

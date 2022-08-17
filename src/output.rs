@@ -18,6 +18,7 @@ use crate::payload::{
 };
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
+use crate::utils::json::json_str;
 
 
 //------------ OutputFormat --------------------------------------------------
@@ -726,11 +727,13 @@ impl ExtendedJson {
                 }
 
                 write!(target,
-                    ", \"validity\": {{ \"notBefore\": \"{}\", \
+                    ", \"tal\": \"{}\", \
+                    \"validity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }}, \
                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }} \
                     }}",
+                    json_str(roa.tal.name()),
                     format_iso_date(roa.roa_validity.not_before().into()),
                     format_iso_date(roa.roa_validity.not_after().into()),
                     format_iso_date(roa.chain_validity.not_before().into()),
@@ -746,11 +749,15 @@ impl ExtendedJson {
                 }
                 write!(target, " {{ \"type\": \"exception\", \"path\": ")?;
                 match exc.path.as_ref() {
-                    Some(path) => write!(target, "\"{}\"", path.display())?,
+                    Some(path) => {
+                        write!(target, "\"{}\"", json_str(path.display()))?
+                    }
                     None => write!(target, "null")?,
                 }
                 if let Some(comment) = exc.comment.as_ref() {
-                    write!(target, ", \"comment\": \"{}\"", comment)?
+                    write!(
+                        target, ", \"comment\": \"{}\"", json_str(comment)
+                    )?
                 }
                 write!(target, " }}")?;
             }

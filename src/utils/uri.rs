@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use rpki::uri;
-use rpki::repository::crypto::{Digest, DigestAlgorithm};
+use rpki::crypto::{Digest, DigestAlgorithm};
 
 
 //------------ UriExt --------------------------------------------------------
