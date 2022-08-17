@@ -105,7 +105,6 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 depends = "adduser, passwd"
 
 [package.metadata.generate-rpm]
-version = "<RPM_PKG_VER_PLACEHOLDER>"
 # "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
 # complain with "invalid-license".
 # See: https://fedoraproject.org/wiki/Licensing:Main?rd=Licensing
