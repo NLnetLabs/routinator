@@ -164,3 +164,64 @@ impl<'a> fmt::Write for JsonString<'a> {
     }
 }
 
+
+//------------ json_str -----------------------------------------------------
+
+pub fn json_str(val: impl fmt::Display) -> impl fmt::Display {
+    struct WriteJsonStr<'a, 'f>(&'a mut fmt::Formatter<'f>);
+
+    impl<'a, 'f> fmt::Write for WriteJsonStr<'a, 'f> {
+        fn write_str(&mut self, mut s: &str) -> fmt::Result {
+            while let Some(idx) = s.find(|ch| ch == '"' || ch == '\\') {
+                self.0.write_str(&s[..idx])?;
+                self.0.write_str("\\")?;
+                write!(self.0, "{}", char::from(s.as_bytes()[idx]))?;
+                s = &s[idx + 1..];
+            }
+            self.0.write_str(s)
+        }
+    }
+
+    struct JsonStr<T>(T);
+
+    impl<T: fmt::Display> fmt::Display for JsonStr<T> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(&mut WriteJsonStr(f), "{}", self.0)
+        }
+    }
+
+    JsonStr(val)
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_json_str() {
+        assert_eq!(
+            format!("{}", json_str("foo")).as_str(),
+            "foo"
+        );
+        assert_eq!(
+            format!("{}", json_str("f\"oo")).as_str(),
+            "f\\\"oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("f\\oo")).as_str(),
+            "f\\\\oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("\\oo")).as_str(),
+            "\\\\oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("foo\\")).as_str(),
+            "foo\\\\"
+        );
+    }
+}
+
