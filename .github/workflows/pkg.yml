@@ -1,21 +1,123 @@
-# GitHub Actions workflow for building and testing Routinator O/S DEB and RPM
-# packages. Uses GitHub Actions caching to avoid rebuilding Rust cargo-deb and
-# Routinator dependencies on every run.
+# GitHub Actions workflow for building and testing our O/S packages.
 #
-# Note: at the time of writing the GH cache contents expire after a week if not
-# used so the next build may be much slower as it will have to re-download /
-# build / install lots of Rust crates.
+# Workflow speed:
+# ===============
+# This workflow uses GitHub Actions caching to avoid rebuilding Rust cargo-deb, cargo generate-rpm and our compiled
+# dependencies on every run. At the time of writing the GH cache contents expire after a week if not used so the next
+# build may be much slower as it will have to re-download/build/install lots of Rust crates.
 #
-# Packages are built inside Docker containers as GH Runners have extra libraries
-# and packages installed which can cause package building to succeed but package
-# installation on a real target O/S to fail, due to being built against too
-# recent version of a package such as libssl or glibc.
+# This workflow does NOT use the lewagon/wait-on-check-action GitHub Action to enable individual sub-jobs of a matrix
+# job to wait only for their corresponding "upstream" matrix sub-job (e.g. DEB packaging for x86-64 doesn't need to
+# wait on cross-compilation while DEB packaging for ARMv7 does need to wait but only for the ARMv7 cross-compile but
+# not for the AARCH64 cross-compile). It was tried, it was great, it speeds up the workflow, but it was unreliable.
+# There are known issues with the GitHub Action and having a fragile workflow fail sporadically because the wait
+# wrongly proceeds to the next step before the dependent step completed successfully is not acceptable. Perhaps this
+# will be better later, or an alternative approach exists that has not yet been found.
 #
-# Packages are tested inside LXC/LXD containers because Docker containers don't
-# by default support init managers such as systemd but we want to test systemd
-# service unit installation and activation.
+# DEB/RPM packaging:
+# ==================
+# DEB and RPM packages are built inside Docker containers as GH Runners have extra libraries and packages installed
+# which can cause package building to succeed but package installation on a real target O/S to fail, due to being built
+# against too recent version of a package such as libssl or glibc.
+#
+# Packages are built using the cargo deb and cargo generate-rpm projects, not using official Debian and RedHat tools.
+# This allows us to keep the configuration in `Cargo.toml` but can mean that we sometimes hit limitations of those
+# tools (e.g. we contributed systemd unit activation support to cargo deb to overcome that lacking capability).
+#
+# DEB/RPM testing:
+# ================
+# DEB and RPM packages are tested inside LXC/LXD containers because Docker containers don't by default support init
+# managers such as systemd but we want to test systemd service unit installation and activation.
+#
+# RHEL 8/CentOS 8 support:
+# ========================
+# We were building with the now discontinued CentOS 8. We continue to build them in a CentOS 8 Docker image but install
+# packages from the CentOS 8 vault to work around the forced breakage introduced by RedHat. For testing we were forced
+# to switch to using a Rocky Linux (CentOS 8 compatible) LXC/LXD image because the CentOS 8 LXC/LXD image was pulled
+# from the LXC/LXD image repositories. In future we may want to explicitly build for Rocky Linux instead or as well as
+# CentOS 8.
+#
+# Docker packaging:
+# =================
+# Docker packaging was originally done using Docker Hub but long delays and repeated spurious failures caused us to
+# migrate Docker packaging to GitHub Actions which is now part of this workflow.
+#
+# Images use an Alpine base image for reduced image size and thus download time, and also for faster and simpler
+# installation of dependencies (apk add is way faster and simpler than apt install for example). However Alpine is
+# MUSL based rather than GLIBC based, so cross-compiled binaries (see below) must target MUSL when intending to be
+# used within a Docker container.
+#
+# Images are built using Docker Buildkit (officially supported by Docker and used by default by the Docker Build Push
+# GitHub Action) which speeds up especially the non-x86-64 architecture case.
+#
+# Per architecture images are built and pushed to Docker Hub with xxx-<arch> tags, and then a Docker Manifest is
+# created which groups these images into a single multi-arch image without the -<arch> extension on the tag. The
+# manifest is then also pushed to Docker Hub.
+#
+# Building of both x86-64 and non-x86-64 architecture images are handled by a single Dockerfile which supports two
+# modes of operation. In the default 'build' mode our app is compiled within the Docker container and only the final
+# artifacts are kept in the final Docker image. In the alternate 'copy' mode our binaries are copied into the
+# build container and compilation within the container is skipped.
+#
+# Multi-arch image creation is NOT done using Docker Buildkit multi-arch support because (a) that does not support
+# configuring the different invocations of the Dockerfile differently (e.g. with MODE=copy for the non-x86-64 cases
+# and providing different the binaries to copy in to the image in each case) and (b) because it compiles our app in
+# parallel for each architecture at once on a single GitHub Actions runner host which is VERY SLOW even for just a
+# couple of architectures. Instead we leverage the GitHub Actions matrix building support to build each image in
+# parallel. This means however that we have to manually invoke the `docker manifest` command as it is not handled
+# automagically for us.
+#
+# Docker authentication:
+# ======================
+# Publication to Docker Hub depends on a Docker Hub username and access token being available in the GitHub secrets
+# available to this workflow.
+#
+# Package publication:
+# ====================
+# Docker packages are published immediately to Docker Hub. DEB and RPM packages are only available to NLnet Labs team
+# members with access to the workflow artifacts. Publication of DEB and RPM packages to packages.nlnetlabs.nl requires
+# that the separate packaging process outside of GitHub be invoked manually.
+#
+# Non-x86-64 packaging:
+# ====================
+# This workflow uses the Rust Tools team Cargo Cross project to cross-compile for architectures other than x86 64, e.g.
+# ARMv7/armhf and ARM64/aarch64.
+#
+# Note: Different tools (rustc, QEmu, Docker, etc) use slightly different names for these targets which can be
+# confusing.
+#
+# Cross-compilation is NOT done using the support built-in to Cargo because this requires for each target architecture
+# that you manually install the appropriate toolchain, set the appropriate environment variables, install the
+# appropriate strip tool, and store with the source code a .cargo/config.toml file telling Cargo which tool paths to
+# use for which architecture. However this comes with a couple of limitations: (a) Cargo Cross itself uses Docker and
+# has known issues running Docker-in-Docker from within a Docker container (which is how what was the main job of this
+# workflow runs), (b) we are "limited" to base images/architectures supported by Cargo Cross (but there are quite
+# a few of these) and (c) if the base Cargo Cross image doesn't include packages or tooling needed by `cargo build`
+# then building will fail. For these reasons cross compilation is done as a pre-job in this workflow (so that it can
+# run on the GitHub runner Host rather than inside a Docker container).
+#
+# Non-x86-64 testing:
+# ===================
+# Only x86-64 architecture packages are sanity checked. Non-x86-64 architecture packages are built but not tested as
+# the binaries won't run on the x86-64 GitHub runner host, Docker or LXC/LXD containers. It might be possible to use
+# QEmu for this but that is not done at this time.
+#
+# Artifacts:
+# ==========
+# The output of this workflow is two-fold:
+#   - Images pushed directly to Docker Hub.
+#   - Artifacts are uploaded to GitHub on workflow completion and appear as-if attached to the workflow run.
+# The latter are consumed by the separate manual external process for publishing to packages.nlnetlabs.nl.
+#
+# This workflow also uses artifacts internally to pass cross-compiled binares from one workflow job to another.
+#   - Cross-compiled binary artifacts are uploaded to GitHub by the 'cross' job.
+#   - Both the 'pkg' and 'docker' jobs download these cross-compiled binary artifacts for inclusion in the
+#     packages they create.
+# Such 'internal' artifacts are named with a 'tmp-' prefix and are ignored by the separate manual external process
+# for publishing to packages.nlnetlabs.nl.
 
 name: Packaging
+
 on:
   push:
     branches:
@@ -23,6 +125,9 @@ on:
     tags:
       - v*
 
+  # Triggering on PRs and arbitrary branch pushes is not enabled because most of the time only the CI build should be
+  # triggered, not the packaging build. In cases where you want to test changes to this workflow this trigger enables
+  # you to manually invoke this workflow on an arbitrary branch as needed.
   workflow_dispatch:
 
 defaults:
@@ -31,51 +136,68 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
+  # -------------------------------------------------------------------------------------------------------------------
+  # Job: 'cross'
+  # -------------------------------------------------------------------------------------------------------------------
   # Cross-compile packages in a separate job so that we can run it on the GitHub Actions runner host directly rather
-  # than inside a Docker container (as is done by the `pkg` workflow). We do this because we use `cargo cross` to handle
-  # the complexity of using the right compile-time tooling and dependencies for cross compilation to work, and 
+  # than inside a Docker container (as is done by the `pkg` job below). We do this because we use `cargo cross` to
+  # handle the complexity of using the right compile-time tooling and dependencies for cross compilation to work, and 
   # `cargo cross` works by launching its own Docker container. Trying to launch a Docker container from within a Docker
   # container, the so-called Docker-in-Docker scenario, is more difficult for `cargo cross` to handle correctly and
   # didn't work when I tried it, even with `CROSS_DOCKER_IN_DOCKER=true` set in the environment, hence this approach.
   #
   # See: https://github.com/rust-embedded/cross#docker-in-docker
   cross:
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         target:
+          # must be one of: https://github.com/cross-rs/cross#supported-targets
           - 'armv7-unknown-linux-musleabihf'
           - 'aarch64-unknown-linux-musl'
-    name: cross
-    runs-on: ubuntu-latest
     steps:
-    # Git clone the code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v1
 
-    - name: Install cargo cross      
-      run: |
-        cargo install cross
     - name: Cross compile
-      env:
-        CROSS_TARGET: ${{ matrix.target }}
-      run: |
-        cross build --locked --release --target ${CROSS_TARGET}
-    - name: Upload built binaries
-      uses: actions/upload-artifact@v2
+      uses: actions-rs/cargo@v1
       with:
-        name: ${{ matrix.target }}
+        use-cross: true
+        command: build
+        args: --locked --release --target ${{ matrix.target }}
+
+    # Upload cross compiled binaries as GitHub Actions artifacts for use by the `pkg` job below. We can't use job
+    # outputs as those are limited to 50 MB which we could easily exceed. We can't use actions/cache as cached items
+    # are not necessarily available on different operating systems as the cache mechanism uses different namespaces
+    # for different compression types and different compression types by operating system. As we don't want these
+    # artifacts to be packaged by the scripts that upload to packages.nlnetlabs.nl we prefix the artifact name with
+    # `tmp-` which will be ignored by packages.nlnetlabs.nl scripts.
+    - name: Upload built binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: tmp-cross-binaries-${{ matrix.target }}
         path: |
           target/${{ matrix.target }}/release/routinator
-          
-  # Use the cargo-deb and cargo-generate-rpm Rust crates to build Debian and RPM
-  # packages respectively for installing Routinator. See:
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # Job: 'pkg'
+  # -------------------------------------------------------------------------------------------------------------------
+  # Use the cargo-deb and cargo-generate-rpm Rust crates to build Debian and RPM packages respectively for installing
+  # our app. See:
   #   - https://github.com/mmstick/cargo-deb
   #   - https://github.com/cat-in-136/cargo-generate-rpm
   pkg:
     needs: cross
+    runs-on: ubuntu-latest
+    # Build on the platform we are targeting in order to avoid https://github.com/rust-lang/rust/issues/57497.
+    # Specifying container causes all of the steps in this job to run inside a Docker container (which is why the
+    # cross-compilation needs to happen above in its own non-containerized job).
+    container: ${{ matrix.image }}
     strategy:
       matrix:
-        image: # can't use complex values here, only primitive values are allowed
+        pkg:
+          - 'routinator'
+        image:
           - "ubuntu:xenial"   # ubuntu/16.04
           - "ubuntu:bionic"   # ubuntu/18.04
           - "ubuntu:focal"    # ubuntu/20.04
@@ -84,10 +206,22 @@ jobs:
           - "debian:buster"   # debian/10
           - "debian:bullseye" # debian/11
           - 'centos:7'
-          - 'centos:8'
+          - 'rockylinux:8'    # compatible with EOL centos:8
         target:
           - 'x86_64'
         include:
+          # CentOS 8 became EOL and is in theory still usable as a build container as there is still a Docker image
+          # available, and package installation can be done by switching the yum config in the container to use packages
+          # from the CentOS 8 vault rather than the now offline actual CentOS 8 repository. However, due to experiencing
+          # lots of timed out connections to the vault we will build the CentOS 8 compatible package in a Rocky Linux
+          # container instead, as Rocky Linux is 100% compatible with CentOS 8. The server at packages.nlnetlabs.nl
+          # however has a repo for CentOS 8, not Rocky Linux, and determines the repo to publish in based on the name of
+          # the archive that we produce below which is in turn based by default on the container image used to build. We
+          # therefore in this case need to specify that the O/S we are building for has a different name than the Docker
+          # image we are building it in.
+          - image: 'rockylinux:8'
+            os: 'centos:8'
+
           # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
           # Raspbian 11 is based.
           - image: 'debian:bullseye'
@@ -99,30 +233,26 @@ jobs:
     env:
       CARGO_DEB_VER: 1.38.4
       CARGO_GENERATE_RPM_VER: 0.8.0
-      # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
-      # newer than the released x.y.z version but is not yet a new release.
+      # A version of the form 'x.y.z-dev' denotes a dev build that is newer than the released x.y.z version but is not
+      # yet a new release.
       NEXT_VER_LABEL: dev
-    name: pkg
-    runs-on: ubuntu-latest
-    # Build on the oldest platform we are targeting in order to avoid
-    # https://github.com/rust-lang/rust/issues/57497. Specifying container
-    # causes all of the steps in this job to run inside a Docker container.
-    container: ${{ matrix.image }}
-
     steps:
     - name: Set vars
       id: setvars
       shell: bash
-      run: |
-        # Get the operating system and release name (e.g. ubuntu and xenial) from
-        # the image name (e.g. ubuntu:xenial) by extracting only the parts before
-        # and after but not including the colon:
-        echo "OS_NAME=${MATRIX_IMAGE%:*}" >> $GITHUB_ENV
-        echo "OS_REL=${MATRIX_IMAGE#*:}" >> $GITHUB_ENV
       env:
         MATRIX_IMAGE: ${{ matrix.image }}
+        MATRIX_OS: ${{ matrix.os }}
+      run: |
+        # Get the operating system and release name (e.g. ubuntu and xenial) from the image name (e.g. ubuntu:xenial) by
+        # extracting only the parts before and after but not including the colon:
+        IMAGE="${MATRIX_IMAGE}"
+        if [ "${MATRIX_OS}" != "" ]; then
+          IMAGE="${MATRIX_OS}"
+        fi
+        echo "OS_NAME=${IMAGE%:*}" >> $GITHUB_ENV
+        echo "OS_REL=${IMAGE#*:}" >> $GITHUB_ENV
 
-    # Git clone the Routinator code in the branch we were invoked on.
     - name: Checkout repository
       uses: actions/checkout@v2
 
@@ -133,9 +263,10 @@ jobs:
       run: |
         sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
 
-    # Install Rust the hard way rather than using a GH Action because the action
-    # doesn't work inside a Docker container.
+    # Install Rust the hard way rather than using a GH Action because the action doesn't work inside a Docker container.
     - name: Install Rust
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
@@ -146,12 +277,13 @@ jobs:
             yum update -y
             ;;
         esac
+
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --profile minimal -y
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      env:
-        DEBIAN_FRONTEND: noninteractive
 
     - name: Install compilation and other dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
@@ -164,10 +296,8 @@ jobs:
             yum groupinstall -y "Development Tools"
             ;;
         esac
-      env:
-        DEBIAN_FRONTEND: noninteractive
 
-    # Speed up Routinator Rust builds by caching unchanged built dependencies.
+    # Speed up Rust builds by caching unchanged built dependencies.
     # See: https://github.com/actions/cache/blob/master/examples.md#rust---cargo
     - name: Cache Dot Cargo
       uses: actions/cache@v2
@@ -175,23 +305,24 @@ jobs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-        key: ${{ matrix.image }}-${{ matrix.target}}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ matrix.image }}-${{ matrix.pkg }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    # Speed up tooling installation by only re-downloading and re-building
-    # dependent crates if we change the version of the tool that we are using.
+    # Speed up tooling installation by only re-downloading and re-building dependent crates if we change the version of
+    # the tool that we are using.
     - name: Cache Cargo Deb if available
       id: cache-cargo-deb
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-deb
-        key: ${{ matrix.image }}-cargo-deb-${{ env.CARGO_DEB_VER }}-${{ endsWith(matrix.image, 'xenial')}}
+        key: ${{ matrix.image }}-${{ matrix.pkg }}-${{ matrix.target }}-cargo-deb-${{ env.CARGO_DEB_VER }}-${{ endsWith(matrix.image, 'xenial')}}
 
     - name: Cache Cargo Generate RPM if available
       id: cache-cargo-generate-rpm
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-generate-rpm
-        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-1
+        # -1 was added to the cache key because the wrong version of the binary got accidentally cached at the usual key
+        key: ${{ matrix.image }}-${{ matrix.pkg }}-${{ matrix.target }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-1
 
     # Only install cargo-deb or cargo-generate-rpm if not already fetched from the cache.
     - name: Install Cargo Deb if needed
@@ -200,9 +331,9 @@ jobs:
         case ${OS_NAME} in
           debian|ubuntu)
             if [[ "${OS_REL}" == "xenial" ]]; then
-              # Disable use of the default lzma feature which causes XZ compression to be used
-              # which then causes Lintian to fail with error:
-              #   E: krill: malformed-deb-archive newer compressed control.tar.xz
+              # Disable use of the default lzma feature which causes XZ compression to be used which then causes Lintian
+              # to fail with error:
+              #   E: routinator: malformed-deb-archive newer compressed control.tar.xz
               # Passing --fast to cargo-deb to disable use of XZ compression didn't help.
               # See: https://github.com/kornelski/cargo-deb/issues/12
               EXTRA_CARGO_INSTALL_ARGS="--no-default-features"
@@ -224,26 +355,26 @@ jobs:
 
     - name: Download cross compiled binaries
       if: ${{ matrix.target != 'x86_64' }}
-      id: download
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
-        name: ${{ matrix.target }}
+        name: tmp-cross-binaries-${{ matrix.target }}
         path: target/${{ matrix.target }}/release
 
-    # Instruct cargo-deb or cargo-generate-rpm to build the Debian package using the config section
-    # in Cargo.toml for the specified "variant".
+    # Instruct cargo-deb or cargo-generate-rpm to build the package based on Cargo.toml settings and command line
+    # arguments.
     - name: Create the package
       env:
+        MATRIX_PKG: ${{ matrix.pkg }}
         MATRIX_IMAGE: ${{ matrix.image }}
+        EXTRA_BUILD_ARGS: ""
         CROSS_TARGET: ${{ matrix.target }}
       run: |
         # Debian
-        # =========================================================================================
-        # Packages for different distributions (e.g. Stretch, Buster) of the same
-        # O/S (e.g. Debian) when served from a single package repository MUST have
-        # unique package_ver_architecture triples. Cargo deb can vary the name based
-        # on the 'variant' config section in use, but doesn't do so according to
-        # Debian policy (as it modifies the package name, not the package version).
+        # ==============================================================================================================
+        # Packages for different distributions (e.g. Stretch, Buster) of the same O/S (e.g. Debian) when served from a
+        # single package repository MUST have unique package_ver_architecture triples. Cargo deb can vary the name based
+        # on the 'variant' config section in use, but doesn't do so according to Debian policy (as it modifies the
+        # package name, not the package version).
         #   Format: package_ver_architecture
         #   Where ver has format: [epoch:]upstream_version[-debian_revision]
         #   And debian_version should be of the form: 1<xxx>
@@ -253,39 +384,35 @@ jobs:
         #   - https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
         # Therefore we generate the version ourselves.
         #
-        # In addition, Semantic Versioning and Debian version policy cannot
-        # express a pre-release label in the same way. For example 0.8.0-rc.1
-        # is a valid Cargo.toml [package].version value but when used as a
-        # Debian package version 0.8.0-rc.1 would be considered _NEWER_ than
-        # the final 0.8.0 release. To express this in a Debian compatible way we
-        # must replace the dash '-' with a tilda '~'.
+        # In addition, Semantic Versioning and Debian version policy cannot express a pre-release label in the same way.
+        # For example 0.8.0-rc.1 is a valid Cargo.toml [package].version value but when used as a Debian package version
+        # 0.8.0-rc.1 would be considered _NEWER_ than the final 0.8.0 release. To express this in a Debian compatible
+        # way we must replace the dash '-' with a tilda '~'.
         #
         # RPM
         # ==============================================================================================================
-        # Handle the release candidate case where the version string needs to have
-        # dash replaced by tilda. The cargo build command won't work if the version
-        # key in Cargo.toml contains a tilda but we have to put the tilda there for
-        # when we run cargo generate-rpm so that it uses it.
+        # Handle the release candidate case where the version string needs to have dash replaced by tilda. The cargo
+        # build command won't work if the version key in Cargo.toml contains a tilda but we have to put the tilda there
+        # for when we run cargo generate-rpm so that it uses it.
         # 
         # For background on RPM versioning see:
         #   https://docs.fedoraproject.org/en-US/packaging-guidelines/Versioning/
         #
         # COMMON
         # ==============================================================================================================
-        # Finally, sometimes we want a version to be NEWER than the latest
-        # release but without having to decide what higher semver number to bump
-        # to. In this case we do NOT want dash '-' to become '~' because `-`
-        # is treated as higher and tilda is treated as lower.
-        ROUTINATOR_VER=$(cargo read-manifest | jq -r '.version')
-        PKG_ROUTINATOR_VER=$(echo $ROUTINATOR_VER | tr '-' '~')
-        PKG_ROUTINATOR_VER=$(echo $PKG_ROUTINATOR_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
+        # Finally, sometimes we want a version to be NEWER than the latest release but without having to decide what
+        # higher semver number to bump to. In this case we do NOT want dash '-' to become '~' because `-` is treated as
+        # higher and tilda is treated as lower.
+        APP_VER=$(cargo read-manifest | jq -r '.version')
+        APP_NEW_VER=$(echo $APP_VER | tr '-' '~')
+        PKG_APP_VER=$(echo $APP_NEW_VER | sed -e "s/~$NEXT_VER_LABEL/-$NEXT_VER_LABEL/")
 
         case ${OS_NAME} in
           debian|ubuntu)
             MAINTAINER="The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"
 
-            # Generate the RFC 5322 format date by hand instead of using date --rfc-email
-            # because that option doesn't exist on Ubuntu 16.04 and Debian 9
+            # Generate the RFC 5322 format date by hand instead of using date --rfc-email because that option doesn't
+            # exist on Ubuntu 16.04 and Debian 9
             RFC5322_TS=$(LC_TIME=en_US.UTF-8 date +'%a, %d %b %Y %H:%M:%S %z')
 
             # Generate the changelog file that Debian packages are required to have.
@@ -293,8 +420,8 @@ jobs:
             if [ ! -d target/debian ]; then
               mkdir -p target/debian
             fi
-            echo "routinator (${PKG_ROUTINATOR_VER}) unstable; urgency=medium" >target/debian/changelog
-            echo "  * See: https://github.com/NLnetLabs/routinator/releases/tag/v${ROUTINATOR_VER}" >>target/debian/changelog
+            echo "${MATRIX_PKG} (${PKG_APP_VER}) unstable; urgency=medium" >target/debian/changelog
+            echo "  * See: https://github.com/${{ env.GITHUB_REPOSITORY }}/releases/tag/v${APP_NEW_VER}" >>target/debian/changelog
             echo " -- maintainer ${MAINTAINER}  ${RFC5322_TS}" >>target/debian/changelog
 
             if [[ "${CROSS_TARGET}" == "x86_64" ]]; then
@@ -308,18 +435,20 @@ jobs:
               VARIANT_NAME="minimal-cross"
             fi
 
-            DEB_VER="${PKG_ROUTINATOR_VER}-1${OS_REL}"
+            DEB_VER="${PKG_APP_VER}-1${OS_REL}"
 
             if [[ "${VARIANT_NAME}" == "" ]]; then
-              cargo deb --deb-version ${DEB_VER} -v ${EXTRA_CARGO_DEB_ARGS} -- --locked
+              OPT_VARIANT_ARG=""
             else
-              cargo deb --deb-version ${DEB_VER} --variant ${VARIANT_NAME} -v ${EXTRA_CARGO_DEB_ARGS} -- --locked
+              OPT_VARIANT_ARG="--variant ${VARIANT_NAME}"
             fi
+
+            cargo deb --deb-version ${DEB_VER} ${OPT_VARIANT_ARG} -v ${EXTRA_CARGO_DEB_ARGS} -- --locked ${EXTRA_BUILD_ARGS}
             ;;
           centos)
-            # Build and strip Routinator as cargo generate-rpm doesn't do this for us
-            cargo build --release --locked
-            strip -s target/release/routinator
+            # Build and strip our app binaries as cargo generate-rpm doesn't do this for us
+            cargo build --release --locked -v ${EXTRA_BUILD_ARGS}
+            find target/release -maxdepth 1 -type f -executable | xargs strip -s -v
 
             # TODO: It might be possible to replace the hacky copying of the service file below with some clever use of
             # `--set-metadata` when invoking cargo generate-rpm. Of particular interest is the new `--variant` command
@@ -327,23 +456,27 @@ jobs:
             # See: https://github.com/cat-in-136/cargo-generate-rpm/issues/18
 
             # Select the correct systemd service unit file for the target operating system
-            case ${MATRIX_IMAGE} in
+            case "${OS_NAME}:${OS_REL}" in
               centos:7)
                 SYSTEMD_SERVICE_UNIT_FILE="routinator-minimal.routinator.service"
                 # yum install fails on older CentOS with the default LZMA compression used by cargo generate-rpm since v0.5.0
+                # see: https://github.com/cat-in-136/cargo-generate-rpm/issues/30
                 EXTRA_CARGO_GENERATE_RPM_ARGS="--payload-compress gzip"
                 ;;
-              *)
+              centos:8)
                 SYSTEMD_SERVICE_UNIT_FILE="routinator.routinator.service"
                 EXTRA_CARGO_GENERATE_RPM_ARGS=""
+                ;;
+              *)
+                echo >&2 "ERROR: Unsupported matrix image value: '${OS_NAME}:${OS_REL}'"
                 ;;
             esac
 
             # Copy the chosen systemd service unit file to where Cargo.toml expects it to be
             mkdir -p target/rpm
-            cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
+            cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/${MATRIX_PKG}.service
     
-            cargo generate-rpm --set-metadata "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
+            cargo generate-rpm --set-metadata "version=\"${PKG_APP_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
@@ -364,52 +497,39 @@ jobs:
             lintian -v ${EXTRA_LINTIAN_ARGS} target/debian/*.deb
             ;;
           centos)
-            # cargo generate-rpm creates RPMs that rpmlint considers to have
-            # errors so don't use the rpmlint exit code otherwise we will always
-            # abort the workflow.
+            # cargo generate-rpm creates RPMs that rpmlint considers to have errors so don't use the rpmlint exit code
+            # otherwise we will always abort the workflow.
             rpmlint target/generate-rpm/*.rpm || true
             ;;
         esac
 
-    # Upload the produced package. The artifact will be available via the GH
-    # Actions job summary and build log pages, but only to users users logged in
-    # to GH with sufficient rights in this project. The uploaded artifact is
-    # also downloaded by the next job (see below) to sanity check that it can be
-    # installed and results in a working Routinator installation.
+    # Upload the produced package. The artifact will be available via the GH Actions job summary and build log pages,
+    # but only to users logged in to GH with sufficient rights in this project. The uploaded artifact is also downloaded
+    # by the next job (see below) to sanity check that it can be installed and results in a working Krill installation.
     - name: Upload package
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
-        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
+        name: ${{ matrix.pkg }}_${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
         path: |
           target/debian/*.deb
           target/generate-rpm/*.rpm
 
-    # Delete the temporary artifact that contains binaries produced by the `cross` job that ran before us. All artifacts
-    # existing once the workflow completes are expected by the packages.nlnetlabs.nl scripting to contain DEB or RPM or
-    # other supported package archives, not intermediate artifacts such as binaries to be packaged. Failure to delete
-    # this temporary artifact will cause later publication to packages.nlnetlabs.nl using artifacts from this workflow
-    # run to fail.
-    - name: Delete temporary cross compiled binaries artifact
-      if: ${{ matrix.target != 'x86_64' }}
-      id: delete
-      uses: geekyeggo/delete-artifact@v1
-      with:
-        name: ${{ matrix.target }}
-
-  # Download and sanity check on target operating systems the packages created
-  # by previous jobs (see above). Don't test on GH runners as they come with
-  # lots of software and libraries pre-installed and thus are not representative
-  # of the actual deployment targets, nor do GH runners support all targets that
-  # we want to test. Don't test in Docker containers as they do not support
-  # systemd.
+  # -------------------------------------------------------------------------------------------------------------------
+  # Job: 'pkg-test'
+  # -------------------------------------------------------------------------------------------------------------------
+  # Download and sanity check on target operating systems the packages created by previous jobs (see above). Don't test
+  # on GH runners as they come with lots of software and libraries pre-installed and thus are not representative of the
+  # actual deployment targets, nor do GH runners support all targets that we want to test. Don't test in Docker
+  # containers as they do not support systemd.
   pkg-test:
-    name: pkg-test
     needs: pkg
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-        image: # can't use complex values here, only primitive values are allowed
+        pkg:
+          - 'routinator'
+        image:
           - "ubuntu:xenial"   # ubuntu/16.04
           - "ubuntu:bionic"   # ubuntu/18.04
           - "ubuntu:focal"    # ubuntu/20.04
@@ -422,11 +542,11 @@ jobs:
         mode:
           - 'fresh-install'
           - 'upgrade-from-published'
-        # if we later add a new O/S or variant we won't have yet ever published
-        # the package so can't do a test upgrade over last published version. In
-        # that case add lines here like so to disable the upgrade from published
-        # test for that O/S (remember to change debian:bullseye to the correct
-        # O/S name!):
+        target:
+          - 'x86_64'
+        # if we later add a new O/S or variant we won't have yet ever published the package so can't do a test upgrade
+        # over last published version. In that case add lines here like so to disable the upgrade from published test
+        # for that O/S (remember to change debian:bullseye to the correct O/S name!):
         #
         # exclude:
         #   - image: 'debian:bullseye'
@@ -434,19 +554,17 @@ jobs:
         exclude:
           - image: 'ubuntu:jammy'
             mode: 'upgrade-from-published'
-        target:
-          - 'x86_64'
     steps:
-    # Set some environment variables that will be available to "run" steps below
-    # in this job, and some output variables that will be available in GH Action
-    # step definitions below.
+    # Set some environment variables that will be available to "run" steps below in this job, and some output variables
+    # that will be available in GH Action step definitions below.
     - name: Set vars
       id: setvars
       shell: bash
+      env:
+        MATRIX_IMAGE: ${{ matrix.image }}
       run: |
-        # Get the operating system and release name (e.g. ubuntu and xenial) from
-        # the image name (e.g. ubuntu:xenial) by extracting only the parts before
-        # and after but not including the colon:
+        # Get the operating system and release name (e.g. ubuntu and xenial) from the image name (e.g. ubuntu:xenial) by
+        # extracting only the parts before and after but not including the colon:
         OS_NAME=${MATRIX_IMAGE%:*}
         OS_REL=${MATRIX_IMAGE#*:}
 
@@ -463,13 +581,11 @@ jobs:
             echo "LXC_IMAGE=images:${OS_NAME}/${OS_REL}/cloud" >> $GITHUB_ENV
             ;;
         esac
-      env:
-        MATRIX_IMAGE: ${{ matrix.image }}
 
     - name: Download package
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
-        name: ${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
+        name: ${{ matrix.pkg }}_${{ env.OS_NAME }}_${{ env.OS_REL }}_${{ matrix.target }}
 
     - name: Add current user to LXD group
       run: |
@@ -483,23 +599,21 @@ jobs:
       run: |
         sg lxd -c "lxc info"
 
-    # Use of IPv6 sometimes prevents yum update being able to resolve mirrorlist.centos.org
+    # Use of IPv6 sometimes prevents yum update being able to resolve mirrorlist.centos.org.
     - name: Disable LXD assignment of IPv6 addresses
       run: |
         sg lxd -c "lxc network set lxdbr0 ipv6.address none"
 
     - name: Launch LXC container
       run: |
-        # security.nesting=true is needed to avoid error "Failed to set up mount
-        # namespacing: Permission denied" in a Debian 10 container.
+        # security.nesting=true is needed to avoid error "Failed to set up mount namespacing: Permission denied" in a
+        # Debian 10 container.
         sg lxd -c "lxc launch ${LXC_IMAGE} -c security.nesting=true testcon"
 
-    # Run package update and install man and sudo support (missing in some LXC/LXD
-    # O/S images) but first wait for cloud-init to finish otherwise the network
-    # isn't yet ready. Don't use cloud-init status --wait as that isn't supported
-    # on older O/S's like Ubuntu 16.04 and Debian 9. Use the sudo package provided
-    # configuration files otherwise when using sudo we get an error that the root
-    # user isn't allowed to use sudo.
+    # Run package update and install man and sudo support (missing in some LXC/LXD O/S images) but first wait for
+    # cloud-init to finish otherwise the network isn't yet ready. Don't use cloud-init status --wait as that isn't
+    # supported on older O/S's like Ubuntu 16.04 and Debian 9. Use the sudo package provided configuration files
+    # otherwise when using sudo we get an error that the root user isn't allowed to use sudo.
     - name: Prepare container
       shell: bash
       run: |
@@ -524,7 +638,7 @@ jobs:
             ;;
         esac
 
-    - name: Copy package into LXC container
+    - name: Copy the newly built ${{ matrix.pkg }} package into the LXC container
       run: |
         case ${OS_NAME} in
           debian|ubuntu)
@@ -539,7 +653,7 @@ jobs:
             ;;
         esac
 
-    - name: Install previously published package
+    - name: Install previously published ${{ matrix.pkg }} package
       if: ${{ matrix.mode == 'upgrade-from-published' }}
       run: |
         case ${OS_NAME} in
@@ -549,7 +663,7 @@ jobs:
             sg lxd -c "lxc exec testcon -- wget -q https://packages.nlnetlabs.nl/aptkey.asc"
             sg lxd -c "lxc exec testcon -- apt-key add ./aptkey.asc"
             sg lxd -c "lxc exec testcon -- apt update"
-            sg lxd -c "lxc exec testcon -- apt install -y routinator"
+            sg lxd -c "lxc exec testcon -- apt install -y ${{ matrix.pkg }}"
             ;;
           centos)
             echo '[nlnetlabs]' >$HOME/nlnetlabs.repo
@@ -558,11 +672,11 @@ jobs:
             echo 'enabled=1' >>$HOME/nlnetlabs.repo
             sg lxd -c "lxc file push $HOME/nlnetlabs.repo testcon/etc/yum.repos.d/"
             sg lxd -c "lxc exec testcon -- rpm --import https://packages.nlnetlabs.nl/aptkey.asc"
-            sg lxd -c "lxc exec testcon -- yum install -y routinator"
+            sg lxd -c "lxc exec testcon -- yum install -y ${{ matrix.pkg }}"
             ;;
         esac
 
-    - name: Install new package
+    - name: Install the newly built ${{ matrix.pkg }} package
       if: ${{ matrix.mode == 'fresh-install' }}
       run: |
         case ${OS_NAME} in
@@ -574,7 +688,8 @@ jobs:
             ;;
         esac
 
-    - name: Test installed packages
+    - name: Test the installed ${{ matrix.pkg}} package
+      if: ${{ matrix.pkg == 'routinator' }}
       run: |
         echo -e "\nROUTINATOR VERSION:"
         sg lxd -c "lxc exec testcon -- routinator --version"
@@ -619,7 +734,7 @@ jobs:
         echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
         sg lxd -c "lxc exec testcon -- ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20"
 
-    - name: Install new package
+    - name: Upgrade from the published ${{ matrix.pkg }} package to the newly built package
       if: ${{ matrix.mode == 'upgrade-from-published' }}
       run: |
         case ${OS_NAME} in
@@ -631,7 +746,7 @@ jobs:
             ;;
         esac
 
-    - name: Test installed packages
+    - name: Test the upgraded ${{ matrix.pkg}} package
       if: ${{ matrix.mode == 'upgrade-from-published' }}
       run: |
         echo -e "\nROUTINATOR VERSION:"
@@ -654,3 +769,187 @@ jobs:
 
         echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
         sg lxd -c "lxc exec testcon -- ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20"
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # Job: 'docker'
+  # -------------------------------------------------------------------------------------------------------------------
+  # Build and push architecture specific images (but NOT the main image that is used by end users). Sanity check the
+  # image if possible (i.e. if it is x86-64, non-x86-64 architecture images cannot be run by this workflow yet). Logs
+  # in to Docker Hub using secrets configured in this GitHub repository.
+  #
+  # NOTE: If you extend the set of matrix includes in this job you must also extend the call to docker manifest create
+  # in the docker-manifest job below.
+  docker:
+    needs: cross
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # matrix field notes:
+        #   platform:    used by Docker to use the right architecture base image.
+        #                the set of supported values can be seen at:
+        #                  https://go.dev/doc/install/source#environment
+        #                  from: https://github.com/docker-library/official-images#architectures-other-than-amd64
+        #                  from: https://docs.docker.com/desktop/multi-arch/
+        #                one must also take any "normalization" into account, e.g. arm64v8 -> arm64, see:
+        #                  https://github.com/containerd/containerd/blob/v1.4.3/platforms/database.go#L83
+        #                see also:
+        #                  https://stackoverflow.com/a/70889505
+        #   shortname:   used by us to tag the architecture specific "manifest" image.
+        #   crosstarget: (optional) used to download the correct cross-compiled binary that was produced earlier by the
+        #                'cross' job above.
+        #   mode:        (optional) set to 'copy' for cross-compiled targets.
+        #   cargo_args:  (optional) can be used when testing, e.g. set to '--no-default-features' to speed up the Krill
+        #                build.
+        include:
+          - platform:    'linux/amd64'
+            shortname:   'amd64'
+            mode:        'build'
+
+          - platform:    'linux/arm64'
+            shortname:   'arm64'
+            crosstarget: 'aarch64-unknown-linux-musl'
+            mode:        'copy'
+    outputs:
+      dockerbasetag: ${{ steps.gen_tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - uses: docker/setup-qemu-action@v1
+        # Don't use QEmu for compiling, it's way too slow on GitHub Actions.
+        # Only use it for making images that will contain prebuilt binaries.
+        if: ${{ matrix.mode == 'copy' }}
+        with:
+          platforms: ${{ matrix.platform }}
+
+      - uses: docker/setup-buildx-action@v1
+
+      - name: Extract metadata for tagging the Docker image
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: krill
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}},prefix=v
+            type=raw,value=unstable,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref != 'refs/heads/main' && !contains(github.ref, '-') }}
+            type=raw,value=test,enable=${{ !contains(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
+
+      - name: Download cross compiled binaries
+        if: ${{ matrix.mode == 'copy' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: tmp-cross-binaries-${{ matrix.crosstarget }}
+          # The file downloaded to dockerbin/xxx will be used by the Dockerfile
+          path: dockerbin/${{ matrix.platform }}
+
+      - name: Log into Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_ID }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Generate architecture specific Docker tag
+        id: gen_tag
+        run: |
+          LOWER_REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          TAG="${LOWER_REPO_NAME}/${{ steps.meta.outputs.tags }}"
+          echo "::set-output name=tag::$TAG"
+          echo "::set-output name=tag_with_arch::$TAG-${{ matrix.shortname }}"
+
+      # Build a single architecture specific Docker image with an explicit architecture extension in the Docker
+      # tag value. We have to push it to Docker Hub otherwise we can't make the multi-arch manifest below. If the
+      # image fails testing (or doesn't work but wasn't caught because it is non-x86-64 which we can't at the moment
+      # test here) it will have been pushed to Docker Hub but is NOT the image we expect people to use, that is the
+      # combined multi-arch image that lacks the architecture specific tag value extension and that will ONLY be
+      # pushed if all architecture specific images build and (where supported) passt he sanity check below.
+      - name: Build Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.gen_tag.outputs.tag_with_arch }}
+          build-args: |
+            MODE=${{ matrix.mode }}
+            CARGO_ARGS=${{ matrix.cargo_args }}
+          load: true
+
+      - name: Save Docker image locally
+        run: |
+          docker save -o /tmp/docker-${{ matrix.shortname }}-img.tar ${{ steps.gen_tag.outputs.tag_with_arch }}
+
+      # Do a basic sanity check of the created image using the test tag to select the image to run, but only if the
+      # image is for the x86-64 architecture as we don't yet have a way to run non-x86-64 architecture images.
+      - name: Test run (linux/amd64 images only)
+        if: ${{ matrix.platform == 'linux/amd64' }}
+        run: |
+          docker run --rm ${{ steps.gen_tag.outputs.tag_with_arch }} krillc --version
+
+      # Upload the Docker image as a GitHub Actions artifact, handy when not publishing or investigating a problem
+      - name: Upload built image to GitHub Actions
+        uses: actions/upload-artifact@v3
+        with:
+          name: tmp-docker-image-${{ matrix.shortname }}
+          path: /tmp/docker-${{ matrix.shortname }}-img.tar
+
+      - name: Publish image to Docker Hub
+        if: contains(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.gen_tag.outputs.tag_with_arch }}
+          build-args: |
+            MODE=${{ matrix.mode }}
+            CARGO_ARGS=${{ matrix.cargo_args }}
+          push: true
+
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # Job: 'docker-manifest'
+  # -------------------------------------------------------------------------------------------------------------------
+  # Create a Docker multi-arch "manifest" referencing the individual already pushed architecture specific images on
+  # Docker Hub and push the manifest to Docker Hub as our "main" application image Docker Hub that end users will use.
+  # Logs in to Docker Hub using secrets configured in this GitHub repository.
+  docker-manifest:
+    needs: docker
+    if: contains(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Log into Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_ID }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # Push the image and tags to Docker Hub.
+      # The build uses the cached build outputs from the step above so we don't have to wait for the build again.
+      #
+      # On push of a tag to refs/tags/v1.2.3 the Docker tags will be 'v1.2.3' and 'latest' because of:
+      #   type=semver,pattern={{version}},prefix=v
+      #   type=raw,value=latest,enable=${{ github.ref != 'refs/heads/main' && !contains(github.ref, '-') }}
+      #                                    ^^^^^^^^^^^^^ true, not main       ^^^^^^^^^ true, no dash found
+      #
+      #   Note: we don't use semver,pattern={{raw}} because while that preserves the leading v in v1.2.3 it
+      #   discards the leading v in v1.2.3-rc4.
+      #
+      # On push of a tag to refs/tags/v1.2.3-rc1 the Docker tags will be 'v1.2.3' but NOT 'latest' because of:
+      #   type=semver,pattern={{raw}}
+      #   type=raw,value=latest,enable=${{ github.ref != 'refs/heads/main' && !contains(github.ref, '-') }}
+      #                                    ^^^^^^^^^^^^^ true, not main       ^^^^^^^^^ false, dash found
+      #
+      # On push to refs/heads/main the Docker tag will be 'unstable' because of:
+      #   type=raw,value=unstable,enable=${{ github.ref == 'refs/heads/main' }}
+      - name: Create multi-arch manifest
+        run: |
+          docker manifest create \
+            ${{ needs.docker.outputs.dockerbasetag }} \
+            --amend ${{ needs.docker.outputs.dockerbasetag }}-amd64 \
+            --amend ${{ needs.docker.outputs.dockerbasetag }}-arm64
+
+      - name: Publish multi-arch image to Docker Hub
+        run: |
+          docker manifest push ${{ needs.docker.outputs.dockerbasetag }}
