@@ -6,6 +6,8 @@ Breaking Changes
 
 * Refactored error handling. Routinator now logs the reason why an object
   failed verification or was otherwise rejected. ([#755])
+* Removed the deprecated `rrdp-disable-gzip` configuration option.
+  ([#769])
 
 New
 
@@ -19,6 +21,7 @@ Other Changes
 
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
+[#769]: https://github.com/NLnetLabs/routinator/pull/769
 
 
 ## 0.11.2
