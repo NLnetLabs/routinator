@@ -1,7 +1,7 @@
 //! Building JSON on the fly.
 
 use std::fmt;
-use std::fmt::Write;
+use crate::utils::fmt::WriteOrPanic;
 
 
 //------------ JsonBuilder ---------------------------------------------------
@@ -61,7 +61,7 @@ impl<'a> JsonBuilder<'a> {
     ) {
         self.append_key(key);
         self.target.push('"');
-        write!(JsonString { target: self.target }, "{}", value).unwrap();
+        write!(self.target, "{}", json_str(value));
         self.target.push('"');
     }
 
@@ -69,7 +69,7 @@ impl<'a> JsonBuilder<'a> {
         &mut self, key: impl fmt::Display, value: impl fmt::Display
     ) {
         self.append_key(key);
-        write!(JsonString { target: self.target }, "{}", value).unwrap();
+        write!(self.target, "{}", json_str(value));
     }
 
     pub fn array_object<F: FnOnce(&mut JsonBuilder)>(&mut self, op: F) {
@@ -104,14 +104,14 @@ impl<'a> JsonBuilder<'a> {
         self.append_array_head();
         self.append_indent();
         self.target.push('"');
-        write!(JsonString { target: self.target }, "{}", value).unwrap();
+        write!(self.target, "{}", json_str(value));
         self.target.push('"');
     }
 
     pub fn array_raw(&mut self, value: impl fmt::Display) {
         self.append_array_head();
         self.append_indent();
-        write!(JsonString { target: self.target }, "{}", value).unwrap();
+        write!(self.target, "{}", json_str(value));
     }
 
     fn append_key(&mut self, key: impl fmt::Display) {
@@ -123,7 +123,7 @@ impl<'a> JsonBuilder<'a> {
         }
         self.append_indent();
         self.target.push('"');
-        write!(JsonString { target: self.target }, "{}", key).unwrap();
+        write!(self.target, "{}", json_str(key));
         self.target.push('"');
         self.target.push_str(": ");
     }
@@ -145,22 +145,65 @@ impl<'a> JsonBuilder<'a> {
 }
 
 
-//------------ JsonString ----------------------------------------------------
+//------------ json_str -----------------------------------------------------
 
-struct JsonString<'a> {
-    target: &'a mut String,
+pub fn json_str(val: impl fmt::Display) -> impl fmt::Display {
+    struct WriteJsonStr<'a, 'f>(&'a mut fmt::Formatter<'f>);
+
+    impl<'a, 'f> fmt::Write for WriteJsonStr<'a, 'f> {
+        fn write_str(&mut self, mut s: &str) -> fmt::Result {
+            while let Some(idx) = s.find(|ch| ch == '"' || ch == '\\') {
+                self.0.write_str(&s[..idx])?;
+                self.0.write_str("\\")?;
+                write!(self.0, "{}", char::from(s.as_bytes()[idx]))?;
+                s = &s[idx + 1..];
+            }
+            self.0.write_str(s)
+        }
+    }
+
+    struct JsonStr<T>(T);
+
+    impl<T: fmt::Display> fmt::Display for JsonStr<T> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            use std::fmt::Write;
+
+            write!(&mut WriteJsonStr(f), "{}", self.0)
+        }
+    }
+
+    JsonStr(val)
 }
 
-impl<'a> fmt::Write for JsonString<'a> {
-    fn write_str(&mut self, mut s: &str) -> Result<(), fmt::Error> {
-        while let Some(idx) = s.find(|ch| ch == '"' || ch == '\\') {
-            self.target.push_str(&s[..idx]);
-            self.target.push('\\');
-            self.target.push(char::from(s.as_bytes()[idx]));
-            s = &s[idx + 1..];
-        }
-        self.target.push_str(s);
-        Ok(())
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_json_str() {
+        assert_eq!(
+            format!("{}", json_str("foo")).as_str(),
+            "foo"
+        );
+        assert_eq!(
+            format!("{}", json_str("f\"oo")).as_str(),
+            "f\\\"oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("f\\oo")).as_str(),
+            "f\\\\oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("\\oo")).as_str(),
+            "\\\\oo"
+        );
+        assert_eq!(
+            format!("{}", json_str("foo\\")).as_str(),
+            "foo\\\\"
+        );
     }
 }
 

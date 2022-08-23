@@ -445,11 +445,6 @@ impl Config {
             .help("Keep RRDP responses in the given directory")
             .takes_value(true)
         )
-        // XXX Remove in next breaking release
-        .arg(Arg::with_name("rrdp-disable-gzip")
-            .long("rrdp-disable-gzip")
-            .hidden(true)
-        )
         .arg(Arg::with_name("max-object-size")
             .long("max-object-size")
             .value_name("BYTES")
@@ -1260,10 +1255,7 @@ impl Config {
             group: file.take_string("group")?,
             tal_labels: file.take_string_map("tal-labels")?.unwrap_or_default(),
         };
-        
-        // XXX Remove in next breaking release.
-        let _ = file.take_bool("rrdp-disable-gzip")?;
-
+       
         file.check_exhausted()?;
         Ok(res)
     }

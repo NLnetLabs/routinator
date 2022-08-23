@@ -1,7 +1,6 @@
 //! Handling of endpoints related to the status.
 
 use std::cmp;
-use std::fmt::Write;
 use chrono::{Duration, Utc};
 use clap::{crate_name, crate_version};
 use hyper::{Body, Method, Request};
@@ -10,6 +9,7 @@ use crate::metrics::{
     SharedRtrServerMetrics, VrpMetrics,
 };
 use crate::payload::SharedHistory;
+use crate::utils::fmt::WriteOrPanic;
 use crate::utils::json::JsonBuilder;
 use super::response::{ContentType, Response, ResponseBuilder};
 
@@ -75,125 +75,125 @@ async fn handle_status(
     // version
     writeln!(res,
         concat!("version: ", crate_name!(), "/", crate_version!())
-    ).unwrap();
+    );
 
     // serial
-    writeln!(res, "serial: {}", serial).unwrap();
+    writeln!(res, "serial: {}", serial);
 
     // last-update-start-at and -ago
-    writeln!(res, "last-update-start-at:  {}", now - start).unwrap();
-    writeln!(res, "last-update-start-ago: {}", start).unwrap();
+    writeln!(res, "last-update-start-at:  {}", now - start);
+    writeln!(res, "last-update-start-ago: {}", start);
 
     // last-update-done-at and -ago
     if let Some(done) = done {
-        writeln!(res, "last-update-done-at:   {}", now - done).unwrap();
-        writeln!(res, "last-update-done-ago:  {}", done).unwrap();
+        writeln!(res, "last-update-done-at:   {}", now - done);
+        writeln!(res, "last-update-done-ago:  {}", done);
     }
     else {
-        writeln!(res, "last-update-done-at:   -").unwrap();
-        writeln!(res, "last-update-done-ago:  -").unwrap();
+        writeln!(res, "last-update-done-at:   -");
+        writeln!(res, "last-update-done-ago:  -");
     }
 
     // last-update-duration
     if let Some(duration) = duration {
-        writeln!(res, "last-update-duration:  {}", duration).unwrap();
+        writeln!(res, "last-update-duration:  {}", duration);
     }
     else {
-        writeln!(res, "last-update-duration:  -").unwrap();
+        writeln!(res, "last-update-duration:  -");
     }
 
     // valid-roas
     writeln!(
         res, "valid-roas: {}", metrics.publication.valid_roas
-    ).unwrap();
+    );
 
     // valid-roas-per-tal
-    write!(res, "valid-roas-per-tal: ").unwrap();
+    write!(res, "valid-roas-per-tal: ");
     for tal in &metrics.tals {
-        write!(res, "{}={} ", tal.name(), tal.publication.valid_roas).unwrap();
+        write!(res, "{}={} ", tal.name(), tal.publication.valid_roas);
     }
-    writeln!(res).unwrap();
+    writeln!(res);
 
     // vrps
-    writeln!(res, "vrps: {}", metrics.payload.vrps().valid).unwrap();
+    writeln!(res, "vrps: {}", metrics.payload.vrps().valid);
 
     // vrps-per-tal
-    write!(res, "vrps-per-tal: ").unwrap();
+    write!(res, "vrps-per-tal: ");
     for tal in &metrics.tals {
-        write!(res, "{}={} ", tal.name(), tal.payload.vrps().valid).unwrap();
+        write!(res, "{}={} ", tal.name(), tal.payload.vrps().valid);
     }
-    writeln!(res).unwrap();
+    writeln!(res);
 
     if unsafe_vrps.log() {
         // unsafe-filtered-vrps
         writeln!(res,
             "unsafe-vrps: {}",
             metrics.payload.vrps().marked_unsafe
-        ).unwrap();
+        );
 
         // unsafe-vrps-per-tal
-        write!(res, "unsafe-filtered-vrps-per-tal: ").unwrap();
+        write!(res, "unsafe-filtered-vrps-per-tal: ");
         for tal in &metrics.tals {
             write!(res,
                 "{}={} ",
                 tal.name(),
                 tal.payload.vrps().marked_unsafe
-            ).unwrap();
+            );
         }
-        writeln!(res).unwrap();
+        writeln!(res);
     }
 
     // locally-filtered-vrps
     writeln!(res,
         "locally-filtered-vrps: {}",
         metrics.payload.vrps().locally_filtered
-    ).unwrap();
+    );
 
     // locally-filtered-vrps-per-tal
-    write!(res, "locally-filtered-vrps-per-tal: ").unwrap();
+    write!(res, "locally-filtered-vrps-per-tal: ");
     for tal in &metrics.tals {
         write!(res, "{}={} ",
             tal.name(), tal.payload.vrps().locally_filtered
-        ).unwrap();
+        );
     }
-    writeln!(res).unwrap();
+    writeln!(res);
 
     // duplicate-vrps-per-tal
-    write!(res, "duplicate-vrps-per-tal: ").unwrap();
+    write!(res, "duplicate-vrps-per-tal: ");
     for tal in &metrics.tals {
         write!(
             res, "{}={} ", tal.name(), tal.payload.vrps().duplicate
-        ).unwrap();
+        );
     }
-    writeln!(res).unwrap();
+    writeln!(res);
 
     // locally-added-vrps
     writeln!(
         res, "locally-added-vrps: {}", metrics.local.vrps().contributed
-    ).unwrap();
+    );
 
     // final-vrps
     writeln!(res,
         "final-vrps: {}",
         metrics.payload.vrps().contributed
-    ).unwrap();
+    );
 
     // final-vrps-per-tal
-    write!(res, "final-vrps-per-tal: ").unwrap();
+    write!(res, "final-vrps-per-tal: ");
     for tal in &metrics.tals {
         write!(
             res, "{}={} ", tal.name(), tal.payload.vrps().contributed
-        ).unwrap();
+        );
     }
-    writeln!(res).unwrap();
+    writeln!(res);
 
     // stale-count
     writeln!(
         res, "stale-count: {}", metrics.publication.stale_objects()
-    ).unwrap();
+    );
 
     // rsync_status
-    writeln!(res, "rsync-durations:").unwrap();
+    writeln!(res, "rsync-durations:");
     for metrics in &metrics.rsync {
         write!(
             res,
@@ -203,22 +203,22 @@ async fn handle_status(
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(_) => -1
             }
-        ).unwrap();
+        );
         if let Ok(duration) = metrics.duration {
             writeln!(
                 res,
                 ", duration={:.3}s",
                 duration.as_secs() as f64
                 + f64::from(duration.subsec_millis()) / 1000.
-            ).unwrap();
+            );
         }
         else {
-            writeln!(res).unwrap()
+            writeln!(res)
         }
     }
 
     // rrdp_status
-    writeln!(res, "rrdp-durations:").unwrap();
+    writeln!(res, "rrdp-durations:");
     for metrics in &metrics.rrdp {
         write!(
             res,
@@ -229,19 +229,19 @@ async fn handle_status(
             metrics.payload_status.map(|status| {
                 status.into_i16()
             }).unwrap_or(0),
-        ).unwrap();
+        );
         if let Ok(duration) = metrics.duration {
             write!(
                 res,
                 ", duration={:.3}s",
                 duration.as_secs_f64()
                 + f64::from(duration.subsec_millis()) / 1000.
-            ).unwrap();
+            );
         }
         if let Some(serial) = metrics.serial {
-            write!(res, ", serial={}", serial).unwrap()
+            write!(res, ", serial={}", serial)
         }
-        writeln!(res).unwrap()
+        writeln!(res)
     }
 
     let detailed_rtr = rtr_metrics.detailed();
@@ -251,16 +251,16 @@ async fn handle_status(
     writeln!(res,
         "rtr-connections: {} current",
         rtr_metrics.current_connections(),
-    ).unwrap();
+    );
     writeln!(res,
         "rtr-data: {} bytes sent, {} bytes received",
         rtr_metrics.bytes_written(),
         rtr_metrics.bytes_read()
-    ).unwrap();
+    );
 
     if detailed_rtr {
         // rtr-clients
-        writeln!(res, "rtr-clients:").unwrap();
+        writeln!(res, "rtr-clients:");
         rtr_metrics.fold_clients(
             // connections, serial, update, read, written
             (0, None, None, 0, 0),
@@ -286,12 +286,12 @@ async fn handle_status(
                 data.4 += client.bytes_written();
             }
         ).for_each(|(addr, (conns, serial, update, read, written))| {
-            write!(res, "    {}: connections={}, ", addr, conns).unwrap();
+            write!(res, "    {}: connections={}, ", addr, conns);
             if let Some(serial) = serial {
-                write!(res, "serial={}, ", serial).unwrap();
+                write!(res, "serial={}, ", serial);
             }
             else {
-                write!(res, "serial=N/A, ").unwrap();
+                write!(res, "serial=N/A, ");
             }
             if let Some(update) = update {
                 let update = Utc::now() - update;
@@ -299,12 +299,12 @@ async fn handle_status(
                     res,
                     "updated-ago={}.{:03}s, ",
                     update.num_seconds(), update.num_milliseconds() % 1000
-                ).unwrap();
+                );
             }
             else {
-                write!(res, "updated=N/A, ").unwrap();
+                write!(res, "updated=N/A, ");
             }
-            writeln!(res, "read={}, written={}", read, written).unwrap();
+            writeln!(res, "read={}, written={}", read, written);
         });
     }
 
@@ -313,16 +313,16 @@ async fn handle_status(
         "http-connections: {} current, {} total",
         server_metrics.conn_open() - server_metrics.conn_close(),
         server_metrics.conn_open()
-    ).unwrap();
+    );
     writeln!(res,
         "http-data: {} bytes sent, {} bytes received",
         server_metrics.bytes_written(),
         server_metrics.bytes_read()
-    ).unwrap();
+    );
     writeln!(res,
         "http-requests: {} ",
         server_metrics.requests()
-    ).unwrap();
+    );
 
     ResponseBuilder::ok().content_type(ContentType::TEXT).body(res)
 }

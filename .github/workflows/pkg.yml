@@ -97,8 +97,8 @@ jobs:
           - image: 'debian:buster'
             target: 'aarch64-unknown-linux-musl'
     env:
-      CARGO_DEB_VER: 1.34.2 # Newer cargo-deb fails to compile with --no-default-features, see https://github.com/kornelski/cargo-deb/issues/43.
-      CARGO_GENERATE_RPM_VER: 0.6.0
+      CARGO_DEB_VER: 1.38.4
+      CARGO_GENERATE_RPM_VER: 0.8.0
       # A Routinator version of the form 'x.y.z-dev' denotes a dev build that is
       # newer than the released x.y.z version but is not yet a new release.
       NEXT_VER_LABEL: dev
@@ -191,7 +191,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-generate-rpm
-        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}
+        key: ${{ matrix.image }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-1
 
     # Only install cargo-deb or cargo-generate-rpm if not already fetched from the cache.
     - name: Install Cargo Deb if needed
@@ -321,8 +321,10 @@ jobs:
             cargo build --release --locked
             strip -s target/release/routinator
 
-            # Fix the version string to be used for the RPM package
-            sed -i -e "s/<RPM_PKG_VER_PLACEHOLDER>/$PKG_ROUTINATOR_VER/" Cargo.toml
+            # TODO: It might be possible to replace the hacky copying of the service file below with some clever use of
+            # `--set-metadata` when invoking cargo generate-rpm. Of particular interest is the new `--variant` command
+            # line argument which might enable us to work the same way as we do for cargo deb above.
+            # See: https://github.com/cat-in-136/cargo-generate-rpm/issues/18
 
             # Select the correct systemd service unit file for the target operating system
             case ${MATRIX_IMAGE} in
@@ -341,7 +343,7 @@ jobs:
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm ${EXTRA_CARGO_GENERATE_RPM_ARGS}
+            cargo generate-rpm --set-metadata "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 

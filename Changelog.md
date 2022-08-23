@@ -6,14 +6,22 @@ Breaking Changes
 
 * Refactored error handling. Routinator now logs the reason why an object
   failed verification or was otherwise rejected. ([#755])
+* Removed the deprecated `rrdp-disable-gzip` configuration option.
+  ([#769])
 
 New
+
+* In the extended `jsonext` output format, the information for VRPs and
+  router keys derived from RPKI data has gained a new member `"tal"` that
+  shows the name of the TAL this object was published under. ([#765])
 
 Bug Fixes
 
 Other Changes
 
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
+[#765]: https://github.com/NLnetLabs/routinator/pull/765
+[#769]: https://github.com/NLnetLabs/routinator/pull/769
 
 
 ## 0.11.2

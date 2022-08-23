@@ -1600,7 +1600,7 @@ impl HttpResponse {
         let start = if etag.starts_with(b"W/\"") {
             3
         }
-        else if etag.get(0) == Some(&b'"') {
+        else if etag.first() == Some(&b'"') {
             1
         }
         else {

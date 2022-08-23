@@ -1,7 +1,6 @@
 //! Handles endpoints related to output of payload deltas.
 
 use std::convert::Infallible;
-use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use futures::stream;
@@ -11,6 +10,7 @@ use rpki::rtr::payload::Payload;
 use crate::payload::{
     PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
 };
+use crate::utils::fmt::WriteOrPanic;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 //------------ handle_get ----------------------------------------------------
@@ -169,7 +169,7 @@ impl DeltaStream {
             \n  \"fromSerial\": {},\
             \n  \"announced\": [",
             session, to_serial, from_serial
-        ).unwrap()
+        )
     }
 
     /// Appends the separator between announced and withdrawn to the vec.
@@ -179,7 +179,7 @@ impl DeltaStream {
         write!(vec, "\
             \n  ],\
             \n  \"withdrawn\": [",
-        ).unwrap()
+        )
     }
 
     /// Appends an origin to the vec.
@@ -203,7 +203,7 @@ impl DeltaStream {
                     origin.asn,
                     origin.prefix.addr(), origin.prefix.prefix_len(),
                     origin.prefix.resolved_max_len()
-                ).unwrap()
+                )
             },
             Payload::RouterKey(ref key) => {
                 write!(vec, "\
@@ -216,7 +216,7 @@ impl DeltaStream {
                     key.key_identifier,
                     key.asn,
                     key.key_info,
-                ).unwrap()
+                )
             }
         }
     }
@@ -316,7 +316,7 @@ impl SnapshotStream {
             \n  \"serial\": {},\
             \n  \"announced\": [",
             session, to_serial,
-        ).unwrap()
+        )
     }
 }
 
