@@ -886,7 +886,7 @@ jobs:
       - name: Test run (linux/amd64 images only)
         if: ${{ matrix.platform == 'linux/amd64' }}
         run: |
-          docker run --rm ${{ steps.gen_tag.outputs.tag_with_arch }} krillc --version
+          docker run --rm ${{ steps.gen_tag.outputs.tag_with_arch }} --version
 
       # Upload the Docker image as a GitHub Actions artifact, handy when not publishing or investigating a problem
       - name: Upload built image to GitHub Actions
