@@ -233,7 +233,7 @@ jobs:
           # Raspbian 10 is based.
           - pkg: 'routinator'
             image: 'debian:buster'
-            target: 'arm-unknown-linux-gnueabihf'
+            target: 'arm-unknown-linux-musleabihf'
 
           # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
           - pkg: 'routinator'
