@@ -118,6 +118,9 @@
 
 name: Packaging
 
+env:
+  DOCKER_REPO: ${{ github.repository }}
+
 on:
   push:
     branches:
@@ -874,7 +877,7 @@ jobs:
       - name: Generate architecture specific Docker tag
         id: gen_tag
         run: |
-          LOWER_REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          LOWER_REPO_NAME=$(echo "${DOCKER_REPO} | tr '[:upper:]' '[:lower:]')
           TAG="${LOWER_REPO_NAME}/${{ steps.meta.outputs.tags }}"
           echo "::set-output name=tag::$TAG"
           echo "::set-output name=tag_with_arch::$TAG-${{ matrix.shortname }}"
