@@ -119,8 +119,14 @@ ONBUILD COPY dockerbin/$TARGETPLATFORM /tmp/out/bin/
 # -----------------------------------------------------------------------------
 # This is a "magic" build stage that "labels" a chosen prior build stage as the
 # one that the build stage after this one should copy application binaries
-# from.
+# from. It also causes the ONBUILD COPY command from the 'copy' stage to be run
+# if needed. Finally, we ensure binaries have the executable flag set because
+# when copied in from outside they may not have the flag set, especially if
+# they were uploaded as a GH actions artifact then downloaded again which
+# causes file permissions to be lost.
+# See: https://github.com/actions/upload-artifact#permission-loss
 FROM ${MODE} AS source
+RUN chmod +x /tmp/out/bin/*
 
 
 # -----------------------------------------------------------------------------
