@@ -126,7 +126,7 @@ ONBUILD COPY dockerbin/$TARGETPLATFORM /tmp/out/bin/
 # causes file permissions to be lost.
 # See: https://github.com/actions/upload-artifact#permission-loss
 FROM ${MODE} AS source
-RUN chmod +x /tmp/out/bin/*
+RUN chmod a+x /tmp/out/bin/*
 
 
 # -----------------------------------------------------------------------------
