@@ -119,7 +119,7 @@
 name: Packaging
 
 env:
-  DOCKER_REPO: ${{ github.repository }}
+  DOCKER_REPO: ${{ github.repository_owner }}
 
 on:
   push:
