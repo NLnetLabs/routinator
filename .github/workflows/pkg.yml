@@ -831,7 +831,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: krill
+          images: routinator
           flavor: |
             latest=false
           tags: |
