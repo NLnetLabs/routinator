@@ -153,6 +153,7 @@ jobs:
       matrix:
         target:
           # must be one of: https://github.com/cross-rs/cross#supported-targets
+          - 'arm-unknown-linux-musleabihf'
           - 'armv7-unknown-linux-musleabihf'
           - 'aarch64-unknown-linux-musl'
     steps:
@@ -227,6 +228,12 @@ jobs:
           - pkg: 'routinator'
             image: 'debian:bullseye'
             target: 'armv7-unknown-linux-musleabihf'
+
+          # package for the Raspberry Pi 1b as an ARMv6 cross compiled variant of the Debian Buster upon which
+          # Raspbian 10 is based.
+          - pkg: 'routinator'
+            image: 'debian:buster'
+            target: 'arm-unknown-linux-gnueabihf'
 
           # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
           - pkg: 'routinator'
@@ -808,6 +815,16 @@ jobs:
             shortname:   'amd64'
             mode:        'build'
 
+          - platform:    'linux/arm/v6'
+            shortname:   'armv6'
+            crosstarget: 'arm-unknown-linux-musleabihf'
+            mode:        'copy'
+
+          - platform:    'linux/arm/v7'
+            shortname:   'armv7'
+            crosstarget: 'armv7-unknown-linux-musleabihf'
+            mode:        'copy'
+
           - platform:    'linux/arm64'
             shortname:   'arm64'
             crosstarget: 'aarch64-unknown-linux-musl'
@@ -950,6 +967,8 @@ jobs:
           docker manifest create \
             ${{ needs.docker.outputs.dockerbasetag }} \
             --amend ${{ needs.docker.outputs.dockerbasetag }}-amd64 \
+            --amend ${{ needs.docker.outputs.dockerbasetag }}-armv6 \
+            --amend ${{ needs.docker.outputs.dockerbasetag }}-armv7 \
             --amend ${{ needs.docker.outputs.dockerbasetag }}-arm64
 
       - name: Publish multi-arch image to Docker Hub
