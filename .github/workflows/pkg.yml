@@ -833,7 +833,7 @@ jobs:
             crosstarget: 'aarch64-unknown-linux-musl'
             mode:        'copy'
     outputs:
-      dockerbasetag: ${{ steps.gen_tag.outputs.tag }}
+      dockerbasetag: ${{ steps.gen_tag.outputs.encoded_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -881,6 +881,14 @@ jobs:
           TAG="${LOWER_REPO_NAME}/${{ steps.meta.outputs.tags }}"
           echo "::set-output name=tag::$TAG"
           echo "::set-output name=tag_with_arch::$TAG-${{ matrix.shortname }}"
+
+          # Encode the tag value as base64 to avoid GitHub Actions refusing to pass the output on to the job that needs
+          # it with warning "Skip output 'dockerbasetag' since it may contain secret.". This can happen if the
+          # DOCKER_REPO value contains the DOCKER_HUB_ID value. E.g. if DOCKER_REPO were 'nlnetlabs' and the user to
+          # login to Docker Hub as is also 'nlnetlabs' then Docker thinks the latter, a secret, is being leaked via the
+          # workflow output 'dockerbasetag' defined above.
+          ENCODED_TAG=$(echo $TAG | base64)
+          echo "::set-output name=encoded_tag::$ENCODED_TAG"
 
       # Build a single architecture specific Docker image with an explicit architecture extension in the Docker
       # tag value. We have to push it to Docker Hub otherwise we can't make the multi-arch manifest below. If the
@@ -965,15 +973,21 @@ jobs:
       #
       # On push to refs/heads/main the Docker tag will be 'unstable' because of:
       #   type=raw,value=unstable,enable=${{ github.ref == 'refs/heads/main' }}
+      - name: Decode encoded tag
+        id: decode_tag
+        run: |
+          DECODED_TAG=$(echo ${{ needs.docker.outputs.dockerbasetag }} | base64 -d)
+          echo "::set-output name=tag::$DECODED_TAG"
+
       - name: Create multi-arch manifest
         run: |
           docker manifest create \
-            ${{ needs.docker.outputs.dockerbasetag }} \
-            --amend ${{ needs.docker.outputs.dockerbasetag }}-amd64 \
-            --amend ${{ needs.docker.outputs.dockerbasetag }}-armv6 \
-            --amend ${{ needs.docker.outputs.dockerbasetag }}-armv7 \
-            --amend ${{ needs.docker.outputs.dockerbasetag }}-arm64
+            ${{ steps.decode_tag.outputs.tag }} \
+            --amend ${{ steps.decode_tag.outputs.tag }}-amd64 \
+            --amend ${{ steps.decode_tag.outputs.tag }}-armv6 \
+            --amend ${{ steps.decode_tag.outputs.tag }}-armv7 \
+            --amend ${{ steps.decode_tag.outputs.tag }}-arm64
 
       - name: Publish multi-arch image to Docker Hub
         run: |
-          docker manifest push ${{ needs.docker.outputs.dockerbasetag }}
+          docker manifest push ${{ steps.decode_tag.outputs.tag }}
