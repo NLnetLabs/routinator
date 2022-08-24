@@ -343,7 +343,22 @@ jobs:
             mkdir -p target/rpm
             cp pkg/common/${SYSTEMD_SERVICE_UNIT_FILE} target/rpm/routinator.service
     
-            cargo generate-rpm --set-metadata "version=\"${PKG_ROUTINATOR_VER}\"" ${EXTRA_CARGO_GENERATE_RPM_ARGS}
+            # https://github.com/NLnetLabs/routinator/issues/773
+            # cargo-generate-rpm doesn't support setting scripts to files, and we can't refer to a file that we
+            # installed such as /usr/share/routinator/rpm/postuninst because 'yum remove' removes the file
+            # before it can be executed (hence post-uninstall rather than pre-uninstall...). So instead embed
+            # the entire uninstall script in the TOML settings using the cargo-generate-rpm --set-metadata (aka
+            # -s) command line argument.
+            POSTINST="post_install_script = \"\"\"$(cat pkg/rpm/postinst)\"\"\""
+            PREUNINST="pre_uninstall_script = \"\"\"$(cat pkg/rpm/preuninst)\"\"\""
+            POSTUNINST="post_uninstall_script = \"\"\"$(cat pkg/rpm/postuninst)\"\"\""
+
+            cargo generate-rpm \
+                -s "version=\"${PKG_ROUTINATOR_VER}\"" \
+                -s "$POSTINST" \
+                -s "$PREUNINST" \
+                -s "$POSTUNINST" \
+                ${EXTRA_CARGO_GENERATE_RPM_ARGS}
             ;;
         esac
 
