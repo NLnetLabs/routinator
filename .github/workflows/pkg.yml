@@ -654,3 +654,25 @@ jobs:
 
         echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
         sg lxd -c "lxc exec testcon -- ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20"
+
+    - name: Test uninstall (without purge)
+      run: |
+        case ${OS_NAME} in
+          debian|ubuntu)
+            sg lxd -c "lxc exec testcon -- apt-get -y remove routinator"
+            ;;
+          centos)
+            sg lxd -c "lxc exec testcon -- yum remove routinator"
+            ;;
+        esac
+
+    - name: Test re-install
+      run: |
+        case ${OS_NAME} in
+          debian|ubuntu)
+            sg lxd -c "lxc exec testcon -- apt-get -y install /tmp/${PKG_FILE}"
+            ;;
+          centos)
+            sg lxd -c "lxc exec testcon -- yum install -y /tmp/${PKG_FILE}"
+            ;;
+        esac
