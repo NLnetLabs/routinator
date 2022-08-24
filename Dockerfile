@@ -90,7 +90,6 @@ COPY . .
 # actually causes the binaries to be placed in `/tmp/out/bin/`. `cargo install`
 # will create the output directory for us.
 RUN CARGO_HTTP_MULTIPLEXING=false cargo install \
-  --target x86_64-alpine-linux-musl \
   --locked \
   --path . \
   --root /tmp/out/ \
