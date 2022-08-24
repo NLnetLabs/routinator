@@ -26,7 +26,7 @@ use rpki::rtr::server::{PayloadDiff, PayloadSet, PayloadSource};
 use rpki::rtr::state::{Serial, State};
 use rpki::uri;
 use crate::config::{Config, FilterPolicy};
-use crate::engine::{CaCert, Engine, ProcessPubPoint, ProcessRun};
+use crate::engine::{CaCert, ProcessPubPoint, ProcessRun};
 use crate::error::Failed;
 use crate::metrics::{Metrics, VrpMetrics};
 use crate::slurm::{ExceptionInfo, LocalExceptions};
@@ -67,18 +67,6 @@ impl ValidationReport {
             rejected: Default::default(),
             enable_bgpsec
         }
-    }
-
-    /// Creates a new validation report by running the engine.
-    pub fn process(
-        engine: &Engine, enable_bgpsec: bool
-    ) -> Result<(Self, Metrics), Failed> {
-        let report = Self::new(enable_bgpsec);
-        let mut run = engine.start(&report)?;
-        run.process()?;
-        run.cleanup()?;
-        let metrics = run.done();
-        Ok((report, metrics))
     }
 }
 

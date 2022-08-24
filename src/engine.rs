@@ -25,6 +25,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use bytes::Bytes;
 use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
@@ -46,6 +47,7 @@ use crate::error::Failed;
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
+use crate::payload::ValidationReport;
 use crate::store::{Store, StoredManifest, StoredObject, StoredPoint};
 use crate::utils::str::str_from_ascii;
 
@@ -276,6 +278,11 @@ impl Engine {
         Ok(())
     }
 
+    /// Checks whether the stored data is to be considered current.
+    pub fn is_current(&self, refresh: Duration) -> bool {
+        self.store.is_current(&self.tals, refresh)
+    }
+
     /// Starts a validation run.
     ///
     /// During the run, `processor` will be responsible for dealing with
@@ -283,14 +290,31 @@ impl Engine {
     ///
     /// The method returns a [`Run`] that drives the validation run.
     pub fn start<P: ProcessRun>(
-        &self, processor: P
+        &self, processor: P, update: bool,
     ) -> Result<Run<P>, Failed> {
         Ok(Run::new(
             self,
-            self.collector.as_ref().map(Collector::start),
-            self.store.start(),
+            if update {
+                self.collector.as_ref().map(Collector::start)
+            }
+            else {
+                None
+            },
+            self.store.start(update)?,
             processor
         ))
+    }
+
+    /// Performs a validation run to create a validation report.
+    pub fn produce_report(
+        &self, enable_bgpsec: bool, update: bool,
+    ) -> Result<(ValidationReport, Metrics), Failed> {
+        let report = ValidationReport::new(enable_bgpsec);
+        let mut run = self.start(&report, update)?;
+        run.process()?;
+        run.cleanup()?;
+        let metrics = run.done();
+        Ok((report, metrics))
     }
 
     /// Dumps the content of the collector and store owned by the engine.
@@ -423,6 +447,8 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         if had_err.load(Ordering::Relaxed) {
             return Err(Failed);
         }
+
+        self.store.confirm_success(&self.validation.tals)?;
 
         metrics.prepare_final(&mut self.metrics);
         while let Some(metrics) = thread_metrics.pop() {

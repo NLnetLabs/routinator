@@ -37,7 +37,7 @@ use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
 use crate::output::OutputFormat;
-use crate::payload::{PayloadSnapshot, SharedHistory, ValidationReport};
+use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::process::Process;
 use crate::engine::Engine;
 use crate::rtr::{rtr_listener};
@@ -538,6 +538,12 @@ impl Server {
         validation.ignite()?;
 
         let join = thread::spawn(move || {
+            let mut update = !validation.is_current(process.config().refresh);
+            if !update {
+                info!(
+                    "Stored data is fresh, creating initial data set from it."
+                );
+            }
             let err = loop {
                 if let Some(log) = log.as_ref() {
                     log.start();
@@ -548,7 +554,7 @@ impl Server {
                     Ok(exceptions) => {
                         if Self::process_once(
                             process.config(), &validation, &history,
-                            &mut notify, exceptions,
+                            &mut notify, exceptions, update,
                         ).is_err() {
                             break Err(Failed);
                         }
@@ -564,6 +570,10 @@ impl Server {
                 };
                 if let Some(log) = log.as_ref() {
                     log.flush();
+                }
+                if !update {
+                    update = true;
+                    continue;
                 }
                 match sig_rx.recv_timeout(timeout) {
                     Ok(UserSignal::ReloadTals) => {
@@ -627,11 +637,12 @@ impl Server {
         history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
+        update: bool,
     ) -> Result<(), Failed> {
         info!("Starting a validation run.");
         history.mark_update_start();
-        let (report, metrics) = ValidationReport::process(
-            engine, config.enable_bgpsec
+        let (report, metrics) = engine.produce_report(
+            config.enable_bgpsec, update,
         )?;
         let must_notify = history.update(
             report, &exceptions, metrics,
@@ -819,8 +830,8 @@ impl Vrps {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
-        let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+        let (report, mut metrics) = engine.produce_report(
+            process.config().enable_bgpsec, !self.noupdate,
         )?;
         let vrps = PayloadSnapshot::from_report(
             report,
@@ -1092,8 +1103,8 @@ impl Validate {
         let mut engine = Engine::new(process.config(), !self.noupdate)?;
         engine.ignite()?;
         process.switch_logging(false, false)?;
-        let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+        let (report, mut metrics) = engine.produce_report(
+            process.config().enable_bgpsec, !self.noupdate,
         )?;
         let snapshot = PayloadSnapshot::from_report(
             report,
@@ -1342,8 +1353,8 @@ impl Update {
         let mut engine = Engine::new(process.config(), true)?;
         engine.ignite()?;
         process.switch_logging(false, false)?;
-        let (_, metrics) = ValidationReport::process(
-            &engine, process.config().enable_bgpsec
+        let (_, metrics) = engine.produce_report(
+            process.config().enable_bgpsec, true,
         )?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)

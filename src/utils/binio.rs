@@ -5,9 +5,12 @@
 //! types we need.
 
 use std::{error, io, slice};
+use std::collections::HashSet;
+use std::hash::Hash;
 use bytes::Bytes;
 use rpki::rrdp;
 use rpki::uri;
+use rpki::crypto::KeyIdentifier;
 use uuid::Uuid;
 
 
@@ -70,6 +73,25 @@ impl<R: io::Read> Parse<R> for u64 {
         let mut res = 0u64.to_ne_bytes();
         source.read_exact(&mut res)?;
         Ok(u64::from_be_bytes(res))
+    }
+}
+
+
+//------------ usize ---------------------------------------------------------
+
+impl<W: io::Write> Compose<W> for usize {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        u64::try_from(*self)
+        .map_err(|_| io_err_other("excessivley large value"))?
+        .compose(target)
+    }
+}
+
+impl<R: io::Read> Parse<R> for usize {
+    fn parse(source: &mut R) -> Result<Self, io::Error> {
+        usize::try_from(u64::parse(source)?).map_err(|_| {
+            io_err_other("value too large for this system")
+        })
     }
 }
 
@@ -309,6 +331,46 @@ impl<R: io::Read> Parse<R> for rrdp::Hash {
     }
 }
 
+
+//------------ KeyIdentifier -------------------------------------------------
+
+impl<W: io::Write> Compose<W> for KeyIdentifier {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        target.write_all(self.as_slice())
+    }
+}
+
+impl<R: io::Read> Parse<R> for KeyIdentifier {
+    fn parse(source: &mut R) -> Result<Self, io::Error> {
+        let mut res = [0u8; 20];
+        source.read_exact(&mut res)?;
+        Ok(res.into())
+    }
+}
+
+
+//------------ Vec<T> --------------------------------------------------------
+
+impl<W: io::Write, T: Compose<W>> Compose<W> for HashSet<T> {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        self.len().compose(target)?;
+        for item in self {
+            item.compose(target)?;
+        }
+        Ok(())
+    }
+}
+
+impl<R: io::Read, T: Parse<R> + Hash + Eq> Parse<R> for HashSet<T> {
+    fn parse(source: &mut R) -> Result<Self, io::Error> {
+        let len = usize::parse(source)?;
+        let mut res = HashSet::with_capacity(len);
+        for _ in 0..len {
+            res.insert(T::parse(source)?);
+        }
+        Ok(res)
+    }
+}
 
 //============ Helper Functions ==============================================
 

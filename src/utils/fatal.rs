@@ -262,6 +262,22 @@ pub fn open_file(path: &Path) -> Result<File, Failed> {
 }
 
 
+//------------ create_file ---------------------------------------------------
+
+/// Creates a file.
+///
+/// Errors out if the file cannot be created.
+pub fn create_file(path: &Path) -> Result<File, Failed> {
+    File::create(path).map_err(|err| {
+        error!(
+            "Fatal: failed to create file {}: {}",
+            path.display(), err
+        );
+        Failed
+    })
+}
+
+
 //------------ read_file -----------------------------------------------------
 
 /// Reads a file’s entire content into a vec.

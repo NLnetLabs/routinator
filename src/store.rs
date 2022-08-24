@@ -63,17 +63,20 @@
 //! random hex-digits.
 
 use std::{error, fs, io};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use log::{debug, error, warn};
 use rand::random;
+use rpki::crypto::KeyIdentifier;
 use rpki::crypto::digest::DigestAlgorithm;
 use rpki::repository::cert::Cert;
 use rpki::repository::manifest::ManifestHash;
-use rpki::repository::tal::TalUri;
+use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::Time;
 use rpki::uri;
 use crate::collector;
@@ -146,9 +149,42 @@ impl Store {
         })
     }
 
+    /// Checks whether the store is to be considered current.
+    pub fn is_current(&self, tals: &[Tal], refresh: Duration) -> bool {
+        let path = self.status_path();
+        let mut file = match File::open(&path) {
+            Ok(file) => file,
+            Err(_) => return false,
+        };
+        let status = match StoredStatus::read(&mut file) {
+            Ok(status) => status,
+            Err(_) => return false,
+        };
+
+        // An error happens only when refresh is excessively large. Should
+        // be safe to claim that we are not current in this case.
+        let refresh = match chrono::Duration::from_std(refresh) {
+            Ok(refresh) => refresh,
+            Err(_) => return false,
+        };
+
+        if status.updated + refresh < Time::now() {
+            return false
+        }
+
+        if !status.contains_tals(tals) {
+            return false
+        }
+
+        true
+    }
+
     /// Start a validation run with the store.
-    pub fn start(&self) -> Run {
-        Run::new(self)
+    ///
+    /// If there is an intention to update the store during this run, set
+    /// `updates` to `true`.
+    pub fn start(&self, updates: bool) -> Result<Run, Failed> {
+        Run::new(self, updates)
     }
 
     /// Dumps the content of the store.
@@ -355,6 +391,11 @@ impl Store {
         self.path.join("rsync")
     }
 
+    /// Returns the path of the status file.
+    fn status_path(&self) -> PathBuf {
+        self.path.join("status.bin")
+    }
+
     /// The name of the directory where the temporary files go.
     const TMP_BASE: &'static str = "tmp";
 
@@ -416,14 +457,38 @@ impl Store {
 pub struct Run<'a> {
     /// A reference to the underlying store.
     store: &'a Store,
+
+    /// Is there store being updated during this run?
+    updates: bool,
 }
 
 impl<'a> Run<'a> {
     /// Creates a new runner from a store.
     fn new(
         store: &'a Store,
-    ) -> Self {
-        Run { store }
+        updates: bool,
+    ) -> Result<Self, Failed> {
+        if updates {
+            fatal::remove_file(&store.status_path())?;
+        }
+        Ok(Run { store, updates })
+    }
+
+    /// Confirms a successful validation run.
+    pub fn confirm_success(&self, tals: &[Tal]) -> Result<(), Failed> {
+        if self.updates {
+            let path = self.store.status_path();
+            let mut file = fatal::create_file(&path)?;
+            if let Err(err) = StoredStatus::new(
+                Time::now(), tals
+            ).write(&mut file) {
+                error!("Fatal: failed to write store status to {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed);
+            }
+        }
+        Ok(())
     }
 
     /// Finishes the validation run.
@@ -556,6 +621,71 @@ impl<'a> Run<'a> {
         cleanup_dir_tree(&self.store.path.join("tmp"), |_path| {
             Ok(false)
         })
+    }
+}
+
+
+//------------ StoredStatus --------------------------------------------------
+
+/// The status of the store.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StoredStatus {
+    /// The time of the last successful update.
+    updated: Time,
+
+    /// The TALs used during the last update.
+    tals: HashSet<KeyIdentifier>,
+}
+
+impl StoredStatus {
+    /// Creates a new status from the necessary values.
+    pub fn new(
+        updated: Time,
+        tals: &[Tal],
+    ) -> Self {
+        StoredStatus {
+            updated,
+            tals: tals.iter().map(|tal| {
+                tal.key_info().key_identifier()
+            }).collect(),
+        }
+    }
+
+    /// Reads the stored status from a reader.
+    pub fn read(reader: &mut impl io::Read) -> Result<Self, io::Error> {
+        // Version number. Must be 0u8.
+        let version = u8::parse(reader)?;
+        if version != 0 {
+            return io_err_other(format!("unexpected version {}", version))
+        }
+
+        Ok(StoredStatus {
+            updated: Utc.timestamp(i64::parse(reader)?, 0).into(),
+            tals: HashSet::parse(reader)?,
+        })
+    }
+
+    /// Writes the stored status to a writer.
+    pub fn write(
+        &self, writer: &mut impl io::Write
+    ) -> Result<(), io::Error> {
+        // Version: 0u8.
+        0u8.compose(writer)?;
+
+        self.updated.timestamp().compose(writer)?;
+        self.tals.compose(writer)?;
+
+        Ok(())
+    }
+
+    /// Checks that all provided TALs are part of the status.
+    pub fn contains_tals(&self, tals: &[Tal]) -> bool {
+        for tal in tals {
+            if !self.tals.contains(&tal.key_info().key_identifier()) {
+                return false
+            }
+        }
+        true
     }
 }
 

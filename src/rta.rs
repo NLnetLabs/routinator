@@ -36,7 +36,7 @@ impl<'a> ValidationReport<'a> {
         &self,
         engine: &Engine,
     ) -> Result<(), Failed> {
-        let mut run = engine.start(self)?;
+        let mut run = engine.start(self, true)?;
         run.process()?;
         run.cleanup()?;
         Ok(())
