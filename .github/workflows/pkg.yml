@@ -662,7 +662,9 @@ jobs:
             sg lxd -c "lxc exec testcon -- apt-get -y remove routinator"
             ;;
           centos)
-            sg lxd -c "lxc exec testcon -- yum remove -y routinator"
+            sg lxd -c "lxc exec testcon -- yum remove -y routinator" 2>&1 | tee remove.log
+            # yum remove exits with code 0 even if scriptlets fail, so look for some sign of failure
+            grep -qE '(err|warn|fail)' remove.log && exit 1
             ;;
         esac
 
