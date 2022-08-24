@@ -333,8 +333,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cargo/bin/cargo-generate-rpm
-        # -1 was added to the cache key because the wrong version of the binary got accidentally cached at the usual key
-        key: ${{ matrix.image }}-${{ matrix.pkg }}-${{ matrix.target }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}-1
+        key: ${{ matrix.image }}-${{ matrix.pkg }}-${{ matrix.target }}-cargo-generate-rpm-${{ env.CARGO_GENERATE_RPM_VER }}
 
     # Only install cargo-deb or cargo-generate-rpm if not already fetched from the cache.
     - name: Install Cargo Deb if needed
