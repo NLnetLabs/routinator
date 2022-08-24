@@ -662,7 +662,7 @@ jobs:
             sg lxd -c "lxc exec testcon -- apt-get -y remove routinator"
             ;;
           centos)
-            sg lxd -c "lxc exec testcon -- yum remove routinator"
+            sg lxd -c "lxc exec testcon -- yum remove -y routinator"
             ;;
         esac
 
