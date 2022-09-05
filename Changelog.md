@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.11.3-rc1
+
+Released 2022-09-05.
+
+Bug Fixes.
+
+* Fixes a mistake in error handling, which causes Routinator to treat data
+  in RRDP snapshot and delta files that isn’t correctly base 64 encoded as
+  a fatal error and to exit.
+
+
 ## 0.11.2
 
 Released 2022-04-20.
