@@ -31,3 +31,4 @@ jobs:
       package_test_scripts_path: pkg/test-scripts/test-<package>.sh
 
       deb_maintainer: The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>
+      docker_sanity_check_command: --version
