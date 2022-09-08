@@ -1,3 +1,4 @@
+pre_uninstall_script = '''
 #!/bin/bash -e
 # Script based on the RPM %systemd_preun scriptlet. See:
 #   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
@@ -8,3 +9,4 @@ if [ $1 -eq 0 ] ; then
     systemctl --no-reload disable routinator.service > /dev/null 2>&1 || :
     systemctl stop routinator.service > /dev/null 2>&1 || :
 fi
+'''

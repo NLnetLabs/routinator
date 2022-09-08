@@ -1,3 +1,4 @@
+post_install_script = '''
 #!/bin/bash -e
 # Script based on the RPM %systemd_post scriptlet. See:
 #   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
@@ -28,3 +29,4 @@ if [ $1 -eq 1 ] ; then
 
     systemctl preset routinator.service 2>&1 || :
 fi
+'''
