@@ -1,0 +1,64 @@
+---
+# matrix field notes:
+#   platform:    used by Docker to use the right architecture base image.
+#                the set of supported values can be seen at:
+#                  https://go.dev/doc/install/source#environment
+#                  from: https://github.com/docker-library/official-images#architectures-other-than-amd64
+#                  from: https://docs.docker.com/desktop/multi-arch/
+#                one must also take any "normalization" into account, e.g. arm64v8 -> arm64, see:
+#                  https://github.com/containerd/containerd/blob/v1.4.3/platforms/database.go#L83
+#                see also:
+#                  https://stackoverflow.com/a/70889505
+#   shortname:   used by us to tag the architecture specific "manifest" image.
+#   crosstarget: (optional) used to download the correct cross-compiled binary that was produced earlier by the
+#                'cross' job above.
+#   mode:        (optional) set to 'copy' for cross-compiled targets.
+#   cargo_args:  (optional) can be used when testing, e.g. set to '--no-default-features' to speed up the Krill
+#                build.
+pkg:
+  - 'routinator'
+image:
+  - "ubuntu:xenial"   # ubuntu/16.04
+  - "ubuntu:bionic"   # ubuntu/18.04
+  - "ubuntu:focal"    # ubuntu/20.04
+  - "ubuntu:jammy"    # ubuntu/22.04
+  - "debian:stretch"  # debian/9
+  - "debian:buster"   # debian/10
+  - "debian:bullseye" # debian/11
+  - 'centos:7'
+  - 'rockylinux:8'    # compatible with EOL centos:8
+target:
+  - 'x86_64'
+include:
+  - image: "centos:7"
+    systemd_service_unit_file: pkg/common/routinator-minimal.routinator.service
+
+  # CentOS 8 became EOL and is in theory still usable as a build container as there is still a Docker image
+  # available, and package installation can be done by switching the yum config in the container to use packages
+  # from the CentOS 8 vault rather than the now offline actual CentOS 8 repository. However, due to experiencing
+  # lots of timed out connections to the vault we will build the CentOS 8 compatible package in a Rocky Linux
+  # container instead, as Rocky Linux is 100% compatible with CentOS 8. The server at packages.nlnetlabs.nl
+  # however has a repo for CentOS 8, not Rocky Linux, and determines the repo to publish in based on the name of
+  # the archive that we produce below which is in turn based by default on the container image used to build. We
+  # therefore in this case need to specify that the O/S we are building for has a different name than the Docker
+  # image we are building it in.
+  - image: 'rockylinux:8'
+    systemd_service_unit_file: pkg/common/routinator.routinator.service
+    os: 'centos:8'
+
+  # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
+  # Raspbian 11 is based.
+  - pkg: 'routinator'
+    image: 'debian:bullseye'
+    target: 'armv7-unknown-linux-musleabihf'
+
+  # package for the Raspberry Pi 1b as an ARMv6 cross compiled variant of the Debian Buster upon which
+  # Raspbian 10 is based.
+  - pkg: 'routinator'
+    image: 'debian:buster'
+    target: 'arm-unknown-linux-musleabihf'
+
+  # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
+  - pkg: 'routinator'
+    image: 'debian:buster'
+    target: 'aarch64-unknown-linux-musl'
