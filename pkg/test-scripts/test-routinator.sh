@@ -47,7 +47,7 @@ case $1 in
     ls -la /var/lib/routinator/tals/
 
     echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
-    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20
+    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20 || true
     ;;
 
   post-upgrade)
@@ -70,6 +70,6 @@ case $1 in
     ls -la /var/lib/routinator/tals/
     
     echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
-    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20
+    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20 || true
     ;;
 esac
