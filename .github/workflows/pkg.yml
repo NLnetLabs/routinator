@@ -14,7 +14,7 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/.github/.github/workflows/pkg-rust.yml@v0
+    uses: NLnetLabs/.github/.github/workflows/pkg-rust.yml@main
     secrets:
       DOCKER_HUB_ID: ximoneighteen
       DOCKER_HUB_TOKEN: ${{ secrets.TEST_DOCKER_HUB_TOKEN }}
