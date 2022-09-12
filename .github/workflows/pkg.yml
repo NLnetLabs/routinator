@@ -14,7 +14,7 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/.github/.github/workflows/pkg-rust.yml@master
+    uses: NLnetLabs/.github/.github/workflows/pkg-rust.yml@v1
     secrets:
       DOCKER_HUB_ID: ximoneighteen
       DOCKER_HUB_TOKEN: ${{ secrets.TEST_DOCKER_HUB_TOKEN }}
@@ -32,3 +32,5 @@ jobs:
 
       deb_maintainer: The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>
       docker_sanity_check_command: --version
+      rpm_scriptlets_path: pkg/rpm/scriptlets.toml
+
