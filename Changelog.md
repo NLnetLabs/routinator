@@ -1,5 +1,18 @@
 # Change Log
 
+## Unreleased future version
+
+Bug Fixes
+
+* Fixes an issue in error handling in the RRDP collector that causes
+  Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
+  and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
+  [CVE-2022-3029]. [#781])
+
+[#781]: https://github.com/NLnetLabs/routinator/pull/781
+[CVE-2022-3029]: https://nlnetlabs.nl/downloads/routinator/CVE-2022-3029.txt
+
+
 ## 0.11.2
 
 Released 2022-04-20.
