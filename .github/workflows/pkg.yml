@@ -19,10 +19,8 @@ jobs:
       DOCKER_HUB_ID: ximoneighteen
       DOCKER_HUB_TOKEN: ${{ secrets.TEST_DOCKER_HUB_TOKEN }}
     with:
-      #docker_org: nlnetlabs
-      #docker_repo: routinator
-      docker_org: ximoneighteen
-      docker_repo: ximontest
+      docker_org: nlnetlabs
+      docker_repo: routinator
 
       cross_build_rules_path: pkg/rules/cross-targets.yml
       docker_build_rules_path: pkg/rules/docker-images-to-build.yml
