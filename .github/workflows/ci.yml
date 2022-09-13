@@ -3,9 +3,11 @@ on:
   push:
     branches: 
       - main
+      - series-*
   pull_request:
     branches: 
       - main
+      - series-*
 jobs:
   test:
     name: test
