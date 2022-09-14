@@ -986,7 +986,7 @@ impl<'a> ProcessSnapshot for SnapshotUpdate<'a> {
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
         let path = self.repository.tmp_object_path(&uri);
-        let mut data = MaxSizeRead::new(
+        let mut data = RrdpDataRead::new(
             data, &uri, self.collector.max_object_size
         );
         RepositoryObject::create(&path, &mut data).map_err(|io_err| {
@@ -1227,7 +1227,7 @@ impl<'a> ProcessDelta for DeltaUpdate<'a> {
         data: &mut rrdp::ObjectReader<'_>
     ) -> Result<(), Self::Err> {
         self.check_hash(&uri, hash)?;
-        let mut data = MaxSizeRead::new(
+        let mut data = RrdpDataRead::new(
             data, &uri, self.collector.max_object_size
         );
         let path = self.repository.tmp_object_path(&uri);
@@ -2142,7 +2142,7 @@ struct RrdpDataRead<'a, R> {
     err: Option<RrdpDataReadError>,
 }
 
-impl<'a, R> MaxSizeRead<'a, R> {
+impl<'a, R> RrdpDataRead<'a, R> {
     /// Creates a new read from necessary information.
     ///
     /// The returned value will wrap `reader`. The `uri` should be the rsync
@@ -2151,7 +2151,7 @@ impl<'a, R> MaxSizeRead<'a, R> {
     /// will be limited to that value in bytes. Larger objects lead to an
     /// error.
     pub fn new(reader: R, uri: &'a uri::Rsync, max_size: Option<u64>) -> Self {
-        MaxSizeRead { reader, uri, left: max_size, err: None }
+        RrdpDataRead { reader, uri, left: max_size, err: None }
     }
 
     /// Returns a stored error if available.
@@ -2166,7 +2166,7 @@ impl<'a, R> MaxSizeRead<'a, R> {
     }
 }
 
-impl<'a, R: io::Read> io::Read for MaxSizeRead<'a, R> {
+impl<'a, R: io::Read> io::Read for RrdpDataRead<'a, R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
         let res = match self.reader.read(buf) {
             Ok(res) => res,
