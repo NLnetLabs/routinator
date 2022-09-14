@@ -2119,10 +2119,14 @@ impl<R: io::Read> io::Read for HashRead<R> {
 }
 
 
-//------------ MaxSizeRead ---------------------------------------------------
+//------------ RrdpDataRead --------------------------------------------------
 
-/// A reader that reads until a certain limit is exceeded.
-struct MaxSizeRead<'a, R> {
+/// A reader that reads the data of objects in a snapshot or delta.
+///
+/// The type ensures the size limit of objects and allows treating read errors
+/// differently than write errors by storing any error and making it available
+/// after the fact.
+struct RrdpDataRead<'a, R> {
     /// The wrapped reader.
     reader: R,
 
@@ -2135,15 +2139,29 @@ struct MaxSizeRead<'a, R> {
     left: Option<u64>,
 
     /// The last error that happend.
-    err: Option<MaxSizeReadError>,
+    err: Option<RrdpDataReadError>,
 }
 
 impl<'a, R> MaxSizeRead<'a, R> {
+    /// Creates a new read from necessary information.
+    ///
+    /// The returned value will wrap `reader`. The `uri` should be the rsync
+    /// URI of the published object. It is only used for generating meaningful
+    /// error messages. If `max_size` is some value, the size of the object
+    /// will be limited to that value in bytes. Larger objects lead to an
+    /// error.
     pub fn new(reader: R, uri: &'a uri::Rsync, max_size: Option<u64>) -> Self {
         MaxSizeRead { reader, uri, left: max_size, err: None }
     }
 
-    pub fn take_err(&mut self) -> Option<MaxSizeReadError> {
+    /// Returns a stored error if available.
+    ///
+    /// If it returns some error, that error happened during reading before
+    /// an `io::Error` was returned.
+    ///
+    /// The method takes the stored error and replaces it internally with
+    /// `None`.
+    pub fn take_err(&mut self) -> Option<RrdpDataReadError> {
         self.err.take()
     }
 }
@@ -2153,7 +2171,7 @@ impl<'a, R: io::Read> io::Read for MaxSizeRead<'a, R> {
         let res = match self.reader.read(buf) {
             Ok(res) => res,
             Err(err) => {
-                self.err = Some(MaxSizeReadError::Read(err));
+                self.err = Some(RrdpDataReadError::Read(err));
                 return Err(io::Error::new(
                     io::ErrorKind::Other, "reading data failed",
                 ))
@@ -2167,7 +2185,7 @@ impl<'a, R: io::Read> io::Read for MaxSizeRead<'a, R> {
                     // definitely way too big.
                     self.left = Some(0);
                     self.err = Some(
-                        MaxSizeReadError::LargeObject(self.uri.clone())
+                        RrdpDataReadError::LargeObject(self.uri.clone())
                     );
                     return Err(io::Error::new(
                         io::ErrorKind::Other, "size limit exceeded"
@@ -2177,7 +2195,7 @@ impl<'a, R: io::Read> io::Read for MaxSizeRead<'a, R> {
             if res64 > left {
                 self.left = Some(0);
                 self.err = Some(
-                    MaxSizeReadError::LargeObject(self.uri.clone())
+                    RrdpDataReadError::LargeObject(self.uri.clone())
                 );
                 Err(io::Error::new(
                     io::ErrorKind::Other, "size limit exceeded")
@@ -2284,15 +2302,15 @@ impl From<StatusCode> for HttpStatus {
 
 //============ Errors ========================================================
 
-//------------ MaxSizeReadError ----------------------------------------------
+//------------ RrdpDataReadError ---------------------------------------------
 
-/// An error happened while `MaxSizeRead` read data.
+/// An error happened while reading object data.
 ///
 /// This covers both the case where the maximum allowed file size was
 /// exhausted as well as where reading data failed. Neither of them is fatal,
-/// so we need to process them.
+/// so we need to process them separately.
 #[derive(Debug)]
-enum MaxSizeReadError {
+enum RrdpDataReadError {
     LargeObject(uri::Rsync),
     Read(io::Error),
 }
@@ -2340,13 +2358,13 @@ impl From<io::Error> for SnapshotError {
     }
 }
 
-impl From<MaxSizeReadError> for SnapshotError {
-    fn from(err: MaxSizeReadError) -> Self {
+impl From<RrdpDataReadError> for SnapshotError {
+    fn from(err: RrdpDataReadError) -> Self {
         match err {
-            MaxSizeReadError::LargeObject(uri) => {
+            RrdpDataReadError::LargeObject(uri) => {
                 SnapshotError::LargeObject(uri)
             }
-            MaxSizeReadError::Read(err) => {
+            RrdpDataReadError::Read(err) => {
                 SnapshotError::Rrdp(err.into())
             }
         }
@@ -2448,13 +2466,13 @@ impl From<io::Error> for DeltaError {
     }
 }
 
-impl From<MaxSizeReadError> for DeltaError {
-    fn from(err: MaxSizeReadError) -> Self {
+impl From<RrdpDataReadError> for DeltaError {
+    fn from(err: RrdpDataReadError) -> Self {
         match err {
-            MaxSizeReadError::LargeObject(uri) => {
+            RrdpDataReadError::LargeObject(uri) => {
                 DeltaError::LargeObject(uri)
             }
-            MaxSizeReadError::Read(err) => {
+            RrdpDataReadError::Read(err) => {
                 DeltaError::Rrdp(err.into())
             }
         }
