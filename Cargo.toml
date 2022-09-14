@@ -116,9 +116,6 @@ assets = [
     { source = "etc/routinator.conf.system-service", dest = "/etc/routinator/routinator.conf", mode = "644", config = true },
     { source = "pkg/common/routinator-init", dest = "/usr/bin/routinator-init", mode = "755" },
     { source = "pkg/common/service.preset", dest = "/lib/systemd/system-preset/50-routinator.preset", mode = "644" },
-    { source = "pkg/rpm/postinst", dest = "/usr/share/routinator/rpm/postinst", mode = "755" },
-    { source = "pkg/rpm/preuninst", dest = "/usr/share/routinator/rpm/preuninst", mode = "755" },
-    { source = "pkg/rpm/postuninst", dest = "/usr/share/routinator/rpm/postuninst", mode = "755" },
 ]
 # These get set using cargo-generate-rpm --set-metadata at package build time.
 #post_install_script = ...
