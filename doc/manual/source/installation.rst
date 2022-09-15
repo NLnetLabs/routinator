@@ -15,9 +15,8 @@ breathing room. This will give you ample margin for the RPKI repositories to
 grow over time, as adoption increases. 
 
 .. Tip:: A "No space left on device" error may be caused by running out of 
-         inodes instead of disk space. The ``du --inode`` command will list 
-         the usage of inodes. In addition, ``df -i`` shows the amount of 
-         inodes available, used, and free.
+         inodes instead of disk space. To verify this, the ``df -i`` command
+         shows the amount of inodes available, used, and free.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
