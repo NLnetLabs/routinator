@@ -6,16 +6,17 @@ System Requirements
 
 Routinator has minimal system requirements. When choosing a system, a
 powerful CPU is not required. Make sure you have 1GB of available memory and
-4GB of disk space for the application. Please keep in mind that the RPKI
-consists of a very large number of small files. As a result, Routinator will
-use a large number of inodes. You should accommodate for at least 500,000
-inodes, but one million will provide more breathing room. This will give you
-ample margin for the RPKI repositories to grow over time, as adoption
-increases. 
+4GB of disk space for the application. 
 
-.. Note:: A "No space left on device" may actually be caused by running out
-          of inodes and not actual disk space. The ``du --inode`` command 
-          will list the usage of inodes.
+Please keep in mind that the RPKI consists of a very large number of small
+files. As a result, Routinator will use a large number of inodes. You should
+accommodate for at least 500,000 inodes, but one million will provide more
+breathing room. This will give you ample margin for the RPKI repositories to
+grow over time, as adoption increases. 
+
+.. Note:: A "No space left on device" error may be caused by running out of 
+          inodes instead of disk space. The ``du --inode`` command will list 
+          the usage of inodes.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
