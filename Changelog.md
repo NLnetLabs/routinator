@@ -19,9 +19,19 @@ Bug Fixes
 
 Other Changes
 
+Packaging
+
+* The RPM packages now won’t complain if the routinator user already
+  exists and the postuninst script won’t fail any more. ([#774], [#773])
+* Debian packages and Docker images are now produced for the ARMv6, ARMv7,
+  and ARM64 architectures. ([#763])
+
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
+[#763]: https://github.com/NLnetLabs/routinator/pull/763
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
+[#773]: https://github.com/NLnetLabs/routinator/pull/773
+[#774]: https://github.com/NLnetLabs/routinator/pull/774
 
 
 ## 0.11.2
