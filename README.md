@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
-[![Docker](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-docker.yml/badge.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
+![Docker Pulls](https://img.shields.io/docker/pulls/nlnetlabs/routinator?color=brightgreen)
 
 [![crates.io](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.readthedocs.io/en/stable/?badge=stable)
