@@ -343,6 +343,7 @@ impl Config {
         )
         .arg(Arg::new("strict")
             .long("strict")
+            .action(ArgAction::SetTrue)
             .help("Parse RPKI data in strict mode")
         )
         .arg(Arg::new("stale")
@@ -365,14 +366,17 @@ impl Config {
         )
         .arg(Arg::new("allow-dubious-hosts")
             .long("allow-dubious-hosts")
+            .action(ArgAction::SetTrue)
             .help("Allow dubious host names in rsync and HTTPS URIs")
         )
         .arg(Arg::new("fresh")
             .long("fresh")
+            .action(ArgAction::SetTrue)
             .help("Delete cached data, download everything again") 
         )
         .arg(Arg::new("disable-rsync")
             .long("disable-rsync")
+            .action(ArgAction::SetTrue)
             .help("Disable rsync and only use RRDP")
         )
         .arg(Arg::new("rsync-command")
@@ -389,6 +393,7 @@ impl Config {
         )
         .arg(Arg::new("disable-rrdp")
             .long("disable-rrdp")
+            .action(ArgAction::SetTrue)
             .help("Disable RRDP and only use rsync")
         )
         .arg(Arg::new("rrdp-max-delta-count")
@@ -453,10 +458,12 @@ impl Config {
         )
         .arg(Arg::new("enable-bgpsec")
             .long("enable-bgpsec")
+            .action(ArgAction::SetTrue)
             .help("Include BGPsec router keys in the data set")
         )
         .arg(Arg::new("dirty-repository")
             .long("dirty")
+            .action(ArgAction::SetTrue)
             .help("Do not clean up repository directory after validation")
         )
         .arg(Arg::new("validation-threads")
@@ -480,6 +487,7 @@ impl Config {
         )
         .arg(Arg::new("syslog")
              .long("syslog")
+            .action(ArgAction::SetTrue)
              .help("Log to syslog")
         )
         .arg(Arg::new("syslog-facility")
@@ -511,21 +519,25 @@ impl Config {
         .arg(Arg::new("refresh")
             .long("refresh")
             .value_name("SECONDS")
+            .action(ArgAction::Set)
             .help("Refresh interval in seconds [default 3600]")
         )
         .arg(Arg::new("retry")
             .long("retry")
             .value_name("SECONDS")
+            .action(ArgAction::Set)
             .help("RTR retry interval in seconds [default 600]")
         )
         .arg(Arg::new("expire")
             .long("expire")
             .value_name("SECONDS")
+            .action(ArgAction::Set)
             .help("RTR expire interval in seconds [default 600]")
         )
         .arg(Arg::new("history")
             .long("history")
             .value_name("COUNT")
+            .action(ArgAction::Set)
             .help("Number of history items to keep [default 10]")
         )
         .arg(Arg::new("rtr-listen")
@@ -554,6 +566,7 @@ impl Config {
         )
         .arg(Arg::new("systemd-listen")
             .long("systemd-listen")
+            .action(ArgAction::SetTrue)
             .help("Acquire listening sockets from systemd")
         )
         .arg(Arg::new("rtr-tcp-keepalive")
@@ -564,6 +577,7 @@ impl Config {
         )
         .arg(Arg::new("rtr-client-metrics")
             .long("rtr-client-metrics")
+            .action(ArgAction::SetTrue)
             .help("Include RTR client information in metrics")
         )
         .arg(Arg::new("rtr-tls-key")
@@ -700,7 +714,7 @@ impl Config {
         }
 
         // strict
-        if matches.contains_id("strict") {
+        if matches.get_flag("strict") {
             self.strict = true
         }
 
@@ -720,17 +734,17 @@ impl Config {
         }
 
         // allow_dubious_hosts
-        if matches.contains_id("allow-dubious-hosts") {
+        if matches.get_flag("allow-dubious-hosts") {
             self.allow_dubious_hosts = true
         }
 
         // fresh
-        if matches.contains_id("fresh") {
+        if matches.get_flag("fresh") {
             self.fresh = true
         }
 
         // disable_rsync
-        if matches.contains_id("disable-rsync") {
+        if matches.get_flag("disable-rsync") {
             self.disable_rsync = true
         }
 
@@ -745,7 +759,7 @@ impl Config {
         }
 
         // disable_rrdp
-        if matches.contains_id("disable-rrdp") {
+        if matches.get_flag("disable-rrdp") {
             self.disable_rrdp = true
         }
 
@@ -825,12 +839,12 @@ impl Config {
         }
 
         // enable_bgpsec
-        if matches.contains_id("enable-bgpsec") {
+        if matches.get_flag("enable-bgpsec") {
             self.enable_bgpsec = true
         }
 
         // dirty_repository
-        if matches.contains_id("dirty-repository") {
+        if matches.get_flag("dirty-repository") {
             self.dirty_repository = true
         }
 
@@ -869,7 +883,7 @@ impl Config {
         matches: &ArgMatches,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
-        if matches.contains_id("syslog") {
+        if matches.get_flag("syslog") {
             self.log_target = LogTarget::Syslog(
                 match Facility::from_str(
                     matches.get_one::<String>("syslog-facility").unwrap()
@@ -1000,7 +1014,7 @@ impl Config {
         }
 
         // systemd_listen
-        if matches.contains_id("systemd-listen") {
+        if matches.get_flag("systemd-listen") {
             self.systemd_listen = true
         }
 
@@ -1015,7 +1029,7 @@ impl Config {
         }
 
         // rtr_client_metrics
-        if matches.contains_id("rtr-client-metrics") {
+        if matches.get_flag("rtr-client-metrics") {
             self.rtr_client_metrics = true
         }
 

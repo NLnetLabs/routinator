@@ -209,14 +209,17 @@ impl Init {
             .arg(Arg::new("force")
                 .short('f')
                 .long("force")
+                .action(ArgAction::SetTrue)
                 .help("Overwrite an existing TAL directory")
             )
             .arg(Arg::new("rir-tals")
                 .long("rir-tals")
+                .action(ArgAction::SetTrue)
                 .help("Install all RIR production TALs")
             )
             .arg(Arg::new("rir-test-tals")
                 .long("rir-test-tals")
+                .action(ArgAction::SetTrue)
                 .help("Install all RIR testbed TALs")
             )
             .arg(Arg::new("tal")
@@ -234,10 +237,12 @@ impl Init {
             )
             .arg(Arg::new("decline-arin-rpa")
                 .long("decline-arin-rpa")
+                .action(ArgAction::SetTrue)
                 .help("Same as '--skip-tal arin' (deprecated)")
             )
             .arg(Arg::new("list-tals")
                 .long("list-tals")
+                .action(ArgAction::SetTrue)
                 .help("List available TALs and exit")
             )
             .after_help(
@@ -266,7 +271,7 @@ impl Init {
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
         // Easy out for --list-tals
-        if matches.contains_id("list-tals") {
+        if matches.get_flag("list-tals") {
             return Ok(Init::ListTals)
         }
 
@@ -276,7 +281,7 @@ impl Init {
         ).map(|tals| {
             tals.cloned().collect()
         }).unwrap_or_default();
-        if matches.contains_id("rir-test-tals") {
+        if matches.get_flag("rir-test-tals") {
             for tal in tals::BUNDLED_TALS {
                 if tal.category == tals::Category::RirTest {
                     requested.insert(tal.name.into());
@@ -284,7 +289,7 @@ impl Init {
             }
         }
         // --rir-tals or lack of other TAL commands includes all RIR TALs.
-        if matches.contains_id("rir-tals") || requested.is_empty() {
+        if matches.get_flag("rir-tals") || requested.is_empty() {
             for tal in tals::BUNDLED_TALS {
                 if tal.category == tals::Category::Production {
                     requested.insert(tal.name.into());
@@ -304,7 +309,7 @@ impl Init {
         }
 
         // Remove ARIN Tal.
-        if matches.contains_id("decline-arin-rpa") {
+        if matches.get_flag("decline-arin-rpa") {
             eprintln!(
                 "Warning: '--decline-arin-rpa' has been replaced \
                  by '--skip-tal arin' and \n         will be removed."
@@ -323,7 +328,7 @@ impl Init {
             }
             tals.push(tal);
             if let Some(opt_in) = tal.opt_in.as_ref() {
-                if !matches.contains_id(opt_in.option_name) {
+                if !matches.get_flag(opt_in.option_name) {
                     eprintln!("{}", opt_in.message);
                     return Err(Failed)
                 }
@@ -338,7 +343,7 @@ impl Init {
         }
 
         Ok(Init::Init {
-            force: matches.contains_id("force"),
+            force: matches.get_flag("force"),
             tals,
         })
     }
@@ -481,6 +486,7 @@ impl Server {
             .arg(Arg::new("detach")
                 .short('d')
                 .long("detach")
+                .action(ArgAction::SetTrue)
                 .help("Detach from the terminal")
             )
             .after_help(AFTER_HELP)
@@ -495,7 +501,7 @@ impl Server {
     ) -> Result<Self, Failed> {
         config.apply_server_arg_matches(matches, cur_dir)?;
         Ok(Server {
-            detach: matches.contains_id("detach")
+            detach: matches.get_flag("detach")
         })
     }
 
@@ -703,10 +709,12 @@ impl Vrps {
             .arg(Arg::new("noupdate")
                 .short('n')
                 .long("noupdate")
+                .action(ArgAction::SetTrue)
                 .help("Don't update the local cache")
             )
             .arg(Arg::new("complete")
                 .long("complete")
+                .action(ArgAction::SetTrue)
                 .help("Return an error status on incomplete update")
             )
             .arg(Arg::new("select-prefix")
@@ -726,6 +734,7 @@ impl Vrps {
             .arg(Arg::new("more-specifics")
                 .short('m')
                 .long("more-specifics")
+                .action(ArgAction::SetTrue)
                 .help("Include more specific prefixes in selected output")
             )
             .after_help(AFTER_HELP)
@@ -757,8 +766,8 @@ impl Vrps {
             selection: Self::output_selection(matches)?,
             output,
             format,
-            noupdate: matches.contains_id("noupdate"),
-            complete: matches.contains_id("complete"),
+            noupdate: matches.get_flag("noupdate"),
+            complete: matches.get_flag("complete"),
         })
     }
 
@@ -766,8 +775,8 @@ impl Vrps {
     fn output_selection(
         matches: &ArgMatches
     ) -> Result<Option<output::Selection>, Failed> {
-        if !matches.contains_id("select-prefix")
-            && !matches.contains_id("select-asn")
+        if !matches.get_flag("select-prefix")
+            && !matches.get_flag("select-asn")
         {
             return Ok(None)
         }
@@ -800,7 +809,7 @@ impl Vrps {
                 }
             }
         }
-        res.set_more_specifics(matches.contains_id("more-specifics"));
+        res.set_more_specifics(matches.get_flag("more-specifics"));
         Ok(Some(res))
     }
 
@@ -927,6 +936,7 @@ impl Validate {
             .arg(Arg::new("json")
                 .short('j')
                 .long("json")
+                .action(ArgAction::SetTrue)
                 .help("Expect input and produce output in JSON")
             )
             .arg(Arg::new("input-file")
@@ -948,10 +958,12 @@ impl Validate {
             .arg(Arg::new("noupdate")
                 .short('n')
                 .long("noupdate")
+                .action(ArgAction::SetTrue)
                 .help("Don't update the local cache")
             )
             .arg(Arg::new("complete")
                 .long("complete")
+                .action(ArgAction::SetTrue)
                 .help("Return an error status on incomplete update")
             )
             .after_help(AFTER_HELP)
@@ -1005,7 +1017,7 @@ impl Validate {
                     },
                 )
             },
-            json: matches.contains_id("json"),
+            json: matches.get_flag("json"),
             output: {
                 let val = matches.get_one::<String>("output-file").unwrap();
                 if val == "-" {
@@ -1015,8 +1027,8 @@ impl Validate {
                     Some(val.clone().into())
                 }
             },
-            noupdate: matches.contains_id("noupdate"),
-            complete: matches.contains_id("complete"),
+            noupdate: matches.get_flag("noupdate"),
+            complete: matches.get_flag("complete"),
         })
     }
 
@@ -1216,7 +1228,7 @@ impl ValidateDocument {
         Ok(ValidateDocument {
             document: matches.get_one::<String>("document").unwrap().into(),
             signature: matches.get_one::<String>("signature").unwrap().into(),
-            noupdate: matches.contains_id("noupdate"),
+            noupdate: matches.get_flag("noupdate"),
         })
     }
 
@@ -1334,7 +1346,7 @@ impl Update {
     /// Creates a command from clap matches.
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
         Ok(Update {
-            complete: matches.contains_id("complete"),
+            complete: matches.get_flag("complete"),
         })
     }
 
