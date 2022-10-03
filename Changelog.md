@@ -27,11 +27,14 @@ Bug Fixes
 
 Other Changes
 
+* The minimal required Rust version has been increased to 1.60. ([#792])
+
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
 [#761]: https://github.com/NLnetLabs/routinator/pull/761
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
 [#783]: https://github.com/NLnetLabs/routinator/pull/784
+[#792]: https://github.com/NLnetLabs/routinator/pull/792
 
 
 ## 0.11.3
