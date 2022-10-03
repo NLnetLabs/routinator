@@ -17,21 +17,32 @@ New
 
 Bug Fixes
 
+* Fixes an issue in error handling in the RRDP collector that causes
+  Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
+  and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
+  [CVE-2022-3029].) ([#784])
+
 Other Changes
 
-Packaging
-
-* The RPM packages now won’t complain if the routinator user already
-  exists and the postuninst script won’t fail any more. ([#774], [#773])
-* Debian packages and Docker images are now produced for the ARMv6, ARMv7,
-  and ARM64 architectures. ([#763])
-
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
-[#763]: https://github.com/NLnetLabs/routinator/pull/763
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
-[#773]: https://github.com/NLnetLabs/routinator/pull/773
-[#774]: https://github.com/NLnetLabs/routinator/pull/774
+[#783]: https://github.com/NLnetLabs/routinator/pull/784
+
+
+## 0.11.3
+
+Released 2022-09-13.
+
+Bug Fixes
+
+* Fixes an issue in error handling in the RRDP collector that causes
+  Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
+  and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
+  [CVE-2022-3029].) ([#781])
+
+[#781]: https://github.com/NLnetLabs/routinator/pull/781
+[CVE-2022-3029]: https://nlnetlabs.nl/downloads/routinator/CVE-2022-3029.txt
 
 
 ## 0.11.2
