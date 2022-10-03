@@ -986,18 +986,18 @@ impl<'a> ProcessSnapshot for SnapshotUpdate<'a> {
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
         let path = self.repository.tmp_object_path(&uri);
-        let mut data = MaxSizeRead::new(data, self.collector.max_object_size);
-        if RepositoryObject::create(&path, &mut data).is_err() {
-            if data.was_triggered() {
-                Err(SnapshotError::LargeObject(uri))
+        let mut data = RrdpDataRead::new(
+            data, &uri, self.collector.max_object_size
+        );
+        RepositoryObject::create(&path, &mut data).map_err(|io_err| {
+            match data.take_err() {
+                Some(data_err) => data_err.into(),
+                None => {
+                    error!("{}", io_err);
+                    SnapshotError::Fatal
+                }
             }
-            else {
-                Err(SnapshotError::Fatal)
-            }
-        }
-        else {
-            Ok(())
-        }
+        })
     }
 }
 
@@ -1227,16 +1227,19 @@ impl<'a> ProcessDelta for DeltaUpdate<'a> {
         data: &mut rrdp::ObjectReader<'_>
     ) -> Result<(), Self::Err> {
         self.check_hash(&uri, hash)?;
-        let mut data = MaxSizeRead::new(data, self.collector.max_object_size);
+        let mut data = RrdpDataRead::new(
+            data, &uri, self.collector.max_object_size
+        );
         let path = self.repository.tmp_object_path(&uri);
-        if RepositoryObject::create(&path, &mut data).is_err() {
-            if data.was_triggered() {
-                return Err(DeltaError::LargeObject(uri))
+        RepositoryObject::create(&path, &mut data).map_err(|io_err| {
+            match data.take_err() {
+                Some(data_err) => data_err.into(),
+                None => {
+                    error!("{}", io_err);
+                    DeltaError::Fatal
+                }
             }
-            else {
-                return Err(DeltaError::Fatal)
-            }
-        }
+        })?;
         if !self.publish.insert(uri.clone()) {
             return Err(DeltaError::ObjectRepeated { uri })
         }
@@ -1949,32 +1952,46 @@ impl RepositoryObject {
     }
 
     /// Writes a new object using everything from reader.
+    ///
+    /// This function returns an `io::Error` since the caller needs to be
+    /// able to suppress any error resulting from reading from `data` as
+    /// these are not in fact fatal. Any errors occurring while trying to
+    /// open the file and actually writing to it are still fatal. The
+    /// distinction is made by the caller by keeping track of what `data`
+    /// does.
     pub fn create(
         path: &Path, data: &mut impl io::Read
-    ) -> Result<(), Failed> {
+    ) -> Result<(), io::Error> {
         if let Some(parent) = path.parent() {
             if let Err(err) = fs::create_dir_all(parent) {
-                error!(
-                    "Fatal: failed to create directory {}: {}.",
-                    parent.display(), err
-                );
-                return Err(Failed)
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "Fatal: failed to create directory {}: {}.",
+                        parent.display(), err
+                    )
+                ))
             }
         }
         let mut target = match File::create(&path) {
             Ok(target) => target,
             Err(err) => {
-                error!(
-                    "Fatal: failed to open file {}: {}", path.display(), err
-                );
-                return Err(Failed)
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "Fatal: failed to open file {}: {}",
+                        path.display(), err
+                    )
+                ))
             }
         };
         Self::_create(data, &mut target).map_err(|err| {
-            error!(
-                "Fatal: failed to write file {}: {}", path.display(), err
-            );
-            Failed
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Fatal: failed to write file {}: {}", path.display(), err
+                )
+            )
         })
     }
 
@@ -2102,35 +2119,64 @@ impl<R: io::Read> io::Read for HashRead<R> {
 }
 
 
-//------------ MaxSizeRead ---------------------------------------------------
+//------------ RrdpDataRead --------------------------------------------------
 
-/// A reader that reads until a certain limit is exceeded.
-struct MaxSizeRead<R> {
+/// A reader that reads the data of objects in a snapshot or delta.
+///
+/// The type ensures the size limit of objects and allows treating read errors
+/// differently than write errors by storing any error and making it available
+/// after the fact.
+struct RrdpDataRead<'a, R> {
     /// The wrapped reader.
     reader: R,
+
+    /// The URI of the object we are reading.
+    uri: &'a uri::Rsync,
 
     /// The number of bytes left to read.
     ///
     /// If this is `None` we are allowed to read an unlimited amount.
     left: Option<u64>,
 
-    /// Did we trigger?
-    triggered: bool,
+    /// The last error that happend.
+    err: Option<RrdpDataReadError>,
 }
 
-impl<R> MaxSizeRead<R> {
-    pub fn new(reader: R, max_size: Option<u64>) -> Self {
-        MaxSizeRead { reader, left: max_size, triggered: false }
+impl<'a, R> RrdpDataRead<'a, R> {
+    /// Creates a new read from necessary information.
+    ///
+    /// The returned value will wrap `reader`. The `uri` should be the rsync
+    /// URI of the published object. It is only used for generating meaningful
+    /// error messages. If `max_size` is some value, the size of the object
+    /// will be limited to that value in bytes. Larger objects lead to an
+    /// error.
+    pub fn new(reader: R, uri: &'a uri::Rsync, max_size: Option<u64>) -> Self {
+        RrdpDataRead { reader, uri, left: max_size, err: None }
     }
 
-    pub fn was_triggered(&self) -> bool {
-        self.triggered
+    /// Returns a stored error if available.
+    ///
+    /// If it returns some error, that error happened during reading before
+    /// an `io::Error` was returned.
+    ///
+    /// The method takes the stored error and replaces it internally with
+    /// `None`.
+    pub fn take_err(&mut self) -> Option<RrdpDataReadError> {
+        self.err.take()
     }
 }
 
-impl<R: io::Read> io::Read for MaxSizeRead<R> {
+impl<'a, R: io::Read> io::Read for RrdpDataRead<'a, R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let res = self.reader.read(buf)?;
+        let res = match self.reader.read(buf) {
+            Ok(res) => res,
+            Err(err) => {
+                self.err = Some(RrdpDataReadError::Read(err));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other, "reading data failed",
+                ))
+            }
+        };
         if let Some(left) = self.left {
             let res64 = match u64::try_from(res) {
                 Ok(res) => res,
@@ -2138,7 +2184,9 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
                     // If the usize doesn’t fit into a u64, things are
                     // definitely way too big.
                     self.left = Some(0);
-                    self.triggered = true;
+                    self.err = Some(
+                        RrdpDataReadError::LargeObject(self.uri.clone())
+                    );
                     return Err(io::Error::new(
                         io::ErrorKind::Other, "size limit exceeded"
                     ))
@@ -2146,7 +2194,9 @@ impl<R: io::Read> io::Read for MaxSizeRead<R> {
             };
             if res64 > left {
                 self.left = Some(0);
-                self.triggered = true;
+                self.err = Some(
+                    RrdpDataReadError::LargeObject(self.uri.clone())
+                );
                 Err(io::Error::new(
                     io::ErrorKind::Other, "size limit exceeded")
                 )
@@ -2252,6 +2302,20 @@ impl From<StatusCode> for HttpStatus {
 
 //============ Errors ========================================================
 
+//------------ RrdpDataReadError ---------------------------------------------
+
+/// An error happened while reading object data.
+///
+/// This covers both the case where the maximum allowed file size was
+/// exhausted as well as where reading data failed. Neither of them is fatal,
+/// so we need to process them separately.
+#[derive(Debug)]
+enum RrdpDataReadError {
+    LargeObject(uri::Rsync),
+    Read(io::Error),
+}
+
+
 //------------ SnapshotError -------------------------------------------------
 
 /// An error happened during snapshot processing.
@@ -2291,6 +2355,19 @@ impl From<rrdp::ProcessError> for SnapshotError {
 impl From<io::Error> for SnapshotError {
     fn from(err: io::Error) -> Self {
         SnapshotError::Rrdp(err.into())
+    }
+}
+
+impl From<RrdpDataReadError> for SnapshotError {
+    fn from(err: RrdpDataReadError) -> Self {
+        match err {
+            RrdpDataReadError::LargeObject(uri) => {
+                SnapshotError::LargeObject(uri)
+            }
+            RrdpDataReadError::Read(err) => {
+                SnapshotError::Rrdp(err.into())
+            }
+        }
     }
 }
 
@@ -2386,6 +2463,19 @@ impl From<rrdp::ProcessError> for DeltaError {
 impl From<io::Error> for DeltaError {
     fn from(err: io::Error) -> Self {
         DeltaError::Rrdp(err.into())
+    }
+}
+
+impl From<RrdpDataReadError> for DeltaError {
+    fn from(err: RrdpDataReadError) -> Self {
+        match err {
+            RrdpDataReadError::LargeObject(uri) => {
+                DeltaError::LargeObject(uri)
+            }
+            RrdpDataReadError::Read(err) => {
+                DeltaError::Rrdp(err.into())
+            }
+        }
     }
 }
 
