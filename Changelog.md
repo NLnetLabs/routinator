@@ -4,6 +4,9 @@
 
 Breaking Changes
 
+* Changed the default configuration option for `unsafe-vrps` to `accept`
+  and removed all logging or mentioning of unsafe VRPs in this case.
+  ([#761]) 
 * Refactored error handling. Routinator now logs the reason why an object
   failed verification or was otherwise rejected. ([#755])
 * Removed the deprecated `rrdp-disable-gzip` configuration option.
@@ -25,6 +28,7 @@ Bug Fixes
 Other Changes
 
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
+[#761]: https://github.com/NLnetLabs/routinator/pull/761
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
 [#783]: https://github.com/NLnetLabs/routinator/pull/784
