@@ -148,10 +148,12 @@ generated in a wide range of output formats for various use cases.
           derived from a published router certificate, or *exception* if it
           was an assertion in a local exception file.
 
-          For RPKI objects, *uri* provides the rsync URI of the ROA or router
-          certificate, *validity* provides the validity of the ROA itself,
-          and *chainValidity* the validity considering the validity of the
-          certificates along the validation chain.
+          For RPKI objects, *tal* provides the name of the trust anchor
+          locator the object was published under, *uri* provides the rsync
+          URI of the ROA or router certificate, *validity* provides the
+          validity of the ROA itself, and *chainValidity* the validity
+          considering the validity of the certificates along the validation
+          chain.
 
           For  assertions from local exceptions, *path* will provide the path
           of the local exceptions file and, optionally, *comment* will
@@ -179,6 +181,7 @@ generated in a wide range of output formats for various use cases.
                     "maxLength": 24,
                     "source": [{
                       "type": "roa",
+                      "tal": "ripe",
                       "uri": "rsync://testbed.krill.cloud/repo/local-testbed-child/0/3138352e34392e3134322e302f32342d3234203d3e20323131333231.roa",
                       "validity": {
                         "notBefore": "2022-07-25T20:47:37Z",
@@ -197,6 +200,7 @@ generated in a wide range of output formats for various use cases.
                   "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET10FMBxP6P3r6aG_ICpfsktp7X6ylJIY8Kye6zkQhNOt0y-cRzYngH8MGzY3cXNvZ64z4CpZ22gf4teybGq8ow",
                   "source": [{
                     "type": "cer",
+                      "tal": "ripe",
                     "uri": "rsync://testbed.krill.cloud/repo/local-testbed-child/0/ROUTER-00033979-17316903F0671229E8808BA8E8AB0105FA915A07.cer",
                     "validity": {
                       "notBefore": "2022-07-25T20:47:37Z",
