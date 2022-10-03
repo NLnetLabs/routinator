@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.12.0-dev"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.60"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
