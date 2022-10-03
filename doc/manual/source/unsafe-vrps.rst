@@ -36,6 +36,4 @@ for a prolonged period.
 
 Routinator has an :option:`--unsafe-vrps` option that specifies how to deal
 with unsafe resources when conditions creating unsafe VRPs exist. Currently,
-the default policy is *warn* in order to gain operational experience with the
-frequency and impact of unsafe VRPs. This default may change in future
-version.
+the default policy is to *accept* unsafe VRPs.
