@@ -573,7 +573,7 @@ impl Config {
             .long("rtr-tcp-keepalive")
             .value_name("SECONDS")
             .action(ArgAction::Set)
-            .help("The TCP keep-alive timeout on RTR. [default 60, 0 for off]")
+            .help("The TCP keep-alive timeout on RTR [default 60, 0 for off]")
         )
         .arg(Arg::new("rtr-client-metrics")
             .long("rtr-client-metrics")
