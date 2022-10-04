@@ -307,9 +307,9 @@ impl Engine {
 
     /// Performs a validation run to create a validation report.
     pub fn produce_report(
-        &self, enable_bgpsec: bool, update: bool,
+        &self, log_rejected: bool, enable_bgpsec: bool, update: bool,
     ) -> Result<(ValidationReport, Metrics), Failed> {
-        let report = ValidationReport::new(enable_bgpsec);
+        let report = ValidationReport::new(log_rejected, enable_bgpsec);
         let mut run = self.start(&report, update)?;
         run.process()?;
         run.cleanup()?;
