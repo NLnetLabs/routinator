@@ -775,13 +775,13 @@ impl Vrps {
     fn output_selection(
         matches: &ArgMatches
     ) -> Result<Option<output::Selection>, Failed> {
-        if !matches.get_flag("select-prefix")
-            && !matches.get_flag("select-asn")
-        {
+        let select_prefix = matches.get_many::<String>("select-prefix");
+        let select_asn = matches.get_many::<String>("select-asn");
+        if select_prefix.is_none() && select_asn.is_none() {
             return Ok(None)
         }
         let mut res = output::Selection::new();
-        if let Some(list) = matches.get_many::<String>("select-prefix") {
+        if let Some(list) = select_prefix {
             for value in list {
                 match addr::Prefix::from_str(value) {
                     Ok(some) => res.push_origin_prefix(some),
@@ -795,7 +795,7 @@ impl Vrps {
                 }
             }
         }
-        if let Some(list) = matches.get_many::<String>("select-asn") {
+        if let Some(list) = select_asn {
             for value in list {
                 match Asn::from_str(value) {
                     Ok(asn) => res.push_origin_asn(asn),
