@@ -82,7 +82,7 @@ impl<R: io::Read> Parse<R> for u64 {
 impl<W: io::Write> Compose<W> for usize {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
         u64::try_from(*self)
-        .map_err(|_| io_err_other("excessivley large value"))?
+        .map_err(|_| io_err_other("excessively large value"))?
         .compose(target)
     }
 }

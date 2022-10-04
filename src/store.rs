@@ -458,7 +458,7 @@ pub struct Run<'a> {
     /// A reference to the underlying store.
     store: &'a Store,
 
-    /// Is there store being updated during this run?
+    /// Is the store being updated during this run?
     updates: bool,
 }
 
