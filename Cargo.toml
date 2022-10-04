@@ -17,7 +17,7 @@ exclude = [ ".github" ]
 base64          = "0.13.0"
 bytes           = "1.0.0"
 chrono          = "0.4.11"
-clap            = { version = "2.33.0", features = [ "wrap_help" ] }
+clap            = { version = "4", features = [ "wrap_help", "cargo" ] }
 crossbeam-queue = "0.3.1"
 crossbeam-utils = "0.8.1"
 dirs            = "4.0.0"
