@@ -36,4 +36,8 @@ for a prolonged period.
 
 Routinator has an :option:`--unsafe-vrps` option that specifies how to deal
 with unsafe resources when conditions creating unsafe VRPs exist. Currently,
-the default policy is to *accept* unsafe VRPs.
+the default policy is to *accept* unsafe VRPs. This means VRPs will not be
+analysed for being unsafe at all, nor will any metrics be generated. The
+other options are *warn*, which will report any unsafe VRP that was
+encountered and *reject*, filtering out VRPs that are marked as unsafe. For
+the latter two options metrics are made available.
