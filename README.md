@@ -4,10 +4,10 @@
 
 [![CI](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
-[![Docker](https://github.com/NLnetLabs/routinator/actions/workflows/pkg-docker.yml/badge.svg)](https://hub.docker.com/r/nlnetlabs/routinator)
+[![Docker Pulls](https://img.shields.io/docker/pulls/nlnetlabs/routinator?color=brightgreen)](https://hub.docker.com/r/nlnetlabs/routinator)
 
 [![crates.io](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
-[![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.readthedocs.io/en/stable/?badge=stable)
+[![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.docs.nlnetlabs.nl/en/stable/)
 [![Discord](https://img.shields.io/discord/818584154278199396?label=Discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
 [![Spotify](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
 [![Twitter](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)

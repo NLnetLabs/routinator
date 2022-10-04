@@ -4,6 +4,9 @@
 
 Breaking Changes
 
+* Changed the default configuration option for `unsafe-vrps` to `accept`
+  and removed all logging or mentioning of unsafe VRPs in this case.
+  ([#761]) 
 * Refactored error handling. Routinator now logs the reason why an object
   failed verification or was otherwise rejected. ([#755])
 * Removed the deprecated `rrdp-disable-gzip` configuration option.
@@ -17,11 +20,36 @@ New
 
 Bug Fixes
 
+* Fixes an issue in error handling in the RRDP collector that causes
+  Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
+  and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
+  [CVE-2022-3029].) ([#784])
+
 Other Changes
 
+* The minimal required Rust version has been increased to 1.60. ([#792])
+
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
+[#761]: https://github.com/NLnetLabs/routinator/pull/761
 [#765]: https://github.com/NLnetLabs/routinator/pull/765
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
+[#783]: https://github.com/NLnetLabs/routinator/pull/784
+[#792]: https://github.com/NLnetLabs/routinator/pull/792
+
+
+## 0.11.3
+
+Released 2022-09-13.
+
+Bug Fixes
+
+* Fixes an issue in error handling in the RRDP collector that causes
+  Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
+  and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
+  [CVE-2022-3029].) ([#781])
+
+[#781]: https://github.com/NLnetLabs/routinator/pull/781
+[CVE-2022-3029]: https://nlnetlabs.nl/downloads/routinator/CVE-2022-3029.txt
 
 
 ## 0.11.2

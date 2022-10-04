@@ -42,7 +42,7 @@ async fn handle_status(
     server_metrics: &HttpServerMetrics,
     rtr_metrics: &SharedRtrServerMetrics,
 ) -> Response {
-    let (metrics, serial, start, done, duration) = {
+    let (metrics, serial, start, done, duration, unsafe_vrps) = {
         let history = history.read();
         (
             match history.metrics() {
@@ -53,6 +53,7 @@ async fn handle_status(
             history.last_update_start(),
             history.last_update_done(),
             history.last_update_duration(),
+            history.unsafe_vrps(),
         )
     };
 
@@ -123,22 +124,24 @@ async fn handle_status(
     }
     writeln!(res);
 
-    // unsafe-filtered-vrps
-    writeln!(res,
-        "unsafe-vrps: {}",
-        metrics.payload.vrps().marked_unsafe
-    );
-
-    // unsafe-vrps-per-tal
-    write!(res, "unsafe-filtered-vrps-per-tal: ");
-    for tal in &metrics.tals {
-        write!(res,
-            "{}={} ",
-            tal.name(),
-            tal.payload.vrps().marked_unsafe
+    if unsafe_vrps.log() {
+        // unsafe-filtered-vrps
+        writeln!(res,
+            "unsafe-vrps: {}",
+            metrics.payload.vrps().marked_unsafe
         );
+
+        // unsafe-vrps-per-tal
+        write!(res, "unsafe-filtered-vrps-per-tal: ");
+        for tal in &metrics.tals {
+            write!(res,
+                "{}={} ",
+                tal.name(),
+                tal.payload.vrps().marked_unsafe
+            );
+        }
+        writeln!(res);
     }
-    writeln!(res);
 
     // locally-filtered-vrps
     writeln!(res,

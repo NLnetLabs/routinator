@@ -55,16 +55,20 @@ pub struct ValidationReport {
     /// certificate are added to this.
     rejected: RejectedResourcesBuilder,
 
+    /// Should we log rejected resources?
+    log_rejected: bool,
+
     /// Should we include BGPsec router keys?
     enable_bgpsec: bool,
 }
 
 impl ValidationReport {
     /// Creates a new, empty validation report.
-    pub fn new(enable_bgpsec: bool) -> Self {
+    pub fn new(log_rejected: bool, enable_bgpsec: bool) -> Self {
         ValidationReport {
             pub_points: Default::default(),
             rejected: Default::default(),
+            log_rejected,
             enable_bgpsec
         }
     }
@@ -211,18 +215,20 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
     }
 
     fn cancel(self, cert: &CaCert) {
-        warn!(
-            "CA for {} rejected, resources marked as unsafe:",
-            cert.ca_repository()
-        );
-        for block in cert.cert().v4_resources().iter() {
-            warn!("   {}", block.display_v4());
-        }
-        for block in cert.cert().v6_resources().iter() {
-            warn!("   {}", block.display_v6());
-        }
-        for block in cert.cert().as_resources().iter() {
-            warn!("   {}", block);
+        if self.report.log_rejected {
+            warn!(
+                "CA for {} rejected, resources marked as unsafe:",
+                cert.ca_repository()
+            );
+            for block in cert.cert().v4_resources().iter() {
+                warn!("   {}", block.display_v4());
+            }
+            for block in cert.cert().v6_resources().iter() {
+                warn!("   {}", block.display_v6());
+            }
+            for block in cert.cert().as_resources().iter() {
+                warn!("   {}", block);
+            }
         }
         self.report.rejected.extend_from_cert(cert);
     }
@@ -791,6 +797,11 @@ impl PayloadHistory {
     pub fn created(&self) -> Option<DateTime<Utc>> {
         self.created
     }
+
+    /// Returns the unsafe VRP policy.
+    pub fn unsafe_vrps(&self) -> FilterPolicy {
+        self.unsafe_vrps
+    }
 }
 
 
@@ -1157,6 +1168,7 @@ impl SnapshotBuilder {
             refresh: None
         };
         let rejected = report.rejected.finalize();
+        let mut unsafe_vrps_present = false;
 
         // Process all publication points from the report.
         while let Some(pub_point) = report.pub_points.pop() {
@@ -1172,6 +1184,7 @@ impl SnapshotBuilder {
                 if let Payload::Origin(origin) = payload {
                     // Does the origin have rejected resources?
                     if !rejected.keep_prefix(origin.prefix.prefix()) {
+                        unsafe_vrps_present = true;
                         match unsafe_vrps {
                             FilterPolicy::Accept => {
                                 // Don’t count, don’t warn ...
@@ -1222,6 +1235,14 @@ impl SnapshotBuilder {
                     }
                 }
             }
+        }
+
+        if unsafe_vrps_present && unsafe_vrps.log()  {
+            warn!(
+                "For more information on unsafe VRPs, see \
+                 https://routinator.docs.nlnetlabs.nl\
+                 /en/stable/unsafe-vrps.html"
+            );
         }
 
         // Add the assertions from the local exceptions.

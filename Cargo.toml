@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.12.0-dev"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.60"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -17,7 +17,7 @@ exclude = [ ".github" ]
 base64          = "0.13.0"
 bytes           = "1.0.0"
 chrono          = "0.4.11"
-clap            = { version = "2.33.0", features = [ "wrap_help" ] }
+clap            = { version = "4", features = [ "wrap_help", "cargo" ] }
 crossbeam-queue = "0.3.1"
 crossbeam-utils = "0.8.1"
 dirs            = "4.0.0"
@@ -116,13 +116,11 @@ assets = [
     { source = "etc/routinator.conf.system-service", dest = "/etc/routinator/routinator.conf", mode = "644", config = true },
     { source = "pkg/common/routinator-init", dest = "/usr/bin/routinator-init", mode = "755" },
     { source = "pkg/common/service.preset", dest = "/lib/systemd/system-preset/50-routinator.preset", mode = "644" },
-    { source = "pkg/rpm/postinst", dest = "/usr/share/routinator/rpm/postinst", mode = "755" },
-    { source = "pkg/rpm/preuninst", dest = "/usr/share/routinator/rpm/preuninst", mode = "755" },
-    { source = "pkg/rpm/postuninst", dest = "/usr/share/routinator/rpm/postuninst", mode = "755" },
 ]
-post_install_script = "/usr/share/routinator/rpm/postinst $*"
-pre_uninstall_script = "/usr/share/routinator/rpm/preuninst $*"
-post_uninstall_script = "/usr/share/routinator/rpm/postuninst $*"
+# These get set using cargo-generate-rpm --set-metadata at package build time.
+#post_install_script = ...
+#pre_uninstall_script = ...
+#post_uninstall_script = ...
 
 # ensure that the useradd and rsync tools are present by installing their respective packages
 [package.metadata.generate-rpm.requires]

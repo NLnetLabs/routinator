@@ -2,7 +2,7 @@
 
 use std::env::current_dir;
 use std::process::exit;
-use clap::{App, crate_authors, crate_version};
+use clap::{Command, crate_authors, crate_version};
 use log::error;
 use routinator::{Config, ExitError, Operation};
 
@@ -22,7 +22,7 @@ fn _main() -> Result<(), ExitError> {
         }
     };
     let matches = Operation::config_args(Config::config_args(
-        App::new("Routinator")
+        Command::new("Routinator")
             .version(crate_version!())
             .author(crate_authors!())
             .about("collects and processes RPKI repository data")

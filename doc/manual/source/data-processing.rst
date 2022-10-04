@@ -124,6 +124,8 @@ these types of VRPs. Currently, the default policy is *warn* in order to gain
 operational experience with the frequency and impact of unsafe VRPs. This
 default may change in future version.
 
+You can learn more about this topic in the :doc:`unsafe-vrps` section.
+
 Storing
 -------
 
