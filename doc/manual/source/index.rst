@@ -105,6 +105,7 @@ Open-source with professional support services
    manual-page
    json-metrics
    prometheus-metrics
+   unsafe-vrps
    advanced-features
    glossary
 
