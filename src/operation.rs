@@ -894,11 +894,11 @@ enum ValidateWhat {
 #[derive(Clone, Debug, Parser)]
 struct ValidateArgs {
     /// Address prefix of the announcement
-    #[arg(short, long, requires = "asn", conflicts_with = "input-file")]
+    #[arg(short, long, requires = "asn", conflicts_with = "input")]
     prefix: Option<addr::Prefix>,
 
     /// Origin AS number of the announcement
-    #[arg(short, long, requires = "prefix", conflicts_with = "input-file")]
+    #[arg(short, long, requires = "prefix", conflicts_with = "input")]
     asn: Option<Asn>,
 
     /// Expect input and produce output in JSON

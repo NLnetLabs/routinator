@@ -1544,7 +1544,7 @@ struct GlobalArgs {
     tal_dir: Option<PathBuf>,
 
     /// File with local exceptions (see RFC 8416 for format)
-    #[arg(short, long, value_name="PATH")]
+    #[arg(short = 'x', long, value_name="PATH")]
     exceptions: Option<Vec<PathBuf>>,
 
     /// Parse RPKI data in strict mode
