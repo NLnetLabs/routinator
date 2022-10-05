@@ -87,6 +87,7 @@ use crate::metrics::Metrics;
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse};
 use crate::utils::dump::DumpRegistry;
+use crate::utils::fatal::IoErrorDisplay;
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
 
@@ -422,7 +423,7 @@ impl Store {
                 Err(err) => {
                     error!(
                         "Fatal: failed to create temporary file {}: {}",
-                        tmp_path.display(), err
+                        tmp_path.display(), IoErrorDisplay(err)
                     );
                     return Err(Failed)
                 }
@@ -483,7 +484,7 @@ impl<'a> Run<'a> {
                 Time::now(), tals
             ).write(&mut file) {
                 error!("Fatal: failed to write store status to {}: {}",
-                    path.display(), err
+                    path.display(), IoErrorDisplay(err)
                 );
                 return Err(Failed);
             }
@@ -867,7 +868,7 @@ impl<'a> StoredPoint<'a> {
         if let Err(err) = manifest.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_path.display(), err
+                tmp_path.display(), IoErrorDisplay(err)
             );
             return Err(UpdateError::Fatal)
         }
@@ -888,7 +889,7 @@ impl<'a> StoredPoint<'a> {
                     if let Err(err) = object.write(&mut tmp_file) {
                         error!(
                             "Fatal: failed to write to file {}: {}",
-                            tmp_path.display(), err
+                            tmp_path.display(), IoErrorDisplay(err)
                         );
                         return Err(UpdateError::Fatal)
                     }

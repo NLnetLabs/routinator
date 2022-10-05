@@ -271,7 +271,7 @@ pub fn create_file(path: &Path) -> Result<File, Failed> {
     File::create(path).map_err(|err| {
         error!(
             "Fatal: failed to create file {}: {}",
-            path.display(), err
+            path.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -366,7 +366,11 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
 
 //------------ IoErrorDisplay ------------------------------------------------
 
-struct IoErrorDisplay(io::Error);
+/// Wrap an `io::Error` for adjusted displaying.
+///
+/// Currently, this type merely mentions inodes when running out of space on
+/// Unix.
+pub struct IoErrorDisplay(pub io::Error);
 
 #[cfg(unix)]
 impl fmt::Display for IoErrorDisplay {
