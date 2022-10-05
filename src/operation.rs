@@ -22,10 +22,10 @@ use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 #[cfg(feature = "rta")] use bytes::Bytes;
-use clap::{Arg, ArgAction, ArgMatches};
+use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
 use log::{error, info};
 use routecore::addr;
-use rpki::repository::resources::Asn;
+use rpki::repository::resources::{Asn};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
@@ -258,6 +258,7 @@ impl Init {
                 cmd = cmd.arg(
                     Arg::new(opt_in.option_name)
                     .long(opt_in.option_name)
+                    .action(ArgAction::SetTrue)
                     .help(opt_in.option_help)
                 );
             }
@@ -469,28 +470,29 @@ impl Init {
 //------------ Server --------------------------------------------------------
 
 /// Run as server.
+#[derive(Clone, Debug, Parser)]
 pub struct Server {
-    /// Detach from the terminal.
-    ///
-    /// If this is `false`, we just start the server and keep going. If
-    /// this is `true`, we detach from the terminal into daemon mode
-    /// which has a few extra consequences.
+    /// Detach from the terminal
+    //
+    // If this is `false`, we just start the server and keep going. If
+    // this is `true`, we detach from the terminal into daemon mode
+    // which has a few extra consequences.
+    #[arg(short, long)]
     detach: bool,
 }
 
 impl Server {
     /// Adds the command configuration to a clap app.
-    pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(Config::server_args(clap::Command::new("server")
-            .about("Starts as a server")
-            .arg(Arg::new("detach")
-                .short('d')
-                .long("detach")
-                .action(ArgAction::SetTrue)
-                .help("Detach from the terminal")
+    pub fn config_args(app: clap::Command) -> clap::Command {
+        app.subcommand(
+            Config::server_args(
+                Server::augment_args(
+                    clap::Command::new("server")
+                    .about("Starts as a server")
+                    .after_help(AFTER_HELP)
+                )
             )
-            .after_help(AFTER_HELP)
-        ))
+       )
     }
 
     /// Creates a command from clap matches.
@@ -500,9 +502,7 @@ impl Server {
         config: &mut Config
     ) -> Result<Self, Failed> {
         config.apply_server_arg_matches(matches, cur_dir)?;
-        Ok(Server {
-            detach: matches.get_flag("detach")
-        })
+        Ok(<Server as FromArgMatches>::from_arg_matches(matches).unwrap())
     }
 
     /// Starts Routinator in server mode.
@@ -685,59 +685,58 @@ pub struct Vrps {
     complete: bool,
 }
 
+/// The command line arguments for the vrps sub-command.
+#[derive(Clone, Debug, Parser)]
+struct VrpsArgs {
+    /// The destination of the output list
+    #[arg(short, long, value_name = "PATH", default_value = "-")]
+    output: PathBuf,
+
+    /// The format of the output list
+    #[arg(
+        short, long, value_name = "FORMAT",
+        default_value = OutputFormat::DEFAULT_VALUE,
+    )]
+    format: String,
+
+    /// Only include records for the given prefix
+    #[arg(
+        short = 'p',
+        long, alias = "filter-prefix",
+        value_name = "PREFIX"
+    )]
+    select_prefix: Option<Vec<addr::Prefix>>,
+
+    /// Only include records for the given AS number
+    #[arg(
+        short = 'a',
+        long, alias = "filter-asn",
+        value_name = "ASN"
+    )]
+    select_asn: Option<Vec<Asn>>,
+
+    /// Include more specific prefixes in selected output
+    #[arg(short, long)]
+    more_specifics: bool,
+
+    /// Don't update the local cache
+    #[arg(short, long)]
+    noupdate: bool,
+
+    /// Return an error status on incomplete update
+    #[arg(long)]
+    complete: bool,
+}
+
 impl Vrps {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(clap::Command::new("vrps")
-            .about("Produces a list of validated ROA payload")
-            .arg(Arg::new("output")
-                .short('o')
-                .long("output")
-                .value_name("FILE")
-                .default_value("-")
-                .action(ArgAction::Set)
-                .help("Output file")
+        app.subcommand(
+            VrpsArgs::augment_args(
+                clap::Command::new("vrps")
+                    .about("Produces a list of validated ROA payload")
+                    .after_help(AFTER_HELP)
             )
-            .arg(Arg::new("format")
-                .short('f')
-                .long("format")
-                .value_name("FORMAT")
-                .default_value(OutputFormat::DEFAULT_VALUE)
-                .action(ArgAction::Set)
-                .help("Sets the output format")
-            )
-            .arg(Arg::new("noupdate")
-                .short('n')
-                .long("noupdate")
-                .action(ArgAction::SetTrue)
-                .help("Don't update the local cache")
-            )
-            .arg(Arg::new("complete")
-                .long("complete")
-                .action(ArgAction::SetTrue)
-                .help("Return an error status on incomplete update")
-            )
-            .arg(Arg::new("select-prefix")
-                .short('p')
-                .long("select-prefix")
-                .alias("filter-prefix")
-                .action(ArgAction::Append)
-                .help("Filter for an address prefix")
-            )
-            .arg(Arg::new("select-asn")
-                .short('a')
-                .long("select-asn")
-                .alias("filter-asn")
-                .action(ArgAction::Append)
-                .help("Filter for an AS number")
-            )
-            .arg(Arg::new("more-specifics")
-                .short('m')
-                .long("more-specifics")
-                .action(ArgAction::SetTrue)
-                .help("Include more specific prefixes in selected output")
-            )
-            .after_help(AFTER_HELP)
         )
     }
 
@@ -745,72 +744,51 @@ impl Vrps {
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
-        let format = matches.get_one::<String>(
-            "format"
-        ).cloned().unwrap_or_else(|| OutputFormat::DEFAULT_VALUE.into());
-        let format = match OutputFormat::from_str(&format) {
+        let args = VrpsArgs::from_arg_matches(matches).unwrap();
+
+        let format = match OutputFormat::from_str(&args.format) {
             Ok(format) => format,
             Err(_) => {
-                error!("Unknown output format '{}'", format);
+                error!("Unknown output format '{}'", args.format);
                 return Err(Failed)
             }
         };
-        let output = matches.get_one::<String>("output").unwrap();
-        let output = if output == "-" {
+
+        let output = if args.output == Path::new("-") {
             None
         }
         else {
-            Some(output.into())
+            Some(args.output)
         };
+
+        let selection = if
+            args.select_prefix.is_none() && args.select_asn.is_none()
+        {
+            None
+        }
+        else {
+            let mut selection = output::Selection::new();
+            if let Some(list) = args.select_prefix {
+                for value in list {
+                    selection.push_origin_prefix(value)
+                }
+            }
+            if let Some(list) = args.select_asn {
+                for value in list {
+                    selection.push_origin_asn(value)
+                }
+            }
+            selection.set_more_specifics(args.more_specifics);
+            Some(selection)
+        };
+
         Ok(Vrps {
-            selection: Self::output_selection(matches)?,
             output,
             format,
-            noupdate: matches.get_flag("noupdate"),
-            complete: matches.get_flag("complete"),
+            noupdate: args.noupdate,
+            complete: args.complete,
+            selection,
         })
-    }
-
-    /// Creates the selection for the vrps command.
-    fn output_selection(
-        matches: &ArgMatches
-    ) -> Result<Option<output::Selection>, Failed> {
-        let select_prefix = matches.get_many::<String>("select-prefix");
-        let select_asn = matches.get_many::<String>("select-asn");
-        if select_prefix.is_none() && select_asn.is_none() {
-            return Ok(None)
-        }
-        let mut res = output::Selection::new();
-        if let Some(list) = select_prefix {
-            for value in list {
-                match addr::Prefix::from_str(value) {
-                    Ok(some) => res.push_origin_prefix(some),
-                    Err(_) => {
-                        error!(
-                            "Invalid prefix \"{}\" in --select-prefix",
-                            value
-                        );
-                        return Err(Failed)
-                    }
-                }
-            }
-        }
-        if let Some(list) = select_asn {
-            for value in list {
-                match Asn::from_str(value) {
-                    Ok(asn) => res.push_origin_asn(asn),
-                    Err(_) => {
-                        error!(
-                            "Invalid ASN \"{}\" in --select-asn",
-                            value
-                        );
-                        return Err(Failed)
-                    }
-                }
-            }
-        }
-        res.set_more_specifics(matches.get_flag("more-specifics"));
-        Ok(Some(res))
     }
 
     /// Produces a list of Validated ROA Payload.
@@ -912,123 +890,95 @@ enum ValidateWhat {
     Stdin,
 }
 
+/// The command line arguments for the validate sub-command.
+#[derive(Clone, Debug, Parser)]
+struct ValidateArgs {
+    /// Address prefix of the announcement
+    #[arg(short, long, requires = "asn", conflicts_with = "input-file")]
+    prefix: Option<addr::Prefix>,
+
+    /// Origin AS number of the announcement
+    #[arg(short, long, requires = "prefix", conflicts_with = "input-file")]
+    asn: Option<Asn>,
+
+    /// Expect input and produce output in JSON
+    #[arg(short, long)]
+    json: bool,
+
+    /// Read routes from a file
+    #[arg(
+        short, long, value_name = "PATH",
+        conflicts_with_all = &["prefix", "asn"]
+    )]
+    input: Option<PathBuf>,
+
+    /// Write output to a file
+    #[arg(short, long, value_name = "PATH", default_value = "-")]
+    output: PathBuf,
+
+    /// Don't update the local cache
+    #[arg(short, long)]
+    noupdate: bool,
+
+    /// Return an error status on incomplete update
+    #[arg(long)]
+    complete: bool,
+}
+
 impl Validate {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(clap::Command::new("validate")
-            .about("Validates a route announcement")
-            .arg(Arg::new("prefix")
-                .short('p')
-                .long("prefix")
-                .requires("asn")
-                .conflicts_with("input-file")
-                .action(ArgAction::Set)
-                .help("Address prefix of the announcement")
+        app.subcommand(
+            ValidateArgs::augment_args(
+                clap::Command::new("validate")
+                    .about("Validates a route announcement")
+                    .after_help(AFTER_HELP)
             )
-            .arg(Arg::new("asn")
-                .short('a')
-                .long("asn")
-                .action(ArgAction::Set)
-                .requires("prefix")
-                .conflicts_with("input-file")
-                .help("Origin AS number of the announcement")
-            )
-            .arg(Arg::new("json")
-                .short('j')
-                .long("json")
-                .action(ArgAction::SetTrue)
-                .help("Expect input and produce output in JSON")
-            )
-            .arg(Arg::new("input-file")
-                .short('i')
-                .long("input")
-                .value_name("FILE")
-                .conflicts_with_all(&["prefix", "asn"])
-                .action(ArgAction::Set)
-                .help("Read routes from a file")
-            )
-            .arg(Arg::new("output-file")
-                .short('o')
-                .long("output")
-                .value_name("FILE")
-                .default_value("-")
-                .action(ArgAction::Set)
-                .help("Write output to a file")
-            )
-            .arg(Arg::new("noupdate")
-                .short('n')
-                .long("noupdate")
-                .action(ArgAction::SetTrue)
-                .help("Don't update the local cache")
-            )
-            .arg(Arg::new("complete")
-                .long("complete")
-                .action(ArgAction::SetTrue)
-                .help("Return an error status on incomplete update")
-            )
-            .after_help(AFTER_HELP)
         )
     }
 
     /// Creates a command from clap matches.
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
+        let args = ValidateArgs::from_arg_matches(matches).unwrap();
+
         Ok(Validate {
-            what: if let Some(path) = matches.get_one::<String>("input-file") {
-                if path == "-" {
+            what: if let Some(path) = args.input {
+                if path == Path::new("-") {
                     ValidateWhat::Stdin
                 }
                 else {
-                    ValidateWhat::File(path.into())
+                    ValidateWhat::File(path)
                 }
             }
             else {
                 ValidateWhat::Single(
-                    {
-                        let prefix = match matches.get_one::<String>("prefix") {
-                            Some(prefix) => prefix,
-                            None => {
-                                error!("Missing required --prefix argument");
-                                return Err(Failed)
-                            }
-                        };
-                        match addr::Prefix::from_str(prefix) {
-                            Ok(prefix) => prefix,
-                            Err(err) => {
-                                error!("illegal address prefix: {}", err);
-                                return Err(Failed);
-                            }
+                    match args.prefix {
+                        Some(prefix) => prefix,
+                        None => {
+                            error!("Missing required --prefix argument");
+                            return Err(Failed)
                         }
                     },
-                    {
-                        let asn = match matches.get_one::<String>("asn") {
-                            Some(asn) => asn,
-                            None => {
-                                error!("Missing required --asn argument");
-                                return Err(Failed)
-                            }
-                        };
-                        match Asn::from_str(asn) {
-                            Ok(asn) => asn,
-                            Err(_) => {
-                                error!("illegal AS number");
-                                return Err(Failed);
-                            }
+                    match args.asn {
+                        Some(asn) => asn,
+                        None => {
+                            error!("Missing required --asn argument");
+                            return Err(Failed)
                         }
                     },
                 )
             },
-            json: matches.get_flag("json"),
+            json: args.json,
             output: {
-                let val = matches.get_one::<String>("output-file").unwrap();
-                if val == "-" {
+                if args.output == Path::new("-") {
                     None
                 }
                 else {
-                    Some(val.clone().into())
+                    Some(args.output)
                 }
             },
-            noupdate: matches.get_flag("noupdate"),
-            complete: matches.get_flag("complete"),
+            noupdate: args.noupdate,
+            complete: args.complete,
         })
     }
 
@@ -1185,14 +1135,18 @@ impl Validate {
 ///
 /// Performs a validation run in order to find the necessary certificates.
 #[cfg(feature = "rta")]
+#[derive(Clone, Debug, Parser)]
 pub struct ValidateDocument {
     /// Path to the signed document.
+    #[arg(long, value_name = "PATH")]
     document: PathBuf,
 
-    /// Path to the signature.
+    /// Path to the signature file.
+    #[arg(long, value_name = "PATH")]
     signature: PathBuf,
 
     /// Don’t update the repository.
+    #[arg(short, long)]
     noupdate: bool,
 }
 
@@ -1200,24 +1154,12 @@ pub struct ValidateDocument {
 impl ValidateDocument {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(clap::Command::new("rta")
-            .about("Validates an RTA-signed document")
-            .arg(Arg::new("noupdate")
-                .short('n')
-                .long("noupdate")
-                .help("Don't update the local cache")
+        app.subcommand(
+            ValidateDocument::augment_args(
+                clap::Command::new("rta")
+                .about("Validates an RTA-signed document")
+                .after_help(AFTER_HELP)
             )
-            .arg(Arg::new("document")
-                .value_name("DOCUMENT")
-                .required(true)
-                .help("Path to the signed document")
-            )
-            .arg(Arg::new("signature")
-                .value_name("SIGNATURE")
-                .required(true)
-                .help("Path to the signature")
-            )
-            .after_help(AFTER_HELP)
         )
     }
 
@@ -1225,11 +1167,11 @@ impl ValidateDocument {
     pub fn from_arg_matches(
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
-        Ok(ValidateDocument {
-            document: matches.get_one::<String>("document").unwrap().into(),
-            signature: matches.get_one::<String>("signature").unwrap().into(),
-            noupdate: matches.get_flag("noupdate"),
-        })
+        Ok(
+            <ValidateDocument as FromArgMatches>::from_arg_matches(
+                matches
+            ).unwrap()
+        )
     }
 
     /// Tries to validate a document through RTA signatures.
@@ -1325,29 +1267,28 @@ impl ValidateDocument {
 ///
 /// This will also do a validation run in order to discover possible new
 /// publication points.
+#[derive(Clone, Debug, Parser)]
 pub struct Update {
     /// Return an error on incomplete update.
+    #[arg(short, long)]
     complete: bool,
 }
 
 impl Update {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(clap::Command::new("update")
-            .about("Updates the local RPKI repository")
-            .arg(Arg::new("complete")
-                .long("complete")
-                .help("Return an error status on incomplete update")
+        app.subcommand(
+            Update::augment_args(
+                clap::Command::new("update")
+                    .about("Updates the local RPKI repository")
+                    .after_help(AFTER_HELP)
             )
-            .after_help(AFTER_HELP)
         )
     }
 
     /// Creates a command from clap matches.
     pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
-        Ok(Update {
-            complete: matches.get_flag("complete"),
-        })
+        Ok(<Update as FromArgMatches>::from_arg_matches(matches).unwrap())
     }
 
     /// Updates the repository.
@@ -1412,8 +1353,10 @@ impl PrintConfig {
 //------------ Dump ----------------------------------------------------------
 
 /// Dumps the database content.
+#[derive(Clone, Debug, Parser)]
 pub struct Dump {
-    /// The output directory.
+    /// Output directory.
+    #[arg(short, long, value_name = "PATH")]
     output: PathBuf,
 }
 
@@ -1421,16 +1364,12 @@ impl Dump {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
         // config
-        app.subcommand(clap::Command::new("dump")
-            .about("Writes the cache content to disk")
-            .arg(Arg::new("output")
-                .short('o')
-                .long("output")
-                .value_name("DIR")
-                .action(ArgAction::Set)
-                .help("Output directory")
+        app.subcommand(
+            Dump::augment_args(
+                clap::Command::new("dump")
+                    .about("Writes the cache content to disk")
+                    .after_help(AFTER_HELP)
             )
-            .after_help(AFTER_HELP)
         )
     }
 
@@ -1439,13 +1378,10 @@ impl Dump {
         matches: &ArgMatches,
         cur_dir: &Path,
     ) -> Result<Self, Failed> {
-        Ok(Dump {
-            output: {
-                matches.get_one::<String>("output").map(|path| {
-                    cur_dir.join(path)
-                }).unwrap_or_else(|| cur_dir.into())
-            }
-        })
+        let mut res =
+            <Dump as FromArgMatches>::from_arg_matches(matches).unwrap();
+        res.output = cur_dir.join(res.output);
+        Ok(res)
     }
 
     /// Prints the current configuration to stdout and exits.
