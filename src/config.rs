@@ -606,7 +606,7 @@ impl Config {
     #[allow(clippy::unnecessary_wraps)]
     fn apply_log_matches(
         &mut self,
-        matches: &ArgMatches,
+        args: &GlobalArgs,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
         if let Some(file) = args.logfile.as_ref() {
