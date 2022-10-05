@@ -4,7 +4,7 @@
 /// `std::fs` that instead of returning `std::io::Error` log that error and
 /// return our own [`Failed`] instead.
 
-use std::{fs, io};
+use std::{fmt, fs, io};
 use std::ffi::{OsStr, OsString};
 use std::fs::{File, Metadata};
 use std::path::{Path, PathBuf};
@@ -89,7 +89,7 @@ impl<'a> Iterator for ReadDir<'a> {
             Err(err) => {
                 error!(
                     "Fatal: failed to read directory {}: {}",
-                    self.path.display(), err
+                    self.path.display(), IoErrorDisplay(err)
                 );
                 return Some(Err(Failed))
             }
@@ -99,7 +99,7 @@ impl<'a> Iterator for ReadDir<'a> {
             Err(err) => {
                 error!(
                     "Fatal: failed to read directory {}: {}",
-                    self.path.display(), err
+                    self.path.display(), IoErrorDisplay(err)
                 );
                 return Some(Err(Failed))
             }
@@ -122,7 +122,7 @@ pub fn read_dir(path: &Path) -> Result<ReadDir, Failed> {
         Err(err) => {
             error!(
                 "Fatal: failed to open directory {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             Err(Failed)
         }
@@ -142,7 +142,7 @@ pub fn read_existing_dir(path: &Path) -> Result<Option<ReadDir>, Failed> {
         Err(err) => {
             error!(
                 "Fatal: failed to open directory {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             Err(Failed)
         }
@@ -157,7 +157,7 @@ pub fn create_dir_all(path: &Path) -> Result<(), Failed> {
     fs::create_dir_all(path).map_err(|err| {
         error!(
             "Fatal: failed to create directory {}: {}",
-            path.display(), err
+            path.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -172,7 +172,7 @@ pub fn create_parent_all(path: &Path) -> Result<(), Failed> {
         fs::create_dir_all(path).map_err(|err| {
             error!(
                 "Fatal: failed to create directory {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             Failed
         })?
@@ -189,7 +189,7 @@ pub fn remove_dir_all(path: &Path) -> Result<(), Failed> {
         if err.kind() != io::ErrorKind::NotFound {
             error!(
                 "Fatal: failed to remove directory tree {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             return Err(Failed)
         }
@@ -208,7 +208,7 @@ pub fn remove_file(path: &Path) -> Result<(), Failed> {
         if err.kind() != io::ErrorKind::NotFound {
             error!(
                 "Fatal: failed to remove file {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             return Err(Failed)
         }
@@ -239,7 +239,7 @@ pub fn rename(source: &Path, target: &Path) -> Result<(), Failed> {
     fs::rename(source, target).map_err(|err| {
         error!(
             "Fatal: failed to move {} to {}: {}",
-            source.display(), target.display(), err
+            source.display(), target.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -255,7 +255,7 @@ pub fn open_file(path: &Path) -> Result<File, Failed> {
     File::open(path).map_err(|err| {
         error!(
             "Fatal: failed to open file {}: {}",
-            path.display(), err
+            path.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -287,7 +287,7 @@ pub fn read_file(path: &Path) -> Result<Vec<u8>, Failed> {
     fs::read(path).map_err(|err| {
         error!(
             "Fatal: failed to read file {}: {}",
-            path.display(), err
+            path.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -307,7 +307,7 @@ pub fn read_existing_file(path: &Path) -> Result<Option<Vec<u8>>, Failed> {
         Err(err) => {
             error!(
                 "Fatal: failed to read file {}: {}",
-                path.display(), err
+                path.display(), IoErrorDisplay(err)
             );
             Err(Failed)
         }
@@ -325,7 +325,7 @@ pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
     fs::write(path, contents).map_err(|err| {
         error!(
             "Fatal: failed to write file {}: {}",
-            path.display(), err
+            path.display(), IoErrorDisplay(err)
         );
         Failed
     })
@@ -348,7 +348,7 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
             ) {
                 error!(
                     "Fatal: failed to copy {}: {}",
-                    entry.path().display(), err
+                    entry.path().display(), IoErrorDisplay(err)
                 );
                 return Err(Failed)
             }
@@ -361,5 +361,35 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
         }
     }
     Ok(())
+}
+
+
+//------------ IoErrorDisplay ------------------------------------------------
+
+struct IoErrorDisplay(io::Error);
+
+#[cfg(unix)]
+impl fmt::Display for IoErrorDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use nix::errno::Errno;
+
+        if matches!(
+            self.0.raw_os_error().map(Errno::from_i32),
+            Some(Errno::ENOSPC)
+        ) {
+            f.write_str("No space or inodes left on device")
+        }
+        else {
+            self.0.fmt(f)
+        }
+    }
+}
+
+
+#[cfg(not(unix))]
+impl fmt::Display for IoErrorDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
