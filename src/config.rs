@@ -2489,24 +2489,6 @@ mod test {
     }
 
     #[test]
-    fn bad_config_file() {
-        let config = ConfigFile::parse(
-            "", Path::new("/test/routinator.conf")
-        ).unwrap();
-        assert!(Config::from_config_file(config).is_err());
-        let config = ConfigFile::parse(
-            "repository-dir=\"bla\"",
-            Path::new("/test/routinator.conf")
-        ).unwrap();
-        assert!(Config::from_config_file(config).is_err());
-        let config = ConfigFile::parse(
-            "tal-dir=\"bla\"",
-            Path::new("/test/routinator.conf")
-        ).unwrap();
-        assert!(Config::from_config_file(config).is_err());
-    }
-
-    #[test]
     fn read_your_own_config() {
         let out_config = get_default_config();
         let out_file = format!("{}", out_config.to_toml());
@@ -2521,13 +2503,12 @@ mod test {
     #[cfg(unix)]
     fn basic_args() {
         let config = process_basic_args(&[
-            "routinator", "-r", "/repository", "-t", "tals",
+            "routinator", "-r", "/repository",
             "-x", "/x1", "--exceptions", "x2", "--strict",
             "--validation-threads", "2000",
             "--syslog", "--syslog-facility", "auth"
         ]);
         assert_eq!(config.cache_dir, Path::new("/repository"));
-        assert_eq!(config.tal_dir.unwrap(), Path::new("/test/tals"));
         assert_eq!(
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
