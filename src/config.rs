@@ -307,10 +307,9 @@ pub struct Config {
 
 
 impl Config {
-    /// Adds the basic arguments to a clapp app.
+    /// Adds the basic arguments to a Clap command.
     ///
-    /// The function follows clap’s builder pattern: it takes an app,
-    /// adds a bunch of arguments to it and returns it at the end.
+    /// Returns the command with the arguments added.
     pub fn config_args(app: Command) -> Command {
         GlobalArgs::augment_args(app)
     }
@@ -323,8 +322,7 @@ impl Config {
     /// server. This function adds the relevant arguments to the subcommand
     /// provided via `app`.
     ///
-    /// It follows clap’s builder pattern and returns the app with all
-    /// arguments added.
+    /// Returns the command with the arguments added.
     pub fn server_args(app: Command) -> Command {
         ServerArgs::augment_args(app)
     }
