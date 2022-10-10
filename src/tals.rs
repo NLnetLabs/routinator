@@ -1,5 +1,79 @@
 //! The TALs bundled with Routinator.
 
+use std::collections::HashMap;
+use log::error;
+use rpki::repository::tal::Tal;
+use crate::config::Config;
+use crate::error::Failed;
+
+
+//------------ collect_tals --------------------------------------------------
+
+/// Produces the set of bundled TALs to use from config.
+pub fn collect_tals(config: &Config) -> Result<Vec<Tal>, Failed> {
+    let mut res = HashMap::new();
+
+    // Add all explicitely mentioned TALs.
+    for name in &config.bundled_tals {
+        let mut added = false;
+        for tal in BUNDLED_TALS {
+            if tal.name == name {
+                if !res.contains_key(tal.name) {
+                    res.insert(tal.name.to_string(), tal.to_tal());
+                }
+                added = true;
+                break;
+            }
+        }
+        if !added {
+            error!("Unknown TAL '{}' in --tal option", name);
+            return Err(Failed)
+        }
+    }
+
+    // Add all the RIR TALs unless specifically disabled.
+    //
+    // (We are doing this second because it cannot ever fail.)
+    if !config.no_rir_tals {
+        for tal in BUNDLED_TALS {
+            if
+                tal.category == Category::Production
+                && !res.contains_key(tal.name)
+            {
+                res.insert(tal.name.to_string(), tal.to_tal());
+
+            }
+        }
+    }
+
+    Ok(res.into_values().collect())
+}
+
+
+//------------ print_tals ----------------------------------------------------
+
+/// Prints all the bundled TALs to stdout.
+pub fn print_tals() {
+    let max_len = BUNDLED_TALS.iter().map(|tal| 
+        tal.name.len()
+    ).max().unwrap_or(0) + 2;
+
+    println!(" .---- --rir-tals");
+    println!(" |  .- --rir-test-tals");
+    println!(" V  V\n");
+
+    for tal in BUNDLED_TALS {
+        match tal.category {
+            Category::Production => print!(" X      "),
+            Category::RirTest => print!("    X   "),
+            _ => print!("        "),
+        }
+        println!(
+            "{:width$} {}", tal.name, tal.description, width = max_len
+        );
+    }
+}
+
 
 //------------ BundledTal ----------------------------------------------------
 
@@ -14,26 +88,16 @@ pub struct BundledTal {
     /// The category of the TAL.
     pub category: Category,
 
-    /// Does this TAL need explicit opt-in and if so, how is it to be done?
-    pub opt_in: Option<OptIn>,
-
     /// The actual content of the TAL.
     pub content: &'static str,
 }
 
-
-//------------ OptIn ---------------------------------------------------------
-
-/// Information about performing the opt-in procedure for some TALs.
-pub struct OptIn {
-    /// The command line option for explicitely opting in.
-    pub option_name: &'static str,
-
-    /// The help text for the command line option.
-    pub option_help: &'static str,
-
-    /// The text to show when opt-in is missing.
-    pub message: &'static str,
+impl BundledTal {
+    fn to_tal(&self) -> Tal {
+        Tal::read_named(
+            self.name.into(), &mut self.content.as_bytes()
+        ).expect("bundled broken TAL")
+    }
 }
 
 
@@ -67,49 +131,30 @@ pub static BUNDLED_TALS: &[BundledTal] = &[
         name: "afrinic",
         description: "AFRINIC production TAL",
         category: Category::Production,
-        opt_in: None,
         content: include_str!("../tals/afrinic.tal"),
     },
     BundledTal {
         name: "apnic",
         description: "APNIC production TAL",
         category: Category::Production,
-        opt_in: None,
         content: include_str!("../tals/apnic.tal"),
     },
     BundledTal {
         name: "arin",
         description: "ARIN production TAL",
         category: Category::Production,
-        opt_in: Some(OptIn {
-            option_name: "accept-arin-rpa",
-            option_help:
-                "You have read and accept \
-                 https://www.arin.net/resources/manage/rpki/rpa.pdf",
-            message:
-                "Before we can install the ARIN TAL, you must have read\n\
-                 and agree to the ARIN Relying Party Agreement (RPA).\n\
-                 It is available at\n\
-                 \n\
-                 https://www.arin.net/resources/manage/rpki/rpa.pdf\n\
-                 \n\
-                 If you agree to the RPA, please run the command\n\
-                 again with the --accept-arin-rpa option."
-        }),
         content: include_str!("../tals/arin.tal"),
     },
     BundledTal {
         name: "lacnic",
         description: "LACNIC production TAL",
         category: Category::Production,
-        opt_in: None,
         content: include_str!("../tals/lacnic.tal"),
     },
     BundledTal {
         name: "ripe",
         description: "RIPE production TAL",
         category: Category::Production,
-        opt_in: None,
         content: include_str!("../tals/ripe.tal"),
     },
 
@@ -118,21 +163,18 @@ pub static BUNDLED_TALS: &[BundledTal] = &[
         name: "apnic-testbed",
         description: "APNIC RPKI Testbed",
         category: Category::RirTest,
-        opt_in: None,
         content: include_str!("../tals/apnic-testbed.tal"),
     },
     BundledTal {
         name: "arin-ote",
         description: "ARIN Operational Test and Evaluation Environment",
         category: Category::RirTest,
-        opt_in: None,
         content: include_str!("../tals/arin-ote.tal"),
     },
     BundledTal {
         name: "ripe-pilot",
         description: "RIPE NCC RPKI Test Environment",
         category: Category::RirTest,
-        opt_in: None,
         content: include_str!("../tals/ripe-pilot.tal"),
     },
 
@@ -141,7 +183,6 @@ pub static BUNDLED_TALS: &[BundledTal] = &[
         name: "nlnetlabs-testbed",
         description: "NLnet Labs RPKI Testbed",
         category: Category::Test,
-        opt_in: None,
         content: include_str!("../tals/nlnetlabs-testbed.tal"),
     }
 ];

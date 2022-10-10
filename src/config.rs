@@ -6,7 +6,7 @@
 //!
 //! [`Config`]: struct.Config.html
 
-use std::{env, fmt, fs};
+use std::{env, fmt, fs, process};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::io::Read;
@@ -21,6 +21,7 @@ use clap::{
 use dirs::home_dir;
 use log::{LevelFilter, error};
 #[cfg(unix)] use syslog::Facility;
+use crate::tals;
 use crate::error::Failed;
 
 
@@ -119,8 +120,14 @@ pub struct Config {
     /// Path to the directory that contains the repository cache.
     pub cache_dir: PathBuf,
 
-    /// Path to the directory that contains the trust anchor locators.
-    pub tal_dir: PathBuf,
+    /// Should we not use the RIR TALs?
+    pub no_rir_tals: bool,
+
+    /// Additional bundled TALs to use.
+    pub bundled_tals: Vec<String>,
+
+    /// Path to a directory that contains additional trust anchor locators.
+    pub tal_dir: Option<PathBuf>,
 
     /// Paths to the local exceptions files.
     pub exceptions: Vec<PathBuf>,
@@ -361,7 +368,6 @@ impl Config {
     ///
     /// The path arguments in `matches` will be interpreted relative to
     /// `cur_dir`.
-    #[allow(clippy::cognitive_complexity)]
     fn apply_arg_matches(
         &mut self,
         matches: &ArgMatches,
@@ -371,6 +377,14 @@ impl Config {
             matches
         ).expect("bug in command line arguments parser");
 
+        // Quick check: If we have the entry "list" in bundled_tals, we
+        // are supposed to print the TALs and exit.
+        if let Some(tals) = args.bundled_tals.as_ref() {
+            if tals.iter().any(|tal| tal == "list") {
+                tals::print_tals();
+                process::exit(0);
+            }
+        }
 
         // log_target - Goes first so we can move things out of args later.
         self.apply_log_matches(&args, cur_dir)?;
@@ -378,9 +392,6 @@ impl Config {
         // cache_dir
         if let Some(dir) = args.repository_dir {
             self.cache_dir = cur_dir.join(dir)
-        }
-        else if let Some(dir) = args.base_dir.as_ref() {
-            self.cache_dir = cur_dir.join(dir).join("repository")
         }
         if self.cache_dir == Path::new("") {
             error!(
@@ -391,21 +402,18 @@ impl Config {
             return Err(Failed)
         }
 
+        // no_rir_tals
+        if args.no_rir_tals {
+            self.no_rir_tals = true
+        }
+
+        // bundled_tals
+        if let Some(tals) = args.bundled_tals {
+            self.bundled_tals = tals;
+        }
+
         // tal_dir
-        if let Some(dir) = args.tal_dir {
-            self.tal_dir = cur_dir.join(dir)
-        }
-        else if let Some(dir) = args.base_dir.as_ref() {
-            self.tal_dir = cur_dir.join(dir).join("tals")
-        }
-        if self.tal_dir == Path::new("") {
-            error!(
-                "Couldn’t determine default TAL directory: \
-                 no home directory.\n\
-                 Please specify the repository directory with the -t option."
-            );
-            return Err(Failed)
-        }
+        self.tal_dir = args.tal_dir.map(|dir| cur_dir.join(dir));
 
         // exceptions
         if let Some(list) = args.exceptions {
@@ -784,7 +792,12 @@ impl Config {
         let log_target = Self::log_target_from_config_file(&mut file)?;
         let res = Config {
             cache_dir: file.take_mandatory_path("repository-dir")?,
-            tal_dir: file.take_mandatory_path("tal-dir")?,
+            no_rir_tals: file.take_bool("no-rir-tals")?.unwrap_or(false),
+            bundled_tals: {
+                file.take_string_array("tals")?
+                    .unwrap_or_default()
+            },
+            tal_dir: file.take_path("tal-dir")?,
             exceptions: {
                 file.take_path_array("exceptions")?.unwrap_or_default()
             },
@@ -1016,10 +1029,12 @@ impl Config {
     ///
     /// Uses default values for everything except for the cache and TAL
     /// directories which are provided.
-    fn default_with_paths(cache_dir: PathBuf, tal_dir: PathBuf) -> Self {
+    fn default_with_paths(cache_dir: PathBuf) -> Self {
         Config {
             cache_dir,
-            tal_dir,
+            no_rir_tals: false,
+            bundled_tals: Vec::new(),
+            tal_dir: None,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
             stale: DEFAULT_STALE_POLICY,
@@ -1086,16 +1101,18 @@ impl Config {
                     return Err(Failed)
                 }
             };
-            self.tal_dir = match self.tal_dir.strip_prefix(chroot) {
-                Ok(dir) => dir.into(),
-                Err(_) => {
-                    error!(
-                        "Fatal: TAL directory {} not under chroot {}.",
-                         self.tal_dir.display(), chroot.display()
-                    );
-                    return Err(Failed)
-                }
-            };
+            if let Some(tal_dir) = self.tal_dir.take() {
+                self.tal_dir = match tal_dir.strip_prefix(chroot) {
+                    Ok(dir) => Some(dir.into()),
+                    Err(_) => {
+                        error!(
+                            "Fatal: TAL directory {} not under chroot {}.",
+                             tal_dir.display(), chroot.display()
+                        );
+                        return Err(Failed)
+                    }
+                };
+            }
             for item in &mut self.exceptions {
                 *item = match item.strip_prefix(chroot) {
                     Ok(path) => path.into(),
@@ -1143,10 +1160,12 @@ impl Config {
             "repository-dir".into(),
             self.cache_dir.display().to_string().into()
         );
-        res.insert(
-            "tal-dir".into(),
-            self.tal_dir.display().to_string().into()
-        );
+        if let Some(tal_dir) = self.tal_dir.as_ref() {
+            res.insert(
+                "tal-dir".into(),
+                tal_dir.display().to_string().into()
+            );
+        }
         res.insert(
             "exceptions".into(),
             toml::Value::Array(
@@ -1376,15 +1395,13 @@ impl Default for Config {
     fn default() -> Self {
         match home_dir() {
             Some(dir) => {
-                let base = dir.join(".rpki-cache");
                 Config::default_with_paths(
-                    base.join("repository"), 
-                    base.join("tals")
+                    dir.join(".rpki-cache/repository"),
                 )
             }
             None => {
                 Config::default_with_paths(
-                    PathBuf::from(""), PathBuf::from("")
+                    PathBuf::from(""),
                 )
             }
         }
@@ -1529,16 +1546,20 @@ struct GlobalArgs {
     #[arg(short, long, value_name="PATH")]
     config: Option<PathBuf>,
 
-    /// Sets the base directory for cache and TALs
-    #[arg(short, long, value_name="PATH")]
-    base_dir: Option<PathBuf>,
-
     /// Sets the repository cache directory
     #[arg(short, long, value_name="PATH")]
     repository_dir: Option<PathBuf>,
 
-    /// Sets the TAL directory
-    #[arg(short, long, value_name="PATH")]
+    /// Do not use the bundlede RIR TALs
+    #[arg(long)]
+    no_rir_tals: bool,
+
+    /// Add an additional bundled TAL ("list" for a list)
+    #[arg(long = "tal", value_name="NAME")]
+    bundled_tals: Option<Vec<String>>,
+
+    /// A directory to load additional TALs from
+    #[arg(long, value_name="PATH")]
     tal_dir: Option<PathBuf>,
 
     /// File with local exceptions (see RFC 8416 for format)
@@ -2370,10 +2391,7 @@ mod test {
             config.cache_dir,
             home_dir().unwrap().join(".rpki-cache").join("repository")
         );
-        assert_eq!(
-            config.tal_dir,
-            home_dir().unwrap().join(".rpki-cache").join("tals")
-        );
+        assert!(config.tal_dir.is_none());
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, DEFAULT_STRICT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
@@ -2411,7 +2429,7 @@ mod test {
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
-        assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
+        assert_eq!(config.tal_dir.unwrap().to_str().unwrap(), "/test/taldir");
         assert_eq!(
             config.exceptions,
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
@@ -2451,7 +2469,7 @@ mod test {
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
-        assert_eq!(config.tal_dir.to_str().unwrap(), "/test/taldir");
+        assert_eq!(config.tal_dir.unwrap().to_str().unwrap(), "/test/taldir");
         assert!(config.exceptions.is_empty());
         assert!(!config.strict);
         assert_eq!(config.validation_threads, ::num_cpus::get());
@@ -2509,7 +2527,7 @@ mod test {
             "--syslog", "--syslog-facility", "auth"
         ]);
         assert_eq!(config.cache_dir, Path::new("/repository"));
-        assert_eq!(config.tal_dir, Path::new("/test/tals"));
+        assert_eq!(config.tal_dir.unwrap(), Path::new("/test/tals"));
         assert_eq!(
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );

@@ -12,7 +12,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use std::{fs, io, thread};
-use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -31,7 +30,7 @@ use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
-use crate::{output, tals, validity};
+use crate::{output, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
@@ -64,7 +63,6 @@ use crate::slurm::LocalExceptions;
 /// [`from_arg_matches`]: #method.from_arg_matches
 /// [`run`]: #method.run
 pub enum Operation {
-    Init(Init),
     Server(Server),
     Vrps(Vrps),
     Validate(Validate),
@@ -86,7 +84,6 @@ impl Operation {
 
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        let app = Init::config_args(app);
         let app = Server::config_args(app);
         let app = Vrps::config_args(app);
         let app = Validate::config_args(app);
@@ -107,9 +104,6 @@ impl Operation {
         config: &mut Config
     ) -> Result<Self, Failed> {
         Ok(match matches.subcommand() {
-            Some(("init", matches)) => {
-                Operation::Init(Init::from_arg_matches(matches)?)
-            }
             Some(("server", matches)) => {
                 Operation::Server(
                     Server::from_arg_matches(matches, cur_dir, config)?
@@ -166,7 +160,6 @@ impl Operation {
     pub fn run(self, config: Config) -> Result<(), ExitError> {
         let process = Process::new(config);
         match self {
-            Operation::Init(cmd) => cmd.run(process),
             Operation::Server(cmd) => cmd.run(process),
             Operation::Vrps(cmd) => cmd.run(process),
             Operation::Validate(cmd) => cmd.run(process),
@@ -176,292 +169,6 @@ impl Operation {
             Operation::PrintConfig(cmd) => cmd.run(process),
             Operation::Dump(cmd) => cmd.run(process),
             Operation::Man(cmd) => cmd.run(process),
-        }
-    }
-}
-
-
-//------------ Init ----------------------------------------------------------
-
-/// Initialize the local repository.
-pub enum Init {
-    /// Only list TALs and exit.
-    ListTals,
-
-    /// Actually do an initialization.
-    Init {
-        /// Force installation of TALs.
-        ///
-        /// If the TAL directory is present, we will not touch it unless this
-        /// flag is `true`.
-        force: bool,
-
-        /// The set of TALs to install.
-        tals: Vec<&'static tals::BundledTal>,
-    }
-}
-
-impl Init {
-    /// Adds the command configuration to a clap app.
-    pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        let mut cmd = clap::Command::new("init")
-            .about("Initializes the local repository")
-            .arg(Arg::new("force")
-                .short('f')
-                .long("force")
-                .action(ArgAction::SetTrue)
-                .help("Overwrite an existing TAL directory")
-            )
-            .arg(Arg::new("rir-tals")
-                .long("rir-tals")
-                .action(ArgAction::SetTrue)
-                .help("Install all RIR production TALs")
-            )
-            .arg(Arg::new("rir-test-tals")
-                .long("rir-test-tals")
-                .action(ArgAction::SetTrue)
-                .help("Install all RIR testbed TALs")
-            )
-            .arg(Arg::new("tal")
-                .long("tal")
-                .action(ArgAction::Append)
-                .help(
-                    "Name a TAL to be installed \
-                     (--list-tals shows available TALs)"
-                )
-            )
-            .arg(Arg::new("skip-tal")
-                .long("skip-tal")
-                .action(ArgAction::Append)
-                .help("Name a TAL not to be in installed")
-            )
-            .arg(Arg::new("decline-arin-rpa")
-                .long("decline-arin-rpa")
-                .action(ArgAction::SetTrue)
-                .help("Same as '--skip-tal arin' (deprecated)")
-            )
-            .arg(Arg::new("list-tals")
-                .long("list-tals")
-                .action(ArgAction::SetTrue)
-                .help("List available TALs and exit")
-            )
-            .after_help(
-                "If none of --rir-tals, --rir-test-tals, or --tal is \
-                given, assumes --rir-tals.\n
-                \n\
-                Additional global options are available. \
-                Please consult 'routinator --help' for those."
-            );
-
-        for tal in tals::BUNDLED_TALS {
-            if let Some(opt_in) = tal.opt_in.as_ref() {
-                cmd = cmd.arg(
-                    Arg::new(opt_in.option_name)
-                    .long(opt_in.option_name)
-                    .action(ArgAction::SetTrue)
-                    .help(opt_in.option_help)
-                );
-            }
-        }
-
-        app.subcommand(cmd)
-    }
-
-    /// Creates a command from clap matches.
-    pub fn from_arg_matches(
-        matches: &ArgMatches,
-    ) -> Result<Self, Failed> {
-        // Easy out for --list-tals
-        if matches.get_flag("list-tals") {
-            return Ok(Init::ListTals)
-        }
-
-        // Collect the names of all requested TALs.
-        let mut requested: HashSet<_> = matches.get_many::<String>(
-            "tal"
-        ).map(|tals| {
-            tals.cloned().collect()
-        }).unwrap_or_default();
-        if matches.get_flag("rir-test-tals") {
-            for tal in tals::BUNDLED_TALS {
-                if tal.category == tals::Category::RirTest {
-                    requested.insert(tal.name.into());
-                }
-            }
-        }
-        // --rir-tals or lack of other TAL commands includes all RIR TALs.
-        if matches.get_flag("rir-tals") || requested.is_empty() {
-            for tal in tals::BUNDLED_TALS {
-                if tal.category == tals::Category::Production {
-                    requested.insert(tal.name.into());
-                }
-            }
-        }
-
-        // Removed --skip-tal TALs.
-        if let Some(values) = matches.get_many::<String>("skip-tal") {
-            for tal in values {
-                // Be strict to avoid accidents.
-                if !requested.remove(tal) {
-                    eprintln!("Attempt to skip non-included TAL '{}'", tal);
-                    return Err(Failed)
-                }
-            }
-        }
-
-        // Remove ARIN Tal.
-        if matches.get_flag("decline-arin-rpa") {
-            eprintln!(
-                "Warning: '--decline-arin-rpa' has been replaced \
-                 by '--skip-tal arin' and \n         will be removed."
-            );
-            if !requested.remove("arin") {
-                eprintln!("Attempt to skip non-included TAL 'arin'");
-                return Err(Failed)
-            }
-        }
-
-        let mut tals = Vec::new();
-
-        for tal in tals::BUNDLED_TALS {
-            if !requested.remove(tal.name) {
-                continue
-            }
-            tals.push(tal);
-            if let Some(opt_in) = tal.opt_in.as_ref() {
-                if !matches.get_flag(opt_in.option_name) {
-                    eprintln!("{}", opt_in.message);
-                    return Err(Failed)
-                }
-            }
-        }
-
-        if !requested.is_empty() {
-            for name in requested {
-                eprintln!("Unknown TAL '{}'", name);
-            }
-            return Err(Failed)
-        }
-
-        Ok(Init::Init {
-            force: matches.get_flag("force"),
-            tals,
-        })
-    }
-
-    /// Initializes the local repository.
-    ///
-    /// Tries to create `config.cache_dir` if it doesn’t exist. Creates the
-    /// `config.tal_dir` if it doesn’t exist and installs the bundled TALs.
-    /// It also does the latter if the directory exists and `force` is
-    /// `true`.
-    pub fn run(self, process: Process) -> Result<(), ExitError> {
-        let (force, tals) = match self {
-            Init::ListTals => {
-                Self::list_tals();
-                return Ok(())
-            }
-            Init::Init { force, tals } => (force, tals)
-        };
-
-        process.create_cache_dir()?;
-
-        // Check if TAL directory exists and error out if needed.
-        if let Ok(metadata) = fs::metadata(&process.config().tal_dir) {
-            if metadata.is_dir() {
-                if !force {
-                    error!(
-                        "TAL directory {} exists.\n\
-                        Use -f to force installation of TALs.",
-                        process.config().tal_dir.display()
-                    );
-                    return Err(Failed.into());
-                }
-            }
-            else {
-                error!(
-                    "TAL directory {} exists and is not a directory.",
-                    process.config().tal_dir.display()
-                );
-                return Err(Failed.into())
-            }
-        }
-
-        // Try to create the TAL directory and error out if that fails.
-        if let Err(err) = fs::create_dir_all(&process.config().tal_dir) {
-            error!(
-                "Cannot create TAL directory {}: {}",
-                process.config().tal_dir.display(), err
-            );
-            return Err(Failed.into())
-        }
-
-        // Now write all the TALs. Overwrite existing ones.
-        for tal in &tals {
-            Self::write_tal(&process.config().tal_dir, tal.name, tal.content)?;
-        }
-
-        // Not really an error, but that’s our log level right now.
-        error!(
-            "Created local repository directory {}",
-            process.config().cache_dir.display()
-        );
-        error!(
-            "Installed {} TALs in {}",
-            tals.len(),
-            process.config().tal_dir.display()
-        );
-
-        Ok(())
-    }
-
-    /// Writes the given tal.
-    fn write_tal(
-        tal_dir: &Path,
-        name: &str,
-        content: &str,
-    ) -> Result<(), Failed> {
-        let mut file = match fs::File::create(tal_dir.join(
-            format!("{}.tal", name)
-        )) {
-            Ok(file) => file,
-            Err(err) => {
-                error!(
-                    "Can't create TAL file {}: {}.\n Aborting.",
-                    tal_dir.join(name).display(), err
-                );
-                return Err(Failed);
-            }
-        };
-        if let Err(err) = file.write_all(content.as_ref()) {
-            error!(
-                "Can't create TAL file {}: {}.\n Aborting.",
-                tal_dir.join(name).display(), err
-            );
-            return Err(Failed);
-        }
-        Ok(())
-    }
-
-    /// Lists all the bundled TALs and exits.
-    fn list_tals() {
-        let max_len = tals::BUNDLED_TALS.iter().map(|tal| 
-            tal.name.len()
-        ).max().unwrap_or(0) + 2;
-
-        println!(" .---- --rir-tals");
-        println!(" |  .- --rir-test-tals");
-        println!(" V  V\n");
-
-        for tal in tals::BUNDLED_TALS {
-            match tal.category {
-                tals::Category::Production => print!(" X      "),
-                tals::Category::RirTest => print!("    X   "),
-                _ => print!("        "),
-            }
-            println!(
-                "{:width$} {}", tal.name, tal.description, width = max_len
-            );
         }
     }
 }
