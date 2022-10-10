@@ -14,7 +14,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
-use clap::{Command, Arg, ArgAction, ArgMatches, crate_version};
+use clap::{
+    Command, Args, ArgAction, ArgMatches, FromArgMatches, Parser,
+    crate_version,
+};
 use dirs::home_dir;
 use log::{LevelFilter, error};
 #[cfg(unix)] use syslog::Facility;
@@ -74,6 +77,10 @@ const DEFAULT_MAX_OBJECT_SIZE: u64 = 20_000_000;
 
 /// The default maximum CA depth.
 const DEFAULT_MAX_CA_DEPTH: usize = 32;
+
+/// The default syslog facility.
+#[cfg(unix)]
+const DEFAULT_SYSLOG_FACILITY: Facility = Facility::LOG_DAEMON;
 
 
 //------------ Config --------------------------------------------------------  
@@ -300,209 +307,11 @@ pub struct Config {
 
 
 impl Config {
-    /// Adds the basic arguments to a clapp app.
+    /// Adds the basic arguments to a Clap command.
     ///
-    /// The function follows clap’s builder pattern: it takes an app,
-    /// adds a bunch of arguments to it and returns it at the end.
+    /// Returns the command with the arguments added.
     pub fn config_args(app: Command) -> Command {
-        app
-        .arg(Arg::new("config")
-            .short('c')
-            .long("config")
-            .value_name("PATH")
-            .action(ArgAction::Set)
-            .help("Read base configuration from this file")
-        )
-        .arg(Arg::new("base-dir")
-            .short('b')
-            .long("base-dir")
-            .value_name("DIR")
-            .action(ArgAction::Set)
-            .help("Sets the base directory for cache and TALs")
-        )
-        .arg(Arg::new("repository-dir")
-            .short('r')
-            .long("repository-dir")
-            .value_name("DIR")
-            .action(ArgAction::Set)
-            .help("Sets the repository cache directory")
-        )
-        .arg(Arg::new("tal-dir")
-            .short('t')
-            .long("tal-dir")
-            .value_name("DIR")
-            .action(ArgAction::Set)
-            .help("Sets the TAL directory")
-        )
-        .arg(Arg::new("exceptions")
-            .short('x')
-            .long("exceptions")
-            .value_name("FILE")
-            .help("File with local exceptions (see RFC 8416 for format)")
-            .action(ArgAction::Append)
-        )
-        .arg(Arg::new("strict")
-            .long("strict")
-            .action(ArgAction::SetTrue)
-            .help("Parse RPKI data in strict mode")
-        )
-        .arg(Arg::new("stale")
-            .long("stale")
-            .value_name("POLICY")
-            .action(ArgAction::Set)
-            .help("The policy for handling stale objects")
-        )
-        .arg(Arg::new("unsafe-vrps")
-            .long("unsafe-vrps")
-            .value_name("POLICY")
-            .action(ArgAction::Set)
-            .help("The policy for handling unsafe VRPs")
-        )
-        .arg(Arg::new("unknown-objects")
-            .long("unknown-objects")
-            .value_name("POLICY")
-            .action(ArgAction::Set)
-            .help("The policy for handling unknown object types")
-        )
-        .arg(Arg::new("allow-dubious-hosts")
-            .long("allow-dubious-hosts")
-            .action(ArgAction::SetTrue)
-            .help("Allow dubious host names in rsync and HTTPS URIs")
-        )
-        .arg(Arg::new("fresh")
-            .long("fresh")
-            .action(ArgAction::SetTrue)
-            .help("Delete cached data, download everything again") 
-        )
-        .arg(Arg::new("disable-rsync")
-            .long("disable-rsync")
-            .action(ArgAction::SetTrue)
-            .help("Disable rsync and only use RRDP")
-        )
-        .arg(Arg::new("rsync-command")
-            .long("rsync-command")
-            .value_name("COMMAND")
-            .action(ArgAction::Set)
-            .help("The command to run for rsync")
-        )
-        .arg(Arg::new("rsync-timeout")
-            .long("rsync-timeout")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("Timeout for rsync commands")
-        )
-        .arg(Arg::new("disable-rrdp")
-            .long("disable-rrdp")
-            .action(ArgAction::SetTrue)
-            .help("Disable RRDP and only use rsync")
-        )
-        .arg(Arg::new("rrdp-max-delta-count")
-            .long("rrdp-max-delta-count")
-            .value_name("COUNT")
-            .action(ArgAction::Set)
-            .help("Maximum number of RRDP deltas before using snapshot")
-        )
-        .arg(Arg::new("rrdp-fallback-time")
-            .long("rrdp-fallback-time")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("Maximum time since last update before fallback to rsync")
-        )
-        .arg(Arg::new("rrdp-timeout")
-            .long("rrdp-timeout")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("Timeout of network operation for RRDP (0 for none)")
-        )
-        .arg(Arg::new("rrdp-connect-timeout")
-            .long("rrdp-connect-timeout")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("Timeout for connecting to an RRDP server")
-        )
-        .arg(Arg::new("rrdp-local-addr")
-            .long("rrdp-local-addr")
-            .value_name("ADDR")
-            .action(ArgAction::Set)
-            .help("Local address for outgoing RRDP connections")
-        )
-        .arg(Arg::new("rrdp-root-cert")
-            .long("rrdp-root-cert")
-            .value_name("PATH")
-            .action(ArgAction::Append)
-            .help("Path to trusted PEM certificate for RRDP HTTPS")
-        )
-        .arg(Arg::new("rrdp-proxy")
-            .long("rrdp-proxy")
-            .value_name("URI")
-            .action(ArgAction::Append)
-            .help("Proxy server for RRDP (HTTP or SOCKS5)")
-        )
-        .arg(Arg::new("rrdp-keep-responses")
-            .long("rrdp-keep-responses")
-            .value_name("DIR")
-            .action(ArgAction::Set)
-            .help("Keep RRDP responses in the given directory")
-        )
-        .arg(Arg::new("max-object-size")
-            .long("max-object-size")
-            .value_name("BYTES")
-            .action(ArgAction::Set)
-            .help("Maximum size of downloaded objects (0 for no limit)")
-        )
-        .arg(Arg::new("max-ca-depth")
-            .long("max-ca-depth")
-            .value_name("COUNT")
-            .action(ArgAction::Set)
-            .help("Maximum distance of a CA from a trust anchor")
-        )
-        .arg(Arg::new("enable-bgpsec")
-            .long("enable-bgpsec")
-            .action(ArgAction::SetTrue)
-            .help("Include BGPsec router keys in the data set")
-        )
-        .arg(Arg::new("dirty-repository")
-            .long("dirty")
-            .action(ArgAction::SetTrue)
-            .help("Do not clean up repository directory after validation")
-        )
-        .arg(Arg::new("validation-threads")
-            .long("validation-threads")
-            .value_name("COUNT")
-            .action(ArgAction::Set)
-            .help("Number of threads for validation")
-        )
-        .arg(Arg::new("verbose")
-            .short('v')
-            .long("verbose")
-            .action(ArgAction::Count)
-            .help("Log more information, twice for even more")
-        )
-        .arg(Arg::new("quiet")
-            .short('q')
-            .long("quiet")
-            .action(ArgAction::Count)
-            .conflicts_with("verbose")
-            .help("Log less information, twice for no information")
-        )
-        .arg(Arg::new("syslog")
-            .long("syslog")
-            .action(ArgAction::SetTrue)
-            .help("Log to syslog")
-        )
-        .arg(Arg::new("syslog-facility")
-            .long("syslog-facility")
-            .value_name("FACILITY")
-            .default_value("daemon")
-            .action(ArgAction::Set)
-            .help("Facility to use for syslog logging")
-        )
-        .arg(Arg::new("logfile")
-            .long("logfile")
-            .value_name("PATH")
-            .action(ArgAction::Set)
-            .help("Log to this file")
-        )
+        GlobalArgs::augment_args(app)
     }
 
     /// Adds the relevant config args to the server subcommand.
@@ -513,128 +322,9 @@ impl Config {
     /// server. This function adds the relevant arguments to the subcommand
     /// provided via `app`.
     ///
-    /// It follows clap’s builder pattern and returns the app with all
-    /// arguments added.
-    pub fn server_args<'a: 'b, 'b>(app: Command) -> Command {
-        app
-        .arg(Arg::new("refresh")
-            .long("refresh")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("Refresh interval in seconds [default 3600]")
-        )
-        .arg(Arg::new("retry")
-            .long("retry")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("RTR retry interval in seconds [default 600]")
-        )
-        .arg(Arg::new("expire")
-            .long("expire")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("RTR expire interval in seconds [default 600]")
-        )
-        .arg(Arg::new("history")
-            .long("history")
-            .value_name("COUNT")
-            .action(ArgAction::Set)
-            .help("Number of history items to keep [default 10]")
-        )
-        .arg(Arg::new("rtr-listen")
-            .long("rtr")
-            .value_name("ADDR:PORT")
-            .action(ArgAction::Append)
-            .help("Listen on address/port for RTR")
-        )
-        .arg(Arg::new("rtr-tls-listen")
-            .long("rtr-tls")
-            .value_name("ADDR:PORT")
-            .action(ArgAction::Append)
-            .help("Listen on address/port for RTR")
-        )
-        .arg(Arg::new("http-listen")
-            .long("http")
-            .value_name("ADDR:PORT")
-            .action(ArgAction::Append)
-            .help("Listen on address/port for HTTP")
-        )
-        .arg(Arg::new("http-tls-listen")
-            .long("http-tls")
-            .value_name("ADDR:PORT")
-            .action(ArgAction::Append)
-            .help("Listen on address/port for HTTP")
-        )
-        .arg(Arg::new("systemd-listen")
-            .long("systemd-listen")
-            .action(ArgAction::SetTrue)
-            .help("Acquire listening sockets from systemd")
-        )
-        .arg(Arg::new("rtr-tcp-keepalive")
-            .long("rtr-tcp-keepalive")
-            .value_name("SECONDS")
-            .action(ArgAction::Set)
-            .help("The TCP keep-alive timeout on RTR [default 60, 0 for off]")
-        )
-        .arg(Arg::new("rtr-client-metrics")
-            .long("rtr-client-metrics")
-            .action(ArgAction::SetTrue)
-            .help("Include RTR client information in metrics")
-        )
-        .arg(Arg::new("rtr-tls-key")
-            .long("rtr-tls-key")
-            .value_name("FILE")
-            .action(ArgAction::Set)
-            .help("The private key to use for RTR over TLS")
-        )
-        .arg(Arg::new("rtr-tls-cert")
-            .long("rtr-tls-cert")
-            .value_name("FILE")
-            .action(ArgAction::Set)
-            .help("The certificate to use for RTR over TLS")
-        )
-        .arg(Arg::new("http-tls-key")
-            .long("http-tls-key")
-            .value_name("FILE")
-            .action(ArgAction::Set)
-            .help("The private key to use for HTTP over TLS")
-        )
-        .arg(Arg::new("http-tls-cert")
-            .long("http-tls-cert")
-            .value_name("FILE")
-            .action(ArgAction::Set)
-            .help("The certificate to use for HTTP over TLS")
-        )
-        .arg(Arg::new("pid-file")
-            .long("pid-file")
-            .value_name("PATH")
-            .action(ArgAction::Set)
-            .help("The file for keep the daemon process's PID in")
-        )
-        .arg(Arg::new("working-dir")
-            .long("working-dir")
-            .value_name("PATH")
-            .action(ArgAction::Set)
-            .help("The working directory of the daemon process")
-        )
-        .arg(Arg::new("chroot")
-            .long("chroot")
-            .value_name("PATH")
-            .action(ArgAction::Set)
-            .help("Root directory for the daemon process")
-        )
-        .arg(Arg::new("user")
-            .long("user")
-            .value_name("USER")
-            .action(ArgAction::Set)
-            .help("User for the daemon process")
-        )
-        .arg(Arg::new("group")
-            .long("group")
-            .value_name("GROUP")
-            .action(ArgAction::Set)
-            .help("Group for the daemon process")
-        )
+    /// Returns the command with the arguments added.
+    pub fn server_args(app: Command) -> Command {
+        ServerArgs::augment_args(app)
     }
 
     /// Creates a configuration from command line matches.
@@ -677,11 +367,19 @@ impl Config {
         matches: &ArgMatches,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
+        let args = GlobalArgs::from_arg_matches(
+            matches
+        ).expect("bug in command line arguments parser");
+
+
+        // log_target - Goes first so we can move things out of args later.
+        self.apply_log_matches(&args, cur_dir)?;
+
         // cache_dir
-        if let Some(dir) = matches.get_one::<String>("repository-dir") {
+        if let Some(dir) = args.repository_dir {
             self.cache_dir = cur_dir.join(dir)
         }
-        else if let Some(dir) = matches.get_one::<String>("base-dir") {
+        else if let Some(dir) = args.base_dir.as_ref() {
             self.cache_dir = cur_dir.join(dir).join("repository")
         }
         if self.cache_dir == Path::new("") {
@@ -694,10 +392,10 @@ impl Config {
         }
 
         // tal_dir
-        if let Some(dir) = matches.get_one::<String>("tal-dir") {
+        if let Some(dir) = args.tal_dir {
             self.tal_dir = cur_dir.join(dir)
         }
-        else if let Some(dir) = matches.get_one::<String>("base-dir") {
+        else if let Some(dir) = args.base_dir.as_ref() {
             self.tal_dir = cur_dir.join(dir).join("tals")
         }
         if self.tal_dir == Path::new("") {
@@ -709,77 +407,75 @@ impl Config {
             return Err(Failed)
         }
 
-        // expceptions
-        if let Some(list) = matches.get_many::<String>("exceptions") {
-            self.exceptions = list.map(|path| cur_dir.join(path)).collect()
+        // exceptions
+        if let Some(list) = args.exceptions {
+            self.exceptions = list.into_iter().map(|path| {
+                cur_dir.join(path)
+            }).collect()
         }
 
         // strict
-        if matches.get_flag("strict") {
+        if args.strict {
             self.strict = true
         }
 
         // stale
-        if let Some(value) = from_str_value_of(matches, "stale")? {
+        if let Some(value) = args.stale {
             self.stale = value
         }
 
         // unsafe_vrps
-        if let Some(value) = from_str_value_of(matches, "unsafe-vrps")? {
+        if let Some(value) = args.unsafe_vrps {
             self.unsafe_vrps = value
         }
 
         // unknown_objects
-        if let Some(value) = from_str_value_of(matches, "unknown-objects")? {
+        if let Some(value) = args.unknown_objects {
             self.unknown_objects = value
         }
 
         // allow_dubious_hosts
-        if matches.get_flag("allow-dubious-hosts") {
+        if args.allow_dubious_hosts {
             self.allow_dubious_hosts = true
         }
 
         // fresh
-        if matches.get_flag("fresh") {
+        if args.fresh {
             self.fresh = true
         }
 
         // disable_rsync
-        if matches.get_flag("disable-rsync") {
+        if args.disable_rsync {
             self.disable_rsync = true
         }
 
         // rsync_command
-        if let Some(value) = matches.get_one::<String>("rsync-command") {
-            self.rsync_command = value.clone()
+        if let Some(value) = args.rsync_command {
+            self.rsync_command = value
         }
 
         // rsync_timeout
-        if let Some(value) = from_str_value_of(matches, "rsync-timeout")? {
+        if let Some(value) = args.rsync_timeout {
             self.rsync_timeout = Duration::from_secs(value)
         }
 
         // disable_rrdp
-        if matches.get_flag("disable-rrdp") {
+        if args.disable_rrdp {
             self.disable_rrdp = true
         }
 
         // rrdp_fallback_time
-        if let Some(value) = from_str_value_of(
-            matches, "rrdp-fallback-time"
-        )? {
+        if let Some(value) = args.rrdp_fallback_time {
             self.rrdp_fallback_time = Duration::from_secs(value)
         }
 
         // rrdp_max_delta_count
-        if let Some(value) = from_str_value_of(
-            matches, "rrdp-max-delta-count"
-        )? {
+        if let Some(value) = args.rrdp_max_delta_count {
             self.rrdp_max_delta_count = value
         }
 
         // rrdp_timeout
-        if let Some(value) = from_str_value_of(matches, "rrdp-timeout")? {
+        if let Some(value) = args.rrdp_timeout {
             self.rrdp_timeout = if value == 0 {
                 None
             }
@@ -789,43 +485,34 @@ impl Config {
         }
 
         // rrdp_connect_timeout
-        if let Some(value) = from_str_value_of(
-            matches, "rrdp-connect-timeout"
-        )? {
+        if let Some(value) = args.rrdp_connect_timeout {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
         }
 
         // rrdp_local_addr
-        if let Some(value) = from_str_value_of(matches, "rrdp-local-addr")? {
+        if let Some(value) = args.rrdp_local_addr {
             self.rrdp_local_addr = Some(value)
         }
 
         // rrdp_root_certs
-        if let Some(list) = matches.get_many::<String>("rrdp-root-cert") {
-            self.rrdp_root_certs = Vec::new();
-            for value in list {
-                match PathBuf::from_str(value) {
-                    Ok(path) => self.rrdp_root_certs.push(path),
-                    Err(_) => {
-                        error!("Invalid path for rrdp-root-cert '{}'", value);
-                        return Err(Failed)
-                    }
-                };
-            }
+        if let Some(list) = args.rrdp_root_cert {
+            self.rrdp_root_certs = list.into_iter().map(|path| {
+                cur_dir.join(path)
+            }).collect()
         }
 
         // rrdp_proxies
-        if let Some(list) = matches.get_many::<String>("rrdp-proxy") {
-            self.rrdp_proxies = list.map(Into::into).collect();
+        if let Some(list) = args.rrdp_proxy {
+            self.rrdp_proxies = list
         }
 
         // rrdp_keep_responses
-        if let Some(path) = matches.get_one::<String>("rrdp-keep-responses") {
-            self.rrdp_keep_responses = Some(path.into())
+        if let Some(path) = args.rrdp_keep_responses {
+            self.rrdp_keep_responses = Some(path)
         }
 
         // max_object_size
-        if let Some(value) = from_str_value_of(matches, "max-object-size")? {
+        if let Some(value) = args.max_object_size {
             if value == 0 {
                 self.max_object_size = None
             }
@@ -835,41 +522,38 @@ impl Config {
         }
 
         // max_ca_depth
-        if let Some(value) = from_str_value_of(matches, "max-ca-depth")? {
+        if let Some(value) = args.max_ca_depth {
             self.max_ca_depth = value;
         }
 
         // enable_bgpsec
-        if matches.get_flag("enable-bgpsec") {
+        if args.enable_bgpsec {
             self.enable_bgpsec = true
         }
 
         // dirty_repository
-        if matches.get_flag("dirty-repository") {
+        if args.dirty_repository {
             self.dirty_repository = true
         }
 
         // validation_threads
-        if let Some(value) = from_str_value_of(matches, "validation-threads")? {
+        if let Some(value) = args.validation_threads {
             self.validation_threads = value
         }
 
         // log_level
-        match (
-            matches.get_count("verbose"),
-            matches.get_count("quiet")
-        ) {
-            // This assumes that -v and -q are conflicting.
-            (0, 0) => { }
-            (1, 0) => self.log_level = LevelFilter::Info,
-            (_, 0) => self.log_level = LevelFilter::Debug,
-            (0, 1) => self.log_level = LevelFilter::Error,
-            (0, _) => self.log_level = LevelFilter::Off,
-            _ => { }
+        if args.verbose > 1 {
+            self.log_level = LevelFilter::Debug
         }
-
-        // log_target
-        self.apply_log_matches(matches, cur_dir)?;
+        else if args.verbose == 1 {
+            self.log_level = LevelFilter::Info
+        }
+        else if args.quiet > 1 {
+            self.log_level = LevelFilter::Off
+        }
+        else if args.quiet == 1 {
+            self.log_level = LevelFilter::Error
+        }
 
         Ok(())
     }
@@ -881,23 +565,28 @@ impl Config {
     #[cfg(unix)]
     fn apply_log_matches(
         &mut self,
-        matches: &ArgMatches,
+        args: &GlobalArgs,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
-        if matches.get_flag("syslog") {
-            self.log_target = LogTarget::Syslog(
-                match Facility::from_str(
-                    matches.get_one::<String>("syslog-facility").unwrap()
-                ) {
-                    Ok(value) => value,
-                    Err(_) => {
-                        error!("Invalid value for syslog-facility.");
-                        return Err(Failed);
+        if args.syslog {
+            if let Some(facility) = args.syslog_facility.as_ref() {
+                self.log_target = LogTarget::Syslog(
+                    match Facility::from_str(facility) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            error!("Invalid value for syslog-facility.");
+                            return Err(Failed);
+                        }
                     }
-                }
-            )
+                )
+            }
+            else if !matches!(self.log_target, LogTarget::Syslog(_)) {
+                // If we don’t have a syslog facility already from the config
+                // file, we use the default.
+                self.log_target = LogTarget::Syslog(DEFAULT_SYSLOG_FACILITY)
+            }
         }
-        else if let Some(file) = matches.get_one::<String>("logfile") {
+        else if let Some(file) = args.logfile.as_ref() {
             if file == "-" {
                 self.log_target = LogTarget::Stderr
             }
@@ -915,10 +604,10 @@ impl Config {
     #[allow(clippy::unnecessary_wraps)]
     fn apply_log_matches(
         &mut self,
-        matches: &ArgMatches,
+        args: &GlobalArgs,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
-        if let Some(file) = matches.get_one::<String>("logfile") {
+        if let Some(file) = args.logfile.as_ref() {
             if file == "-" {
                 self.log_target = LogTarget::Stderr
             }
@@ -929,7 +618,6 @@ impl Config {
         Ok(())
     }
 
-
     /// Applies the RTR server command line arguments to an existing config.
     ///
     /// All paths used in arguments are interpreted relative to `cur_dir`.
@@ -938,89 +626,57 @@ impl Config {
         matches: &ArgMatches,
         cur_dir: &Path,
     ) -> Result<(), Failed> {
+        let args = ServerArgs::from_arg_matches(
+            matches
+        ).expect("bug in command line arguments parser");
+
         // refresh
-        if let Some(value) = from_str_value_of(matches, "refresh")? {
+        if let Some(value) = args.refresh {
             self.refresh = Duration::from_secs(value)
         }
 
         // retry
-        if let Some(value) = from_str_value_of(matches, "retry")? {
+        if let Some(value) = args.retry {
             self.retry = Duration::from_secs(value)
         }
 
         // expire
-        if let Some(value) = from_str_value_of(matches, "expire")? {
+        if let Some(value) = args.expire {
             self.expire = Duration::from_secs(value)
         }
 
         // history_size
-        if let Some(value) = from_str_value_of(matches, "history")? {
+        if let Some(value) = args.history {
             self.history_size = value
         }
 
         // rtr_listen
-        if let Some(list) = matches.get_many::<String>("rtr-listen") {
-            self.rtr_listen = Vec::new();
-            for value in list {
-                match SocketAddr::from_str(value) {
-                    Ok(some) => self.rtr_listen.push(some),
-                    Err(_) => {
-                        error!("Invalid value for rtr: {}", value);
-                        return Err(Failed);
-                    }
-                }
-            }
+        if let Some(list) = args.rtr_listen {
+            self.rtr_listen = list
         }
 
         // rtr_tls_listen
-        if let Some(list) = matches.get_many::<String>("rtr-tls-listen") {
-            self.rtr_tls_listen = Vec::new();
-            for value in list {
-                match SocketAddr::from_str(value) {
-                    Ok(some) => self.rtr_tls_listen.push(some),
-                    Err(_) => {
-                        error!("Invalid value for rtr-tls: {}", value);
-                        return Err(Failed);
-                    }
-                }
-            }
+        if let Some(list) = args.rtr_tls_listen {
+            self.rtr_tls_listen = list
         }
 
         // http_listen
-        if let Some(list) = matches.get_many::<String>("http-listen") {
-            self.http_listen = Vec::new();
-            for value in list {
-                match SocketAddr::from_str(value) {
-                    Ok(some) => self.http_listen.push(some),
-                    Err(_) => {
-                        error!("Invalid value for http: {}", value);
-                        return Err(Failed);
-                    }
-                }
-            }
+        if let Some(list) = args.http_listen {
+            self.http_listen = list
         }
 
         // http_tls_listen
-        if let Some(list) = matches.get_many::<String>("http-tls-listen") {
-            self.http_tls_listen = Vec::new();
-            for value in list {
-                match SocketAddr::from_str(value) {
-                    Ok(some) => self.http_tls_listen.push(some),
-                    Err(_) => {
-                        error!("Invalid value for http-tls: {}", value);
-                        return Err(Failed);
-                    }
-                }
-            }
+        if let Some(list) = args.http_tls_listen {
+            self.http_tls_listen = list
         }
 
         // systemd_listen
-        if matches.get_flag("systemd-listen") {
+        if args.systemd_listen {
             self.systemd_listen = true
         }
 
         // rtr_tcp_keepalive
-        if let Some(keep) = from_str_value_of(matches, "rtr-tcp-keepalive")? {
+        if let Some(keep) = args.rtr_tcp_keepalive {
             self.rtr_tcp_keepalive = if keep == 0 {
                 None
             }
@@ -1030,53 +686,53 @@ impl Config {
         }
 
         // rtr_client_metrics
-        if matches.get_flag("rtr-client-metrics") {
+        if args.rtr_client_metrics {
             self.rtr_client_metrics = true
         }
 
         // rtr_tls_key
-        if let Some(path) = matches.get_one::<String>("rtr-tls-key") {
+        if let Some(path) = args.rtr_tls_key {
             self.rtr_tls_key = Some(cur_dir.join(path))
         }
 
         // rtr_tls_cert
-        if let Some(path) = matches.get_one::<String>("rtr-tls-cert") {
+        if let Some(path) = args.rtr_tls_cert {
             self.rtr_tls_cert = Some(cur_dir.join(path))
         }
 
         // http_tls_key
-        if let Some(path) = matches.get_one::<String>("http-tls-key") {
+        if let Some(path) = args.http_tls_key {
             self.http_tls_key = Some(cur_dir.join(path))
         }
 
         // http_tls_cert
-        if let Some(path) = matches.get_one::<String>("http-tls-cert") {
+        if let Some(path) = args.http_tls_cert {
             self.http_tls_cert = Some(cur_dir.join(path))
         }
 
         // pid_file
-        if let Some(pid_file) = matches.get_one::<String>("pid-file") {
+        if let Some(pid_file) = args.pid_file {
             self.pid_file = Some(cur_dir.join(pid_file))
         }
 
         // working_dir
-        if let Some(working_dir) = matches.get_one::<String>("working-dir") {
+        if let Some(working_dir) = args.working_dir {
             self.working_dir = Some(cur_dir.join(working_dir))
         }
 
         // chroot
-        if let Some(chroot) = matches.get_one::<String>("chroot") {
+        if let Some(chroot) = args.chroot {
             self.chroot = Some(cur_dir.join(chroot))
         }
 
         // user
-        if let Some(user) = matches.get_one::<String>("user") {
-            self.user = Some(user.into())
+        if let Some(user) = args.user {
+            self.user = Some(user)
         }
 
         // group
-        if let Some(group) = matches.get_one::<String>("group") {
-            self.group = Some(group.into())
+        if let Some(group) = args.group {
+            self.group = Some(group)
         }
 
         Ok(())
@@ -1090,7 +746,7 @@ impl Config {
         key: &str,
         dir: &Path
     ) -> Option<PathBuf> {
-        matches.get_one::<String>(key).map(|path| dir.join(path))
+        matches.get_one::<PathBuf>(key).map(|path| dir.join(path))
     }
 
     /// Creates the correct base configuration for the given config file path.
@@ -1864,6 +1520,234 @@ impl fmt::Display for FilterPolicy {
 }
 
 
+//------------ GlobalArgs ----------------------------------------------------
+
+/// The global command line arguments.
+#[derive(Clone, Debug, Parser)]
+struct GlobalArgs {
+    /// Read base configuration from this file
+    #[arg(short, long, value_name="PATH")]
+    config: Option<PathBuf>,
+
+    /// Sets the base directory for cache and TALs
+    #[arg(short, long, value_name="PATH")]
+    base_dir: Option<PathBuf>,
+
+    /// Sets the repository cache directory
+    #[arg(short, long, value_name="PATH")]
+    repository_dir: Option<PathBuf>,
+
+    /// Sets the TAL directory
+    #[arg(short, long, value_name="PATH")]
+    tal_dir: Option<PathBuf>,
+
+    /// File with local exceptions (see RFC 8416 for format)
+    #[arg(short = 'x', long, value_name="PATH")]
+    exceptions: Option<Vec<PathBuf>>,
+
+    /// Parse RPKI data in strict mode
+    #[arg(long)]
+    strict: bool,
+
+    /// The policy for handling stale objects
+    #[arg(long, value_name = "POLICY")]
+    stale: Option<FilterPolicy>,
+
+    /// The policy for handling unsafe VRPs
+    #[arg(long, value_name = "POLICY")]
+    unsafe_vrps: Option<FilterPolicy>,
+
+    /// The policy for handling unknown object types
+    #[arg(long, value_name = "POLICY")]
+    unknown_objects: Option<FilterPolicy>,
+
+    /// Allow dubious host names in rsync and HTTPS URIs
+    #[arg(long)]
+    allow_dubious_hosts: bool,
+
+    /// Delete cached data, download everything again
+    #[arg(long)]
+    fresh: bool,
+
+    /// Disable rsync and only use RRDP
+    #[arg(long)]
+    disable_rsync: bool,
+
+    /// The command to run for rsync
+    #[arg(long, value_name="COMMAND")]
+    rsync_command: Option<String>,
+
+    /// Timeout for rsync commands
+    #[arg(long, value_name = "SECONDS")]
+    rsync_timeout: Option<u64>,
+
+    /// Disable RRDP and only use rsync
+    #[arg(long)]
+    disable_rrdp: bool,
+
+    /// Maximum number of RRDP deltas before using snapshot
+    #[arg(long, value_name = "COUNT")]
+    rrdp_max_delta_count: Option<usize>,
+
+    /// Maximum time since last update before fallback to rsync
+    #[arg(long, value_name = "SECONDS")]
+    rrdp_fallback_time: Option<u64>,
+
+    /// Timeout of network operation for RRDP (0 for none)
+    #[arg(long, value_name = "SECONDS")]
+    rrdp_timeout: Option<u64>,
+
+    /// Timeout for connecting to an RRDP server
+    #[arg(long, value_name = "SECONDS")]
+    rrdp_connect_timeout: Option<u64>,
+
+    /// Local address for outgoing RRDP connections
+    #[arg(long, value_name = "ADDR")]
+    rrdp_local_addr: Option<IpAddr>,
+
+    /// Path to trusted PEM certificate for RRDP HTTPS
+    #[arg(long, value_name = "PATH")]
+    rrdp_root_cert: Option<Vec<PathBuf>>,
+
+    /// Proxy server for RRDP (HTTP or SOCKS5)
+    #[arg(long, value_name = "URI")]
+    rrdp_proxy: Option<Vec<String>>,
+
+    /// Keep RRDP responses in the given directory
+    #[arg(long, value_name = "PATH")]
+    rrdp_keep_responses: Option<PathBuf>,
+
+    /// Maximum size of downloaded objects (0 for no limit)
+    #[arg(long, value_name = "BYTES")]
+    max_object_size: Option<u64>,
+
+    /// Maximum distance of a CA from a trust anchor
+    #[arg(long, value_name = "COUNT")]
+    max_ca_depth: Option<usize>,
+
+    /// Include BGPsec router keys in the data set
+    #[arg(long)]
+    enable_bgpsec: bool,
+
+    /// Do not clean up repository directory after validation
+    #[arg(long)]
+    dirty_repository: bool,
+
+    /// Number of threads for validation
+    #[arg(long, value_name = "COUNT")]
+    validation_threads: Option<usize>,
+
+    /// Log more information, twice for even more
+    #[arg(short, long, action = ArgAction::Count)]
+    verbose: u8,
+
+    /// Log less information, twice for no information
+    #[arg(short, long, action = ArgAction::Count, conflicts_with = "verbose")]
+    quiet: u8,
+
+    /// Log to syslog
+    #[cfg(unix)]
+    #[arg(long)]
+    syslog: bool,
+
+    /// Facility to use for syslog logging
+    #[cfg(unix)]
+    #[arg(long, value_name = "FACILITY")]
+    syslog_facility: Option<String>,
+
+    /// Log to this file
+    #[arg(long, value_name = "PATH")]
+    logfile: Option<String>,
+}
+
+
+//------------ ServerArgs ----------------------------------------------------
+
+/// The server-related command line arguments.
+#[derive(Clone, Debug, Parser)]
+struct ServerArgs {
+    /// Refresh interval in seconds [default 3600]
+    #[arg(long, value_name = "SECONDS")]
+    refresh: Option<u64>,
+
+    /// RTR retry interval in seconds [default 600]
+    #[arg(long, value_name = "SECONDS")]
+    retry: Option<u64>,
+
+    /// RTR expire interval in seconds [default 600]
+    #[arg(long, value_name = "SECONDS")]
+    expire: Option<u64>,
+
+    /// Number of history items to keep [default 10]
+    #[arg(long, value_name = "COUNT")]
+    history: Option<usize>,
+
+    /// Listen on address/port for RTR
+    #[arg(long = "rtr", value_name = "ADDR:PORT")]
+    rtr_listen: Option<Vec<SocketAddr>>,
+
+    /// Listen on address/port for RTR over TLS
+    #[arg(long = "rtr-tls", value_name = "ADDR:PORT")]
+    rtr_tls_listen: Option<Vec<SocketAddr>>,
+
+    /// Listen on address/port for HTTP
+    #[arg(long = "http", value_name = "ADDR:PORT")]
+    http_listen: Option<Vec<SocketAddr>>,
+
+    /// Listen on address/port for HTTP over TLS
+    #[arg(long = "http-tls", value_name = "ADDR:PORT")]
+    http_tls_listen: Option<Vec<SocketAddr>>,
+
+    /// Acquire listening sockets from systemd
+    #[arg(long)]
+    systemd_listen: bool,
+
+    /// TCP keep-alive timeout on RTR [default 60, 0 for off]
+    #[arg(long, value_name = "SECONDS")]
+    rtr_tcp_keepalive: Option<u64>,
+
+    /// Include RTR client information in metrics
+    #[arg(long)]
+    rtr_client_metrics: bool,
+
+    /// The private key to use for RTR over TLS
+    #[arg(long, value_name = "PATH")]
+    rtr_tls_key: Option<PathBuf>,
+
+    /// The certificate to use for RTR over TLS
+    #[arg(long, value_name = "PATH")]
+    rtr_tls_cert: Option<PathBuf>,
+
+    /// The private key to use for HTTP over TLS
+    #[arg(long, value_name = "PATH")]
+    http_tls_key: Option<PathBuf>,
+
+    /// The certificate to use for HTTP over TLS
+    #[arg(long, value_name = "PATH")]
+    http_tls_cert: Option<PathBuf>,
+
+    /// The file for keep the daemon process's PID in
+    #[arg(long, value_name = "PATH")]
+    pid_file: Option<PathBuf>,
+
+    /// The working directory of the daemon process
+    #[arg(long, value_name = "PATH")]
+    working_dir: Option<PathBuf>,
+
+    /// Root directory for the daemon process
+    #[arg(long, value_name = "PATH")]
+    chroot: Option<PathBuf>,
+
+    /// User for the daemon process
+    #[arg(long, value_name = "UID")]
+    user: Option<String>,
+
+    /// Group for the daemon process
+    #[arg(long, value_name = "GID")]
+    group: Option<String>,
+}
+
+
 //------------ ConfigFile ----------------------------------------------------
 
 /// The content of a config file.
@@ -2416,33 +2300,6 @@ impl ConfigFile {
 
 //------------ Helpers -------------------------------------------------------
 
-/// Try to convert a string encoded value.
-///
-/// This helper function just changes error handling. Instead of returning
-/// the actual conversion error, it logs it as an invalid value for entry
-/// `key` and returns the standard error.
-fn from_str_value_of<T>(
-    matches: &ArgMatches,
-    key: &str
-) -> Result<Option<T>, Failed>
-where T: FromStr, T::Err: fmt::Display {
-    match matches.get_one::<String>(key) {
-        Some(value) => {
-            match T::from_str(value) {
-                Ok(value) => Ok(Some(value)),
-                Err(err) => {
-                    error!(
-                        "Invalid value for {}: {}.", 
-                        key, err
-                    );
-                    Err(Failed)
-                }
-            }
-        }
-        None => Ok(None)
-    }
-}
-
 /// Converts the syslog facility name to the facility type.
 #[cfg(unix)]
 fn facility_to_string(facility: Facility) -> String {
@@ -2701,6 +2558,13 @@ mod test {
             vec![SocketAddr::from_str("192.0.2.4:8080").unwrap()]
         );
         assert!(config.systemd_listen);
+    }
+    
+    #[test]
+    fn check_args() {
+        crate::operation::Operation::config_args(
+            GlobalArgs::augment_args(Command::new("test"))
+        ).debug_assert();
     }
 }
 
