@@ -1,5 +1,5 @@
-Running
-=======
+Setting Up
+==========
 
 Routinator can run interactively or as a service that periodically fetches
 RPKI data, verifies it and makes the resulting data set available through the
@@ -78,8 +78,8 @@ fetch data from the ARIN Operational Test and Evaluation Environment, run:
 
     routinator --no-rir-tals --tal=arin-ote
 
-If you would like to use a TAL that isn't bundled with Routinator you can
-place it in a directory of your choice, for example
+Lastly, if you would like to use a TAL that isn't bundled with Routinator you
+can place it in a directory of your choice, for example
 :file:`/var/lib/routinator/tals`, and refer to it by running:
 
 .. code-block:: text
@@ -87,11 +87,10 @@ place it in a directory of your choice, for example
     routinator --extra-tals-dir="/var/lib/routinator/tals"
 
 Routinator will use all files in this directory with an extension of *.tal*
-as TALs. These files need to be in the format described by :rfc:`8630`.
-
-Note that Routinator will use all TALs provided. That means that if a TAL in
-this directory is one of the bundled TALs, then these resources will be
-validated twice.
+as TALs. These files need to be in the format described by :rfc:`8630`. Note
+that Routinator will use all TALs provided. That means that if a TAL in this
+directory is one of the bundled TALs, then these resources will be validated
+twice.
 
 .. versionadded:: 0.9.0
    :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
