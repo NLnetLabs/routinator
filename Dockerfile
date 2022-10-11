@@ -153,14 +153,8 @@ RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
     adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
 
 # Create the repository and TAL directories
-RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-cache/tals && \
+RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository && \
     chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache
-
-# Due to ARIN TAL distribution terms, we can't do this here.
-# An individual user, however, might want to anyway - after reviewing
-# https://www.arin.net/resources/rpki/tal.html.
-#
-#COPY --from=build /tmp/routinator/tals/*.tal /home/${RUN_USER}/.rpki-cache/tals/
 
 # Switch to our applications user
 USER $RUN_USER_UID
@@ -175,4 +169,3 @@ EXPOSE 9556/tcp
 # way of activating Tini, but cannot be enabled from inside the Docker image).
 ENTRYPOINT ["/sbin/tini", "--", "routinator"]
 CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:9556"]
-
