@@ -46,6 +46,10 @@ pub fn collect_tals(config: &Config) -> Result<Vec<Tal>, Failed> {
         }
     }
 
+    for tal in res.values_mut() {
+        tal.prefer_https()
+    }
+
     Ok(res.into_values().collect())
 }
 
