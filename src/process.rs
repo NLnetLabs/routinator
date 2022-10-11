@@ -184,11 +184,20 @@ impl Process {
     fn fern_logger(&self, timestamp: bool) -> fern::Dispatch {
         let mut res = fern::Dispatch::new();
         if timestamp {
-            res = res.format(|out, message, _record| {
+            res = res.format(|out, message, record| {
                 out.finish(format_args!(
-                    "{} {} {}",
+                    "{} [{}] {}",
                     chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
-                    _record.module_path().unwrap_or(""),
+                    record.level(),
+                    message
+                ))
+            });
+        }
+        else {
+            res = res.format(|out, message, record| {
+                out.finish(format_args!(
+                    "[{}] {}",
+                    record.level(),
                     message
                 ))
             });
