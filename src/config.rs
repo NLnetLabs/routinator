@@ -30,7 +30,7 @@ use crate::error::Failed;
 const DEFAULT_STRICT: bool = false;
 
 /// The default timeout for running rsync commands in seconds.
-const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
+const DEFAULT_RSYNC_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Are we leaving the repository dirty by default?
 const DEFAULT_DIRTY_REPOSITORY: bool = false;
@@ -177,7 +177,9 @@ pub struct Config {
     pub rsync_args: Option<Vec<String>>,
 
     /// Timeout for rsync commands.
-    pub rsync_timeout: Duration,
+    ///
+    /// If this is None, no timeout is set.
+    pub rsync_timeout: Option<Duration>,
 
     /// Whether to disable RRDP.
     pub disable_rrdp: bool,
@@ -456,7 +458,12 @@ impl Config {
 
         // rsync_timeout
         if let Some(value) = args.rsync_timeout {
-            self.rsync_timeout = Duration::from_secs(value)
+            self.rsync_timeout = if value == 0 {
+                None
+            }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // disable_rrdp
@@ -810,10 +817,11 @@ impl Config {
             },
             rsync_args: file.take_string_array("rsync-args")?,
             rsync_timeout: {
-                Duration::from_secs(
-                    file.take_u64("rsync-timeout")?
-                        .unwrap_or(DEFAULT_RSYNC_TIMEOUT)
-                )
+                match file.take_u64("rsync-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RSYNC_TIMEOUT)
+                }
             },
             disable_rrdp: file.take_bool("disable-rrdp")?.unwrap_or(false),
             rrdp_fallback_time: {
@@ -1030,7 +1038,7 @@ impl Config {
             disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
-            rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
+            rsync_timeout: Some(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
@@ -1178,7 +1186,12 @@ impl Config {
         }
         res.insert(
             "rsync-timeout".into(),
-            (self.rsync_timeout.as_secs() as i64).into()
+            match self.rsync_timeout {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
         );
         res.insert("disable-rrdp".into(), self.disable_rrdp.into());
         res.insert(
@@ -1577,7 +1590,7 @@ struct GlobalArgs {
     #[arg(long, value_name="COMMAND")]
     rsync_command: Option<String>,
 
-    /// Timeout for rsync commands
+    /// Timeout for rsync commands (0 for none)
     #[arg(long, value_name = "SECONDS")]
     rsync_timeout: Option<u64>,
 
