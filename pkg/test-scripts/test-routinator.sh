@@ -17,7 +17,7 @@ case $1 in
 
     # For newer Routinator init is no longer required and the Routinator service should be automatically enabled and
     # started, for 0.11.3 and earlier init had to be done first and then the service manually enabled and started:
-    if [[ "$VER" == "0.11.3" ]]; then
+    if [[ "$VER" == "Routinator 0.11.3" ]]; then
       echo -e "\nROUTINATOR SERVICE STATUS BEFORE ENABLE:"
       systemctl status routinator || true
 
