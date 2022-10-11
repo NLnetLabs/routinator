@@ -4,8 +4,6 @@ Manual Page
 Synopsis
 --------
 
-:program:`routinator` [``options``] :subcmd:`init` [``init-options``]
-
 :program:`routinator` [``options``] :subcmd:`vrps` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
 
 :program:`routinator` [``options``] :subcmd:`validate` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
