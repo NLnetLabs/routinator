@@ -119,12 +119,6 @@ undesirable in your setup, you can choose to store the cache in volatile
 memory using the `tmpfs file system
 <https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
-When setting this up, you should make sure to only put the directory for the
-local RPKI cache in *tmpfs* and not the directory where the Trust Anchor
-Locators reside. Both locations are set in the :ref:`configuration file
-<manual-page:configuration file>` with the ``repository-dir`` and ``tal-dir``
-options, respectively.
-
 If you have installed Routinator using a package, by default the RPKI cache
 directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
 as an example. Note that the directory you choose must exist before the mount
