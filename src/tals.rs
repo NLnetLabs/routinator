@@ -62,8 +62,8 @@ pub fn print_tals() {
         tal.name.len()
     ).max().unwrap_or(0) + 2;
 
-    println!(" .---- --rir-tals");
-    println!(" |  .- --rir-test-tals");
+    println!(" .---- RIR TALs");
+    println!(" |  .- RIR test TALs");
     println!(" V  V\n");
 
     for tal in BUNDLED_TALS {
