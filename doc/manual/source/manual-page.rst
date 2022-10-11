@@ -364,52 +364,6 @@ Commands
 Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
 
-.. subcmd:: init
-
-    Prepares the local repository directories and the TAL directory for
-    running Routinator.  Specifically,  makes sure the local repository
-    directory exists, and creates the TAL directory and fills it with the
-    desired TALs.
-
-    For more information about TALs, see `TRUST ANCHOR LOCATORS`_ below.
-
-    .. option:: -f, --force
-
-           Forces installation of the TALs even if the TAL directory already
-           exists.
-
-    .. option:: --rir-tals
-    
-           Selects the production TALs of the five RIRs for installation. If
-           no other TAL selection options are provided, this option is
-           assumed.
-
-    .. option:: --rir-test-tals
-    
-           Selects the bundled TALs for RIR testbeds for installation.
-
-    .. option:: --tal=name
-    
-           Selects the bundled TAL with the provided name for installation.
-
-    .. option:: --skip-tal=name
-
-           Deselects the bundled TAL with the given name.
-
-    .. option:: --list-tals
-    
-           List all bundled TALs and exit. The list also shows which TALs are
-           selected by the :option:`--rir-tals` and :option:`--rir-test-tals`
-           options.
-
-    .. option:: --accept-arin-rpa
-
-           Before you can use the ARIN TAL, you need to agree to the ARIN
-           Relying Party Agreement (RPA). You can find it at
-           https://www.arin.net/resources/manage/rpki/rpa.pdf and explicitly
-           agree to it via this option. This explicit agreement is necessary
-           in order to install the ARIN TAL.
-
 .. subcmd:: vrps
 
     This command requests that Routinator update the local repository and
@@ -686,8 +640,8 @@ These can be requested by providing different commands on the command line.
 
        This command causes Routinator to act as a server for the
        RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
-       read all the TALs (See `TRUST ANCHOR LOCATORS`_ below) and will stay
-       attached to the terminal unless the :option:`-d` option is given.
+       read all the Trust Anchor Locators and will stay attached to the
+       terminal unless the :option:`-d` option is given.
 
        The server will periodically update the local repository, every ten
        minutes by default, notify any clients of changes, and let them fetch
