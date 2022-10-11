@@ -35,7 +35,7 @@ repository-dir = "..."
 # A relative path is interpreted with respect to the directory this config
 # lives in.
 #
-#tal-dir = "..."
+#extra-tals-dir = "..."
 
 # Local exceptions files
 #
