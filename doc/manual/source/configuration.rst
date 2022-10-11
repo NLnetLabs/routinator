@@ -20,15 +20,13 @@ below.
 Routinator Installed From a Package
 -----------------------------------
 
-As explained in the :doc:`initialisation` section, the installation script
-will run as the user *routinator* and refer to the configuration file
-:file:`/etc/routinator/routinator.conf` which contains the following
-pre-configured options:
+The installation script will run as the user *routinator* and refer to the
+configuration file :file:`/etc/routinator/routinator.conf` which contains the
+following pre-configured options:
 
 .. code-block:: toml
 
    repository-dir = "/var/lib/routinator/rpki-cache"
-   tal-dir = "/var/lib/routinator/tals"
    rtr-listen = ["127.0.0.1:3323"]
    http-listen = ["127.0.0.1:8323"]
 

@@ -89,9 +89,6 @@ The command will build Routinator and install it in the same directory that
 Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator
 will be in your path, too.
 
-.. Note:: Before you can use Routinator, you must first 
-          :doc:`initialise<initialisation>` the application.
-
 Updating
 """"""""
 

@@ -93,26 +93,11 @@ to get started.
 
           sudo apt install routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -181,26 +166,11 @@ to get started.
 
           sudo apt install routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -243,26 +213,11 @@ to get started.
 
           sudo yum install -y routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
