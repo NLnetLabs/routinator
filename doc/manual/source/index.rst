@@ -59,7 +59,6 @@ Open-source with professional support services
 
    installation
    building
-   setting-up
    configuration
    
 .. toctree::
