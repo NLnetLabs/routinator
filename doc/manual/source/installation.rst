@@ -8,15 +8,14 @@ Routinator has minimal system requirements. When choosing a system, a
 powerful CPU is not required. Make sure you have 1GB of available memory and
 4GB of disk space for the application. 
 
-Please keep in mind that the RPKI consists of a very large number of small
-files. As a result, Routinator will use a large number of inodes. You should
+Please keep in mind that the RPKI consists of a great number of small files.
+As a result, Routinator will use a large amount of inodes. You should
 accommodate for at least 500,000 inodes, but one million will provide more
 breathing room. This will give you ample margin for the RPKI repositories to
 grow over time, as adoption increases. 
 
-.. Tip:: A "No space left on device" error may be caused by running out of 
-         inodes instead of disk space. To verify this, the ``df -i`` command
-         shows the amount of inodes available, used, and free.
+.. Tip:: The ``df -i`` command shows the amount of inodes available, used,
+         and free.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
@@ -277,6 +276,8 @@ to get started.
    Debian packages for ``armhf`` and ``arm64`` architecture
 .. versionadded:: 0.11.2
    Ubuntu packages for Jammy 22.04 (LTS)
+.. deprecated:: 0.12.0
+   ``routinator-init`` and ``--accept-arin-rpa``
 
 Updating
 --------
