@@ -200,7 +200,8 @@ The available options are:
       Sets the number of seconds an rsync command is allowed to run before it
       is terminated early. This protects against hanging rsync commands that
       prevent Routinator from continuing. The default is 300 seconds which
-      should be long enough except for very slow networks.
+      should be long enough except for very slow networks. Set the option to
+      0 to disable the timeout.
 
 .. option:: --disable-rrdp
 
@@ -1043,7 +1044,8 @@ All values can be overridden via the command line options.
       rsync-timeout
             An integer value specifying the number seconds an rsync command
             is allowed to run before it is being terminated. The default if
-            the value is missing is 300 seconds.
+            the value is missing is 300 seconds. Set the value to 0 to turn
+            the timeout off.
 
       disable-rrdp
             A boolean value that, if present and true, turns off the use of
