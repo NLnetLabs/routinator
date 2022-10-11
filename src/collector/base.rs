@@ -2,11 +2,9 @@
 //!
 //! This is a private module. It’s types are re-exported by the parent.
 
-use std::{fs, io};
 use std::collections::HashSet;
 use std::path::Path;
 use bytes::Bytes;
-use log::error;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::Config;
