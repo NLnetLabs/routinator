@@ -24,7 +24,8 @@ installed and how you intend to use Routinator, which we'll cover below.
 Routinator Installed From a Package
 -----------------------------------
 
-The installation script will run as the user *routinator* and refer to the
+The installation script will set up Routinator to run as the user
+*routinator* and be configured to start at boot. Routinator will use the
 configuration file :file:`/etc/routinator/routinator.conf` which contains the
 following pre-configured options:
 
@@ -67,7 +68,7 @@ with regards to the user that it runs as and the privileges it has. There is
 no default configuration file, as it is your choice if you want to use one.
 
 If you run Routinator without referring to a configuration file it will check
-if there is a :file:`$HOME/.routinator.conf` file and if it exists, use it.
+if the file :file:`$HOME/.routinator.conf` exists and if it does, use it.
 If no configuration file is available, the default values are used.
 
 You can specify the location of the RPKI cache directory using the
@@ -75,7 +76,7 @@ You can specify the location of the RPKI cache directory using the
 default location :file:`$HOME/.rpki-cache/repository`. The :doc:`HTTP
 service<http-service>` and :doc:`RTR service<rtr-service>` must be started
 explicitly using the command line options :option:`--http` and
-:option:`--rtr`, respectively. 
+:option:`--rtr`, respectively, or via the configuration file. 
 
 You can view the default settings Routinator runs with using:
 
@@ -90,36 +91,41 @@ own:
 
 .. code-block:: toml
 
-    allow-dubious-hosts = false
-    dirty = false
-    disable-rrdp = false
-    disable-rsync = false
-    exceptions = []
-    expire = 7200
-    history-size = 10
-    http-listen = []
-    log = "default"
-    log-level = "WARN"
-    max-object-size = 20000000
-    refresh = 600
-    repository-dir = "/Users/routinator/.rpki-cache/repository"
-    retry = 600
-    rrdp-fallback-time = 3600
-    rrdp-proxies = []
-    rrdp-root-certs = []
-    rsync-command = "rsync"
-    rsync-timeout = 300
-    rtr-client-metrics = false
-    rtr-listen = []
-    rtr-tcp-keepalive = 60
-    stale = "reject"
-    strict = false
-    syslog-facility = "daemon"
-    systemd-listen = false
-    tal-dir = "/Users/routinator/.rpki-cache/tals"
-    unknown-objects = "warn"
-    unsafe-vrps = "warn"
-    validation-threads = 4
+      allow-dubious-hosts = false
+      dirty = false
+      disable-rrdp = false
+      disable-rsync = false
+      enable-bgpsec = false
+      exceptions = []
+      expire = 7200
+      history-size = 10
+      http-listen = []
+      http-tls-listen = []
+      log = "default"
+      log-level = "WARN"
+      max-ca-depth = 32
+      max-object-size = 20000000
+      refresh = 600
+      repository-dir = "/Users/routinator/.rpki-cache/repository"
+      retry = 600
+      rrdp-fallback-time = 3600
+      rrdp-max-delta-count = 100
+      rrdp-proxies = []
+      rrdp-root-certs = []
+      rrdp-timeout = 300
+      rsync-command = "rsync"
+      rsync-timeout = 300
+      rtr-client-metrics = false
+      rtr-listen = []
+      rtr-tcp-keepalive = 60
+      rtr-tls-listen = []
+      stale = "reject"
+      strict = false
+      syslog-facility = "daemon"
+      systemd-listen = false
+      unknown-objects = "warn"
+      unsafe-vrps = "accept"
+      validation-threads = 10
 
 Trust Anchor Locators
 ---------------------
