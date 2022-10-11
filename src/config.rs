@@ -19,7 +19,7 @@ use clap::{
     crate_version,
 };
 use dirs::home_dir;
-use log::{LevelFilter, error};
+use log::{LevelFilter, error, warn};
 #[cfg(unix)] use syslog::Facility;
 use crate::tals;
 use crate::error::Failed;
@@ -127,7 +127,7 @@ pub struct Config {
     pub bundled_tals: Vec<String>,
 
     /// Path to a directory that contains additional trust anchor locators.
-    pub tal_dir: Option<PathBuf>,
+    pub extra_tals_dir: Option<PathBuf>,
 
     /// Paths to the local exceptions files.
     pub exceptions: Vec<PathBuf>,
@@ -412,8 +412,8 @@ impl Config {
             self.bundled_tals = tals;
         }
 
-        // tal_dir
-        self.tal_dir = args.tal_dir.map(|dir| cur_dir.join(dir));
+        // extra_tals_dir
+        self.extra_tals_dir = args.extra_tals_dir.map(|dir| cur_dir.join(dir));
 
         // exceptions
         if let Some(list) = args.exceptions {
@@ -797,7 +797,7 @@ impl Config {
                 file.take_string_array("tals")?
                     .unwrap_or_default()
             },
-            tal_dir: file.take_path("tal-dir")?,
+            extra_tals_dir: file.take_path("extra-tals-dir")?,
             exceptions: {
                 file.take_path_array("exceptions")?.unwrap_or_default()
             },
@@ -934,6 +934,13 @@ impl Config {
             group: file.take_string("group")?,
             tal_labels: file.take_string_map("tal-labels")?.unwrap_or_default(),
         };
+
+        if file.take_path("tal-dir")?.is_some() {
+            warn!(
+                "Ignoring obsolete \"tal-dir\" option in config file {}.",
+                file.path.display()
+            );
+        }
        
         file.check_exhausted()?;
         Ok(res)
@@ -1034,7 +1041,7 @@ impl Config {
             cache_dir,
             no_rir_tals: false,
             bundled_tals: Vec::new(),
-            tal_dir: None,
+            extra_tals_dir: None,
             exceptions: Vec::new(),
             strict: DEFAULT_STRICT,
             stale: DEFAULT_STALE_POLICY,
@@ -1101,13 +1108,15 @@ impl Config {
                     return Err(Failed)
                 }
             };
-            if let Some(tal_dir) = self.tal_dir.take() {
-                self.tal_dir = match tal_dir.strip_prefix(chroot) {
+            if let Some(extra_tals_dir) = self.extra_tals_dir.take() {
+                self.extra_tals_dir = match extra_tals_dir.strip_prefix(
+                    chroot
+                ) {
                     Ok(dir) => Some(dir.into()),
                     Err(_) => {
                         error!(
                             "Fatal: TAL directory {} not under chroot {}.",
-                             tal_dir.display(), chroot.display()
+                             extra_tals_dir.display(), chroot.display()
                         );
                         return Err(Failed)
                     }
@@ -1160,10 +1169,10 @@ impl Config {
             "repository-dir".into(),
             self.cache_dir.display().to_string().into()
         );
-        if let Some(tal_dir) = self.tal_dir.as_ref() {
+        if let Some(extra_tals_dir) = self.extra_tals_dir.as_ref() {
             res.insert(
-                "tal-dir".into(),
-                tal_dir.display().to_string().into()
+                "extra-tals-dir".into(),
+                extra_tals_dir.display().to_string().into()
             );
         }
         res.insert(
@@ -1560,7 +1569,7 @@ struct GlobalArgs {
 
     /// A directory to load additional TALs from
     #[arg(long, value_name="PATH")]
-    tal_dir: Option<PathBuf>,
+    extra_tals_dir: Option<PathBuf>,
 
     /// File with local exceptions (see RFC 8416 for format)
     #[arg(short = 'x', long, value_name="PATH")]
@@ -2391,7 +2400,7 @@ mod test {
             config.cache_dir,
             home_dir().unwrap().join(".rpki-cache").join("repository")
         );
-        assert!(config.tal_dir.is_none());
+        assert!(config.extra_tals_dir.is_none());
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, DEFAULT_STRICT);
         assert_eq!(config.validation_threads, ::num_cpus::get());
@@ -2411,7 +2420,7 @@ mod test {
     fn good_config_file() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
-             tal-dir = \"taldir\"\n\
+             extra-tals-dir = \"taldir\"\n\
              exceptions = [\"ex1\", \"/ex2\"]\n\
              strict = true\n\
              validation-threads = 1000\n\
@@ -2429,7 +2438,10 @@ mod test {
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
-        assert_eq!(config.tal_dir.unwrap().to_str().unwrap(), "/test/taldir");
+        assert_eq!(
+            config.extra_tals_dir.unwrap().to_str().unwrap(),
+            "/test/taldir"
+        );
         assert_eq!(
             config.exceptions,
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
@@ -2464,12 +2476,14 @@ mod test {
     fn minimal_config_file() {
         let config = ConfigFile::parse(
             "repository-dir = \"/repodir\"\n\
-             tal-dir = \"taldir\"",
+             extra-tals-dir = \"taldir\"",
             Path::new("/test/routinator.conf")
         ).unwrap();
         let config = Config::from_config_file(config).unwrap();
         assert_eq!(config.cache_dir.to_str().unwrap(), "/repodir");
-        assert_eq!(config.tal_dir.unwrap().to_str().unwrap(), "/test/taldir");
+        assert_eq!(
+            config.extra_tals_dir.unwrap().to_str().unwrap(), "/test/taldir"
+        );
         assert!(config.exceptions.is_empty());
         assert!(!config.strict);
         assert_eq!(config.validation_threads, ::num_cpus::get());

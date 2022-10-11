@@ -66,8 +66,9 @@ The available options are:
       resources from their area. For normal production installations, these
       are the only TALs that should be used.
 
-      Using this option as well as the :option:`--tal` and :option:`--tal-dir`
-      options you can change which TALs Routinator should use.
+      Using this option as well as the :option:`--tal` and
+      :option:`--extra-tals-dir` options you can change which TALs
+      Routinator should use.
 
 .. option:: --tal=name
 
@@ -80,7 +81,7 @@ The available options are:
 
       The option can be given more than once.
 
-.. option:: --tal-dir=dir
+.. option:: --extra-tals-dir=dir
 
       Specifies a directory containing additional trust anchor locators
       (TALs) to use. Routinator will use all files in this directory with
@@ -922,7 +923,7 @@ All values can be overridden via the command line options.
             A list of strings, each containing the name of a bundled TAL to
             be added to the set of TALs to be evaluated.
 
-      tal-dir
+      extra-tals-dir
             A string containing the path to a directory that contains
             additional TALs.
 

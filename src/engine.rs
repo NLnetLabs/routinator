@@ -84,7 +84,7 @@ pub struct Engine {
     bundled_tals: Vec<Tal>,
 
     /// An optional directory to load TALs from.
-    tal_dir: Option<PathBuf>,
+    extra_tals_dir: Option<PathBuf>,
 
     /// A mapping of TAL file names to TAL labels.
     tal_labels: HashMap<String, String>,
@@ -149,7 +149,7 @@ impl Engine {
         let store = Store::new(config)?;
         let mut res = Engine {
             bundled_tals: tals::collect_tals(config)?,
-            tal_dir: config.tal_dir.clone(),
+            extra_tals_dir: config.extra_tals_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
             collector,
@@ -175,12 +175,12 @@ impl Engine {
     /// directory. However, a warning will be logged in this case.
     pub fn reload_tals(&mut self) -> Result<(), Failed> {
         let mut res = self.bundled_tals.clone();
-        if let Some(tal_dir) = self.tal_dir.as_ref() {
-            let dir = match fs::read_dir(tal_dir) {
+        if let Some(extra_tals_dir) = self.extra_tals_dir.as_ref() {
+            let dir = match fs::read_dir(extra_tals_dir) {
                 Ok(dir) => dir,
                 Err(err) => {
                     error!("Failed to open TAL directory {}: {}.",
-                        tal_dir.display(), err
+                        extra_tals_dir.display(), err
                     );
                     return Err(Failed)
                 }
