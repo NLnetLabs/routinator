@@ -6,7 +6,8 @@ set -x
 case $1 in
   post-install)
     echo -e "\nROUTINATOR VERSION:"
-    routinator --version
+    VER=$(routinator --version)
+    echo $VER
 
     echo -e "\nROUTINATOR CONF:"
     cat /etc/routinator/routinator.conf
@@ -14,21 +15,42 @@ case $1 in
     echo -e "\nROUTINATOR DATA DIR:"
     ls -la /var/lib/routinator
 
-    # Check that the Routinator service is enabled
+    # For newer Routinator init is no longer required and the Routinator service should be automatically enabled and
+    # started, for 0.11.3 and earlier init had to be done first and then the service manually enabled and started:
+    if [[ "$VER" == "0.11.3" ]]; then
+      echo -e "\nROUTINATOR SERVICE STATUS BEFORE ENABLE:"
+      systemctl status routinator || true
+
+      echo -e "\nINIT ROUTINATOR:"
+      sudo routinator-init --accept-arin-rpa
+
+      echo -e "\nROUTINATOR DATA DIR AFTER INIT:"
+      ls -la /var/lib/routinator
+
+      echo -e "\nENABLE ROUTINATOR SERVICE:"
+      systemctl enable routinator
+
+      echo -e "\nROUTINATOR SERVICE STATUS AFTER ENABLE:"
+      systemctl status routinator || true
+
+      echo -e "\nSTART ROUTINATOR SERVICE:"
+      systemctl start routinator
+
+      echo -e "\nROUTINATOR TALS DIR:"
+      ls -la /var/lib/routinator/tals/
+    fi
+
+    echo -e "\nROUTINATOR SERVICE SHOULD BE ENABLED:"
     systemctl is-enabled --quiet routinator
 
-    # Check that the Routinator service is running
+    echo -e "\nROUTINATOR SERVICE SHOULD BE ACTIVE:"
     systemctl is-active --quiet routinator
 
-    echo -e "\nROUTINATOR SERVICE STATUS:"
-    systemctl status routinator || true
-
-    # Give Routinator time to do something interesting...
     sleep 15s
 
     echo -e "\nROUTINATOR LOGS AFTER START:"
     journalctl --unit=routinator
-
+    
     echo -e "\nROUTINATOR MAN PAGE (first 20 lines only):"
     man -P cat routinator | head -n 20 || true
 
