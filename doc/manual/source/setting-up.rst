@@ -1,3 +1,8 @@
+.. Important:: **With Routinator 0.12.0 and newer, initialisation to accept 
+               the ARIN Relying Party Agreement is no longer required.** By 
+               default, Routinator is set up to fetch and validate all RPKI
+               data needed for production environments.
+
 Setting Up
 ==========
 
