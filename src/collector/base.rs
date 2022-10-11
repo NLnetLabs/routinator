@@ -44,28 +44,11 @@ pub struct Collector {
 impl Collector {
     /// Initializes the collector without creating a value.
     ///
-    /// Ensures that the base directory exists. This will _not_ create the
-    /// base directory to ensure that `routinator init` has been run.
+    /// Ensures that the collector’s directories exists and creates them if
+    /// necessary.
     ///
     /// The function is called implicitly by [`new`][Self::new].
     pub fn init(config: &Config) -> Result<(), Failed> {
-        if let Err(err) = fs::read_dir(&config.cache_dir) {
-            if err.kind() == io::ErrorKind::NotFound {
-                error!(
-                    "Missing repository directory {}.\n\
-                     You may have to initialize it via \
-                     \'routinator init\'.",
-                     config.cache_dir.display()
-                );
-            }
-            else {
-                error!(
-                    "Failed to open repository directory {}: {}",
-                    config.cache_dir.display(), err
-                );
-            }
-            return Err(Failed)
-        }
         rrdp::Collector::init(config)?;
         rsync::Collector::init(config)?;
         Ok(())
