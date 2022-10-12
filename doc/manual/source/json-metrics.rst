@@ -284,15 +284,6 @@ enabled or not.
    The total number of bytes written to RTR connections. In other words,
    describes how much data has been sent to clients.
 
-``last_reset`` 
-   Contains the time of the last cache reset by the client.
-
-``reset_queries`` 
-   Contains the number of reset queries by the client.
-
-``serial_queries`` 
-   Contains the number of serial queries by the client.
-
 If ``rtr-client-metrics`` are enabled via configuration or command line,
 an additional object ``clients`` will appear that list the IP addresses of
 clients seen by the RTR server providing the following information for them.
@@ -301,6 +292,18 @@ clients seen by the RTR server providing the following information for them.
    The number of currently open connections from that address. The number
    should normally be 0 or 1 but can be higher if the address is the public
    side of a NAT.
+
+``updated`` 
+   Contains the time of the last successful update by the client.
+
+``lastReset`` 
+   Contains the time of the last successful cache reset by the client.
+
+``resetQueries`` 
+   Contains the number of reset queries by the client.
+
+``serialQueries`` 
+   Contains the number of serial queries by the client.
 
 ``serial``
    The highest serial of the data provided to a client from that address.
