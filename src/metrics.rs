@@ -800,6 +800,18 @@ pub struct RtrClientMetrics {
     /// serves as a `None`.
     updated: AtomicI64,
 
+    /// The time the last successful cache reset finished.
+    ///
+    /// This is an option of the unix timestamp. The value of `i64::MIN`
+    /// serves as a `None`.
+    last_reset: AtomicI64,
+
+    /// The number of successful reset queries.
+    reset_queries: AtomicU32,
+
+    /// The number of successful serial queries.
+    serial_queries: AtomicU32,
+
     /// The number of bytes read.
     bytes_read: AtomicU64,
 
@@ -815,6 +827,9 @@ impl RtrClientMetrics {
             open: AtomicBool::new(true),
             serial: AtomicU32::new(u32::MAX),
             updated: AtomicI64::new(i64::MIN),
+            last_reset: AtomicI64::new(i64::MIN),
+            reset_queries: AtomicU32::new(0),
+            serial_queries: AtomicU32::new(0),
             bytes_read: AtomicU64::new(0),
             bytes_written: AtomicU64::new(0),
         }
@@ -876,12 +891,42 @@ impl RtrClientMetrics {
         }
     }
 
+    /// Returns the time of the last successful reset update.
+    ///
+    /// Returns `None` if there never was a successful update.
+    pub fn last_reset(&self) -> Option<DateTime<Utc>> {
+        let updated = self.last_reset.load(Ordering::Relaxed);
+        if updated == i64::MIN {
+            None
+        }
+        else {
+            Some(Utc.timestamp(updated, 0))
+        }
+    }
+
+    /// Returns the number of successful reset queries.
+    pub fn reset_queries(&self) -> u32 {
+        self.reset_queries.load(Ordering::Relaxed)
+    }
+
+    /// Returns the number of successful reset queries.
+    pub fn serial_queries(&self) -> u32 {
+        self.serial_queries.load(Ordering::Relaxed)
+    }
+
     /// A successful update with the given serial number has finished now.
     ///
     /// Updates the serial number and update time accordingly.
-    pub fn update_now(&self, serial: Serial) {
+    pub fn update_now(&self, serial: Serial, reset: bool) {
         self.serial.store(serial.into(), Ordering::Relaxed);
         self.updated.store(Utc::now().timestamp(), Ordering::Relaxed);
+        if reset {
+            self.last_reset.store(Utc::now().timestamp(), Ordering::Relaxed);
+            self.reset_queries.fetch_add(1, Ordering::Relaxed);
+        }
+        else {
+            self.serial_queries.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     /// Collapses the metrics of two values into a new one.
@@ -910,6 +955,20 @@ impl RtrClientMetrics {
                     self.updated.load(Ordering::Relaxed),
                     other.updated.load(Ordering::Relaxed)
                 )
+            ),
+            last_reset: AtomicI64::new(
+                cmp::max(
+                    self.last_reset.load(Ordering::Relaxed),
+                    other.last_reset.load(Ordering::Relaxed)
+                )
+            ),
+            reset_queries: AtomicU32::new(
+                self.reset_queries.load(Ordering::Relaxed)
+                + other.reset_queries.load(Ordering::Relaxed)
+            ),
+            serial_queries: AtomicU32::new(
+                self.serial_queries.load(Ordering::Relaxed)
+                + other.serial_queries.load(Ordering::Relaxed)
             ),
             bytes_read: AtomicU64::new(
                 self.bytes_read.load(Ordering::Relaxed)

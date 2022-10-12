@@ -209,8 +209,8 @@ impl RtrStream {
 }
 
 impl Socket for RtrStream {
-    fn update(&self, state: State, _reset: bool) {
-        self.metrics.update_now(state.serial());
+    fn update(&self, state: State, reset: bool) {
+        self.metrics.update_now(state.serial(), reset);
     }
 }
 

@@ -1,7 +1,7 @@
 //! Handling of endpoints related to the status.
 
 use std::cmp;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use clap::{crate_name, crate_version};
 use hyper::{Body, Method, Request};
 use crate::metrics::{
@@ -262,38 +262,47 @@ async fn handle_status(
         // rtr-clients
         writeln!(res, "rtr-clients:");
         rtr_metrics.fold_clients(
-            // connections, serial, update, read, written
-            (0, None, None, 0, 0),
+            RtrClientStatus::default(),
             |data, client| {
                 if client.is_open() {
-                    data.0 += 1
+                    data.connections += 1;
                 }
-                data.1 = match (
-                    data.1, client.serial().map(u32::from)
+                data.serial = match (
+                    data.serial, client.serial().map(u32::from)
                 ) {
                     (Some(left), Some(right)) => Some(cmp::max(left, right)),
                     (Some(left), None) => Some(left),
                     (None, Some(right)) => Some(right),
                     (None, None) => None
                 };
-                data.2 = match (data.2, client.updated()) {
+                data.updated = match (data.updated, client.updated()) {
                     (Some(left), Some(right)) => Some(cmp::max(left, right)),
                     (Some(left), None) => Some(left),
                     (None, Some(right)) => Some(right),
                     (None, None) => None
                 };
-                data.3 += client.bytes_read();
-                data.4 += client.bytes_written();
+                data.last_reset = match
+                    (data.last_reset, client.last_reset())
+                {
+                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                    (Some(left), None) => Some(left),
+                    (None, Some(right)) => Some(right),
+                    (None, None) => None
+                };
+                data.reset_queries += client.reset_queries();
+                data.serial_queries += client.serial_queries();
+                data.bytes_read += client.bytes_read();
+                data.bytes_written += client.bytes_written();
             }
-        ).for_each(|(addr, (conns, serial, update, read, written))| {
-            write!(res, "    {}: connections={}, ", addr, conns);
-            if let Some(serial) = serial {
+        ).for_each(|(addr, data)| {
+            write!(res, "    {}: connections={}, ", addr, data.connections);
+            if let Some(serial) = data.serial {
                 write!(res, "serial={}, ", serial);
             }
             else {
                 write!(res, "serial=N/A, ");
             }
-            if let Some(update) = update {
+            if let Some(update) = data.updated {
                 let update = Utc::now() - update;
                 write!(
                     res,
@@ -304,7 +313,22 @@ async fn handle_status(
             else {
                 write!(res, "updated=N/A, ");
             }
-            writeln!(res, "read={}, written={}", read, written);
+            if let Some(update) = data.last_reset {
+                let update = Utc::now() - update;
+                write!(
+                    res,
+                    "last-reset-ago={}.{:03}s, ",
+                    update.num_seconds(), update.num_milliseconds() % 1000
+                );
+            }
+            else {
+                write!(res, "last-reset=N/A, ");
+            }
+            writeln!(res,
+                "reset-queries={}, serial-queries={}, read={}, written={}",
+                data.reset_queries, data.serial_queries,
+                data.bytes_read, data.bytes_written,
+            );
         });
     }
 
@@ -325,6 +349,20 @@ async fn handle_status(
     );
 
     ResponseBuilder::ok().content_type(ContentType::TEXT).body(res)
+}
+
+
+// Helper struct to keep RTR client data.
+#[derive(Clone, Default)]
+struct RtrClientStatus {
+    connections: usize,
+    serial: Option<u32>,
+    updated: Option<DateTime<Utc>>,
+    last_reset: Option<DateTime<Utc>>,
+    reset_queries: u32,
+    serial_queries: u32,
+    bytes_read: u64,
+    bytes_written: u64,
 }
 
 
