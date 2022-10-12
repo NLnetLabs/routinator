@@ -251,10 +251,10 @@ to get started.
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
 
        To adjust the configuration you can pass command line arguments to
-       Routinator (try `--help` for more information) and/or supply your
+       Routinator (try ``--help`` for more information) and/or supply your
        own Routinator configuration file (by mapping it from the host info
-       the container using `-v host/path/to/routinator.conf:/etc/routinator.conf`
-       and passing `--config /etc/routinator.conf` when running the container).
+       the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
+       and passing ``--config /etc/routinator.conf`` when running the container).
 
 .. versionadded:: 0.9.0
    RPM packages
