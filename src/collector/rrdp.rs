@@ -288,7 +288,7 @@ pub struct Run<'a> {
     ///
     /// If there is some value for a repository, it is available and current.
     /// If there is a `None`, the repository is not available or outdated.
-    updated: RwLock<HashMap<uri::Https, Option<Repository>>>,
+    updated: RwLock<HashMap<uri::Https, LoadResult>>,
 
     /// The modules that are currently being updated.
     ///
@@ -356,7 +356,7 @@ impl<'a> Run<'a> {
     /// `Ok(None)`, you can fall back to rsync.
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
-    ) -> Result<Option<Repository>, Failed> {
+    ) -> Result<LoadResult, Failed> {
         // If we already tried updating, we can return already.
         if let Some(repo) = self.updated.read().get(rpki_notify) {
             return Ok(repo.clone())
@@ -490,6 +490,25 @@ impl<'a> Run<'a> {
 }
 
 
+//------------ LoadResult ----------------------------------------------------
+
+/// The result of trying to load a repository.
+#[derive(Clone, Debug)]
+pub enum LoadResult {
+    /// The update failed and there is no local copy.
+    Unavailable,
+
+    /// The update failed and any content should now be considered stale.
+    Stale,
+
+    /// The update failed but content should not be considered stale yet.
+    Current,
+
+    /// The repository was successfully updated.
+    Updated(Repository),
+}
+
+
 //------------ Repository ----------------------------------------------------
 
 /// Access to a single RRDP repository.
@@ -560,14 +579,14 @@ impl Repository {
     /// downloaded version that hasn’t expired yet.
     fn try_update(
         run: &Run, rpki_notify: uri::Https
-    ) -> Result<Option<Self>, Failed> {
+    ) -> Result<LoadResult, Failed> {
         // Check if the repository URI is dubious and return early if so.
         if run.collector.filter_dubious && rpki_notify.has_dubious_authority() {
             warn!(
                 "{}: Dubious host name. Not using the repository.",
                 rpki_notify
             );
-            return Ok(None)
+            return Ok(LoadResult::Unavailable)
         }
 
         let path = run.collector.repository_path(&rpki_notify);
@@ -603,26 +622,26 @@ impl Repository {
         metrics.duration = SystemTime::now().duration_since(start_time);
         run.metrics.lock().push(metrics);
 
-        if is_updated || is_current {
-            Ok(Some(repo))
+        if is_updated {
+            Ok(LoadResult::Updated(repo))
+        }
+        else if is_current {
+            Ok(LoadResult::Current)
+        }
+        else if let Some(date) = best_before {
+            info!(
+                "RRDP {}: Update failed and \
+                current copy is expired since {}.",
+                rpki_notify, date
+            );
+            Ok(LoadResult::Stale)
         }
         else {
-            match best_before {
-                Some(date) => {
-                    info!(
-                        "RRDP {}: Update failed and \
-                        current copy is expired since {}.",
-                        rpki_notify, date
-                    );
-                },
-                None => {
-                    info!(
-                        "RRDP {}: Update failed and there is no current copy.",
-                        rpki_notify
-                    );
-                }
-            }
-            Ok(None)
+            info!(
+                "RRDP {}: Update failed and there is no current copy.",
+                rpki_notify
+            );
+            Ok(LoadResult::Unavailable)
         }
     }
 

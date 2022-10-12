@@ -9,7 +9,7 @@ use bytes::Bytes;
 use log::error;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
-use crate::config::Config;
+use crate::config::{Config, FallbackPolicy};
 use crate::error::Failed;
 use crate::metrics::Metrics;
 use crate::engine::CaCert;
@@ -39,6 +39,9 @@ pub struct Collector {
     ///
     /// If this is `None`, use of rsync has been disabled entirely.
     rsync: Option<rsync::Collector>,
+
+    /// The policy for falling back from RRDP to rsync.
+    rrdp_fallback: FallbackPolicy,
 }
 
 impl Collector {
@@ -81,6 +84,7 @@ impl Collector {
         Ok(Collector {
             rrdp: rrdp::Collector::new(config)?,
             rsync: rsync::Collector::new(config)?,
+            rrdp_fallback: config.rrdp_fallback,
         })
     }
 
@@ -125,6 +129,9 @@ impl Collector {
 /// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
+    /// The collector we are base off of.
+    collector: &'a Collector,
+
     /// The runner for rsync if this transport is enabled.
     rsync: Option<rsync::Run<'a>>,
 
@@ -136,6 +143,7 @@ impl<'a> Run<'a> {
     /// Creates a new validation run for the given collector.
     fn new(collector: &'a Collector) -> Self {
         Run {
+            collector,
             rsync: collector.rsync.as_ref().map(|rsync| rsync.start()),
             rrdp: collector.rrdp.as_ref().map(|rrdp| rrdp.start()),
         }
@@ -184,15 +192,46 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If the repository is definitely unavailable,  returns `Ok(None)`.
+    /// If no updated version of the repository is available, returns
+    /// `Ok(None)`.
     pub fn repository<'s>(
         &'s self, ca: &'s CaCert
     ) -> Result<Option<Repository<'s>>, Failed> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                if let Some(repository) = rrdp.load_repository(rrdp_uri)? {
-                    return Ok(Some(Repository::rrdp(repository)))
+                match rrdp.load_repository(rrdp_uri)? {
+                    rrdp::LoadResult::Unavailable => {
+                        // Update failed and no local copy at all. Both
+                        // "stale" and "new" want us to fall back, "never"
+                        // to just fail.
+                        if matches!(
+                            self.collector.rrdp_fallback,
+                            FallbackPolicy::Never
+                        ) {
+                            return Ok(None)
+                        }
+                    }
+                    rrdp::LoadResult::Stale => {
+                        // Update failed and data is now stale. Only
+                        // "stale" wants us to fall back, "never" and "new"
+                        // want us to fail.
+                        if matches!(
+                            self.collector.rrdp_fallback,
+                            FallbackPolicy::Never | FallbackPolicy::New
+                        ) {
+                            return Ok(None)
+                        }
+                    }
+                    rrdp::LoadResult::Current => {
+                        // Update failed but data is still current. Nobody
+                        // wants us to fall back.
+                        return Ok(None)
+                    }
+                    rrdp::LoadResult::Updated(repo) => {
+                        // Hurrah!
+                        return Ok(Some(Repository::rrdp(repo)))
+                    }
                 }
             }
         }
