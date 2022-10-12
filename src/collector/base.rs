@@ -6,7 +6,7 @@ use std::{fs, io};
 use std::collections::HashSet;
 use std::path::Path;
 use bytes::Bytes;
-use log::error;
+use log::{error, info};
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::{Config, FallbackPolicy};
@@ -232,6 +232,10 @@ impl<'a> Run<'a> {
                         // Hurrah!
                         return Ok(Some(Repository::rrdp(repo)))
                     }
+                }
+
+                if self.rsync.is_some() {
+                    info!("RRDP {}: Falling back to rsync.", rrdp_uri);
                 }
             }
         }
