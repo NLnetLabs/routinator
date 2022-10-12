@@ -256,6 +256,16 @@ to get started.
        the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
        and passing ``--config /etc/routinator.conf`` when running the container).
 
+       To persist the RPKI cache data you can create a separate Docker volume
+       and mount it into the container like so:
+
+       .. code-block:: bash
+
+          sudo docker volume create rpki-cache
+          sudo docker run <your usual arguments> \
+              -v rpki-cache:/home/routinator/.rpki-cache \
+              nlnetlabs/routinator
+
 .. versionadded:: 0.9.0
    RPM packages
 .. versionadded:: 0.11.0
