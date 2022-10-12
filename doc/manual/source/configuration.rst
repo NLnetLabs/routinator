@@ -21,7 +21,7 @@ Routinator can run as a daemon but you can also use it interactively from the
 command line. There are several considerations with regards to how you've
 installed and how you intend to use Routinator, which we'll cover below.
 
-Routinator Installed From a Package
+Setup When Installed From a Package
 -----------------------------------
 
 The installation script will set up Routinator to run as the user
@@ -60,7 +60,7 @@ make changes.
                :doc:`user interface<user-interface>` or one of the 
                :doc:`HTTP endpoints<http-service>`.
 
-Routinator Built with Cargo
+Setup When Built with Cargo
 ---------------------------
 
 If you have built Routinator using Cargo, you have made your own decisions
@@ -164,7 +164,7 @@ This displays the following overview:
          X   apnic-testbed       APNIC RPKI Testbed
          X   arin-ote            ARIN Operational Test and Evaluation Environment
          X   ripe-pilot          RIPE NCC RPKI Test Environment
-            nlnetlabs-testbed   NLnet Labs RPKI Testbed
+             nlnetlabs-testbed   NLnet Labs RPKI Testbed
 
 You can influence which TALs Routinator uses with the :option:`--tal` option,
 which can be combined with the :option:`--no-rir-tals` option to leave out
@@ -236,8 +236,8 @@ served to your routers.
 Also keep in mind that every time you restart the machine, the contents of
 the *tmpfs* file system will be lost. This means that Routinator will have to
 rebuild its cache from scratch. This is not a problem, other than it having
-to download several gigabytes of data, which usually takes about ten minutes
-to complete. During this time all services will be unavailable.
+to download several hundred megabytes of data, which usually takes about ten
+minutes to complete. During this time all services will be unavailable.
 
 Note that your routers should be configured to have a secondary relying party
 instance available at all times.
