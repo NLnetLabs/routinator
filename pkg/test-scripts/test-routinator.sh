@@ -75,7 +75,9 @@ case $1 in
     man -P cat routinator
   
     echo -e "\nOLD ROUTINATOR-INIT SCRIPT SHOULD NOT EXIST:"
-    if [ -f /usr/bin/routinator-init ]; then
+    if [ ! -f /usr/bin/routinator-init ]; then
+      echo "Confirmed that /usr/bin/routinator-init does not exist."
+    else
       echo >&2 "ERROR: /usr/bin/routinator-init exists but should have been removed if it was present"
       exit 1
     fi
