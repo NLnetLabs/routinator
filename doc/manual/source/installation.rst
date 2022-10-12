@@ -233,42 +233,28 @@ to get started.
        
    .. group-tab:: Docker
 
-       Routinator Docker images are built with Alpine Linux for
-       ``amd64``/``x86_64`` architecture.
-       
-       Due to the impracticality of complying with terms and conditions in an
-       unsupervised Docker environment, it is necessary to first review and
-       agree to the `ARIN Relying Party Agreement (RPA)
-       <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree, you
-       can let the Routinator Docker image install the :term:`Trust Anchor
-       Locator (TAL)` files into a mounted volume that is later reused for
-       the server.
+       Routinator Docker images are built with Alpine Linux. The supported CPU
+       architectures are shown on the `Docker Hub Routinator page <https://hub.docker.com/r/nlnetlabs/routinator/tags>`_
+       per Routinator version (aka Docker "tag") in the `OS/ARCH` column.
 
-       First, create a Docker volume to persist the TAL files in:
+       To run Routinator as a background daemon with the default settings (RTR
+       server on port 3323 and HTTP server on port 8323) can be done like so:
 
        .. code-block:: bash
 
-          sudo docker volume create routinator-tals
-
-       Then run a disposable container to install the TALs:
-
-       .. code-block:: bash
-
-          sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
-              nlnetlabs/routinator init -f --accept-arin-rpa
-
-       Finally, launch the detached container named *routinator*, exposing
-       the :term:`RPKI-to-Router (RPKI-RTR)` protocol on port 3323 and HTTP
-       on port 8323:
-
-       .. code-block:: bash
-
-          sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-               -p 8323:8323 -v routinator-tals:/home/routinator/.rpki-cache/tals \
-               nlnetlabs/routinator
+          sudo docker run -d --restart=unless-stopped --name routinator \
+              -p 3323:3323 \
+              -p 8323:8323 \
+              nlnetlabs/routinator
                
        The Routinator container is known to run successfully run under 
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
+
+       To adjust the configuration you can pass command line arguments to
+       Routinator (try `--help` for more information) and/or supply your
+       own Routinator configuration file (by mapping it from the host info
+       the container using `-v host/path/to/routinator.conf:/etc/routinator.conf`
+       and passing `--config /etc/routinator.conf` when running the container).
 
 .. versionadded:: 0.9.0
    RPM packages
@@ -345,11 +331,14 @@ Updating
              
    .. group-tab:: Docker
 
-       Upgrading to the latest version of Routinator can be done with:
+       Assuming that you run Docker with image `nlnetlabs/routinator`, upgrading
+       to the latest version can be done by running the following commands:
         
        .. code-block:: text
        
-          docker run -it nlnetlabs/routinator:latest
+          docker pull nlnetlabs/routinator
+          docker stop routinator
+          docker run <your usual docker run arguments> nlnetlabs/routinator
 
 Installing Specific Versions
 ----------------------------
