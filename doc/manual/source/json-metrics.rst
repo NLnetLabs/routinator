@@ -284,6 +284,15 @@ enabled or not.
    The total number of bytes written to RTR connections. In other words,
    describes how much data has been sent to clients.
 
+``last_reset`` 
+   Contains the time of the last cache reset by the client.
+
+``reset_queries`` 
+   Contains the number of reset queries by the client.
+
+``serial_queries`` 
+   Contains the number of serial queries by the client.
+
 If ``rtr-client-metrics`` are enabled via configuration or command line,
 an additional object ``clients`` will appear that list the IP addresses of
 clients seen by the RTR server providing the following information for them.
