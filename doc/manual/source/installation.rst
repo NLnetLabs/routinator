@@ -233,9 +233,10 @@ to get started.
        
    .. group-tab:: Docker
 
-       Routinator Docker images are built with Alpine Linux. The supported CPU
-       architectures are shown on the `Docker Hub Routinator page <https://hub.docker.com/r/nlnetlabs/routinator/tags>`_
-       per Routinator version (aka Docker "tag") in the `OS/ARCH` column.
+       Routinator Docker images are built with Alpine Linux. The supported 
+       CPU architectures are shown on the `Docker Hub Routinator page 
+       <https://hub.docker.com/r/nlnetlabs/routinator/tags>`_ per Routinator
+       version (aka Docker "tag") in the ``OS/ARCH`` column.
 
        To run Routinator as a background daemon with the default settings (RTR
        server on port 3323 and HTTP server on port 8323) can be done like so:
@@ -251,7 +252,7 @@ to get started.
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
 
        To adjust the configuration you can pass command line arguments to
-       Routinator (try ``--help`` for more information) and/or supply your
+       Routinator (try :option:`--help` for more information) and/or supply your
        own Routinator configuration file (by mapping it from the host info
        the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
        and passing ``--config /etc/routinator.conf`` when running the container.
