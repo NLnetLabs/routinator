@@ -129,7 +129,7 @@ impl Collector {
 /// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
 #[derive(Debug)]
 pub struct Run<'a> {
-    /// The collector we are base off of.
+    /// The collector we are based off of.
     collector: &'a Collector,
 
     /// The runner for rsync if this transport is enabled.
