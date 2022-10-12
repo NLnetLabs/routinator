@@ -348,7 +348,7 @@ Updating
        .. code-block:: text
        
           sudo docker pull nlnetlabs/routinator
-          sudo docker stop routinator
+          sudo docker rm --force routinator
           sudo docker run <your usual arguments> nlnetlabs/routinator
 
 Installing Specific Versions
