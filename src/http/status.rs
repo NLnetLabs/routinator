@@ -6,7 +6,7 @@ use clap::{crate_name, crate_version};
 use hyper::{Body, Method, Request};
 use crate::metrics::{
     HttpServerMetrics, PayloadMetrics, PublicationMetrics,
-    SharedRtrServerMetrics, VrpMetrics,
+    RtrClientMetrics, SharedRtrServerMetrics, VrpMetrics,
 };
 use crate::payload::SharedHistory;
 use crate::utils::fmt::WriteOrPanic;
@@ -262,38 +262,7 @@ async fn handle_status(
         // rtr-clients
         writeln!(res, "rtr-clients:");
         rtr_metrics.fold_clients(
-            RtrClientStatus::default(),
-            |data, client| {
-                if client.is_open() {
-                    data.connections += 1;
-                }
-                data.serial = match (
-                    data.serial, client.serial().map(u32::from)
-                ) {
-                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                    (Some(left), None) => Some(left),
-                    (None, Some(right)) => Some(right),
-                    (None, None) => None
-                };
-                data.updated = match (data.updated, client.updated()) {
-                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                    (Some(left), None) => Some(left),
-                    (None, Some(right)) => Some(right),
-                    (None, None) => None
-                };
-                data.last_reset = match
-                    (data.last_reset, client.last_reset())
-                {
-                    (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                    (Some(left), None) => Some(left),
-                    (None, Some(right)) => Some(right),
-                    (None, None) => None
-                };
-                data.reset_queries += client.reset_queries();
-                data.serial_queries += client.serial_queries();
-                data.bytes_read += client.bytes_read();
-                data.bytes_written += client.bytes_written();
-            }
+            RtrClientStatus::default(), RtrClientStatus::fold
         ).for_each(|(addr, data)| {
             write!(res, "    {}: connections={}, ", addr, data.connections);
             if let Some(serial) = data.serial {
@@ -349,20 +318,6 @@ async fn handle_status(
     );
 
     ResponseBuilder::ok().content_type(ContentType::TEXT).body(res)
-}
-
-
-// Helper struct to keep RTR client data.
-#[derive(Clone, Default)]
-struct RtrClientStatus {
-    connections: usize,
-    serial: Option<u32>,
-    updated: Option<DateTime<Utc>>,
-    last_reset: Option<DateTime<Utc>>,
-    reset_queries: u32,
-    serial_queries: u32,
-    bytes_read: u64,
-    bytes_written: u64,
 }
 
 
@@ -543,45 +498,20 @@ async fn handle_api_status(
             if detailed_rtr {
                 target.member_object("clients", |target| {
                     rtr_metrics.fold_clients(
-                        // connections, serial, update, read, written
-                        (0, None, None, 0, 0),
-                        |data, client| {
-                            if client.is_open() {
-                                data.0 += 1
-                            }
-                            data.1 = match (
-                                data.1,
-                                client.serial().map(u32::from)
-                            ) {
-                                (Some(left), Some(right)) => {
-                                    Some(cmp::max(left, right))
-                                }
-                                (Some(left), None) => Some(left),
-                                (None, Some(right)) => Some(right),
-                                (None, None) => None
-                            };
-                            data.2 = match (data.2, client.updated()) {
-                                (Some(left), Some(right)) => {
-                                    Some(cmp::max(left, right))
-                                }
-                                (Some(left), None) => Some(left),
-                                (None, Some(right)) => Some(right),
-                                (None, None) => None
-                            };
-                            data.3 += client.bytes_read();
-                            data.4 += client.bytes_written();
-                        }
-                    ).for_each(
-                        |(addr, (conns, serial, update, read, written))| {
+                        RtrClientStatus::default(), RtrClientStatus::fold
+                   ).for_each(
+                        |(addr, data)| {
                             target.member_object(addr, |target| {
-                                target.member_raw("connections", conns);
-                                if let Some(serial) = serial {
+                                target.member_raw(
+                                    "connections", data.connections
+                                );
+                                if let Some(serial) = data.serial {
                                     target.member_raw("serial", serial);
                                 }
                                 else {
                                     target.member_raw("serial", "null");
                                 }
-                                if let Some(update) = update {
+                                if let Some(update) = data.updated {
                                     target.member_str(
                                         "updated",
                                         update.format("%+")
@@ -590,8 +520,27 @@ async fn handle_api_status(
                                 else {
                                     target.member_raw("updated", "null");
                                 }
-                                target.member_raw("read", read);
-                                target.member_raw("written", written);
+                                if let Some(update) = data.last_reset {
+                                    target.member_str(
+                                        "lastReset",
+                                        update.format("%+")
+                                    );
+                                }
+                                else {
+                                    target.member_raw("lastReset", "null");
+                                }
+                                target.member_raw(
+                                    "resetQueries", data.reset_queries
+                                );
+                                target.member_raw(
+                                    "serialQueries", data.serial_queries
+                                );
+                                target.member_raw(
+                                    "read", data.bytes_read
+                                );
+                                target.member_raw(
+                                    "written", data.bytes_written
+                                );
                             })
                         }
                     );
@@ -690,6 +639,56 @@ fn handle_version(head: bool) -> Response {
     }
     else {
         res.body(crate_version!())
+    }
+}
+
+
+//------------ RtrClientStatus -----------------------------------------------
+
+// Helper struct to keep RTR client data.
+#[derive(Clone, Default)]
+struct RtrClientStatus {
+    connections: usize,
+    serial: Option<u32>,
+    updated: Option<DateTime<Utc>>,
+    last_reset: Option<DateTime<Utc>>,
+    reset_queries: u32,
+    serial_queries: u32,
+    bytes_read: u64,
+    bytes_written: u64,
+}
+
+impl RtrClientStatus {
+    fn fold(&mut self, client: &RtrClientMetrics) {
+        if client.is_open() {
+            self.connections += 1;
+        }
+        self.serial = match (
+            self.serial, client.serial().map(u32::from)
+        ) {
+            (Some(left), Some(right)) => Some(cmp::max(left, right)),
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None
+        };
+        self.updated = match (self.updated, client.updated()) {
+            (Some(left), Some(right)) => Some(cmp::max(left, right)),
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None
+        };
+        self.last_reset = match
+            (self.last_reset, client.last_reset())
+        {
+            (Some(left), Some(right)) => Some(cmp::max(left, right)),
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None
+        };
+        self.reset_queries += client.reset_queries();
+        self.serial_queries += client.serial_queries();
+        self.bytes_read += client.bytes_read();
+        self.bytes_written += client.bytes_written();
     }
 }
 
