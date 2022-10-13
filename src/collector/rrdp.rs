@@ -883,7 +883,12 @@ impl<'a> SnapshotUpdate<'a> {
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
-                response
+                if response.status() != StatusCode::OK {
+                    return Err(response.status().into())
+                }
+                else {
+                    response
+                }
             }
             Err(err) => {
                 self.metrics.payload_status = Some(HttpStatus::Error);
@@ -1082,7 +1087,12 @@ impl<'a> DeltaUpdate<'a> {
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
-                response
+                if response.status() != StatusCode::OK {
+                    return Err(response.status().into())
+                }
+                else {
+                    response
+                }
             }
             Err(err) => {
                 self.metrics.payload_status = Some(HttpStatus::Error);
@@ -1429,7 +1439,9 @@ impl HttpClient {
         if let Some(timeout) = self.timeout {
             request = request.timeout(timeout);
         }
-        request.send().map(|response| {
+        request.send().and_then(|response| {
+            response.error_for_status()
+        }).map(|response| {
             HttpResponse::create(response, uri, &self.response_dir, multi)
         })
     }
@@ -1475,7 +1487,7 @@ impl HttpClient {
         if response.status() == StatusCode::NOT_MODIFIED {
             Ok(None)
         }
-        else if !response.status().is_success() {
+        else if response.status() != StatusCode::OK {
             warn!(
                 "RRDP {}: Getting notification file failed with status {}",
                 uri, response.status()
@@ -2339,6 +2351,7 @@ enum RrdpDataReadError {
 #[derive(Debug)]
 enum SnapshotError {
     Http(reqwest::Error),
+    HttpStatus(StatusCode),
     Rrdp(rrdp::ProcessError),
     SessionMismatch {
         expected: Uuid,
@@ -2356,6 +2369,12 @@ enum SnapshotError {
 impl From<reqwest::Error> for SnapshotError {
     fn from(err: reqwest::Error) -> Self {
         SnapshotError::Http(err)
+    }
+}
+
+impl From<StatusCode> for SnapshotError {
+    fn from(code: StatusCode) -> Self {
+        SnapshotError::HttpStatus(code)
     }
 }
 
@@ -2394,6 +2413,9 @@ impl fmt::Display for SnapshotError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             SnapshotError::Http(ref err) => err.fmt(f),
+            SnapshotError::HttpStatus(status) => {
+                write!(f, "HTTP {}", status)
+            }
             SnapshotError::Rrdp(ref err) => err.fmt(f),
             SnapshotError::SessionMismatch { ref expected, ref received } => {
                 write!(
@@ -2435,6 +2457,7 @@ impl error::Error for SnapshotError { }
 #[derive(Debug)]
 enum DeltaError {
     Http(reqwest::Error),
+    HttpStatus(StatusCode),
     Rrdp(rrdp::ProcessError),
     SessionMismatch {
         expected: Uuid,
@@ -2464,6 +2487,12 @@ enum DeltaError {
 impl From<reqwest::Error> for DeltaError {
     fn from(err: reqwest::Error) -> Self {
         DeltaError::Http(err)
+    }
+}
+
+impl From<StatusCode> for DeltaError {
+    fn from(code: StatusCode) -> Self {
+        DeltaError::HttpStatus(code)
     }
 }
 
@@ -2502,6 +2531,9 @@ impl fmt::Display for DeltaError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             DeltaError::Http(ref err) => err.fmt(f),
+            DeltaError::HttpStatus(status) => {
+                write!(f, "HTTP {}", status)
+            }
             DeltaError::Rrdp(ref err) => err.fmt(f),
             DeltaError::SessionMismatch { ref expected, ref received } => {
                 write!(
