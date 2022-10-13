@@ -50,6 +50,9 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 /// The default for the RRDP timeout.
 const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
 
+/// The default for the RRDP TCP keepalive
+const DEFAULT_RRDP_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
+
 /// The default for the RRDP fallback policy.
 const DEFAULT_RRDP_FALLBACK: FallbackPolicy = FallbackPolicy::Stale;
 
@@ -201,8 +204,11 @@ pub struct Config {
     /// If this is None, no timeout is set.
     pub rrdp_timeout: Option<Duration>,
 
-    /// Optional RRDP connect timeout in seconds.
+    /// Optional RRDP connect timeout.
     pub rrdp_connect_timeout: Option<Duration>,
+
+    /// Optional TCP keepalive duration for RRDP connections.
+    pub rrdp_tcp_keepalive: Option<Duration>,
 
     /// Optional RRDP local address to bind to when doing requests.
     pub rrdp_local_addr: Option<IpAddr>,
@@ -505,6 +511,16 @@ impl Config {
         // rrdp_connect_timeout
         if let Some(value) = args.rrdp_connect_timeout {
             self.rrdp_connect_timeout = Some(Duration::from_secs(value))
+        }
+
+        // rrdp_tcp_keepalive
+        if let Some(value) = args.rrdp_tcp_keepalive {
+            self.rrdp_tcp_keepalive = if value == 0 {
+                None
+            }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // rrdp_local_addr
@@ -858,6 +874,13 @@ impl Config {
             rrdp_connect_timeout: {
                 file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
             },
+            rrdp_tcp_keepalive: {
+                match file.take_u64("rrdp-tcp-keepalive")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RRDP_TCP_KEEPALIVE)
+                }
+            },
             rrdp_local_addr: file.take_from_str("rrdp-local-addr")?,
             rrdp_root_certs: {
                 file.take_from_str_array("rrdp-root-certs")?
@@ -1060,6 +1083,7 @@ impl Config {
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
             rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
             rrdp_connect_timeout: None,
+            rrdp_tcp_keepalive: Some(DEFAULT_RRDP_TCP_KEEPALIVE),
             rrdp_local_addr: None,
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
@@ -1237,6 +1261,15 @@ impl Config {
                 (timeout.as_secs() as i64).into()
             );
         }
+        res.insert(
+            "rrdp-tcp-keepalive".into(),
+            match self.rrdp_tcp_keepalive {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
+        );
         if let Some(addr) = self.rrdp_local_addr {
             res.insert("rrdp-local-addr".into(), addr.to_string().into());
         }
@@ -1684,6 +1717,10 @@ struct GlobalArgs {
     /// Timeout for connecting to an RRDP server
     #[arg(long, value_name = "SECONDS")]
     rrdp_connect_timeout: Option<u64>,
+
+    /// TCP keepalive duration for RRDP connections (0 for none)
+    #[arg(value_name = "SECONDS")]
+    rrdp_tcp_keepalive: Option<u64>,
 
     /// Local address for outgoing RRDP connections
     #[arg(long, value_name = "ADDR")]
