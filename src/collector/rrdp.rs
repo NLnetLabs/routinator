@@ -347,16 +347,14 @@ impl<'a> Run<'a> {
     /// This method blocks if the repository is deemed to need updating until
     /// the update has finished.
     ///
-    /// If a repository has been successfully updated during this run,
-    /// returns it. Otherwise returns it if it is cached and that cached data
-    /// is newer than the fallback time. Thus, if the method returns
-    /// `Ok(None)`, you can fall back to rsync.
+    /// Returns the result of the update of the repository and whether this
+    /// is the first attempt at updating the repository.
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
-    ) -> Result<LoadResult, Failed> {
+    ) -> Result<(LoadResult, bool), Failed> {
         // If we already tried updating, we can return already.
         if let Some(repo) = self.updated.read().get(rpki_notify) {
-            return Ok(repo.clone())
+            return Ok((repo.clone(), false))
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
@@ -371,7 +369,7 @@ impl<'a> Run<'a> {
         // up-to-date which happens if someone else had the mutex first.
         let _lock = mutex.lock();
         if let Some(res) = self.updated.read().get(rpki_notify) {
-            return Ok(res.clone())
+            return Ok((res.clone(), false))
         }
 
         // Now we can update the repository.
@@ -384,7 +382,7 @@ impl<'a> Run<'a> {
         self.updated.write().insert(
             rpki_notify.clone(), repository.clone()
         );
-        Ok(repository)
+        Ok((repository, true))
     }
 
     /// Cleans up the RRDP collector.
