@@ -62,7 +62,7 @@
 //! actually complete and correct. File names here are named using eight
 //! random hex-digits.
 
-use std::{error, fs, io};
+use std::{fs, io};
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -82,7 +82,7 @@ use crate::engine::CaCert;
 use crate::error::Failed;
 use crate::metrics::Metrics;
 use crate::utils::fatal;
-use crate::utils::binio::{Compose, Parse};
+use crate::utils::binio::{Compose, Parse, ParseError};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
 use crate::utils::uri::UriExt;
@@ -680,20 +680,38 @@ impl<'a> StoredPoint<'a> {
             }
         };
 
-        let manifest = StoredManifest::read(&mut file).map_err(|err| {
-            error!(
-                "Failed to read stored publication point at {}: {}",
-                path.display(), err
-            );
-            Failed
-        })?;
+        let manifest = match StoredManifest::read(&mut file) {
+            Ok(manifest) => Some(manifest),
+            Err(err) => {
+                if err.is_fatal() {
+                    error!(
+                        "Failed to read stored publication point at {}: {}",
+                        path.display(), err
+                    );
+                    return Err(Failed)
+                }
+                else {
+                    None
+                }
+            }
+        };
 
         Ok(StoredPoint {
             store, path,
-            file: Some(file),
-            manifest: Some(manifest),
+            file: if manifest.is_some() {
+                Some(file)
+            }
+            else {
+                None
+            },
+            manifest,
             is_rrdp
         })
+    }
+
+    /// Returns a reference to the path of the file.
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Returns whether the stored point is for an RRDP repository.
@@ -800,20 +818,10 @@ impl<'a> StoredPoint<'a> {
 }
 
 impl<'a> Iterator for StoredPoint<'a> {
-    type Item = Result<StoredObject, Failed>;
+    type Item = Result<StoredObject, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match StoredObject::read(self.file.as_mut()?) {
-            Ok(Some(res)) => Some(Ok(res)),
-            Ok(None) => None,
-            Err(err) => {
-                error!(
-                    "Fatal: failed to read from {}: {}",
-                    self.path.display(), err
-                );
-                Some(Err(Failed))
-            }
-        }
+        StoredObject::read(self.file.as_mut()?).transpose()
     }
 }
 
@@ -888,11 +896,13 @@ impl StoredManifest {
     }
 
     /// Reads a stored manifest from an IO reader.
-    pub fn read(reader: &mut impl io::Read) -> Result<Self, io::Error> {
+    pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
         // Version number. Must be 0u8.
         let version = u8::parse(reader)?;
         if version != 0 {
-            return io_err_other(format!("unexpected version {}", version))
+            return Err(ParseError::format(
+                    format!("unexpected version {}", version)
+            ))
         }
 
         let not_after = Utc.timestamp(i64::parse(reader)?, 0).into();
@@ -1005,17 +1015,23 @@ impl StoredObject {
     /// Reads a stored object from an IO reader.
     pub fn read(
         reader: &mut impl io::Read
-    ) -> Result<Option<Self>, io::Error> {
+    ) -> Result<Option<Self>, ParseError> {
         // Version number. Must be 0u8.
         let version = match u8::parse(reader) {
             Ok(version) => version,
-            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                return Ok(None)
+            Err(err) => {
+                if err.is_eof() {
+                    return Ok(None)
+                }
+                else {
+                    return Err(err)
+                }
             }
-            Err(err) => return Err(err)
         };
         if version != 0 {
-            return io_err_other(format!("unexpected version {}", version))
+            return Err(ParseError::format(
+                format!("unexpected version {}", version)
+            ))
         }
 
         let uri = uri::Rsync::parse(reader)?;
@@ -1028,9 +1044,9 @@ impl StoredObject {
                 Some(ManifestHash::new(value.into(), algorithm))
             }
             hash_type => {
-                return io_err_other(
+                return Err(ParseError::format(
                     format!("unsupported hash type {}", hash_type)
-                );
+                ));
             }
         };
         let content = Bytes::parse(reader)?;
@@ -1106,14 +1122,6 @@ impl From<Failed> for UpdateError {
 
 
 //============ Helper Functions ==============================================
-
-/// Creates an IO error of kind other with the given string.
-fn io_err_other<T>(
-    err: impl Into<Box<dyn error::Error + Send + Sync>>
-) -> Result<T, io::Error> {
-    Err(io::Error::new(io::ErrorKind::Other, err))
-}
-
 
 /// Cleans up a directory tree.
 ///

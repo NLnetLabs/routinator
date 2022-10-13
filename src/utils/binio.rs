@@ -4,7 +4,7 @@
 //! how to serialize themselves. The module implements the traits for all the
 //! types we need.
 
-use std::{error, io, slice};
+use std::{error, fmt, io, slice};
 use bytes::Bytes;
 use rpki::rrdp;
 use rpki::uri;
@@ -19,7 +19,7 @@ pub trait Compose<W> {
 
 pub trait Parse<R>
 where Self: Sized {
-    fn parse(source: &mut R) -> Result<Self, io::Error>;
+    fn parse(source: &mut R) -> Result<Self, ParseError>;
 }
 
 
@@ -32,7 +32,7 @@ impl<W: io::Write> Compose<W> for u8 {
 }
 
 impl<R: io::Read> Parse<R> for u8 {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut res = 0u8;
         source.read_exact(slice::from_mut(&mut res))?;
         Ok(res)
@@ -49,7 +49,7 @@ impl<W: io::Write> Compose<W> for u32 {
 }
 
 impl<R: io::Read> Parse<R> for u32 {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut res = 0u32.to_ne_bytes();
         source.read_exact(&mut res)?;
         Ok(u32::from_be_bytes(res))
@@ -66,7 +66,7 @@ impl<W: io::Write> Compose<W> for u64 {
 }
 
 impl<R: io::Read> Parse<R> for u64 {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut res = 0u64.to_ne_bytes();
         source.read_exact(&mut res)?;
         Ok(u64::from_be_bytes(res))
@@ -83,7 +83,7 @@ impl<W: io::Write> Compose<W> for i64 {
 }
 
 impl<R: io::Read> Parse<R> for i64 {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut res = 0i64.to_ne_bytes();
         source.read_exact(&mut res)?;
         Ok(i64::from_be_bytes(res))
@@ -112,12 +112,12 @@ impl<W: io::Write> Compose<W> for Option<i64> {
 }
 
 impl<R: io::Read> Parse<R> for Option<i64> {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         match u8::parse(source)? {
             0 => return Ok(None),
             1 => { },
             _ => {
-                return Err(io_err_other("illegally encoded Option<i64>"))
+                return Err(ParseError::format("illegally encoded Option<i64>"))
             }
         };
         Ok(Some(i64::parse(source)?))
@@ -133,21 +133,21 @@ impl<R: io::Read> Parse<R> for Option<i64> {
 impl<W: io::Write> Compose<W> for uri::Rsync {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
         u32::try_from(self.as_slice().len())
-        .map_err(|_| io_err_other("excessively large URI"))?
+        .map_err(|_| ParseError::format("excessively large URI"))?
         .compose(target)?;
         target.write_all(self.as_slice())
     }
 }
 
 impl<R: io::Read> Parse<R> for uri::Rsync {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let len = usize::try_from(u32::parse(source)?).map_err(|_| {
-            io_err_other("URI too large for this system")
+            ParseError::format("URI too large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         Self::from_bytes(bits.into()).map_err(|err| {
-            io_err_other(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {}", err))
         })
     }
 }
@@ -161,21 +161,21 @@ impl<R: io::Read> Parse<R> for uri::Rsync {
 impl<W: io::Write> Compose<W> for uri::Https {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
         u32::try_from(self.as_slice().len())
-        .map_err(|_| io_err_other("excessively large URI"))?
+        .map_err(|_| ParseError::format("excessively large URI"))?
         .compose(target)?;
         target.write_all(self.as_slice())
     }
 }
 
 impl<R: io::Read> Parse<R> for uri::Https {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let len = usize::try_from(u32::parse(source)?).map_err(|_| {
-            io_err_other("URI too large for this system")
+            ParseError::format("URI too large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         Self::from_bytes(bits.into()).map_err(|err| {
-            io_err_other(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {}", err))
         })
     }
 }
@@ -190,7 +190,7 @@ impl<W: io::Write> Compose<W> for Option<uri::Https> {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
         if let Some(uri) = self.as_ref() {
             u32::try_from(uri.as_slice().len())
-            .map_err(|_| io_err_other("excessively large URI"))?
+            .map_err(|_| ParseError::format("excessively large URI"))?
             .compose(target)?;
             target.write_all(uri.as_slice())
         }
@@ -201,18 +201,18 @@ impl<W: io::Write> Compose<W> for Option<uri::Https> {
 }
 
 impl<R: io::Read> Parse<R> for Option<uri::Https> {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let len = u32::parse(source)?;
         if len == 0 {
             return Ok(None)
         }
         let len = usize::try_from(len).map_err(|_| {
-            io_err_other("URI too large for this system")
+            ParseError::format("URI too large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         uri::Https::from_bytes(bits.into()).map_err(|err| {
-            io_err_other(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {}", err))
         }).map(Some)
     }
 }
@@ -226,16 +226,16 @@ impl<R: io::Read> Parse<R> for Option<uri::Https> {
 impl<W: io::Write> Compose<W> for Bytes {
     fn compose(&self, target: &mut W) -> Result<(), io::Error> {
         u64::try_from(self.len())
-        .map_err(|_| io_err_other("excessively large data"))?
+        .map_err(|_| ParseError::format("excessively large data"))?
         .compose(target)?;
         target.write_all(self.as_ref())
     }
 }
 
 impl<R: io::Read> Parse<R> for Bytes {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let len = usize::try_from(u64::parse(source)?).map_err(|_| {
-            io_err_other("data block too large for this system")
+            ParseError::format("data block too large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
@@ -261,13 +261,13 @@ impl<W: io::Write> Compose<W> for Option<Bytes> {
 }
 
 impl<R: io::Read> Parse<R> for Option<Bytes> {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let len = u64::parse(source)?;
         if len == u64::MAX {
             return Ok(None)
         }
         let len = usize::try_from(len).map_err(|_| {
-            io_err_other("data block large for this system")
+            ParseError::format("data block large for this system")
         })?;
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
@@ -285,7 +285,7 @@ impl<W: io::Write> Compose<W> for Uuid {
 }
 
 impl<R: io::Read> Parse<R> for Uuid {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut data = uuid::Bytes::default();
         source.read_exact(&mut data)?;
         Ok(Self::from_bytes(data))
@@ -302,7 +302,7 @@ impl<W: io::Write> Compose<W> for rrdp::Hash {
 }
 
 impl<R: io::Read> Parse<R> for rrdp::Hash {
-    fn parse(source: &mut R) -> Result<Self, io::Error> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
         let mut res = [0u8; 32];
         source.read_exact(&mut res)?;
         Ok(res.into())
@@ -310,13 +310,57 @@ impl<R: io::Read> Parse<R> for rrdp::Hash {
 }
 
 
-//============ Helper Functions ==============================================
+//------------ ParseError ----------------------------------------------------
 
-/// Creates an IO error of kind other with the given string.
-fn io_err_other(
-    err: impl Into<Box<dyn error::Error + Send + Sync>>
-) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
+#[derive(Debug)]
+pub struct ParseError {
+    err: io::Error,
+    is_fatal: bool,
+}
+
+impl ParseError {
+    /// Creates an error for bad formatting.
+    pub fn format(
+        err: impl Into<Box<dyn error::Error + Send + Sync>>
+    ) -> Self {
+        ParseError {
+            err: io::Error::new(io::ErrorKind::Other, err),
+            is_fatal: false,
+        }
+    }
+
+    /// Returns whether parsing failed fatally.
+    ///
+    /// Any error other than bad formatting or early EOF is considered fatal.
+    pub fn is_fatal(&self) -> bool {
+        self.is_fatal
+    }
+
+    /// Returns whether the error was an unexpected EOF.
+    pub fn is_eof(&self) -> bool {
+        self.err.kind() == io::ErrorKind::UnexpectedEof
+    }
+}
+
+impl From<io::Error> for ParseError {
+    fn from(err: io::Error) -> Self {
+        ParseError {
+            is_fatal: err.kind() != io::ErrorKind::UnexpectedEof,
+            err
+        }
+    }
+}
+
+impl From<ParseError> for io::Error {
+    fn from(err: ParseError) -> Self {
+        err.err
+    }
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.err.fmt(f)
+    }
 }
 
 

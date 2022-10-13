@@ -1004,7 +1004,22 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         let mut ca_tasks = Vec::new();
         for object in &mut store {
-            let object = object?;
+            let object = match object {
+                Ok(object) => object,
+                Err(err) => {
+                    if err.is_fatal() {
+                        error!(
+                            "Fatal: failed to read from {}: {}",
+                            store.path().display(), err
+                        );
+                        return Err(Failed)
+                    }
+                    else {
+                        self.reject_point(metrics);
+                        return Ok(Vec::new())
+                    }
+                }
+            };
             if !self.process_object(
                 object.uri(), object.content().clone(),
                 &mut manifest, &mut ca_tasks
