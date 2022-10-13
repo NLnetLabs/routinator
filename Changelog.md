@@ -6,7 +6,9 @@ Breaking Changes
 
 * Changed the default configuration option for `unsafe-vrps` to `accept`
   and removed all logging or mentioning of unsafe VRPs in this case.
-  ([#761]) 
+  ([#761])
+* Setting the `rsync-timeout` option to 0 now disables the rsync timeout.
+  ([#798])
 * Refactored error handling. Routinator now logs the reason why an object
   failed verification or was otherwise rejected. ([#755])
 * Removed the deprecated `rrdp-disable-gzip` configuration option.
@@ -14,9 +16,18 @@ Breaking Changes
 
 New
 
+* The new `rrdp-fallback` command line and configuration file option
+  allows specifying the circumstances under which a failed RRDP fetch
+  should result in using rsync instead. Supported polices are `never` for
+  never falling back to using rsync, `stale` for the current behavior of
+  falling back when RRDP has failed for some time, and `new` to only fall
+  back for repositories where RRDP has never worked before. ([#799])
 * In the extended `jsonext` output format, the information for VRPs and
   router keys derived from RPKI data has gained a new member `"tal"` that
   shows the name of the TAL this object was published under. ([#765])
+* The log output to files, stderr, and the `/log` HTTP endpoint now
+  includes the log level of the message to make it more clear how
+  important the message really is. ([#797])
 
 Bug Fixes
 
@@ -35,6 +46,9 @@ Other Changes
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
 [#783]: https://github.com/NLnetLabs/routinator/pull/784
 [#792]: https://github.com/NLnetLabs/routinator/pull/792
+[#797]: https://github.com/NLnetLabs/routinator/pull/797
+[#798]: https://github.com/NLnetLabs/routinator/pull/798
+[#799]: https://github.com/NLnetLabs/routinator/pull/799
 
 
 ## 0.11.3
