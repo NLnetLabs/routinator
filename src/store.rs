@@ -68,7 +68,7 @@ use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use rand::random;
 use rpki::crypto::digest::DigestAlgorithm;
 use rpki::repository::cert::Cert;
@@ -691,6 +691,10 @@ impl<'a> StoredPoint<'a> {
                     return Err(Failed)
                 }
                 else {
+                    info!(
+                        "Ignoring invalid stored publication point at {}: {}",
+                        path.display(), err
+                    );
                     None
                 }
             }

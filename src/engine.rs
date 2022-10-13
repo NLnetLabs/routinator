@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
 use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use rpki::crypto::keys::KeyIdentifier;
 use rpki::repository::cert::{Cert, KeyUsage, ResourceCert};
 use rpki::repository::crl::Crl;
@@ -1015,6 +1015,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                         return Err(Failed)
                     }
                     else {
+                        info!(
+                            "Ignoring invalid stored publication point \
+                             at {}: {}",
+                            store.path().display(), err
+                        );
                         self.reject_point(metrics);
                         return Ok(Vec::new())
                     }
