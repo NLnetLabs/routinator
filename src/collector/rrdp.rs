@@ -285,9 +285,6 @@ pub struct Run<'a> {
     collector: &'a Collector,
 
     /// A set of the repositories we have updated already.
-    ///
-    /// If there is some value for a repository, it is available and current.
-    /// If there is a `None`, the repository is not available or outdated.
     updated: RwLock<HashMap<uri::Https, LoadResult>>,
 
     /// The modules that are currently being updated.
@@ -574,9 +571,6 @@ impl Repository {
 ///
 impl Repository {
     /// Creates the repository by trying to update it.
-    ///
-    /// Returns `Ok(None)` if the update fails and there is no already
-    /// downloaded version that hasn’t expired yet.
     fn try_update(
         run: &Run, rpki_notify: uri::Https
     ) -> Result<LoadResult, Failed> {

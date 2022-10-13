@@ -216,9 +216,9 @@ impl<'a> Run<'a> {
                         // Update failed and data is now stale. Only
                         // "stale" wants us to fall back, "never" and "new"
                         // want us to fail.
-                        if matches!(
+                        if !matches!(
                             self.collector.rrdp_fallback,
-                            FallbackPolicy::Never | FallbackPolicy::New
+                            FallbackPolicy::Stale
                         ) {
                             return Ok(None)
                         }
