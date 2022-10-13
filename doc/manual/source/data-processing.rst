@@ -6,8 +6,9 @@ Fetching
 
 There are two protocols in use to transport RPKI data: rsync and the :term:`RPKI
 Repository Delta Protocol (RRDP)`, which relies on HTTPS. RRDP was designed to
-be the successor to rsync in the RPKI. As almost all RPKI repositories currently
-support both protocols, Routinator will prefer RRDP if available. 
+be the successor to rsync in the RPKI. As all RPKI repositories currently
+advertise support for both protocols, Routinator will prefer RRDP if 
+available. 
 
 In the RPKI, the certificate hierarchy follows the same structure as the
 Internet number resource allocation hierarchy. Routinator starts traversing the
@@ -35,16 +36,29 @@ RRDP Fallback
 """""""""""""
 
 If an RRDP endpoint is unavailable but it has worked in the past, Routinator
-will assume this is a transient problem. It will retry using RRDP for up to 60
-minutes since the last successful update, during which it will rely on the
-locally cached data for this repository. After this time, Routinator will try to
-use rsync to fetch the data instead. To spread out load on the rsync server, the
-exact moment fallback happens is picked randomly between the refresh time and
-the :option:`--rrdp-fallback-time` value. If rsync communication is
-unsuccessful too, the local cache is used until the objects go stale and
-ultimately expire. 
+will assume this is a transient problem. What action is taken is determined
+by the :option:`--rrdp-fallback` option. The default policy is *stale*. This
+means Routinator will retry using RRDP for up to 60 minutes since the last
+successful update, during which it will rely on the locally cached data for
+this repository. After this time, Routinator will try to use rsync to fetch
+the data instead. To spread out load on the rsync server, the exact moment
+fallback happens is picked randomly between the refresh time and the
+:option:`--rrdp-fallback-time` value. If rsync communication is unsuccessful
+too, the local cache is used until the objects go stale and ultimately
+expire. 
+
+Another policy for :option:`--rrdp-fallback` is *never*. This means that
+rsync is never tried for a CA that advertises the availability of RRDP.
+Lastly, the policy *new* means that rsync is tried if an update via RRDP
+fails and there is no local copy of the RRDP repository at all. In other
+words, an update via RRDP has never succeeded for the repository. Choosing
+this policy allows a repository operator some leeway when first enabling RRDP
+support.
 
 .. versionadded:: 0.9.0
+
+.. versionchanged:: 0.12.0
+   The :option:`--rrdp-fallback` option
 
 Update Interval
 """""""""""""""
