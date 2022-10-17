@@ -31,10 +31,15 @@ New
 
 Bug Fixes
 
-* Fixes an issue in error handling in the RRDP collector that causes
+* Fixed an issue in error handling in the RRDP collector that causes
   Routinator to exit if it encountered malformed Base 64 in RRDP snapshot
   and delta files. (Found by Donika Mirdita and Haya Shulman. Assigned
   [CVE-2022-3029].) ([#784])
+* Fixed an issue where RRDP snapshots and deltas with a status code other
+  than 200 OK were accepted and processed. ([#802])
+* Changed how Routinator deals with files in the store that cannot be
+  parsed. These will now be ignored and the publication point stored in
+  them considered not available. ([#803])
 
 Other Changes
 
@@ -49,6 +54,8 @@ Other Changes
 [#797]: https://github.com/NLnetLabs/routinator/pull/797
 [#798]: https://github.com/NLnetLabs/routinator/pull/798
 [#799]: https://github.com/NLnetLabs/routinator/pull/799
+[#803]: https://github.com/NLnetLabs/routinator/pull/803
+[#803]: https://github.com/NLnetLabs/routinator/pull/803
 
 
 ## 0.11.3
