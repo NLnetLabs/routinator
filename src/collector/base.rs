@@ -200,7 +200,8 @@ impl<'a> Run<'a> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                match rrdp.load_repository(rrdp_uri)? {
+                let (repo, first) = rrdp.load_repository(rrdp_uri)?;
+                match repo {
                     rrdp::LoadResult::Unavailable => {
                         // Update failed and no local copy at all. Both
                         // "stale" and "new" want us to fall back, "never"
@@ -234,7 +235,7 @@ impl<'a> Run<'a> {
                     }
                 }
 
-                if self.rsync.is_some() {
+                if first && self.rsync.is_some() {
                     info!("RRDP {}: Falling back to rsync.", rrdp_uri);
                 }
             }
