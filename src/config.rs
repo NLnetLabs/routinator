@@ -1057,8 +1057,8 @@ impl Config {
 
     /// Creates a default config with the given paths.
     ///
-    /// Uses default values for everything except for the cache and TAL
-    /// directories which are provided.
+    /// Uses default values for everything except for the cache directory
+    /// which needs to be provided.
     fn default_with_paths(cache_dir: PathBuf) -> Self {
         Config {
             cache_dir,
