@@ -220,12 +220,38 @@ The available options are:
       Sets the number of seconds an rsync command is allowed to run before it
       is terminated early. This protects against hanging rsync commands that
       prevent Routinator from continuing. The default is 300 seconds which
-      should be long enough except for very slow networks.
+      should be long enough except for very slow networks. Set the option to
+      0 to disable the timeout.
 
 .. option:: --disable-rrdp
 
       If this option is present, RRDP is disabled and only rsync will be
       used.
+
+.. option:: --rrdp-fallback=policy
+
+      Defines the circumstance when access via rsync should be tried for a
+      CA that announces it can be updated via RRDP. In general, access via
+      RRDP is less resource intensive and more secure than rsync and will
+      therefore be preferred. This option specifies what to do when access
+      to an RRDP repository fails.
+
+      The policy ``never`` means that rsync is never tried for a CA that
+      announces RRDP.
+
+      The policy ``stale`` means that rsync is tried if an update via RRDP
+      fails and there is no current local copy of the RRDP repository. A
+      local copy is considered current if it was last updated within a
+      time span chosen on a per-repository basis between the
+      :option:`--refresh` time and :option:`--rrdp-fallback-time`.
+
+      The policy ``new`` means that rsync is tried if an update via RRDP
+      fails and there is no local copy of the RRDP repository at all. In
+      other words, an update via RRDP has never succeeded for the repository.
+      Choosing this policy allows a repository operator some leeway when
+      first enabling RRDP support.
+
+      The default policy if this option is not given is ``stale``.
 
 .. option:: --rrdp-fallback-time=seconds
 
@@ -1005,11 +1031,17 @@ All values can be overridden via the command line options.
       rsync-timeout
             An integer value specifying the number seconds an rsync command
             is allowed to run before it is being terminated. The default if
-            the value is missing is 300 seconds.
+            the value is missing is 300 seconds. Set the value to 0 to turn
+            the timeout off.
 
       disable-rrdp
             A boolean value that, if present and true, turns off the use of
             RRDP.
+
+      rrdp-fallback
+            A string value specifying the circumstances under which an update
+            via rsync is tried if an update via RRDP fails. See
+            :option:`--rrdp-fallback` for details on the available policies.
 
       rrdp-fallback-time
             An integer value specifying the maximum number of seconds since a

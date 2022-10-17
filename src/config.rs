@@ -31,7 +31,7 @@ use crate::error::Failed;
 const DEFAULT_STRICT: bool = false;
 
 /// The default timeout for running rsync commands in seconds.
-const DEFAULT_RSYNC_TIMEOUT: u64 = 300;
+const DEFAULT_RSYNC_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Are we leaving the repository dirty by default?
 const DEFAULT_DIRTY_REPOSITORY: bool = false;
@@ -50,6 +50,9 @@ const DEFAULT_HISTORY_SIZE: usize = 10;
 
 /// The default for the RRDP timeout.
 const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// The default for the RRDP fallback policy.
+const DEFAULT_RRDP_FALLBACK: FallbackPolicy = FallbackPolicy::Stale;
 
 /// The default for the RRDP fallback time.
 const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
@@ -184,10 +187,15 @@ pub struct Config {
     pub rsync_args: Option<Vec<String>>,
 
     /// Timeout for rsync commands.
-    pub rsync_timeout: Duration,
+    ///
+    /// If this is None, no timeout is set.
+    pub rsync_timeout: Option<Duration>,
 
     /// Whether to disable RRDP.
     pub disable_rrdp: bool,
+
+    /// The policy for when to fall back from RRDP to rsync.
+    pub rrdp_fallback: FallbackPolicy,
 
     /// Time since last update of an RRDP repository before fallback to rsync.
     pub rrdp_fallback_time: Duration,
@@ -464,12 +472,22 @@ impl Config {
 
         // rsync_timeout
         if let Some(value) = args.rsync_timeout {
-            self.rsync_timeout = Duration::from_secs(value)
+            self.rsync_timeout = if value == 0 {
+                None
+            }
+            else {
+                Some(Duration::from_secs(value))
+            };
         }
 
         // disable_rrdp
         if args.disable_rrdp {
             self.disable_rrdp = true
+        }
+
+        // rrdp_fallback
+        if let Some(value) = args.rrdp_fallback {
+            self.rrdp_fallback = value
         }
 
         // rrdp_fallback_time
@@ -823,12 +841,17 @@ impl Config {
             },
             rsync_args: file.take_string_array("rsync-args")?,
             rsync_timeout: {
-                Duration::from_secs(
-                    file.take_u64("rsync-timeout")?
-                        .unwrap_or(DEFAULT_RSYNC_TIMEOUT)
-                )
+                match file.take_u64("rsync-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RSYNC_TIMEOUT)
+                }
             },
             disable_rrdp: file.take_bool("disable-rrdp")?.unwrap_or(false),
+            rrdp_fallback: {
+                file.take_from_str("rrdp-fallback")?
+                    .unwrap_or(DEFAULT_RRDP_FALLBACK)
+            },
             rrdp_fallback_time: {
                 file.take_u64("rrdp-fallback-time")?
                 .map(Duration::from_secs)
@@ -1052,8 +1075,9 @@ impl Config {
             disable_rsync: false,
             rsync_command: "rsync".into(),
             rsync_args: None,
-            rsync_timeout: Duration::from_secs(DEFAULT_RSYNC_TIMEOUT),
+            rsync_timeout: Some(DEFAULT_RSYNC_TIMEOUT),
             disable_rrdp: false,
+            rrdp_fallback: DEFAULT_RRDP_FALLBACK,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
             rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
@@ -1206,9 +1230,18 @@ impl Config {
         }
         res.insert(
             "rsync-timeout".into(),
-            (self.rsync_timeout.as_secs() as i64).into()
+            match self.rsync_timeout {
+                None => 0.into(),
+                Some(value) => {
+                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
+                }
+            }
         );
         res.insert("disable-rrdp".into(), self.disable_rrdp.into());
+        res.insert(
+            "rrdp-fallback".into(),
+            self.rrdp_fallback.to_string().into(),
+        );
         res.insert(
             "rrdp-fallback-time".into(),
             (self.rrdp_fallback_time.as_secs() as i64).into()
@@ -1546,6 +1579,53 @@ impl fmt::Display for FilterPolicy {
 }
 
 
+//------------ FallbackPolicy ------------------------------------------------
+
+/// The policy for fallback to rsync.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FallbackPolicy {
+    /// Never fall back to rsync.
+    ///
+    /// If a CA promises to be available via RRDP, fail if that doesn’t work.
+    Never,
+
+    /// Fall back if access fails and a local copy is too old.
+    ///
+    /// If access to a CA via RRDP doesn’t work, use an existing local copy
+    /// if it is available and not too old.
+    Stale,
+
+    /// Only fall back for new repositories.
+    ///
+    /// If access to a CA via RRDP doesn’t work, fall back to rsync if RRDP
+    /// has never worked before.
+    New,
+}
+
+impl FromStr for FallbackPolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "never" => Ok(FallbackPolicy::Never),
+            "stale" => Ok(FallbackPolicy::Stale),
+            "new" => Ok(FallbackPolicy::New),
+            _ => Err(format!("invalid policy '{}'", s))
+        }
+    }
+}
+
+impl fmt::Display for FallbackPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            FallbackPolicy::Never => "never",
+            FallbackPolicy::Stale => "stale",
+            FallbackPolicy::New => "new",
+        })
+    }
+}
+
+
 //------------ GlobalArgs ----------------------------------------------------
 
 /// The global command line arguments.
@@ -1607,7 +1687,7 @@ struct GlobalArgs {
     #[arg(long, value_name="COMMAND")]
     rsync_command: Option<String>,
 
-    /// Timeout for rsync commands
+    /// Timeout for rsync commands (0 for none)
     #[arg(long, value_name = "SECONDS")]
     rsync_timeout: Option<u64>,
 
@@ -1618,6 +1698,10 @@ struct GlobalArgs {
     /// Maximum number of RRDP deltas before using snapshot
     #[arg(long, value_name = "COUNT")]
     rrdp_max_delta_count: Option<usize>,
+
+    /// When to fall back to rsync if RRDP fails
+    #[arg(long, value_name = "POLICY")]
+    rrdp_fallback: Option<FallbackPolicy>,
 
     /// Maximum time since last update before fallback to rsync
     #[arg(long, value_name = "SECONDS")]

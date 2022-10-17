@@ -22,7 +22,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use bytes::Bytes;
-use futures::TryFutureExt;
+use futures::{FutureExt, TryFutureExt};
+use futures::future::Either;
 use log::{debug, error, info, warn};
 use rpki::uri;
 use tokio::process::Command as AsyncCommand;
@@ -432,7 +433,7 @@ struct RsyncCommand {
     args: Vec<String>,
 
     /// The rsync timeout.
-    timeout: Duration,
+    timeout: Option<Duration>,
 }
 
 impl RsyncCommand {
@@ -521,14 +522,21 @@ impl RsyncCommand {
             let mut stdout = Vec::new();
             let mut stderr = Vec::new();
             let res = tokio::try_join!(
-                tokio::time::timeout(
-                    self.timeout, child.wait()
-                ).map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "rsync process reached time out"
-                    )
-                }),
+                match self.timeout {
+                    None => Either::Left(child.wait().map(Ok)),
+                    Some(timeout) => {
+                        Either::Right(
+                            tokio::time::timeout(
+                                timeout, child.wait()
+                            ).map_err(|_| {
+                                io::Error::new(
+                                    io::ErrorKind::TimedOut,
+                                    "rsync process reached time out"
+                                )
+                            })
+                        )
+                    }
+                },
                 async {
                     if let Some(mut pipe) = stdout_pipe {
                         tokio::io::copy(&mut pipe, &mut stdout).await?;
