@@ -909,7 +909,7 @@ impl RtrClientMetrics {
         self.reset_queries.load(Ordering::Relaxed)
     }
 
-    /// Returns the number of successful reset queries.
+    /// Returns the number of successful serial queries.
     pub fn serial_queries(&self) -> u32 {
         self.serial_queries.load(Ordering::Relaxed)
     }
