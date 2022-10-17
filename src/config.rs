@@ -1559,7 +1559,7 @@ struct GlobalArgs {
     #[arg(short, long, value_name="PATH")]
     repository_dir: Option<PathBuf>,
 
-    /// Do not use the bundlede RIR TALs
+    /// Do not use the bundled RIR TALs
     #[arg(long)]
     no_rir_tals: bool,
 
