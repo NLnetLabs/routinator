@@ -152,7 +152,7 @@ RUN apk add --no-cache libgcc rsync tini
 RUN addgroup -g ${RUN_USER_GID} ${RUN_USER} && \
     adduser -D -u ${RUN_USER_UID} -G ${RUN_USER} ${RUN_USER}
 
-# Create the repository and TAL directories
+# Create the repository directory
 RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository && \
     chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache
 
