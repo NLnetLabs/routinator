@@ -75,3 +75,33 @@ run, so you can simply update the file whenever your exceptions change.
 In the metrics Routinator provides, there are counters indicating how many
 VRPs are added and excluded from the final data set as a result of your
 exceptions. 
+
+Limiting Prefix Length
+----------------------
+
+It's possible to set the maximum length of IPv4 and IPv6 prefixes that will
+be included in the VRP data set. You can set this with the
+:option:`--limit-v4-len` and :option:`--limit-v6-len` options, respectively.
+
+To illustrate this option we'll use an extreme example:
+
+.. code-block:: text
+
+    routinator --limit-v4-len=8 --limit-v6-len=19 vrps
+
+Now, VRPs for prefixes with a longer prefix length than /8 IPv4 and /19 IPv6
+will be ignored:
+
+.. code-block:: text
+
+    ASN,IP Prefix,Max Length,Trust Anchor
+    AS6253,48.0.0.0/8,24,arin
+    AS31399,53.0.0.0/8,8,ripe
+    AS7922,73.0.0.0/8,8,arin
+    AS3320,2003::/19,19,ripe
+    AS5511,2a01:c000::/19,48,ripe
+
+Note that only the prefix length itself and not the maximum prefix length
+value of the ROA is considered.
+
+.. versionadded:: 0.12.0
