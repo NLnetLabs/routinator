@@ -89,8 +89,8 @@ To illustrate this option we'll use an extreme example:
 
     routinator --limit-v4-len=8 --limit-v6-len=19 vrps
 
-Now, VRPs for prefixes with a longer prefix length than /8 IPv4 and /19 IPv6
-will be ignored:
+Now, all VRPs will be ignored that have a prefix with a length that is longer
+than /8 IPv4 and /19 IPv6:
 
 .. code-block:: text
 
