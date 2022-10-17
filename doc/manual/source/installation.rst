@@ -253,9 +253,9 @@ to get started.
 
        To adjust the configuration you can pass command line arguments to
        Routinator (try :option:`--help` for more information) and/or supply your
-       own Routinator configuration file (by mapping it from the host info
+       own Routinator configuration file (by mapping it from the host into
        the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
-       and passing ``--config /etc/routinator.conf`` when running the container.
+       and passing ``--config /etc/routinator.conf`` when running the container).
 
        To persist the RPKI cache data you can create a separate Docker volume
        and mount it into the container like so:
