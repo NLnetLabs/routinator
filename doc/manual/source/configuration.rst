@@ -288,34 +288,39 @@ produces a list of VRPs in the default CSV format to standard output.
 
 .. code-block:: text
 
-      Using the following TALs:
-      * afrinic
-      * apnic
-      * arin
-      * lacnic
-      * ripe
-      Found valid trust anchor https://rpki.ripe.net/ta/ripe-ncc-ta.cer. Processing.
-      Found valid trust anchor https://rrdp.arin.net/arin-rpki-ta.cer. Processing.
-      Found valid trust anchor https://rpki.afrinic.net/repository/AfriNIC.cer. Processing.
-      Found valid trust anchor https://rrdp.lacnic.net/ta/rta-lacnic-rpki.cer. Processing.
-      Found valid trust anchor https://rpki.apnic.net/repository/apnic-rpki-root-iana-origin.cer. Processing.
-      RRDP https://rrdp.ripe.net/notification.xml: updating from snapshot.
-      RRDP https://rrdp.arin.net/notification.xml: updating from snapshot.
-      RRDP https://rrdp.apnic.net/notification.xml: updating from snapshot.
-      RRDP https://rrdp.lacnic.net/rrdp/notification.xml: updating from snapshot.
-      RRDP https://rrdp.afrinic.net/notification.xml: updating from snapshot.
-      RRDP https://rrdp.apnic.net/notification.xml: snapshot update completed.
-      RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/08c2f264-23f9-49fb-9d43-f8b50bec9261/notification.xml: updating from snapshot.
-      RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/08c2f264-23f9-49fb-9d43-f8b50bec9261/notification.xml: snapshot update completed.
-      RRDP https://rrdp.ripe.net/notification.xml: snapshot update completed.
-      RRDP https://rpki.akrn.net/rrdp/notification.xml: updating from snapshot.
-      RRDP https://rpki.akrn.net/rrdp/notification.xml: snapshot update completed.
-      RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/bd48a1fa-3471-4ab2-8508-ad36b96813e4/notification.xml: updating from snapshot.
-      RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/bd48a1fa-3471-4ab2-8508-ad36b96813e4/notification.xml: snapshot update completed.
-      RRDP https://rpki.admin.freerangecloud.com/rrdp/notification.xml: updating from snapshot.
-      RRDP https://rpki.admin.freerangecloud.com/rrdp/notification.xml: snapshot update completed.
-      RRDP https://rpki.cnnic.cn/rrdp/notify.xml: updating from snapshot.
-      RRDP https://rrdp.lacnic.net/rrdp/notification.xml: snapshot update completed.
+      [INFO] Using the following TALs:
+      [INFO]   * afrinic
+      [INFO]   * apnic
+      [INFO]   * arin
+      [INFO]   * lacnic
+      [INFO]   * ripe
+      [DEBUG] Found valid trust anchor https://rpki.ripe.net/ta/ripe-ncc-ta.cer. Processing.
+      [DEBUG] Found valid trust anchor https://rrdp.lacnic.net/ta/rta-lacnic-rpki.cer. Processing.
+      [DEBUG] Found valid trust anchor https://rpki.afrinic.net/repository/AfriNIC.cer. Processing.
+      [DEBUG] Found valid trust anchor https://rpki.apnic.net/repository/apnic-rpki-root-iana-origin.cer. Processing.
+      [DEBUG] Found valid trust anchor https://rrdp.arin.net/arin-rpki-ta.cer. Processing.
+      [DEBUG] RRDP https://rrdp.ripe.net/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.lacnic.net/rrdp/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.apnic.net/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.afrinic.net/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.arin.net/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.apnic.net/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/08c2f264-23f9-49fb-9d43-f8b50bec9261/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/08c2f264-23f9-49fb-9d43-f8b50bec9261/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rpki.akrn.net/rrdp/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rpki.akrn.net/rrdp/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rpki.admin.freerangecloud.com/rrdp/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rpki.admin.freerangecloud.com/rrdp/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rpki.cnnic.cn/rrdp/notify.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.ripe.net/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://0.sb/rrdp/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://0.sb/rrdp/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rrdp.sub.apnic.net/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rrdp.sub.apnic.net/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rpki.roa.net/rrdp/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rpki.roa.net/rrdp/notification.xml: snapshot update completed.
+      [DEBUG] RRDP https://rrdp.rp.ki/notification.xml: updating from snapshot.
+      [DEBUG] RRDP https://rpki.cnnic.cn/rrdp/notify.xml: snapshot update completed.
       ...
       ASN,IP Prefix,Max Length,Trust Anchor
       AS137884,103.116.116.0/23,23,apnic
