@@ -838,10 +838,16 @@ impl Vrps {
             }
         };
         if let Err(err) = res {
-            error!(
-                "Failed to output result: {}",
-                err
-            );
+            // Surpress an error message for broken pipe on stdout.
+            if 
+                self.output.is_some() ||
+                err.kind() != io::ErrorKind::BrokenPipe
+            {
+                error!(
+                    "Failed to output result: {}",
+                    err
+                );
+            }
             Err(ExitError::Generic)
         }
         else if self.complete && !metrics.rsync_complete() {
