@@ -1672,7 +1672,7 @@ struct GlobalArgs {
     #[arg(
         long,
         value_name = "LENGTH",
-        value_parser = clap::value_parser!(u8).range(..32)
+        value_parser = clap::value_parser!(u8).range(..=32)
     )]
     limit_v4_len: Option<u8>,
 
@@ -1680,7 +1680,7 @@ struct GlobalArgs {
     #[arg(
         long,
         value_name = "LENGTH",
-        value_parser = clap::value_parser!(u8).range(..128)
+        value_parser = clap::value_parser!(u8).range(..=128)
     )]
     limit_v6_len: Option<u8>,
 
