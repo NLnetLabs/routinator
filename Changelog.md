@@ -28,6 +28,14 @@ New
 * The log output to files, stderr, and the `/log` HTTP endpoint now
   includes the log level of the message to make it more clear how
   important the message really is. ([#797])
+* The RTR client metrics have been extended by three new values allowing
+  to track the time since last cache reset and the number of reset and
+  serial queries. Like all RTR client metrics, these new values are only
+  available if enable explicitly via the `rtr-client-metrics` config option.
+  ([#800])
+* TCP keepalive is now enabled for RRDP connections. The keepalive
+  duration can be configured via the new command line and config file option
+  `rrdp-tcp-keepalive`. ([#801])
 
 Bug Fixes
 
@@ -40,6 +48,8 @@ Bug Fixes
 * Changed how Routinator deals with files in the store that cannot be
   parsed. These will now be ignored and the publication point stored in
   them considered not available. ([#803])
+* When piping output from the `vrps` command into something else, a broken
+  pipe will not lead to an error message any more. ([#807])
 
 Other Changes
 
@@ -54,8 +64,11 @@ Other Changes
 [#797]: https://github.com/NLnetLabs/routinator/pull/797
 [#798]: https://github.com/NLnetLabs/routinator/pull/798
 [#799]: https://github.com/NLnetLabs/routinator/pull/799
+[#800]: https://github.com/NLnetLabs/routinator/pull/800
+[#801]: https://github.com/NLnetLabs/routinator/pull/801
+[#802]: https://github.com/NLnetLabs/routinator/pull/802
 [#803]: https://github.com/NLnetLabs/routinator/pull/803
-[#803]: https://github.com/NLnetLabs/routinator/pull/803
+[#807]: https://github.com/NLnetLabs/routinator/pull/807
 
 
 ## 0.11.3
