@@ -261,6 +261,12 @@ The available options are:
       Sets the timeout in seconds for RRDP connect requests. If omitted, the
       general timeout will be used.
 
+.. option:: --rrdp-tcp-keepalive=seconds
+
+      Sets the value of the TCP keepalive duration in seconds for RRDP
+      connections. The default if this option is omitted is 60 seconds. Set
+      the option to 0 to disable the use of TCP keepalives.
+
 .. option:: --rrdp-local-addr=addr
 
       If present, sets the local address that the RRDP client should bind to
@@ -1103,6 +1109,12 @@ All values can be overridden via the command line options.
       rrdp-connect-timeout
             An integer value that, if present, sets a separate timeout in
             seconds for RRDP connect requests only.
+
+      rrdp-tcp-keepalive
+            An integer value that provides the duration in seconds for the
+            TCP keepalive option on RRDP connections. If the value is missing,
+            a duration of 60 seconds is used. Set the value to 0 to disable
+            the use of TCP keepalive for RRDP connections.
 
       rrdp-local-addr
             A string value that provides the local address to be used by RRDP
