@@ -293,6 +293,18 @@ clients seen by the RTR server providing the following information for them.
    should normally be 0 or 1 but can be higher if the address is the public
    side of a NAT.
 
+``updated`` 
+   Contains the time of the last successful update by the client.
+
+``lastReset`` 
+   Contains the time of the last successful cache reset by the client.
+
+``resetQueries`` 
+   Contains the number of reset queries by the client.
+
+``serialQueries`` 
+   Contains the number of serial queries by the client.
+
 ``serial``
    The highest serial of the data provided to a client from that address.
    This can be used to determine when the client has last updated.

@@ -181,6 +181,20 @@ enabled or not.
    The total number of bytes written to RTR connections. In other words,
    describes how much data has been sent to clients.
 
+``routinator_rtr_client_last_reset_seconds`` 
+   The amount of seconds since last cache reset by a client address.
+
+``routinator_rtr_client_reset_queries`` 
+   The number of of reset queries by a client address.
+
+``routinator_rtr_client_serial_queries`` 
+   The number of of serial queries by a client address.
+
+.. versionadded:: 0.12.0
+   ``routinator_rtr_client_last_reset_seconds``, 
+   ``routinator_rtr_client_reset_queries`` and
+   ``routinator_rtr_client_serial_queries``
+
 HTTP Server Metrics
 """""""""""""""""""
 

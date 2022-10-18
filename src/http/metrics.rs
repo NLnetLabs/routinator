@@ -597,6 +597,73 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
         });
 
         let item = Metric::new(
+            "rtr_client_last_reset_seconds",
+            "seconds since last cache reset by a client address",
+            MetricType::Gauge
+        );
+        target.header(item);
+        metrics.fold_clients(None, |update, client| {
+            *update = match (*update, client.last_reset()) {
+                (Some(left), Some(right)) => Some(cmp::max(left, right)),
+                (Some(left), None) => Some(left),
+                (None, Some(right)) => Some(right),
+                (None, None) => None
+            };
+        }).for_each(|(addr, update)| {
+            match update {
+                Some(update) => {
+                    let duration = Utc::now() - update;
+                    target.multi(item).label("addr", addr).value(
+                        format_args!(
+                            "{}.{:03}",
+                            duration.num_seconds(),
+                            duration.num_milliseconds() % 1000,
+                        )
+                    );
+                }
+                None => {
+                    target.multi(item).label("addr", addr).value(-1)
+                }
+            }
+        });
+
+        let item = Metric::new(
+            "rtr_client_reset_queries",
+            "number of of reset queries by a client address",
+            MetricType::Counter,
+        );
+        target.header(item);
+        metrics.fold_clients(0, |count, client| {
+            *count += client.reset_queries();
+        }).for_each(|(addr, count)| {
+            target.multi(item).label("addr", addr).value(count)
+        });
+
+        let item = Metric::new(
+            "rtr_client_serial_queries",
+            "number of of serial queries by a client address",
+            MetricType::Counter,
+        );
+        target.header(item);
+        metrics.fold_clients(0, |count, client| {
+            *count += client.serial_queries();
+        }).for_each(|(addr, count)| {
+            target.multi(item).label("addr", addr).value(count)
+        });
+
+        let item = Metric::new(
+            "rtr_client_reset_queries",
+            "number of of reset queries by a client address",
+            MetricType::Counter,
+        );
+        target.header(item);
+        metrics.fold_clients(0, |count, client| {
+            *count += client.reset_queries();
+        }).for_each(|(addr, count)| {
+            target.multi(item).label("addr", addr).value(count)
+        });
+
+        let item = Metric::new(
             "rtr_client_read_bytes",
             "number of bytes read from a client address",
             MetricType::Counter,
