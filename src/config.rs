@@ -161,6 +161,12 @@ pub struct Config {
     /// How to deal with unknown RPKI object types.
     pub unknown_objects: FilterPolicy,
 
+    /// The maximum length of IPv4 prefixes included in the VRP set.
+    pub limit_v4_len: Option<u8>,
+
+    /// The maximum length of IPv6 prefixes included in the VRP set.
+    pub limit_v6_len: Option<u8>,
+
     /// Allow dubious host names.
     pub allow_dubious_hosts: bool,
 
@@ -446,6 +452,16 @@ impl Config {
         // unknown_objects
         if let Some(value) = args.unknown_objects {
             self.unknown_objects = value
+        }
+
+        // limit_v4_len
+        if let Some(value) = args.limit_v4_len {
+            self.limit_v4_len = Some(value)
+        }
+
+        // limit_v6_len
+        if let Some(value) = args.limit_v6_len {
+            self.limit_v6_len = Some(value)
         }
 
         // allow_dubious_hosts
@@ -834,6 +850,8 @@ impl Config {
                 file.take_from_str("unknown-objects")?
                     .unwrap_or(DEFAULT_UNKNOWN_OBJECTS_POLICY)
             },
+            limit_v4_len: file.take_limited_u8("limit-v4-len", 32)?,
+            limit_v6_len: file.take_limited_u8("limit-v6-len", 128)?,
             allow_dubious_hosts:
                 file.take_bool("allow-dubious-hosts")?.unwrap_or(false),
             fresh: false,
@@ -1071,6 +1089,8 @@ impl Config {
             stale: DEFAULT_STALE_POLICY,
             unsafe_vrps: DEFAULT_UNSAFE_VRPS_POLICY,
             unknown_objects: DEFAULT_UNKNOWN_OBJECTS_POLICY,
+            limit_v4_len: None,
+            limit_v6_len: None,
             allow_dubious_hosts: false,
             fresh: false,
             disable_rsync: false,
@@ -1209,8 +1229,15 @@ impl Config {
             "unsafe-vrps".into(), format!("{}", self.unsafe_vrps).into()
         );
         res.insert(
-            "unknown-objects".into(), format!("{}", self.unknown_objects).into()
+            "unknown-objects".into(),
+            format!("{}", self.unknown_objects).into(),
         );
+        if let Some(value) = self.limit_v4_len {
+            res.insert("limit-v4-len".into(), value.into());
+        }
+        if let Some(value) = self.limit_v6_len {
+            res.insert("limit-v6-len".into(), value.into());
+        }
         res.insert(
             "allow-dubious-hosts".into(), self.allow_dubious_hosts.into()
         );
@@ -1674,6 +1701,22 @@ struct GlobalArgs {
     #[arg(long, value_name = "POLICY")]
     unknown_objects: Option<FilterPolicy>,
 
+    /// Maximum length of IPv4 prefixes included in output
+    #[arg(
+        long,
+        value_name = "LENGTH",
+        value_parser = clap::value_parser!(u8).range(..=32)
+    )]
+    limit_v4_len: Option<u8>,
+
+    /// Maximum length of IP64 prefixes included in output
+    #[arg(
+        long,
+        value_name = "LENGTH",
+        value_parser = clap::value_parser!(u8).range(..=128)
+    )]
+    limit_v6_len: Option<u8>,
+
     /// Allow dubious host names in rsync and HTTPS URIs
     #[arg(long)]
     allow_dubious_hosts: bool,
@@ -1967,6 +2010,40 @@ impl ConfigFile {
                     error!(
                         "Failed in config file {}: \
                          '{}' expected to be a boolean.",
+                        self.path.display(), key
+                    );
+                    Err(Failed)
+                }
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Takes a limited unsigned 8-bit integer value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer, is larger than `limit` or is negative.
+    fn take_limited_u8(
+        &mut self, key: &str, limit: u8,
+    ) -> Result<Option<u8>, Failed> {
+        match self.content.remove(key) {
+            Some(value) => {
+                if let toml::Value::Integer(res) = value {
+                    if res < 0 || res > limit as i64 {
+                        error!(
+                            "Failed in config file {}: \
+                            '{}' expected integer between 0 and {}.",
+                            self.path.display(), key, limit,
+                        );
+                        return Err(Failed)
+                    }
+                    Ok(Some(res as u8))
+                }
+                else {
+                    error!(
+                        "Failed in config file {}: \
+                         '{}' expected to be an integer.",
                         self.path.display(), key
                     );
                     Err(Failed)

@@ -60,24 +60,32 @@ pub struct ValidationReport {
 
     /// Should we include BGPsec router keys?
     enable_bgpsec: bool,
+
+    /// Should we filter IPv4 prefixes longer than a certain length?
+    limit_v4_len: Option<u8>,
+
+    /// Should we filter IPv6 prefixes longer than a certain length?
+    limit_v6_len: Option<u8>,
 }
 
 impl ValidationReport {
     /// Creates a new, empty validation report.
-    pub fn new(log_rejected: bool, enable_bgpsec: bool) -> Self {
+    pub fn new(config: &Config) -> Self {
         ValidationReport {
             pub_points: Default::default(),
             rejected: Default::default(),
-            log_rejected,
-            enable_bgpsec
+            log_rejected: config.unsafe_vrps.log(),
+            enable_bgpsec: config.enable_bgpsec,
+            limit_v4_len: config.limit_v4_len,
+            limit_v6_len: config.limit_v6_len,
         }
     }
 
     /// Creates a new validation report by running the engine.
     pub fn process(
-        engine: &Engine, log_rejected: bool, enable_bgpsec: bool
+        engine: &Engine, config: &Config,
     ) -> Result<(Self, Metrics), Failed> {
-        let report = Self::new(log_rejected, enable_bgpsec);
+        let report = Self::new(config);
         let mut run = engine.start(&report)?;
         run.process()?;
         run.cleanup()?;
@@ -208,10 +216,12 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         cert: ResourceCert,
         route: RouteOriginAttestation
     ) -> Result<(), Failed> {
-        self.pub_point.update_refresh(cert.validity().not_after());
-        self.pub_point.add_roa(
-            route, Arc::new(PublishInfo::signed_object(&cert, self.validity))
-        );
+        if self.pub_point.add_roa(
+            route, Arc::new(PublishInfo::signed_object(&cert, self.validity)),
+            self.report.limit_v4_len, self.report.limit_v6_len,
+        ) {
+            self.pub_point.update_refresh(cert.validity().not_after());
+        }
         Ok(())
     }
 
@@ -321,10 +331,26 @@ impl PubPoint {
         &mut self,
         roa: RouteOriginAttestation,
         info: Arc<PublishInfo>,
-    ) {
-        self.payload.extend(roa.iter_origins().map(|origin| {
-            (origin.into(), info.clone())
-        }));
+        limit_v4_len: Option<u8>,
+        limit_v6_len: Option<u8>,
+    ) -> bool {
+        let mut any = false;
+        for origin in roa.iter_origins() {
+            let limit = if origin.prefix.prefix().is_v4() {
+                limit_v4_len
+            }
+            else {
+                limit_v6_len
+            };
+            if let Some(limit) = limit {
+                if origin.prefix.prefix().len() > limit {
+                    continue;
+                }
+            }
+            self.payload.push((origin.into(), info.clone()));
+            any = true;
+        }
+        any
     }
 
     /// Adds the content of a router key to the payload.

@@ -166,6 +166,16 @@ The available options are:
       in the manifest. If the hash does not match, the CA and all its objects
       are still rejected.
 
+.. option:: --limit-v4-len=length, --limit-v6-len=length
+
+      If present, defines the maximum length of IPv4 prefixes or IPv6
+      prefixes, respectively, that will be included in the VRP data set. All
+      VRPs for prefixes with a longer prefix length will be ignored. Note that
+      only the prefix length itself, not the max length is considered.
+
+      If either option is missing, VRPs for all prefixes of that particular
+      address family are included.
+
 .. option:: --allow-dubious-hosts
 
       As a precaution, Routinator will reject rsync and HTTPS URIs from RPKI
@@ -1048,6 +1058,16 @@ All values can be overridden via the command line options.
 
             accept
                   Quietly ignore the object and accept the issuing CA.
+
+      limit-v4-len
+            An integer value which, if present, limits the length of IPv4
+            prefixes for which VPRs are included in the data set to the given
+            value.
+
+      limit-v6-len
+            An integer value which, if present, limits the length of IPv6
+            prefixes for which VPRs are included in the data set to the given
+            value.
 
       allow-dubious-hosts
             A boolean value that, if present and true, disables Routinator's
