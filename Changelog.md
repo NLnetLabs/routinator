@@ -16,7 +16,10 @@ Breaking Changes
 
 New
 
-* The new `rrdp-fallback` command line and configuration file option
+* The new `limit-v4-len` and `limit-v6-len` command line and config file
+  options allow limiting the length of IPv4 and IPv6 prefixes,
+  respectively, to be included in the VRP data set. ([#810])
+* The new `rrdp-fallback` command line and config file option
   allows specifying the circumstances under which a failed RRDP fetch
   should result in using rsync instead. Supported polices are `never` for
   never falling back to using rsync, `stale` for the current behavior of
@@ -69,6 +72,7 @@ Other Changes
 [#802]: https://github.com/NLnetLabs/routinator/pull/802
 [#803]: https://github.com/NLnetLabs/routinator/pull/803
 [#807]: https://github.com/NLnetLabs/routinator/pull/807
+[#810]: https://github.com/NLnetLabs/routinator/pull/810
 
 
 ## 0.11.3
