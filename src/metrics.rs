@@ -725,22 +725,30 @@ impl RtrServerMetrics {
                     }
                 }
 
-                // Always keep open items.
-                if item.open.load(Ordering::Relaxed) {
-                    new_clients.push(item);
-                    continue;
-                }
-
                 if let Some(pending_item) = pending.take() {
                     if pending_item.addr == item.addr {
-                        pending = Some(
-                            Arc::new(pending_item.collapse_closed(&item))
-                        );
+                        if item.open.load(Ordering::Relaxed) {
+                            new_clients.push(item);
+                            pending = Some(pending_item);
+                        }
+                        else {
+                            pending = Some(
+                                Arc::new(pending_item.collapse_closed(&item))
+                            );
+                        }
                     }
                     else {
                         new_clients.push(pending_item);
-                        pending = Some(item);
+                        if item.open.load(Ordering::Relaxed) {
+                            new_clients.push(item);
+                        }
+                        else {
+                            pending = Some(item);
+                        }
                     }
+                }
+                else if item.open.load(Ordering::Relaxed) {
+                    new_clients.push(item);
                 }
                 else {
                     pending = Some(item);
@@ -757,7 +765,7 @@ impl RtrServerMetrics {
             let index = match self.clients.binary_search_by(|item| {
                 item.addr.cmp(&client.addr)
             }) {
-                Ok(index) => index + 1,
+                Ok(index) => index,
                 Err(index) => index
             };
             self.clients.insert(index, client);
