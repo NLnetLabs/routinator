@@ -53,6 +53,7 @@ Bug Fixes
   them considered not available. ([#803])
 * When piping output from the `vrps` command into something else, a broken
   pipe will not lead to an error message any more. ([#807])
+* Fixed various issues with the calculation of RTR metrics. ([#811])
 
 Other Changes
 
@@ -73,6 +74,7 @@ Other Changes
 [#803]: https://github.com/NLnetLabs/routinator/pull/803
 [#807]: https://github.com/NLnetLabs/routinator/pull/807
 [#810]: https://github.com/NLnetLabs/routinator/pull/810
+[#811]: https://github.com/NLnetLabs/routinator/pull/811
 
 
 ## 0.11.3
