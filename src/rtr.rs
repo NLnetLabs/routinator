@@ -146,7 +146,7 @@ impl RtrStream {
         if let Some(duration) = keepalive {
             Self::set_keepalive(&sock, duration)?
         }
-        let metrics = Arc::new(RtrClientMetrics::new(sock.local_addr()?.ip()));
+        let metrics = Arc::new(RtrClientMetrics::new(sock.peer_addr()?.ip()));
         let client_metrics = metrics.clone();
         tokio::spawn(async move {
             server_metrics.add_client(client_metrics).await

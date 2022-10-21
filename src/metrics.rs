@@ -725,27 +725,52 @@ impl RtrServerMetrics {
                     }
                 }
 
-                // Always keep open items.
-                if item.open.load(Ordering::Relaxed) {
-                    new_clients.push(item);
-                    continue;
-                }
-
                 if let Some(pending_item) = pending.take() {
                     if pending_item.addr == item.addr {
-                        pending = Some(
-                            Arc::new(pending_item.collapse_closed(&item))
-                        );
+                        // We have a pending item with the same addr as the
+                        // currently processed item. If the currently
+                        // processed item is open, we push it to the new list
+                        // and remember the pending item. Otherwise, we make
+                        // a new pending item from the two and remember that.
+                        if item.open.load(Ordering::Relaxed) {
+                            new_clients.push(item);
+                            pending = Some(pending_item);
+                        }
+                        else {
+                            pending = Some(
+                                Arc::new(pending_item.collapse_closed(&item))
+                            );
+                        }
                     }
                     else {
+                        // We have a pending item with a different addr, i.e.,
+                        // we have advanced to the next addr. Push the pending
+                        // item and either use the current item as the new
+                        // pendin item (if it is closed) or push it to the
+                        // list, too.
                         new_clients.push(pending_item);
-                        pending = Some(item);
+                        if item.open.load(Ordering::Relaxed) {
+                            new_clients.push(item);
+                        }
+                        else {
+                            pending = Some(item);
+                        }
                     }
                 }
+                else if item.open.load(Ordering::Relaxed) {
+                    // We don’t have a pending item and the current item is
+                    // open. Push it to the list.
+                    new_clients.push(item);
+                }
                 else {
+                    // We don’t have a pending item and the current item is
+                    // closed. Make it the new pending item.
                     pending = Some(item);
                 }
             }
+
+            // Push a possible pending item to the new list and swap out the
+            // lists.
             if let Some(pending) = pending.take() {
                 new_clients.push(pending)
             }
@@ -757,7 +782,7 @@ impl RtrServerMetrics {
             let index = match self.clients.binary_search_by(|item| {
                 item.addr.cmp(&client.addr)
             }) {
-                Ok(index) => index + 1,
+                Ok(index) => index,
                 Err(index) => index
             };
             self.clients.insert(index, client);
