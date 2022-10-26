@@ -1,20 +1,4 @@
 ---
-# matrix field notes:
-#   platform:    used by Docker to use the right architecture base image.
-#                the set of supported values can be seen at:
-#                  https://go.dev/doc/install/source#environment
-#                  from: https://github.com/docker-library/official-images#architectures-other-than-amd64
-#                  from: https://docs.docker.com/desktop/multi-arch/
-#                one must also take any "normalization" into account, e.g. arm64v8 -> arm64, see:
-#                  https://github.com/containerd/containerd/blob/v1.4.3/platforms/database.go#L83
-#                see also:
-#                  https://stackoverflow.com/a/70889505
-#   shortname:   used by us to tag the architecture specific "manifest" image.
-#   crosstarget: (optional) used to download the correct cross-compiled binary that was produced earlier by the
-#                'cross' job above.
-#   mode:        (optional) set to 'copy' for cross-compiled targets.
-#   cargo_args:  (optional) can be used when testing, e.g. set to '--no-default-features' to speed up the Krill
-#                build.
 pkg:
   - 'routinator'
 image:
