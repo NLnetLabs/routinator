@@ -1,6 +1,6 @@
 //! Managing the process Routinator runs in.
 
-use std::{fs, io, process};
+use std::{fs, io};
 use std::future::Future;
 use std::net::TcpListener;
 use std::path::Path;
@@ -137,7 +137,7 @@ impl Process {
             facility,
             hostname: None,
             process,
-            pid: process::id(),
+            pid: std::process::id(),
         };
         let logger = syslog::unix(formatter.clone()).or_else(|_| {
             syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
