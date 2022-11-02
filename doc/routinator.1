@@ -27,12 +27,10 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Apr 20, 2022" "0.11.3-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Nov 02, 2022" "0.12.0-dev" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
-.sp
-\fBroutinator\fP [\fBoptions\fP] \fI\%init\fP [\fBinit\-options\fP]
 .sp
 \fBroutinator\fP [\fBoptions\fP] \fI\%vrps\fP [\fBvrps\-options\fP] [\fB\-o \fP\fIoutput\-file\fP] [\fB\-f \fP\fIformat\fP]
 .sp
@@ -75,29 +73,52 @@ contents of the configuration file.
 .UNINDENT
 .INDENT 0.0
 .TP
-.B \-b dir, \-\-base\-dir=dir
-Specifies the base directory to keep status information in. Unless
-overwritten by the \fI\%\-r\fP or \fI\%\-t\fP options, the local
-repository will be kept in the sub\-directory \fBrepository\fP and the
-TALs will be kept in the sub\-directory \fBtals\fP\&.
-.sp
-If omitted, the base directory defaults to \fB$HOME/.rpki\-cache\fP\&.
-.UNINDENT
-.INDENT 0.0
-.TP
 .B \-r dir, \-\-repository\-dir=dir
 Specifies the directory to keep the local repository in. This is
 the place where Routinator stores the RPKI data it has collected
 and thus is a copy of all the data referenced via the trust
 anchors.
+.sp
+If omitted, defaults to \fB$HOME/.rpki\-cache/repository\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
-.B \-t dir, \-\-tal\-dir=dir
-Specifies the directory containing the trust anchor locators (TALs) to
-use. Trust anchor locators are the starting points for collecting and
-validating RPKI data. See \fI\%TRUST ANCHOR LOCATORS\fP for more information
-on what should be present in this directory.
+.B \-\-no\-rir\-tals
+If present, Routinator will not use the bundled trust anchor locators
+(TALs) of the five Regional Internet Registries (RIRs).
+.sp
+Trust anchor locators are the starting points for collecting and
+validating RPKI data. Each of the five RIRs provides a TAL that adds
+resources from their area. For normal production installations, these
+are the only TALs that should be used.
+.sp
+Using this option as well as the \fI\%\-\-tal\fP and
+\fI\%\-\-extra\-tals\-dir\fP options you can change which TALs
+Routinator should use.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-tal=name
+Use the bundled TAL with the given name in addition to any other TAL.
+.sp
+Each RIR TAL is available through this option as well as TALs for a
+few select test environments. If you use this option with the name
+\fIlist\fP, Routinator will print a list of all available bundled TALS and
+exit.
+.sp
+The option can be given more than once.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-extra\-tals\-dir=dir
+Specifies a directory containing additional trust anchor locators
+(TALs) to use. Routinator will use all files in this directory with
+an extension of \fI\&.tal\fP as TALs. These files need to be in the format
+described by \fI\%RFC 8630\fP\&.
+.sp
+Note that Routinator will use all TALs provided. That means that if a
+TAL in this directory is one of the bundled TALs, then these resources
+will be validated twice.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -165,11 +186,7 @@ The \fIwarn\fP policy will log warnings for unsafe VRPs but will add them
 to the valid VRPs.
 .sp
 Finally, the \fIaccept\fP policy will quietly add unsafe VRPs to the valid
-VRPs.
-.sp
-Currently, the default policy is \fIwarn\fP in order to gain operational
-experience with the frequency and impact of unsafe VRPs. This default
-may change in future versions.
+VRPs. This is the default policy.
 .sp
 For more information on the process of validation implemented in
 Routinator, see the section \fI\%VALIDATION\fP below.
@@ -201,6 +218,17 @@ Note that even if unknown objects are accepted, they must appear in
 the manifest and the hash over their content must match the one given
 in the manifest. If the hash does not match, the CA and all its objects
 are still rejected.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-limit\-v4\-len=length, \-\-limit\-v6\-len=length
+If present, defines the maximum length of IPv4 prefixes or IPv6
+prefixes, respectively, that will be included in the VRP data set. All
+VRPs for prefixes with a longer prefix length will be ignored. Note that
+only the prefix length itself, not the max length is considered.
+.sp
+If either option is missing, VRPs for all prefixes of that particular
+address family are included.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -241,13 +269,40 @@ that it is in the path.
 Sets the number of seconds an rsync command is allowed to run before it
 is terminated early. This protects against hanging rsync commands that
 prevent Routinator from continuing. The default is 300 seconds which
-should be long enough except for very slow networks.
+should be long enough except for very slow networks. Set the option to
+0 to disable the timeout.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B \-\-disable\-rrdp
 If this option is present, RRDP is disabled and only rsync will be
 used.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-rrdp\-fallback=policy
+Defines the circumstance when access via rsync should be tried for a
+CA that announces it can be updated via RRDP. In general, access via
+RRDP is less resource intensive and more secure than rsync and will
+therefore be preferred. This option specifies what to do when access
+to an RRDP repository fails.
+.sp
+The policy \fBnever\fP means that rsync is never tried for a CA that
+announces RRDP.
+.sp
+The policy \fBstale\fP means that rsync is tried if an update via RRDP
+fails and there is no current local copy of the RRDP repository. A
+local copy is considered current if it was last updated within a
+time span chosen on a per\-repository basis between the
+\fI\%\-\-refresh\fP time and \fI\%\-\-rrdp\-fallback\-time\fP\&.
+.sp
+The policy \fBnew\fP means that rsync is tried if an update via RRDP
+fails and there is no local copy of the RRDP repository at all. In
+other words, an update via RRDP has never succeeded for the repository.
+Choosing this policy allows a repository operator some leeway when
+first enabling RRDP support.
+.sp
+The default policy if this option is not given is \fBstale\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -280,6 +335,13 @@ the timeout.
 .B \-\-rrdp\-connect\-timeout=seconds
 Sets the timeout in seconds for RRDP connect requests. If omitted, the
 general timeout will be used.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-rrdp\-tcp\-keepalive=seconds
+Sets the value of the TCP keepalive duration in seconds for RRDP
+connections. The default if this option is omitted is 60 seconds. Set
+the option to 0 to disable the use of TCP keepalives.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -405,60 +467,6 @@ Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
 .INDENT 0.0
 .TP
-.B init
-Prepares the local repository directories and the TAL directory for
-running Routinator.  Specifically,  makes sure the local repository
-directory exists, and creates the TAL directory and fills it with the
-desired TALs.
-.sp
-For more information about TALs, see \fI\%TRUST ANCHOR LOCATORS\fP below.
-.INDENT 7.0
-.TP
-.B \-f, \-\-force
-Forces installation of the TALs even if the TAL directory already
-exists.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-rir\-tals
-Selects the production TALs of the five RIRs for installation. If
-no other TAL selection options are provided, this option is
-assumed.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-rir\-test\-tals
-Selects the bundled TALs for RIR testbeds for installation.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-tal=name
-Selects the bundled TAL with the provided name for installation.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-skip\-tal=name
-Deselects the bundled TAL with the given name.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-list\-tals
-List all bundled TALs and exit. The list also shows which TALs are
-selected by the \fI\%\-\-rir\-tals\fP and \fI\%\-\-rir\-test\-tals\fP
-options.
-.UNINDENT
-.INDENT 7.0
-.TP
-.B \-\-accept\-arin\-rpa
-Before you can use the ARIN TAL, you need to agree to the ARIN
-Relying Party Agreement (RPA). You can find it at
-\fI\%https://www.arin.net/resources/manage/rpki/rpa.pdf\fP and explicitly
-agree to it via this option. This explicit agreement is necessary
-in order to install the ARIN TAL.
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.TP
 .B vrps
 This command requests that Routinator update the local repository and
 then validate the Route Origin Attestations in the repository and output
@@ -563,11 +571,12 @@ from a valid ROA object, \fIcer\fP if it was derived from
 a published router certificate, or \fIexception\fP if it was an
 assertion in a local exception file.
 .sp
-For RPKI objects, \fIuri\fP provides the rsync URI of the ROA
-or router certificate, \fIvalidity\fP provides the validity of
-the ROA itself, and \fIchainValidity\fP the validity
-considering the validity of the certificates along the
-validation chain.
+For RPKI objects, \fItal\fP provides the name of the trust
+anchor locator the object was published under, \fIuri\fP
+provides the rsync URI of the ROA or router certificate,
+\fIvalidity\fP provides the validity of the ROA itself, and
+\fIchainValidity\fP the validity considering the validity of
+the certificates along the validation chain.
 .sp
 For  assertions from local exceptions, \fIpath\fP will provide
 the path of the local exceptions file and, optionally,
@@ -751,8 +760,8 @@ status 0 in this case.
 .B server
 This command causes Routinator to act as a server for the
 RPKI\-to\-Router (RTR) and HTTP protocols. In this mode, Routinator will
-read all the TALs (See \fI\%TRUST ANCHOR LOCATORS\fP below) and will stay
-attached to the terminal unless the \fI\%\-d\fP option is given.
+read all the Trust Anchor Locators and will stay attached to the
+terminal unless the \fI\%\-d\fP option is given.
 .sp
 The server will periodically update the local repository, every ten
 minutes by default, notify any clients of changes, and let them fetch
@@ -1029,25 +1038,6 @@ the given file instead of displaying it. Use \- to output the
 manual page to standard output.
 .UNINDENT
 .UNINDENT
-.SH TRUST ANCHOR LOCATORS
-.sp
-RPKI uses trust anchor locators, or TALs, to identify the location and public
-keys of the trusted root CA certificates. Routinator keeps these TALs in
-files in the TAL directory which can be set by the  \fI\%\-t\fP option. If
-the \fI\%\-b\fP option is used instead, the TAL directory will be in the
-subdirectory \fItals\fP under the directory specified in this option. The default
-location, if no options are used at all is \fB$HOME/.rpki\-cache/tals\fP\&.
-.sp
-Routinator comes with a set of commonly used TALs that can be used to
-populate the TAL directory via the init command. By default, the command will
-install the TALs of the five Regional Internet Registries (RIRs) necessary
-for the complete global RPKI repository.
-.sp
-If the directory does exist, Routinator will use all files with an extension
-of \fI\&.tal\fP in this directory. This means that you can add and remove trust
-anchors by adding and removing files in this directory. If you add files,
-make sure they are in the format described by \fI\%RFC 7730\fP or the upcoming
-\fI\%RFC 8630\fP\&.
 .SH CONFIGURATION FILE
 .sp
 Instead of providing all options on the command line, they can also be
@@ -1069,9 +1059,18 @@ All values can be overridden via the command line options.
 A string containing the path to the directory to store the local
 repository in. This entry is mandatory.
 .TP
-.B tal\-dir
-A string containing the path to the directory that contains the
-Trust Anchor Locators. This entry is mandatory.
+.B no\-rir\-tals
+A boolean specifying whether the five RIR Trust Anchor Locators
+(TALs) should not be added to the set of evaluated TALs. If
+missing, the RIR TALs will be used.
+.TP
+.B tals
+A list of strings, each containing the name of a bundled TAL to
+be added to the set of TALs to be evaluated.
+.TP
+.B extra\-tals\-dir
+A string containing the path to a directory that contains
+additional TALs.
 .TP
 .B exceptions
 A list of strings, each containing the path to a file with local
@@ -1108,11 +1107,11 @@ Filter unsafe VRPs and add warning messages to the log.
 .TP
 .B warn
 Warn about unsafe VRPs in the log but add them to the final
-set of VRPs. This is the default policy if the value is
-missing.
+set of VRPs.
 .TP
 .B accept
-Quietly add unsafe VRPs to the final set of VRPs.
+Quietly add unsafe VRPs to the final set of VRPs.  This is
+the default policy if the value is missing.
 .UNINDENT
 .TP
 .B unknown\-objects
@@ -1130,6 +1129,16 @@ CA. This is the default policy if the value is missing.
 .B accept
 Quietly ignore the object and accept the issuing CA.
 .UNINDENT
+.TP
+.B limit\-v4\-len
+An integer value which, if present, limits the length of IPv4
+prefixes for which VPRs are included in the data set to the given
+value.
+.TP
+.B limit\-v6\-len
+An integer value which, if present, limits the length of IPv6
+prefixes for which VPRs are included in the data set to the given
+value.
 .TP
 .B allow\-dubious\-hosts
 A boolean value that, if present and true, disables Routinator\(aqs
@@ -1157,11 +1166,17 @@ arguments are used.
 .B rsync\-timeout
 An integer value specifying the number seconds an rsync command
 is allowed to run before it is being terminated. The default if
-the value is missing is 300 seconds.
+the value is missing is 300 seconds. Set the value to 0 to turn
+the timeout off.
 .TP
 .B disable\-rrdp
 A boolean value that, if present and true, turns off the use of
 RRDP.
+.TP
+.B rrdp\-fallback
+A string value specifying the circumstances under which an update
+via rsync is tried if an update via RRDP fails. See
+\fI\%\-\-rrdp\-fallback\fP for details on the available policies.
 .TP
 .B rrdp\-fallback\-time
 An integer value specifying the maximum number of seconds since a
@@ -1185,6 +1200,12 @@ off.
 .B rrdp\-connect\-timeout
 An integer value that, if present, sets a separate timeout in
 seconds for RRDP connect requests only.
+.TP
+.B rrdp\-tcp\-keepalive
+An integer value that provides the duration in seconds for the
+TCP keepalive option on RRDP connections. If the value is missing,
+a duration of 60 seconds is used. Set the value to 0 to disable
+the use of TCP keepalive for RRDP connections.
 .TP
 .B rrdp\-local\-addr
 A string value that provides the local address to be used by RRDP
@@ -1386,7 +1407,7 @@ run as.
 A string value containing the group name a daemon process should
 run as.
 .TP
-.B tal\-label
+.B tal\-labels
 An array containing arrays of two string values mapping the name
 of a TAL file (without the path but including the extension) as
 given by the first string to the name of the TAL to be included

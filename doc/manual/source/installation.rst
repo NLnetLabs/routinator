@@ -270,6 +270,7 @@ to get started.
        have it listen on IPv6 as well as IPv4:
 
        .. code-block:: bash
+
           sudo docker run <your usual arguments> \
               server --rtr [::]:3323 --http [::]:8323
 
