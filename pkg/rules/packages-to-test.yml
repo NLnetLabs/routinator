@@ -16,13 +16,21 @@ mode:
   - 'upgrade-from-published'
 target:
   - 'x86_64'
-# if we later add a new O/S or variant we won't have yet ever published the package so can't do a test upgrade
-# over last published version. In that case add lines here like so to disable the upgrade from published test
-# for that O/S (remember to change debian:bullseye to the correct O/S name!):
+
+# if we later add a new O/S or variant we won't have yet ever published the package so can't do a test upgrade over
+# last published version. In that case add lines here like so to disable the upgrade from published test for that O/S
+# (remember to change debian:bullseye to the correct O/S name!):
 #
 # exclude:
 #   - image: 'debian:bullseye'
 #     mode: 'upgrade-from-published'
+
+# The CentOS v0.11.3 Routinator version fails on upgrade to a newer version with error:
+#   /var/tmp/rpm-tmp.8bqcXa: line 1: /usr/share/routinator/rpm/postuninst: No such file or directory
+#   warning: %postun(routinator-0:0.11.3-1.x86_64) scriptlet failed, exit status 127
+# So, until v0.12.0 is released (which fixes the problem) we have to ignore upgrade failures with CentOS otherwise the
+# packaging workflow will fail. This wasn't a problem with v1 of the packaging workflow as that didn't check for errors
+# on upgrade, so we only have to introduce this now that we are using v2 of the packaging workflow.
 include:
   - pkg: 'routinator'
     image: "centos:7"
