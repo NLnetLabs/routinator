@@ -32,8 +32,7 @@ target:
 # packaging workflow will fail. This wasn't a problem with v1 of the packaging workflow as that didn't check for errors
 # on upgrade, so we only have to introduce this now that we are using v2 of the packaging workflow.
 include:
-  - pkg: 'routinator'
-    image: "centos:7"
-    mode: 'upgrade-from-published'
-    target: 'x86_64'
+  - image: "centos:7"
+    ignore_upgrade_failure: true
+  - image: "centos:8"
     ignore_upgrade_failure: true
