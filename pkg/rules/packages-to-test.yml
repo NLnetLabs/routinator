@@ -23,3 +23,9 @@ target:
 # exclude:
 #   - image: 'debian:bullseye'
 #     mode: 'upgrade-from-published'
+include:
+  - pkg: 'routinator'
+    image: "centos:7"
+    mode: 'upgrade-from-published'
+    target: 'x86_64'
+    ignore_upgrade_failure: true
