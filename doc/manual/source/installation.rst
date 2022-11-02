@@ -266,6 +266,18 @@ to get started.
        the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
        and passing ``--config /etc/routinator.conf`` when running the container).
 
+       For example in an IPv6 only network you could invoke Routinator like so to
+       have it listen on IPv6 as well as IPv4:
+
+       .. code-block:: bash
+          sudo docker run <your usual arguments> \
+              server --rtr [::]:3323 --http [::]:8323
+
+       Note the :subcmd:`server` command passed to Routinator. When you override the
+       default arguments passed to Routinator by the Docker image you must provide
+       all of the arguments required by Routinator. See the :doc:`manual-page` for
+       more information.
+
        To persist the RPKI cache data you can create a separate Docker volume
        and mount it into the container like so:
 
