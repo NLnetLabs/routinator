@@ -247,7 +247,16 @@ to get started.
               -p 3323:3323 \
               -p 8323:8323 \
               nlnetlabs/routinator
-               
+
+       .. tip:: If no arguments are supplied the Routinator Docker image
+                configures Routinator to run in :subcmd:`server` mode, with
+                :option:`--rtr` 3323 and :option:`--http` 8323.
+
+                For backward compatibility with earlier releases it also
+                configures Routinator with :option:`--http` 9556, the port
+                number `allocated by the Prometheus project <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>`_
+                for Routinator metric publication.
+
        The Routinator container is known to run successfully run under 
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
 

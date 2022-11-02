@@ -160,12 +160,19 @@ RUN mkdir -p /home/${RUN_USER}/.rpki-cache/repository && \
 USER $RUN_USER_UID
 
 # Hint to operators the TCP port that the application in this image listens on
-# (by default).
+# (by default). Routinator documentation and DEB/RPM packages configure
+# Routinator to listen for HTTP requests on port 8323. For consistency we do
+# the same, but for backward compatibility with earlier versions of this file
+# we still also listen for HTTP requests on port 9556, the port number
+# allocated by the Prometheus project [1] for Routinator metric publication.
+#
+# [1]: https://github.com/prometheus/prometheus/wiki/Default-port-allocations
 EXPOSE 3323/tcp
+EXPOSE 8323/tcp
 EXPOSE 9556/tcp
 
 # Use Tini to ensure that our application responds to CTRL-C when run in the
 # foreground without the Docker argument "--init" (which is actually another
 # way of activating Tini, but cannot be enabled from inside the Docker image).
 ENTRYPOINT ["/sbin/tini", "--", "routinator"]
-CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:9556"]
+CMD ["server", "--rtr", "0.0.0.0:3323", "--http", "0.0.0.0:8323", "--http", "0.0.0.0:9556"]
