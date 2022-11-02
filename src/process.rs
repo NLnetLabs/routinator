@@ -137,7 +137,7 @@ impl Process {
             facility,
             hostname: None,
             process,
-            pid: nix::unistd::getpid().as_raw()
+            pid: std::process::id(),
         };
         let logger = syslog::unix(formatter.clone()).or_else(|_| {
             syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
