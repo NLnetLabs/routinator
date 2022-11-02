@@ -14,7 +14,7 @@ Breaking Changes
   `--extra-tals-dir` option. The `tal-dir` option has been removed but will
   still be accepted – and ignored – in the config file only. 
 
-  The `init` command has been removed.
+  The `init` command has been removed. ([#796])
 * Changed the default configuration option for `unsafe-vrps` to `accept`
   and removed all logging or mentioning of unsafe VRPs in this case.
   ([#761])
@@ -69,6 +69,8 @@ Bug Fixes
 Other Changes
 
 * The minimal required Rust version has been increased to 1.60. ([#792])
+* The default Docker image now listens on both port 8323 and 9556 for HTTP
+  requests. ([#809])
 
 [#755]: https://github.com/NLnetLabs/routinator/pull/755
 [#761]: https://github.com/NLnetLabs/routinator/pull/761
@@ -76,6 +78,7 @@ Other Changes
 [#769]: https://github.com/NLnetLabs/routinator/pull/769
 [#783]: https://github.com/NLnetLabs/routinator/pull/784
 [#792]: https://github.com/NLnetLabs/routinator/pull/792
+[#796]: https://github.com/NLnetLabs/routinator/pull/796
 [#797]: https://github.com/NLnetLabs/routinator/pull/797
 [#798]: https://github.com/NLnetLabs/routinator/pull/798
 [#799]: https://github.com/NLnetLabs/routinator/pull/799
@@ -84,6 +87,7 @@ Other Changes
 [#802]: https://github.com/NLnetLabs/routinator/pull/802
 [#803]: https://github.com/NLnetLabs/routinator/pull/803
 [#807]: https://github.com/NLnetLabs/routinator/pull/807
+[#809]: https://github.com/NLnetLabs/routinator/pull/809
 [#810]: https://github.com/NLnetLabs/routinator/pull/810
 [#811]: https://github.com/NLnetLabs/routinator/pull/811
 
