@@ -4,6 +4,17 @@
 
 Breaking Changes
 
+* Restructured the TAL configuration in response to the dropped requirement
+  to opt into the ARIN TAL.
+
+  Routinator will now use the bundled RIR TALs directly unless told otherwise
+  by the new `--no-rir-tals` command  line and config option. The additional
+  bundled TALs can be added via the new `--tal` command line and config
+  option. Additionally, the TAL directory can still be used via the
+  `--extra-tals-dir` option. The `tal-dir` option has been removed but will
+  still be accepted – and ignored – in the config file only. 
+
+  The `init` command has been removed.
 * Changed the default configuration option for `unsafe-vrps` to `accept`
   and removed all logging or mentioning of unsafe VRPs in this case.
   ([#761])
