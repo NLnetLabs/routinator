@@ -1,13 +1,10 @@
 Trust Anchor Locators
 =====================
 
-This directory contains the trust anchor locators (TALs) of the five
-Regional Internet Registries (RIRs) that are bundled with Routinator
-and are necessary for RPKI validation.
+This directory contains the trust anchor locators (TALs) that are bundled
+with Routinator. These are the TALs of the five Regional Internet Registries
+(RIRs) as well as those for a number of test setups.
 
-Please be aware that you can only use the ARIN TAL (in file `arin.tal`)
-if you agree to the [ARIN Relying Party Agreement (PDF)]. This TAL has been
-included in Routinator with permission by ARIN provided we gain agreement
-to the RPA before installation or use.
+For more information, please refer to `src/tals.rs` which is the canonical
+place to describe and categorize them.
 
-[ARIN Relying Party Agreement (PDF)]: https://www.arin.net/resources/manage/rpki/rpa.pdf

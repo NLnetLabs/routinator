@@ -4,8 +4,6 @@ Manual Page
 Synopsis
 --------
 
-:program:`routinator` [``options``] :subcmd:`init` [``init-options``]
-
 :program:`routinator` [``options``] :subcmd:`vrps` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
 
 :program:`routinator` [``options``] :subcmd:`validate` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
@@ -49,15 +47,6 @@ The available options are:
       See `CONFIGURATION FILE`_ below for more information on the format and
       contents of the configuration file.
 
-.. option:: -b dir, --base-dir=dir
-
-      Specifies the base directory to keep status information in. Unless
-      overwritten by the :option:`-r` or :option:`-t` options, the local
-      repository will be kept in the sub-directory :file:`repository` and the
-      TALs will be kept in the sub-directory :file:`tals`.
-
-      If omitted, the base directory defaults to :file:`$HOME/.rpki-cache`.
-
 .. option:: -r dir, --repository-dir=dir
 
       Specifies the directory to keep the local repository in. This is
@@ -65,12 +54,43 @@ The available options are:
       and thus is a copy of all the data referenced via the trust
       anchors.
 
-.. option:: -t dir, --tal-dir=dir
+      If omitted, defaults to :file:`$HOME/.rpki-cache/repository`.
 
-      Specifies the directory containing the trust anchor locators (TALs) to
-      use. Trust anchor locators are the starting points for collecting and
-      validating RPKI data. See `TRUST ANCHOR LOCATORS`_ for more information
-      on what should be present in this directory.
+.. option:: --no-rir-tals
+
+      If present, Routinator will not use the bundled trust anchor locators
+      (TALs) of the five Regional Internet Registries (RIRs).
+
+      Trust anchor locators are the starting points for collecting and
+      validating RPKI data. Each of the five RIRs provides a TAL that adds
+      resources from their area. For normal production installations, these
+      are the only TALs that should be used.
+
+      Using this option as well as the :option:`--tal` and
+      :option:`--extra-tals-dir` options you can change which TALs
+      Routinator should use.
+
+.. option:: --tal=name
+
+      Use the bundled TAL with the given name in addition to any other TAL.
+
+      Each RIR TAL is available through this option as well as TALs for a
+      few select test environments. If you use this option with the name
+      *list*, Routinator will print a list of all available bundled TALS and
+      exit.
+
+      The option can be given more than once.
+
+.. option:: --extra-tals-dir=dir
+
+      Specifies a directory containing additional trust anchor locators
+      (TALs) to use. Routinator will use all files in this directory with
+      an extension of *.tal* as TALs. These files need to be in the format
+      described by :rfc:`8630`.
+
+      Note that Routinator will use all TALs provided. That means that if a
+      TAL in this directory is one of the bundled TALs, then these resources
+      will be validated twice.
 
 .. option:: -x file, --exceptions=file
 
@@ -385,52 +405,6 @@ Commands
 Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
 
-.. subcmd:: init
-
-    Prepares the local repository directories and the TAL directory for
-    running Routinator.  Specifically,  makes sure the local repository
-    directory exists, and creates the TAL directory and fills it with the
-    desired TALs.
-
-    For more information about TALs, see `TRUST ANCHOR LOCATORS`_ below.
-
-    .. option:: -f, --force
-
-           Forces installation of the TALs even if the TAL directory already
-           exists.
-
-    .. option:: --rir-tals
-    
-           Selects the production TALs of the five RIRs for installation. If
-           no other TAL selection options are provided, this option is
-           assumed.
-
-    .. option:: --rir-test-tals
-    
-           Selects the bundled TALs for RIR testbeds for installation.
-
-    .. option:: --tal=name
-    
-           Selects the bundled TAL with the provided name for installation.
-
-    .. option:: --skip-tal=name
-
-           Deselects the bundled TAL with the given name.
-
-    .. option:: --list-tals
-    
-           List all bundled TALs and exit. The list also shows which TALs are
-           selected by the :option:`--rir-tals` and :option:`--rir-test-tals`
-           options.
-
-    .. option:: --accept-arin-rpa
-
-           Before you can use the ARIN TAL, you need to agree to the ARIN
-           Relying Party Agreement (RPA). You can find it at
-           https://www.arin.net/resources/manage/rpki/rpa.pdf and explicitly
-           agree to it via this option. This explicit agreement is necessary
-           in order to install the ARIN TAL.
-
 .. subcmd:: vrps
 
     This command requests that Routinator update the local repository and
@@ -707,8 +681,8 @@ These can be requested by providing different commands on the command line.
 
        This command causes Routinator to act as a server for the
        RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
-       read all the TALs (See `TRUST ANCHOR LOCATORS`_ below) and will stay
-       attached to the terminal unless the :option:`-d` option is given.
+       read all the Trust Anchor Locators and will stay attached to the
+       terminal unless the :option:`-d` option is given.
 
        The server will periodically update the local repository, every ten
        minutes by default, notify any clients of changes, and let them fetch
@@ -959,27 +933,6 @@ These can be requested by providing different commands on the command line.
               the given file instead of displaying it. Use - to output the
               manual page to standard output.
 
-Trust Anchor Locators
----------------------
-
-RPKI uses trust anchor locators, or TALs, to identify the location and public
-keys of the trusted root CA certificates. Routinator keeps these TALs in
-files in the TAL directory which can be set by the  :option:`-t` option. If
-the :option:`-b` option is used instead, the TAL directory will be in the
-subdirectory *tals* under the directory specified in this option. The default
-location, if no options are used at all is :file:`$HOME/.rpki-cache/tals`.
-
-Routinator comes with a set of commonly used TALs that can be used to
-populate the TAL directory via the init command. By default, the command will
-install the TALs of the five Regional Internet Registries (RIRs) necessary
-for the complete global RPKI repository.
-
-If the directory does exist, Routinator will use all files with an extension
-of *.tal* in this directory. This means that you can add and remove trust
-anchors by adding and removing files in this directory. If you add files,
-make sure they are in the format described by :rfc:`7730` or the upcoming
-:rfc:`8630`.
-
 Configuration File
 ------------------
 
@@ -1003,9 +956,18 @@ All values can be overridden via the command line options.
             A string containing the path to the directory to store the local
             repository in. This entry is mandatory.
 
-      tal-dir
-            A string containing the path to the directory that contains the
-            Trust Anchor Locators. This entry is mandatory.
+      no-rir-tals
+            A boolean specifying whether the five RIR Trust Anchor Locators
+            (TALs) should not be added to the set of evaluated TALs. If
+            missing, the RIR TALs will be used.
+
+      tals
+            A list of strings, each containing the name of a bundled TAL to
+            be added to the set of TALs to be evaluated.
+
+      extra-tals-dir
+            A string containing the path to a directory that contains
+            additional TALs.
 
       exceptions
             A list of strings, each containing the path to a file with local

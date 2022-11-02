@@ -89,9 +89,6 @@ The command will build Routinator and install it in the same directory that
 Cargo itself lives in, likely ``$HOME/.cargo/bin``. This means Routinator
 will be in your path, too.
 
-.. Note:: Before you can use Routinator, you must first 
-          :doc:`initialise<initialisation>` the application.
-
 Updating
 """"""""
 
@@ -348,15 +345,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   Edit the PATH line to include "/home/routinator/.cargo/bin"
   PATH=$PATH:$HOME/.local/bin:$HOME/bin:/home/routinator/.cargo/bin
 
-14.	Initialise Routinator, accept the ARIN TAL and exit back to the user with
-   	:command:`sudo`:
-
-.. code-block:: bash
-
-  /home/routinator/.cargo/bin/routinator -b /opt/routinator init -f --accept-arin-rpa
-  exit
-
-15.	Create a routinator systemd script using the template below:
+14.	Create a routinator systemd script using the template below:
 
 .. code-block:: bash
 
@@ -384,7 +373,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
             /home/routinator/.cargo/bin/routinator -v -b /opt/routinator server \
             --http 127.0.0.1:8080 --rtr 172.16.47.235:8323 --rtr [2001:db8::43]:8323
 
-16.	Configure SELinux to allow connections to localhost and to allow
+15.	Configure SELinux to allow connections to localhost and to allow
    	:program:`rsync` to write to the ``/opt/routinator`` directory:
 
 .. code-block:: bash
@@ -392,7 +381,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   sudo setsebool -P httpd_can_network_connect 1
   sudo semanage permissive -a rsync_t
 
-17.	Reload the systemd daemon and set the routinator service to start at
+16.	Reload the systemd daemon and set the routinator service to start at
    	boot:
 
 .. code-block:: bash
@@ -401,7 +390,7 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
   sudo systemctl enable routinator.service
   sudo systemctl start routinator.service
 
-18.	Set up the firewall to permit :program:`ssh`, HTTPS and port 8323 for the
+17.	Set up the firewall to permit :program:`ssh`, HTTPS and port 8323 for the
    	RTR protocol:
 
 .. code-block:: bash
@@ -421,6 +410,6 @@ run Routinator on Security Enhanced Linux (SELinux) using CentOS 7.
       source address="<peering router IPv6 loopback subnet>" port port=8323 protocol=tcp accept'
   sudo firewall-cmd --reload
 
-19.	Navigate to :samp:`https://{<IP-address>}/metrics` to see if it's
+18.	Navigate to :samp:`https://{<IP-address>}/metrics` to see if it's
    	working. You should authenticate with the username and password that you
    	provided in step 10 of setting up the RPKI Validation Server.

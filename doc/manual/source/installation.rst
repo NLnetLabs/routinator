@@ -8,15 +8,14 @@ Routinator has minimal system requirements. When choosing a system, a
 powerful CPU is not required. Make sure you have 1GB of available memory and
 4GB of disk space for the application. 
 
-Please keep in mind that the RPKI consists of a very large number of small
-files. As a result, Routinator will use a large number of inodes. You should
+Please keep in mind that the RPKI consists of a great number of small files.
+As a result, Routinator will use a large amount of inodes. You should
 accommodate for at least 500,000 inodes, but one million will provide more
 breathing room. This will give you ample margin for the RPKI repositories to
 grow over time, as adoption increases. 
 
-.. Tip:: A "No space left on device" error may be caused by running out of 
-         inodes instead of disk space. To verify this, the ``df -i`` command
-         shows the amount of inodes available, used, and free.
+.. Tip:: The ``df -i`` command shows the amount of inodes available, used,
+         and free.
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
@@ -93,26 +92,11 @@ to get started.
 
           sudo apt install routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -181,26 +165,11 @@ to get started.
 
           sudo apt install routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -243,26 +212,11 @@ to get started.
 
           sudo yum install -y routinator
 
-       Before running Routinator for the first time, you must prepare the
-       directory for the local RPKI cache, as well as the directory where the
-       :term:`Trust Anchor Locator (TAL)` files reside. After entering this
-       command, **follow the instructions** provided about the ARIN TAL:
-
-       .. code-block:: bash
-
-          sudo routinator-init
-
-       To learn more about this process refer to the :doc:`initialisation`
-       section. After successful initialisation you can enable Routinator
-       with:
-
-       .. code-block:: bash
-
-          sudo systemctl enable --now routinator
-
-       By default, Routinator will start the RTR server on port 3323 and the
-       HTTP server on port 8323. These, and other values can be changed in
-       the :doc:`configuration file<configuration>` located in
+       After installation Routinator will run immediately as the user
+       *routinator* and be configured to start at boot. By default, it will
+       run the RTR server on port 3323 and the HTTP server on port 8323.
+       These, and other values can be changed in the :doc:`configuration
+       file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
        
        You can check the status of Routinator with:
@@ -279,42 +233,39 @@ to get started.
        
    .. group-tab:: Docker
 
-       Routinator Docker images are built with Alpine Linux for
-       ``amd64``/``x86_64`` architecture.
-       
-       Due to the impracticality of complying with terms and conditions in an
-       unsupervised Docker environment, it is necessary to first review and
-       agree to the `ARIN Relying Party Agreement (RPA)
-       <https://www.arin.net/resources/manage/rpki/tal/>`_. If you agree, you
-       can let the Routinator Docker image install the :term:`Trust Anchor
-       Locator (TAL)` files into a mounted volume that is later reused for
-       the server.
+       Routinator Docker images are built with Alpine Linux. The supported 
+       CPU architectures are shown on the `Docker Hub Routinator page 
+       <https://hub.docker.com/r/nlnetlabs/routinator/tags>`_ per Routinator
+       version (aka Docker "tag") in the ``OS/ARCH`` column.
 
-       First, create a Docker volume to persist the TAL files in:
+       To run Routinator as a background daemon with the default settings (RTR
+       server on port 3323 and HTTP server on port 8323) can be done like so:
 
        .. code-block:: bash
 
-          sudo docker volume create routinator-tals
-
-       Then run a disposable container to install the TALs:
-
-       .. code-block:: bash
-
-          sudo docker run --rm -v routinator-tals:/home/routinator/.rpki-cache/tals \
-              nlnetlabs/routinator init -f --accept-arin-rpa
-
-       Finally, launch the detached container named *routinator*, exposing
-       the :term:`RPKI-to-Router (RPKI-RTR)` protocol on port 3323 and HTTP
-       on port 8323:
-
-       .. code-block:: bash
-
-          sudo docker run -d --restart=unless-stopped --name routinator -p 3323:3323 \
-               -p 8323:8323 -v routinator-tals:/home/routinator/.rpki-cache/tals \
-               nlnetlabs/routinator
+          sudo docker run -d --restart=unless-stopped --name routinator \
+              -p 3323:3323 \
+              -p 8323:8323 \
+              nlnetlabs/routinator
                
        The Routinator container is known to run successfully run under 
        `gVisor <https://gvisor.dev/>`_ for additional isolation.
+
+       To adjust the configuration you can pass command line arguments to
+       Routinator (try :option:`--help` for more information) and/or supply your
+       own Routinator configuration file (by mapping it from the host into
+       the container using ``-v host/path/to/routinator.conf:/etc/routinator.conf``
+       and passing ``--config /etc/routinator.conf`` when running the container).
+
+       To persist the RPKI cache data you can create a separate Docker volume
+       and mount it into the container like so:
+
+       .. code-block:: bash
+
+          sudo docker volume create rpki-cache
+          sudo docker run <your usual arguments> \
+              -v rpki-cache:/home/routinator/.rpki-cache \
+              nlnetlabs/routinator
 
 .. versionadded:: 0.9.0
    RPM packages
@@ -322,6 +273,8 @@ to get started.
    Debian packages for ``armhf`` and ``arm64`` architecture
 .. versionadded:: 0.11.2
    Ubuntu packages for Jammy 22.04 (LTS)
+.. deprecated:: 0.12.0
+   ``routinator-init`` and ``--accept-arin-rpa``
 
 Updating
 --------
@@ -389,11 +342,14 @@ Updating
              
    .. group-tab:: Docker
 
-       Upgrading to the latest version of Routinator can be done with:
+       Assuming that you run Docker with image `nlnetlabs/routinator`, upgrading
+       to the latest version can be done by running the following commands:
         
        .. code-block:: text
        
-          docker run -it nlnetlabs/routinator:latest
+          sudo docker pull nlnetlabs/routinator
+          sudo docker rm --force routinator
+          sudo docker run <your usual arguments> nlnetlabs/routinator
 
 Installing Specific Versions
 ----------------------------
@@ -510,5 +466,5 @@ a specific version, if needed.
         
        .. code-block:: text
        
-          docker run -it nlnetlabs/routinator:v0.9.0-rc2
+          sudo docker run <your usual arguments> nlnetlabs/routinator:v0.9.0-rc2
                

@@ -30,7 +30,8 @@ if [ $1 -eq 1 ] ; then
     # Ensure that the home directory has the correct permissions
     chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
 
-    systemctl preset routinator.service 2>&1 || :
+    # Set the Routinator service to start now and on boot
+    systemctl enable --now routinator.service
 fi
 '''
 

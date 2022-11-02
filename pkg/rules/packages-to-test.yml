@@ -23,10 +23,3 @@ target:
 # exclude:
 #   - image: 'debian:bullseye'
 #     mode: 'upgrade-from-published'
-exclude:
-  - image: 'ubuntu:jammy'
-    mode: 'upgrade-from-published'
-  - image: 'centos:7'
-    mode: 'upgrade-from-published' # disabled due to #773, until at least one version with #773 has been released
-  - image: 'centos:8'
-    mode: 'upgrade-from-published' # disabled due to #773, until at least one version with #773 has been released

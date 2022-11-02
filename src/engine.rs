@@ -18,7 +18,7 @@
 /// the accompanying trait [`ProcessPubPoint`] dealing with individual
 /// publication points.
 
-use std::{fmt, fs, io};
+use std::{fmt, fs};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
@@ -39,7 +39,7 @@ use rpki::repository::sigobj::SignedObject;
 use rpki::repository::tal::{Tal, TalInfo, TalUri};
 use rpki::repository::x509::{Time, Validity};
 use rpki::uri;
-use crate::{collector, store};
+use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
 use crate::error::Failed;
@@ -80,8 +80,11 @@ const CRL_CACHE_LIMIT: usize = 50;
 /// drives the validation run.
 #[derive(Debug)]
 pub struct Engine {
-    /// The directory to load TALs from.
-    tal_dir: PathBuf,
+    /// A list of built-in TALs to use.
+    bundled_tals: Vec<Tal>,
+
+    /// An optional directory to load TALs from.
+    extra_tals_dir: Option<PathBuf>,
 
     /// A mapping of TAL file names to TAL labels.
     tal_labels: HashMap<String, String>,
@@ -145,7 +148,8 @@ impl Engine {
         };
         let store = Store::new(config)?;
         let mut res = Engine {
-            tal_dir: config.tal_dir.clone(),
+            bundled_tals: tals::collect_tals(config)?,
+            extra_tals_dir: config.extra_tals_dir.clone(),
             tal_labels: config.tal_labels.clone(),
             tals: Vec::new(),
             collector,
@@ -170,84 +174,79 @@ impl Engine {
     /// It is not considered an error if there are no TAL files in the TAL
     /// directory. However, a warning will be logged in this case.
     pub fn reload_tals(&mut self) -> Result<(), Failed> {
-        let mut res = Vec::new();
-        let dir = match fs::read_dir(&self.tal_dir) {
-            Ok(dir) => dir,
-            Err(err) => {
-                if err.kind() == io::ErrorKind::NotFound {
-                    error!(
-                        "Missing TAL directory {}.\n\
-                         You may have to initialize it via \
-                         \'routinator init\'.",
-                         self.tal_dir.display()
-                    );
-                }
-                else {
-                    error!("Failed to open TAL directory: {}.", err);
-                }
-                return Err(Failed)
-            }
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(entry) => entry,
+        let mut res = self.bundled_tals.clone();
+        if let Some(extra_tals_dir) = self.extra_tals_dir.as_ref() {
+            let dir = match fs::read_dir(extra_tals_dir) {
+                Ok(dir) => dir,
                 Err(err) => {
-                    error!(
-                        "Failed to iterate over tal directory: {}",
-                        err
+                    error!("Failed to open TAL directory {}: {}.",
+                        extra_tals_dir.display(), err
                     );
                     return Err(Failed)
                 }
             };
+            for entry in dir {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        error!(
+                            "Failed to iterate over tal directory: {}",
+                            err
+                        );
+                        return Err(Failed)
+                    }
+                };
 
-            if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                continue
+                if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+                    continue
+                }
+
+                let path = entry.path();
+                if path.extension().map(|ext| ext != "tal").unwrap_or(true) {
+                    continue
+                }
+
+                let mut file = match File::open(&path) {
+                    Ok(file) => {
+                        file
+                    }
+                    Err(err) => {
+                        error!(
+                            "Failed to open TAL {}: {}. \n\
+                             Aborting.",
+                             path.display(), err
+                        );
+                        return Err(Failed)
+                    }
+                };
+                let mut tal = match Tal::read_named(
+                    self.path_to_tal_label(&path),
+                    &mut file
+                ) {
+                    Ok(tal) => tal,
+                    Err(err) => {
+                        error!(
+                            "Failed to read TAL {}: {}. \n\
+                             Aborting.",
+                            path.display(), err
+                        );
+                        return Err(Failed)
+                    }
+                };
+                tal.prefer_https();
+                res.push(tal);
             }
-
-            let path = entry.path();
-            if path.extension().map(|ext| ext != "tal").unwrap_or(true) {
-                continue
-            }
-
-            let mut file = match File::open(&path) {
-                Ok(file) => {
-                    file
-                }
-                Err(err) => {
-                    error!(
-                        "Failed to open TAL {}: {}. \n\
-                         Aborting.",
-                         path.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            let mut tal = match Tal::read_named(
-                self.path_to_tal_label(&path),
-                &mut file
-            ) {
-                Ok(tal) => tal,
-                Err(err) => {
-                    error!(
-                        "Failed to read TAL {}: {}. \n\
-                         Aborting.",
-                        path.display(), err
-                    );
-                    return Err(Failed)
-                }
-            };
-            tal.prefer_https();
-            res.push(tal);
         }
         if res.is_empty() {
             warn!(
-                "No TALs found in TAL directory. Starting anyway."
+                "No TALs provided. Starting anyway."
             );
         }
         res.sort_by(|left, right| {
             left.info().name().cmp(right.info().name())
         });
         self.tals = res;
+
         Ok(())
     }
 
@@ -285,6 +284,10 @@ impl Engine {
     pub fn start<P: ProcessRun>(
         &self, processor: P
     ) -> Result<Run<P>, Failed> {
+        info!("Using the following TALs:");
+        for tal in &self.tals {
+            info!("  * {}", tal.info().name());
+        }
         Ok(Run::new(
             self,
             self.collector.as_ref().map(Collector::start),

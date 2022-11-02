@@ -21,7 +21,13 @@
 #
 repository-dir = "..."
 
-# Trust Anchor Locator (TAL) directory
+# Do not use bundled RIR TALs.
+#no-rir-tals = false
+
+# Use additional bundled TALs.
+#tals = [ "apnic-testbed", "nlnetlabs-testbed" ]
+
+# Directory with additional TALs.
 #
 # All the files with the extension ".tal" in this directory are treated as
 # trust anchor locators for RPKI validation.
@@ -29,9 +35,7 @@ repository-dir = "..."
 # A relative path is interpreted with respect to the directory this config
 # lives in.
 #
-# This setting is mandatory.
-#
-tal-dir = "..."
+#extra-tals-dir = "..."
 
 # Local exceptions files
 #
