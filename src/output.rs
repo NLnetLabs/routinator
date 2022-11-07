@@ -1061,7 +1061,7 @@ impl Summary {
                 tal.payload.router_keys.contributed
             ))?;
         }
-        line(format_args!("\ntotal: "))?;
+        line(format_args!("total: "))?;
         line(format_args!(
             "            ROAs: {:7} verified;",
             metrics.publication.valid_roas
