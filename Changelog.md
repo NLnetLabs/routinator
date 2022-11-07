@@ -4,6 +4,8 @@
 
 Bug Fixes
 
+* Remove a stray newline in summary output.
+
 Other Changes
 
 
