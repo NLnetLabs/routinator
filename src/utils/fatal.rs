@@ -328,7 +328,7 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
         let entry = entry?;
         if entry.is_file() {
             if let Err(err) = fs::copy(
-                entry.path(), &target.join(entry.file_name())
+                entry.path(), target.join(entry.file_name())
             ) {
                 error!(
                     "Fatal: failed to copy {}: {}",

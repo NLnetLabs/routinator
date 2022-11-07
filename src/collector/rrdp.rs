@@ -218,7 +218,7 @@ impl Collector {
         let path = repos.base_dir().join("repositories.json");
         if let Err(err) = fs::write(
             &path, 
-            &JsonBuilder::build(|builder| {
+            JsonBuilder::build(|builder| {
                 builder.member_array("repositories", |builder| {
                     for (key, value) in repos.rrdp_uris() {
                         builder.array_object(|builder| {
@@ -1148,7 +1148,7 @@ impl<'a> DeltaUpdate<'a> {
                 }
             }
             if let Some(parent) = obj_path.parent() {
-                if let Err(err) = fs::create_dir_all(&parent) {
+                if let Err(err) = fs::create_dir_all(parent) {
                     error!(
                         "Fatal: failed to create directory {}: {}",
                         parent.display(), err
@@ -1559,7 +1559,7 @@ impl HttpResponse {
                 return Err(Failed)
             }
         };
-        if let Err(err) = fs::create_dir_all(&parent) {
+        if let Err(err) = fs::create_dir_all(parent) {
             warn!(
                 "Cannot keep HTTP response; \
                 creating directory {} failed: {}",
@@ -1997,7 +1997,7 @@ impl RepositoryObject {
                 ))
             }
         }
-        let mut target = match File::create(&path) {
+        let mut target = match File::create(path) {
             Ok(target) => target,
             Err(err) => {
                 return Err(io::Error::new(

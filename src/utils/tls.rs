@@ -30,7 +30,7 @@ pub fn create_server_config(
 ) -> Result<ServerConfig, ExitError> {
     let certs = rustls_pemfile::certs(
         &mut io::BufReader::new(
-            File::open(&cert_path).map_err(|err| {
+            File::open(cert_path).map_err(|err| {
                 error!(
                     "Failed to open TLS certificate file '{}': {}.",
                     cert_path.display(), err
@@ -50,7 +50,7 @@ pub fn create_server_config(
 
     let key = rustls_pemfile::pkcs8_private_keys(
         &mut io::BufReader::new(
-            File::open(&key_path).map_err(|err| {
+            File::open(key_path).map_err(|err| {
                 error!(
                     "Failed to open TLS key file '{}': {}.",
                     key_path.display(), err

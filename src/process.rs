@@ -406,7 +406,7 @@ mod unix {
                 self.perform_fork()?
             }
             if let Some(path) = config.working_dir.as_ref() {
-                if let Err(err) = set_current_dir(&path) {
+                if let Err(err) = set_current_dir(path) {
                     error!("Fatal: failed to set working directory {}: {}",
                         path.display(), err
                     );

@@ -133,13 +133,13 @@ impl Collector {
                 return Err(Failed)
             }
         }
-        self.dump_dir(&self.working_dir.base, &target)?;
+        Self::dump_dir(&self.working_dir.base, &target)?;
         debug!("Rsync collector dump complete.");
         Ok(())
     }
 
     /// Recursively copies the content of `source` to `target`.
-    fn dump_dir(&self, source: &Path, target: &Path) -> Result<(), Failed> {
+    fn dump_dir(source: &Path, target: &Path) -> Result<(), Failed> {
         let read_dir = match fs::read_dir(source) {
             Ok(read_dir) => read_dir,
             Err(err) => {
@@ -180,11 +180,11 @@ impl Collector {
                     );
                     return Err(Failed);
                 }
-                self.dump_dir(&item.path(), &target)?;
+                Self::dump_dir(&item.path(), &target)?;
             }
             else if file_type.is_file() {
                 let target = target.join(item.file_name());
-                if let Err(err) = fs::copy( &item.path(), &target) {
+                if let Err(err) = fs::copy(item.path(), &target) {
                     error!(
                         "Failed to copy {} to {}: {}",
                         item.path().display(), target.display(), err
