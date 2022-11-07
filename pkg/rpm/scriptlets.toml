@@ -59,7 +59,7 @@ pre_uninstall_script = '''
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
     # Run commands equivalent to what the RPM systemd macros would do
-    systemd_preun mytest.timer
+    systemd_preun routinator.service
     systemd_triggers
 fi
 '''
@@ -70,7 +70,7 @@ post_uninstall_script = '''
 
 if [ $1 -ge 1 ] ; then
     # Run commands equivalent to what the RPM systemd macros would do
-    systemd_postun_with_restart mytest.timer
+    systemd_postun_with_restart routinator.service
     systemd_triggers
 fi
 '''
