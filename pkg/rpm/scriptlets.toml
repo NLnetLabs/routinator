@@ -29,7 +29,7 @@ if [ $1 -eq 1 ] ; then
     chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
 
     # Run commands equivalent to what the RPM systemd macros would do
-    systemd_post mytest.timer
+    systemd_post routinator.service
     systemd_triggers
 
     # Force the new service to be activated immediately post-install. This goes against Fedora policy as Fedora says
