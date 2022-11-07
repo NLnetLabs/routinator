@@ -1,5 +1,6 @@
 ---
 # must be one of: https://github.com/cross-rs/cross#supported-targets
+target:
 - 'arm-unknown-linux-musleabihf'
 - 'armv7-unknown-linux-musleabihf'
 - 'aarch64-unknown-linux-musl'
