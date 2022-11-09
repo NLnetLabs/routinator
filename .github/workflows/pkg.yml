@@ -21,14 +21,14 @@ jobs:
     with:
       docker_org: nlnetlabs
       docker_repo: routinator
-
-      cross_build_rules: pkg/rules/cross-targets.yml
       docker_build_rules: pkg/rules/docker-images-to-build.yml
+      docker_sanity_check_command: --version
+
       package_build_rules: pkg/rules/packages-to-build.yml
       package_test_rules: pkg/rules/packages-to-test.yml
       package_test_scripts_path: pkg/test-scripts/test-<package>.sh
 
       deb_maintainer: The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>
-      docker_sanity_check_command: --version
+
       rpm_scriptlets_path: pkg/rpm/scriptlets.toml
 
