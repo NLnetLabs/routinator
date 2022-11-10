@@ -1,12 +1,12 @@
 # Change Log
 
-## Unreleased future version
+## 0.12.0 ‘Brutalism and Gardening’
+
+Released 2022-11-10.
 
 Bug Fixes
 
 * Remove a stray newline in summary output.
-
-Other Changes
 
 
 ## 0.12.0-rc1
