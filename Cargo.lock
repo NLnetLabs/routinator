@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.12.0"
+version = "0.12.1-dev"
 dependencies = [
  "base64",
  "bytes",
