@@ -100,7 +100,7 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 # on the target platform and so it cannot determine the dependencies correctly
 # for us.
 [package.metadata.deb.variants.minimal-cross]
-depends = "adduser, passwd"
+depends = "adduser, passwd, rsync"
 
 [package.metadata.generate-rpm]
 # "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
