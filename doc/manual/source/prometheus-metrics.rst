@@ -185,7 +185,7 @@ enabled or not.
    The amount of seconds since last cache reset by a client address.
 
 ``routinator_rtr_client_reset_queries`` 
-   The number of of reset queries by a client address.
+   The number of reset queries by a client address.
 
 ``routinator_rtr_client_serial_queries`` 
    The number of of serial queries by a client address.
