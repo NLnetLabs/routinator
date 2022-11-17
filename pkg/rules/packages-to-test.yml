@@ -24,15 +24,3 @@ target:
 # exclude:
 #   - image: 'debian:bullseye'
 #     mode: 'upgrade-from-published'
-
-# The CentOS v0.11.3 Routinator version fails on upgrade to a newer version with error:
-#   /var/tmp/rpm-tmp.8bqcXa: line 1: /usr/share/routinator/rpm/postuninst: No such file or directory
-#   warning: %postun(routinator-0:0.11.3-1.x86_64) scriptlet failed, exit status 127
-# So, until v0.12.0 is released (which fixes the problem) we have to ignore upgrade failures with CentOS otherwise the
-# packaging workflow will fail. This wasn't a problem with v1 of the packaging workflow as that didn't check for errors
-# on upgrade, so we only have to introduce this now that we are using v2 of the packaging workflow.
-include:
-  - image: "centos:7"
-    ignore_upgrade_failure: true
-  - image: "centos:8"
-    ignore_upgrade_failure: true
