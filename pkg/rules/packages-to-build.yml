@@ -1,3 +1,5 @@
+# This matrix definition is used as both the package_build_rules and the package_test_rules Ploutos packaging
+# workflow inputs.
 ---
 pkg:
   - 'routinator'
@@ -13,9 +15,6 @@ image:
   - 'rockylinux:8'    # compatible with EOL centos:8
 target:
   - 'x86_64'
-mode:
-  - 'fresh-install'
-  - 'upgrade-from-published'
 include:
   - image: "centos:7"
     systemd_service_unit_file: pkg/common/routinator-minimal.routinator.service
@@ -49,3 +48,10 @@ include:
   - pkg: 'routinator'
     image: 'debian:buster'
     target: 'aarch64-unknown-linux-musl'
+
+# 'mode' is not used by the package building workflow job, but is used by the package testing workflow job.
+# Ploutos will not include this key when using this matrix definition to generate package building matrix
+# permutations but will use it when generating package testing permutations.
+mode:   
+  - 'fresh-install'
+  - 'upgrade-from-published'
