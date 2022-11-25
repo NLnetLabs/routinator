@@ -433,7 +433,9 @@ impl Config {
         }
 
         // extra_tals_dir
-        self.extra_tals_dir = args.extra_tals_dir.map(|dir| cur_dir.join(dir));
+        if let Some(dir) = args.extra_tals_dir {
+            self.extra_tals_dir = Some(cur_dir.join(dir));
+        }
 
         // exceptions
         if let Some(list) = args.exceptions {
