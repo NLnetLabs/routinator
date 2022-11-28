@@ -60,14 +60,14 @@ fn create_tls_config(
     let key_path = match config.http_tls_key.as_ref() {
         Some(path) => path.as_ref(),
         None => {
-            error!("Missing rtr-tls-key option for HTTP TLS server.");
+            error!("Missing http-tls-key option for HTTP TLS server.");
             return Err(ExitError::Generic)
         }
     };
     let cert_path = match config.http_tls_cert.as_ref() {
         Some(path) => path.as_ref(),
         None => {
-            error!("Missing rtr-tls-cert option for HTTP TLS server.");
+            error!("Missing http-tls-cert option for HTTP TLS server.");
             return Err(ExitError::Generic)
         }
     };
