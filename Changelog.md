@@ -8,7 +8,11 @@ New
 
 Bug Fixes
 
+* Actually use the `extra-tals-dir` config file option. ([#821])
+
 Other Changes
+
+[#821]: https://github.com/NLnetLabs/routinator/pull/821
 
 
 ## 0.12.0 ‘Brutalism and Gardening’
