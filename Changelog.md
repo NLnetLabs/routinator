@@ -9,10 +9,22 @@ New
 Bug Fixes
 
 * Actually use the `extra-tals-dir` config file option. ([#821])
+* On Unix, if chroot is requested but no working directory is explicitly
+  provided, set the working directory to the chroot directory. ([#823])
+* Fixed the error messages printed when the `http-tls-key` or
+  `http-tls-cert` options are required but missing. They now refer to HTTP
+  and not, as previously, to RTR. ([#824] by [@SanderDelden])
 
 Other Changes
 
+* Switch the packaging workflow to use [Ploutos]. ([#816])
+
+[#816]: https://github.com/NLnetLabs/routinator/pull/816
 [#821]: https://github.com/NLnetLabs/routinator/pull/821
+[#823]: https://github.com/NLnetLabs/routinator/pull/823
+[#824]: https://github.com/NLnetLabs/routinator/pull/824
+[@SanderDelden]: https://github.com/SanderDelden
+[Ploutos]: https://github.com/NLnetLabs/ploutos/
 
 
 ## 0.12.0 ‘Brutalism and Gardening’
