@@ -14,21 +14,18 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v1
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v5
     secrets:
       DOCKER_HUB_ID: ${{ secrets.DOCKER_HUB_ID }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
     with:
       docker_org: nlnetlabs
       docker_repo: routinator
+      docker_build_rules: pkg/rules/docker-images-to-build.yml
+      docker_sanity_check_command: --version
 
-      cross_build_rules_path: pkg/rules/cross-targets.yml
-      docker_build_rules_path: pkg/rules/docker-images-to-build.yml
-      package_build_rules_path: pkg/rules/packages-to-build.yml
-      package_test_rules_path: pkg/rules/packages-to-test.yml
+      package_build_rules: pkg/rules/packages-to-build.yml
       package_test_scripts_path: pkg/test-scripts/test-<package>.sh
 
-      deb_maintainer: The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>
-      docker_sanity_check_command: --version
       rpm_scriptlets_path: pkg/rpm/scriptlets.toml
 

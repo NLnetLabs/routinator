@@ -1,8 +1,6 @@
 post_install_script = '''
 #!/bin/bash -e
-# Script based on the RPM %systemd_post scriptlet. See:
-#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
-#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+#RPM_SYSTEMD_MACROS#
 
 if [ $EUID -ne 0 ]; then
     echo >&2 "ERROR: Routinator postinst script must be run as root"
@@ -30,32 +28,49 @@ if [ $1 -eq 1 ] ; then
     # Ensure that the home directory has the correct permissions
     chmod ${R_HOME_DIR_PERMS} ${R_HOME_DIR}
 
-    # Set the Routinator service to start now and on boot
+    # Run commands equivalent to what the RPM systemd macros would do
+    systemd_post routinator.service
+    systemd_triggers
+
+    # Force the new service to be activated immediately post-install. This goes against Fedora policy as Fedora says
+    # the distribution and system operator decide which services should be activated automatically by way of systemd
+    # preset files. E.g. the `systemd.preset` man page says:
+    #
+    #   It is not recommended to ship preset files within the respective software packages implementing the units, but
+    #   rather centralize them in a distribution or spin default policy, which can be amended by administrator policy,
+    #   see below.
+    #
+    #   If no preset files exist, preset operations will enable all units that are installed by default. If this is not
+    #   desired and all units shall rather be disabled, it is necessary to ship a preset file with a single, catchall
+    #   "disable *" line. (See example 1, below.)
+    #
+    #   From: https://www.freedesktop.org/software/systemd/man/systemd.preset.html#Description
+    #
+    # Fedora 36 for example has such a "catchall" "disable *" preset policy.
+    # See also: https://stackoverflow.com/a/45058741
     systemctl enable --now routinator.service
 fi
 '''
 
 pre_uninstall_script = '''
 #!/bin/bash -e
-# Script based on the RPM %systemd_preun scriptlet. See:
-#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
-#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+#RPM_SYSTEMD_MACROS#
 
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
-    systemctl --no-reload disable routinator.service > /dev/null 2>&1 || :
-    systemctl stop routinator.service > /dev/null 2>&1 || :
+    # Run commands equivalent to what the RPM systemd macros would do
+    systemd_preun routinator.service
+    systemd_triggers
 fi
 '''
 
 post_uninstall_script = '''
 #!/bin/bash -e
-# Script based on the RPM %systemd_postun scriptlet. See:
-#   - https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_systemd
-#   - https://cgit.freedesktop.org/systemd/systemd/tree/src/core/macros.systemd.in
+#RPM_SYSTEMD_MACROS#
 
-systemctl daemon-reload >/dev/null 2>&1 || :
 if [ $1 -ge 1 ] ; then
-    systemctl try-restart routinator.service >/dev/null 2>&1 || :
+    # Run commands equivalent to what the RPM systemd macros would do
+    systemd_postun_with_restart routinator.service
+    systemd_triggers
 fi
 '''
