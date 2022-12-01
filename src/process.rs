@@ -405,7 +405,10 @@ mod unix {
             if detach {
                 self.perform_fork()?
             }
-            if let Some(path) = config.working_dir.as_ref() {
+
+            if let Some(path) = config.working_dir.as_ref().or(
+                config.chroot.as_ref()
+            ) {
                 if let Err(err) = set_current_dir(path) {
                     error!("Fatal: failed to set working directory {}: {}",
                         path.display(), err
@@ -413,6 +416,7 @@ mod unix {
                     return Err(Failed)
                 }
             }
+
             // set_sid 
             // umask
             if detach {
