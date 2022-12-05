@@ -234,10 +234,12 @@ impl Collector {
                             if let Some(state) = states.get(key) {
                                 builder.member_raw("serial", state.serial);
                                 builder.member_str("session", state.session);
-                                builder.member_str(
-                                    "updated",
-                                    state.updated().to_rfc3339()
-                                );
+                                if let Some(updated) = state.updated() {
+                                    builder.member_str(
+                                        "updated",
+                                        updated.to_rfc3339()
+                                    );
+                                }
                             }
                         })
                     }
@@ -606,7 +608,7 @@ impl Repository {
             Some(state) => !state.is_expired(),
             None => false,
         };
-        let best_before = state.as_ref().map(|state| state.best_before());
+        let best_before = state.as_ref().and_then(|state| state.best_before());
 
         let start_time = SystemTime::now();
         let mut metrics = RrdpRepositoryMetrics::new(rpki_notify.clone());
@@ -1465,10 +1467,12 @@ impl HttpClient {
                 );
             }
             if let Some(ts) = state.last_modified_ts {
-                request = request.header(
-                    header::IF_MODIFIED_SINCE,
-                    format_http_date(Utc.timestamp(ts, 0))
-                );
+                if let Some(datetime) = Utc.timestamp_opt(ts, 0).single() {
+                    request = request.header(
+                        header::IF_MODIFIED_SINCE,
+                        format_http_date(datetime)
+                    );
+                }
             }
         }
         let response = match self._response(uri, request, true) {
@@ -1785,13 +1789,19 @@ impl RepositoryState {
     }
 
     /// Returns the last update time as proper timestamp.
-    pub fn updated(&self) -> DateTime<Utc> {
-        Utc.timestamp(self.updated_ts, 0)
+    ///
+    /// Returns `None` if the time cannot be converted into a timestampe for
+    /// some reason.
+    pub fn updated(&self) -> Option<DateTime<Utc>> {
+        Utc.timestamp_opt(self.updated_ts, 0).single()
     }
 
     /// Returns the best before time as a proper timestamp.
-    pub fn best_before(&self) -> DateTime<Utc> {
-        Utc.timestamp(self.best_before_ts, 0)
+    ///
+    /// Returns `None` if the time cannot be converted into a timestampe for
+    /// some reason.
+    pub fn best_before(&self) -> Option<DateTime<Utc>> {
+        Utc.timestamp_opt(self.best_before_ts, 0).single()
     }
 
     /// Sets the update time to now.
@@ -1801,8 +1811,13 @@ impl RepositoryState {
     }
 
     /// Returns whether this repository should be considered expired.
+    ///
+    /// If in doubt, this will return `true`.
     pub fn is_expired(&self) -> bool {
-        Utc::now() > self.best_before()
+        match self.best_before() {
+            Some(best_before) => Utc::now() > best_before,
+            None => true,
+        }
     }
 
     /// Reads the state file of a repository.

@@ -909,7 +909,16 @@ impl StoredManifest {
             ))
         }
 
-        let not_after = Utc.timestamp(i64::parse(reader)?, 0).into();
+        let not_after = match Utc.timestamp_opt(
+            i64::parse(reader)?, 0
+        ).single() {
+            Some(not_after) => not_after.into(),
+            None => {
+                return Err(ParseError::format(
+                    String::from("invalid not_after time")
+                ))
+            }
+        };
         let rpki_notify = Option::parse(reader)?;
         let ca_repository = uri::Rsync::parse(reader)?;
         let manifest_uri = uri::Rsync::parse(reader)?;
