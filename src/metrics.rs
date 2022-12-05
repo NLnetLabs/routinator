@@ -912,7 +912,7 @@ impl RtrClientMetrics {
             None
         }
         else {
-            Some(Utc.timestamp(updated, 0))
+            Utc.timestamp_opt(updated, 0).single()
         }
     }
 
@@ -925,7 +925,7 @@ impl RtrClientMetrics {
             None
         }
         else {
-            Some(Utc.timestamp(updated, 0))
+            Utc.timestamp_opt(updated, 0).single()
         }
     }
 

@@ -133,9 +133,9 @@ mod test {
     #[test]
     fn test_parse_http_date() {
         let date = DateTime::<Utc>::from_utc(
-            chrono::naive::NaiveDate::from_ymd(
+            chrono::naive::NaiveDate::from_ymd_opt(
                 1994, 11, 6
-            ).and_hms(8, 49, 37),
+            ).unwrap().and_hms_opt(8, 49, 37).unwrap(),
             Utc
         );
 
