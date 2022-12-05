@@ -1790,7 +1790,7 @@ impl RepositoryState {
 
     /// Returns the last update time as proper timestamp.
     ///
-    /// Returns `None` if the time cannot be converted into a timestampe for
+    /// Returns `None` if the time cannot be converted into a timestamp for
     /// some reason.
     pub fn updated(&self) -> Option<DateTime<Utc>> {
         Utc.timestamp_opt(self.updated_ts, 0).single()
@@ -1798,7 +1798,7 @@ impl RepositoryState {
 
     /// Returns the best before time as a proper timestamp.
     ///
-    /// Returns `None` if the time cannot be converted into a timestampe for
+    /// Returns `None` if the time cannot be converted into a timestamp for
     /// some reason.
     pub fn best_before(&self) -> Option<DateTime<Utc>> {
         Utc.timestamp_opt(self.best_before_ts, 0).single()
