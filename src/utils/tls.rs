@@ -28,7 +28,20 @@ pub use tokio_rustls::rustls::ServerConfig;
 pub fn create_server_config(
     service: &str, key_path: &Path, cert_path: &Path
 ) -> Result<ServerConfig, ExitError> {
-    let certs = rustls_pemfile::certs(
+
+    ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth()
+        .with_single_cert(read_certs(cert_path)?, read_key(key_path)?)
+        .map_err(|err| {
+            error!("Failed to create {} TLS server config: {}", service, err);
+            ExitError::Generic
+        })
+}
+
+/// Reads the certificates from the given PEM file.
+fn read_certs(cert_path: &Path) -> Result<Vec<Certificate>, ExitError> {
+    rustls_pemfile::certs(
         &mut io::BufReader::new(
             File::open(cert_path).map_err(|err| {
                 error!(
@@ -46,50 +59,64 @@ pub fn create_server_config(
         ExitError::Generic
     }).map(|mut certs| {
         certs.drain(..).map(Certificate).collect()
-    })?;
+    })
+}
 
-    let key = rustls_pemfile::pkcs8_private_keys(
-        &mut io::BufReader::new(
-            File::open(key_path).map_err(|err| {
-                error!(
-                    "Failed to open TLS key file '{}': {}.",
-                    key_path.display(), err
-                );
-                ExitError::Generic
-            })?
-        )
-    ).map_err(|err| {
-        error!(
-            "Failed to read TLS key file '{}': {}.",
-            key_path.display(), err
-        );
-        ExitError::Generic
-    }).and_then(|mut certs| {
-        if certs.is_empty() {
+/// Reads the first private key from the given PEM file.
+///
+/// The key may be a PKCS#1 RSA private key or a PKCS#8 private key. All
+/// other PEM items are ignored.
+///
+/// Errors out if opening or reading the file fails or if there isn’t exactly
+/// one private key in the file.
+fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
+    use rustls_pemfile::Item::*;
+
+    let mut key_file = io::BufReader::new(
+        File::open(key_path).map_err(|err| {
             error!(
-                "TLS key file '{}' does not contain any usable keys.",
-                key_path.display()
+                "Failed to open TLS key file '{}': {}.",
+                key_path.display(), err
             );
-            return Err(ExitError::Generic)
-        }
-        if certs.len() != 1 {
+            ExitError::Generic
+        })?
+    );
+
+    let mut key = None;
+
+    for item in rustls_pemfile::read_one(&mut key_file).transpose() {
+        let item = item.map_err(|err| {
+            error!(
+                "Failed to read TLS key file '{}': {}.",
+                key_path.display(), err
+            );
+            ExitError::Generic
+        })?;
+
+        let bits = match item {
+            RSAKey(bits) | PKCS8Key(bits) => bits,
+            _ => continue
+        };
+        if key.is_some() {
             error!(
                 "TLS key file '{}' contains multiple keys.",
                 key_path.display()
             );
             return Err(ExitError::Generic)
         }
-        Ok(PrivateKey(certs.pop().unwrap()))
-    })?;
+        key = Some(PrivateKey(bits))
+    }
 
-    ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|err| {
-            error!("Failed to create {} TLS server config: {}", service, err);
-            ExitError::Generic
-        })
+    match key {
+        Some(key) => Ok(key),
+        None => {
+             error!(
+                "TLS key file '{}' does not contain any usable keys.",
+                key_path.display()
+            );
+            Err(ExitError::Generic)
+       }
+    }
 }
 
 
