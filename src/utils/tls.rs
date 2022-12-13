@@ -84,7 +84,9 @@ fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
 
     let mut key = None;
 
-    for item in rustls_pemfile::read_one(&mut key_file).transpose() {
+    while let Some(item) =
+        rustls_pemfile::read_one(&mut key_file).transpose()
+    {
         let item = item.map_err(|err| {
             error!(
                 "Failed to read TLS key file '{}': {}.",
