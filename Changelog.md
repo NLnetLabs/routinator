@@ -4,7 +4,13 @@
 
 Bug Fixes
 
+* Allow private keys prefixed both with `BEGIN PRIVATE KEY` and
+  `BEGIN RSA PRIVATE KEY` in the files referred to by `http-tls-key` and
+  `rtr-tls-key` configuration options. ([#831])
+
 Other Changes
+
+[#831]: https://github.com/NLnetLabs/routinator/pull/831
 
 
 ## 0.12.1-rc1
