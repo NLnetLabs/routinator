@@ -2,14 +2,15 @@
 
 <img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
 
+[![crates.io](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![CI](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/nlnetlabs/routinator?color=brightgreen)](https://hub.docker.com/r/nlnetlabs/routinator)
-
-[![crates.io](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.docs.nlnetlabs.nl/en/stable/)
-[![Discord](https://img.shields.io/discord/818584154278199396?label=Discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
+
 [![Spotify](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
+[![Discord](https://img.shields.io/discord/818584154278199396?label=Discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
+![Mastodon Follow](https://img.shields.io/mastodon/follow/109262826617293067?domain=https%3A%2F%2Ffosstodon.org&style=social)
 [![Twitter](https://img.shields.io/twitter/follow/routinator3000.svg?label=Follow&style=social)](https://twitter.com/routinator3000)
 
 Routinator 3000 is free, open-source RPKI Relying Party software. The project
