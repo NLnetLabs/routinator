@@ -13,6 +13,7 @@ image:
   - "debian:bullseye" # debian/11
   - 'centos:7'
   - 'rockylinux:8'    # compatible with EOL centos:8
+  - 'rockylinux:9'
 target:
   - 'x86_64'
 include:
@@ -30,7 +31,9 @@ include:
   # image we are building it in.
   - image: 'rockylinux:8'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
-    os: 'centos:8'
+
+  - image: 'rockylinux:9'
+    systemd_service_unit_file: pkg/common/routinator.routinator.service
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
   # Raspbian 11 is based.
