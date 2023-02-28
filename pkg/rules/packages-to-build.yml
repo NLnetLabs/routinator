@@ -59,7 +59,7 @@ mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-test-exclude:
+testexclude:
   - pkg: 'routinator'
     image: 'rockylinux:9'
     mode: 'upgrade-from-published'
