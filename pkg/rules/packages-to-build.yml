@@ -59,6 +59,7 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
+# Disable upgrade testing on Rocky Linux 9 as we haven't published any packages for the 9 release yet.
 test-exclude:
   - pkg: 'routinator'
     image: 'rockylinux:9'
