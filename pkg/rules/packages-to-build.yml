@@ -67,7 +67,7 @@ include:
   - pkg: 'routinator'
     image: 'rockylinux:9'
     target: 'x86_64'
-    test-image: 'almalinux:8'
+    test-image: 'almalinux:9'
 
   - pkg: 'routinator'
     image: 'rockylinux:9'
