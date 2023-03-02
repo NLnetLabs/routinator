@@ -14,7 +14,7 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@64-verify-add-support-for-rhel-9-and-derivatives
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v6
     secrets:
       DOCKER_HUB_ID: ${{ secrets.DOCKER_HUB_ID }}
       DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
