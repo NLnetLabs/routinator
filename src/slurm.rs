@@ -126,7 +126,7 @@ impl LocalExceptions {
     pub fn assertions(
         &self
     ) -> impl Iterator<Item = (&Payload, Arc<ExceptionInfo>)> + '_ {
-        self.assertions.iter().map(|&(ref payload, ref info)| {
+        self.assertions.iter().map(|(payload, info)| {
             (payload, info.clone())
         })
     }

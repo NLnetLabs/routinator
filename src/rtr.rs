@@ -137,6 +137,7 @@ struct RtrStream {
 }
 
 impl RtrStream {
+    #[allow(clippy::redundant_async_block)] // False positive
     fn new(
         sock: TcpStream,
         tls: Option<&TlsAcceptor>,

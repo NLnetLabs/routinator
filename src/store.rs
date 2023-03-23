@@ -763,7 +763,7 @@ impl<'a> StoredPoint<'a> {
             );
             return Err(UpdateError::Fatal)
         }
-        let tmp_object_start = match tmp_file.seek(SeekFrom::Current(0)) {
+        let tmp_object_start = match tmp_file.stream_position() {
             Ok(some) => some,
             Err(err) => {
                 error!(
