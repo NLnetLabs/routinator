@@ -122,8 +122,10 @@ async fn single_rtr_listener(
     let listener = TcpListenerStream::new(listener).and_then(|sock| async {
         RtrStream::new(sock, tls.as_ref(), keepalive, server_metrics.clone())
     }).boxed();
-    if Server::new(listener, sender, origins.clone()).run().await.is_err() {
-        error!("Fatal error in RTR server {}.", addr);
+    if let Err(err) = Server::new(
+        listener, sender, origins.clone()
+    ).run().await {
+        error!("Fatal error in RTR server {}: {}", addr, err);
     }
 }
 
@@ -137,6 +139,7 @@ struct RtrStream {
 }
 
 impl RtrStream {
+    #[allow(clippy::redundant_async_block)] // False positive
     fn new(
         sock: TcpStream,
         tls: Option<&TlsAcceptor>,
