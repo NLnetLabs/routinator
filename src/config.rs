@@ -1559,7 +1559,7 @@ impl Default for LogTarget {
 }
 
 #[cfg(not(unix))]
-#[allow(clippy::derivable-impls)]
+#[allow(clippy::derivable_impls)]
 impl Default for LogTarget {
     fn default() -> Self {
         LogTarget::Stderr
