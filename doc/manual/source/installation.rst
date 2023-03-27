@@ -8,14 +8,22 @@ Routinator has minimal system requirements. When choosing a system, a
 powerful CPU is not required. Make sure you have 1GB of available memory and
 4GB of disk space for the application. 
 
+Inode Usage
+"""""""""""
+
 Please keep in mind that the RPKI consists of a great number of small files.
 As a result, Routinator will use a large amount of inodes. You should
-accommodate for at least 500,000 inodes, but one million will provide more
-breathing room. This will give you ample margin for the RPKI repositories to
-grow over time, as adoption increases. 
+accommodate for at least two million inodes. This will give you ample margin
+for the RPKI repositories to grow over time, as adoption increases. 
+
+Alternatively, you could opt to use a file system such as ZFS, which doesn't
+use inodes, or btrfs, where inodes are allocated dynamically as needed.
 
 .. Tip:: The ``df -i`` command shows the amount of inodes available, used,
          and free.
+
+Firewall Configuration
+""""""""""""""""""""""
 
 As new RPKI repositories can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
