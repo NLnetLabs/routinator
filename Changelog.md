@@ -10,6 +10,10 @@ Bug Fixes
 
 Other Changes
 
+* The minimal required Rust version has been increased to 1.64. ([#845])
+
+[#845]: https://github.com/NLnetLabs/routinator/pull/845
+
 
 ## 0.12.1 ‘Plan uw reis in de app’
 
