@@ -1,9 +1,9 @@
 [package]
 # Note: some of these values are also used when building Debian packages below.
 name = "routinator"
-version = "0.12.2-dev"
+version = "0.13.0-dev"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.64"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
