@@ -1,5 +1,16 @@
 # Change Log
 
+## Unreleased next version
+
+Breaking Changes
+
+New
+
+Bug Fixes
+
+Other Changes
+
+
 ## 0.12.1 ‘Plan uw reis in de app’
 
 Released 2023-01-04.

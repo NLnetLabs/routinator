@@ -1580,7 +1580,7 @@ impl PartialEq for LogTarget {
                 (s as usize) == (o as usize)
             }
             (&LogTarget::Stderr, &LogTarget::Stderr) => true,
-            (&LogTarget::File(ref s), &LogTarget::File(ref o)) => {
+            (LogTarget::File(s), LogTarget::File(o)) => {
                 s == o
             }
             _ => false

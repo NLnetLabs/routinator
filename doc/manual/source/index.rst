@@ -34,13 +34,17 @@ Open-source with professional support services
 
    .. only:: html
 
-      |discord| |twitter|
+      |discord| |mastodon| |twitter|
       
       .. |discord| image:: https://img.shields.io/discord/818584154278199396   
          :alt: Discord
          :target: https://discord.gg/8dvKB5Ykhy
 
-      .. |twitter| image:: https://img.shields.io/twitter/follow/routinator3000?style=social
+      .. |mastodon| image:: https://img.shields.io/mastodon/follow/109262826617293067?domain=https%3A%2F%2Ffosstodon.org&style=social
+         :alt: Mastodon
+         :target: https://fosstodon.org/@nlnetlabs
+
+      .. |twitter| image:: https://img.shields.io/badge/follow-%40routinator3000-1DA1F2?logo=twitter&style=social
          :alt: Twitter
          :target: https://twitter.com/routinator3000/
                 
