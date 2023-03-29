@@ -12,7 +12,8 @@ The HTTP service supports GET requests on the following paths:
 ``/api/v1/validity/as-number/prefix``
      Returns a JSON object describing whether the route announcement given by
      its origin AS Number and address prefix is RPKI valid, invalid, or not
-     found. A complete list of VRPs that caused the result is included.
+     found. A complete list of VRPs that caused the result is included. For
+     details about its contents see :doc:`validity checker<validity-checker>`.
      
 ``/validity?asn=as-number&prefix=prefix``
      Same as above but with a more form-friendly calling convention.
