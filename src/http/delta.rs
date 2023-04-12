@@ -6,9 +6,10 @@ use std::sync::Arc;
 use futures::stream;
 use hyper::{Body, Method, Request};
 use rpki::rtr::Serial;
-use rpki::rtr::payload::Payload;
+use rpki::rtr::payload::{Action, PayloadRef};
+use rpki::rtr::server::PayloadDiff;
 use crate::payload::{
-    PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
+    DeltaArcIter, PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
 };
 use crate::utils::fmt::WriteOrPanic;
 use super::response::{ContentType, Response, ResponseBuilder};
@@ -129,16 +130,25 @@ struct DeltaStream {
     /// the very first iteration.
     header: Option<Vec<u8>>,
 
-    /// The delta we work on.
+    /// The iterator for announced items.
     ///
-    /// This is set to `None` to fuse the iterator.
-    delta: Option<Arc<PayloadDelta>>,
+    /// This is a regular delta iterator, we just have to skip over withdraw
+    /// items.
+    ///
+    /// If this is `None`, we are done with the announcements and need to do
+    /// the withdrawals.
+    announce: Option<DeltaArcIter>,
 
-    /// The position of the next item in the delta.
+    /// The iterator for withdrawn items.
     ///
-    /// If this is `Ok(_)`, we are working with announced payload. If this
-    /// is `Err(_)` we are working with withdrawn payload.
-    pos: Result<usize, usize>,
+    /// This is a regular delta iterator, we just have to skip over announced
+    /// items.
+    ///
+    /// If this is `None`, there is nothing left to do.
+    withdraw: Option<DeltaArcIter>,
+
+    /// Is the next appened item the first item in a list?
+    first: bool,
 }
 
 impl DeltaStream {
@@ -151,8 +161,9 @@ impl DeltaStream {
         Self::append_header(&mut vec, session, from_serial, to_serial);
         DeltaStream {
             header: Some(vec),
-            delta: Some(delta),
-            pos: Ok(0),
+            announce: Some(delta.clone().arc_iter()),
+            withdraw: Some(delta.arc_iter()),
+            first: true,
         }
     }
 
@@ -185,14 +196,14 @@ impl DeltaStream {
     /// Appends an origin to the vec.
     fn append_payload(
         vec: &mut Vec<u8>,
-        payload: &Payload,
+        payload: PayloadRef,
         first: bool
     ) {
         if !first {
             vec.push(b',')
         }
-        match *payload {
-            Payload::Origin(ref origin) => {
+        match payload {
+            PayloadRef::Origin(origin) => {
                 write!(vec, "\
                     \n    {{\
                     \n        \"type\": \"routeOrigin\",\
@@ -205,7 +216,7 @@ impl DeltaStream {
                     origin.prefix.resolved_max_len()
                 )
             },
-            Payload::RouterKey(ref key) => {
+            PayloadRef::RouterKey(key) => {
                 write!(vec, "\
                     \n    {{\
                     \n        \"type\": \"routerKey\",\
@@ -217,6 +228,28 @@ impl DeltaStream {
                     key.asn,
                     key.key_info,
                 )
+            }
+            PayloadRef::Aspa(aspa) => {
+                write!(vec, "\
+                    \n  {{\
+                    \n      \"type\": \"aspa\",
+                    \n      \"customerAsn\": \"{}\",\
+                    \n      \"afi\": \"{}\",\
+                    \n      \"providerAsns\": [",
+                    aspa.customer,
+                    if aspa.afi.is_ipv4() { "ipv4" } else { "ipv6" },
+                );
+                let mut first = true;
+                for asn in aspa.providers.iter() {
+                    if first {
+                        write!(vec, "\"{}\"", asn);
+                        first = false
+                    }
+                    else {
+                        write!(vec, ", \"{}\"", asn);
+                    }
+                }
+                write!(vec, "]\n\n    }}");
             }
         }
     }
@@ -231,44 +264,60 @@ impl Iterator for DeltaStream {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let delta = self.delta.as_ref()?;
+        if self.withdraw.is_none() {
+            return None
+        }
         let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
                 return Some(vec)
             }
-            match self.pos {
-                Ok(pos) => {
-                    match delta.announce().get(pos) {
-                        Some(payload) => {
-                            Self::append_payload(
-                                &mut vec, payload, pos == 0,
-                            );
-                            self.pos = Ok(pos + 1);
-                        }
-                        None => {
-                            Self::append_separator(&mut vec);
-                            self.pos = Err(0);
-                        }
-                    }
-                }
-                Err(pos) => {
-                    match delta.withdraw().get(pos) {
-                        Some(payload) => {
-                            Self::append_payload(
-                                &mut vec, payload, pos == 0,
-                            );
-                            self.pos = Err(pos + 1);
-                        }
-                        None => break
-                    }
+            if self.next_announce(&mut vec) {
+                continue;
+            }
+            if !self.next_withdraw(&mut vec) {
+                return Some(vec)
+            }
+        }
+    }
+}
+
+impl DeltaStream {
+    fn next_announce(&mut self, vec: &mut Vec<u8>) -> bool {
+        if let Some(announce) = self.announce.as_mut() {
+            while let Some((payload, action)) = announce.next() {
+                if matches!(action, Action::Announce) {
+                    Self::append_payload(vec, payload, self.first);
+                    self.first = false;
+                    return true
                 }
             }
         }
+        else {
+            return false;
+        }
+        Self::append_separator(vec);
+        self.announce = None;
+        self.first = true;
+        true
+    }
 
-        self.delta = None;
-        Self::append_footer(&mut vec);
-        Some(vec)
+    fn next_withdraw(&mut self, vec: &mut Vec<u8>) -> bool {
+        if let Some(withdraw) = self.withdraw.as_mut() {
+            while let Some((payload, action)) = withdraw.next() {
+                if matches!(action, Action::Withdraw) {
+                    Self::append_payload(vec, payload, self.first);
+                    self.first = false;
+                    return true
+                }
+            }
+        }
+        else {
+            return false;
+        }
+        Self::append_footer(vec);
+        self.withdraw = None;
+        true
     }
 }
 
