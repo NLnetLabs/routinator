@@ -571,7 +571,7 @@ impl AspaMetrics {
             self.locally_filtered_v4 += 1;
         }
         else {
-            self.locally_filtered_v4 += 1;
+            self.locally_filtered_v6 += 1;
         }
     }
 }

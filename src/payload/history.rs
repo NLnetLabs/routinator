@@ -69,7 +69,7 @@ impl SharedHistory {
         };
 
         let delta = current.as_ref().and_then(|current| {
-            PayloadDelta::construct(&current, &snapshot, serial)
+            PayloadDelta::construct(current, &snapshot, serial)
         });
 
         let mut history = self.write();

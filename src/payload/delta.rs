@@ -353,9 +353,9 @@ impl AspaDelta {
                 Some(item) => item,
                 None => {
                     // New is finished. The rest of old goes into withdraw.
-                    items.push((old_item.withdraw().into(), Withdraw));
+                    items.push((old_item.withdraw(), Withdraw));
                     items.extend(
-                        old_iter.map(|x| (x.withdraw().into(), Withdraw))
+                        old_iter.map(|x| (x.withdraw(), Withdraw))
                     );
                     break;
                 }
@@ -364,20 +364,20 @@ impl AspaDelta {
             match old_item.key().cmp(&new_item.key()) {
                 Ordering::Less => {
                     // Excess old item. Goes into withdraw.
-                    items.push((old_item.withdraw().into(), Withdraw));
+                    items.push((old_item.withdraw(), Withdraw));
                     opt_old = old_iter.next();
                 }
                 Ordering::Equal => {
                     if old_item.providers != new_item.providers {
                         // Different providers. Goes into update.
-                        items.push((new_item.clone().into(), Update))
+                        items.push((new_item.clone(), Update))
                     }
                     opt_old = old_iter.next();
                     opt_new = new_iter.next();
                 }
                 Ordering::Greater => {
                     // Excess new item. Goes into announce.
-                    items.push((new_item.clone().into(), Announce));
+                    items.push((new_item.clone(), Announce));
                     opt_new = new_iter.next();
                 }
             }

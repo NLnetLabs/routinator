@@ -264,6 +264,7 @@ impl Iterator for DeltaStream {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        #[allow(clippy::question_mark)]
         if self.withdraw.is_none() {
             return None
         }

@@ -749,7 +749,7 @@ impl<'a> SnapshotBuilder<'a> {
         if !aspa.v6_providers.is_empty() {
             if self.process_aspa_family(
                 aspa.customer, Afi::ipv6(), aspa.v6_providers,
-                aspa.info.clone(), metrics,
+                aspa.info, metrics,
             ) {
                 contributed = true;
             }
