@@ -15,6 +15,12 @@ object through which the holder of an Autonomous System (AS) can authorise
 one or more other ASes as its upstream providers. When validated, an ASPA's
 content can be used for detection and mitigation of route leaks.
 
+.. note:: 
+
+    Currently, none of the Hosted RPKI systems that the RIRs offer support
+    the creation of ASPA objects, but you can run Delegated RPKI with Krill
+    instead to :ref:`manage ASPAs<krill:manage-aspas>`. 
+
 You can let Routinator process ASPA objects and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-aspa` option
 or by setting ``enable-aspa`` to True in the :doc:`configuration
