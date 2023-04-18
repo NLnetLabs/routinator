@@ -1,0 +1,36 @@
+[package]
+name = "routinator-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rpki            = { path = "../../rpki-rs", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+
+[dependencies.routinator]
+path = ".."
+features = ["arbitrary"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "construct_delta"
+path = "fuzz_targets/construct_delta.rs"
+test = false
+doc = false
+
+
+[[bin]]
+name = "merge_deltas"
+path = "fuzz_targets/merge_deltas.rs"
+test = false
+doc = false

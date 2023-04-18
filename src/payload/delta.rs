@@ -1,11 +1,13 @@
 //! Changes between different version of payload.
 //!
-//! This is a private module. Its public types are re-exported by the parent.
+//! This is a private module. Its relevant public types are re-exported by
+//! the parent.
 
 use std::sync::Arc;
 use std::cmp::Ordering;
 use rpki::rtr::{Action, PayloadRef, PayloadType, Serial};
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
+use rpki::rtr::pdu::ProviderAsns;
 use rpki::rtr::server::PayloadDiff;
 use super::info::PayloadInfo;
 use super::snapshot::PayloadSnapshot;
@@ -14,7 +16,16 @@ use super::snapshot::PayloadSnapshot;
 //------------ PayloadDelta --------------------------------------------------
 
 /// The changes between two payload snapshots.
+///
+/// You can create a delta from two snapshots through the
+/// [`Self::construct`] function or by merging two existing deltas via
+/// [`merge`][Self::merge].
+///
+/// An existing delta allows you to iterate over its contents – called
+/// actions – in various ways, both for all actions or only those regarding
+/// a particular payload type.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PayloadDelta {
     /// The target serial number of this delta.
     ///
@@ -52,10 +63,12 @@ impl PayloadDelta {
         let res = Self {
             serial,
             origins: StandardDelta::construct(
-                old.origin_refs(), new.origin_refs()
+                old.origin_refs().map(|item| item.0),
+                new.origin_refs().map(|item| item.0),
             ),
             router_keys: StandardDelta::construct(
-                old.router_keys(), new.router_keys()
+                old.router_keys().map(|item| item.0),
+                new.router_keys().map(|item| item.0),
             ),
             aspas: AspaDelta::construct(
                 old.aspas(), new.aspas()
@@ -121,6 +134,38 @@ impl PayloadDelta {
     pub fn arc_iter(self: Arc<Self>) -> DeltaArcIter {
         DeltaArcIter::new(self)
     }
+
+    /// Returns an iterator over the actions on route origins.
+    pub fn origin_actions(
+        &self
+    ) -> impl Iterator<Item = (RouteOrigin, Action)> + '_ {
+        self.origins.items.iter().map(|(item, action)| (*item, *action))
+    }
+
+    /// Returns an iterator over the actions on router keys.
+    pub fn router_key_actions(
+        &self
+    ) -> impl Iterator<Item = (&RouterKey, Action)> + '_ {
+        self.router_keys.items.iter().map(|(item, action)| (item, *action))
+    }
+
+    /// Returns an iterator over the actions on ASPAs. 
+    pub fn aspa_actions(
+        &self
+    ) -> impl Iterator<Item = (&Aspa, Action)> + '_ {
+        self.aspas.items.iter().map(|(item, action)| (item, action.into()))
+    }
+
+    /// Returns an iterator over the actions.
+    pub fn actions(
+        &self
+    ) -> impl Iterator<Item = (PayloadRef, Action)> + '_ {
+        self.origin_actions().map(|(p, a)| (p.into(), a)).chain(
+            self.router_key_actions().map(|(p, a)| (p.into(), a))
+        ).chain(
+            self.aspa_actions().map(|(p, a)| (p.into(), a))
+        )
+    }
 }
 
 
@@ -152,9 +197,10 @@ impl<P> Default for StandardDelta<P> {
 }
 
 impl<P: Clone + Ord> StandardDelta<P> {
+    /// Construct a delta from iterators over old and new content.
     fn construct<'a>(
-        mut old_iter: impl Iterator<Item = (&'a P, &'a PayloadInfo)>,
-        mut new_iter: impl Iterator<Item = (&'a P, &'a PayloadInfo)>,
+        mut old_iter: impl Iterator<Item = &'a P>,
+        mut new_iter: impl Iterator<Item = &'a P>,
     ) -> Self
     where P: 'a {
         let mut items = Self::default();
@@ -164,25 +210,25 @@ impl<P: Clone + Ord> StandardDelta<P> {
 
         loop {
             let old_item = match opt_old {
-                Some((item, _)) => item,
+                Some(item) => item,
                 None => {
                     // Old is finished. The rest of new goes into announced.
-                    if let Some((new_item, _)) = opt_new {
+                    if let Some(new_item) = opt_new {
                         items.push((new_item.clone(), Action::Announce));
                     }
                     items.extend(
-                        new_iter.map(|(x, _)| (x.clone(), Action::Announce))
+                        new_iter.map(|x| (x.clone(), Action::Announce))
                     );
                     break;
                 }
             };
             let new_item = match opt_new {
-                Some((item, _)) => item,
+                Some(item) => item,
                 None => {
                     // New is finished. The rest of old goes into withdraw.
                     items.push((old_item.clone(), Action::Withdraw));
                     items.extend(
-                        old_iter.map(|(x, _)| (x.clone(), Action::Withdraw))
+                        old_iter.map(|x| (x.clone(), Action::Withdraw))
                     );
                     break;
                 }
@@ -305,12 +351,41 @@ impl<P> StandardDelta<P> {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a, P> arbitrary::Arbitrary<'a> for StandardDelta<P>
+where P: arbitrary::Arbitrary<'a> + Ord {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        let mut items = Vec::<(P, Action)>::arbitrary(u)?;
+        items.sort_by(|left, right| left.0.cmp(&right.0));
+        items.dedup_by(|left, right| left.0 == right.0);
+        let announce_len = items.iter().filter(|(_, action)| {
+            matches!(action, Action::Announce)
+        }).count();
+        let withdraw_len = items.iter().filter(|(_, action)| {
+            matches!(action, Action::Withdraw)
+        }).count();
+        Ok(Self { items, announce_len, withdraw_len })
+    }
+}
+
 
 //------------ AspaDelta -----------------------------------------------------
 
 /// A delta for ASPA payload.
+///
+/// Deltas for ASPAs are a bit complicated because the set of ASPAs is
+/// actually a map assinging the provider ASN set to a key of the pair of
+/// customer ASN and address family (‘AFI’). The ‘announce’ action of a delta
+/// between two of those maps covers both adding a new key and updating the
+/// provider set of an existing key.
+///
+/// This makes it necessary to keep additional information for correctly
+/// merging deltas. These are kept in the [`AspaAction`] enum.
 #[derive(Clone, Debug, Default)]
 struct AspaDelta {
+    /// The items of the delta.
     items: Vec<(Aspa, AspaAction)>,
 
     /// The number of annouced and updated items.
@@ -321,6 +396,7 @@ struct AspaDelta {
 }
 
 impl AspaDelta {
+    /// Constructs a new delta from iterators over old and new payload.
     fn construct<'a>(
         old_iter: impl Iterator<Item = (&'a Aspa, &'a PayloadInfo)>,
         new_iter: impl Iterator<Item = (&'a Aspa, &'a PayloadInfo)>,
@@ -353,10 +429,8 @@ impl AspaDelta {
                 Some(item) => item,
                 None => {
                     // New is finished. The rest of old goes into withdraw.
-                    items.push((old_item.withdraw(), Withdraw));
-                    items.extend(
-                        old_iter.map(|x| (x.withdraw(), Withdraw))
-                    );
+                    items.push(AspaAction::withdraw(old_item));
+                    items.extend(old_iter.map(AspaAction::withdraw));
                     break;
                 }
             };
@@ -364,13 +438,16 @@ impl AspaDelta {
             match old_item.key().cmp(&new_item.key()) {
                 Ordering::Less => {
                     // Excess old item. Goes into withdraw.
-                    items.push((old_item.withdraw(), Withdraw));
+                    items.push(AspaAction::withdraw(old_item));
                     opt_old = old_iter.next();
                 }
                 Ordering::Equal => {
                     if old_item.providers != new_item.providers {
                         // Different providers. Goes into update.
-                        items.push((new_item.clone(), Update))
+                        items.push((
+                            new_item.clone(),
+                            Update(old_item.providers.clone())
+                        ))
                     }
                     opt_old = old_iter.next();
                     opt_new = new_iter.next();
@@ -400,7 +477,7 @@ impl AspaDelta {
             let old_item = match opt_old {
                 Some(some) => some,
                 None => {
-                    // Old is finished. Keep everything from new.
+                    // Old is finished. Keep all changes made by new.
                     if let Some(item) = opt_new {
                         items.push(item.clone())
                     }
@@ -411,7 +488,7 @@ impl AspaDelta {
             let new_item = match opt_new {
                 Some(some) => some,
                 None => {
-                    // New is finished. Keep everything from old.
+                    // New is finished. Keep all changes made by old.
                     if let Some(item) = opt_old {
                         items.push(item.clone())
                     }
@@ -420,6 +497,7 @@ impl AspaDelta {
                 }
             };
 
+            // Compare ASPAs only by their key.
             match old_item.0.key().cmp(&new_item.0.key()) {
                 Ordering::Less => {
                     // Sole old item. Keep.
@@ -434,18 +512,67 @@ impl AspaDelta {
                 Ordering::Equal => {
                     use self::AspaAction::*;
 
-                    // There are a few pairings that should be impossible,
-                    // but I think we can fix the issue quitely ...
-                    let action = match (old_item.1, new_item.1) {
+                    // The item is both in old and new. What to do depends
+                    // on the two actions.
+                    let action = match (&old_item.1, &new_item.1) {
+                        // Announced in both deltas. Technically that can’t
+                        // happen, but we just pretend it was announced.
                         (Announce, Announce) => Some(Announce),
-                        (Announce, Update) => Some(Announce),
-                        (Announce, Withdraw) => None,
-                        (Update, Announce) => Some(Update),
-                        (Update, Update) => Some(Update),
-                        (Update, Withdraw) => Some(Withdraw),
-                        (Withdraw, Announce) => Some(Update),
-                        (Withdraw, Update) => Some(Update),
-                        (Withdraw, Withdraw) => Some(Withdraw),
+
+                        // Announced then updated: just announced.
+                        (Announce, Update(_)) => Some(Announce),
+
+                        // Announced then withdrawn: never happened.
+                        (Announce, Withdraw(_)) => None,
+
+                        // Updated then announced. Can’t really happen but we
+                        // pretend it was updated from the original providers.
+                        (Update(ref p), Announce) => Some(Update(p.clone())),
+
+                        // Updated twice. If the new providers are equal to
+                        // the original providers, nothing happened. Otherwise
+                        // it is an update.
+                        (Update(ref p), Update(_)) => {
+                            if *p == new_item.0.providers {
+                                None
+                            }
+                            else {
+                                Some(Update(p.clone()))
+                            }
+                        }
+
+                        // Updated then withdrawn: withdrawn.
+                        (Update(ref p), Withdraw(_)) => {
+                            Some(Withdraw(p.clone()))
+                        }
+
+                        // Withdrawn then announced. If the new providers are
+                        // equal to the original providers, nothing happened.
+                        // Otherwise, this is an update.
+                        (Withdraw(ref p), Announce) => {
+                            if *p == new_item.0.providers {
+                                None
+                            }
+                            else {
+                                Some(Update(p.clone()))
+                            }
+                        }
+
+                        // Withdraw then updated. Can’t happend, but we treat
+                        // the update as an announce.
+                        (Withdraw(ref p), Update(_)) => {
+                            if *p == new_item.0.providers {
+                                None
+                            }
+                            else {
+                                Some(Update(p.clone()))
+                            }
+                        }
+
+                        // Withdrawn twice. Can’t happend but whatever.
+                        (Withdraw(ref p), Withdraw(_)) => {
+                            Some(Withdraw(p.clone()))
+                        }
                     };
                     if let Some(action) = action {
                         items.push((new_item.0.clone(), action));
@@ -462,8 +589,10 @@ impl AspaDelta {
     /// Appends an item.
     fn push(&mut self, (payload, action): (Aspa, AspaAction)) {
         match action {
-            AspaAction::Announce | AspaAction::Update => self.announce_len += 1,
-            AspaAction::Withdraw => self.withdraw_len += 1,
+            AspaAction::Announce | AspaAction::Update(_) => {
+                self.announce_len += 1
+            }
+            AspaAction::Withdraw(_) => self.withdraw_len += 1,
         }
         self.items.push((payload, action))
     }
@@ -482,7 +611,25 @@ impl AspaDelta {
 
     /// Returns an element of the delta.
     fn get(&self, idx: usize) -> Option<(&Aspa, Action)> {
-        self.items.get(idx).map(|item| (&item.0, item.1.into()))
+        self.items.get(idx).map(|item| (&item.0, (&item.1).into()))
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for AspaDelta {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        let mut items = Vec::<(Aspa, AspaAction)>::arbitrary(u)?;
+        items.sort_by(|left, right| left.0.cmp(&right.0));
+        items.dedup_by(|left, right| left.0 == right.0);
+        let announce_len = items.iter().filter(|(_, action)| {
+            matches!(action, AspaAction::Announce | AspaAction::Update(_))
+        }).count();
+        let withdraw_len = items.iter().filter(|(_, action)| {
+            matches!(action, AspaAction::Withdraw(_))
+        }).count();
+        Ok(Self { items, announce_len, withdraw_len })
     }
 }
 
@@ -544,23 +691,125 @@ impl PayloadDiff for DeltaArcIter {
 
 /// A delta action for ASPA.
 ///
-/// In ASPA ‘announce’ actually means both accounce a new ASPA or update an
-/// existing one. In order to correctly merge two deltas, we need to know
-/// which it really was.
-#[derive(Clone, Copy, Debug)]
+/// This type contains all the extra information necessary for merging
+/// [`AspaDelta`]s.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 enum AspaAction {
+    /// Announce an ASPA for a new key.
+    ///
+    /// This simply becomes `Action::Announce`.
     Announce,
-    Update,
-    Withdraw,
+
+    /// Update a the providers of an existing key.
+    ///
+    /// This is becomes `Action::Announce`.
+    ///
+    /// The value is the providers before the update.
+    Update(ProviderAsns),
+
+    /// Withdraw the ASPA for a key.
+    ///
+    /// This becomes `Action::Withdraw`.
+    ///
+    /// The value is the providers before the key was withdrawn.
+    Withdraw(ProviderAsns),
+}
+
+impl AspaAction {
+    fn withdraw(aspa: &Aspa) -> (Aspa, Self) {
+        (aspa.withdraw(), Self::Withdraw(aspa.providers.clone()))
+    }
 }
 
 impl From<AspaAction> for Action {
     fn from(src: AspaAction) -> Self {
         match src {
             AspaAction::Announce => Action::Announce,
-            AspaAction::Update => Action::Announce,
-            AspaAction::Withdraw => Action::Withdraw,
+            AspaAction::Update(_) => Action::Announce,
+            AspaAction::Withdraw(_) => Action::Withdraw,
         }
     }
+}
+
+impl<'a> From<&'a AspaAction> for Action {
+    fn from(src: &'a AspaAction) -> Self {
+        match *src {
+            AspaAction::Announce => Action::Announce,
+            AspaAction::Update(_) => Action::Announce,
+            AspaAction::Withdraw(_) => Action::Withdraw,
+        }
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn standard_construct() {
+        fn process(old: &mut [u32], new: &mut [u32]) {
+            let old_set: HashSet<_> = old.iter().copied().collect();
+            let new_set: HashSet<_> = new.iter().copied().collect();
+            old.sort();
+            new.sort();
+            let delta = StandardDelta::construct(old.iter(), new.iter());
+
+            let mut announce_set: Vec<_> = new_set.difference(
+                &old_set
+            ).copied().collect();
+            announce_set.sort();
+            let announce = delta.items.iter().filter_map(|(item, action)| {
+                match action {
+                    Action::Announce => Some(*item),
+                    Action::Withdraw => None
+                }
+            }).collect::<Vec<_>>();
+
+            let mut withdraw_set: Vec<_> = old_set.difference(
+                &new_set
+            ).copied().collect();
+            withdraw_set.sort();
+            let withdraw = delta.items.iter().filter_map(|(item, action)| {
+                match action {
+                    Action::Withdraw => Some(*item),
+                    Action::Announce => None,
+                }
+            }).collect::<Vec<_>>();
+
+            assert_eq!(announce.len(), delta.announce_len);
+            assert_eq!(withdraw.len(), delta.withdraw_len);
+            assert_eq!(announce, announce_set);
+            assert_eq!(withdraw, withdraw_set);
+        }
+
+        process(&mut [], &mut []);
+        process(&mut [0, 1, 2, 3], &mut [0, 1, 2, 3]);
+        process(&mut [], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut []);
+
+        // 1 item difference
+        process(&mut [0,    2, 3], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [0,    2, 3]);
+        process(&mut [   1, 2, 3], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [   1, 2, 3]);
+        process(&mut [0, 1, 2   ], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [0, 1, 2   ]);
+
+        // 2 item difference
+        process(&mut [0, 1, 2, 3], &mut [0, 1, 2, 3]);
+        process(&mut [0,       3], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [0,       3]);
+        process(&mut [      2, 3], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [      2, 3]);
+        process(&mut [0, 1,     ], &mut [0, 1, 2, 3]);
+        process(&mut [0, 1, 2, 3], &mut [0, 1,     ]);
+    }
+
+    // Delta merging has been tested via the merge_deltas fuzz target.
 }
 

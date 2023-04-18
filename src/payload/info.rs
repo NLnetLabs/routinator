@@ -14,6 +14,7 @@ use crate::slurm::ExceptionInfo;
 
 /// Information about the sources of a payload item.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PayloadInfo {
     /// The head of a linked list of origin infos.
     ///
@@ -130,6 +131,7 @@ impl<'a> Iterator for PayloadInfoIter<'a> {
 
 /// Information about the published object a payload item came from.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PublishInfo {
     /// The TAL the ROA is derived from.
     pub tal: Arc<TalInfo>,

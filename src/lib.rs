@@ -24,9 +24,8 @@
 //!
 //! The second part currently comes in two flavours:
 //!
-//! * [payload], which processes data for Route Origin Validation (i.e.,
-//!   checking that a BGP route has been announced by someone who was
-//!   authorized to do so), and
+//! * [payload], which collects and processes data for distribution to
+//!   routers or local use, and
 //! * [rta], which processes Resource Tagged Authorizations (i.e., objects
 //!   signed by resource holders).
 //!
@@ -35,12 +34,12 @@
 //! The third part is represented by a number of modules with differing
 //! purposes:
 //!
-//! * [output] allows formatting data – currently Route Origin Validation
-//!   data only – in different formats,
-//! * [http] provides an HTTP server with mutliple endpoints for all sorts
-//!   of purposes, and
+//! * [output] allows formatting data  in different formats,
+//! * [http] provides an HTTP server with multiple endpoints for all sorts
+//!   of purposes,
 //! * [rtr] provides an RTR server which allows routers to synchronize their
-//!   RPKI filter tables.
+//!   RPKI filter tables, and
+//! * [validity] can be used to perform route origin validation.
 //!
 //! Apart from these, there are a few more modules that support these core
 //! parts in their work.

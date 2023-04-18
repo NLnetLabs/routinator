@@ -18,6 +18,7 @@ use super::info::PayloadInfo;
 
 /// The complete set of validated payload data.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PayloadSnapshot {
     /// The route origins.
     origins: PayloadCollection<RouteOrigin>,
@@ -82,11 +83,11 @@ impl PayloadSnapshot {
     /// Returns an iteratore over all payload.
     pub fn payload(
         &self
-    ) -> impl Iterator<Item = (PayloadRef, &PayloadInfo)> {
-        self.origins.iter_ref().chain(
-            self.router_keys.iter_ref()
+    ) -> impl Iterator<Item = PayloadRef> {
+        self.origins.iter_payload().chain(
+            self.router_keys.iter_payload()
         ).chain(
-            self.aspas.iter_ref()
+            self.aspas.iter_payload()
         )
     }
 
@@ -227,6 +228,42 @@ impl<P: Ord> FromIterator<(P, PayloadInfo)> for PayloadCollection<P> {
         Self::from_vec(
             iter.into_iter().collect()
         )
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for PayloadCollection<RouteOrigin> {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        let mut vec = Vec::<(RouteOrigin, PayloadInfo)>::arbitrary(u)?;
+        vec.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        vec.dedup_by(|left, right| left.0 == right.0);
+        Ok(Self { vec })
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for PayloadCollection<RouterKey> {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        let mut vec = Vec::<(RouterKey, PayloadInfo)>::arbitrary(u)?;
+        vec.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        vec.dedup_by(|left, right| left.0 == right.0);
+        Ok(Self { vec })
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for PayloadCollection<Aspa> {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        let mut vec = Vec::<(Aspa, PayloadInfo)>::arbitrary(u)?;
+        vec.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        vec.dedup_by(|left, right| left.0.key() == right.0.key());
+        Ok(Self { vec })
     }
 }
 

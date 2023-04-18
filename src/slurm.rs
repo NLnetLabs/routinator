@@ -171,6 +171,25 @@ pub struct ExceptionInfo {
     pub comment: Option<String>,
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for ExceptionInfo {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        Ok(Self {
+            path: if bool::arbitrary(u)? {
+                Some(
+                    std::path::PathBuf::arbitrary(u)?.into_boxed_path().into()
+                )
+            }
+            else {
+                None
+            },
+            comment: Option::arbitrary(u)?,
+        })
+    }
+}
+
 
 //------------ LoadError ----------------------------------------------------
 
