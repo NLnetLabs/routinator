@@ -78,6 +78,8 @@ in the :term:`jsonext` output format, e.g.:
     - `BGP AS_PATH Verification Based on Autonomous System Provider
       Authorization (ASPA) Objects
       <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-verification>`_ 
+    - `Manage ASPA objects with Krill
+      <https://krill.docs.nlnetlabs.nl/en/stable/manage-aspas.html>`_
 
 .. versionadded:: 0.13.0
 
