@@ -247,7 +247,7 @@ impl FromStr for OutputFormat {
 #[derive(Clone, Debug, Default)]
 pub struct Selection {
     /// The list of selection conditions.
-    origins: Vec<SelectOrigin>,
+    origins: Vec<SelectResource>,
 
     /// Should we include more specific prefixes in the output?
     more_specifics: bool,
@@ -275,12 +275,12 @@ impl Selection {
         for (key, value) in form_urlencoded::parse(query.as_ref()) {
             if key == "select-prefix" || key == "filter-prefix" {
                 res.origins.push(
-                    SelectOrigin::Prefix(addr::Prefix::from_str(&value)?)
+                    SelectResource::Prefix(addr::Prefix::from_str(&value)?)
                 );
             }
             else if key == "select-asn" || key == "filter-asn" {
                 res.origins.push(
-                    SelectOrigin::Asn(
+                    SelectResource::Asn(
                         Asn::from_str(&value).map_err(|_| QueryError)?
                     )
                 );
@@ -304,12 +304,12 @@ impl Selection {
 
     /// Add an origin ASN to select.
     pub fn push_origin_asn(&mut self, asn: Asn) {
-        self.origins.push(SelectOrigin::Asn(asn))
+        self.origins.push(SelectResource::Asn(asn))
     }
 
     /// Add a origin prefix to select.
     pub fn push_origin_prefix(&mut self, prefix: addr::Prefix) {
-        self.origins.push(SelectOrigin::Prefix(prefix))
+        self.origins.push(SelectResource::Prefix(prefix))
     }
 
     /// Returns whether an origin should be included in output.
@@ -333,8 +333,13 @@ impl Selection {
     }
 
     /// Returns whether an ASPA should be included in output.
-    pub fn include_aspa(&self, _: &Aspa) -> bool {
-        true
+    pub fn include_aspa(&self, aspa: &Aspa) -> bool {
+        for select in &self.origins {
+            if select.include_aspa(aspa) {
+                return true
+            }
+        }
+        false
     }
 }
 
@@ -345,11 +350,11 @@ impl AsRef<Selection> for Selection {
 }
 
 
-//------------ SelectOrigin --------------------------------------------------
+//------------ SelectResource ------------------------------------------------
 
 /// A selection rule for origins.
 #[derive(Clone, Copy, Debug)]
-enum SelectOrigin {
+enum SelectResource {
     /// Include resources related to the given ASN.
     Asn(Asn),
 
@@ -357,14 +362,14 @@ enum SelectOrigin {
     Prefix(addr::Prefix),
 }
 
-impl SelectOrigin {
+impl SelectResource {
     /// Returns whether this rule selects payload.
     fn include_origin(
         self, origin: RouteOrigin, more_specifics: bool
     ) -> bool {
         match self {
-            SelectOrigin::Asn(asn) => origin.asn == asn,
-            SelectOrigin::Prefix(prefix) => {
+            SelectResource::Asn(asn) => origin.asn == asn,
+            SelectResource::Prefix(prefix) => {
                 origin.prefix.prefix().covers(prefix)
                 || (more_specifics && prefix.covers(origin.prefix.prefix()))
             }
@@ -373,8 +378,15 @@ impl SelectOrigin {
 
     fn include_router_key(self, key: &RouterKey) -> bool {
         match self {
-            SelectOrigin::Asn(asn) => key.asn == asn,
+            SelectResource::Asn(asn) => key.asn == asn,
             _ => false
+        }
+    }
+
+    fn include_aspa(self, aspa: &Aspa) -> bool {
+        match self {
+            SelectResource::Asn(asn) => aspa.customer == asn,
+            _ => false,
         }
     }
 }
