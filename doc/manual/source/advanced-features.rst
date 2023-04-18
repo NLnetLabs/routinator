@@ -5,52 +5,6 @@ Routinator offers several advanced features to let operators gain operational
 experience with some of the ongoing work in the Internet Engineering Task
 Force to improve and augment RPKI. 
 
-Resource Tagged Attestations
-----------------------------
-
-Resource Tagged Attestations (RTAs) allow any arbitrary file to be signed
-‘with resources’ by one or more parties. The RTA object is a separate file
-that cryptographically connects the document with a set of resources. The
-receiver of the object can use Routinator to show these resources, and verify
-that it was created by their rightful holder(s).
-
-One practical example where RTA could be valuable is to authorise a Bring
-Your Own IP (BYOIP) process, where you bring part or all of your publicly
-routable IPv4 or IPv6 address range from your on-premises network to a cloud
-provider. The document authorising BYOIP could be signed using RTA.
-
-RTA objects can be generated using Krill, the RPKI Certificate Authority
-software from NLnet Labs, and you can use the MyAPNIC hosted service. The
-objects can be validated using Routinator if it is built with RTA support,
-using the :ref:`features<building:enabling or disabling features>`
-functionality provided by Cargo:
-
-.. code-block:: text
-
-   cargo install --locked --features rta routinator
-
-You can now interactively validate an RTA signed object. If it is valid,
-Routinator will report the resources used to sign the object:
-
-.. code-block:: text
-
-    routinator rta acme-corp-byoip.rta
-
-    192.0.2.0/24
-    203.0.113.0/24
-    2001:db8::/48 
-
-.. seealso::
-
-    - `A profile for Resource Tagged Attestations (RTAs)
-      <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_
-    - `Moving RPKI Beyond Routing Security
-      <https://blog.nlnetlabs.nl/moving-rpki-beyond-routing-security/>`_ 
-    - `A proof-of-concept for constructing and validating RTAs
-      <https://github.com/APNIC-net/rpki-rta-demo>`_
-
-.. versionadded:: 0.8.0
-
 BGPsec
 ------
 
@@ -109,3 +63,49 @@ in the :term:`SLURM` and :term:`jsonext` output format, e.g.:
     }
 
 .. versionadded:: 0.11.0
+
+Resource Tagged Attestations
+----------------------------
+
+Resource Tagged Attestations (RTAs) allow any arbitrary file to be signed
+‘with resources’ by one or more parties. The RTA object is a separate file
+that cryptographically connects the document with a set of resources. The
+receiver of the object can use Routinator to show these resources, and verify
+that it was created by their rightful holder(s).
+
+One practical example where RTA could be valuable is to authorise a Bring
+Your Own IP (BYOIP) process, where you bring part or all of your publicly
+routable IPv4 or IPv6 address range from your on-premises network to a cloud
+provider. The document authorising BYOIP could be signed using RTA.
+
+RTA objects can be generated using Krill, the RPKI Certificate Authority
+software from NLnet Labs, and you can use the MyAPNIC hosted service. The
+objects can be validated using Routinator if it is built with RTA support,
+using the :ref:`features<building:enabling or disabling features>`
+functionality provided by Cargo:
+
+.. code-block:: text
+
+   cargo install --locked --features rta routinator
+
+You can now interactively validate an RTA signed object. If it is valid,
+Routinator will report the resources used to sign the object:
+
+.. code-block:: text
+
+    routinator rta acme-corp-byoip.rta
+
+    192.0.2.0/24
+    203.0.113.0/24
+    2001:db8::/48 
+
+.. seealso::
+
+    - `A profile for Resource Tagged Attestations (RTAs)
+      <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_
+    - `Moving RPKI Beyond Routing Security
+      <https://blog.nlnetlabs.nl/moving-rpki-beyond-routing-security/>`_ 
+    - `A proof-of-concept for constructing and validating RTAs
+      <https://github.com/APNIC-net/rpki-rta-demo>`_
+
+.. versionadded:: 0.8.0
