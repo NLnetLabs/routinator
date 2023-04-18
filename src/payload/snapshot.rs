@@ -146,18 +146,18 @@ impl PayloadSnapshot {
     }
 
     /// Returns an iterator over the origins of a shared snapshot.
-    pub fn arc_origins_iter(self: Arc<Self>) -> SnapshotArcOriginsIter {
-        SnapshotArcOriginsIter::new(self)
+    pub fn arc_origin_iter(self: Arc<Self>) -> SnapshotArcOriginIter {
+        SnapshotArcOriginIter::new(self)
     }
 
     /// Returns an iterator over the router keys of a shared snapshot.
-    pub fn arc_router_keys_iter(self: Arc<Self>) -> SnapshotArcRouterKeysIter {
-        SnapshotArcRouterKeysIter::new(self)
+    pub fn arc_router_key_iter(self: Arc<Self>) -> SnapshotArcRouterKeyIter {
+        SnapshotArcRouterKeyIter::new(self)
     }
 
     /// Returns an iterator over the ASPAs of a shared snapshot.
-    pub fn arc_aspas_iter(self: Arc<Self>) -> SnapshotArcAspasIter {
-        SnapshotArcAspasIter::new(self)
+    pub fn arc_aspa_iter(self: Arc<Self>) -> SnapshotArcAspaIter {
+        SnapshotArcAspaIter::new(self)
     }
 }
 
@@ -325,11 +325,11 @@ impl PayloadSet for SnapshotArcIter {
 }
 
 
-//------------ SnapshotArcOriginsIter ----------------------------------------
+//------------ SnapshotArcOriginIter -----------------------------------------
 
 /// An iterator over the route origins in a shared snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotArcOriginsIter {
+pub struct SnapshotArcOriginIter {
     /// The snapshot we iterate over.
     snapshot: Arc<PayloadSnapshot>,
 
@@ -337,7 +337,7 @@ pub struct SnapshotArcOriginsIter {
     next: usize
 }
 
-impl SnapshotArcOriginsIter {
+impl SnapshotArcOriginIter {
     /// Creates a new iterator from a shared snapshot.
     fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
         Self {
@@ -354,7 +354,7 @@ impl SnapshotArcOriginsIter {
     }
 }
 
-impl Iterator for SnapshotArcOriginsIter {
+impl Iterator for SnapshotArcOriginIter {
     type Item = RouteOrigin;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -363,11 +363,11 @@ impl Iterator for SnapshotArcOriginsIter {
 }
 
 
-//------------ SnapshotArcRouterKeysIter -------------------------------------
+//------------ SnapshotArcRouterKeyIter --------------------------------------
 
 /// An iterator over the router keys in a shared snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotArcRouterKeysIter {
+pub struct SnapshotArcRouterKeyIter {
     /// The snapshot we iterate over.
     snapshot: Arc<PayloadSnapshot>,
 
@@ -375,7 +375,7 @@ pub struct SnapshotArcRouterKeysIter {
     next: usize
 }
 
-impl SnapshotArcRouterKeysIter {
+impl SnapshotArcRouterKeyIter {
     /// Creates a new iterator from a shared snapshot.
     fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
         Self {
@@ -393,11 +393,11 @@ impl SnapshotArcRouterKeysIter {
 }
 
 
-//------------ SnapshotArcAspasIter ------------------------------------------
+//------------ SnapshotArcAspaIter -------------------------------------------
 
 /// An iterator over the ASPA elements in a shared snapshot.
 #[derive(Clone, Debug)]
-pub struct SnapshotArcAspasIter {
+pub struct SnapshotArcAspaIter {
     /// The snapshot we iterate over.
     snapshot: Arc<PayloadSnapshot>,
 
@@ -405,7 +405,7 @@ pub struct SnapshotArcAspasIter {
     next: usize
 }
 
-impl SnapshotArcAspasIter {
+impl SnapshotArcAspaIter {
     /// Creates a new iterator from a shared snapshot.
     fn new(snapshot: Arc<PayloadSnapshot>) -> Self {
         Self {
@@ -417,14 +417,6 @@ impl SnapshotArcAspasIter {
     /// Returns the next item and its information.
     pub fn next_with_info(&mut self) -> Option<(&Aspa, &PayloadInfo)> {
         self.snapshot.aspas.get(self.next).map(|res| { self.next +=1; res })
-        /*
-        let (payload, info) = self.snapshot.aspas.get(self.next)?;
-        self.next += 1;
-        match payload {
-            Payload::Aspa(aspa) => Some((aspa, info)),
-            _ => panic!("non-router key in router key set")
-        }
-        */
     }
 }
  

@@ -11,8 +11,8 @@ pub use self::delta::{DeltaArcIter, PayloadDelta};
 pub use self::history::{PayloadHistory, SharedHistory};
 pub use self::info::PayloadInfo;
 pub use self::snapshot::{
-    PayloadSnapshot, SnapshotArcOriginsIter, SnapshotArcIter,
-    SnapshotArcRouterKeysIter,
+    PayloadSnapshot, SnapshotArcAspaIter, SnapshotArcIter,
+    SnapshotArcOriginIter, SnapshotArcRouterKeyIter,
 };
 pub use self::validation::ValidationReport;
 

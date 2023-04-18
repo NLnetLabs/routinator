@@ -5,9 +5,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
-use routecore::asn::Asn;
-use routecore::bgpsec::KeyIdentifier;
-use rpki::rtr::payload::{Afi, Payload, RouteOrigin, RouterKey};
+use rpki::rtr::payload::{Payload, RouteOrigin, RouterKey};
 use rpki::slurm::{PrefixFilter, SlurmFile};
 use crate::config::Config;
 use crate::error::Failed;
@@ -118,18 +116,6 @@ impl LocalExceptions {
 
     pub fn drop_origin(&self, origin: RouteOrigin) -> bool {
         !self.keep_payload(&Payload::Origin(origin))
-    }
-
-    pub fn drop_router_key_id(&self, _key_id: KeyIdentifier) -> bool {
-        unimplemented!()
-    }
-
-    pub fn drop_router_key(&self, _ski: KeyIdentifier, _asn: Asn) -> bool {
-        unimplemented!()
-    }
-
-    pub fn drop_aspa(&self, _customer: Asn, _afi: Afi) -> bool {
-        unimplemented!()
     }
 
     pub fn keep_payload(&self, payload: &Payload) -> bool {

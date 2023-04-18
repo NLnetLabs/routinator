@@ -697,22 +697,8 @@ impl<'a> SnapshotBuilder<'a> {
     ) {
         metrics.update(|m| m.router_keys.valid += key.asns.asn_count());
 
-        // Is the whole key ID to be filtered?
-        if self.exceptions.drop_router_key_id(key.key_id) {
-            metrics.update(
-                |m| m.router_keys.locally_filtered += key.asns.asn_count()
-            );
-            return
-        }
-
         // Now for each ASN.
         for asn in key.asns.iter_asns() {
-            // Is this key filtered locally?
-            if self.exceptions.drop_router_key(key.key_id, asn) {
-                metrics.update(|m| m.router_keys.locally_filtered += 1);
-                continue
-            }
-
             // Insert the key. If we have it already, we need to
             // update its info instead.
             match self.router_keys.entry(
@@ -772,11 +758,9 @@ impl<'a> SnapshotBuilder<'a> {
         afi: Afi,
         providers: SmallAsnSet,
         info: Arc<PublishInfo>,
-        metrics: &mut AllVrpMetrics,
+        _metrics: &mut AllVrpMetrics,
     ) -> bool {
-        if self.exceptions.drop_aspa(customer, afi) {
-            metrics.update(|m| m.aspas.inc_locally_filtered(afi));
-        }
+        // SLURM filtering goes here ...
 
         match self.aspas.entry((customer, afi)) {
             hash_map::Entry::Vacant(entry) => {
