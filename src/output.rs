@@ -1164,6 +1164,11 @@ impl Summary {
                 tal.payload.router_keys.valid,
                 tal.payload.router_keys.contributed
             ))?;
+            line(format_args!(
+                "           ASPAs: {:7} verified, {:7} final.",
+                tal.publication.valid_aspas,
+                tal.payload.aspas.contributed
+            ))?;
         }
         line(format_args!("total: "))?;
         line(format_args!(
@@ -1183,7 +1188,13 @@ impl Summary {
             "     router keys: {:7} verified, {:7} final.",
             metrics.payload.router_keys.valid,
             metrics.payload.router_keys.contributed
-        ))
+        ))?;
+        line(format_args!(
+            "           ASPAs: {:7} verified, {:7} final.",
+            metrics.publication.valid_aspas,
+            metrics.payload.aspas.contributed
+        ))?;
+        Ok(())
     }
 
     pub fn log(metrics: &Metrics) {
