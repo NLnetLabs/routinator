@@ -505,6 +505,13 @@ These can be requested by providing different commands on the command line.
                   information about the source of the key is contained in
                   *source*.
 
+                  The *aspa* member contains an array of objects with four
+                  members each: The *customer* member contains the customer
+                  ASN, *afi* the address family as either "ipv4" or "ipv6",
+                  *providers* contains the provider ASN set as an array, and
+                  information about the source of the data can be found in
+                  *source*.
+
                   This source information the same for route origins and
                   router keys. It consists of an array. Each item in that
                   array is an object providing details of a source.
