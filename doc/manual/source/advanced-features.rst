@@ -51,6 +51,7 @@ in the :term:`jsonext` output format, e.g.:
                 }
             }]
         }],
+        "routerKeys": [],
         "aspas": [{
           "customer": "AS64496",
           "afi": "ipv6",
@@ -137,7 +138,8 @@ in the :term:`SLURM` and :term:`jsonext` output format, e.g.:
                     "notAfter": "2022-08-06T00:00:00Z"
                 }
             }]
-        }]
+        }],
+        "aspas": []
     }
 
 .. versionadded:: 0.11.0
