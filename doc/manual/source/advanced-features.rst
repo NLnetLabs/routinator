@@ -142,6 +142,16 @@ in the :term:`SLURM` and :term:`jsonext` output format, e.g.:
         "aspas": []
     }
 
+.. seealso::
+
+    - `BGPsec Protocol Specification
+      <https://datatracker.ietf.org/doc/html/rfc8205.html>`_
+    - `A Profile for BGPsec Router Certificates, Certificate Revocation
+      Lists, and Certification Requests
+      <https://datatracker.ietf.org/doc/html/rfc8209.html>`_ 
+    - `Manage BGPSec Router Certificates with Krill
+      <https://krill.docs.nlnetlabs.nl/en/stable/manage-bgpsec.html>`_
+
 .. versionadded:: 0.11.0
 
 Resource Tagged Attestations
