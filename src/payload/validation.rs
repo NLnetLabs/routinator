@@ -428,19 +428,32 @@ impl PubPoint {
         aspa: AsProviderAttestation,
         info: Arc<PublishInfo>,
     ) {
+        let v4_providers = SmallAsnSet::from_iter(
+            aspa.provider_as_set().iter().filter_map(|item| {
+                item.includes_v4().then(|| item.provider())
+            })
+        );
+        let v6_providers = SmallAsnSet::from_iter(
+            aspa.provider_as_set().iter().filter_map(|item| {
+                item.includes_v4().then(|| item.provider())
+            })
+        );
+
         self.aspas.push(
             PubAspa {
                 customer: aspa.customer_as(),
-                v4_providers: SmallAsnSet::from_iter(
-                    aspa.provider_as_set().iter().filter_map(|item| {
-                        item.includes_v4().then(|| item.provider())
-                    })
-                ),
-                v6_providers: SmallAsnSet::from_iter(
-                    aspa.provider_as_set().iter().filter_map(|item| {
-                        item.includes_v6().then(|| item.provider())
-                    })
-                ),
+                v4_providers: if v4_providers.is_empty() {
+                    SmallAsnSet::from_iter([Asn::from(0)])
+                }
+                else {
+                    v4_providers
+                },
+                v6_providers: if v6_providers.is_empty() {
+                    SmallAsnSet::from_iter([Asn::from(0)])
+                }
+                else {
+                    v6_providers
+                },
                 info
             }
         )
