@@ -34,8 +34,8 @@ pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.16.12"
-routecore       = { git = "https://github.com/NLnetLabs/routecore.git", branch = "arbitrary" }
-rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch = "arbitrary", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+routecore       = { git = "https://github.com/NLnetLabs/routecore.git" }
+rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 rustls-pemfile  = "1"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"

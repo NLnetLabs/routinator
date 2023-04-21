@@ -1191,7 +1191,7 @@ dependencies = [
 [[package]]
 name = "routecore"
 version = "0.2.1-dev"
-source = "git+https://github.com/NLnetLabs/routecore.git?branch=arbitrary#87e9d35e8fae09243357267676f4787e3e3b5137"
+source = "git+https://github.com/NLnetLabs/routecore.git#9f621f81293fcb30d13fa976515b44666053f313"
 dependencies = [
  "arbitrary",
  "bcder",
@@ -1252,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.16.1-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=arbitrary#238a60cf519322a37d0adbc40174509bcf977000"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#89739f30054ac711d745162304481e390d5a8163"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
