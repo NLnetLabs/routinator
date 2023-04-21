@@ -147,10 +147,11 @@ generated in a wide range of output formats for various use cases.
           The *aspas* member contains an array of objects with
           four elements each: 
           
-            - *customer*
-            - *afi*
-            - *providers*
-            - *source*
+            - *customer* contains the customer ASN,
+            - *afi* specifies the address family as either "ipv4" or "ipv6",
+            - *providers* contains the provider ASN set as an array, and
+            - *source* contains information about the source of the
+              authorisation.
 
           This source information the same for route origins, router keys and
           aspas. It consists of an array. Each item in that array is an

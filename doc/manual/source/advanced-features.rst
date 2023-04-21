@@ -5,6 +5,12 @@ Routinator offers several advanced features to let operators gain operational
 experience with some of the ongoing work in the Internet Engineering Task
 Force to improve and augment RPKI. 
 
+.. note:: 
+
+    The Hosted RPKI systems that the RIRs offer currently only support the
+    creation of ROAs. To manage ASPA, BGPsec or other RPKI objects, you can
+    run Delegated RPKI with `Krill <https://krill.docs.nlnetlabs.nl/>`_. 
+
 ASPA
 ----
 
@@ -14,12 +20,6 @@ know from ROAs to the propagation of routes. An ASPA is a digitally signed
 object through which the holder of an Autonomous System (AS) can authorise
 one or more other ASes as its upstream providers. When validated, an ASPA's
 content can be used for detection and mitigation of route leaks.
-
-.. note:: 
-
-    Currently, none of the Hosted RPKI systems that the RIRs offer support
-    the creation of ASPA objects, but you can run Delegated RPKI with Krill
-    instead to :ref:`manage ASPAs<krill:manage-aspas>`. 
 
 You can let Routinator process ASPA objects and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-aspa` option
@@ -51,6 +51,7 @@ in the :term:`jsonext` output format, e.g.:
                 }
             }]
         }],
+        "routerKeys": [],
         "aspas": [{
           "customer": "AS64496",
           "afi": "ipv6",
@@ -137,8 +138,19 @@ in the :term:`SLURM` and :term:`jsonext` output format, e.g.:
                     "notAfter": "2022-08-06T00:00:00Z"
                 }
             }]
-        }]
+        }],
+        "aspas": []
     }
+
+.. seealso::
+
+    - `BGPsec Protocol Specification
+      <https://datatracker.ietf.org/doc/html/rfc8205.html>`_
+    - `A Profile for BGPsec Router Certificates, Certificate Revocation
+      Lists, and Certification Requests
+      <https://datatracker.ietf.org/doc/html/rfc8209.html>`_ 
+    - `Manage BGPSec Router Certificates with Krill
+      <https://krill.docs.nlnetlabs.nl/en/stable/manage-bgpsec.html>`_
 
 .. versionadded:: 0.11.0
 
