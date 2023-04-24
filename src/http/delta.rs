@@ -147,12 +147,12 @@ struct DeltaStream {
     /// If this is `None`, there is nothing left to do.
     withdraw: Option<DeltaArcIter>,
 
-    /// Is the next appened item the first item in a list?
+    /// Is the next appended item the first item in a list?
     first: bool,
 }
 
 impl DeltaStream {
-    /// Creats a new delta stream.
+    /// Creates a new delta stream.
     fn new(
         session: u64, from_serial: Serial, to_serial: Serial,
         delta: Arc<PayloadDelta>

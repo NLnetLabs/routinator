@@ -145,7 +145,7 @@ impl<'a> ProcessRun for &'a ValidationReport {
 
 /// Collects all the data for a publication point.
 ///
-/// This type is used to during validation of a publication point. It collects
+/// This type is used during validation of a publication point. It collects
 /// all the published data and eventually contributes it to a validation
 /// report.
 #[derive(Clone, Debug)]
@@ -612,7 +612,8 @@ impl<'a> SnapshotBuilder<'a> {
             origins: Default::default(),
             router_keys: Default::default(),
             aspas: Default::default(),
-            rejected, unsafe_vrps,
+            rejected,
+            unsafe_vrps,
             unsafe_vrps_present: false,
             refresh: None,
             exceptions,
@@ -861,7 +862,7 @@ impl<'a> SnapshotBuilder<'a> {
                         }
                         Err(_) => {
                             warn!(
-                                "Ignoring excessivly large ASPA for {}/{} \
+                                "Ignoring excessively large ASPA for {}/{} \
                                  with {} provider ASNs.",
                                 customer, afi, providers.len()
                             );

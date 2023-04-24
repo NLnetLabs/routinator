@@ -179,7 +179,7 @@ struct StandardDelta<P> {
     /// This list is ordered by payload.
     items: Vec<(P, Action)>,
 
-    /// The number of annouced items.
+    /// The number of announced items.
     announce_len: usize,
 
     /// The number of withdrawn items.
@@ -376,7 +376,7 @@ where P: arbitrary::Arbitrary<'a> + Ord {
 /// A delta for ASPA payload.
 ///
 /// Deltas for ASPAs are a bit complicated because the set of ASPAs is
-/// actually a map assinging the provider ASN set to a key of the pair of
+/// actually a map assigning the provider ASN set to a key of the pair of
 /// customer ASN and address family (‘AFI’). The ‘announce’ action of a delta
 /// between two of those maps covers both adding a new key and updating the
 /// provider set of an existing key.
@@ -388,7 +388,7 @@ struct AspaDelta {
     /// The items of the delta.
     items: Vec<(Aspa, AspaAction)>,
 
-    /// The number of annouced and updated items.
+    /// The number of announced and updated items.
     announce_len: usize,
 
     /// The number of withdrawn items.
@@ -558,7 +558,7 @@ impl AspaDelta {
                             }
                         }
 
-                        // Withdraw then updated. Can’t happend, but we treat
+                        // Withdraw then updated. Can’t happen, but we treat
                         // the update as an announce.
                         (Withdraw(ref p), Update(_)) => {
                             if *p == new_item.0.providers {
@@ -569,7 +569,7 @@ impl AspaDelta {
                             }
                         }
 
-                        // Withdrawn twice. Can’t happend but whatever.
+                        // Withdrawn twice. Can’t happen but whatever.
                         (Withdraw(ref p), Withdraw(_)) => {
                             Some(Withdraw(p.clone()))
                         }
@@ -701,9 +701,9 @@ enum AspaAction {
     /// This simply becomes `Action::Announce`.
     Announce,
 
-    /// Update a the providers of an existing key.
+    /// Update the providers of an existing key.
     ///
-    /// This is becomes `Action::Announce`.
+    /// This becomes `Action::Announce`.
     ///
     /// The value is the providers before the update.
     Update(ProviderAsns),

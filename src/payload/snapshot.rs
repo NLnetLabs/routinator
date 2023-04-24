@@ -80,7 +80,7 @@ impl PayloadSnapshot {
         self.refresh
     }
 
-    /// Returns an iteratore over all payload.
+    /// Returns an iterator over all payload.
     pub fn payload(
         &self
     ) -> impl Iterator<Item = PayloadRef> {
@@ -112,7 +112,7 @@ impl PayloadSnapshot {
         self.origins.iter_payload()
     }
 
-    /// Returns an interator over the router keys.
+    /// Returns an iterator over the router keys.
     pub fn router_keys(
         &self
     ) -> impl Iterator<Item = (&RouterKey, &PayloadInfo)> + '_ {
@@ -126,7 +126,7 @@ impl PayloadSnapshot {
         self.router_keys.iter_payload()
     }
 
-    /// Returns an interator over the AS providers.
+    /// Returns an iterator over the AS providers.
     pub fn aspas(
         &self
     ) -> impl Iterator<Item = (&Aspa, &PayloadInfo)> + '_ {
@@ -371,7 +371,7 @@ pub struct SnapshotArcRouterKeyIter {
     /// The snapshot we iterate over.
     snapshot: Arc<PayloadSnapshot>,
 
-    /// The index of the next item in ther outer key list.
+    /// The index of the next item in the router key list.
     next: usize
 }
 
@@ -401,7 +401,7 @@ pub struct SnapshotArcAspaIter {
     /// The snapshot we iterate over.
     snapshot: Arc<PayloadSnapshot>,
 
-    /// The index of the next item in ther outer key list.
+    /// The index of the next item in the AS providers list.
     next: usize
 }
 
