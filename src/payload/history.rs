@@ -1,7 +1,7 @@
 //! The collection of data used to serve our clients.
 //!
 //! This is a private module. Its public types are re-exported by the parent
-//! as neeeded.
+//! as needed.
 
 use std::{cmp, ops};
 use std::collections::VecDeque;
@@ -81,7 +81,7 @@ impl SharedHistory {
                 delta.announce_len(),
                 delta.withdraw_len(),
             );
-            history.current = Some( snapshot.into());
+            history.current = Some(snapshot.into());
             history.push_delta(delta);
             true
         }
@@ -196,7 +196,7 @@ pub struct PayloadHistory {
 
     /// A queue with a number of deltas.
     ///
-    /// The newest delta will be at the fron of the queue. This delta will
+    /// The newest delta will be at the front of the queue. This delta will
     /// also deliver the current serial number.
     deltas: VecDeque<Arc<PayloadDelta>>,
 
@@ -277,14 +277,14 @@ impl PayloadHistory {
 
     /// Returns whether the history is already active.
     ///
-    /// The history becoes active once the first validation has finished.
+    /// The history becomes active once the first validation has finished.
     pub fn is_active(&self) -> bool {
         self.current.is_some()
     }
 
     /// Returns a shareable reference to the current payload snapshot.
     ///
-    /// If the history isn’t active yet, returns `None`.
+    /// If the history isn't active yet, returns `None`.
     pub fn current(&self) -> Option<Arc<PayloadSnapshot>> {
         self.current.clone()
     }
@@ -312,12 +312,12 @@ impl PayloadHistory {
 
     /// Returns a delta from the given serial number to the current set.
     ///
-    /// The serial is what the requestor has last seen. The method produces
+    /// The serial is what the requester has last seen. The method produces
     /// a delta from that version to the current version if it can. If it
-    /// can’t, this is either because it doesn’t have enough history data or
+    /// can't, this is either because it doesn't have enough history data or
     /// because the serial is actually in the future.
     ///
-    /// The method returns an arc’d delta so it can return the delta from the
+    /// The method returns an arc'd delta so it can return the delta from the
     /// previous version which is the most likely scenario for RTR.
     pub fn delta_since(&self, serial: Serial) -> Option<Arc<PayloadDelta>> {
         // First, handle all special cases that won’t result in us iterating

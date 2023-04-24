@@ -2,7 +2,7 @@
 //!
 //! This module contains types to collect data during a validation run –
 //! the [`ValidationReport`] – and store the resulting data set afterwards.
-//! A full such data sets is called a [`PayloadSnapshot`] with differences
+//! A full such data set is called a [`PayloadSnapshot`] with differences
 //! between consecutive such snapshots available as [`PayloadDelta`]. A
 //! collection of the two plus additional information is the
 //! [`PayloadHistory`] or, wrapped in an arc, [`SharedHistory`].

@@ -1,6 +1,6 @@
 //! Information about where payload came from.
 //!
-//! This is a private module. Its public types are re-rexported by the parent.
+//! This is a private module. Its public types are re-exported by the parent.
 
 use std::sync::Arc;
 use rpki::uri;
@@ -147,7 +147,7 @@ pub struct PublishInfo {
 }
 
 impl PublishInfo {
-    /// Creates a new origin info from the EE certificate of a ROA
+    /// Creates a new origin info from the EE certificate of a ROA.
     pub fn signed_object(cert: &ResourceCert, ca_validity: Validity) -> Self {
         PublishInfo {
             tal: cert.tal().clone(),
