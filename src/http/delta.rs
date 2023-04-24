@@ -284,6 +284,9 @@ impl Iterator for DeltaStream {
 }
 
 impl DeltaStream {
+    /// Appends the next announcement to `vec`.
+    ///
+    /// Returns whether the method should be called again.
     fn next_announce(&mut self, vec: &mut Vec<u8>) -> bool {
         if let Some(announce) = self.announce.as_mut() {
             while let Some((payload, action)) = announce.next() {
@@ -300,9 +303,15 @@ impl DeltaStream {
         Self::append_separator(vec);
         self.announce = None;
         self.first = true;
+
+        // Request to be called again. This only means that if we crossed
+        // the 64k boundary, we won’t add the first withdrawal just yet.
         true
     }
 
+    /// Appends the next withdrawal to `vec`.
+    ///
+    /// Returns whether the method should be called again.
     fn next_withdraw(&mut self, vec: &mut Vec<u8>) -> bool {
         if let Some(withdraw) = self.withdraw.as_mut() {
             while let Some((payload, action)) = withdraw.next() {
@@ -318,7 +327,7 @@ impl DeltaStream {
         }
         Self::append_footer(vec);
         self.withdraw = None;
-        true
+        false
     }
 }
 

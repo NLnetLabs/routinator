@@ -9,7 +9,10 @@ fuzz_target!{|data: [PayloadSnapshot; N]| {
     let mut steps = Vec::new();
     for i in 0..N - 1 {
         if let Some(delta) = PayloadDelta::construct(
-            &data[i], &data[i + 1], 1.into()
+            &data[i], &data[i + 1],
+            // We don’t care about serial numbers here, so just set it to
+            // whatever.
+            1.into()
         ) {
             steps.push(delta);
         }

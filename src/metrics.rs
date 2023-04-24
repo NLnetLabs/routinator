@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, TimeZone, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
-use rpki::rtr::payload::{Afi, PayloadType};
+use rpki::rtr::payload::Afi;
 use rpki::rtr::state::Serial;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -415,15 +415,6 @@ impl PayloadMetrics {
     pub fn vrps(&self) -> &VrpMetrics {
         &self.origins
     }
-
-    /// Returns a mutable reference to the metrics for the given payload.
-    pub fn for_payload(&mut self, payload: PayloadType) -> &mut VrpMetrics {
-        match payload {
-            PayloadType::Origin => &mut self.v6_origins,
-            PayloadType::RouterKey => &mut self.router_keys,
-            PayloadType::Aspa => unimplemented!()
-        }
-    }
 }
 
 impl ops::Add for PayloadMetrics {
@@ -505,9 +496,9 @@ impl<'a> ops::AddAssign<&'a Self> for VrpMetrics {
 impl<'a> ops::AddAssign<&'a AspaMetrics> for VrpMetrics {
     fn add_assign(&mut self, other: &'a AspaMetrics) {
         self.valid += other.valid;
-        self.locally_filtered += cmp::max(
-            other.locally_filtered_v4, other.locally_filtered_v6
-        );
+        self.locally_filtered += 
+            other.locally_filtered_v4 + other.locally_filtered_v6
+        ;
         self.duplicate += other.duplicate;
         self.contributed += other.contributed;
     }

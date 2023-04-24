@@ -261,7 +261,7 @@ fn object_metrics<'a>(
             .label("state", "valid")
             .value(metrics.valid_aspas);
         target.multi(metric).label(group.label(), name)
-            .label("type", "asoa")
+            .label("type", "aspa")
             .label("state", "invalid")
             .value(metrics.invalid_aspas);
 

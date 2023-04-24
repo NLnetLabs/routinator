@@ -137,13 +137,20 @@ impl LocalExceptions {
 
     pub fn origin_assertions(
         &self
-    ) -> impl Iterator<Item = (RouteOrigin, Arc<ExceptionInfo>)> {
-        std::iter::empty()
+    ) -> impl Iterator<Item = (RouteOrigin, Arc<ExceptionInfo>)> + '_ {
+        self.assertions.iter().filter_map(|(payload, info)| {
+            if let Payload::Origin(origin) = payload {
+                Some((*origin, info.clone()))
+            }
+            else {
+                None
+            }
+        })
     }
 
     pub fn router_key_assertions(
         &self
-    ) -> impl Iterator<Item = (RouterKey, Arc<ExceptionInfo>)> {
+    ) -> impl Iterator<Item = (RouterKey, Arc<ExceptionInfo>)> + '_ {
         std::iter::empty()
     }
 }

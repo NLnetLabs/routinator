@@ -247,7 +247,7 @@ impl FromStr for OutputFormat {
 #[derive(Clone, Debug, Default)]
 pub struct Selection {
     /// The list of selection conditions.
-    origins: Vec<SelectResource>,
+    resources: Vec<SelectResource>,
 
     /// Should we include more specific prefixes in the output?
     more_specifics: bool,
@@ -274,12 +274,12 @@ impl Selection {
         let mut res = Self::default();
         for (key, value) in form_urlencoded::parse(query.as_ref()) {
             if key == "select-prefix" || key == "filter-prefix" {
-                res.origins.push(
+                res.resources.push(
                     SelectResource::Prefix(addr::Prefix::from_str(&value)?)
                 );
             }
             else if key == "select-asn" || key == "filter-asn" {
-                res.origins.push(
+                res.resources.push(
                     SelectResource::Asn(
                         Asn::from_str(&value).map_err(|_| QueryError)?
                     )
@@ -303,18 +303,18 @@ impl Selection {
     }
 
     /// Add an origin ASN to select.
-    pub fn push_origin_asn(&mut self, asn: Asn) {
-        self.origins.push(SelectResource::Asn(asn))
+    pub fn push_asn(&mut self, asn: Asn) {
+        self.resources.push(SelectResource::Asn(asn))
     }
 
     /// Add a origin prefix to select.
-    pub fn push_origin_prefix(&mut self, prefix: addr::Prefix) {
-        self.origins.push(SelectResource::Prefix(prefix))
+    pub fn push_prefix(&mut self, prefix: addr::Prefix) {
+        self.resources.push(SelectResource::Prefix(prefix))
     }
 
     /// Returns whether an origin should be included in output.
     pub fn include_origin(&self, origin: RouteOrigin) -> bool {
-        for select in &self.origins {
+        for select in &self.resources {
             if select.include_origin(origin, self.more_specifics) {
                 return true
             }
@@ -324,7 +324,7 @@ impl Selection {
 
     /// Returns whether a router key should be included in output.
     pub fn include_router_key(&self, key: &RouterKey) -> bool {
-        for select in &self.origins {
+        for select in &self.resources {
             if select.include_router_key(key) {
                 return true
             }
@@ -334,7 +334,7 @@ impl Selection {
 
     /// Returns whether an ASPA should be included in output.
     pub fn include_aspa(&self, aspa: &Aspa) -> bool {
-        for select in &self.origins {
+        for select in &self.resources {
             if select.include_aspa(aspa) {
                 return true
             }

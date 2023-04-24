@@ -475,12 +475,12 @@ impl Vrps {
             let mut selection = output::Selection::new();
             if let Some(list) = args.select_prefix {
                 for value in list {
-                    selection.push_origin_prefix(value)
+                    selection.push_prefix(value)
                 }
             }
             if let Some(list) = args.select_asn {
                 for value in list {
-                    selection.push_origin_asn(value)
+                    selection.push_asn(value)
                 }
             }
             selection.set_more_specifics(args.more_specifics);

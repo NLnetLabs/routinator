@@ -620,7 +620,7 @@ fn json_payload_metrics(target: &mut JsonBuilder, payload: &PayloadMetrics) {
             target.member_raw("totalIPv6", payload.aspas.valid_v6);
             // XXX locallyFiltered: We don’t do filtering yet.
             target.member_raw("duplicate", payload.aspas.duplicate);
-            target.member_raw("final", payload.aspas.duplicate);
+            target.member_raw("final", payload.aspas.contributed);
         })
     });
 }

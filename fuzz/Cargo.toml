@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-rpki            = { path = "../../rpki-rs", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 
 [dependencies.routinator]
 path = ".."

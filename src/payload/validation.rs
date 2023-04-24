@@ -435,7 +435,7 @@ impl PubPoint {
         );
         let v6_providers = SmallAsnSet::from_iter(
             aspa.provider_as_set().iter().filter_map(|item| {
-                item.includes_v4().then(|| item.provider())
+                item.includes_v6().then(|| item.provider())
             })
         );
 
@@ -463,9 +463,13 @@ impl PubPoint {
 
 //------------ PubRouteOrigin ------------------------------------------------
 
+/// The payload of a published route origin.
 #[derive(Clone, Debug)]
 pub struct PubRouteOrigin {
+    /// The route origin to be published.
     pub origin: RouteOrigin,
+
+    /// Information on the source of the payload.
     pub info: Arc<PublishInfo>,
 }
 
@@ -475,9 +479,16 @@ pub struct PubRouteOrigin {
 /// The raw information from a router key certificate.
 #[derive(Clone, Debug)]
 pub struct PubRouterKey {
+    /// The ASNs which use the router key.
     pub asns: AsBlocks,
+
+    /// The key identifier.
     pub key_id: KeyIdentifier,
+
+    /// The key itself.
     pub key_info: RouterKeyInfo,
+
+    /// Information on the source of the payload.
     pub info: Arc<PublishInfo>,
 }
 
@@ -487,9 +498,16 @@ pub struct PubRouterKey {
 /// The raw information from a published ASPA object.
 #[derive(Clone, Debug)]
 pub struct PubAspa {
+    /// The customer AS of the ASPA.
     pub customer: Asn,
+
+    /// The set of IPv4 providers.
     pub v4_providers: SmallAsnSet,
+
+    /// The set of IPv6 providers.
     pub v6_providers: SmallAsnSet,
+
+    /// Information on the source of the payload.
     pub info: Arc<PublishInfo>,
 }
 
