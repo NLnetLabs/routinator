@@ -2,17 +2,33 @@
 
 ## Unreleased next version
 
+New
+
+* Added support for ASPA. Processing needs to be enabled via the new option
+  `enable-aspa` which is off by default. ([#847])
+* Added support for version 2 of the RTR protocol. This primarly means
+  support for the ASPA payload type. ([#847])
+
 Breaking Changes
 
-New
+* A new field `aspa` was added to the jsonext format. See the manual page
+  for more information. This field is present even if ASPA has not been
+  enabled. ([#847])
+* A number of ASPA-related fields have been added to all metrics and
+  status formats. These fields may be present even if ASPA has not been
+  enabled. ([#847])
 
 Bug Fixes
 
+* Fixed a bug in the RTR server where it would include router key PDUs
+  even if the negotiated protocol version was 0. (via [rpki-rs #250])
+
 Other Changes
 
-* The minimal required Rust version has been increased to 1.64. ([#845])
+* The minimal required Rust version has been increased to 1.65. ([#847])
 
-[#845]: https://github.com/NLnetLabs/routinator/pull/845
+[#847]: https://github.com/NLnetLabs/routinator/pull/847
+[rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 
 ## 0.12.1 ‘Plan uw reis in de app’
