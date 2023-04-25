@@ -50,8 +50,8 @@ though not all of them are equally supported. The official `Rust Platform
 Support`_ page provides an overview of the various support levels.
 
 While some system distributions include Rust as system packages, Routinator
-relies on a relatively new version of Rust, currently 1.65.0 or newer. We
-therefore suggest to use the canonical Rust installation via a tool called
+relies on a relatively new version of Rust, currently |rustversion| or newer.
+We therefore suggest to use the canonical Rust installation via a tool called
 :program:`rustup`.
 
 Assuming you already have :program:`curl` installed, you can install

@@ -36,6 +36,11 @@ semver = toml.load('../../../Cargo.toml')
 
 # The short X.Y version
 version = semver.get('package').get('version')
+rustversion = semver.get('package').get('rust-version')
+rst_epilog = f"""
+.. |rustversion| replace:: {rustversion}
+"""
+
 # The full version, including alpha/beta/rc tags
 release = version
 
