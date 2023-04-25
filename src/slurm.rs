@@ -5,7 +5,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
-use rpki::rtr::payload::{Payload, RouteOrigin};
+use rpki::rtr::payload::{Payload, RouteOrigin, RouterKey};
 use rpki::slurm::{PrefixFilter, SlurmFile};
 use crate::config::Config;
 use crate::error::Failed;
@@ -114,6 +114,10 @@ impl LocalExceptions {
         );
     }
 
+    pub fn drop_origin(&self, origin: RouteOrigin) -> bool {
+        !self.keep_payload(&Payload::Origin(origin))
+    }
+
     pub fn keep_payload(&self, payload: &Payload) -> bool {
         for filter in &self.filters {
             if filter.drop_payload(payload) {
@@ -130,6 +134,25 @@ impl LocalExceptions {
             (payload, info.clone())
         })
     }
+
+    pub fn origin_assertions(
+        &self
+    ) -> impl Iterator<Item = (RouteOrigin, Arc<ExceptionInfo>)> + '_ {
+        self.assertions.iter().filter_map(|(payload, info)| {
+            if let Payload::Origin(origin) = payload {
+                Some((*origin, info.clone()))
+            }
+            else {
+                None
+            }
+        })
+    }
+
+    pub fn router_key_assertions(
+        &self
+    ) -> impl Iterator<Item = (RouterKey, Arc<ExceptionInfo>)> + '_ {
+        std::iter::empty()
+    }
 }
 
 
@@ -139,6 +162,25 @@ impl LocalExceptions {
 pub struct ExceptionInfo {
     pub path: Option<Arc<Path>>,
     pub comment: Option<String>,
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for ExceptionInfo {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'a>
+    ) -> arbitrary::Result<Self> {
+        Ok(Self {
+            path: if bool::arbitrary(u)? {
+                Some(
+                    std::path::PathBuf::arbitrary(u)?.into_boxed_path().into()
+                )
+            }
+            else {
+                None
+            },
+            comment: Option::arbitrary(u)?,
+        })
+    }
 }
 
 

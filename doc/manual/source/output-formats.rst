@@ -108,17 +108,20 @@ generated in a wide range of output formats for various use cases.
              Add the *metadata* member
 
     jsonext
-          The list is placed into a JSON object with three members:
+          The list is placed into a JSON object with four members:
 
             - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
-              :ref:`advanced-features:bgpsec` router keys, and 
+              :ref:`advanced-features:bgpsec` router keys,
+            - *aspas* contains the validated :ref:`advanced-features:aspa` 
+              objects, and 
             - *metadata* contains some information about the validation run
               itself.
 
-          All three members are always present, even if
-          :ref:`advanced-features:bgpsec` has not been enabled. In this case,
-          *routerKeys* will simply be empty.
+          All four members are always present, even if
+          :ref:`advanced-features:bgpsec` and/or
+          :ref:`advanced-features:aspa` have not been enabled. In this case,
+          *routerKeys* and *aspas* will simply be empty.
 
           The *roas* member contains an array of objects with four elements
           each: 
@@ -141,12 +144,22 @@ generated in a wide range of output formats for various use cases.
             - *source* contains extended information about the source of the
               key.
 
-          This source information the same for route origins and router keys.
-          It consists of an array. Each item in that array is an object
-          providing details of a source. The object will have a *type* of
-          *roa* if it was derived from a valid ROA object, *cer* if it was
-          derived from a published router certificate, or *exception* if it
-          was an assertion in a local exception file.
+          The *aspas* member contains an array of objects with
+          four elements each: 
+          
+            - *customer* contains the customer ASN,
+            - *afi* specifies the address family as either "ipv4" or "ipv6",
+            - *providers* contains the provider ASN set as an array, and
+            - *source* contains information about the source of the
+              authorisation.
+
+          This source information the same for route origins, router keys and
+          aspas. It consists of an array. Each item in that array is an
+          object providing details of a source. The object will have a *type*
+          of *roa* if it was derived from a valid ROA object, *cer* if it was
+          derived from a published router certificate, *aspa* if it was
+          derived from an ASPA object, or *exception* if it was an assertion
+          in a local exception file.
 
           For RPKI objects, *tal* provides the name of the trust anchor
           locator the object was published under, *uri* provides the rsync
@@ -211,6 +224,24 @@ generated in a wide range of output formats for various use cases.
                       "notAfter": "2023-02-24T12:31:01Z"
                     }
                   }]
+                }],
+                "aspas": [{
+                  "customer": "AS64496",
+                  "afi": "ipv6",
+                  "providers": ["AS64499", "AS64511", "AS65551"],
+                  "source": [{
+                      "type": "aspa",
+                      "uri": "rsync://acmecorp.example.net/0/AS64496.asa",
+                      "tal": "ripe",
+                      "validity": {
+                          "notBefore": "2023-04-13T07:21:24Z",
+                          "notAfter": "2024-04-11T07:26:24Z"
+                      },
+                      "chainValidity": {
+                          "notBefore": "2023-04-18T14:32:13Z",
+                          "notAfter": "2024-04-11T07:26:24Z"
+                        }
+                    }]
                 }]
               }
             
@@ -219,6 +250,8 @@ generated in a wide range of output formats for various use cases.
              Add metadata
           .. versionchanged:: 0.11.0
              Add :ref:`advanced-features:bgpsec` information
+          .. versionchanged:: 0.13.0
+             Add :ref:`advanced-features:aspa` information
 
     slurm
           The list is formatted as locally added assertions of a :doc:`local

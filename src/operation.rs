@@ -475,12 +475,12 @@ impl Vrps {
             let mut selection = output::Selection::new();
             if let Some(list) = args.select_prefix {
                 for value in list {
-                    selection.push_origin_prefix(value)
+                    selection.push_prefix(value)
                 }
             }
             if let Some(list) = args.select_asn {
                 for value in list {
-                    selection.push_origin_asn(value)
+                    selection.push_asn(value)
                 }
             }
             selection.set_more_specifics(args.more_specifics);
@@ -511,12 +511,7 @@ impl Vrps {
         let (report, mut metrics) = ValidationReport::process(
             &engine, process.config(),
         )?;
-        let vrps = PayloadSnapshot::from_report(
-            report,
-            &exceptions,
-            &mut metrics,
-            process.config().unsafe_vrps,
-        );
+        let vrps = report.into_snapshot( &exceptions, &mut metrics);
         let res = match self.output {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
@@ -770,11 +765,9 @@ impl Validate {
         let (report, mut metrics) = ValidationReport::process(
             &engine, process.config(),
         )?;
-        let snapshot = PayloadSnapshot::from_report(
-            report,
+        let snapshot = report.into_snapshot(
             &LocalExceptions::load(process.config(), false)?,
             &mut metrics,
-            process.config().unsafe_vrps,
         );
         if self.complete && !metrics.rsync_complete() {
             error!("Failed: Incomplete update.");

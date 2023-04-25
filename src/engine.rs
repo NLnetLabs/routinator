@@ -30,6 +30,7 @@ use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
 use log::{debug, error, info, warn};
 use rpki::crypto::keys::KeyIdentifier;
+use rpki::repository::aspa::{Aspa, AsProviderAttestation};
 use rpki::repository::cert::{Cert, KeyUsage, ResourceCert};
 use rpki::repository::crl::Crl;
 use rpki::repository::error::{InspectionError, ValidationError};
@@ -1221,14 +1222,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         else if uri.ends_with(".roa") {
             self.process_roa(uri, content, manifest)?;
         }
+        else if uri.ends_with(".asa") {
+            self.process_aspa(uri, content, manifest)?;
+        }
+        else if uri.ends_with(".gbr") {
+            self.process_gbr(uri, content, manifest)?;
+        }
         else if uri.ends_with(".crl") {
             if *uri != manifest.crl_uri {
                 warn!("{}: stray CRL.", uri);
                 manifest.metrics.stray_crls += 1;
             }
-        }
-        else if uri.ends_with(".gbr") {
-            self.process_gbr(uri, content, manifest)?;
         }
         else {
             manifest.metrics.others += 1;
@@ -1379,6 +1383,38 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_roas += 1;
+                warn!("{}: {}.", uri, err)
+            }
+        }
+        Ok(())
+    }
+
+    /// Process an ASPA object.
+    fn process_aspa(
+        &mut self, uri: &uri::Rsync, content: Bytes,
+        manifest: &mut ValidPointManifest,
+    ) -> Result<(), Failed> {
+        let aspa = match Aspa::decode(
+            content, self.run.validation.strict
+        ) {
+            Ok(aspa) => aspa,
+            Err(err) => {
+                warn!("{}: {}.", uri, err);
+                manifest.metrics.invalid_aspas += 1;
+                return Ok(())
+            }
+        };
+        match aspa.process(
+            self.cert.cert(),
+            self.run.validation.strict,
+            |cert| manifest.check_crl(cert)
+        ) {
+            Ok((cert, aspa)) => {
+                manifest.metrics.valid_aspas += 1;
+                self.processor.process_aspa(uri, cert, aspa)?
+            }
+            Err(err) => {
+                manifest.metrics.invalid_aspas += 1;
                 warn!("{}: {}.", uri, err)
             }
         }
@@ -1918,6 +1954,20 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         route: RouteOriginAttestation
     ) -> Result<(), Failed> {
         let _ = (uri, cert, route);
+        Ok(())
+    }
+
+    /// Process the content of a validated ASPA object.
+    ///
+    /// The method is given both the URI and the content of the ASPA object.
+    /// If it returns an error, the entire processing run will be aborted.
+    fn process_aspa(
+        &mut self,
+        uri: &uri::Rsync,
+        cert: ResourceCert,
+        aspa: AsProviderAttestation,
+    ) -> Result<(), Failed> {
+        let _ = (uri, cert, aspa);
         Ok(())
     }
  

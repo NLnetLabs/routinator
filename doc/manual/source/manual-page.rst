@@ -344,6 +344,11 @@ The available options are:
       If this option is present, BGPsec router keys will be processed
       during validation and included in the produced data set.
 
+.. option:: --enable-aspa
+
+      If this option is present, ASPA objects will be processed
+      during validation and included in the produced data set.
+
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -498,6 +503,13 @@ These can be requested by providing different commands on the command line.
                   hexadecimal digits in *SKI*, the actual public key as a
                   Base 64 encoded string in *routerPublicKey*, and extended
                   information about the source of the key is contained in
+                  *source*.
+
+                  The *aspa* member contains an array of objects with four
+                  members each: The *customer* member contains the customer
+                  ASN, *afi* the address family as either "ipv4" or "ipv6",
+                  *providers* contains the provider ASN set as an array, and
+                  information about the source of the data can be found in
                   *source*.
 
                   This source information the same for route origins and
@@ -1136,6 +1148,11 @@ All values can be overridden via the command line options.
             A boolean value specifying whether BGPsec router keys should be
             included in the published dataset. If false or missing, no router
             keys will be included.
+
+      enable-aspa
+            A boolean value specifying whether ASPA payload should be
+            included in the published dataset. If false or missing, no ASPA
+            payload will be included.
 
       dirty
             A boolean value which, if true, specifies that unused files and

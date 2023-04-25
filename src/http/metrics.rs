@@ -257,6 +257,15 @@ fn object_metrics<'a>(
             .value(metrics.invalid_roas);
 
         target.multi(metric).label(group.label(), name)
+            .label("type", "aspa")
+            .label("state", "valid")
+            .value(metrics.valid_aspas);
+        target.multi(metric).label(group.label(), name)
+            .label("type", "aspa")
+            .label("state", "invalid")
+            .value(metrics.invalid_aspas);
+
+        target.multi(metric).label(group.label(), name)
             .label("type", "gbr")
             .label("state", "valid")
             .value(metrics.valid_gbrs);
@@ -406,6 +415,20 @@ fn payload_metrics<'a>(
                 .label("type", type_name)
                 .value(metrics.contributed);
         }
+
+        target.multi(valid_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.valid);
+        target.multi(duplicate_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.duplicate);
+        target.multi(contributed_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.contributed);
+
     }
 }
 

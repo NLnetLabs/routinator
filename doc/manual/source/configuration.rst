@@ -98,6 +98,7 @@ own:
       dirty = false
       disable-rrdp = false
       disable-rsync = false
+      enable-aspa = false
       enable-bgpsec = false
       exceptions = []
       expire = 7200
