@@ -76,12 +76,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arc-swap"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -836,17 +830,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "log-reroute"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "741a3ba679a9a1d331319dda1c7d8f204e9f6760fd867e28576a45d17048bc02"
-dependencies = [
- "arc-swap",
- "log",
- "once_cell",
-]
-
-[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1216,9 +1199,9 @@ dependencies = [
  "hyper",
  "listenfd",
  "log",
- "log-reroute",
  "nix",
  "num_cpus",
+ "once_cell",
  "pin-project-lite",
  "rand",
  "reqwest",

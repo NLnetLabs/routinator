@@ -2,12 +2,14 @@
 
 use std::{fs, io};
 use std::future::Future;
+use std::io::Write;
 use std::net::TcpListener;
 use std::path::Path;
 use std::sync::mpsc;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{error, LevelFilter};
+use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::error::Failed;
@@ -65,15 +67,10 @@ impl Process {
     /// stderr.
     fn init_logging() -> Result<(), Failed> {
         log::set_max_level(LevelFilter::Warn);
-        if let Err(err) = log_reroute::init() {
+        if let Err(err) = log::set_logger(&GLOBAL_LOGGER) {
             eprintln!("Failed to initialize logger: {}.\nAborting.", err);
             return Err(Failed)
-        };
-        let dispatch = fern::Dispatch::new()
-            .level(LevelFilter::Error)
-            .chain(io::stderr())
-            .into_log().1;
-        log_reroute::reroute_boxed(dispatch);
+        }
         Ok(())
     }
 
@@ -117,7 +114,7 @@ impl Process {
             (logger, None)
         };
 
-        log_reroute::reroute_boxed(logger.into_log().1);
+        GLOBAL_LOGGER.switch(Box::new(logger.into_log().1));
         log::set_max_level(self.config.log_level);
         Ok(res)
     }
@@ -306,6 +303,63 @@ impl Process {
     /// Runs a future to completion atop a Tokio runtime.
     pub fn block_on<F: Future>(&self, future: F) -> Result<F::Output, Failed> {
         Ok(self.runtime()?.block_on(future))
+    }
+}
+
+
+//------------ GlobalLogger --------------------------------------------------
+
+struct GlobalLogger {
+    inner: OnceCell<Box<dyn log::Log>>
+}
+
+static GLOBAL_LOGGER: GlobalLogger = GlobalLogger::new();
+
+impl GlobalLogger {
+    const fn new() -> Self {
+        GlobalLogger { inner: OnceCell::new() }
+    }
+
+    fn switch(&self, logger: Box<dyn log::Log>) {
+        if self.inner.set(logger).is_err() {
+            panic!("Tried to switch logger more than once.")
+        }
+    }
+}
+
+
+impl log::Log for GlobalLogger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        match self.inner.get() {
+            Some(logger) => logger.enabled(metadata),
+            None => true,
+        }
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        match self.inner.get() {
+            Some(logger) => logger.log(record),
+            None => {
+                if let Err(err) = writeln!(
+                    io::stderr().lock(), "[{}] {}",
+                    record.level(), record.args()
+                ) {
+                    // XXX This is (sort of) what fern does.
+                    panic!(
+                        "Error logging to stderr: {}\n\
+                         The message was: [{}] {}",
+                        err, record.level(), record.args()
+                    );
+                }
+            }
+        }
+    }
+
+    fn flush(&self) {
+        match self.inner.get() {
+            Some(logger) => logger.flush(),
+            None => { }
+        }
     }
 }
 
