@@ -1262,7 +1262,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.process_ca_cer(uri, cert, manifest, ca_task)
         }
         else {
-            self.process_ee_cer(uri, cert, manifest)
+            self.process_router_cert(uri, cert, manifest)
         }
     }
 
@@ -1335,8 +1335,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok(())
     }
 
-    /// Processes an EE certificate.
-    fn process_ee_cer(
+    /// Processes a router certificate.
+    fn process_router_cert(
         &mut self, uri: &uri::Rsync, cert: Cert,
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
@@ -1352,8 +1352,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
-        manifest.metrics.valid_ee_certs += 1;
-        self.processor.process_ee_cert(uri, cert, self.cert)?;
+        manifest.metrics.valid_router_certs += 1;
+        self.processor.process_router_cert(uri, cert, self.cert)?;
         Ok(())
     }
 
@@ -1932,11 +1932,11 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         &mut self, uri: &uri::Rsync, cert: &CaCert,
     ) -> Result<Option<Self>, Failed>;
 
-    /// Process the content of a validated EE certificate.
+    /// Process the content of a validated router certificate.
     ///
     /// The method is given both the URI and the certificate. If it
     /// returns an error, the entire processing run will be aborted.
-    fn process_ee_cert(
+    fn process_router_cert(
         &mut self, uri: &uri::Rsync, cert: Cert, ca_cert: &CaCert,
     ) -> Result<(), Failed> {
         let _ = (uri, cert, ca_cert);

@@ -189,7 +189,7 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         ))
     }
 
-    fn process_ee_cert(
+    fn process_router_cert(
         &mut self, uri: &uri::Rsync, cert: Cert, ca_cert: &CaCert,
     ) -> Result<(), Failed> {
         if !self.report.enable_bgpsec {
@@ -233,7 +233,8 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         };
         self.pub_point.update_refresh(cert.validity().not_after());
         self.pub_point.add_router_key(
-            asns, id, key, Arc::new(PublishInfo::ee_cert(&cert, uri, ca_cert))
+            asns, id, key,
+            Arc::new(PublishInfo::router_cert(&cert, uri, ca_cert)),
         );
         Ok(())
     }

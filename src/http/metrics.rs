@@ -241,7 +241,7 @@ fn object_metrics<'a>(
         target.multi(metric).label(group.label(), name)
             .label("type", "router_cert")
             .label("state", "valid")
-            .value(metrics.valid_ee_certs);
+            .value(metrics.valid_router_certs);
         target.multi(metric).label(group.label(), name)
             .label("type", "cert")
             .label("state", "invalid")

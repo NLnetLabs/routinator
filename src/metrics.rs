@@ -292,8 +292,8 @@ pub struct PublicationMetrics {
     /// The number of valid CA certificates.
     pub valid_ca_certs: u32,
 
-    /// The number of valid EE certificates.
-    pub valid_ee_certs: u32,
+    /// The number of valid router certificates.
+    pub valid_router_certs: u32,
 
     /// The number of invalid certificates.
     pub invalid_certs: u32,
@@ -352,7 +352,7 @@ impl<'a> ops::AddAssign<&'a Self> for PublicationMetrics {
         self.stray_crls += other.stray_crls;
 
         self.valid_ca_certs += other.valid_ca_certs;
-        self.valid_ee_certs += other.valid_ee_certs;
+        self.valid_router_certs += other.valid_router_certs;
         self.invalid_certs += other.invalid_certs;
         self.valid_roas += other.valid_roas;
         self.invalid_roas += other.invalid_roas;
