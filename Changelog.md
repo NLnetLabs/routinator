@@ -17,6 +17,12 @@ Breaking Changes
 * A number of ASPA-related fields have been added to all metrics and
   status formats. These fields may be present even if ASPA has not been
   enabled. ([#847])
+* Renamed functions and attributes that refer to standalone end entity
+  certificates to refer to router certificates so they don’t get confused
+  with the end entity certificates included with signed object. ([#854])
+* Renamed the JSON member that in the HTTP status API from `validEECerts`
+  to `validRouterCerts`. The old name is still available but may be
+  removed in the future. ([#854])
 
 Bug Fixes
 
@@ -25,9 +31,12 @@ Bug Fixes
 
 Other Changes
 
-* The minimal required Rust version has been increased to 1.65. ([#847])
+* The minimal required Rust version has been increased to 1.63.
+  ([#847], [#853])
 
 [#847]: https://github.com/NLnetLabs/routinator/pull/847
+[#853]: https://github.com/NLnetLabs/routinator/pull/853
+[#854]: https://github.com/NLnetLabs/routinator/pull/854
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 
