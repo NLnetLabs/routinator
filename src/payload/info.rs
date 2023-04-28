@@ -159,7 +159,9 @@ impl PublishInfo {
         }
     }
 
-    pub fn ee_cert(cert: &Cert, uri: &uri::Rsync, ca_cert: &CaCert) -> Self {
+    pub fn router_cert(
+        cert: &Cert, uri: &uri::Rsync, ca_cert: &CaCert
+    ) -> Self {
         PublishInfo {
             tal: ca_cert.cert().tal().clone(),
             uri: Some(uri.clone()),

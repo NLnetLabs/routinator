@@ -587,7 +587,11 @@ fn json_publication_metrics(
     target.member_raw("staleCRLs", metrics.stale_crls);
     target.member_raw("strayCRLs", metrics.stray_crls);
     target.member_raw("validCACerts", metrics.valid_ca_certs);
-    target.member_raw("validEECerts", metrics.valid_ee_certs);
+
+    // XXX This is deprecated and should probably be removed at some point.
+    target.member_raw("validEECerts", metrics.valid_router_certs);
+
+    target.member_raw("validRouterCerts", metrics.valid_router_certs);
     target.member_raw("invalidCerts", metrics.invalid_certs);
     target.member_raw("validROAs", metrics.valid_roas);
     target.member_raw("invalidROAs", metrics.invalid_roas);

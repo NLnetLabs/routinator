@@ -1157,7 +1157,7 @@ impl Summary {
             ))?;
             line(format_args!(
                 "    router certs: {:7} verified;",
-                tal.publication.valid_ee_certs,
+                tal.publication.valid_router_certs,
             ))?;
             line(format_args!(
                 "     router keys: {:7} verified, {:7} final.",
@@ -1182,7 +1182,7 @@ impl Summary {
         ))?;
         line(format_args!(
             "    router certs: {:7} verified;",
-            metrics.publication.valid_ee_certs,
+            metrics.publication.valid_router_certs,
         ))?;
         line(format_args!(
             "     router keys: {:7} verified, {:7} final.",
