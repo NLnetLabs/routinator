@@ -1190,8 +1190,9 @@ dependencies = [
 
 [[package]]
 name = "routecore"
-version = "0.2.1-dev"
-source = "git+https://github.com/NLnetLabs/routecore.git#9f621f81293fcb30d13fa976515b44666053f313"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8e2f02d8dd21010b44bf2ca4502cca2fbb2a8ddfd982a18feff149279dc236c"
 dependencies = [
  "arbitrary",
  "bcder",
@@ -1251,8 +1252,9 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.16.1-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git#89739f30054ac711d745162304481e390d5a8163"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "207f773b99ae73e14f8e8ab0f789a5892fc46548b1b79caccec8f33e2d303c40"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
