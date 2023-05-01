@@ -56,7 +56,7 @@ impl PayloadDelta {
 
     /// Construct a new delta between two snapshots.
     ///
-    /// The argument `serial` constains the serial number of the old
+    /// The argument `serial` contains the serial number of the old
     /// snapshot, i.e., the current serial number of the payload history.
     ///
     /// Returns `None` if the two snapshots are, in fact, identical.
