@@ -159,7 +159,7 @@ impl OutputFormat {
                 first = false;
             }
             else {
-                formatter.delimiter(target)?;
+                formatter.origin_delimiter(target)?;
             }
             formatter.origin(origin, info, target)?;
         }
@@ -175,7 +175,7 @@ impl OutputFormat {
                 first = false;
             }
             else {
-                formatter.delimiter(target)?;
+                formatter.router_key_delimiter(target)?;
             }
             formatter.router_key(key, info, target)?;
         }
@@ -191,7 +191,7 @@ impl OutputFormat {
                 first = false;
             }
             else {
-                formatter.delimiter(target)?;
+                formatter.aspa_delimiter(target)?;
             }
             formatter.aspa(aspa, info, target)?;
         }
@@ -461,7 +461,7 @@ impl<Target: io::Write> OutputStream<Target> {
                         *first = false;
                     }
                     else {
-                        self.formatter.delimiter(target)?;
+                        self.formatter.origin_delimiter(target)?;
                     }
                     self.formatter.origin(origin, info, target)?;
                     return Ok(true)
@@ -489,7 +489,7 @@ impl<Target: io::Write> OutputStream<Target> {
                         *first = false;
                     }
                     else {
-                        self.formatter.delimiter(target)?;
+                        self.formatter.router_key_delimiter(target)?;
                     }
                     self.formatter.router_key(key, info, target)?;
                     return Ok(true)
@@ -519,7 +519,7 @@ impl<Target: io::Write> OutputStream<Target> {
                         *first = false;
                     }
                     else {
-                        self.formatter.delimiter(target)?;
+                        self.formatter.aspa_delimiter(target)?;
                     }
                     self.formatter.aspa(aspa, info, target)?;
                     return Ok(true)
@@ -618,7 +618,17 @@ trait Formatter<W> {
         Ok(())
     }
 
-    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        let _ = target;
+        Ok(())
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        let _ = target;
+        Ok(())
+    }
+
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         let _ = target;
         Ok(())
     }
@@ -768,7 +778,7 @@ impl<W: io::Write> Formatter<W> for Json {
         )
     }
 
-    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         writeln!(target, ",")
     }
 }
@@ -924,7 +934,15 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         writeln!(target, "\n  ]\n}}")
     }
 
-    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         writeln!(target, ",")
     }
 }
@@ -1016,7 +1034,11 @@ impl<W: io::Write> Formatter<W> for Slurm {
         )
     }
 
-    fn delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         writeln!(target, ",")
     }
 }
