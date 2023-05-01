@@ -56,12 +56,15 @@ impl PayloadDelta {
 
     /// Construct a new delta between two snapshots.
     ///
+    /// The argument `delta` constains the serial number of the old
+    /// snapshot, i.e., the current serial number of the payload history.
+    ///
     /// Returns `None` if the two snapshots are, in fact, identical.
     pub fn construct(
         old: &PayloadSnapshot, new: &PayloadSnapshot, serial: Serial,
     ) -> Option<Self> {
         let res = Self {
-            serial,
+            serial: serial.add(1),
             origins: StandardDelta::construct(
                 old.origin_refs().map(|item| item.0),
                 new.origin_refs().map(|item| item.0),
