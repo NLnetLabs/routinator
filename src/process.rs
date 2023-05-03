@@ -1,18 +1,20 @@
 //! Managing the process Routinator runs in.
 
-use std::{fs, io};
+use std::{fs, io, mem, process};
 use std::future::Future;
 use std::io::Write;
 use std::net::TcpListener;
-use std::path::Path;
-use std::sync::mpsc;
+use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::Arc;
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use log::{error, LevelFilter};
 use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::error::Failed;
+use crate::utils::fmt::WriteOrPanic;
 use crate::utils::sync::{Mutex, RwLock};
 
 
@@ -84,133 +86,22 @@ impl Process {
         daemon: bool,
         with_output: bool
     ) -> Result<Option<LogOutput>, Failed> {
-        let logger = match self.config.log_target {
-            #[cfg(unix)]
-            LogTarget::Default(fac) => {
-                if daemon {
-                    self.syslog_logger(fac)?
-                }
-                else {
-                    self.stderr_logger(false)
-                }
-            }
-            #[cfg(unix)]
-            LogTarget::Syslog(fac) => {
-                self.syslog_logger(fac)?
-            }
-            LogTarget::Stderr => {
-                self.stderr_logger(daemon)
-            }
-            LogTarget::File(ref path) => {
-                self.file_logger(path)?
-            }
-        };
-        let (logger, res) = if with_output {
-            let (tx, res) = LogOutput::new();
-            let logger = logger.chain(tx);
-            (logger, Some(res))
+        let (output, res) = if with_output {
+            let output = LogOutput::new();
+            (Some(output.0), Some(output.1))
         }
         else {
-            (logger, None)
+            (None, None)
         };
-
-        GLOBAL_LOGGER.switch(Box::new(logger.into_log().1));
+        let logger = Logger::new(&self.config, daemon, output)?;
+        GLOBAL_LOGGER.switch(logger);
         log::set_max_level(self.config.log_level);
         Ok(res)
     }
 
-    /// Creates a syslog logger and configures correctly.
-    #[cfg(unix)]
-    fn syslog_logger(
-        &self,
-        facility: syslog::Facility
-    ) -> Result<fern::Dispatch, Failed> {
-        let process = std::env::current_exe().ok().and_then(|path|
-            path.file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(ToString::to_string)
-        ).unwrap_or_else(|| String::from("routinator"));
-        let formatter = syslog::Formatter3164 {
-            facility,
-            hostname: None,
-            process,
-            pid: std::process::id(),
-        };
-        let logger = syslog::unix(formatter.clone()).or_else(|_| {
-            syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
-        }).or_else(|_| {
-            syslog::udp(formatter, ("127.0.0.1", 0), ("127.0.0.1", 514))
-        });
-        match logger {
-            Ok(logger) => {
-                Ok(self.fern_logger(false).chain(
-                    Box::new(syslog::BasicLogger::new(logger))
-                    as Box::<dyn log::Log>
-                ))
-            }
-            Err(err) => {
-                error!("Cannot connect to syslog: {}", err);
-                Err(Failed)
-            }
-        }
-    }
-
-    /// Creates a stderr logger.
-    ///
-    /// If we are in daemon mode, we add a timestamp to the output.
-    fn stderr_logger(&self, daemon: bool) -> fern::Dispatch {
-        self.fern_logger(daemon).chain(io::stderr())
-    }
-
-    /// Creates a file logger using the file provided by `path`.
-    fn file_logger(&self, path: &Path) -> Result<fern::Dispatch, Failed> {
-        let file = match fern::log_file(path) {
-            Ok(file) => file,
-            Err(err) => {
-                error!(
-                    "Failed to open log file '{}': {}",
-                    path.display(), err
-                );
-                return Err(Failed)
-            }
-        };
-        Ok(self.fern_logger(true).chain(file))
-    }
-
-    /// Creates and returns a fern logger.
-    fn fern_logger(&self, timestamp: bool) -> fern::Dispatch {
-        let mut res = fern::Dispatch::new();
-        if timestamp {
-            res = res.format(|out, message, record| {
-                out.finish(format_args!(
-                    "{} [{}] {}",
-                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
-                    record.level(),
-                    message
-                ))
-            });
-        }
-        else {
-            res = res.format(|out, message, record| {
-                out.finish(format_args!(
-                    "[{}] {}",
-                    record.level(),
-                    message
-                ))
-            });
-        }
-        res = res
-            .level(self.config.log_level)
-            .level_for("rustls", LevelFilter::Error);
-        if self.config.log_level == LevelFilter::Debug {
-            res = res
-                .level_for("tokio_reactor", LevelFilter::Info)
-                .level_for("hyper", LevelFilter::Info)
-                .level_for("reqwest", LevelFilter::Info)
-                .level_for("h2", LevelFilter::Info)
-                .level_for("sled", LevelFilter::Info);
-        }
-        res
+    /// Rotates the log file if necessary.
+    pub fn rotate_log(&self) -> Result<(), Failed> {
+        GLOBAL_LOGGER.rotate()
     }
 }
 
@@ -307,58 +198,372 @@ impl Process {
 }
 
 
-//------------ GlobalLogger --------------------------------------------------
+//------------ Logger --------------------------------------------------------
 
-struct GlobalLogger {
-    inner: OnceCell<Box<dyn log::Log>>
+/// Format and write log messages.
+struct Logger {
+    /// Where to write messages to.
+    target: Mutex<LogBackend>,
+
+    /// An additional target for showing the log in the HTTP server.
+    output: Option<Arc<Mutex<String>>>,
+
+    /// The maximum log level.
+    log_level: log::LevelFilter,
 }
 
+/// The actual target for logging
+enum LogBackend {
+    #[cfg(unix)]
+    Syslog(SyslogLogger),
+    File {
+        file: fs::File,
+        path: PathBuf,
+    },
+    Stderr {
+        stderr: io::Stderr,
+        timestamp: bool,
+    }
+}
+
+impl Logger {
+    /// Creates a new logger from config and additional information.
+    fn new(
+        config: &Config, daemon: bool, output: Option<Arc<Mutex<String>>>
+    ) -> Result<Self, Failed> {
+        let target = match config.log_target {
+            #[cfg(unix)]
+            LogTarget::Default(facility) => {
+                if daemon { 
+                    Self::new_syslog_target(facility)?
+                }
+                else {
+                    Self::new_stderr_target(false)
+                }
+            }
+            #[cfg(unix)]
+            LogTarget::Syslog(facility) => {
+                Self::new_syslog_target(facility)?
+            }
+            LogTarget::File(ref path) => {
+                Self::new_file_target(path.clone())?
+            }
+            LogTarget::Stderr => {
+                Self::new_stderr_target(daemon)
+            }
+        };
+        Ok(Self {
+            target: Mutex::new(target),
+            output,
+            log_level: config.log_level,
+        })
+    }
+
+    /// Creates a syslog target.
+    #[cfg(unix)]
+    fn new_syslog_target(
+        facility: syslog::Facility
+    ) -> Result<LogBackend, Failed> {
+        SyslogLogger::new(facility).map(LogBackend::Syslog)
+    }
+
+    fn new_file_target(path: PathBuf) -> Result<LogBackend, Failed> {
+        Ok(LogBackend::File {
+            file: match Self::open_log_file(&path) {
+                Ok(file) => file,
+                Err(err) => {
+                    error!(
+                        "Failed to open log file '{}': {}",
+                        path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            },
+            path
+        })
+    }
+
+    /// Opens a log file.
+    fn open_log_file(path: &PathBuf) -> Result<fs::File, io::Error> {
+        fs::OpenOptions::new().create(true).append(true).open(path)
+    }
+
+    /// Configures the stederr target.
+    fn new_stderr_target(timestamp: bool) -> LogBackend {
+        LogBackend::Stderr {
+            stderr: io::stderr(),
+            timestamp,
+        }
+    }
+
+    /// Logs a message.
+    ///
+    /// This method may exit the whole process if logging fails.
+    fn log(&self, record: &log::Record) {
+        if self.should_ignore(record) {
+            return;
+        }
+
+        if let Some(output) = self.output.as_ref() {
+            writeln!(output.lock(), "{}", record.args());
+        }
+
+        if let Err(err) = self.try_log(record) {
+            self.log_failure(err);
+        }
+    }
+
+    /// Tries logging a message and returns an error if there is one.
+    fn try_log(&self, record: &log::Record) -> Result<(), io::Error> {
+        match self.target.lock().deref_mut() {
+            #[cfg(unix)]
+            LogBackend::Syslog(ref mut logger) => logger.log(record),
+            LogBackend::File { ref mut file, .. } => {
+                writeln!(
+                    file, "{} [{}] {}",
+                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+                    record.level(),
+                    record.args()
+                )
+            }
+            LogBackend::Stderr{ ref mut stderr, timestamp } => {
+                // We never fail when writing to stderr.
+                if *timestamp {
+                    let _ = write!(stderr, "{}",
+                        chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]")
+                    );
+                }
+                let _ = writeln!(
+                    stderr, "[{}] {}", record.level(), record.args()
+                );
+                Ok(())
+            }
+        }
+    }
+
+    /// Handles an error that happened during logging.
+    fn log_failure(&self, err: io::Error) -> ! {
+        // We try to write a meaningful message to stderr and then abort.
+        match self.target.lock().deref() {
+            #[cfg(unix)]
+            LogBackend::Syslog(_) => {
+                eprintln!("Logging to syslog failed: {}. Exiting.", err);
+            }
+            LogBackend::File { ref path, .. } => {
+                eprintln!(
+                    "Logging to file {} failed: {}. Exiting.",
+                    path.display(),
+                    err
+                );
+            }
+            LogBackend::Stderr { ..  } => {
+                // We never fail when writing to stderr.
+            }
+        }
+        process::exit(1)
+    }
+
+    /// Flushes the logging backend.
+    fn flush(&self) {
+        match self.target.lock().deref_mut() {
+            #[cfg(unix)]
+            LogBackend::Syslog(ref mut logger) => logger.flush(),
+            LogBackend::File { ref mut file, .. } => {
+                let _ = file.flush();
+            }
+            LogBackend::Stderr { ref mut stderr, .. } => {
+                let _  = stderr.lock().flush();
+            }
+        }
+    }
+
+    /// Determines whether a log record should be ignored.
+    ///
+    /// This filters out messages by libraries that we don’t really want to
+    /// see.
+    fn should_ignore(&self, record: &log::Record) -> bool {
+        let module = match record.module_path() {
+            Some(module) => module,
+            None => return false,
+        };
+
+        if record.level() > log::Level::Error {
+            // Only log errors from rustls.
+            if module.starts_with("rustls") {
+                return true
+            }
+        }
+        if self.log_level >= log::LevelFilter::Debug {
+            // Don’t filter anything else if we are in debug or worse.
+            return false
+        }
+
+        // Ignore these modules unless INFO or better.
+        record.level() > log::Level::Info && (
+               module.starts_with("tokio_reactor")
+            || module.starts_with("hyper")
+            || module.starts_with("reqwest")
+            || module.starts_with("h2")
+        )
+    }
+
+    /// Rotates the log target if necessary.
+    ///
+    /// This method exits the whole process when rotating fails.
+    fn rotate(&self) -> Result<(), Failed> {
+        if let LogBackend::File {
+            ref mut file, ref path
+        } = self.target.lock().deref_mut() {
+            // This tries to open the file. If this fails, it writes a
+            // message to both the old file and stderr and then exits.
+            *file = match Self::open_log_file(path) {
+                Ok(file) => file,
+                Err(err) => {
+                    let _ = writeln!(file,
+                        "Re-opening log file {} failed: {}. Exiting.",
+                        path.display(), err
+                    );
+                    eprintln!(
+                        "Re-opening log file {} failed: {}. Exiting.",
+                        path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+
+//------------ SyslogLogger --------------------------------------------------
+
+/// A syslog logger.
+///
+/// This is essentially [`syslog::BasicLogger`] but that one keeps the logger
+/// behind a mutex – which we already do – and doesn’t return error – which
+/// we do want to see.
+#[cfg(unix)]
+struct SyslogLogger(
+    syslog::Logger<syslog::LoggerBackend, syslog::Formatter3164>
+);
+
+#[cfg(unix)]
+impl SyslogLogger {
+    /// Creates a new syslog logger.
+    fn new(facility: syslog::Facility) -> Result<Self, Failed> {
+        let process = std::env::current_exe().ok().and_then(|path|
+            path.file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(ToString::to_string)
+        ).unwrap_or_else(|| String::from("routinator"));
+        let formatter = syslog::Formatter3164 {
+            facility,
+            hostname: None,
+            process,
+            pid: std::process::id(),
+        };
+        let logger = syslog::unix(formatter.clone()).or_else(|_| {
+            syslog::tcp(formatter.clone(), ("127.0.0.1", 601))
+        }).or_else(|_| {
+            syslog::udp(formatter, ("127.0.0.1", 0), ("127.0.0.1", 514))
+        });
+        match logger {
+            Ok(logger) => Ok(Self(logger)),
+            Err(err) => {
+                error!("Cannot connect to syslog: {}", err);
+                Err(Failed)
+            }
+        }
+    }
+
+    /// Tries logging.
+    fn log(&mut self, record: &log::Record) -> Result<(), io::Error> {
+        match record.level() {
+            log::Level::Error => self.0.err(record.args()),
+            log::Level::Warn => self.0.warning(record.args()),
+            log::Level::Info => self.0.info(record.args()),
+            log::Level::Debug => self.0.debug(record.args()),
+            log::Level::Trace => self.0.debug(record.args()),
+        }.map_err(|err| {
+            match err.0 {
+                syslog::ErrorKind::Io(err) => err,
+                syslog::ErrorKind::Msg(err) => {
+                    io::Error::new(io::ErrorKind::Other, err)
+                }
+                err => {
+                    io::Error::new(io::ErrorKind::Other, format!("{}", err))
+                }
+            }
+        })
+    }
+
+    /// Flushes the logger.
+    ///
+    /// Ignores any errors.
+    fn flush(&mut self) {
+        let _ = self.0.backend.flush();
+    }
+}
+
+
+//------------ GlobalLogger --------------------------------------------------
+
+/// The global logger.
+///
+/// A value of this type can go into a static. Until a proper logger is
+/// installed, it just writes all log output to stderr.
+struct GlobalLogger {
+    /// The real logger. Can only be set once.
+    inner: OnceCell<Logger>,
+}
+
+/// The static for the log crate.
 static GLOBAL_LOGGER: GlobalLogger = GlobalLogger::new();
 
 impl GlobalLogger {
+    /// Creates a new provisional logger.
     const fn new() -> Self {
         GlobalLogger { inner: OnceCell::new() }
     }
 
-    fn switch(&self, logger: Box<dyn log::Log>) {
+    /// Switches to the proper logger.
+    fn switch(&self, logger: Logger) {
         if self.inner.set(logger).is_err() {
             panic!("Tried to switch logger more than once.")
+        }
+    }
+
+    /// Performs a log rotation.
+    fn rotate(&self) -> Result<(), Failed> {
+        match self.inner.get() {
+            Some(logger) => logger.rotate(),
+            None => Ok(()),
         }
     }
 }
 
 
 impl log::Log for GlobalLogger {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        match self.inner.get() {
-            Some(logger) => logger.enabled(metadata),
-            None => true,
-        }
+    fn enabled(&self, _: &log::Metadata<'_>) -> bool {
+        true
     }
 
     fn log(&self, record: &log::Record<'_>) {
         match self.inner.get() {
             Some(logger) => logger.log(record),
             None => {
-                if let Err(err) = writeln!(
+                let _ = writeln!(
                     io::stderr().lock(), "[{}] {}",
                     record.level(), record.args()
-                ) {
-                    // XXX This is (sort of) what fern does.
-                    panic!(
-                        "Error logging to stderr: {}\n\
-                         The message was: [{}] {}",
-                        err, record.level(), record.args()
-                    );
-                }
+                );
             }
         }
     }
 
     fn flush(&self) {
-        match self.inner.get() {
-            Some(logger) => logger.flush(),
-            None => { }
+        if let Some(logger) = self.inner.get() {
+            logger.flush()
         }
     }
 }
@@ -368,42 +573,36 @@ impl log::Log for GlobalLogger {
 
 #[derive(Debug)]
 pub struct LogOutput {
-    queue: Mutex<mpsc::Receiver<String>>,
-    current: RwLock<(Bytes, DateTime<Utc>)>,
+    queue: Arc<Mutex<String>>,
+    current: RwLock<Bytes>,
 }
 
 impl LogOutput {
-    fn new() -> (mpsc::Sender<String>, Self) {
-        let (tx, rx) = mpsc::channel();
+    fn new() -> (Arc<Mutex<String>>, Self) {
+        let queue = Arc::new(Mutex::new(String::new()));
         let res = LogOutput {
-            queue: Mutex::new(rx),
-            current: RwLock::new((
+            queue: queue.clone(),
+            current: RwLock::new(
                 "Initial validation ongoing. Please wait.".into(),
-                Utc::now()
-            ))
+            )
         };
-        (tx, res)
+        (queue, res)
     }
 
     pub fn start(&self) {
-        self.current.write().1 = Utc::now();
+        let new_string = format!(
+            "Log from validation run started at {}\n\n", Utc::now()
+        );
+        let _ = mem::replace(self.queue.lock().deref_mut(), new_string);
     }
 
     pub fn flush(&self) {
-        let queue = self.queue.lock();
-        let started = self.current.read().1;
-
-        let mut content = format!(
-            "Log from validation run started at {}\n\n", started
-        );
-        for item in queue.try_iter() {
-            content.push_str(&item)
-        }
-        self.current.write().0 = content.into();
+        let content = mem::take(self.queue.lock().deref_mut());
+        *self.current.write() = content.into();
     }
 
     pub fn get_output(&self) -> Bytes {
-        self.current.read().0.clone()
+        self.current.read().clone()
     }
 }
 
