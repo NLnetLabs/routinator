@@ -498,6 +498,7 @@ struct Request {
     prefix: addr::Prefix,
 
     /// The origin AS number of the route announcement.
+    #[serde(deserialize_with = "Asn::deserialize_from_any")]
     asn: Asn,
 }
 
@@ -515,4 +516,19 @@ const DESCRIPTION_BAD_LEN: &str = "At least one VRP Covers the Route Prefix, \
                                    than the maximum length allowed by VRP(s) \
                                    matching this route origin ASN";
 const DESCRIPTION_NOT_FOUND: &str = "No VRP Covers the Route Prefix";
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn request_list_from_json_reader() {
+        let _ = RequestList::from_json_reader(
+            &mut include_bytes!("../test/validate/beacons.json").as_ref()
+        );
+    }
+}
 
