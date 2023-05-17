@@ -62,7 +62,7 @@ impl Process {
     /// Initialize logging.
     ///
     /// All diagnostic output of Routinator is done via logging, never to
-    /// stderr directly. Thus, it is important to initalize logging before
+    /// stderr directly. Thus, it is important to initialize logging before
     /// doing anything else that may result in such output. This function
     /// does exactly that. It sets a maximum log level of `warn`, leading
     /// only printing important information, and directs all logging to
@@ -288,7 +288,7 @@ impl Logger {
         fs::OpenOptions::new().create(true).append(true).open(path)
     }
 
-    /// Configures the stederr target.
+    /// Configures the stderr target.
     fn new_stderr_target(timestamp: bool) -> LogBackend {
         LogBackend::Stderr {
             stderr: io::stderr(),
