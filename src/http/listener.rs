@@ -13,6 +13,7 @@ use hyper::Server;
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
+use rpki::rtr::server::NotifySender;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
@@ -34,6 +35,7 @@ pub fn http_listener(
     rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
     config: &Config,
+    notify: NotifySender,
 ) -> Result<impl Future<Output = ()>, ExitError> {
     let metrics = Arc::new(HttpServerMetrics::default());
 
@@ -51,7 +53,7 @@ pub fn http_listener(
             );
         }
     }
-    Ok(_http_listener(origins, metrics, rtr_metrics, log, listeners))
+    Ok(_http_listener(origins, metrics, rtr_metrics, log, notify, listeners))
 }
 
 fn create_tls_config(
@@ -79,6 +81,7 @@ async fn _http_listener(
     metrics: Arc<HttpServerMetrics>,
     rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
+    notify: NotifySender,
     listeners: Vec<(SocketAddr, Option<Arc<tls::ServerConfig>>, StdListener)>,
 ) {
     // If there are no listeners, just never return.
@@ -93,6 +96,7 @@ async fn _http_listener(
                 addr, tls_config, listener,
                 origins.clone(), metrics.clone(),
                 rtr_metrics.clone(), log.clone(),
+                notify.clone(),
             ))
         })
     ).await;
@@ -104,6 +108,7 @@ async fn _http_listener(
 /// listener, in which case it will print an error and resolve the error case.
 /// It will listen bind a Hyper server onto `addr` and produce any data
 /// served from `origins`.
+#[allow(clippy::too_many_arguments)]
 async fn single_http_listener(
     addr: SocketAddr,
     tls_config: Option<Arc<tls::ServerConfig>>,
@@ -112,22 +117,26 @@ async fn single_http_listener(
     metrics: Arc<HttpServerMetrics>,
     rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
+    notify: NotifySender,
 ) {
     let make_service = make_service_fn(|_conn| {
         let origins = origins.clone();
         let metrics = metrics.clone();
         let rtr_metrics = rtr_metrics.clone();
         let log = log.clone();
+        let notify = notify.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let origins = origins.clone();
                 let metrics = metrics.clone();
                 let rtr_metrics = rtr_metrics.clone();
                 let log = log.clone();
+                let notify = notify.clone();
                 async move {
                     Ok::<_, Infallible>(handle_request(
                         req, &origins, &metrics, &rtr_metrics,
-                        log.as_ref().map(|x| x.as_ref())
+                        log.as_ref().map(|x| x.as_ref()),
+                        &notify,
                     ).await.into_hyper())
                 }
             }))
