@@ -14,6 +14,7 @@ use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::error::Failed;
+use crate::utils::date::{format_iso_date, format_local_iso_date};
 use crate::utils::fmt::WriteOrPanic;
 use crate::utils::sync::{Mutex, RwLock};
 
@@ -320,8 +321,8 @@ impl Logger {
             LogBackend::Syslog(ref mut logger) => logger.log(record),
             LogBackend::File { ref mut file, .. } => {
                 writeln!(
-                    file, "{} [{}] {}",
-                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+                    file, "[{}] [{}] {}",
+                    format_local_iso_date(chrono::Local::now()),
                     record.level(),
                     record.args()
                 )
@@ -329,8 +330,8 @@ impl Logger {
             LogBackend::Stderr{ ref mut stderr, timestamp } => {
                 // We never fail when writing to stderr.
                 if *timestamp {
-                    let _ = write!(stderr, "{}",
-                        chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]")
+                    let _ = write!(stderr, "[{}] ",
+                        format_local_iso_date(chrono::Local::now()),
                     );
                 }
                 let _ = writeln!(
@@ -387,18 +388,20 @@ impl Logger {
             None => return false,
         };
 
+        // log::Level sorts more important first.
+
         if record.level() > log::Level::Error {
-            // Only log errors from rustls.
+            // From rustls, only log errors.
             if module.starts_with("rustls") {
                 return true
             }
         }
         if self.log_level >= log::LevelFilter::Debug {
-            // Don’t filter anything else if we are in debug or worse.
+            // Don’t filter anything else if we are in debug or trace.
             return false
         }
 
-        // Ignore these modules unless INFO or better.
+        // Ignore these modules unless INFO or more important.
         record.level() > log::Level::Info && (
                module.starts_with("tokio_reactor")
             || module.starts_with("hyper")
@@ -484,7 +487,10 @@ impl SyslogLogger {
             log::Level::Warn => self.0.warning(record.args()),
             log::Level::Info => self.0.info(record.args()),
             log::Level::Debug => self.0.debug(record.args()),
-            log::Level::Trace => self.0.debug(record.args()),
+            log::Level::Trace => {
+                // Syslog doesn’t have trace, use debug instead.
+                self.0.debug(record.args())
+            }
         }.map_err(|err| {
             match err.0 {
                 syslog::ErrorKind::Io(err) => err,
@@ -591,7 +597,8 @@ impl LogOutput {
 
     pub fn start(&self) {
         let new_string = format!(
-            "Log from validation run started at {}\n\n", Utc::now()
+            "Log from validation run started at {}\n\n",
+            format_iso_date(Utc::now())
         );
         let _ = mem::replace(self.queue.lock().deref_mut(), new_string);
     }
