@@ -28,6 +28,8 @@ Bug Fixes
 
 * Fixed a bug in the RTR server where it would include router key PDUs
   even if the negotiated protocol version was 0. (via [rpki-rs #250])
+* Restored the ability to parse ASNs in JSON input to the `validity` command
+  as string or number. ([#861])
 
 Other Changes
 
@@ -37,6 +39,7 @@ Other Changes
 [#847]: https://github.com/NLnetLabs/routinator/pull/847
 [#853]: https://github.com/NLnetLabs/routinator/pull/853
 [#854]: https://github.com/NLnetLabs/routinator/pull/854
+[#861]: https://github.com/NLnetLabs/routinator/pull/861
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 
