@@ -1378,6 +1378,11 @@ The service only supports GET requests with the following paths:
       provided session and serial. If *reset* is *true*, the *withdrawn*
       member is not present.
 
+/json-delta/notify
+      Waits with a response until a new update is available and then returns
+      a JSON object with two members *session* and *serial* which contain the
+      session ID and serial number of the updated data set.
+
 In addition, the current set of VRPs is available for each output format at a
 path with the same name as the output format. E.g., the CSV output is
 available at ``/csv``.
