@@ -14,7 +14,6 @@ mod delta;
 mod listener;
 mod log;
 mod metrics;
-mod notify;
 mod payload;
 mod response;
 mod status;
@@ -48,7 +47,7 @@ async fn handle_request(
     if let Some(response) = payload::handle_get_or_head(&req, origins) {
         return response
     }
-    if let Some(response) = notify::handle_get_or_head(
+    if let Some(response) = delta::handle_notify_get_or_head(
         &req, origins, notify,
     ).await {
         return response
