@@ -732,18 +732,26 @@ impl<'a> SnapshotBuilder<'a> {
 
         // Now for each ASN.
         for asn in key.asns.iter_asns() {
+            let router_key = RouterKey::new(
+                key.key_id, asn, key.key_info.clone()
+            );
+
+            // Is the key to be filtered locally?
+            if self.exceptions.drop_router_key(&router_key) {
+                metrics.update(|m| m.router_keys.locally_filtered += 1);
+                continue
+            }
+
             // Insert the key. If we have it already, we need to
             // update its info instead.
-            match self.router_keys.entry(
-                RouterKey::new(key.key_id, asn, key.key_info.clone())
-            ) {
+            match self.router_keys.entry(router_key) {
                 hash_map::Entry::Vacant(entry) => {
                     entry.insert(key.info.clone().into());
-                    metrics.update( |m| m.router_keys.contributed += 1);
+                    metrics.update(|m| m.router_keys.contributed += 1);
                 }
                 hash_map::Entry::Occupied(mut entry) => {
                     entry.get_mut().add_published(key.info.clone());
-                    metrics.update( |m| m.router_keys.duplicate += 1);
+                    metrics.update(|m| m.router_keys.duplicate += 1);
                 }
             }
         }
