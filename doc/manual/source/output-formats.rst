@@ -71,8 +71,10 @@ generated in a wide range of output formats for various use cases.
           The list is placed into a JSON object with up to four members:
 
             - *roas* contains the validated route origin authorisations, 
-            - *routerKeys* contains the validated BGPsec router keys, 
-            - *aspas* contains the validated ASPA payload, and 
+            - *routerKeys* contains the validated
+              :ref:`advanced-features:bgpsec` router keys,
+            - *aspas* contains the validated :ref:`advanced-features:aspa` 
+              payload, and
             - *metadata* contains some information about the validation run 
               itself. 
               
