@@ -396,8 +396,8 @@ generated in a wide range of output formats for various use cases.
           
           For each trust anchor, it will print the number of verified ROAs
           and VRPs, router certificates and keys, as well as ASPAs. Note that
-          router keys and ASPAs will only be verified and included in the
-          totals if you have enabled :ref:`advanced-features:bgpsec` and
+          router keys and ASPAs will only be included in the totals if you
+          have enabled :ref:`advanced-features:bgpsec` and
           :ref:`advanced-features:aspa`, respectively.
                 
           .. code-block:: text
@@ -444,4 +444,4 @@ generated in a wide range of output formats for various use cases.
              Reformat, sort alphabetically and add 
              :ref:`advanced-features:bgpsec` information
           .. versionadded:: 0.13.0
-             Include ASPAs
+             Include :ref:`advanced-features:aspa`
