@@ -395,45 +395,53 @@ generated in a wide range of output formats for various use cases.
           provide numbers for the complete repository. 
           
           For each trust anchor, it will print the number of verified ROAs
-          and VRPs, as well as router certificates and keys. Note that router
-          keys will only be verified and included in the totals if you have
-          enabled :ref:`advanced-features:bgpsec`.
+          and VRPs, router certificates and keys, as well as ASPAs. Note that
+          router keys and ASPAs will only be verified and included in the
+          totals if you have enabled :ref:`advanced-features:bgpsec` and
+          :ref:`advanced-features:aspa`, respectively.
                 
           .. code-block:: text
           
-            Summary at 2022-01-28 08:37:27.046365 UTC
+            Summary at 2023-05-30 16:22:27.060940 UTC
             afrinic: 
-                        ROAs:    3587 verified;
-                        VRPs:    4545 verified,       3 unsafe,    4466 final;
+                        ROAs:    4896 verified;
+                        VRPs:    6248 verified,    5956 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       0 verified,       0 final.
             apnic: 
-                        ROAs:   18612 verified;
-                        VRPs:   85992 verified,       0 unsafe,   85711 final;
+                        ROAs:   25231 verified;
+                        VRPs:  109978 verified,  109717 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       2 verified,       2 final.
             arin: 
-                        ROAs:   41500 verified;
-                        VRPs:   50495 verified,       5 unsafe,    1812 final;
-                router certs:       0 verified;
-                 router keys:       0 verified,       0 final.
+                        ROAs:   63188 verified;
+                        VRPs:   78064 verified,   76941 final;
+                router certs:       1 verified;
+                 router keys:       1 verified,       1 final.
+                       ASPAs:       7 verified,       7 final.
             lacnic: 
-                        ROAs:   11744 verified;
-                        VRPs:   23628 verified,       0 unsafe,   21235 final;
+                        ROAs:   18036 verified;
+                        VRPs:   32565 verified,   30929 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       0 verified,       0 final.
             ripe: 
-                        ROAs:   27195 verified;
-                        VRPs:  149164 verified,      17 unsafe,  149162 final;
+                        ROAs:   39081 verified;
+                        VRPs:  211048 verified,  211043 final;
                 router certs:       2 verified;
                  router keys:       2 verified,       2 final.
-
+                       ASPAs:      57 verified,      57 final.
             total: 
-                        ROAs:  141922 verified;
-                        VRPs:  361536 verified,      25 unsafe,  307434 final;
-                router certs:       2 verified;
-                 router keys:       2 verified,       2 final.
+                        ROAs:  150432 verified;
+                        VRPs:  437903 verified,  434586 final;
+                router certs:       3 verified;
+                 router keys:       3 verified,       3 final.
+                       ASPAs:      66 verified,      66 final.
 
           .. versionchanged:: 0.11.0
              Reformat, sort alphabetically and add 
              :ref:`advanced-features:bgpsec` information
+          .. versionadded:: 0.13.0
+             Include ASPAs
