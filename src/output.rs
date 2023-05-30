@@ -885,10 +885,18 @@ impl<W: io::Write> Formatter<W> for Json {
             \n  \"metadata\": {{\
             \n    \"generated\": {},\
             \n    \"generatedTime\": \"{}\"\
-            \n  }},\
-            \n  \"roas\": [",
+            \n  }}",
             metrics.time.timestamp(),
             format_iso_date(metrics.time)
+        )
+    }
+
+    fn before_origins(
+        &self, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            ",\
+            \n  \"roas\": ["
         )
     }
 
@@ -909,10 +917,77 @@ impl<W: io::Write> Formatter<W> for Json {
         writeln!(target, ",")
     }
 
+    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
+    fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"routerKeys\": [")
+    }
+
+    fn router_key(
+        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+            \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
+            key.asn,
+            key.key_identifier,
+            key.key_info,
+            info.tal_name().unwrap_or("N/A"),
+        )
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
+    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"aspas\": [")
+    }
+
+    fn aspa(
+        &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"customer\": \"{}\", \"afi\": \"{}\", \
+            \"providers\": [",
+            aspa.customer,
+            aspa.afi,
+        )?;
+
+        let mut first = true;
+        for item in aspa.providers.iter() {
+            if first {
+                write!(target, "\"{}\"", item)?;
+                first = false;
+            }
+            else {
+                write!(target, ", \"{}\"", item)?;
+            }
+        }
+
+        write!(
+            target, "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
     fn footer(
         &self, _metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "\n  ]\n}}")
+        writeln!(target, "\n}}")
     }
 }
 
@@ -1021,6 +1096,10 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target, "] }}")
     }
 
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
     fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
         write!(target, "\n  ]")
     }
@@ -1041,6 +1120,10 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         )?;
         Self::payload_info(info, "cer", target)?;
         write!(target, "] }}")
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
     }
 
     fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
@@ -1077,6 +1160,10 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target, "] }}")
     }
 
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
     fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
         write!(target, "\n  ]")
     }
@@ -1085,18 +1172,6 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         &self, _metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
         writeln!(target, "\n}}")
-    }
-
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
     }
 }
 
