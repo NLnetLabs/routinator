@@ -120,14 +120,28 @@ generated in a wide range of output formats for various use cases.
             
             {
               "metadata": {
-                "generated": 1626853335,
-                "generatedTime": "2021-07-21T07:42:15Z"
+                "generated": 1685455841,
+                "generatedTime": "2023-05-30T14:10:41Z"
               },
-              "roas": [
-                { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
-                { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
-                { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
-              ]
+              "roas": [{
+                "asn": "AS196615",
+                "prefix": "93.175.147.0/24",
+                "maxLength": 24,
+                "ta": "ripe"
+                }
+              ],
+              "routerKeys": [{
+                "asn": "AS211321",
+                "SKI": "17316903F0671229E8808BA8E8AB0105FA915A07",
+                "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET10FMBxP6P3r6aG_ICpfsktp7X6ylJIY8Kye6zkQhNOt0y-cRzYngH8MGzY3cXNvZ64z4CpZ22gf4teybGq8ow",
+                "ta": "ripe"
+              }],
+              "aspas": [{
+                "customer": "AS64496",
+                "afi": "ipv6",
+                "providers": ["AS64499", "AS64511", "AS65551"],
+                "ta": "ripe"
+              }]
             }
 
           .. versionchanged:: 0.10.0
