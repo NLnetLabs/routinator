@@ -379,7 +379,7 @@ impl Output {
                     match value {
                         "origins" => self.route_origins = false,
                         "routerKeys" => self.router_keys = false,
-                        "aspa" => self.aspas = false,
+                        "aspas" => self.aspas = false,
                         _ => { }
                     }
                 }
