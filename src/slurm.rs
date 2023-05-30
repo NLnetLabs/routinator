@@ -96,7 +96,7 @@ impl LocalExceptions {
         keep_comments: bool,
     ) {
         // If we don’t keep comments, we can have one info value for
-        // everything and safe a bit of memory.
+        // everything and save a bit of memory.
         let info = keep_comments.then(|| {
             Arc::new(ExceptionInfo {
                 path: path.clone(),
