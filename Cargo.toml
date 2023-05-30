@@ -22,14 +22,13 @@ clap            = { version = "4", features = [ "wrap_help", "cargo", "derive" ]
 crossbeam-queue = "0.3.1"
 crossbeam-utils = "0.8.1"
 dirs            = "4.0.0"
-fern            = "0.6.0"
 form_urlencoded = "1.0"
 futures         = "0.3.4"
 hyper           = { version = "0.14", features = [ "server", "stream" ] }
 listenfd        = "1"
 log             = "0.4.8"
-log-reroute     = "0.1.5"
 num_cpus        = "1.12.0"
+once_cell       = "1"
 pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
