@@ -1534,6 +1534,10 @@ SIGUSR1: Reload TALs and restart validation
    that succeeds, restart validation. If loading the TALs fails, Routinator
    will exit.
 
+SIGUSR2: Re-open log file
+   When receiving SIGUSR2 and logging to a file is enabled, Routinator will
+   re-open the log file. If this fails, Routinator will exit.
+
 Exit Status
 -----------
 
