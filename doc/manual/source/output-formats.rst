@@ -68,9 +68,19 @@ generated in a wide range of output formats for various use cases.
             rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
               
     json
-          The output is in JSON format. The list is placed into a member
-          named *roas* which contains an array of objects with four elements
-          each: 
+          The list is placed into a JSON object with up to four members:
+
+            - *roas* contains the validated route origin authorisations, 
+            - *routerKeys* contains the validated BGPsec router keys, 
+            - *aspas* contains the validated ASPA payload, and 
+            - *metadata* contains some information about the validation run 
+              itself. 
+              
+          Of the first three, only those members are present that have not 
+          been disabled or excluded. 
+          
+          The *roas* member contains an array of objects with four elements 
+          each:
           
             - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
@@ -80,9 +90,25 @@ generated in a wide range of output formats for various use cases.
             - *ta* has the trust anchor from which the authorisation was
               derived. 
           
-          This format of the *roas* element is identical to that produced by
-          the RIPE NCC RPKI Validator except for different naming of the
-          trust anchor. 
+          The *routerKeys* member contains an array of objects with four 
+          elements each: 
+          
+            - *asn* contains the autonomous system using the router key,
+            - *SKI* lists the key identifier as a string of hexadecimal 
+              digits,
+            - *routerPublicKey* contains the actual public key as a Base 64 
+              encoded string, and 
+            - *ta* has the trust anchor from which the authorisation was
+              derived.
+
+          The *aspa* member contains an array of objects with four members 
+          each: 
+          
+            - *customer* contains the customer ASN,
+            - *afi* lists the address family as either "ipv4" or "ipv6",
+            - *providers* contains the provider ASN set as an array, and
+            - *ta* has the trust anchor from which the authorisation was
+              derived.
           
           The output object also includes a member named *metadata* which
           provides additional information. Currently, this is a member
@@ -106,9 +132,11 @@ generated in a wide range of output formats for various use cases.
 
           .. versionchanged:: 0.10.0
              Add the *metadata* member
+          .. versionchanged:: 0.13.0
+             Add the *routerKeys* and *aspas* members
 
     jsonext
-          The list is placed into a JSON object with four members:
+          The list is placed into a JSON object with up to four members:
 
             - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
@@ -118,10 +146,8 @@ generated in a wide range of output formats for various use cases.
             - *metadata* contains some information about the validation run
               itself.
 
-          All four members are always present, even if
-          :ref:`advanced-features:bgpsec` and/or
-          :ref:`advanced-features:aspa` have not been enabled. In this case,
-          *routerKeys* and *aspas* will simply be empty.
+          Of the first three, only those members are present that have not 
+          been disabled or excluded.
 
           The *roas* member contains an array of objects with four elements
           each: 
@@ -252,6 +278,8 @@ generated in a wide range of output formats for various use cases.
              Add :ref:`advanced-features:bgpsec` information
           .. versionchanged:: 0.13.0
              Add :ref:`advanced-features:aspa` information
+          .. versionchanged:: 0.13.0
+             Only include members that have not been disabled or excluded
 
     slurm
           The list is formatted as locally added assertions of a :doc:`local

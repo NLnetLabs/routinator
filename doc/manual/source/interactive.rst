@@ -28,6 +28,15 @@ error. You can influence the amount of details returned with the
 :option:`--verbose` and :option:`--quiet` options. To learn more about what kind
 of information returned, refer to the :doc:`logging` section.
 
+If you have enabled :ref:`advanced-features:bgpsec` and/or
+:ref:`advanced-features:aspa` validation, in some output formats the amount
+data can be quite overwhelming. You can exclude specific data types for the
+output with the :option:`--no-route-origins`, :option:`--no-router-keys` and
+the :option:`--noaspas` options.
+
+.. versionchanged:: 0.13.0
+   Allow excluding specific data from the output.
+
 Query Options
 -------------
 
@@ -128,7 +137,19 @@ You will now see that a more specific /23 prefix is returned as well:
          will get a list of all more specific VRPs covered by the prefix you
          supplied in the query.
 
+Exclude Specific Data Types
+"""""""""""""""""""""""""""
+
+If you have enabled :ref:`advanced-features:bgpsec` and/or
+:ref:`advanced-features:aspa` validation, in some output formats the amount
+data can be quite overwhelming. You can exclude specific payload types with
+the :option:`--no-route-origins`, :option:`--no-router-keys` and
+:option:`--noaspas` options to disable inclusion of route origins, router
+keys, and ASPAs, respectively.
+
 .. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
 .. versionchanged:: 0.11.0
    Add the :option:`--more-specifics` option
+.. versionadded:: 0.13.0
+   Allow excluding specific data from the output
