@@ -8,6 +8,8 @@ New
   `enable-aspa` which is off by default. ([#847])
 * Added support for version 2 of the RTR protocol. This primarly means
   support for the ASPA payload type. ([#847])
+* Sending SIGUSR2 to Routinator will re-open a log file if logging to a
+  file is enabled. ([#859])
 
 Breaking Changes
 
@@ -35,11 +37,15 @@ Other Changes
 
 * The minimal required Rust version has been increased to 1.63.
   ([#847], [#853])
+* The log message for missing manifest now include the URI of the CA
+  certificate for which the manifest is missing. ([#864])
 
 [#847]: https://github.com/NLnetLabs/routinator/pull/847
 [#853]: https://github.com/NLnetLabs/routinator/pull/853
 [#854]: https://github.com/NLnetLabs/routinator/pull/854
+[#859]: https://github.com/NLnetLabs/routinator/pull/859
 [#861]: https://github.com/NLnetLabs/routinator/pull/861
+[#864]: https://github.com/NLnetLabs/routinator/pull/864
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 

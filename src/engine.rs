@@ -989,8 +989,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 // We don’t seem to have this point in the store either.
                 // Warn and return.
                 warn!(
-                    "{}: no valid manifest found.",
-                    self.cert.rpki_manifest()
+                    "{}: no valid manifest {} found.",
+                    self.cert.uri(), self.cert.rpki_manifest()
                 );
                 self.metrics.missing_manifests += 1;
                 self.reject_point(metrics);
@@ -1587,7 +1587,11 @@ pub struct CaCert {
     cert: ResourceCert,
 
     /// The certificate’s location.
-    #[allow(dead_code)] // Keep it even if unused, we may want it metrics later
+    ///
+    /// Don’t be confused by the type – this is a TAL URI because it can be
+    /// an HTTPS URI for TAL certificates. But it definitely isn’t the URI
+    /// of the TAL this was derived from, it is the actual URI of the actual
+    /// certificate.
     uri: TalUri,
 
     /// The CA repository URI of the certificate.
@@ -1723,6 +1727,16 @@ impl CaCert {
     /// Returns a reference to the resource certificate.
     pub fn cert(&self) -> &ResourceCert {
         &self.cert
+    }
+
+    /// Returns a reference to the certificate’s URI.
+    ///
+    /// Note that this really is the URI of the certificate itself despite
+    /// the type of `TalUri`. This type is used because TAL certificates
+    /// (which are CA certificates) are published with an HTTPS URI rather
+    /// than an rsync URI.
+    pub fn uri(&self) -> &TalUri {
+        &self.uri
     }
 
     /// Returns a reference the caRepository URI of the certificate.

@@ -1378,6 +1378,16 @@ The service only supports GET requests with the following paths:
       provided session and serial. If *reset* is *true*, the *withdrawn*
       member is not present.
 
+/json-delta/notify, /json-delta/notify?session=session&serial=serial
+      Returns a JSON object with two members *session* and *serial* which
+      contain the session ID and serial number of the current data set.
+
+      If the *session* and *serial* query parameters are provided, and the
+      session ID and serial number of the current data set are identical
+      to the provided values, the request will not return until a new data
+      set is available. This can be used as a means to get notified when
+      the data set has been updated.
+
 In addition, the current set of VRPs is available for each output format at a
 path with the same name as the output format. E.g., the CSV output is
 available at ``/csv``.
@@ -1533,6 +1543,10 @@ SIGUSR1: Reload TALs and restart validation
    When receiving SIGUSR1, Routinator will attempt to reload the TALs and, if
    that succeeds, restart validation. If loading the TALs fails, Routinator
    will exit.
+
+SIGUSR2: Re-open log file
+   When receiving SIGUSR2 and logging to a file is enabled, Routinator will
+   re-open the log file. If this fails, Routinator will exit.
 
 Exit Status
 -----------
