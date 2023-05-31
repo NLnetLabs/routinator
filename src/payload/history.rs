@@ -383,6 +383,11 @@ impl PayloadHistory {
         self.session
     }
 
+    /// Returns the session and serial number of the current data set.
+    pub fn session_and_serial(&self) -> (u64, Serial) {
+        (self.session(), self.serial())
+    }
+
     /// Returns the RTR version of the session ID.
     ///
     /// This is the last 16 bits of the full session ID.
