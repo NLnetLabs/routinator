@@ -80,7 +80,7 @@ fn handle_reset(
 }
 
 
-//------------ handle_get_or_head --------------------------------------------
+//------------ handle_notify_get_or_head -------------------------------------
 
 pub async fn handle_notify_get_or_head(
     req: &Request<Body>,

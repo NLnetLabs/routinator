@@ -1384,7 +1384,7 @@ The service only supports GET requests with the following paths:
       session ID and serial number of the updated data set.
 
       If the *session* and *serial* query parameters are provided, the JSON
-      object is returned immediately if the session ID and serial number of
+      object is returned immediately if the session ID or serial number of
       the current data set differ from the provided values and only waits
       for an update if they are identical.
 
