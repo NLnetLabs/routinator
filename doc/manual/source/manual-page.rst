@@ -1379,14 +1379,14 @@ The service only supports GET requests with the following paths:
       member is not present.
 
 /json-delta/notify, /json-delta/notify?session=session&serial=serial
-      Waits with a response until a new update is available and then returns
-      a JSON object with two members *session* and *serial* which contain the
-      session ID and serial number of the updated data set.
+      Returns a JSON object with two members *session* and *serial* which
+      contain the session ID and serial number of the current data set.
 
-      If the *session* and *serial* query parameters are provided, the JSON
-      object is returned immediately if the session ID or serial number of
-      the current data set differ from the provided values and only waits
-      for an update if they are identical.
+      If the *session* and *serial* query parameters are provided, and the
+      session ID and serial number of the current data set are identical
+      to the provided values, the request will not return until a new data
+      set is available. This can be used as a means to get notified when
+      the data set has been updated.
 
 In addition, the current set of VRPs is available for each output format at a
 path with the same name as the output format. E.g., the CSV output is

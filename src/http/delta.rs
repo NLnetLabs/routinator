@@ -124,7 +124,7 @@ fn need_wait(
 ) -> Result<bool, Response> {
     let version = match version_from_query(req.uri().query())? {
         Some(version) => version,
-        None => return Ok(true),
+        None => return Ok(false),
     };
 
     Ok(history.read().session_and_serial() == version)
