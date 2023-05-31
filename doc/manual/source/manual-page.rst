@@ -504,7 +504,7 @@ These can be requested by providing different commands on the command line.
                   dedicated name for each.
 
            jsonext
-                  The list is placed into a JSON object with upt to four
+                  The list is placed into a JSON object with up to four
                   members: *roas* contains the validated route origin
                   authorizations, *routerKeys* contains the validated 
                   BGPsec router keys, *aspas* contains the validated
@@ -1421,8 +1421,8 @@ inclusion of VRPs for more specific prefixes of prefixes given via
 ``select-prefix``.
 
 Finally, the query parameter ``exclude`` can be used to exclude certain
-payload types from the response. The values ``origins``, ``routerkeys``, and
-``aspa`` disable inclusion of route origins, router keys, and ASPAs,
+payload types from the response. The values ``routeOrigins``, ``routerKeys``,
+and ``aspas`` disable inclusion of route origins, router keys, and ASPAs,
 respectively. The values can either be given in separate ``exclude``
 parameters or included in one separated by commas.
 

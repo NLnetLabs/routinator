@@ -377,7 +377,7 @@ impl Output {
             else if key == "exclude" {
                 for value in value.split(',') {
                     match value {
-                        "origins" => self.route_origins = false,
+                        "routeOrigins" => self.route_origins = false,
                         "routerKeys" => self.router_keys = false,
                         "aspas" => self.aspas = false,
                         _ => { }
