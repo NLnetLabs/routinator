@@ -1189,7 +1189,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.16.2-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=specific-drop-in-slurm-filters#dfe53f65d07034428f60b15ee10c5ab06cec8fc2"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#068b448eebe1b1d44402ee228b534fe15275ad73"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
