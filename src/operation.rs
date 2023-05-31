@@ -35,7 +35,7 @@ use crate::config::Config;
 use crate::error::{ExitError, Failed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
-use crate::output::OutputFormat;
+use crate::output::{Output, OutputFormat};
 use crate::payload::{PayloadSnapshot, SharedHistory, ValidationReport};
 use crate::process::Process;
 use crate::engine::Engine;
@@ -398,13 +398,13 @@ pub struct Vrps {
     ///
     /// If this is some path, then we print the list into that file.
     /// Otherwise we just dump it to stdout.
-    output: Option<PathBuf>,
+    path: Option<PathBuf>,
 
     /// The desired output format.
     format: OutputFormat,
 
-    /// Optional output filters.
-    selection: Option<output::Selection>,
+    /// Configuration of the output.
+    output: Output,
 
     /// Don’t update the repository.
     noupdate: bool,
@@ -447,6 +447,18 @@ struct VrpsArgs {
     #[arg(short, long)]
     more_specifics: bool,
 
+    /// Don’t include route origins in output
+    #[arg(long)]
+    no_route_origins: bool,
+
+    /// Don’t include router keys in output
+    #[arg(long)]
+    no_router_keys: bool,
+
+    /// Don’t include ASPA in output
+    #[arg(long)]
+    no_aspas: bool,
+
     /// Don't update the local cache
     #[arg(short, long)]
     noupdate: bool,
@@ -482,19 +494,16 @@ impl Vrps {
             }
         };
 
-        let output = if args.output == Path::new("-") {
+        let path = if args.output == Path::new("-") {
             None
         }
         else {
             Some(args.output)
         };
 
-        let selection = if
-            args.select_prefix.is_none() && args.select_asn.is_none()
-        {
-            None
-        }
-        else {
+        let mut output = Output::new();
+
+        if args.select_prefix.is_some() || args.select_asn.is_some() {
             let mut selection = output::Selection::new();
             if let Some(list) = args.select_prefix {
                 for value in list {
@@ -507,26 +516,37 @@ impl Vrps {
                 }
             }
             selection.set_more_specifics(args.more_specifics);
-            Some(selection)
+            output.set_selection(selection);
         };
 
+        if args.no_route_origins {
+            output.no_route_origins();
+        }
+        if args.no_router_keys {
+            output.no_router_keys();
+        }
+        if args.no_aspas{
+            output.no_aspas();
+        }
+
         Ok(Vrps {
-            output,
+            path,
             format,
+            output,
             noupdate: args.noupdate,
             complete: args.complete,
-            selection,
         })
     }
 
     /// Produces a list of Validated ROA Payload.
     ///
-    /// The list will be written to the file identified by `output` or
+    /// The list will be written to the file identified by `path` or
     /// stdout if that is `None`. The format is determined by `format`.
     /// If `noupdate` is `false`, the local repository will be updated first
     /// and rsync will be enabled during validation to sync any new
     /// publication points.
-    fn run(self, process: Process) -> Result<(), ExitError> {
+    fn run(mut self, process: Process) -> Result<(), ExitError> {
+        self.output.update_from_config(process.config());
         let mut engine = Engine::new(process.config(), !self.noupdate)?;
         engine.ignite()?;
         process.switch_logging(false, false)?;
@@ -534,8 +554,10 @@ impl Vrps {
         let (report, mut metrics) = ValidationReport::process(
             &engine, process.config(),
         )?;
-        let vrps = report.into_snapshot( &exceptions, &mut metrics);
-        let res = match self.output {
+        let vrps = Arc::new(report.into_snapshot(&exceptions, &mut metrics));
+        let rsync_complete = metrics.rsync_complete();
+        let metrics = Arc::new(metrics);
+        let res = match self.path {
             Some(ref path) => {
                 let mut file = match fs::File::create(path) {
                     Ok(file) => file,
@@ -547,21 +569,18 @@ impl Vrps {
                         return Err(Failed.into())
                     }
                 };
-                self.format.output_snapshot(
-                    &vrps, self.selection.as_ref(), &metrics, &mut file)
+                self.output.write(vrps, metrics, self.format, &mut file)
             }
             None => {
                 let out = io::stdout();
                 let mut out = out.lock();
-                self.format.output_snapshot(
-                    &vrps, self.selection.as_ref(), &metrics, &mut out
-                )
+                self.output.write(vrps, metrics, self.format, &mut out)
             }
         };
         if let Err(err) = res {
             // Surpress an error message for broken pipe on stdout.
             if 
-                self.output.is_some() ||
+                self.path.is_some() ||
                 err.kind() != io::ErrorKind::BrokenPipe
             {
                 error!(
@@ -571,7 +590,7 @@ impl Vrps {
             }
             Err(ExitError::Generic)
         }
-        else if self.complete && !metrics.rsync_complete() {
+        else if self.complete && !rsync_complete {
             Err(ExitError::IncompleteUpdate)
         }
         else {

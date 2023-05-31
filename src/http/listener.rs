@@ -24,7 +24,7 @@ use crate::payload::SharedHistory;
 use crate::process::LogOutput;
 use crate::utils::{net, tls};
 use crate::utils::tls::MaybeTlsTcpStream;
-use super::handle_request;
+use super::dispatch::State;
 
 
 //------------ http_listener -------------------------------------------------
@@ -37,7 +37,9 @@ pub fn http_listener(
     config: &Config,
     notify: NotifySender,
 ) -> Result<impl Future<Output = ()>, ExitError> {
-    let metrics = Arc::new(HttpServerMetrics::default());
+    let state = Arc::new(
+        State::new(config, origins, rtr_metrics, log, notify)
+    );
 
     // Binding needs to have happened before dropping privileges
     // during detach. So we do this here synchronously.
@@ -53,7 +55,7 @@ pub fn http_listener(
             );
         }
     }
-    Ok(_http_listener(origins, metrics, rtr_metrics, log, notify, listeners))
+    Ok(_http_listener(state, listeners))
 }
 
 fn create_tls_config(
@@ -77,11 +79,7 @@ fn create_tls_config(
 }
 
 async fn _http_listener(
-    origins: SharedHistory,
-    metrics: Arc<HttpServerMetrics>,
-    rtr_metrics: SharedRtrServerMetrics,
-    log: Option<Arc<LogOutput>>,
-    notify: NotifySender,
+    state: Arc<State>,
     listeners: Vec<(SocketAddr, Option<Arc<tls::ServerConfig>>, StdListener)>,
 ) {
     // If there are no listeners, just never return.
@@ -93,10 +91,7 @@ async fn _http_listener(
     let _ = select_all(
         listeners.into_iter().map(|(addr, tls_config, listener)| {
             tokio::spawn(single_http_listener(
-                addr, tls_config, listener,
-                origins.clone(), metrics.clone(),
-                rtr_metrics.clone(), log.clone(),
-                notify.clone(),
+                addr, tls_config, listener, state.clone(),
             ))
         })
     ).await;
@@ -108,36 +103,21 @@ async fn _http_listener(
 /// listener, in which case it will print an error and resolve the error case.
 /// It will listen bind a Hyper server onto `addr` and produce any data
 /// served from `origins`.
-#[allow(clippy::too_many_arguments)]
 async fn single_http_listener(
     addr: SocketAddr,
     tls_config: Option<Arc<tls::ServerConfig>>,
     listener: StdListener,
-    origins: SharedHistory,
-    metrics: Arc<HttpServerMetrics>,
-    rtr_metrics: SharedRtrServerMetrics,
-    log: Option<Arc<LogOutput>>,
-    notify: NotifySender,
+    state: Arc<State>,
 ) {
     let make_service = make_service_fn(|_conn| {
-        let origins = origins.clone();
-        let metrics = metrics.clone();
-        let rtr_metrics = rtr_metrics.clone();
-        let log = log.clone();
-        let notify = notify.clone();
+        let state = state.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                let origins = origins.clone();
-                let metrics = metrics.clone();
-                let rtr_metrics = rtr_metrics.clone();
-                let log = log.clone();
-                let notify = notify.clone();
+                let state = state.clone();
                 async move {
-                    Ok::<_, Infallible>(handle_request(
-                        req, &origins, &metrics, &rtr_metrics,
-                        log.as_ref().map(|x| x.as_ref()),
-                        &notify,
-                    ).await.into_hyper())
+                    Ok::<_, Infallible>(
+                        state.handle_request(req).await.into_hyper()
+                    )
                 }
             }))
         }
@@ -151,7 +131,7 @@ async fn single_http_listener(
             }
         },
         tls: tls_config.map(Into::into),
-        metrics: metrics.clone(),
+        metrics: state.metrics().clone(),
     };
     if let Err(err) = Server::builder(listener).serve(make_service).await {
         error!("Fatal error in HTTP server {}: {}", addr, err);

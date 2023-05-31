@@ -68,9 +68,21 @@ generated in a wide range of output formats for various use cases.
             rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa,AS196615,93.175.147.0/24,24,2021-05-03 14:51:30,2022-07-01 00:00:00
               
     json
-          The output is in JSON format. The list is placed into a member
-          named *roas* which contains an array of objects with four elements
-          each: 
+          The list is placed into a JSON object with up to four members:
+
+            - *roas* contains the validated route origin authorisations, 
+            - *routerKeys* contains the validated
+              :ref:`advanced-features:bgpsec` router keys,
+            - *aspas* contains the validated :ref:`advanced-features:aspa` 
+              payload, and
+            - *metadata* contains some information about the validation run 
+              itself. 
+              
+          Of the first three, only those members are present that have not 
+          been disabled or excluded. 
+          
+          The *roas* member contains an array of objects with four elements 
+          each:
           
             - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
@@ -80,9 +92,25 @@ generated in a wide range of output formats for various use cases.
             - *ta* has the trust anchor from which the authorisation was
               derived. 
           
-          This format of the *roas* element is identical to that produced by
-          the RIPE NCC RPKI Validator except for different naming of the
-          trust anchor. 
+          The *routerKeys* member contains an array of objects with four 
+          elements each: 
+          
+            - *asn* contains the autonomous system using the router key,
+            - *SKI* lists the key identifier as a string of hexadecimal 
+              digits,
+            - *routerPublicKey* contains the actual public key as a Base 64 
+              encoded string, and 
+            - *ta* has the trust anchor from which the authorisation was
+              derived.
+
+          The *aspa* member contains an array of objects with four members 
+          each: 
+          
+            - *customer* contains the customer ASN,
+            - *afi* lists the address family as either "ipv4" or "ipv6",
+            - *providers* contains the provider ASN set as an array, and
+            - *ta* has the trust anchor from which the authorisation was
+              derived.
           
           The output object also includes a member named *metadata* which
           provides additional information. Currently, this is a member
@@ -94,21 +122,37 @@ generated in a wide range of output formats for various use cases.
             
             {
               "metadata": {
-                "generated": 1626853335,
-                "generatedTime": "2021-07-21T07:42:15Z"
+                "generated": 1685455841,
+                "generatedTime": "2023-05-30T14:10:41Z"
               },
-              "roas": [
-                { "asn": "AS196615", "prefix": "2001:7fb:fd03::/48", "maxLength": 48, "ta": "ripe" },
-                { "asn": "AS196615", "prefix": "2001:7fb:fd04::/48", "maxLength": 48, "ta": "ripe" },
-                { "asn": "AS196615", "prefix": "93.175.147.0/24", "maxLength": 24, "ta": "ripe" }
-              ]
+              "roas": [{
+                "asn": "AS196615",
+                "prefix": "93.175.147.0/24",
+                "maxLength": 24,
+                "ta": "ripe"
+                }
+              ],
+              "routerKeys": [{
+                "asn": "AS211321",
+                "SKI": "17316903F0671229E8808BA8E8AB0105FA915A07",
+                "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET10FMBxP6P3r6aG_ICpfsktp7X6ylJIY8Kye6zkQhNOt0y-cRzYngH8MGzY3cXNvZ64z4CpZ22gf4teybGq8ow",
+                "ta": "ripe"
+              }],
+              "aspas": [{
+                "customer": "AS64496",
+                "afi": "ipv6",
+                "providers": ["AS64499", "AS64511", "AS65551"],
+                "ta": "ripe"
+              }]
             }
 
           .. versionchanged:: 0.10.0
              Add the *metadata* member
+          .. versionchanged:: 0.13.0
+             Add the *routerKeys* and *aspas* members
 
     jsonext
-          The list is placed into a JSON object with four members:
+          The list is placed into a JSON object with up to four members:
 
             - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
@@ -118,10 +162,8 @@ generated in a wide range of output formats for various use cases.
             - *metadata* contains some information about the validation run
               itself.
 
-          All four members are always present, even if
-          :ref:`advanced-features:bgpsec` and/or
-          :ref:`advanced-features:aspa` have not been enabled. In this case,
-          *routerKeys* and *aspas* will simply be empty.
+          Of the first three, only those members are present that have not 
+          been disabled or excluded.
 
           The *roas* member contains an array of objects with four elements
           each: 
@@ -252,6 +294,8 @@ generated in a wide range of output formats for various use cases.
              Add :ref:`advanced-features:bgpsec` information
           .. versionchanged:: 0.13.0
              Add :ref:`advanced-features:aspa` information
+          .. versionchanged:: 0.13.0
+             Only include members that have not been disabled or excluded
 
     slurm
           The list is formatted as locally added assertions of a :doc:`local
@@ -351,45 +395,53 @@ generated in a wide range of output formats for various use cases.
           provide numbers for the complete repository. 
           
           For each trust anchor, it will print the number of verified ROAs
-          and VRPs, as well as router certificates and keys. Note that router
-          keys will only be verified and included in the totals if you have
-          enabled :ref:`advanced-features:bgpsec`.
+          and VRPs, router certificates and keys, as well as ASPAs. Note that
+          router keys and ASPAs will only be included in the totals if you
+          have enabled :ref:`advanced-features:bgpsec` and
+          :ref:`advanced-features:aspa`, respectively.
                 
           .. code-block:: text
           
-            Summary at 2022-01-28 08:37:27.046365 UTC
+            Summary at 2023-05-30 16:22:27.060940 UTC
             afrinic: 
-                        ROAs:    3587 verified;
-                        VRPs:    4545 verified,       3 unsafe,    4466 final;
+                        ROAs:    4896 verified;
+                        VRPs:    6248 verified,    5956 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       0 verified,       0 final.
             apnic: 
-                        ROAs:   18612 verified;
-                        VRPs:   85992 verified,       0 unsafe,   85711 final;
+                        ROAs:   25231 verified;
+                        VRPs:  109978 verified,  109717 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       2 verified,       2 final.
             arin: 
-                        ROAs:   41500 verified;
-                        VRPs:   50495 verified,       5 unsafe,    1812 final;
-                router certs:       0 verified;
-                 router keys:       0 verified,       0 final.
+                        ROAs:   63188 verified;
+                        VRPs:   78064 verified,   76941 final;
+                router certs:       1 verified;
+                 router keys:       1 verified,       1 final.
+                       ASPAs:       7 verified,       7 final.
             lacnic: 
-                        ROAs:   11744 verified;
-                        VRPs:   23628 verified,       0 unsafe,   21235 final;
+                        ROAs:   18036 verified;
+                        VRPs:   32565 verified,   30929 final;
                 router certs:       0 verified;
                  router keys:       0 verified,       0 final.
+                       ASPAs:       0 verified,       0 final.
             ripe: 
-                        ROAs:   27195 verified;
-                        VRPs:  149164 verified,      17 unsafe,  149162 final;
+                        ROAs:   39081 verified;
+                        VRPs:  211048 verified,  211043 final;
                 router certs:       2 verified;
                  router keys:       2 verified,       2 final.
-
+                       ASPAs:      57 verified,      57 final.
             total: 
-                        ROAs:  141922 verified;
-                        VRPs:  361536 verified,      25 unsafe,  307434 final;
-                router certs:       2 verified;
-                 router keys:       2 verified,       2 final.
+                        ROAs:  150432 verified;
+                        VRPs:  437903 verified,  434586 final;
+                router certs:       3 verified;
+                 router keys:       3 verified,       3 final.
+                       ASPAs:      66 verified,      66 final.
 
           .. versionchanged:: 0.11.0
              Reformat, sort alphabetically and add 
              :ref:`advanced-features:bgpsec` information
+          .. versionadded:: 0.13.0
+             Include :ref:`advanced-features:aspa`

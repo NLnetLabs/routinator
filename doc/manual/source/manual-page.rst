@@ -458,18 +458,35 @@ These can be requested by providing different commands on the command line.
                   be in one single output file.
 
            json
-                  The list is placed into a JSON object with a single element
-                  *roas* which contains an array of objects with four
+                  The list is placed into a JSON object with up to four
+                  members: *roas* contains the validated route origin
+                  authorizations, *routerKeys* contains the validated 
+                  BGPsec router keys, *aspas* contains the validated
+                  ASPA payload, and *metadata* contains some information
+                  about the validation run itself. Of the first three, only
+                  those members are present that have not been disabled or
+                  excluded.
+
+                  The *roas* member contains an array of objects with four
                   elements each: The autonomous system number of the network
                   authorized to originate a prefix in *asn*, the prefix in
                   slash notation in *prefix*, the maximum prefix length of
                   the announced route in *maxLength*, and the trust anchor
-                  from which the authorization was derived in *ta*. This
-                  format is identical to that produced by the RIPE NCC RPKI
-                  Validator except for different naming of the trust anchor.
-                  Routinator uses the name of the TAL file without the
-                  extension *.tal* whereas the RIPE NCC Validator has a
-                  dedicated name for each.
+                  from which the authorization was derived in *ta*.
+
+                  The *routerKeys* member contains an array of objects with
+                  four elements each: The autonomous system using the router
+                  key is given in *asn*, the key identifier as a string of
+                  hexadecimal digits in *SKI*, the actual public key as a
+                  Base 64 encoded string in *routerPublicKey*, and the trust
+                  anchor from which the authorization was derived in *ta*.
+
+                  The *aspa* member contains an array of objects with four
+                  members each: The *customer* member contains the customer
+                  ASN, *afi* the address family as either "ipv4" or "ipv6",
+                  *providers* contains the provider ASN set as an array, and
+                  the trust anchor from which the authorization was derived
+                  in *ta*.
 
                   The output object also includes a member named *metadata*
                   which provides additional information. Currently, this is a
@@ -478,16 +495,23 @@ These can be requested by providing different commands on the command line.
                   which provides the same time but in the standard ISO date
                   format.
 
-           jsonext
-                  The list is placed into a JSON object with three members:
-                  *roas* contains the validated route origin
-                  authorizations, *routerKeys* contains the validated 
-                  BGPsec router keys, and *metadata* contains some information
-                  about the validation run itself.
+                  If only route origins are included, this format is identical
+                  to that produced by the RIPE NCC
+                  RPKI Validator except for different naming of the trust
+                  anchor.
+                  Routinator uses the name of the TAL file without the
+                  extension *.tal* whereas the RIPE NCC Validator has a
+                  dedicated name for each.
 
-                  All three members are always present, even if BGPsec has
-                  not been enabled. In this case, *routerKeys* will simply
-                  be empty.
+           jsonext
+                  The list is placed into a JSON object with up to four
+                  members: *roas* contains the validated route origin
+                  authorizations, *routerKeys* contains the validated 
+                  BGPsec router keys, *aspas* contains the validated
+                  ASPA payload, and *metadata* contains some information
+                  about the validation run itself. Of the first three, only
+                  those members are present that have not been disabled or
+                  excluded.
 
                   The *roas* member contains an array of objects with four
                   elements each: The autonomous system number of the network
@@ -618,7 +642,12 @@ These can be requested by providing different commands on the command line.
            Note that VRPs with more specific prefixes have no influence on
            whether a route is RPKI valid or invalid and therefore these VRPs
            are of an informational nature only.
-        
+    
+    .. option:: --no-route-origins, --no-router-keys, --no-aspas
+
+           These three options can be used to exclude the various payload
+           types from being included in the output.
+
 
 .. subcmd:: validate
 
@@ -1400,6 +1429,12 @@ fields can be repeated multiple times.
 In addition, the query parameter ``include=more-specifics`` will cause the
 inclusion of VRPs for more specific prefixes of prefixes given via
 ``select-prefix``.
+
+Finally, the query parameter ``exclude`` can be used to exclude certain
+payload types from the response. The values ``routeOrigins``, ``routerKeys``,
+and ``aspas`` disable inclusion of route origins, router keys, and ASPAs,
+respectively. The values can either be given in separate ``exclude``
+parameters or included in one separated by commas.
 
 These parameters work in the same way as the options of the same name to the
 :subcmd:`vrps` command.

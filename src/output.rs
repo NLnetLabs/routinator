@@ -10,6 +10,7 @@ use log::{error, info};
 use routecore::addr;
 use rpki::repository::resources::Asn;
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
+use crate::config::Config;
 use crate::error::Failed;
 use crate::http::ContentType;
 use crate::payload::{
@@ -138,76 +139,6 @@ impl OutputFormat {
         }
     }
 
-    /// Outputs a payload snapshot to a writer.
-    pub fn output_snapshot<W: io::Write>(
-        self,
-        snapshot: &PayloadSnapshot,
-        selection: Option<&Selection>,
-        metrics: &Metrics,
-        target: &mut W,
-    ) -> Result<(), io::Error> {
-        let formatter = self.formatter();
-        let mut first = true;
-        formatter.header(snapshot, metrics, target)?;
-        for (origin, info) in snapshot.origins() {
-            if let Some(selection) = selection {
-                if !selection.include_origin(origin) {
-                    continue
-                }
-            }
-            if first {
-                first = false;
-            }
-            else {
-                formatter.origin_delimiter(target)?;
-            }
-            formatter.origin(origin, info, target)?;
-        }
-        formatter.after_origins(target)?;
-        let mut first = true;
-        for (key, info) in snapshot.router_keys() {
-            if let Some(selection) = selection {
-                if !selection.include_router_key(key) {
-                    continue
-                }
-            }
-            if first {
-                first = false;
-            }
-            else {
-                formatter.router_key_delimiter(target)?;
-            }
-            formatter.router_key(key, info, target)?;
-        }
-        formatter.after_router_keys(target)?;
-        let mut first = true;
-        for (aspa, info) in snapshot.aspas() {
-            if let Some(selection) = selection {
-                if !selection.include_aspa(aspa) {
-                    continue
-                }
-            }
-            if first {
-                first = false;
-            }
-            else {
-                formatter.aspa_delimiter(target)?;
-            }
-            formatter.aspa(aspa, info, target)?;
-        }
-        formatter.footer(metrics, target)
-    }
-
-    /// Creates an output stream for this format.
-    pub fn stream(
-        self,
-        snapshot: Arc<PayloadSnapshot>,
-        selection: Option<Selection>,
-        metrics: Arc<Metrics>,
-    ) -> impl Iterator<Item = Vec<u8>> {
-        OutputStream::new(self, snapshot, selection, metrics)
-    }
-
     fn formatter<W: io::Write>(self) -> Box<dyn Formatter<W> + Send> {
         match self {
             OutputFormat::Csv => Box::new(Csv),
@@ -264,44 +195,6 @@ impl Selection {
         self.more_specifics = more_specifics
     }
 
-    /// Creates a selection from a HTTP query string.
-    pub fn from_query(query: Option<&str>) -> Result<Option<Self>, QueryError> {
-        let query = match query {
-            Some(query) => query,
-            None => return Ok(None)
-        };
-
-        let mut res = Self::default();
-        for (key, value) in form_urlencoded::parse(query.as_ref()) {
-            if key == "select-prefix" || key == "filter-prefix" {
-                res.resources.push(
-                    SelectResource::Prefix(addr::Prefix::from_str(&value)?)
-                );
-            }
-            else if key == "select-asn" || key == "filter-asn" {
-                res.resources.push(
-                    SelectResource::Asn(
-                        Asn::from_str(&value).map_err(|_| QueryError)?
-                    )
-                );
-            }
-            else if key == "include" {
-                for value in value.split(',') {
-                    #[allow(clippy::single_match)]
-                    match value {
-                        "more-specifics" => res.more_specifics = true,
-                        _ => { }
-                    }
-                }
-            }
-            else {
-                return Err(QueryError)
-            }
-        }
-
-        Ok(Some(res))
-    }
-
     /// Add an origin ASN to select.
     pub fn push_asn(&mut self, asn: Asn) {
         self.resources.push(SelectResource::Asn(asn))
@@ -310,6 +203,11 @@ impl Selection {
     /// Add a origin prefix to select.
     pub fn push_prefix(&mut self, prefix: addr::Prefix) {
         self.resources.push(SelectResource::Prefix(prefix))
+    }
+
+    /// Returns whether there are any resources.
+    pub fn has_resources(&self) -> bool {
+        !self.resources.is_empty()
     }
 
     /// Returns whether an origin should be included in output.
@@ -392,14 +290,188 @@ impl SelectResource {
 }
 
 
+//------------ Output --------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Output {
+    /// Limiting data to be included.
+    ///
+    /// If this is `None`, all data is potentially included.
+    selection: Option<Selection>,
+
+    /// Should we include route origins?
+    route_origins: bool,
+
+    /// Should we include router keys?
+    router_keys: bool,
+
+    /// Should we include ASPA data?
+    aspas: bool,
+}
+
+impl Output {
+    /// Creates new default output
+    pub fn new() -> Self {
+        Self {
+            selection: None,
+            route_origins: true,
+            router_keys: true,
+            aspas: true
+        }
+    }
+
+    /// Creates a new output based on the config.
+    pub fn from_config(config: &Config) -> Self {
+        let mut res = Self::new();
+        res.update_from_config(config);
+        res
+    }
+
+    pub fn from_query(query: Option<&str>) -> Result<Self, QueryError> {
+        let mut res = Self::new();
+        res.update_from_query(query)?;
+        Ok(res)
+    }
+
+    pub fn update_from_config(&mut self, config: &Config) {
+        if !config.enable_bgpsec {
+            self.no_router_keys();
+        }
+        if !config.enable_aspa {
+            self.no_aspas();
+        }
+    }
+
+    /// Updates the output value from query parameters.
+    pub fn update_from_query(
+        &mut self, query: Option<&str>
+    ) -> Result<(), QueryError> {
+        let query = match query {
+            Some(query) => query,
+            None => return Ok(())
+        };
+
+        let mut selection = Selection::new();
+        for (key, value) in form_urlencoded::parse(query.as_ref()) {
+            if key == "select-prefix" || key == "filter-prefix" {
+                selection.resources.push(
+                    SelectResource::Prefix(addr::Prefix::from_str(&value)?)
+                );
+            }
+            else if key == "select-asn" || key == "filter-asn" {
+                selection.resources.push(
+                    SelectResource::Asn(
+                        Asn::from_str(&value).map_err(|_| QueryError)?
+                    )
+                );
+            }
+            else if key == "include" {
+                for value in value.split(',') {
+                    #[allow(clippy::single_match)]
+                    match value {
+                        "more-specifics" => selection.more_specifics = true,
+                        _ => { }
+                    }
+                }
+            }
+            else if key == "exclude" {
+                for value in value.split(',') {
+                    match value {
+                        "routeOrigins" => self.route_origins = false,
+                        "routerKeys" => self.router_keys = false,
+                        "aspas" => self.aspas = false,
+                        _ => { }
+                    }
+                }
+            }
+            else {
+                return Err(QueryError)
+            }
+        }
+
+        if selection.has_resources() {
+            self.set_selection(selection)
+        }
+
+        Ok(())
+    }
+
+    pub fn set_selection(&mut self, selection: Selection) {
+        self.selection = Some(selection)
+    }
+
+    pub fn no_route_origins(&mut self) {
+        self.route_origins = false
+    }
+
+    pub fn no_router_keys(&mut self) {
+        self.router_keys = false
+    }
+
+    pub fn no_aspas(&mut self) {
+        self.aspas = false
+    }
+
+    /// Outputs the payload snapshot to the target in the given format.
+    pub fn write<W: io::Write>(
+        self,
+        snapshot: Arc<PayloadSnapshot>,
+        metrics: Arc<Metrics>,
+        format: OutputFormat,
+        target: &mut W,
+    ) -> Result<(), io::Error> {
+        let mut stream = OutputStream::new(self, snapshot, metrics, format);
+        while stream.write_next(target)? { }
+        Ok(())
+    }
+
+    /// Creates an output stream for the given format.
+    pub fn stream(
+        self,
+        snapshot: Arc<PayloadSnapshot>,
+        metrics: Arc<Metrics>,
+        format: OutputFormat,
+    ) -> impl Iterator<Item = Vec<u8>> {
+        OutputStream::new(self, snapshot, metrics, format)
+    }
+
+    fn include_origin(&self, origin: RouteOrigin) -> bool {
+        match self.selection.as_ref() {
+            Some(selection) => selection.include_origin(origin),
+            None => true
+        }
+    }
+
+    fn include_router_key(&self, key: &RouterKey) -> bool {
+        match self.selection.as_ref() {
+            Some(selection) => selection.include_router_key(key),
+            None => true
+        }
+    }
+
+    fn include_aspa(&self, aspa: &Aspa) -> bool {
+        match self.selection.as_ref() {
+            Some(selection) => selection.include_aspa(aspa),
+            None => true
+        }
+    }
+}
+
+impl Default for Output {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 //------------ OutputStream --------------------------------------------------
 
 struct OutputStream<Target> {
+    output: Output,
     snapshot: Arc<PayloadSnapshot>,
+    metrics: Arc<Metrics>,
     state: StreamState,
     formatter: Box<dyn Formatter<Target> + Send>,
-    selection: Option<Selection>,
-    metrics: Arc<Metrics>,
 }
 
 enum StreamState {
@@ -413,17 +485,15 @@ enum StreamState {
 impl<Target: io::Write> OutputStream<Target> {
     /// Creates a new output stream.
     fn new(
-        format: OutputFormat,
+        output: Output,
         snapshot: Arc<PayloadSnapshot>,
-        selection: Option<Selection>,
         metrics: Arc<Metrics>,
+        format: OutputFormat,
     ) -> Self {
         OutputStream {
-            snapshot,
+            output, snapshot, metrics,
             state: StreamState::Header,
             formatter: format.formatter(),
-            selection,
-            metrics,
         }
     }
 
@@ -432,16 +502,15 @@ impl<Target: io::Write> OutputStream<Target> {
     /// Returns `Ok(true)` if something was written and there may be more
     /// data. Returns `Ok(false)` if nothing was written and there also is
     /// no more data.
-    fn write_next(&mut self, target: &mut Target) -> Result<bool, io::Error> {
+    pub fn write_next(
+        &mut self, target: &mut Target
+    ) -> Result<bool, io::Error> {
         let next = match self.state {
             StreamState::Header => {
                 self.formatter.header(
                     &self.snapshot, &self.metrics, target
                 )?;
-                StreamState::Origin {
-                    iter: self.snapshot.clone().arc_origin_iter(),
-                    first: true,
-                }
+                self.progress_header(target)?
             }
             StreamState::Origin { ref mut iter, ref mut first } => {
                 loop {
@@ -452,10 +521,8 @@ impl<Target: io::Write> OutputStream<Target> {
                             break
                         }
                     };
-                    if let Some(selection) = self.selection.as_ref() {
-                        if !selection.include_origin(origin) {
-                            continue
-                        }
+                    if !self.output.include_origin(origin) {
+                        continue
                     }
                     if *first {
                         *first = false;
@@ -466,10 +533,7 @@ impl<Target: io::Write> OutputStream<Target> {
                     self.formatter.origin(origin, info, target)?;
                     return Ok(true)
                 }
-                StreamState::Key {
-                    iter: self.snapshot.clone().arc_router_key_iter(),
-                    first: true
-                }
+                self.progress_origin(target)?
             }
             StreamState::Key { ref mut iter, ref mut first } => {
                 loop {
@@ -480,10 +544,8 @@ impl<Target: io::Write> OutputStream<Target> {
                             break
                         }
                     };
-                    if let Some(selection) = self.selection.as_ref() {
-                        if !selection.include_router_key(key) {
-                            continue
-                        }
+                    if !self.output.include_router_key(key) {
+                        continue
                     }
                     if *first {
                         *first = false;
@@ -494,26 +556,19 @@ impl<Target: io::Write> OutputStream<Target> {
                     self.formatter.router_key(key, info, target)?;
                     return Ok(true)
                 }
-                StreamState::Aspa {
-                    iter: self.snapshot.clone().arc_aspa_iter(),
-                    first: true
-                }
+                self.progress_key(target)?
             }
             StreamState::Aspa { ref mut iter, ref mut first } => {
                 loop {
                     let (aspa, info) = match iter.next_with_info() {
                         Some((aspa, info)) => (aspa, info),
                         None => {
-                            self.formatter.footer(
-                                self.metrics.as_ref(), target
-                            )?;
+                            self.formatter.after_aspas(target)?;
                             break
                         }
                     };
-                    if let Some(selection) = self.selection.as_ref() {
-                        if !selection.include_aspa(aspa) {
-                            continue
-                        }
+                    if !self.output.include_aspa(aspa) {
+                        continue
                     }
                     if *first {
                         *first = false;
@@ -528,8 +583,62 @@ impl<Target: io::Write> OutputStream<Target> {
             }
             StreamState::Done => return Ok(false)
         };
+
+        if matches!(next, StreamState::Done) {
+            self.formatter.footer(
+                self.metrics.as_ref(), target
+            )?;
+        }
         self.state = next;
         Ok(true)
+    }
+
+    /// Progresses from the header state to the next state.
+    fn progress_header(
+        &self, target: &mut Target
+    ) -> Result<StreamState, io::Error> {
+        if self.output.route_origins {
+            self.formatter.before_origins(target)?;
+            Ok(StreamState::Origin {
+                iter: self.snapshot.clone().arc_origin_iter(),
+                first: true,
+            })
+        }
+        else {
+            self.progress_origin(target)
+        }
+    }
+
+    /// Progresses from the origin state to the next state.
+    fn progress_origin(
+        &self, target: &mut Target
+    ) -> Result<StreamState, io::Error> {
+        if self.output.router_keys {
+            self.formatter.before_router_keys(target)?;
+            Ok(StreamState::Key {
+                iter: self.snapshot.clone().arc_router_key_iter(),
+                first: true
+            })
+        }
+        else {
+            self.progress_key(target)
+        }
+    }
+
+    /// Progresses from the router key state to the next state.
+    fn progress_key(
+        &self, target: &mut Target
+    ) -> Result<StreamState, io::Error> {
+        if self.output.aspas {
+            self.formatter.before_aspas(target)?;
+            Ok(StreamState::Aspa {
+                iter: self.snapshot.clone().arc_aspa_iter(),
+                first: true
+            })
+        }
+        else {
+            Ok(StreamState::Done)
+        }
     }
 }
 
@@ -583,11 +692,28 @@ trait Formatter<W> {
         Ok(())
     }
 
+    fn before_origins(
+        &self, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
     fn origin(
         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error>;
 
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        let _ = target;
+        Ok(())
+    }
+
     fn after_origins(
+        &self, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
+    fn before_router_keys(
         &self, _target: &mut W
     ) -> Result<(), io::Error> {
         Ok(())
@@ -599,7 +725,18 @@ trait Formatter<W> {
         Ok(())
     }
 
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        let _ = target;
+        Ok(())
+    }
+
     fn after_router_keys(
+        &self, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
+    fn before_aspas(
         &self, _target: &mut W
     ) -> Result<(), io::Error> {
         Ok(())
@@ -611,25 +748,21 @@ trait Formatter<W> {
         Ok(())
     }
 
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        let _ = target;
+        Ok(())
+    }
+
+    fn after_aspas(
+        &self, _target: &mut W
+    ) -> Result<(), io::Error> {
+        Ok(())
+    }
+
     fn footer(
         &self, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
         let _ = (metrics, target);
-        Ok(())
-    }
-
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        let _ = target;
-        Ok(())
-    }
-
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        let _ = target;
-        Ok(())
-    }
-
-    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        let _ = target;
         Ok(())
     }
 }
@@ -752,17 +885,19 @@ impl<W: io::Write> Formatter<W> for Json {
             \n  \"metadata\": {{\
             \n    \"generated\": {},\
             \n    \"generatedTime\": \"{}\"\
-            \n  }},\
-            \n  \"roas\": [",
+            \n  }}",
             metrics.time.timestamp(),
             format_iso_date(metrics.time)
         )
     }
 
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
+    fn before_origins(
+        &self, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "\n  ]\n}}")
+        writeln!(target,
+            ",\
+            \n  \"roas\": ["
+        )
     }
 
     fn origin(
@@ -780,6 +915,79 @@ impl<W: io::Write> Formatter<W> for Json {
 
     fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         writeln!(target, ",")
+    }
+
+    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
+    fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"routerKeys\": [")
+    }
+
+    fn router_key(
+        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+            \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
+            key.asn,
+            key.key_identifier,
+            key.key_info,
+            info.tal_name().unwrap_or("N/A"),
+        )
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
+    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"aspas\": [")
+    }
+
+    fn aspa(
+        &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \"customer\": \"{}\", \"afi\": \"{}\", \
+            \"providers\": [",
+            aspa.customer,
+            aspa.afi,
+        )?;
+
+        let mut first = true;
+        for item in aspa.providers.iter() {
+            if first {
+                write!(target, "\"{}\"", item)?;
+                first = false;
+            }
+            else {
+                write!(target, ", \"{}\"", item)?;
+            }
+        }
+
+        write!(
+            target, "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
+    fn footer(
+        &self, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target, "\n}}")
     }
 }
 
@@ -854,15 +1062,23 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
     fn header(
         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target,
+        write!(target,
             "{{\
             \n  \"metadata\": {{\
             \n    \"generated\": {},\
             \n    \"generatedTime\": \"{}\"\
-            \n  }},\
-            \n  \"roas\": [",
+            \n  }}",
             metrics.time.timestamp(),
             format_iso_date(metrics.time)
+        )
+    }
+
+    fn before_origins(
+        &self, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            ",\
+            \n  \"roas\": ["
         )
     }
 
@@ -880,8 +1096,16 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target, "] }}")
     }
 
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
     fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, "\n  ],\n  \"routerKeys\": [")
+        write!(target, "\n  ]")
+    }
+
+    fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"routerKeys\": [")
     }
 
     fn router_key(
@@ -898,8 +1122,16 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target, "] }}")
     }
 
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
     fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, "\n  ],\n  \"aspas\": [")
+        write!(target, "\n  ]")
+    }
+
+    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",\n  \"aspas\": [")
     }
 
     fn aspa(
@@ -928,22 +1160,18 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         write!(target, "] }}")
     }
 
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        write!(target, "\n  ]")
+    }
+
     fn footer(
         &self, _metrics: &Metrics, target: &mut W
     ) -> Result<(), io::Error> {
-        writeln!(target, "\n  ]\n}}")
-    }
-
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
+        writeln!(target, "\n}}")
     }
 }
 

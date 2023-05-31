@@ -51,6 +51,15 @@ This will produce the following output:
       ]
     }
 
+The query parameter ``exclude`` can be used to exclude certain payload types
+from the response. The values ``routeOrigins``, ``routerKeys``, and ``aspas``
+disable inclusion of route origins, router keys, and ASPAs, respectively. The
+values can either be given in separate ``exclude`` parameters or included in
+one separated by commas.
+
+.. versionadded:: 0.13.0
+   Allow excluding specific data from the output
+
 More Specific Prefixes
 """"""""""""""""""""""
 
