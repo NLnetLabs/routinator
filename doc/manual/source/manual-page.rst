@@ -1420,7 +1420,7 @@ In addition, the query parameter ``include=more-specifics`` will cause the
 inclusion of VRPs for more specific prefixes of prefixes given via
 ``select-prefix``.
 
-Finally, the query parameters ``exclude`` can be used to exclude certain
+Finally, the query parameter ``exclude`` can be used to exclude certain
 payload types from the response. The values ``origins``, ``routerkeys``, and
 ``aspa`` disable inclusion of route origins, router keys, and ASPAs,
 respectively. The values can either be given in separate ``exclude``
