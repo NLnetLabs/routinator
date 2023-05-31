@@ -30,7 +30,7 @@ of information returned, refer to the :doc:`logging` section.
 
 If you have enabled :ref:`advanced-features:bgpsec` and/or
 :ref:`advanced-features:aspa` validation, in some output formats the amount
-data can be quite overwhelming. You can exclude specific data types for the
+of data can be quite overwhelming. You can exclude specific data types for the
 output with the :option:`--no-route-origins`, :option:`--no-router-keys` and
 the :option:`--noaspas` options.
 
