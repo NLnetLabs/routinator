@@ -13,6 +13,7 @@ use hyper::Server;
 use hyper::server::accept::Accept;
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
+use rpki::rtr::server::NotifySender;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
@@ -34,8 +35,11 @@ pub fn http_listener(
     rtr_metrics: SharedRtrServerMetrics,
     log: Option<Arc<LogOutput>>,
     config: &Config,
+    notify: NotifySender,
 ) -> Result<impl Future<Output = ()>, ExitError> {
-    let state = Arc::new(State::new(config, origins, rtr_metrics, log));
+    let state = Arc::new(
+        State::new(config, origins, rtr_metrics, log, notify)
+    );
 
     // Binding needs to have happened before dropping privileges
     // during detach. So we do this here synchronously.
@@ -111,9 +115,9 @@ async fn single_http_listener(
             Ok::<_, Infallible>(service_fn(move |req| {
                 let state = state.clone();
                 async move {
-                    Ok::<_, Infallible>(state.handle_request(
-                        req,
-                    ).await.into_hyper())
+                    Ok::<_, Infallible>(
+                        state.handle_request(req).await.into_hyper()
+                    )
                 }
             }))
         }

@@ -31,10 +31,9 @@ pub fn rtr_listener(
     history: SharedHistory,
     metrics: SharedRtrServerMetrics,
     config: &Config,
+    sender: NotifySender,
     extra_listener: Option<StdListener>,
-) -> Result<(NotifySender, impl Future<Output = ()>), ExitError> {
-    let sender = NotifySender::new();
-
+) -> Result<impl Future<Output = ()>, ExitError> {
     // Binding needs to have happened before dropping privileges
     // during detach. So we do this here synchronously.
     let mut listeners = Vec::new();
@@ -54,9 +53,9 @@ pub fn rtr_listener(
             ));
         }
     }
-    Ok((sender.clone(), _rtr_listener(
+    Ok(_rtr_listener(
         history, metrics, sender, listeners, config.rtr_tcp_keepalive,
-    )))
+    ))
 }
 
 fn create_tls_config(

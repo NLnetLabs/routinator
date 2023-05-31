@@ -7,14 +7,15 @@ use futures::stream;
 use hyper::{Body, Method, Request};
 use rpki::rtr::Serial;
 use rpki::rtr::payload::{Action, PayloadRef};
-use rpki::rtr::server::PayloadDiff;
+use rpki::rtr::server::{NotifySender, PayloadDiff};
 use crate::payload::{
     DeltaArcIter, PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
 };
 use crate::utils::fmt::WriteOrPanic;
+use crate::utils::json::JsonBuilder;
 use super::response::{ContentType, Response, ResponseBuilder};
 
-//------------ handle_get ----------------------------------------------------
+//------------ handle_get_or_head --------------------------------------------
 
 pub fn handle_get_or_head(
     req: &Request<Body>,
@@ -57,6 +58,81 @@ pub fn handle_get_or_head(
     Some(handle_reset(history.session(), history.serial(), snapshot))
 }
 
+fn handle_delta(
+    session: u64, from_serial: Serial, to_serial: Serial,
+    delta: Arc<PayloadDelta>
+) -> Response {
+    ResponseBuilder::ok().content_type(ContentType::JSON)
+    .body(Body::wrap_stream(stream::iter(
+        DeltaStream::new(session, from_serial, to_serial, delta)
+        .map(Result::<_, Infallible>::Ok)
+    )))
+}
+
+fn handle_reset(
+    session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>
+) -> Response {
+    ResponseBuilder::ok().content_type(ContentType::JSON)
+    .body(Body::wrap_stream(stream::iter(
+        SnapshotStream::new(session, to_serial, snapshot)
+        .map(Result::<_, Infallible>::Ok)
+    )))
+}
+
+
+//------------ handle_notify_get_or_head -------------------------------------
+
+pub async fn handle_notify_get_or_head(
+    req: &Request<Body>,
+    history: &SharedHistory,
+    notify: &NotifySender,
+) -> Option<Response> {
+    if req.uri().path() != "/json-delta/notify" {
+        return None
+    }
+
+    let wait = match need_wait(req, history) {
+        Ok(wait) => wait,
+        Err(resp) => return Some(resp),
+    };
+
+    if wait {
+        notify.subscribe().recv().await;
+    }
+
+    if *req.method() == Method::HEAD {
+        Some(
+            ResponseBuilder::ok().content_type(ContentType::JSON).empty()
+        )
+    }
+    else {
+        let (session, serial) = history.read().session_and_serial();
+        Some(
+            ResponseBuilder::ok().content_type(ContentType::JSON).body(
+                JsonBuilder::build(|json| {
+                    json.member_raw("session", session);
+                    json.member_raw("serial", serial);
+                })
+            )
+        )
+    }
+}
+
+fn need_wait(
+    req: &Request<Body>,
+    history: &SharedHistory,
+) -> Result<bool, Response> {
+    let version = match version_from_query(req.uri().query())? {
+        Some(version) => version,
+        None => return Ok(false),
+    };
+
+    Ok(history.read().session_and_serial() == version)
+}
+
+
+//------------ Helpers -------------------------------------------------------
+
 fn version_from_query(
     query: Option<&str>
 ) -> Result<Option<(u64, Serial)>, Response> {
@@ -93,27 +169,6 @@ fn version_from_query(
         (None, None) => Ok(None),
         _ => Err(Response::bad_request())
     }
-}
-
-fn handle_delta(
-    session: u64, from_serial: Serial, to_serial: Serial,
-    delta: Arc<PayloadDelta>
-) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON)
-    .body(Body::wrap_stream(stream::iter(
-        DeltaStream::new(session, from_serial, to_serial, delta)
-        .map(Result::<_, Infallible>::Ok)
-    )))
-}
-
-fn handle_reset(
-    session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>
-) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON)
-    .body(Body::wrap_stream(stream::iter(
-        SnapshotStream::new(session, to_serial, snapshot)
-        .map(Result::<_, Infallible>::Ok)
-    )))
 }
 
 

@@ -19,7 +19,7 @@ use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
 use log::{error, info};
@@ -228,12 +228,14 @@ impl Server {
         );
 
         let history = SharedHistory::from_config(process.config());
-        let (mut notify, rtr) = rtr_listener(
+        let mut notify = NotifySender::new();
+        let rtr = rtr_listener(
             history.clone(), rtr_metrics.clone(), process.config(),
-            process.get_listen_fd()?
+            notify.clone(), process.get_listen_fd()?
         )?;
         let http = http_listener(
-            history.clone(), rtr_metrics, log.clone(), process.config()
+            history.clone(), rtr_metrics, log.clone(), process.config(),
+            notify.clone(),
         )?;
 
         process.drop_privileges()?;
@@ -275,25 +277,46 @@ impl Server {
                 if let Some(log) = log.as_ref() {
                     log.flush();
                 }
-                match sig_rx.recv_timeout(timeout) {
-                    Ok(UserSignal::ReloadTals) => {
-                        match validation.reload_tals() {
-                            Ok(_) => {
-                                info!("Reloaded TALs at user request.");
-                            },
-                            Err(_) => {
-                                error!(
-                                    "Fatal: Reloading TALs failed, \
-                                     shutting down."
-                                );
-                                break Err(Failed);
+
+                // Because we don’t want to restart validation upon
+                // log rotation, we need to loop here. But then we need
+                // to recalculate timeout.
+                let deadline = Instant::now() + timeout;
+                let end = loop {
+                    let timeout = deadline.saturating_duration_since(
+                        Instant::now()
+                    );
+                    match sig_rx.recv_timeout(timeout) {
+                        Ok(UserSignal::ReloadTals) => {
+                            match validation.reload_tals() {
+                                Ok(_) => {
+                                    info!("Reloaded TALs at user request.");
+                                    break None;
+                                },
+                                Err(_) => {
+                                    error!(
+                                        "Fatal: Reloading TALs failed, \
+                                         shutting down."
+                                    );
+                                    break Some(Err(Failed));
+                                }
                             }
                         }
+                        Ok(UserSignal::RotateLog) => {
+                            if process.rotate_log().is_err() {
+                                break Some(Err(Failed));
+                            }
+                        }
+                        Err(RecvTimeoutError::Timeout) => {
+                            break None;
+                        }
+                        Err(RecvTimeoutError::Disconnected) => {
+                            break Some(Ok(()));
+                        }
                     }
-                    Err(RecvTimeoutError::Timeout) => { }
-                    Err(RecvTimeoutError::Disconnected) => {
-                        break Ok(());
-                    }
+                };
+                if let Some(end) = end {
+                    break end;
                 }
             };
             // An error here means the receiver is gone which is fine.
@@ -1238,6 +1261,7 @@ impl Man {
 #[allow(dead_code)]
 enum UserSignal {
     ReloadTals,
+    RotateLog,
 }
 
 /// Wait for the next validation run or a user telling us to quit or reload.
@@ -1246,6 +1270,7 @@ enum UserSignal {
 #[cfg(unix)]
 struct SignalListener {
     usr1: Signal,
+    usr2: Signal,
 }
 
 #[cfg(unix)]
@@ -1258,7 +1283,14 @@ impl SignalListener {
                     error!("Attaching to signal USR1 failed: {}", err);
                     return Err(Failed)
                 }
-            }
+            },
+            usr2: match signal(SignalKind::user_defined2()) {
+                Ok(usr2) => usr2,
+                Err(err) => {
+                    error!("Attaching to signal USR2 failed: {}", err);
+                    return Err(Failed)
+                }
+            },
         })
     }
 
@@ -1266,8 +1298,10 @@ impl SignalListener {
     ///
     /// Returns what to do.
     pub async fn next(&mut self) -> UserSignal {
-        self.usr1.recv().await;
-        UserSignal::ReloadTals
+        tokio::select! {
+            _ = self.usr1.recv() => UserSignal::ReloadTals,
+            _ = self.usr2.recv() => UserSignal::RotateLog,
+        }
     }
 }
 

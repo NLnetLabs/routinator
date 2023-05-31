@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use hyper::{Body, Method, Request};
+use rpki::rtr::server::NotifySender;
 use crate::config::Config;
 use crate::metrics::{HttpServerMetrics, SharedRtrServerMetrics};
 use crate::payload::SharedHistory;
@@ -17,6 +18,7 @@ pub struct State {
     history: SharedHistory,
     metrics: Arc<HttpServerMetrics>,
     rtr_metrics: SharedRtrServerMetrics,
+    notify: NotifySender,
 }
 
 impl State {
@@ -24,7 +26,8 @@ impl State {
         config: &Config,
         history: SharedHistory,
         rtr_metrics: SharedRtrServerMetrics,
-        log: Option<Arc<LogOutput>>
+        log: Option<Arc<LogOutput>>,
+        notify: NotifySender,
     ) -> Self {
         Self {
             payload: payload::State::new(config),
@@ -32,6 +35,7 @@ impl State {
             history,
             metrics: Arc::new(HttpServerMetrics::default()),
             rtr_metrics,
+            notify,
         }
     }
     
@@ -51,6 +55,11 @@ impl State {
         if let Some(response) = self.payload.handle_get_or_head(
             &req, &self.history
         ) {
+            return response
+        }
+        if let Some(response) = delta::handle_notify_get_or_head(
+            &req, &self.history, &self.notify,
+        ).await {
             return response
         }
         if let Some(response) = delta::handle_get_or_head(

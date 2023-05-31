@@ -5,26 +5,26 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
-use rpki::rtr::payload::{Payload, RouteOrigin, RouterKey};
-use rpki::slurm::{PrefixFilter, SlurmFile};
+use rpki::rtr::payload::{RouteOrigin, RouterKey};
+use rpki::slurm::{BgpsecFilter, PrefixFilter, SlurmFile};
 use crate::config::Config;
 use crate::error::Failed;
 
 
 //------------ LocalExceptions -----------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct LocalExceptions {
-    filters: Vec<PrefixFilter>,
-    assertions: Vec<(Payload, Arc<ExceptionInfo>)>,
+    origin_filters: Vec<PrefixFilter>,
+    router_key_filters: Vec<BgpsecFilter>,
+
+    origin_assertions: Vec<(RouteOrigin, Arc<ExceptionInfo>)>,
+    router_key_assertions: Vec<(RouterKey, Arc<ExceptionInfo>)>,
 }
 
 impl LocalExceptions {
     pub fn empty() -> Self {
-        LocalExceptions {
-            filters: Vec::new(),
-            assertions: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn load(config: &Config, keep_comments: bool) -> Result<Self, Failed> {
@@ -95,19 +95,56 @@ impl LocalExceptions {
         path: Option<Arc<Path>>,
         keep_comments: bool,
     ) {
-        self.filters.extend(json.filters.prefix.into_iter().map(Into::into));
-        self.assertions.extend(
+        // If we don’t keep comments, we can have one info value for
+        // everything and save a bit of memory.
+        let info = (!keep_comments).then(|| {
+            Arc::new(ExceptionInfo {
+                path: path.clone(),
+                comment: None
+            })
+        });
+        let info = info.as_ref(); // So we can use info.cloned() below.
+
+        self.origin_filters.extend(
+            json.filters.prefix.into_iter().map(|mut item| {
+                if !keep_comments {
+                    item.comment = None
+                }
+                item
+            })
+        );
+        self.router_key_filters.extend(
+            json.filters.bgpsec.into_iter().map(|mut item| {
+                if !keep_comments {
+                    item.comment = None
+                }
+                item
+            })
+        );
+        self.origin_assertions.extend(
             json.assertions.prefix.into_iter().map(|item| {
                 (
-                    RouteOrigin::new(item.prefix, item.asn).into(),
-                    Arc::new(ExceptionInfo {
-                        path: path.clone(),
-                        comment: if keep_comments {
-                            item.comment
-                        }
-                        else {
-                            None
-                        }
+                    RouteOrigin::new(item.prefix, item.asn),
+                    info.cloned().unwrap_or_else(|| {
+                        Arc::new(ExceptionInfo {
+                            path: path.clone(),
+                            comment: item.comment,
+                        })
+                    })
+                )
+            })
+        );
+        self.router_key_assertions.extend(
+            json.assertions.bgpsec.into_iter().map(|item| {
+                (
+                    RouterKey::new(
+                        item.ski, item.asn, item.router_public_key.into()
+                    ),
+                    info.cloned().unwrap_or_else(|| {
+                        Arc::new(ExceptionInfo {
+                            path: path.clone(),
+                            comment: item.comment,
+                        })
                     })
                 )
             })
@@ -115,43 +152,29 @@ impl LocalExceptions {
     }
 
     pub fn drop_origin(&self, origin: RouteOrigin) -> bool {
-        !self.keep_payload(&Payload::Origin(origin))
+        self.origin_filters.iter().any(|filter| filter.drop_origin(origin))
     }
 
-    pub fn keep_payload(&self, payload: &Payload) -> bool {
-        for filter in &self.filters {
-            if filter.drop_payload(payload) {
-                return false
-            }
-        }
-        true
-    }
-
-    pub fn assertions(
-        &self
-    ) -> impl Iterator<Item = (&Payload, Arc<ExceptionInfo>)> + '_ {
-        self.assertions.iter().map(|(payload, info)| {
-            (payload, info.clone())
+    pub fn drop_router_key(&self, key: &RouterKey) -> bool {
+        self.router_key_filters.iter().any(|filter| {
+            filter.drop_router_key(key)
         })
     }
 
     pub fn origin_assertions(
         &self
     ) -> impl Iterator<Item = (RouteOrigin, Arc<ExceptionInfo>)> + '_ {
-        self.assertions.iter().filter_map(|(payload, info)| {
-            if let Payload::Origin(origin) = payload {
-                Some((*origin, info.clone()))
-            }
-            else {
-                None
-            }
+        self.origin_assertions.iter().map(|(origin, info)| {
+            (*origin, info.clone())
         })
     }
 
     pub fn router_key_assertions(
         &self
     ) -> impl Iterator<Item = (RouterKey, Arc<ExceptionInfo>)> + '_ {
-        std::iter::empty()
+        self.router_key_assertions.iter().map(|(key, info)| {
+            (key.clone(), info.clone())
+        })
     }
 }
 
