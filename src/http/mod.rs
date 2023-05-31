@@ -8,8 +8,8 @@
 pub use self::listener::http_listener;
 pub use self::response::ContentType;
 
-// First, a bit of scaffolding. `dispatch` contains the state needs is
-// necessary for answering requests and dispatches to the specific handlers.
+// First, a bit of scaffolding. `dispatch` contains the state necessary for
+// answering requests and dispatches to the specific handlers.
 // `listener` contains all the logic to actually handle connections etc.
 mod dispatch;
 mod listener;

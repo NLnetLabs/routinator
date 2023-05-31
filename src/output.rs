@@ -625,7 +625,7 @@ impl<Target: io::Write> OutputStream<Target> {
         }
     }
 
-    /// Progresses from the origin state to the next state.
+    /// Progresses from the router key state to the next state.
     fn progress_key(
         &self, target: &mut Target
     ) -> Result<StreamState, io::Error> {
