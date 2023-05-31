@@ -10,6 +10,12 @@ New
   support for the ASPA payload type. ([#847])
 * Sending SIGUSR2 to Routinator will re-open a log file if logging to a
   file is enabled. ([#859])
+* The HTTP server provides a new endpoint `/json-delta/notify` that can be
+  used to wait for updated data similar to the RTR Notify PDU. ([#863])
+* Added support for filtering and adding router keys via local exception
+  files. ([#865])
+* The `vrps` command and the HTTP payload output endpoints now allow
+  excluding specific payload types for output. ([#866])
 
 Breaking Changes
 
@@ -25,6 +31,9 @@ Breaking Changes
 * Renamed the JSON member that in the HTTP status API from `validEECerts`
   to `validRouterCerts`. The old name is still available but may be
   removed in the future. ([#854])
+* The regular `json` output format now includes router key and ASPA
+  output. Since both are disabled by default, the format will still be
+  compatible by default. ([#866])
 
 Bug Fixes
 
@@ -45,7 +54,10 @@ Other Changes
 [#854]: https://github.com/NLnetLabs/routinator/pull/854
 [#859]: https://github.com/NLnetLabs/routinator/pull/859
 [#861]: https://github.com/NLnetLabs/routinator/pull/861
+[#863]: https://github.com/NLnetLabs/routinator/pull/863
 [#864]: https://github.com/NLnetLabs/routinator/pull/864
+[#865]: https://github.com/NLnetLabs/routinator/pull/865
+[#866]: https://github.com/NLnetLabs/routinator/pull/866
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 
