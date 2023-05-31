@@ -244,7 +244,7 @@ impl DeltaStream {
             \n  \"serial\": {},\
             \n  \"fromSerial\": {},\
             \n  \"generated\": {},\
-            \n  \"generatedTime\": \"{}\"\
+            \n  \"generatedTime\": \"{}\",\
             \n  \"announced\": [",
             session, to_serial, from_serial,
             created.timestamp(), format_iso_date(created),
@@ -443,7 +443,7 @@ impl SnapshotStream {
             \n  \"session\": \"{}\",\
             \n  \"serial\": {},\
             \n  \"generated\": {},\
-            \n  \"generatedTime\": \"{}\"\
+            \n  \"generatedTime\": \"{}\",\
             \n  \"announced\": [",
             session, to_serial,
             created.timestamp(), format_iso_date(created),
