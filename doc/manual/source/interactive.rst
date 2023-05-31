@@ -141,7 +141,7 @@ Exclude Specific Data Types
 """""""""""""""""""""""""""
 
 If you have enabled :ref:`advanced-features:bgpsec` and/or
-:ref:`advanced-features:aspa` validation, in some output formats the amount
+:ref:`advanced-features:aspa` validation, in some output formats the amount of
 data can be quite overwhelming. You can exclude specific payload types with
 the :option:`--no-route-origins`, :option:`--no-router-keys` and
 :option:`--noaspas` options to disable inclusion of route origins, router
