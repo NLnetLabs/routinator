@@ -16,6 +16,10 @@ New
   files. ([#865])
 * The `vrps` command and the HTTP payload output endpoints now allow
   excluding specific payload types for output. ([#866])
+* Added a new member `payload` to the output of the `/api/v1/status`
+  endpoint that gives an overall summary of the produced payload. ([#867])
+* Added new members `generated` and `generatedTime` to the JSON object
+  produced by the `/json-delta` endpoint. ([#868])
 
 Breaking Changes
 
@@ -44,8 +48,8 @@ Bug Fixes
 
 Other Changes
 
-* The minimal required Rust version has been increased to 1.63.
-  ([#847], [#853])
+* The minimal required Rust version has been increased to 1.65.
+  ([#847], [#853], [#869])
 * The log message for missing manifest now include the URI of the CA
   certificate for which the manifest is missing. ([#864])
 
@@ -58,6 +62,9 @@ Other Changes
 [#864]: https://github.com/NLnetLabs/routinator/pull/864
 [#865]: https://github.com/NLnetLabs/routinator/pull/865
 [#866]: https://github.com/NLnetLabs/routinator/pull/866
+[#867]: https://github.com/NLnetLabs/routinator/pull/867
+[#868]: https://github.com/NLnetLabs/routinator/pull/868
+[#869]: https://github.com/NLnetLabs/routinator/pull/869
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 
 
