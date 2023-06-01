@@ -3,6 +3,7 @@
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
 use futures::stream;
 use hyper::{Body, Method, Request};
 use rpki::rtr::Serial;
@@ -12,6 +13,7 @@ use crate::payload::{
     DeltaArcIter, PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
 };
 use crate::utils::fmt::WriteOrPanic;
+use crate::utils::date::format_iso_date;
 use crate::utils::json::JsonBuilder;
 use super::response::{ContentType, Response, ResponseBuilder};
 
@@ -41,11 +43,15 @@ pub fn handle_get_or_head(
         )
     }
 
+    // We are past initial validation so there is a creation time, so any
+    // fallback here is fine.
+    let created = history.created().unwrap_or(Utc::now());
+
     if let Some((session, serial)) = version {
         if session == history.session() {
             if let Some(delta) = history.delta_since(serial) {
                 return Some(handle_delta(
-                    session, serial, history.serial(), delta
+                    session, serial, history.serial(), delta, created
                 ))
             }
         }
@@ -55,26 +61,27 @@ pub fn handle_get_or_head(
         Some(snapshot) => snapshot,
         None => return Some(Response::initial_validation()),
     };
-    Some(handle_reset(history.session(), history.serial(), snapshot))
+    Some(handle_reset(history.session(), history.serial(), snapshot, created))
 }
 
 fn handle_delta(
     session: u64, from_serial: Serial, to_serial: Serial,
-    delta: Arc<PayloadDelta>
+    delta: Arc<PayloadDelta>, created: DateTime<Utc>,
 ) -> Response {
     ResponseBuilder::ok().content_type(ContentType::JSON)
     .body(Body::wrap_stream(stream::iter(
-        DeltaStream::new(session, from_serial, to_serial, delta)
+        DeltaStream::new(session, from_serial, to_serial, delta, created)
         .map(Result::<_, Infallible>::Ok)
     )))
 }
 
 fn handle_reset(
-    session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>
+    session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>,
+    created: DateTime<Utc>,
 ) -> Response {
     ResponseBuilder::ok().content_type(ContentType::JSON)
     .body(Body::wrap_stream(stream::iter(
-        SnapshotStream::new(session, to_serial, snapshot)
+        SnapshotStream::new(session, to_serial, snapshot, created)
         .map(Result::<_, Infallible>::Ok)
     )))
 }
@@ -210,10 +217,12 @@ impl DeltaStream {
     /// Creates a new delta stream.
     fn new(
         session: u64, from_serial: Serial, to_serial: Serial,
-        delta: Arc<PayloadDelta>
+        delta: Arc<PayloadDelta>, created: DateTime<Utc>,
     ) -> Self {
         let mut vec = Vec::new();
-        Self::append_header(&mut vec, session, from_serial, to_serial);
+        Self::append_header(
+            &mut vec, session, from_serial, to_serial, created
+        );
         DeltaStream {
             header: Some(vec),
             announce: Some(delta.clone().arc_iter()),
@@ -226,6 +235,7 @@ impl DeltaStream {
     fn append_header(
         vec: &mut Vec<u8>,
         session: u64, from_serial: Serial, to_serial: Serial,
+        created: DateTime<Utc>,
     ) {
         write!(vec, "\
             {{\
@@ -233,8 +243,11 @@ impl DeltaStream {
             \n  \"session\": \"{}\",\
             \n  \"serial\": {},\
             \n  \"fromSerial\": {},\
+            \n  \"generated\": {},\
+            \n  \"generatedTime\": \"{}\",\
             \n  \"announced\": [",
-            session, to_serial, from_serial
+            session, to_serial, from_serial,
+            created.timestamp(), format_iso_date(created),
         )
     }
 
@@ -408,10 +421,11 @@ struct SnapshotStream {
 impl SnapshotStream {
     /// Creates a new snapshot stream.
     fn new(
-        session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>
+        session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>,
+        created: DateTime<Utc>,
     ) -> Self {
         let mut vec = Vec::new();
-        Self::append_header(&mut vec, session, to_serial);
+        Self::append_header(&mut vec, session, to_serial, created);
         SnapshotStream {
             header: Some(vec),
             iter: Some(snapshot.arc_iter()),
@@ -421,15 +435,18 @@ impl SnapshotStream {
     /// Appends the snapshot header to the vec.
     fn append_header(
         vec: &mut Vec<u8>,
-        session: u64, to_serial: Serial,
+        session: u64, to_serial: Serial, created: DateTime<Utc>,
     ) {
         write!(vec, "\
             {{\
             \n  \"reset\": true,\
             \n  \"session\": \"{}\",\
             \n  \"serial\": {},\
+            \n  \"generated\": {},\
+            \n  \"generatedTime\": \"{}\",\
             \n  \"announced\": [",
             session, to_serial,
+            created.timestamp(), format_iso_date(created),
         )
     }
 }
