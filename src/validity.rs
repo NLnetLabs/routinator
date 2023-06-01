@@ -3,8 +3,7 @@
 use std::{fmt, io};
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use routecore::addr;
-use rpki::repository::resources::Asn;
+use rpki::resources::{Asn, Prefix};
 use rpki::rtr::payload::RouteOrigin;
 use serde::Deserialize;
 use crate::payload::{PayloadInfo, PayloadSnapshot};
@@ -69,7 +68,7 @@ impl<'a> RouteValidityList<'a> {
 
     pub fn iter_state(
         &self
-    ) -> impl Iterator<Item = (addr::Prefix, Asn, RouteState)> + '_ {
+    ) -> impl Iterator<Item = (Prefix, Asn, RouteState)> + '_ {
         self.routes.iter().map(|route| {
             (route.prefix, route.asn, route.state())
         })
@@ -83,7 +82,7 @@ impl<'a> RouteValidityList<'a> {
 #[derive(Clone, Debug)]
 pub struct RouteValidity<'a> {
     /// The address prefix of the route announcement.
-    prefix: addr::Prefix,
+    prefix: Prefix,
 
     /// The origin AS number of the route announcement.
     asn: Asn,
@@ -100,7 +99,7 @@ pub struct RouteValidity<'a> {
 
 impl<'a> RouteValidity<'a> {
     pub fn new(
-        prefix: addr::Prefix,
+        prefix: Prefix,
         asn: Asn,
         snapshot: &'a PayloadSnapshot
     ) -> Self {
@@ -123,7 +122,7 @@ impl<'a> RouteValidity<'a> {
         RouteValidity { prefix, asn, matched, bad_asn, bad_len }
     }
 
-    pub fn prefix(&self) -> addr::Prefix {
+    pub fn prefix(&self) -> Prefix {
         self.prefix
     }
 
@@ -382,7 +381,7 @@ impl RequestList {
 
             let prefix = match tokens.next() {
                 Some(prefix) => {
-                    match addr::Prefix::from_str(prefix) {
+                    match Prefix::from_str(prefix) {
                         Ok(prefix) => prefix,
                         Err(_) => {
                             return Err(io::Error::new(
@@ -473,7 +472,7 @@ impl RequestList {
     }
 
     /// Creates a request list with a single entry.
-    pub fn single(prefix: addr::Prefix, asn: Asn) -> Self {
+    pub fn single(prefix: Prefix, asn: Asn) -> Self {
         RequestList {
             routes: vec![Request { prefix, asn }]
         }
@@ -495,7 +494,7 @@ impl RequestList {
 #[derive(Clone, Debug, Deserialize)]
 struct Request {
     /// The address prefix of the route announcement.
-    prefix: addr::Prefix,
+    prefix: Prefix,
 
     /// The origin AS number of the route announcement.
     #[serde(deserialize_with = "Asn::deserialize_from_any")]

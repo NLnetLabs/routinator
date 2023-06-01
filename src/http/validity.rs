@@ -3,8 +3,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 use hyper::{Body, Method, Request};
-use routecore::addr::Prefix;
-use rpki::repository::resources::Asn;
+use rpki::resources::{Asn, Prefix};
 use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::validity::RouteValidity;
 use super::response::{ContentType, Response, ResponseBuilder};
