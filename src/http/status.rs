@@ -373,10 +373,12 @@ async fn handle_api_status(
             target.member_raw("lastUpdateDuration", "null");
         }
 
+        json_payload_metrics(target, &metrics.payload);
+
         target.member_object("tals", |target| {
             for tal in &metrics.tals {
                 target.member_object(tal.tal.name(), |target| {
-                    json_payload_metrics(target, &tal.payload);
+                    json_compat_payload_metrics(target, &tal.payload);
                     json_publication_metrics(
                         target, &tal.publication
                     );
@@ -396,7 +398,7 @@ async fn handle_api_status(
                     else {
                         target.member_str("type", "other");
                     }
-                    json_payload_metrics(target, &repo.payload);
+                    json_compat_payload_metrics(target, &repo.payload);
                     json_publication_metrics(
                         target, &repo.publication
                     );
@@ -602,12 +604,20 @@ fn json_publication_metrics(
     target.member_raw("otherObjects", metrics.others);
 }
 
-fn json_payload_metrics(target: &mut JsonBuilder, payload: &PayloadMetrics) {
+fn json_compat_payload_metrics(
+    target: &mut JsonBuilder, payload: &PayloadMetrics
+) {
     target.member_raw("vrpsTotal", payload.vrps().valid);
     target.member_raw("vrpsUnsafe", payload.vrps().marked_unsafe);
     target.member_raw("vrpsLocallyFiltered", payload.vrps().locally_filtered);
     target.member_raw("vrpsDuplicate", payload.vrps().duplicate);
     target.member_raw("vrpsFinal", payload.vrps().contributed);
+    json_payload_metrics(target, payload)
+}
+
+fn json_payload_metrics(
+    target: &mut JsonBuilder, payload: &PayloadMetrics
+) {
     target.member_object("payload", |target| {
         target.member_object("routeOriginsIPv4", |target| {
             json_vrps_metrics(target, &payload.v4_origins, true)
@@ -628,6 +638,7 @@ fn json_payload_metrics(target: &mut JsonBuilder, payload: &PayloadMetrics) {
         })
     });
 }
+
 
 fn json_vrps_metrics(
     target: &mut JsonBuilder,
