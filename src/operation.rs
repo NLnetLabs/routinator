@@ -23,8 +23,7 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
 use log::{error, info};
-use routecore::addr;
-use rpki::repository::resources::{Asn};
+use rpki::resources::{Asn, Prefix};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
@@ -433,7 +432,7 @@ struct VrpsArgs {
         long, alias = "filter-prefix",
         value_name = "PREFIX"
     )]
-    select_prefix: Option<Vec<addr::Prefix>>,
+    select_prefix: Option<Vec<Prefix>>,
 
     /// Only include records for the given AS number
     #[arg(
@@ -627,7 +626,7 @@ pub struct Validate {
 /// What route(s) should we validate, please?
 enum ValidateWhat {
     /// Validate a single route with the given prefix and ASN.
-    Single(addr::Prefix, Asn),
+    Single(Prefix, Asn),
 
     /// Validate the routes provided in the given file.
     File(PathBuf),
@@ -641,7 +640,7 @@ enum ValidateWhat {
 struct ValidateArgs {
     /// Address prefix of the announcement
     #[arg(short, long, requires = "asn", conflicts_with = "input")]
-    prefix: Option<addr::Prefix>,
+    prefix: Option<Prefix>,
 
     /// Origin AS number of the announcement
     #[arg(short, long, requires = "prefix", conflicts_with = "input")]

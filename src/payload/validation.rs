@@ -19,10 +19,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crossbeam_queue::SegQueue;
 use log::{info, warn};
-use routecore::addr;
-use routecore::asn::{Asn, SmallAsnSet};
-use routecore::bgpsec::KeyIdentifier;
 use rpki::uri;
+use rpki::crypto::keys::KeyIdentifier;
 use rpki::repository::aspa::AsProviderAttestation;
 use rpki::repository::cert::{Cert, ResourceCert};
 use rpki::repository::resources::{
@@ -31,6 +29,7 @@ use rpki::repository::resources::{
 use rpki::repository::roa::RouteOriginAttestation;
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::{Time, Validity};
+use rpki::resources::{Asn, Prefix, SmallAsnSet};
 use rpki::rtr::payload::{Afi, Aspa, RouteOrigin, RouterKey};
 use rpki::rtr::pdu::{ProviderAsns, RouterKeyInfo};
 use crate::config::{Config, FilterPolicy};
@@ -524,7 +523,7 @@ pub struct RejectedResources {
 
 impl RejectedResources {
     /// Checks whether a prefix should be kept.
-    pub fn keep_prefix(&self, prefix: addr::Prefix) -> bool {
+    pub fn keep_prefix(&self, prefix: Prefix) -> bool {
         let raw = rpki::repository::resources::Prefix::new(
             prefix.addr(), prefix.len()
         );
