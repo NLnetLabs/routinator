@@ -28,10 +28,6 @@ content can be used for detection and mitigation of route leaks.
    without unintended side effects. See 
    :ref:`building:Enabling or Disabling Features` for more information.
 
-building.html#enabling-or-disabling-features
-:ref:`advanced-features:Resource Tagged
-    Attestations`
-
 You can let Routinator process ASPA objects and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-aspa` option
 or by setting ``enable-aspa`` to True in the :doc:`configuration
