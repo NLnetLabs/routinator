@@ -344,11 +344,6 @@ The available options are:
       If this option is present, BGPsec router keys will be processed
       during validation and included in the produced data set.
 
-.. option:: --enable-aspa
-
-      If this option is present, ASPA objects will be processed
-      during validation and included in the produced data set.
-
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -1177,11 +1172,6 @@ All values can be overridden via the command line options.
             A boolean value specifying whether BGPsec router keys should be
             included in the published dataset. If false or missing, no router
             keys will be included.
-
-      enable-aspa
-            A boolean value specifying whether ASPA payload should be
-            included in the published dataset. If false or missing, no ASPA
-            payload will be included.
 
       dirty
             A boolean value which, if true, specifies that unused files and

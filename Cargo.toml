@@ -54,6 +54,7 @@ syslog          = "6"
 [features]
 default = [ "socks", "ui"]
 arbitrary = [ "dep:arbitrary", "chrono/arbitrary", "rpki/arbitrary" ]
+aspa = []
 native-tls = [ "reqwest/native-tls", "tls" ]
 rta = []
 socks = [ "reqwest/socks" ]
