@@ -954,10 +954,7 @@ impl<W: io::Write> Formatter<W> for Json {
         &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target,
-            "    {{ \"customer\": \"{}\", \"afi\": \"{}\", \
-            \"providers\": [",
-            aspa.customer,
-            aspa.afi,
+            "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
         )?;
 
         let mut first = true;
@@ -1138,10 +1135,7 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target,
-            "    {{ \"customer\": \"{}\", \"afi\": \"{}\", \
-            \"providers\": [",
-            aspa.customer,
-            aspa.afi,
+            "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
         )?;
 
         let mut first = true;

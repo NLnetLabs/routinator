@@ -30,7 +30,7 @@ use rpki::repository::roa::RouteOriginAttestation;
 use rpki::repository::tal::{Tal, TalUri};
 use rpki::repository::x509::{Time, Validity};
 use rpki::resources::{Asn, Prefix, SmallAsnSet};
-use rpki::rtr::payload::{Afi, Aspa, RouteOrigin, RouterKey};
+use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
 use rpki::rtr::pdu::{ProviderAsns, RouterKeyInfo};
 use crate::config::{Config, FilterPolicy};
 use crate::engine::{CaCert, Engine, ProcessPubPoint, ProcessRun};
@@ -428,32 +428,10 @@ impl PubPoint {
         aspa: AsProviderAttestation,
         info: Arc<PublishInfo>,
     ) {
-        let v4_providers = SmallAsnSet::from_iter(
-            aspa.provider_as_set().iter().filter_map(|item| {
-                item.includes_v4().then(|| item.provider())
-            })
-        );
-        let v6_providers = SmallAsnSet::from_iter(
-            aspa.provider_as_set().iter().filter_map(|item| {
-                item.includes_v6().then(|| item.provider())
-            })
-        );
-
         self.aspas.push(
             PubAspa {
                 customer: aspa.customer_as(),
-                v4_providers: if v4_providers.is_empty() {
-                    SmallAsnSet::from_iter([Asn::from(0)])
-                }
-                else {
-                    v4_providers
-                },
-                v6_providers: if v6_providers.is_empty() {
-                    SmallAsnSet::from_iter([Asn::from(0)])
-                }
-                else {
-                    v6_providers
-                },
+                providers: aspa.provider_as_set().to_set(),
                 info
             }
         )
@@ -501,11 +479,8 @@ pub struct PubAspa {
     /// The customer AS of the ASPA.
     pub customer: Asn,
 
-    /// The set of IPv4 providers.
-    pub v4_providers: SmallAsnSet,
-
-    /// The set of IPv6 providers.
-    pub v6_providers: SmallAsnSet,
+    /// The set of providers.
+    pub providers: SmallAsnSet,
 
     /// Information on the source of the payload.
     pub info: Arc<PublishInfo>,
@@ -602,7 +577,7 @@ struct SnapshotBuilder<'a> {
     /// The collected ASPA payload.
     ///
     /// The key is the customer ASN.
-    aspas: HashMap<(Asn, Afi), (SmallAsnSet, PayloadInfo)>,
+    aspas: HashMap<Asn, (SmallAsnSet, PayloadInfo)>,
 
     /// The list of rejected resources.
     rejected: RejectedResources,
@@ -759,59 +734,18 @@ impl<'a> SnapshotBuilder<'a> {
     fn process_aspa(&mut self, aspa: PubAspa, metrics: &mut AllVrpMetrics) {
         metrics.update(|m| m.aspas.valid += 1);
 
-        let (mut contributed, mut duplicate) = (false, false);
-
-        if !aspa.v4_providers.is_empty() {
-            if self.process_aspa_family(
-                aspa.customer, Afi::ipv4(), aspa.v4_providers,
-                aspa.info.clone(), metrics,
-            ) {
-                contributed = true;
-            }
-            else {
-                duplicate = true;
-            }
-        }
-        if !aspa.v6_providers.is_empty() {
-            if self.process_aspa_family(
-                aspa.customer, Afi::ipv6(), aspa.v6_providers,
-                aspa.info, metrics,
-            ) {
-                contributed = true;
-            }
-            else {
-                duplicate = true;
-            }
-        }
-
-        if contributed {
-            metrics.update(|m| m.aspas.contributed += 1);
-        }
-        if duplicate {
-            metrics.update(|m| m.aspas.duplicate += 1);
-        }
-    }
-
-    fn process_aspa_family(
-        &mut self,
-        customer: Asn,
-        afi: Afi,
-        providers: SmallAsnSet,
-        info: Arc<PublishInfo>,
-        _metrics: &mut AllVrpMetrics,
-    ) -> bool {
         // SLURM filtering goes here ...
 
-        match self.aspas.entry((customer, afi)) {
+        match self.aspas.entry(aspa.customer) {
             hash_map::Entry::Vacant(entry) => {
-                entry.insert((providers, info.into()));
-                true
+                entry.insert((aspa.providers, aspa.info.into()));
+                metrics.update(|m| m.aspas.contributed += 1);
             }
             hash_map::Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
-                entry.0 = entry.0.union(&providers).collect();
-                entry.1.add_published(info);
-                false
+                entry.0 = entry.0.union(&aspa.providers).collect();
+                entry.1.add_published(aspa.info);
+                metrics.update(|m| m.aspas.duplicate += 1);
             }
         }
     }
@@ -881,16 +815,16 @@ impl<'a> SnapshotBuilder<'a> {
             self.origins.into_iter(),
             self.router_keys.into_iter(),
             self.aspas.into_iter().filter_map(
-                |((customer, afi), (providers, info))| {
+                |(customer, (providers, info))| {
                     match ProviderAsns::try_from_iter(providers.iter()) {
                         Ok(providers) => {
-                            Some((Aspa::new(customer, afi, providers), info))
+                            Some((Aspa::new(customer, providers), info))
                         }
                         Err(_) => {
                             warn!(
-                                "Ignoring excessively large ASPA for {}/{} \
+                                "Ignoring excessively large ASPA for {} \
                                  with {} provider ASNs.",
-                                customer, afi, providers.len()
+                                customer, providers.len()
                             );
                             None
                         }
