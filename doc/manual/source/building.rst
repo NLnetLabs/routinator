@@ -155,7 +155,9 @@ Routinator currently has the following features:
     Let Routinator validate :ref:`advanced-features:Resource Tagged
     Attestations`.
 ``aspa`` —  *Disabled* by default
-    Let Routinator validate :ref:`advanced-features:ASPA` objects.
+    Let Routinator validate :ref:`advanced-features:ASPA` objects. *Note that
+    this is a temporary measure while the ASPA draft is under discussion in
+    the IETF.*
 
 To disable the features that are enabled by default, use the
 ``--no-default-features`` option. You can then choose which features you want
