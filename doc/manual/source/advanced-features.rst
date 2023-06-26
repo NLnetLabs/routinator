@@ -21,6 +21,17 @@ object through which the holder of an Autonomous System (AS) can authorise
 one or more other ASes as its upstream providers. When validated, an ASPA's
 content can be used for detection and mitigation of route leaks.
 
+.. note:: 
+   
+   ASPA support is temporarily behind a feature flag while the draft is under
+   discussion in the IETF. This way operators can gain operational experience
+   without unintended side effects. See 
+   :ref:`building:Enabling or Disabling Features` for more information.
+
+building.html#enabling-or-disabling-features
+:ref:`advanced-features:Resource Tagged
+    Attestations`
+
 You can let Routinator process ASPA objects and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-aspa` option
 or by setting ``enable-aspa`` to True in the :doc:`configuration
