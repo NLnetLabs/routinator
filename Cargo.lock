@@ -1142,7 +1142,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.16.2-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=no-more-routecore#81e1e4e0882ac891a5724bcadcf85ba302c8d68a"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#be88ac3f8a341cae68837dd9667715521d4da82f"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
