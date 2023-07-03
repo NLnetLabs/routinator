@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Jan 04, 2023" "0.12.2-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Jun 26, 2023" "0.13.0-dev" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -171,7 +171,7 @@ was \fIwarn\fP\&. In all previous versions \fIwarn\fP was hard\-wired.
 .INDENT 0.0
 .TP
 .B \-\-unsafe\-vrps=policy
-This option defines how to deal with "unsafe VRPs." If the address
+This option defines how to deal with \(dqunsafe VRPs.\(dq If the address
 prefix of a VRP overlaps with any resources assigned to a CA that has
 been rejected because if failed to validate completely, the VRP is said
 to be unsafe since using it may lead to legitimate routes being flagged
@@ -505,7 +505,7 @@ identical to the CSV produced by the RIPE NCC Validator.
 .B csvext
 An extended version of csv each line contains these
 comma\-separated values: the rsync URI of the ROA the line
-is taken from (or "N/A" if it isn\(aqt from a ROA), the
+is taken from (or \(dqN/A\(dq if it isn\(aqt from a ROA), the
 autonomous system number, the prefix in slash notation, the
 maximum prefix length, the not\-before date and not\-after
 date of the validity of the ROA.
@@ -516,18 +516,35 @@ not currently supported by Routinator \-\- all entries will
 be in one single output file.
 .TP
 .B json
-The list is placed into a JSON object with a single element
-\fIroas\fP which contains an array of objects with four
+The list is placed into a JSON object with up to four
+members: \fIroas\fP contains the validated route origin
+authorizations, \fIrouterKeys\fP contains the validated
+BGPsec router keys, \fIaspas\fP contains the validated
+ASPA payload, and \fImetadata\fP contains some information
+about the validation run itself. Of the first three, only
+those members are present that have not been disabled or
+excluded.
+.sp
+The \fIroas\fP member contains an array of objects with four
 elements each: The autonomous system number of the network
 authorized to originate a prefix in \fIasn\fP, the prefix in
 slash notation in \fIprefix\fP, the maximum prefix length of
 the announced route in \fImaxLength\fP, and the trust anchor
-from which the authorization was derived in \fIta\fP\&. This
-format is identical to that produced by the RIPE NCC RPKI
-Validator except for different naming of the trust anchor.
-Routinator uses the name of the TAL file without the
-extension \fI\&.tal\fP whereas the RIPE NCC Validator has a
-dedicated name for each.
+from which the authorization was derived in \fIta\fP\&.
+.sp
+The \fIrouterKeys\fP member contains an array of objects with
+four elements each: The autonomous system using the router
+key is given in \fIasn\fP, the key identifier as a string of
+hexadecimal digits in \fISKI\fP, the actual public key as a
+Base 64 encoded string in \fIrouterPublicKey\fP, and the trust
+anchor from which the authorization was derived in \fIta\fP\&.
+.sp
+The \fIaspa\fP member contains an array of objects with four
+members each: The \fIcustomer\fP member contains the customer
+ASN, \fIafi\fP the address family as either \(dqipv4\(dq or \(dqipv6\(dq,
+\fIproviders\fP contains the provider ASN set as an array, and
+the trust anchor from which the authorization was derived
+in \fIta\fP\&.
 .sp
 The output object also includes a member named \fImetadata\fP
 which provides additional information. Currently, this is a
@@ -535,17 +552,24 @@ member \fIgenerated\fP which provides the time the list was
 generated as a Unix timestamp, and a member \fIgeneratedTime\fP
 which provides the same time but in the standard ISO date
 format.
+.sp
+If only route origins are included, this format is identical
+to that produced by the RIPE NCC
+RPKI Validator except for different naming of the trust
+anchor.
+Routinator uses the name of the TAL file without the
+extension \fI\&.tal\fP whereas the RIPE NCC Validator has a
+dedicated name for each.
 .TP
 .B jsonext
-The list is placed into a JSON object with three members:
-\fIroas\fP contains the validated route origin
+The list is placed into a JSON object with up to four
+members: \fIroas\fP contains the validated route origin
 authorizations, \fIrouterKeys\fP contains the validated
-BGPsec router keys, and \fImetadata\fP contains some information
-about the validation run itself.
-.sp
-All three members are always present, even if BGPsec has
-not been enabled. In this case, \fIrouterKeys\fP will simply
-be empty.
+BGPsec router keys, \fIaspas\fP contains the validated
+ASPA payload, and \fImetadata\fP contains some information
+about the validation run itself. Of the first three, only
+those members are present that have not been disabled or
+excluded.
 .sp
 The \fIroas\fP member contains an array of objects with four
 elements each: The autonomous system number of the network
@@ -561,6 +585,13 @@ key is given in \fIasn\fP, the key identifier as a string of
 hexadecimal digits in \fISKI\fP, the actual public key as a
 Base 64 encoded string in \fIrouterPublicKey\fP, and extended
 information about the source of the key is contained in
+\fIsource\fP\&.
+.sp
+The \fIaspa\fP member contains an array of objects with four
+members each: The \fIcustomer\fP member contains the customer
+ASN, \fIafi\fP the address family as either \(dqipv4\(dq or \(dqipv6\(dq,
+\fIproviders\fP contains the provider ASN set as an array, and
+information about the source of the data can be found in
 \fIsource\fP\&.
 .sp
 This source information the same for route origins and
@@ -663,7 +694,7 @@ the prefix is RPKI valid or invalid.
 The option can be given multiple times, in which case VRPs for all
 prefixes are provided. It can also be combined with one or more
 ASN selections. Then all matching VRPs are included. That is,
-selectors combine as "or" not "and".
+selectors combine as \(dqor\(dq not \(dqand\(dq.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -675,6 +706,12 @@ prefixes equal or less specific are included.
 Note that VRPs with more specific prefixes have no influence on
 whether a route is RPKI valid or invalid and therefore these VRPs
 are of an informational nature only.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-no\-route\-origins, \-\-no\-router\-keys, \-\-no\-aspas
+These three options can be used to exclude the various payload
+types from being included in the output.
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
@@ -1477,6 +1514,16 @@ The members \fIannounced\fP and \fIwithdrawn\fP contain arrays with route
 origins that have been announced and withdrawn, respectively, since the
 provided session and serial. If \fIreset\fP is \fItrue\fP, the \fIwithdrawn\fP
 member is not present.
+.TP
+.B /json\-delta/notify, /json\-delta/notify?session=session&serial=serial
+Returns a JSON object with two members \fIsession\fP and \fIserial\fP which
+contain the session ID and serial number of the current data set.
+.sp
+If the \fIsession\fP and \fIserial\fP query parameters are provided, and the
+session ID and serial number of the current data set are identical
+to the provided values, the request will not return until a new data
+set is available. This can be used as a means to get notified when
+the data set has been updated.
 .UNINDENT
 .sp
 In addition, the current set of VRPs is available for each output format at a
@@ -1491,6 +1538,12 @@ fields can be repeated multiple times.
 In addition, the query parameter \fBinclude=more\-specifics\fP will cause the
 inclusion of VRPs for more specific prefixes of prefixes given via
 \fBselect\-prefix\fP\&.
+.sp
+Finally, the query parameter \fBexclude\fP can be used to exclude certain
+payload types from the response. The values \fBrouteOrigins\fP, \fBrouterKeys\fP,
+and \fBaspas\fP disable inclusion of route origins, router keys, and ASPAs,
+respectively. The values can either be given in separate \fBexclude\fP
+parameters or included in one separated by commas.
 .sp
 These parameters work in the same way as the options of the same name to the
 \fI\%vrps\fP command.
@@ -1637,6 +1690,10 @@ strings.
 When receiving SIGUSR1, Routinator will attempt to reload the TALs and, if
 that succeeds, restart validation. If loading the TALs fails, Routinator
 will exit.
+.TP
+.B SIGUSR2: Re\-open log file
+When receiving SIGUSR2 and logging to a file is enabled, Routinator will
+re\-open the log file. If this fails, Routinator will exit.
 .UNINDENT
 .SH EXIT STATUS
 .sp

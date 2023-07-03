@@ -595,6 +595,7 @@ impl Config {
         }
 
         // enable_aspa
+        #[cfg(feature = "aspa")]
         if args.enable_aspa {
             self.enable_aspa = true
         }
@@ -944,7 +945,13 @@ impl Config {
                     .unwrap_or(DEFAULT_MAX_CA_DEPTH)
             },
             enable_bgpsec: file.take_bool("enable-bgpsec")?.unwrap_or(false),
+
+            #[cfg(feature = "aspa")]
             enable_aspa: file.take_bool("enable-aspa")?.unwrap_or(false),
+
+            #[cfg(not(feature = "aspa"))]
+            enable_aspa: false,
+
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize("validation-threads")?
@@ -1370,6 +1377,7 @@ impl Config {
             (self.max_ca_depth as i64).into()
         );
         res.insert("enable-bgpsec".into(), self.enable_bgpsec.into());
+        #[cfg(feature = "aspa")]
         res.insert("enable-aspa".into(), self.enable_aspa.into());
         res.insert("dirty".into(), self.dirty_repository.into());
         res.insert(
@@ -1838,6 +1846,7 @@ struct GlobalArgs {
     enable_bgpsec: bool,
 
     /// Include ASPA in the data set
+    #[cfg(feature = "aspa")]
     #[arg(long)]
     enable_aspa: bool,
 

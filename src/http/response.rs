@@ -46,6 +46,7 @@ impl Response {
     }
 
     /// Returns a Moved Permanently response pointing to the given location.
+    #[allow(dead_code)]
     pub fn moved_permanently(location: &str) -> Self {
         ResponseBuilder::moved_permanently()
             .content_type(ContentType::TEXT)
@@ -174,6 +175,7 @@ impl ResponseBuilder {
     }
 
     /// Adds the Location header.
+    #[allow(dead_code)]
     pub fn location(self, location: &str) -> Self {
         ResponseBuilder {
             builder: self.builder.header(
