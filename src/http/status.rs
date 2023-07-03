@@ -629,12 +629,7 @@ fn json_payload_metrics(
             json_vrps_metrics(target, &payload.router_keys, false)
         });
         target.member_object("aspas", |target| {
-            target.member_raw("total", payload.aspas.valid);
-            target.member_raw("totalIPv4", payload.aspas.valid_v4);
-            target.member_raw("totalIPv6", payload.aspas.valid_v6);
-            // XXX locallyFiltered: We don’t do filtering yet.
-            target.member_raw("duplicate", payload.aspas.duplicate);
-            target.member_raw("final", payload.aspas.contributed);
+            json_vrps_metrics(target, &payload.aspas, false)
         })
     });
 }

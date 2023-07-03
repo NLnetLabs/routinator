@@ -14,7 +14,6 @@ use std::time::{Duration, SystemTimeError};
 use chrono::{DateTime, TimeZone, Utc};
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
-use rpki::rtr::payload::Afi;
 use rpki::rtr::state::Serial;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -389,7 +388,7 @@ pub struct PayloadMetrics {
     pub router_keys: VrpMetrics,
 
     /// The metrics for ASPA payload.
-    pub aspas: AspaMetrics,
+    pub aspas: VrpMetrics,
 
     /// The metrics for all payload items.
     pub all: VrpMetrics,
@@ -493,102 +492,8 @@ impl<'a> ops::AddAssign<&'a Self> for VrpMetrics {
         self.contributed += other.contributed;
     }
 }
-impl<'a> ops::AddAssign<&'a AspaMetrics> for VrpMetrics {
-    fn add_assign(&mut self, other: &'a AspaMetrics) {
-        self.valid += other.valid;
-        self.locally_filtered += 
-            other.locally_filtered_v4 + other.locally_filtered_v6
-        ;
-        self.duplicate += other.duplicate;
-        self.contributed += other.contributed;
-    }
-}
 
 impl ops::AddAssign for VrpMetrics {
-    fn add_assign(&mut self, other: Self) {
-        self.add_assign(&other)
-    }
-}
-
-//------------ AspaMetrics ---------------------------------------------------
-
-/// Individual metrics regarding the generated ASPA payload.
-#[derive(Clone, Debug, Default)]
-pub struct AspaMetrics {
-    /// The total number of valid ASPA payload.
-    ///
-    /// This is equivalent to the total number of encountered valid ASPA
-    /// objects.
-    pub valid: u32,
-
-    /// The total number of valid ASPA payload for the IPv4 family.
-    ///
-    /// This is equivalent to the total number of encountered valid ASPA
-    /// objects that had at least one provider ASN with either no afiLimit
-    /// or an afiLimit for IPv4.
-    pub valid_v4: u32,
-
-    /// The total number of valid ASPA payload for the IPv6 family.
-    ///
-    /// This is equivalent to the total number of encountered valid ASPA
-    /// objects that had at least one provider ASN with either no afiLimit
-    /// or an afiLimit for IPv6.
-    pub valid_v6: u32,
-
-    /// The total number of locally filtered ASPAs for the IPv4 family.
-    pub locally_filtered_v4: u32,
-
-    /// The total number of locally filtered ASPAs for the IPv6 family.
-    pub locally_filtered_v6: u32,
-
-    /// The number of ASPAs with duplicate customer ASN.
-    ///
-    /// This number is only calculated after local filtering. If duplicates
-    /// come from different publication points, the decision which are
-    /// counted as valid and which are counted as duplicate depends on the
-    /// order of processing. This number therefore has to be taken with a
-    /// grain of salt.
-    pub duplicate: u32,
-
-    /// The total number of VRPs contributed to the final set.
-    ///
-    /// See the note on `duplicate_vrps` for caveats.
-    pub contributed: u32,
-}
-
-impl AspaMetrics {
-    pub fn inc_locally_filtered(&mut self, afi: Afi) {
-        if afi.is_ipv4() {
-            self.locally_filtered_v4 += 1;
-        }
-        else {
-            self.locally_filtered_v6 += 1;
-        }
-    }
-}
-
-impl ops::Add for AspaMetrics {
-    type Output = Self;
-
-    fn add(mut self, other: Self) -> Self::Output {
-        self += other;
-        self
-    }
-}
-
-impl<'a> ops::AddAssign<&'a Self> for AspaMetrics {
-    fn add_assign(&mut self, other: &'a Self) {
-        self.valid += other.valid;
-        self.valid_v4 += other.valid_v4;
-        self.valid_v6 += other.valid_v6;
-        self.locally_filtered_v4 += other.locally_filtered_v4;
-        self.locally_filtered_v6 += other.locally_filtered_v6;
-        self.duplicate += other.duplicate;
-        self.contributed += other.contributed;
-    }
-}
-
-impl ops::AddAssign for AspaMetrics {
     fn add_assign(&mut self, other: Self) {
         self.add_assign(&other)
     }

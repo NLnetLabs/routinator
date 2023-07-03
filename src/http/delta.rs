@@ -302,10 +302,8 @@ impl DeltaStream {
                     \n  {{\
                     \n      \"type\": \"aspa\",
                     \n      \"customerAsn\": \"{}\",\
-                    \n      \"afi\": \"{}\",\
                     \n      \"providerAsns\": [",
                     aspa.customer,
-                    if aspa.afi.is_ipv4() { "ipv4" } else { "ipv6" },
                 );
                 let mut first = true;
                 for asn in aspa.providers.iter() {
