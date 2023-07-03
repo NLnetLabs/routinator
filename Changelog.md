@@ -5,7 +5,10 @@
 New
 
 * Added support for ASPA. Processing needs to be enabled via the new option
-  `enable-aspa` which is off by default. ([#847])
+  `enable-aspa` which is only available if the `aspa` feature is
+  explicitly selected during compilation. This is due to the specification
+  still changing. The implementation currently conforms with
+  [draft-ietf-sidrops-aspa-profile-15].  ([#847], [#873], [#874])
 * Added support for version 2 of the RTR protocol. This primarly means
   support for the ASPA payload type. ([#847])
 * Sending SIGUSR2 to Routinator will re-open a log file if logging to a
@@ -65,7 +68,10 @@ Other Changes
 [#867]: https://github.com/NLnetLabs/routinator/pull/867
 [#868]: https://github.com/NLnetLabs/routinator/pull/868
 [#869]: https://github.com/NLnetLabs/routinator/pull/869
+[#873]: https://github.com/NLnetLabs/routinator/pull/873
+[#874]: https://github.com/NLnetLabs/routinator/pull/874
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
+[draft-ietf-sidrops-aspa-profile-15]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/15/
 
 
 ## 0.12.1 ‘Plan uw reis in de app’
