@@ -33,7 +33,7 @@ pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.16.12"
-rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch = "modified-aspa", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 rustls-pemfile  = "1"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
@@ -53,6 +53,7 @@ syslog          = "6"
 [features]
 default = [ "socks", "ui"]
 arbitrary = [ "dep:arbitrary", "chrono/arbitrary", "rpki/arbitrary" ]
+aspa = []
 native-tls = [ "reqwest/native-tls", "tls" ]
 rta = []
 socks = [ "reqwest/socks" ]
