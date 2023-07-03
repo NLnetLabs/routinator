@@ -7,8 +7,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::{error, info};
-use routecore::addr;
-use rpki::repository::resources::Asn;
+use rpki::resources::{Asn, Prefix};
+use rpki::resources::addr::ParsePrefixError;
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
 use crate::config::Config;
 use crate::error::Failed;
@@ -201,7 +201,7 @@ impl Selection {
     }
 
     /// Add a origin prefix to select.
-    pub fn push_prefix(&mut self, prefix: addr::Prefix) {
+    pub fn push_prefix(&mut self, prefix: Prefix) {
         self.resources.push(SelectResource::Prefix(prefix))
     }
 
@@ -257,7 +257,7 @@ enum SelectResource {
     Asn(Asn),
 
     /// Include resources related to the given prefix.
-    Prefix(addr::Prefix),
+    Prefix(Prefix),
 }
 
 impl SelectResource {
@@ -355,7 +355,7 @@ impl Output {
         for (key, value) in form_urlencoded::parse(query.as_ref()) {
             if key == "select-prefix" || key == "filter-prefix" {
                 selection.resources.push(
-                    SelectResource::Prefix(addr::Prefix::from_str(&value)?)
+                    SelectResource::Prefix(Prefix::from_str(&value)?)
                 );
             }
             else if key == "select-asn" || key == "filter-asn" {
@@ -667,8 +667,8 @@ impl Iterator for OutputStream<Vec<u8>> {
 #[derive(Debug)]
 pub struct QueryError;
 
-impl From<addr::ParsePrefixError> for QueryError {
-    fn from(_: addr::ParsePrefixError) -> Self {
+impl From<ParsePrefixError> for QueryError {
+    fn from(_: ParsePrefixError) -> Self {
         QueryError
     }
 }
