@@ -30,6 +30,7 @@ use crossbeam_queue::{ArrayQueue, SegQueue};
 use crossbeam_utils::thread;
 use log::{debug, error, info, warn};
 use rpki::crypto::keys::KeyIdentifier;
+#[allow(unused_imports)]
 use rpki::repository::aspa::{Aspa, AsProviderAttestation};
 use rpki::repository::cert::{Cert, KeyUsage, ResourceCert};
 use rpki::repository::crl::Crl;
@@ -1390,32 +1391,35 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     }
 
     /// Process an ASPA object.
+    #[allow(unused_variables)]
     fn process_aspa(
         &mut self, uri: &uri::Rsync, content: Bytes,
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
-        let aspa = match Aspa::decode(
-            content, self.run.validation.strict
-        ) {
-            Ok(aspa) => aspa,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
-                manifest.metrics.invalid_aspas += 1;
-                return Ok(())
-            }
-        };
-        match aspa.process(
-            self.cert.cert(),
-            self.run.validation.strict,
-            |cert| manifest.check_crl(cert)
-        ) {
-            Ok((cert, aspa)) => {
-                manifest.metrics.valid_aspas += 1;
-                self.processor.process_aspa(uri, cert, aspa)?
-            }
-            Err(err) => {
-                manifest.metrics.invalid_aspas += 1;
-                warn!("{}: {}.", uri, err)
+        #[cfg(feature = "aspa")] {
+            let aspa = match Aspa::decode(
+                content, self.run.validation.strict
+            ) {
+                Ok(aspa) => aspa,
+                Err(err) => {
+                    warn!("{}: {}.", uri, err);
+                    manifest.metrics.invalid_aspas += 1;
+                    return Ok(())
+                }
+            };
+            match aspa.process(
+                self.cert.cert(),
+                self.run.validation.strict,
+                |cert| manifest.check_crl(cert)
+            ) {
+                Ok((cert, aspa)) => {
+                    manifest.metrics.valid_aspas += 1;
+                    self.processor.process_aspa(uri, cert, aspa)?
+                }
+                Err(err) => {
+                    manifest.metrics.invalid_aspas += 1;
+                    warn!("{}: {}.", uri, err)
+                }
             }
         }
         Ok(())
