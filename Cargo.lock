@@ -89,12 +89,6 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "base64"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
-
-[[package]]
-name = "base64"
 version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "604178f6c5c21f02dc555784810edfb88d34ac2c73b2eae109655649ee73ce3d"
@@ -957,9 +951,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.23.1"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11bafc859c6815fbaffbbbf4229ecb767ac913fecb27f9ad4343662e9ef099ea"
+checksum = "81b9228215d82c7b61490fec1de287136b5de6f5700f6e58ea9ad61a7964ca51"
 dependencies = [
  "memchr",
 ]
@@ -1038,7 +1032,7 @@ version = "0.11.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cde824a14b7c14f85caff81225f411faacc04a2013f41670f41443742b1c1c55"
 dependencies = [
- "base64 0.21.2",
+ "base64",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -1095,7 +1089,6 @@ name = "routinator"
 version = "0.13.0-dev"
 dependencies = [
  "arbitrary",
- "base64 0.13.1",
  "bytes",
  "chrono",
  "clap",
@@ -1141,11 +1134,12 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.16.2-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git#37866d37c62b6302cf3ece54f842b8546e012f24"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2e2cf92592175551ef134dba1b30f8d1526479e680399d3a1eef27136023373"
 dependencies = [
  "arbitrary",
- "base64 0.13.1",
+ "base64",
  "bcder",
  "bytes",
  "chrono",
@@ -1205,7 +1199,7 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
- "base64 0.21.2",
+ "base64",
 ]
 
 [[package]]
