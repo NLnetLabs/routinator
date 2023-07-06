@@ -1233,10 +1233,7 @@ impl<W: io::Write> Formatter<W> for Slurm {
         write!(target, "\",\
             \n        \"routerPublicKey\": \""
         )?;
-        base64::Slurm.write_encoded_slice(
-            key.key_identifier.as_slice(),
-            target,
-        )?;
+        base64::Slurm.write_encoded_slice(key.key_info.as_slice(), target)?;
         write!(target, "\",\
             \n        \"comment\": \"{}\"
             \n      }}",
