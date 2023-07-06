@@ -1,7 +1,6 @@
 //! Output of validated RPKI payload.
 
 use std::{error, fmt, io};
-use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Utc;
@@ -10,6 +9,7 @@ use log::{error, info};
 use rpki::resources::{Asn, Prefix};
 use rpki::resources::addr::ParsePrefixError;
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
+use rpki::util::base64;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::http::ContentType;
@@ -1226,19 +1226,17 @@ impl<W: io::Write> Formatter<W> for Slurm {
             \n        \"SKI\": \"",
             key.asn.into_u32(),
         )?;
-        let mut enc = base64::write::EncoderWriter::new(
-            target, base64::URL_SAFE_NO_PAD
-        );
-        enc.write_all(key.key_identifier.as_slice())?;
-        let target = enc.finish()?;
+        base64::Slurm.write_encoded_slice(
+            key.key_identifier.as_slice(),
+            target,
+        )?;
         write!(target, "\",\
             \n        \"routerPublicKey\": \""
         )?;
-        let mut enc = base64::write::EncoderWriter::new(
-            target, base64::URL_SAFE_NO_PAD
-        );
-        enc.write_all(key.key_identifier.as_slice())?;
-        let target = enc.finish()?;
+        base64::Slurm.write_encoded_slice(
+            key.key_identifier.as_slice(),
+            target,
+        )?;
         write!(target, "\",\
             \n        \"comment\": \"{}\"
             \n      }}",
