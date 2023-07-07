@@ -1876,13 +1876,11 @@ impl RunMetrics {
     /// This only collapses the publication metrics since those are the ones
     /// collected by the engine.
     pub fn collapse(self, target: &mut Metrics) {
-        for (target, metric) in target.tals.iter_mut().zip(
-            self.tals.into_iter()
-        ) {
+        for (target, metric) in target.tals.iter_mut().zip(self.tals) {
             target.publication += metric
         }
         for (target, metric) in target.repositories.iter_mut().zip(
-            self.repositories.into_iter()
+            self.repositories
         ) {
             target.publication += metric
         }
