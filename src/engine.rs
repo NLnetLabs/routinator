@@ -18,7 +18,7 @@
 /// the accompanying trait [`ProcessPubPoint`] dealing with individual
 /// publication points.
 
-use std::{fmt, fs};
+use std::{fmt, fs, thread};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
@@ -27,7 +27,6 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
 use crossbeam_queue::{ArrayQueue, SegQueue};
-use crossbeam_utils::thread;
 use log::{debug, error, info, warn};
 use rpki::crypto::keys::KeyIdentifier;
 #[allow(unused_imports)]
@@ -400,9 +399,9 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         let thread_metrics = ArrayQueue::new(
             self.validation.validation_threads
         );
-        let res = thread::scope(|scope| {
+        thread::scope(|scope| {
             for _ in 0 .. self.validation.validation_threads {
-                scope.spawn(|_| {
+                scope.spawn(|| {
                     let mut metrics = metrics.fork();
                     while let Some(task) = tasks.pop() {
                         if self.process_task(
@@ -415,15 +414,6 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                 });
             }
         });
-
-        if res.is_err() {
-            // One of the workers has panicked. Well gosh darn.
-            error!(
-                "Engine failed after a worker thread has panicked. \
-                 This is most assuredly a bug."
-            );
-            return Err(Failed);
-        }
 
         if had_err.load(Ordering::Relaxed) {
             return Err(Failed);
