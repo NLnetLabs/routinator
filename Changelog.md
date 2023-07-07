@@ -8,7 +8,7 @@ New
   `enable-aspa` which is only available if the `aspa` feature is
   explicitly selected during compilation. This is due to the specification
   still changing. The implementation currently conforms with
-  [draft-ietf-sidrops-aspa-profile-15].  ([#847], [#873], [#874])
+  [draft-ietf-sidrops-aspa-profile-15].  ([#847], [#873], [#874], [#878])
 * Added support for version 2 of the RTR protocol. This primarly means
   support for the ASPA payload type. ([#847])
 * Sending SIGUSR2 to Routinator will re-open a log file if logging to a
@@ -70,6 +70,7 @@ Other Changes
 [#869]: https://github.com/NLnetLabs/routinator/pull/869
 [#873]: https://github.com/NLnetLabs/routinator/pull/873
 [#874]: https://github.com/NLnetLabs/routinator/pull/874
+[#878]: https://github.com/NLnetLabs/routinator/pull/878
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 [draft-ietf-sidrops-aspa-profile-15]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/15/
 
