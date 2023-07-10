@@ -82,8 +82,12 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Debian Bookworm as we haven't published any packages for the 9 release yet.
+# Disable upgrade testing on Rocky Linux 9 and Debian Bookworm as we haven't published any packages for
+# those O/S versions yet.
 test-exclude:
+  - pkg: 'routinator'
+    image: 'rockylinux:9'
+    mode: 'upgrade-from-published'
   - pkg: 'routinator'
     image: 'debian:bookworm'
     mode: 'upgrade-from-published'
