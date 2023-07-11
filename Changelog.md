@@ -41,6 +41,8 @@ Breaking Changes
 * The regular `json` output format now includes router key and ASPA
   output. Since both are disabled by default, the format will still be
   compatible by default. ([#866])
+* The minimal required Rust version has been increased to 1.70.
+  ([#847], [#853], [#869], [#879])
 
 Bug Fixes
 
@@ -51,10 +53,9 @@ Bug Fixes
 
 Other Changes
 
-* The minimal required Rust version has been increased to 1.65.
-  ([#847], [#853], [#869])
 * The log message for missing manifest now include the URI of the CA
   certificate for which the manifest is missing. ([#864])
+* Binary packages are now also built for Debian _bookworm._ ([#881])
 
 [#847]: https://github.com/NLnetLabs/routinator/pull/847
 [#853]: https://github.com/NLnetLabs/routinator/pull/853
@@ -71,6 +72,8 @@ Other Changes
 [#873]: https://github.com/NLnetLabs/routinator/pull/873
 [#874]: https://github.com/NLnetLabs/routinator/pull/874
 [#878]: https://github.com/NLnetLabs/routinator/pull/878
+[#879]: https://github.com/NLnetLabs/routinator/pull/879
+[#881]: https://github.com/NLnetLabs/routinator/pull/881
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 [draft-ietf-sidrops-aspa-profile-15]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/15/
 
