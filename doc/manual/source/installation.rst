@@ -50,6 +50,7 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Debian versions:
 
+         -  Debian Bookworm 12
          -  Debian Bullseye 11
          -  Debian Buster 10
          -  Debian Stretch 9
@@ -195,7 +196,7 @@ to get started.
    .. group-tab:: RHEL/CentOS
 
        To install a Routinator package, you need Red Hat Enterprise Linux
-       (RHEL) 7 or 8, or compatible operating system such as Rocky Linux.
+       (RHEL) 7, 8 or 9, or compatible operating system such as Rocky Linux.
        Packages are available for the ``amd64``/``x86_64`` architecture only.
        
        First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
@@ -305,6 +306,8 @@ to get started.
    Ubuntu packages for Jammy 22.04 (LTS)
 .. deprecated:: 0.12.0
    ``routinator-init`` and ``--accept-arin-rpa``
+.. versionadded:: 0.13.0
+   Packages for Debian Bookworm 12 and RHEL 9
 
 Updating
 --------
