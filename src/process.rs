@@ -6,11 +6,10 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use bytes::Bytes;
 use chrono::Utc;
 use log::{error, LevelFilter};
-use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
 use crate::config::{Config, LogTarget};
 use crate::error::Failed;
@@ -521,7 +520,7 @@ impl SyslogLogger {
 /// installed, it just writes all log output to stderr.
 struct GlobalLogger {
     /// The real logger. Can only be set once.
-    inner: OnceCell<Logger>,
+    inner: OnceLock<Logger>,
 }
 
 /// The static for the log crate.
@@ -530,7 +529,7 @@ static GLOBAL_LOGGER: GlobalLogger = GlobalLogger::new();
 impl GlobalLogger {
     /// Creates a new provisional logger.
     const fn new() -> Self {
-        GlobalLogger { inner: OnceCell::new() }
+        GlobalLogger { inner: OnceLock::new() }
     }
 
     /// Switches to the proper logger.

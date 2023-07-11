@@ -21,6 +21,7 @@ use clap::{
 use dirs::home_dir;
 use log::{LevelFilter, error, warn};
 #[cfg(unix)] use syslog::Facility;
+use toml_edit as toml;
 use crate::tals;
 use crate::error::Failed;
 
@@ -1250,264 +1251,240 @@ impl Config {
     }
 
     /// Returns a TOML representation of the config.
-    pub fn to_toml(&self) -> toml::Value {
-        let mut res = toml::value::Table::new();
-        res.insert(
-            "repository-dir".into(),
-            self.cache_dir.display().to_string().into()
+    pub fn to_toml(&self) -> toml::Table {
+        fn insert(
+            table: &mut toml::Table,
+            key: &str,
+            value: impl Into<toml::Value>,
+        ) {
+            table.insert(key, toml::Item::Value(value.into()));
+        }
+
+        fn insert_int(
+            table: &mut toml::Table,
+            key: &str,
+            value: impl TryInto<i64>,
+        ) {
+            insert(table, key, value.try_into().unwrap_or(i64::MAX))
+        }
+
+        let mut res = toml::Table::new();
+        insert(
+            &mut res, "repository-dir", self.cache_dir.display().to_string()
         );
         if let Some(extra_tals_dir) = self.extra_tals_dir.as_ref() {
-            res.insert(
-                "extra-tals-dir".into(),
-                extra_tals_dir.display().to_string().into()
+            insert(
+                &mut res, "extra-tals-dir",
+                extra_tals_dir.display().to_string(),
             );
         }
-        res.insert(
-            "exceptions".into(),
+        insert(
+            &mut res, "exceptions",
             toml::Value::Array(
                 self.exceptions.iter()
-                    .map(|p| p.display().to_string().into())
+                    .map(|p| toml::Value::from(p.display().to_string()))
                     .collect()
             )
         );
-        res.insert("strict".into(), self.strict.into());
-        res.insert("stale".into(), format!("{}", self.stale).into());
-        res.insert(
-            "unsafe-vrps".into(), format!("{}", self.unsafe_vrps).into()
-        );
-        res.insert(
-            "unknown-objects".into(),
-            format!("{}", self.unknown_objects).into(),
+        insert(&mut res, "strict", self.strict);
+        insert(&mut res, "stale", format!("{}", self.stale));
+        insert(&mut res, "unsafe-vrps", format!("{}", self.unsafe_vrps));
+        insert(
+            &mut res, "unknown-objects", format!("{}", self.unknown_objects)
         );
         if let Some(value) = self.limit_v4_len {
-            res.insert("limit-v4-len".into(), value.into());
+            insert(&mut res, "limit-v4-len", i64::from(value));
         }
         if let Some(value) = self.limit_v6_len {
-            res.insert("limit-v6-len".into(), value.into());
+            insert(&mut res, "limit-v6-len", i64::from(value));
         }
-        res.insert(
-            "allow-dubious-hosts".into(), self.allow_dubious_hosts.into()
-        );
-        res.insert("disable-rsync".into(), self.disable_rsync.into());
-        res.insert("rsync-command".into(), self.rsync_command.clone().into());
+        insert(&mut res, "allow-dubious-hosts", self.allow_dubious_hosts);
+        insert(&mut res, "disable-rsync", self.disable_rsync);
+        insert(&mut res, "rsync-command", self.rsync_command.clone());
         if let Some(ref args) = self.rsync_args {
-            res.insert(
-                "rsync-args".into(),
+            insert(
+                &mut res, "rsync-args",
                 toml::Value::Array(
-                    args.iter().map(|a| a.clone().into()).collect()
+                    args.iter().map(|a| toml::Value::from(a.clone())).collect()
                 )
             );
         }
-        res.insert(
-            "rsync-timeout".into(),
+        insert_int(
+            &mut res, "rsync-timeout",
             match self.rsync_timeout {
-                None => 0.into(),
-                Some(value) => {
-                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
-                }
+                None => 0,
+                Some(value) => value.as_secs(),
             }
         );
-        res.insert("disable-rrdp".into(), self.disable_rrdp.into());
-        res.insert(
-            "rrdp-fallback".into(),
-            self.rrdp_fallback.to_string().into(),
+        insert(&mut res, "disable-rrdp", self.disable_rrdp);
+        insert(&mut res, "rrdp-fallback", self.rrdp_fallback.to_string());
+        insert_int(
+            &mut res, "rrdp-fallback-time", self.rrdp_fallback_time.as_secs(),
         );
-        res.insert(
-            "rrdp-fallback-time".into(),
-            (self.rrdp_fallback_time.as_secs() as i64).into()
+        insert_int(
+            &mut res, "rrdp-max-delta-count", self.rrdp_max_delta_count
         );
-        res.insert(
-            "rrdp-max-delta-count".into(),
-            i64::try_from(self.rrdp_max_delta_count).unwrap_or(i64::MAX).into()
-        );
-        res.insert(
-            "rrdp-timeout".into(),
+        insert_int(
+            &mut res, "rrdp-timeout",
             match self.rrdp_timeout {
-                None => 0.into(),
-                Some(value) => {
-                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
-                }
+                None => 0,
+                Some(value) => value.as_secs(),
             }
         );
         if let Some(timeout) = self.rrdp_connect_timeout {
-            res.insert(
-                "rrdp-connect-timeout".into(),
-                (timeout.as_secs() as i64).into()
-            );
+            insert_int(&mut res, "rrdp-connect-timeout", timeout.as_secs());
         }
-        res.insert(
-            "rrdp-tcp-keepalive".into(),
+        insert_int(
+            &mut res, "rrdp-tcp-keepalive",
             match self.rrdp_tcp_keepalive {
-                None => 0.into(),
-                Some(value) => {
-                    value.as_secs().try_into().unwrap_or(i64::MAX).into()
-                }
+                None => 0,
+                Some(value) => value.as_secs(),
             }
         );
         if let Some(addr) = self.rrdp_local_addr {
-            res.insert("rrdp-local-addr".into(), addr.to_string().into());
+            insert(&mut res, "rrdp-local-addr", addr.to_string());
         }
-        res.insert(
-            "rrdp-root-certs".into(),
+        insert(
+            &mut res, "rrdp-root-certs",
             toml::Value::Array(
                 self.rrdp_root_certs.iter()
-                    .map(|p| p.display().to_string().into())
+                    .map(|p| toml::Value::from(p.display().to_string()))
                     .collect()
             )
         );
-        res.insert(
-            "rrdp-proxies".into(),
+        insert(
+            &mut res, "rrdp-proxies",
             toml::Value::Array(
-                self.rrdp_proxies.iter().map(|s| s.clone().into()).collect()
+                self.rrdp_proxies.iter().map(|s| {
+                    toml::Value::from(s.clone())
+                }).collect()
             )
         );
         if let Some(path) = self.rrdp_keep_responses.as_ref() {
-            res.insert(
-                "rrdp-keep-responses".into(),
-                format!("{}", path.display()).into()
+            insert(
+                &mut res,"rrdp-keep-responses", format!("{}", path.display())
             );
         }
-        res.insert("max-object-size".into(),
-            match self.max_object_size {
-                Some(value) => value as i64,
-                None => 0,
-            }.into()
+        insert_int(
+            &mut res, "max-object-size",
+            self.max_object_size.unwrap_or(0),
         );
-        res.insert("max-ca-depth".into(),
-            (self.max_ca_depth as i64).into()
-        );
-        res.insert("enable-bgpsec".into(), self.enable_bgpsec.into());
+        insert_int(&mut res, "max-ca-depth", self.max_ca_depth);
+        insert(&mut res, "enable-bgpsec", self.enable_bgpsec);
         #[cfg(feature = "aspa")]
-        res.insert("enable-aspa".into(), self.enable_aspa.into());
-        res.insert("dirty".into(), self.dirty_repository.into());
-        res.insert(
-            "validation-threads".into(),
-            (self.validation_threads as i64).into()
-        );
-        res.insert("refresh".into(), (self.refresh.as_secs() as i64).into());
-        res.insert("retry".into(), (self.retry.as_secs() as i64).into());
-        res.insert("expire".into(), (self.expire.as_secs() as i64).into());
-        res.insert("history-size".into(), (self.history_size as i64).into());
-        res.insert(
-            "rtr-listen".into(),
+        insert(&mut res, "enable-aspa", self.enable_aspa);
+        insert(&mut res, "dirty", self.dirty_repository);
+        insert_int(&mut res, "validation-threads", self.validation_threads);
+        insert_int(&mut res, "refresh", self.refresh.as_secs());
+        insert_int(&mut res, "retry", self.retry.as_secs());
+        insert_int(&mut res, "expire", self.expire.as_secs());
+        insert_int(&mut res, "history-size", self.history_size);
+        insert(
+            &mut res, "rtr-listen",
             toml::Value::Array(
-                self.rtr_listen.iter().map(|a| a.to_string().into()).collect()
+                self.rtr_listen.iter().map(|a| {
+                    toml::Value::from(a.to_string())
+                }).collect()
             )
         );
-        res.insert(
-            "rtr-tls-listen".into(),
+        insert(
+            &mut res, "rtr-tls-listen",
             toml::Value::Array(
                 self.rtr_tls_listen.iter().map(|a| {
-                    a.to_string().into()
+                    toml::Value::from(a.to_string())
                 }).collect()
             )
         );
-        res.insert(
-            "http-listen".into(),
+        insert(
+            &mut res, "http-listen",
             toml::Value::Array(
-                self.http_listen.iter().map(|a| a.to_string().into()).collect()
+                self.http_listen.iter().map(|a| {
+                    toml::Value::from(a.to_string())
+                }).collect()
             )
         );
-        res.insert(
-            "http-tls-listen".into(),
+        insert(
+            &mut res, "http-tls-listen",
             toml::Value::Array(
                 self.http_tls_listen.iter().map(|a| {
-                    a.to_string().into()
+                    toml::Value::from(a.to_string())
                 }).collect()
             )
         );
-        res.insert("systemd-listen".into(), self.systemd_listen.into());
-        res.insert("rtr-tcp-keepalive".into(),
+        insert(&mut res, "systemd-listen", self.systemd_listen);
+        insert_int(
+            &mut res, "rtr-tcp-keepalive",
             match self.rtr_tcp_keepalive {
-                Some(keep) => (keep.as_secs() as i64).into(),
-                None => 0.into(),
+                Some(value) => value.as_secs(),
+                None => 0,
             }
         );
-        res.insert(
-            "rtr-client-metrics".into(),
-            self.rtr_client_metrics.into()
-        );
+        insert( &mut res, "rtr-client-metrics", self.rtr_client_metrics);
         if let Some(ref path) = self.rtr_tls_key {
-            res.insert(
-                "rtr-tls-key".into(),
-                path.display().to_string().into()
-            );
+            insert(&mut res, "rtr-tls-key", path.display().to_string());
         }
         if let Some(ref path) = self.rtr_tls_cert {
-            res.insert(
-                "rtr-tls-cert".into(),
-                path.display().to_string().into()
-            );
+            insert(&mut res, "rtr-tls-cert", path.display().to_string());
         }
         if let Some(ref path) = self.http_tls_key {
-            res.insert(
-                "http-tls-key".into(),
-                path.display().to_string().into()
-            );
+            insert(&mut res, "http-tls-key", path.display().to_string());
         }
         if let Some(ref path) = self.http_tls_cert {
-            res.insert(
-                "http-tls-cert".into(),
-                path.display().to_string().into()
-            );
+            insert(&mut res, "http-tls-cert", path.display().to_string());
         }
-        res.insert("log-level".into(), self.log_level.to_string().into());
+        insert(&mut res, "log-level", self.log_level.to_string());
         match self.log_target {
             #[cfg(unix)]
             LogTarget::Default(facility) => {
-                res.insert("log".into(), "default".into());
-                res.insert(
-                    "syslog-facility".into(),
-                    facility_to_string(facility).into()
+                insert(&mut res, "log", "default");
+                insert(
+                    &mut res, "syslog-facility", facility_to_string(facility)
                 );
             }
             #[cfg(unix)]
             LogTarget::Syslog(facility) => {
-                res.insert("log".into(), "syslog".into());
-                res.insert(
-                    "syslog-facility".into(),
-                    facility_to_string(facility).into()
+                insert(&mut res, "log", "syslog");
+                insert(
+                    &mut res, "syslog-facility", facility_to_string(facility)
                 );
             }
             LogTarget::Stderr => {
-                res.insert("log".into(), "stderr".into());
+                insert(&mut res, "log", "stderr");
             }
             LogTarget::File(ref file) => {
-                res.insert("log".into(), "file".into());
-                res.insert(
-                    "log-file".into(),
-                    file.display().to_string().into()
-                );
+                insert(&mut res, "log", "file");
+                insert(&mut  res, "log-file", file.display().to_string());
             }
         }
         if let Some(ref file) = self.pid_file {
-            res.insert("pid-file".into(), file.display().to_string().into());
+            insert(&mut res, "pid-file", file.display().to_string());
         }
         if let Some(ref dir) = self.working_dir {
-            res.insert("working-dir".into(), dir.display().to_string().into());
+            insert(&mut res, "working-dir", dir.display().to_string());
         }
         if let Some(ref dir) = self.chroot {
-            res.insert("chroot".into(), dir.display().to_string().into());
+            insert(&mut res, "chroot", dir.display().to_string());
         }
         if let Some(ref user) = self.user {
-            res.insert("user".into(), user.clone().into());
+            insert(&mut res, "user", user.clone());
         }
         if let Some(ref group) = self.group {
-            res.insert("group".into(), group.clone().into());
+            insert(&mut res, "group", group.clone());
         }
         if !self.tal_labels.is_empty() {
-            res.insert(
-                "tal-labels".into(),
+            insert(
+                &mut res, "tal-labels",
                 toml::Value::Array(
                     self.tal_labels.iter().map(|(left, right)| {
-                        toml::Value::Array(vec![
-                            left.clone().into(), right.clone().into()
-                        ])
+                        toml::Value::Array([
+                            toml::Value::from(left.clone()),
+                            toml::Value::from(right.clone()),
+                        ].into_iter().collect())
                     }).collect()
                 )
             );
         }
-        res.into()
+        res
     }
 }
 
@@ -1978,7 +1955,7 @@ struct ServerArgs {
 #[derive(Clone, Debug)]
 struct ConfigFile {
     /// The content of the file.
-    content: toml::value::Table,
+    content: toml::Document,
 
     /// The path to the config file.
     path: PathBuf,
@@ -2013,17 +1990,10 @@ impl ConfigFile {
 
     /// Parses the content of the file from a string.
     fn parse(content: &str, path: &Path) -> Result<Self, Failed> {
-        let content = match toml::from_str(content) {
-            Ok(toml::Value::Table(content)) => content,
-            Ok(_) => {
-                error!(
-                    "Failed to parse config file {}: Not a mapping.",
-                    path.display()
-                );
-                return Err(Failed);
-            }
+        let content = match toml::Document::from_str(content) {
+            Ok(content) => content,
             Err(err) => {
-                error!(
+                eprintln!(
                     "Failed to parse config file {}: {}",
                     path.display(), err
                 );
@@ -2052,25 +2022,72 @@ impl ConfigFile {
         })
     }
 
+    /// Takes a value from the from the config file if present.
+    fn take_value(
+        &mut self, key: &str
+    ) -> Result<Option<toml::Value>, Failed> {
+        match self.content.remove(key) {
+            Some(toml::Item::Value(value)) => Ok(Some(value)),
+            Some(_) => {
+                error!(
+                    "Failed in config file {}: \
+                     '{}' expected to be a value.",
+                    self.path.display(), key
+                );
+                Err(Failed)
+            }
+            None => Ok(None)
+        }
+    }
+    
+
     /// Takes a boolean value from the config file.
     ///
     /// The value is taken from the given `key`. Returns `Ok(None)` if there
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t a booelan.
     fn take_bool(&mut self, key: &str) -> Result<Option<bool>, Failed> {
-        match self.content.remove(key) {
-            Some(value) => {
-                if let toml::Value::Boolean(res) = value {
-                    Ok(Some(res))
+        match self.take_value(key)? {
+            Some(toml::Value::Boolean(res)) => Ok(Some(res.into_value())),
+            Some(_) => {
+                error!(
+                    "Failed in config file {}: \
+                     '{}' expected to be a boolean.",
+                    self.path.display(), key
+                );
+                Err(Failed)
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Takes an unsigned integer value from the config file.
+    ///
+    /// The value is taken from the given `key`. Returns `Ok(None)` if there
+    /// is no such key. Returns an error if the key exists but the value
+    /// isn’t an integer or if it is negative.
+    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Failed> {
+        match self.take_value(key)? {
+            Some(toml::Value::Integer(value)) => {
+                match u64::try_from(value.into_value()) {
+                    Ok(value) => Ok(Some(value)),
+                    Err(_) => {
+                        error!(
+                            "Failed in config file {}: \
+                            '{}' expected to be a positive integer.",
+                            self.path.display(), key
+                        );
+                        Err(Failed)
+                    }
                 }
-                else {
-                    error!(
-                        "Failed in config file {}: \
-                         '{}' expected to be a boolean.",
-                        self.path.display(), key
-                    );
-                    Err(Failed)
-                }
+            }
+            Some(_) => {
+                error!(
+                    "Failed in config file {}: \
+                     '{}' expected to be an integer.",
+                    self.path.display(), key
+                );
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -2084,60 +2101,30 @@ impl ConfigFile {
     fn take_limited_u8(
         &mut self, key: &str, limit: u8,
     ) -> Result<Option<u8>, Failed> {
-        match self.content.remove(key) {
+        match self.take_u64(key)? {
             Some(value) => {
-                if let toml::Value::Integer(res) = value {
-                    if res < 0 || res > limit as i64 {
+                match u8::try_from(value) {
+                    Ok(value) => {
+                        if value > limit {
+                            error!(
+                                "Failed in config file {}: \
+                                '{}' expected integer between 0 and {}.",
+                                self.path.display(), key, limit,
+                            );
+                            Err(Failed)
+                        }
+                        else {
+                            Ok(Some(value))
+                        }
+                    }
+                    Err(_) => {
                         error!(
                             "Failed in config file {}: \
                             '{}' expected integer between 0 and {}.",
                             self.path.display(), key, limit,
                         );
-                        return Err(Failed)
-                    }
-                    Ok(Some(res as u8))
-                }
-                else {
-                    error!(
-                        "Failed in config file {}: \
-                         '{}' expected to be an integer.",
-                        self.path.display(), key
-                    );
-                    Err(Failed)
-                }
-            }
-            None => Ok(None)
-        }
-    }
-
-    /// Takes an unsigned integer value from the config file.
-    ///
-    /// The value is taken from the given `key`. Returns `Ok(None)` if there
-    /// is no such key. Returns an error if the key exists but the value
-    /// isn’t an integer or if it is negative.
-    fn take_u64(&mut self, key: &str) -> Result<Option<u64>, Failed> {
-        match self.content.remove(key) {
-            Some(value) => {
-                if let toml::Value::Integer(res) = value {
-                    if res < 0 {
-                        error!(
-                            "Failed in config file {}: \
-                            '{}' expected to be a positive integer.",
-                            self.path.display(), key
-                        );
                         Err(Failed)
                     }
-                    else {
-                        Ok(Some(res as u64))
-                    }
-                }
-                else {
-                    error!(
-                        "Failed in config file {}: \
-                         '{}' expected to be an integer.",
-                        self.path.display(), key
-                    );
-                    Err(Failed)
                 }
             }
             None => Ok(None)
@@ -2150,25 +2137,18 @@ impl ConfigFile {
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t an integer or if it is negative.
     fn take_usize(&mut self, key: &str) -> Result<Option<usize>, Failed> {
-        match self.content.remove(key) {
+        match self.take_u64(key)? {
             Some(value) => {
-                if let toml::Value::Integer(res) = value {
-                    usize::try_from(res).map(Some).map_err(|_| {
+                match usize::try_from(value) {
+                    Ok(value) => Ok(Some(value)),
+                    Err(_) => {
                         error!(
                             "Failed in config file {}: \
                             '{}' expected to be a positive integer.",
                             self.path.display(), key
                         );
-                        Failed
-                    })
-                }
-                else {
-                    error!(
-                        "Failed in config file {}: \
-                         '{}' expected to be an integer.",
-                        self.path.display(), key
-                    );
-                    Err(Failed)
+                        Err(Failed)
+                    }
                 }
             }
             None => Ok(None)
@@ -2184,36 +2164,18 @@ impl ConfigFile {
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t an integer or if it is out of bounds.
     fn take_small_usize(&mut self, key: &str) -> Result<Option<usize>, Failed> {
-        match self.content.remove(key) {
+        match self.take_usize(key)? {
             Some(value) => {
-                if let toml::Value::Integer(res) = value {
-                    if res < 0 {
-                        error!(
-                            "Failed in config file {}: \
-                            '{}' expected to be a positive integer.",
-                            self.path.display(), key
-                        );
-                        Err(Failed)
-                    }
-                    else if res > ::std::u16::MAX.into() {
-                        error!(
-                            "Failed in config file {}: \
-                            value for '{}' is too large.",
-                            self.path.display(), key
-                        );
-                        Err(Failed)
-                    }
-                    else {
-                        Ok(Some(res as usize))
-                    }
-                }
-                else {
+                if value > u16::MAX.into() {
                     error!(
                         "Failed in config file {}: \
-                         '{}' expected to be a integer.",
+                        value for '{}' is too large.",
                         self.path.display(), key
                     );
                     Err(Failed)
+                }
+                else {
+                    Ok(Some(value))
                 }
             }
             None => Ok(None)
@@ -2226,19 +2188,17 @@ impl ConfigFile {
     /// is no such key. Returns an error if the key exists but the value
     /// isn’t a string.
     fn take_string(&mut self, key: &str) -> Result<Option<String>, Failed> {
-        match self.content.remove(key) {
-            Some(value) => {
-                if let toml::Value::String(res) = value {
-                    Ok(Some(res))
-                }
-                else {
-                    error!(
-                        "Failed in config file {}: \
-                         '{}' expected to be a string.",
-                        self.path.display(), key
-                    );
-                    Err(Failed)
-                }
+        match self.take_value(key)? {
+            Some(toml::Value::String(value)) => {
+                Ok(Some(value.into_value()))
+            }
+            Some(_) => {
+                error!(
+                    "Failed in config file {}: \
+                     '{}' expected to be a string.",
+                    self.path.display(), key
+                );
+                Err(Failed)
             }
             None => Ok(None)
         }
@@ -2313,12 +2273,12 @@ impl ConfigFile {
         &mut self,
         key: &str
     ) -> Result<Option<Vec<String>>, Failed> {
-        match self.content.remove(key) {
+        match self.take_value(key)? {
             Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
                     if let toml::Value::String(value) = value {
-                        res.push(value)
+                        res.push(value.into_value())
                     }
                     else {
                         error!(
@@ -2358,12 +2318,12 @@ impl ConfigFile {
         key: &str
     ) -> Result<Option<Vec<T>>, Failed>
     where T: FromStr, T::Err: fmt::Display {
-        match self.content.remove(key) {
+        match self.take_value(key)? {
             Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
                     if let toml::Value::String(value) = value {
-                        match T::from_str(&value) {
+                        match T::from_str(value.value()) {
                             Ok(value) => res.push(value),
                             Err(err) => {
                                 error!(
@@ -2412,15 +2372,15 @@ impl ConfigFile {
         &mut self,
         key: &str
     ) -> Result<Option<Vec<PathBuf>>, Failed> {
-        match self.content.remove(key) {
+        match self.take_value(key)? {
             Some(toml::Value::String(value)) => {
-                Ok(Some(vec![self.dir.join(value)]))
+                Ok(Some(vec![self.dir.join(value.into_value())]))
             }
             Some(toml::Value::Array(vec)) => {
                 let mut res = Vec::new();
                 for value in vec.into_iter() {
                     if let toml::Value::String(value) = value {
-                        res.push(self.dir.join(value))
+                        res.push(self.dir.join(value.into_value()))
                     }
                     else {
                         error!(
@@ -2451,7 +2411,7 @@ impl ConfigFile {
         &mut self,
         key: &str
     ) -> Result<Option<HashMap<String, String>>, Failed> {
-        match self.content.remove(key) {
+        match self.take_value(key)? {
             Some(toml::Value::Array(vec)) => {
                 let mut res = HashMap::new();
                 for value in vec.into_iter() {
@@ -2500,7 +2460,9 @@ impl ConfigFile {
                         );
                         return Err(Failed);
                     }
-                    if res.insert(left, right).is_some() {
+                    if res.insert(
+                        left.into_value(), right.into_value()
+                    ).is_some() {
                         error!(
                             "Failed in config file {}: \
                             'duplicate item in '{}'.",
@@ -2534,7 +2496,7 @@ impl ConfigFile {
                 self.path.display()
             );
             let mut first = true;
-            for key in self.content.keys() {
+            for (key, _) in self.content.iter() {
                 if !first {
                     print!(",");
                 }
@@ -2730,7 +2692,7 @@ mod test {
     #[test]
     fn read_your_own_config() {
         let out_config = get_default_config();
-        let out_file = format!("{}", out_config.to_toml());
+        let out_file = out_config.to_string();
         let in_file = ConfigFile::parse(
             &out_file, Path::new("/test/routinator.conf")
         ).unwrap();
