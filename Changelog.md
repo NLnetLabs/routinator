@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.13.0-rc1
+
+Released 2023-07-13.
 
 New
 
@@ -27,15 +29,13 @@ New
 Breaking Changes
 
 * A new field `aspa` was added to the jsonext format. See the manual page
-  for more information. This field is present even if ASPA has not been
-  enabled. ([#847])
+  for more information. ([#847])
 * A number of ASPA-related fields have been added to all metrics and
-  status formats. These fields may be present even if ASPA has not been
-  enabled. ([#847])
+  status formats. ([#847])
 * Renamed functions and attributes that refer to standalone end entity
   certificates to refer to router certificates so they don’t get confused
-  with the end entity certificates included with signed object. ([#854])
-* Renamed the JSON member that in the HTTP status API from `validEECerts`
+  with the end entity certificates included with signed objects. ([#854])
+* Renamed the JSON member in the HTTP status API from `validEECerts`
   to `validRouterCerts`. The old name is still available but may be
   removed in the future. ([#854])
 * The regular `json` output format now includes router key and ASPA
