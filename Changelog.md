@@ -2,7 +2,7 @@
 
 ## 0.13.0-rc1
 
-Released 2023-07-12.
+Released 2023-07-13.
 
 New
 
