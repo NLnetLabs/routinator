@@ -4,6 +4,7 @@ pub mod binio;
 pub mod date;
 pub mod dump;
 pub mod fatal;
+pub mod filedb;
 pub mod fmt;
 pub mod json;
 pub mod net;
