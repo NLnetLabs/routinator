@@ -2,9 +2,9 @@
 //!
 //! This module contains a file system-in-a-file that is tailored towards
 //! the needs of Routinator. It can be used to store objects containing
-//! binary data and access them based on a one or two-part key. These objects
-//! can only be created, replaced, or deleted but not modified. The whole file
-//! system can grow and shrink as needed.
+//! binary data. These objects can only be created, replaced, or deleted
+//! but not modified. The whole file system can grow and shrink as needed.
+//!
 //!
 //! # Architecture
 //!
