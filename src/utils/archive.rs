@@ -919,7 +919,7 @@ struct Storage {
     file: Mutex<fs::File>,
 
     /// The optional memory map.
-    #[cfg(uni)]
+    #[cfg(unix)]
     mmap: Option<mmapimpl::Mmap>,
 
     /// The size of the archive.
@@ -1297,8 +1297,6 @@ impl<'a> StorageWrite<'a> {
 
 #[cfg(unix)]
 mod mmapimpl {
-    #![allow(dead_code, unused_variables)]
-
     use std::{fs, io, slice};
     use std::borrow::Cow;
     use std::ffi::c_void;
@@ -1426,6 +1424,9 @@ mod mmapimpl {
             }
         }
     }
+
+    unsafe impl Sync for Mmap { }
+    unsafe impl Send for Mmap { }
 }
 
 
