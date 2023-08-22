@@ -919,6 +919,7 @@ struct Storage {
     file: Mutex<fs::File>,
 
     /// The optional memory map.
+    #[cfg(uni)]
     mmap: Option<mmapimpl::Mmap>,
 
     /// The size of the archive.
@@ -930,6 +931,7 @@ impl Storage {
     pub fn new(file: fs::File) -> Result<Self, io::Error> {
         let mut res = Self {
             file: Mutex::new(file),
+            #[cfg(unix)]
             mmap: None,
             size: 0,
         };
@@ -940,6 +942,7 @@ impl Storage {
     /// Re-memory maps the storage.
     ///
     /// You can un-memory map the storage by setting `self.mmap` to `None`.
+    #[cfg(unix)]
     fn mmap(&mut self) -> Result<(), io::Error> {
         self.mmap = mmapimpl::Mmap::new(&mut self.file.lock())?;
         if let Some(mmap) = self.mmap.as_ref() {
@@ -950,6 +953,11 @@ impl Storage {
             file.seek(SeekFrom::End(0))?;
             self.size = file.stream_position()?; 
         }
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    fn mmap(&mut self) -> Result<(), io::Error> {
         Ok(())
     }
 
@@ -994,6 +1002,7 @@ pub struct StorageRead<'a>(ReadInner<'a>);
 #[derive(Debug)]
 enum ReadInner<'a> {
     /// The storage is memory-mapped and we read from there.
+    #[cfg(unix)]
     Mmap {
         /// The memory map.
         mmap: &'a mmapimpl::Mmap,
@@ -1017,6 +1026,8 @@ impl<'a> StorageRead<'a> {
                 "unexpected EOF"
             ).into())
         }
+
+        #[cfg(unix)]
         match storage.mmap.as_ref() {
             Some(mmap) => {
                 Ok(StorageRead(
@@ -1029,11 +1040,18 @@ impl<'a> StorageRead<'a> {
                 ))
             }
         }
+
+        #[cfg(not(unix))]
+        Ok(StorageRead(
+            ReadInner::File { file: storage.file.lock() }
+        ))
+        
     }
 
     /// Returns the current read position.
     pub fn pos(&mut self) -> Result<u64, ArchiveError> {
         match self.0 {
+            #[cfg(unix)]
             ReadInner::Mmap { pos, .. } => Ok(pos),
             ReadInner::File { ref mut file } => Ok(file.stream_position()?),
         }
@@ -1044,6 +1062,7 @@ impl<'a> StorageRead<'a> {
         &mut self, buf: &mut [u8]
     ) -> Result<(), ArchiveError> {
         match self.0 {
+            #[cfg(unix)]
             ReadInner::Mmap { mmap, ref mut pos } => {
                 *pos = mmap.read_into(*pos, buf)?;
                 Ok(())
@@ -1062,6 +1081,7 @@ impl<'a> StorageRead<'a> {
         &mut self, len: usize,
     ) -> Result<Cow<'a, [u8]>, ArchiveError> {
         match self.0 {
+            #[cfg(unix)]
             ReadInner::Mmap { mmap, ref mut pos } => {
                 let (res, end) = mmap.read(*pos, len)?;
                 *pos = end;
@@ -1135,6 +1155,7 @@ pub struct StorageWrite<'a>(WriteInner<'a>);
 #[derive(Debug)]
 enum WriteInner<'a> {
     /// We are writing into a memory mapped region.
+    #[cfg(unix)]
     Mmap {
         /// The memory-map.
         mmap: &'a mut mmapimpl::Mmap,
@@ -1162,6 +1183,8 @@ impl<'a> StorageWrite<'a> {
         if pos >= storage.size {
             return Err(ArchiveError::Corrupt)
         }
+
+        #[cfg(unix)]
         match storage.mmap.as_mut() {
             Some(mmap) => {
                 Ok(Self(WriteInner::Mmap { mmap, pos, }))
@@ -1172,10 +1195,18 @@ impl<'a> StorageWrite<'a> {
                 Ok(Self(WriteInner::Overwrite { file }))
             }
         }
+
+        #[cfg(not(unix))]
+        {
+            let mut file = storage.file.lock();
+            file.seek(SeekFrom::Start(pos))?;
+            Ok(Self(WriteInner::Overwrite { file }))
+        }
     }
 
     /// Creates a new storage writer for appending data.
     fn new_append(storage: &'a mut Storage) -> Result<Self, ArchiveError> {
+        #[cfg(unix)]
         if let Some(mmap) = storage.mmap.take() {
             drop(mmap)
         }
@@ -1189,6 +1220,7 @@ impl<'a> StorageWrite<'a> {
     /// Returns whether a memory-map needs to be renewed.
     fn finish(self) -> Result<bool, ArchiveError> {
         match self.0 {
+            #[cfg(unix)]
             WriteInner::Mmap { mmap, .. } => {
                 mmap.sync()?;
                 Ok(false)
@@ -1207,6 +1239,7 @@ impl<'a> StorageWrite<'a> {
     /// Returns the current writing position.
     pub fn pos(&mut self) -> Result<u64, io::Error> {
         match self.0 {
+            #[cfg(unix)]
             WriteInner::Mmap { pos, .. } => Ok(pos),
             WriteInner::Overwrite { ref mut file } => file.stream_position(),
             WriteInner::Append { ref mut file } => file.stream_position(),
@@ -1222,6 +1255,7 @@ impl<'a> StorageWrite<'a> {
         &mut self, data: &[u8]
     ) -> Result<(), ArchiveError> {
         match self.0 {
+            #[cfg(unix)]
             WriteInner::Mmap { ref mut mmap, ref mut pos } => {
                 *pos = mmap.write(*pos, data)?;
                 Ok(())
@@ -1261,6 +1295,7 @@ impl<'a> StorageWrite<'a> {
 
 }
 
+#[cfg(unix)]
 mod mmapimpl {
     #![allow(dead_code, unused_variables)]
 
