@@ -220,7 +220,7 @@ The full RPKI data set consists of hundreds of thousands of small files. This
 causes a considerable amount of disk I/O with each validation run. If this is
 undesirable in your setup, you can choose to store the cache in volatile
 memory using the `tmpfs file system
-<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
+<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_. 
 
 If you have installed Routinator using a package, by default the RPKI cache
 directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
@@ -245,6 +245,11 @@ minutes to complete. During this time all services will be unavailable.
 
 Note that your routers should be configured to have a secondary relying party
 instance available at all times.
+
+Lastly, similar to using a regular disk, the same considerations apply to 
+:ref:`inode usage<installation:Inode Usage>`.
+
+.. Tip:: The ``-o nr_inodes=2M`` option flag will allocate two million inodes.
 
 Verifying Configuration
 -----------------------
