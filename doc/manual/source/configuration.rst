@@ -220,7 +220,7 @@ The full RPKI data set consists of hundreds of thousands of small files. This
 causes a considerable amount of disk I/O with each validation run. If this is
 undesirable in your setup, you can choose to store the cache in volatile
 memory using the `tmpfs file system
-<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_. 
+<https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
 If you have installed Routinator using a package, by default the RPKI cache
 directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
@@ -232,10 +232,14 @@ can be done. You should allocate at least 3GB for the cache, but giving it
 
     sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
 
-*Tmpfs* will behave just like a regular disk, so if it runs out of space
-Routinator will do a clean crash, stopping validation, the API, HTTP server
-and most importantly the RTR server, ensuring that no stale data will be
-served to your routers. 
+*Tmpfs* will behave just like a regular disk, so the same considerations
+apply to :ref:`inode usage<installation:Inode Usage>`.
+
+.. Tip:: The ``-o nr_inodes=2M`` option flag will allocate two million inodes.
+
+If the tmpfs file system runs out of space, Routinator will do a clean crash,
+stopping validation, the API, HTTP server and most importantly the RTR
+server, ensuring that no stale data will be served to your routers. 
 
 Also keep in mind that every time you restart the machine, the contents of
 the *tmpfs* file system will be lost. This means that Routinator will have to
@@ -245,11 +249,6 @@ minutes to complete. During this time all services will be unavailable.
 
 Note that your routers should be configured to have a secondary relying party
 instance available at all times.
-
-Lastly, similar to using a regular disk, the same considerations apply to 
-:ref:`inode usage<installation:Inode Usage>`.
-
-.. Tip:: The ``-o nr_inodes=2M`` option flag will allocate two million inodes.
 
 Verifying Configuration
 -----------------------
