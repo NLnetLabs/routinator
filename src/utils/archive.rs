@@ -35,8 +35,8 @@ use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::ops::Range;
-use std::path::Path;
 use std::io::{Read, Seek, SeekFrom, Write};
+use bytes::Bytes;
 use siphasher::sip::SipHasher24;
 use crate::utils::sync::{Mutex, MutexGuard};
 
@@ -69,43 +69,38 @@ pub struct Archive<Meta> {
     /// The meta data of the archive.
     meta: ArchiveMeta,
 
+    /// A marker for the Meta type argument.
     marker: PhantomData<Meta>,
 }
 
 impl<Meta> Archive<Meta> {
-    /// Opens an archive.
-    ///
-    /// If the archive file does not exist, creates it.
-    ///
-    /// If the directories leading to the archive file don’t exist, returns
-    /// an error.
-    ///
-    /// If the archive file does exist but is broken, returns an error.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, ArchiveError> {
-        Self::new(
-            fs::OpenOptions::new()
-            .read(true).write(true).create(true)
-            .open(path.as_ref())?
-        )
-    }
-
     /// Prepares an archive in the given file.
     ///
     /// If the file is empty, adds the necessary file headers. Otherwise,
     /// the file headers are checked.
-    pub fn new(mut file: fs::File) -> Result<Self, ArchiveError> {
+    ///
+    /// Returns the archive and whether it was created anew.
+    pub fn new(
+        mut file: fs::File,
+        writable: bool
+    ) -> Result<(Self, bool), ArchiveError> {
         file.seek(SeekFrom::End(0))?;
-        let meta = if file.stream_position()? == 0 {
-            Self::prepare_new(&mut file)?
+        let size = file.stream_position()?;
+        file.rewind()?;
+        let (meta, new) = if size == 0 {
+            (Self::prepare_new(&mut file)?, true)
         }
         else {
-            Self::prepare_existing(&mut file)?
+            (Self::prepare_existing(&mut file)?, false)
         };
-        Ok(Self {
-            file: Storage::new(file)?,
-            meta,
-            marker: PhantomData,
-        })
+        Ok((
+            Self {
+                file: Storage::new(file, writable)?,
+                meta,
+                marker: PhantomData,
+            },
+            new
+        ))
     }
 
     /// Prepares a new archive by writing the header.
@@ -188,6 +183,32 @@ impl<Meta> Archive<Meta> {
 /// # Access to specific objects
 ///
 impl<Meta: ObjectMeta> Archive<Meta> {
+    pub fn fetch(
+        &self,
+        name: &[u8],
+    ) -> Result<Cow<[u8]>, FetchError> {
+        let hash = self.hash_name(name);
+        let found = match self.find(hash, name)? {
+            Some(found) => found,
+            None => return Err(FetchError::NotFound),
+        };
+        self.file.read(found.data_start::<Meta>(), |read| {
+            Ok(read.read_slice(found.header.data_size::<Meta>()?)?)
+        })
+    }
+
+    pub fn fetch_bytes(
+        &self,
+        name: &[u8],
+    ) -> Result<Bytes, FetchError> {
+        self.fetch(name).map(|res| {
+            match res {
+                Cow::Borrowed(slice) => Bytes::copy_from_slice(slice),
+                Cow::Owned(vec) => vec.into()
+            }
+        })
+    }
+
     /// Fetch the contents of an object.
     ///
     /// The object is identified by its `name`. The closure `check` can be
@@ -202,7 +223,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     /// also return an error if the `check` closure refuses the object.
     /// Finally, it will return an error if the archive is discovered to be
     /// broken or cannot be accessed.
-    pub fn fetch(
+    pub fn fetch_if(
         &self,
         name: &[u8],
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
@@ -516,6 +537,7 @@ impl<Meta> Archive<Meta> {
     ///
     /// The returned value will already be taken module the number of buckets.
     fn hash_name(&self, name: &[u8]) -> u64 {
+        assert!(!name.is_empty());
         let mut hasher = SipHasher24::new_with_key(&self.meta.hash_key);
         hasher.write(name);
         hasher.finish() % usize_to_u64(self.meta.bucket_count)
@@ -733,7 +755,7 @@ impl ArchiveMeta {
 ///
 /// This header is of a fixed size and is followed directly by the variable
 /// length data.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct ObjectHeader {
     /// The size of the object including the header.
     size: u64,
@@ -789,7 +811,7 @@ impl ObjectHeader {
             let header = Self::read_from(read)?;
             let name_len = match header.name_len {
                 Some(len) => len.into(),
-                None => return Err(ArchiveError::Corrupt)
+                None => return Err(ArchiveError::Corrupt),
             };
             let name = read.read_slice(name_len)?;
             Ok((header, name))
@@ -839,7 +861,13 @@ impl ObjectHeader {
 
     /// Returns the start of the meta data.
     fn meta_start(&self, start: u64) -> u64 {
-        start + Self::SIZE
+        start + Self::SIZE + nonzero_usize_to_u64(self.name_len)
+    }
+
+    /// Returns the start of the content.
+    fn data_start<Meta: ObjectMeta>(&self, start: u64) -> u64 {
+          start + Self::SIZE
+        + usize_to_u64(Meta::SIZE)
         + nonzero_usize_to_u64(self.name_len)
     }
 
@@ -874,6 +902,11 @@ impl FoundObject {
     /// Returns the start of the meta data.
     fn meta_start(&self) -> u64 {
         self.header.meta_start(self.start)
+    }
+
+    /// Returns the start of the content.
+    fn data_start<Meta: ObjectMeta>(&self) -> u64 {
+        self.header.data_start::<Meta>(self.start)
     }
 }
 
@@ -922,17 +955,21 @@ struct Storage {
     #[cfg(unix)]
     mmap: Option<mmapimpl::Mmap>,
 
+    /// Do we need write permissions?
+    writable: bool,
+
     /// The size of the archive.
     size: u64,
 }
 
 impl Storage {
     /// Creates a new storage value using the given file.
-    pub fn new(file: fs::File) -> Result<Self, io::Error> {
+    pub fn new(file: fs::File, writable: bool) -> Result<Self, io::Error> {
         let mut res = Self {
             file: Mutex::new(file),
             #[cfg(unix)]
             mmap: None,
+            writable,
             size: 0,
         };
         res.mmap()?;
@@ -944,7 +981,7 @@ impl Storage {
     /// You can un-memory map the storage by setting `self.mmap` to `None`.
     #[cfg(unix)]
     fn mmap(&mut self) -> Result<(), io::Error> {
-        self.mmap = mmapimpl::Mmap::new(&mut self.file.lock())?;
+        self.mmap = mmapimpl::Mmap::new(&mut self.file.lock(), self.writable)?;
         if let Some(mmap) = self.mmap.as_ref() {
             self.size = mmap.size()
         }
@@ -1312,9 +1349,13 @@ mod mmapimpl {
     }
 
     impl Mmap {
-        pub fn new(file: &mut fs::File) -> Result<Option<Self>, io::Error> {
+        pub fn new(
+            file: &mut fs::File,
+            writable: bool,
+        ) -> Result<Option<Self>, io::Error> {
             file.seek(SeekFrom::End(0))?;
             let size = file.stream_position()?;
+            file.rewind()?;
             let size = match usize::try_from(size).and_then(TryInto::try_into) {
                 Ok(size) => size,
                 Err(_) => return Ok(None)
@@ -1322,7 +1363,12 @@ mod mmapimpl {
             let ptr = unsafe {
                 mmap(
                     None, size, 
-                    ProtFlags::PROT_READ | ProtFlags::PROT_WRITE,
+                    if writable {
+                        ProtFlags::PROT_READ | ProtFlags::PROT_WRITE
+                    }
+                    else {
+                        ProtFlags::PROT_READ
+                    },
                     MapFlags::MAP_SHARED,
                     file.as_raw_fd(),
                     0
@@ -1472,6 +1518,15 @@ impl From<io::Error> for ArchiveError {
     }
 }
 
+impl fmt::Display for ArchiveError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ArchiveError::Corrupt => f.write_str("archive corrupted"),
+            ArchiveError::Io(ref err) => write!(f, "{}", err)
+        }
+    }
+}
+
 
 //------------ PublishError --------------------------------------------------
 
@@ -1508,6 +1563,25 @@ pub enum AccessError<T> {
 }
 
 impl<T> From<ArchiveError> for AccessError<T> {
+    fn from(err: ArchiveError) -> Self {
+        Self::Archive(err)
+    }
+}
+
+
+//------------ FetchError ----------------------------------------------------
+
+/// An error happened while publishing an object.
+#[derive(Debug)]
+pub enum FetchError {
+    /// The object does not exist.
+    NotFound,
+
+    /// An error happened while trying to access the archive.
+    Archive(ArchiveError),
+}
+
+impl From<ArchiveError> for FetchError {
     fn from(err: ArchiveError) -> Self {
         Self::Archive(err)
     }
@@ -1567,38 +1641,35 @@ mod test {
 
     fn run_archive(ops: impl IntoIterator<Item = Op>) {
         let mut archive = Archive::new(
-            tempfile::tempfile().unwrap()
-        ).unwrap();
+            tempfile::tempfile().unwrap(), true
+        ).unwrap().0;
         let mut content = HashMap::new();
 
         for item in ops {
             match item {
                 Op::Publish { name, data } => {
-                    eprintln!("Publish {:?}", name);
                     assert!(content.insert(name, data).is_none());
                     archive.publish(name, &(), data).unwrap();
                     check_archive(&archive, &content);
                     assert_eq!(
-                        archive.fetch(name, |_| Ok(())).unwrap().as_ref(),
+                        archive.fetch(name).unwrap().as_ref(),
                         data
                     );
                 }
                 Op::Update { name, data } => {
-                    eprintln!("Update {:?}", name);
                     assert!(content.insert(name, data).is_some());
                     archive.update(name, &(), data, |_| Ok(())).unwrap();
                     assert_eq!(
-                        archive.fetch(name, |_| Ok(())).unwrap().as_ref(),
+                        archive.fetch(name).unwrap().as_ref(),
                         data
                     );
                 }
                 Op::Delete { name } => {
-                    eprintln!("Delete {:?}", name);
                     assert!(content.remove(name).is_some());
                     archive.delete(name, |_| Ok(())).unwrap();
                     assert!(matches!(
-                        archive.fetch(name, |_| Ok(())),
-                        Err(AccessError::NotFound)
+                        archive.fetch(name),
+                        Err(FetchError::NotFound)
                     ));
                 }
             }
