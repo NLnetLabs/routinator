@@ -237,8 +237,8 @@ apply to :ref:`inode usage<installation:Inode Usage>`.
 
 .. Tip:: The ``-o nr_inodes=2M`` option flag will allocate two million inodes.
 
-If the tmpfs file system runs out of space, Routinator will do a clean crash,
-stopping validation, the API, HTTP server and most importantly the RTR
+If the *tmpfs* file system runs out of space, Routinator will do a clean
+crash, stopping validation, the API, HTTP server and most importantly the RTR
 server, ensuring that no stale data will be served to your routers. 
 
 Also keep in mind that every time you restart the machine, the contents of
