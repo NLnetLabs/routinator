@@ -11,10 +11,20 @@ image:
   - "debian:stretch"  # debian/9
   - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
+  - "debian:bookworm" # debian/12
   - 'centos:7'
   - 'rockylinux:8'    # compatible with EOL centos:8
+  - 'rockylinux:9'
 target:
   - 'x86_64'
+test-image:
+  # Set 'test-image' to the empty string for all matrix permutations so that the default ('image') will be used
+  # to launch an LXC container to test the created packages in. Why explicitly set what is already the default?
+  # If this isn't present, later entries in the include set below will overwrite earlier entries that differ
+  # only by their 'test-image' value. If however 'test-image' is present in the original matrix by defining it
+  # here, then 'included' entries will no longer overwrite each other because they alter a key that is present
+  # in the original matrix. This is just how GitHub Actions matrix include rules work.
+  - ""
 include:
   - image: "centos:7"
     systemd_service_unit_file: pkg/common/routinator-minimal.routinator.service
@@ -30,7 +40,9 @@ include:
   # image we are building it in.
   - image: 'rockylinux:8'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
-    os: 'centos:8'
+
+  - image: 'rockylinux:9'
+    systemd_service_unit_file: pkg/common/routinator.routinator.service
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
   # Raspbian 11 is based.
@@ -49,9 +61,33 @@ include:
     image: 'debian:buster'
     target: 'aarch64-unknown-linux-musl'
 
+  # the include entries below will not cause additional packages to be built because they specify combinations
+  # of matrix keys and values as already exist elsewhere in the matrix, but they will cause an additional tests
+  # to be run in the package testing phase, which will install the package in an LXC container running the 
+  # specified 'test-image' instead of the 'image' it was built in.
+  - pkg: 'routinator'
+    image: 'rockylinux:9'
+    target: 'x86_64'
+    test-image: 'almalinux:9'
+
+  - pkg: 'routinator'
+    image: 'rockylinux:9'
+    target: 'x86_64'
+    test-image: 'centos:9-Stream'
+
 # 'mode' is not used by the package building workflow job, but is used by the package testing workflow job.
 # Ploutos will not include this key when using this matrix definition to generate package building matrix
 # permutations but will use it when generating package testing permutations.
-mode:   
+test-mode:   
   - 'fresh-install'
   - 'upgrade-from-published'
+
+# Disable upgrade testing on Rocky Linux 9 and Debian Bookworm as we haven't published any packages for
+# those O/S versions yet.
+test-exclude:
+  - pkg: 'routinator'
+    image: 'rockylinux:9'
+    mode: 'upgrade-from-published'
+  - pkg: 'routinator'
+    image: 'debian:bookworm'
+    mode: 'upgrade-from-published'
