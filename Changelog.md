@@ -6,8 +6,14 @@ Bug Fixes
 
 * Update bcder to at least 0.7.3 to fix various decoding issues that could
   lead to a panic when processing invalid RPKI objects.
+* Check the request URI when generating a path for storing a copy of a RRDP
+  response with the `rrdp-keep-responses` option to avoid path traversal.
+  ([#894]. Found by Haya Shulman, Donika Mirdita and Niklas Vogel.
+  Assigned CVE-2023-39916.)
 
 Other Changes
+
+[#894]: https://github.com/NLnetLabs/routinator/pull/894
 
 
 ## 0.13.0-rc1
