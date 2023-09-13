@@ -1533,7 +1533,7 @@ impl HttpResponse {
         HttpResponse {
             response,
             file: response_dir.as_ref().and_then(|base| {
-                Self::open_file(base, uri, multi).ok()
+                Self::open_file(base, uri, multi)
             })
         }
     }
@@ -1543,15 +1543,8 @@ impl HttpResponse {
     /// See [`create`][Self::create] for the rules.
     fn open_file(
         base: &Path, uri: &uri::Https, multi: bool
-    ) -> Result<fs::File, Failed> {
-        let path = base.join(&uri.as_str()[8..]);
-        let path = if multi {
-            path.join(Utc::now().to_rfc3339())
-        }
-        else {
-            path
-        };
-
+    ) -> Option<fs::File> {
+        let path = Self::get_mirror_path(base, uri, multi)?;
         let parent = match path.parent() {
             Some(parent) => parent,
             None => {
@@ -1560,7 +1553,7 @@ impl HttpResponse {
                     URI translated into a bad path '{}'",
                     path.display()
                 );
-                return Err(Failed)
+                return None
             }
         };
         if let Err(err) = fs::create_dir_all(parent) {
@@ -1569,7 +1562,7 @@ impl HttpResponse {
                 creating directory {} failed: {}",
                 parent.display(), err
             );
-            return Err(Failed)
+            return None
         }
         fs::File::create(&path).map_err(|err| {
             warn!(
@@ -1578,7 +1571,42 @@ impl HttpResponse {
                 path.display(), err
             );
             Failed
-        })
+        }).ok()
+    }
+
+    /// Returns a mirror path for given HTTPS URI.
+    ///
+    /// Returns `None` if the path is fishy in any way. Specifically, we only
+    /// allow printable ASCII characters and no path segments . and ..
+    fn get_mirror_path(
+        base: &Path, uri: &uri::Https, multi: bool
+    ) -> Option<PathBuf> {
+        let rel = &uri.as_str()[8..];
+        for segment in rel.split('/') {
+            if segment == "." || segment == ".." {
+                warn!(
+                    "Cannot keep HTTP response; \
+                    URI '{}' translates into an ambiguous path.",
+                    uri
+                );
+                return None
+            }
+        }
+        let path = base.join(rel);
+        if !path.starts_with(base) {
+            warn!(
+                "Cannot keep HTTP response; \
+                URI '{}' translates into an illegal path.",
+                uri
+            );
+            return None
+        }
+        if multi {
+            Some(path.join(Utc::now().to_rfc3339()))
+        }
+        else {
+            Some(path)
+        }
     }
 
     /// Returns the value of the content length header if present.
@@ -2631,6 +2659,30 @@ mod test {
         let decoded = RepositoryState::_read(&mut slice).unwrap();
         assert!(slice.is_empty());
         assert_eq!(orig, decoded);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_mirror_path() {
+        fn check(uri: &[u8], path_str: Option<&str>) {
+            let path = uri::Https::from_slice(uri).ok().and_then(|uri| {
+                HttpResponse::get_mirror_path(
+                    Path::new("/base"), &uri, false
+                )
+            });
+            assert_eq!(
+                path.as_ref().map(|path| path.to_str().unwrap()),
+                path_str
+            );
+        }
+
+        check(b"https://foo.bar/baz", Some("/base/foo.bar/baz"));
+        check(b"https:///foo.bar/baz", None);
+        check(b"https://foo.bar/../baz", None);
+        check(b"https://foo.bar/foo/../baz", None);
+        check(b"https://foo.bar/foo/./baz", None);
+        check(b"https://foo.bar/foo/baz?query", None);
+        check(b"https://../foo/baz", None);
     }
 }
 
