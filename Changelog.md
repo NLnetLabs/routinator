@@ -1,6 +1,10 @@
 # Change Log
 
-## Unreleased future version
+## 0.13.0-rc2
+
+Released 2023-09-13.
+
+This RC reflects the changes from release 0.12.2.
 
 Bug Fixes
 
@@ -10,8 +14,6 @@ Bug Fixes
   response with the `rrdp-keep-responses` option to avoid path traversal.
   ([#894]. Found by Haya Shulman, Donika Mirdita and Niklas Vogel.
   Assigned CVE-2023-39916.)
-
-Other Changes
 
 [#894]: https://github.com/NLnetLabs/routinator/pull/894
 
