@@ -37,9 +37,9 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "bcder"
-version = "0.7.0"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f007d8acfb8ef7d219911c7164c025a6d3504735120fc5df59c3c479ab84ea51"
+checksum = "bf16bec990f8ea25cab661199904ef452fcf11f565c404ce6cffbdf3f8cbbc47"
 dependencies = [
  "bytes",
  "smallvec",
@@ -1148,6 +1148,7 @@ name = "routinator"
 version = "0.12.1"
 dependencies = [
  "base64",
+ "bcder",
  "bytes",
  "chrono",
  "clap",

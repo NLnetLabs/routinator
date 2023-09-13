@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.12.1"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.62"
 authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -14,6 +14,9 @@ readme = "README.md"
 exclude = [ ".github" ]
 
 [dependencies]
+# XXX Force bcder to be at least 0.7.3.
+bcder           = "0.7.3"
+
 base64          = "0.13.0"
 bytes           = "1.0.0"
 chrono          = "0.4.23"

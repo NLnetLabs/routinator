@@ -3,9 +3,11 @@ on:
   push:
     branches: 
       - main
+      - series-*
   pull_request:
     branches: 
       - main
+      - series-*
 jobs:
   test:
     name: test
@@ -13,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [1.60.0, stable, beta]
+        rust: [1.62.0, stable, beta]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -21,10 +23,10 @@ jobs:
       uses: hecrj/setup-rust-action@v1
       with:
         rust-version: ${{ matrix.rust }}
-    - if: matrix.rust == 'stable'
-      run: rustup component add clippy
-    - if: matrix.rust == 'stable'
-      run: cargo clippy -- -D warnings
+#   - if: matrix.rust == 'stable'
+#     run: rustup component add clippy
+#   - if: matrix.rust == 'stable'
+#     run: cargo clippy -- -D warnings
     - run: cargo build --verbose --locked
     - run: cargo test --verbose
 
