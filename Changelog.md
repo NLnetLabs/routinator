@@ -4,6 +4,9 @@
 
 Bug Fixes
 
+* Update bcder to at least 0.7.3 to fix various decoding issues that could
+  lead to a panic when processing invalid RPKI objects.
+
 Other Changes
 
 

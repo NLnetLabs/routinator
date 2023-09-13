@@ -14,6 +14,9 @@ readme = "README.md"
 exclude = [ ".github" ]
 
 [dependencies]
+# XXX Force bcder to be at least 0.7.3.
+bcder           = "0.7.3"
+
 arbitrary       = { version = "1", optional = true, features = ["derive"] }
 bytes           = "1.0.0"
 chrono          = "0.4.23"
