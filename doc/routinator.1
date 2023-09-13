@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Jan 04, 2023" "0.12.1" "Routinator"
+.TH "ROUTINATOR" "1" "Sep 13, 2023" "0.12.2" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -171,7 +171,7 @@ was \fIwarn\fP\&. In all previous versions \fIwarn\fP was hard\-wired.
 .INDENT 0.0
 .TP
 .B \-\-unsafe\-vrps=policy
-This option defines how to deal with "unsafe VRPs." If the address
+This option defines how to deal with \(dqunsafe VRPs.\(dq If the address
 prefix of a VRP overlaps with any resources assigned to a CA that has
 been rejected because if failed to validate completely, the VRP is said
 to be unsafe since using it may lead to legitimate routes being flagged
@@ -505,7 +505,7 @@ identical to the CSV produced by the RIPE NCC Validator.
 .B csvext
 An extended version of csv each line contains these
 comma\-separated values: the rsync URI of the ROA the line
-is taken from (or "N/A" if it isn\(aqt from a ROA), the
+is taken from (or \(dqN/A\(dq if it isn\(aqt from a ROA), the
 autonomous system number, the prefix in slash notation, the
 maximum prefix length, the not\-before date and not\-after
 date of the validity of the ROA.
@@ -663,7 +663,7 @@ the prefix is RPKI valid or invalid.
 The option can be given multiple times, in which case VRPs for all
 prefixes are provided. It can also be combined with one or more
 ASN selections. Then all matching VRPs are included. That is,
-selectors combine as "or" not "and".
+selectors combine as \(dqor\(dq not \(dqand\(dq.
 .UNINDENT
 .INDENT 7.0
 .TP
