@@ -85,6 +85,24 @@ Other Changes
 [draft-ietf-sidrops-aspa-profile-15]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/15/
 
 
+## 0.12.2 ‘Brutti, sporchi e cattivi’
+
+Release 2023-09-13.
+
+Bug Fixes
+
+* Fixed various decoding issues that could lead to a panic when processing
+  invalid RPKI objects. ([#891], via bcder release 0.7.3. Found by
+  Haya Shulman, Donika Mirdita and Niklas Vogel. Assigned CVE-2023-39915)
+* Check the request URI when generating a path for storing a copy of a RRDP
+  response with the `rrdp-keep-responses` option to avoid path traversal.
+  ([#892]. Found by Haya Shulman, Donika Mirdita and Niklas Vogel.
+  Assigned CVE-2023-39916.)
+
+[#891]: https://github.com/NLnetLabs/routinator/pull/891
+[#892]: https://github.com/NLnetLabs/routinator/pull/892
+
+
 ## 0.12.1 ‘Plan uw reis in de app’
 
 Released 2023-01-04.
