@@ -827,7 +827,6 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(RunFailed::fatal())
             }
         }
-        archive.verify()?;
         drop(archive);
         if let Err(err) = fs::rename(path.as_ref(), self.path.as_ref()) {
             error!(
@@ -893,7 +892,6 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        archive.verify()?;
         debug!("RRDP {}: Delta update completed.", self.rpki_notify);
         Ok(None)
     }

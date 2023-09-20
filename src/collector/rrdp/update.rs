@@ -386,10 +386,6 @@ impl<'a> ProcessDelta for DeltaUpdate<'a> {
                 })
             }
         };
-        match self.archive.verify() {
-            Ok(_) => eprintln!("Archive is fine"),
-            Err(_) => eprintln!("Archive is broken"),
-        }
         res
     }
 
