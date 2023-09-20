@@ -290,6 +290,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         self.set_index(hash, start.into())?;
         if empty_end > object_end {
             empty.size = empty_end - object_end;
+            assert!(empty.size >= ObjectHeader::SIZE);
             empty.next = self.get_empty_index()?;
             empty.write(&mut self.file, object_end)?;
             self.set_empty_index(NonZeroU64::new(object_end))?;
@@ -335,15 +336,20 @@ impl<Meta: ObjectMeta> Archive<Meta> {
 
         let new_size = Self::object_size(name, data);
         if Self::fits(found.header.size, new_size) {
+            // We can squeeze the new object data into its current space.
             ObjectHeader::update_size(found.start, new_size, &mut self.file)?;
             self.file.write(found.meta_start(), |write| {
                 meta.write(write)?;
                 write.write(data)
             })?;
-            self.create_empty(
-                found.start + new_size,
-                found.header.size - new_size
-            )?;
+            // If there’s empty space, we need to mark and add that.
+            let empty_size = found.header.size - new_size;
+            if empty_size > 0 {
+                self.create_empty(
+                    found.start + new_size,
+                    empty_size,
+                )?;
+            }
         }
         else {
             self.delete_found(hash, found)?;
