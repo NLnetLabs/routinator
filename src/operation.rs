@@ -249,6 +249,7 @@ impl Server {
         validation.ignite()?;
 
         let join = thread::spawn(move || {
+            let mut can_retry = true;
             let err = loop {
                 if let Some(log) = log.as_ref() {
                     log.start();
@@ -266,11 +267,20 @@ impl Server {
                             }
                             Err(err) => {
                                 if err.should_retry() {
-                                    info!(
-                                        "Validation failed but \
-                                         can be retried."
-                                    );
-                                    Duration::from_secs(0)
+                                    if can_retry() {
+                                        info!(
+                                            "Validation failed but \
+                                             can be retried."
+                                        );
+                                        can_retry = false;
+                                        Duration::from_secs(0)
+                                    }
+                                    else {
+                                        error!(
+                                            "Retried validation failed again."
+                                        );
+                                        break Err(Failed);
+                                    }
                                 }
                                 else {
                                     break Err(Failed);
@@ -572,9 +582,12 @@ impl Vrps {
                 match ValidationReport::process(&engine, process.config()) {
                     Ok(res) => break res,
                     Err(err) => {
-                        if err.should_retry() && !once {
-                            once = true;
-                            continue
+                        if err.should_retry() {
+                            if !once {
+                                once = true;
+                                continue
+                            }
+                            error!("Restarted run failed again. Aborting.");
                         }
                         return Err(ExitError::Generic)
                     }
