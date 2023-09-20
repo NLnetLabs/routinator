@@ -796,7 +796,7 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<bool, RunFailed> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
         let (file, path) = self.collector.temp_file()?;
-        let mut archive = WriteArchive::create(file, path.clone())?;
+        let mut archive = WriteArchive::create_with_file(file, path.clone())?;
         if let Err(err) = SnapshotUpdate::new(
             self.collector, &mut archive, notify, &mut self.metrics
         ).try_update() {

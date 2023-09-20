@@ -35,6 +35,7 @@ use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::ops::Range;
+use std::path::Path;
 use std::io::{Read, Seek, SeekFrom, Write};
 use bytes::Bytes;
 use siphasher::sip::SipHasher24;
@@ -74,55 +75,59 @@ pub struct Archive<Meta> {
 }
 
 impl<Meta> Archive<Meta> {
-    /// Prepares an archive in the given file.
+    /// Creates a new archive at the given path.
     ///
-    /// If the file is empty, adds the necessary file headers. Otherwise,
-    /// the file headers are checked.
+    /// The archive is opened for reading and writing.
     ///
-    /// Returns the archive and whether it was created anew.
-    pub fn new(
-        mut file: fs::File,
-        writable: bool
-    ) -> Result<(Self, bool), ArchiveError> {
-        file.seek(SeekFrom::End(0))?;
-        let size = file.stream_position()?;
-        file.rewind()?;
-        let (meta, new) = if size == 0 {
-            (Self::prepare_new(&mut file)?, true)
-        }
-        else {
-            (Self::prepare_existing(&mut file)?, false)
-        };
-        Ok((
-            Self {
-                file: Storage::new(file, writable)?,
-                meta,
-                marker: PhantomData,
-            },
-            new
-        ))
+    /// If there already is a file at the given path, the function fails.
+    pub fn create(path: impl AsRef<Path>) -> Result<Self, ArchiveError> {
+        Self::create_with_file(
+            fs::OpenOptions::new()
+                .read(true).write(true).create_new(true)
+                .open(path)?
+        )
     }
 
-    /// Prepares a new archive by writing the header.
-    fn prepare_new(file: &mut fs::File) -> Result<ArchiveMeta, ArchiveError> {
+    pub fn create_with_file(
+        mut file: fs::File
+    ) -> Result<Self, ArchiveError> {
+        file.set_len(0)?;
         let meta = ArchiveMeta::new(DEFAULT_BUCKET_COUNT);
         file.write_all(&FILE_MAGIC)?;
-        meta.write(file)?;
+        meta.write(&mut file)?;
         let len = file.stream_position()? + Self::index_size(&meta);
         file.set_len(len)?;
-        Ok(meta)
+
+        Ok(Self {
+            file: Storage::new(file, true)?,
+            meta,
+            marker: PhantomData,
+        })
     }
 
-    /// Prepares an existing archive by checking the header.
-    fn prepare_existing(
-        file: &mut fs::File
-    ) -> Result<ArchiveMeta, ArchiveError> {
+    /// Opens an existing archive at the given path.
+    pub fn open(
+        path: impl AsRef<Path>, writable: bool
+    ) -> Result<Self, OpenError> {
+        let mut file = if writable {
+            fs::OpenOptions::new().read(true).write(true).open(path)?
+        }
+        else {
+            fs::OpenOptions::new().read(true).open(path)?
+        };
+
         let mut magic = [0; MAGIC_SIZE];
         file.read_exact(&mut magic)?;
         if magic != FILE_MAGIC {
-            return Err(ArchiveError::Corrupt)
+            return Err(ArchiveError::Corrupt.into())
         }
-        Ok(ArchiveMeta::read(file)?)
+        let meta = ArchiveMeta::read(&mut file)?;
+
+        Ok(Self {
+            file: Storage::new(file, writable)?,
+            meta,
+            marker: PhantomData,
+        })
     }
 
     /// Verifies the consistency of an archive.
@@ -1533,6 +1538,44 @@ impl fmt::Display for ArchiveError {
     }
 }
 
+//------------ OpenError -----------------------------------------------------
+
+/// An error happened while opening an existing archive.
+#[derive(Debug)]
+pub enum OpenError {
+    /// The archive does not exist.
+    NotFound,
+
+    /// An error happened while trying to access the archive.
+    Archive(ArchiveError),
+}
+
+impl From<io::Error> for OpenError {
+    fn from(err: io::Error) -> Self {
+        ArchiveError::Io(err).into()
+    }
+}
+
+impl From<ArchiveError> for OpenError {
+    fn from(err: ArchiveError) -> Self {
+        match err {
+            ArchiveError::Io(err) if matches!(
+                err.kind(), io::ErrorKind::NotFound
+            ) => Self::NotFound,
+            _ => Self::Archive(err),
+        }
+    }
+}
+
+impl fmt::Display for OpenError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OpenError::NotFound => f.write_str("not found"),
+            OpenError::Archive(ref err) => write!(f, "{}", err),
+        }
+    }
+}
+
 
 //------------ PublishError --------------------------------------------------
 
@@ -1542,7 +1585,7 @@ pub enum PublishError {
     /// The object already exists.
     AlreadyExists,
 
-    /// An error happened while tryimg to access the archive.
+    /// An error happened while trying to access the archive.
     Archive(ArchiveError),
 }
 
@@ -1646,9 +1689,9 @@ mod test {
     }
 
     fn run_archive(ops: impl IntoIterator<Item = Op>) {
-        let mut archive = Archive::new(
-            tempfile::tempfile().unwrap(), true
-        ).unwrap().0;
+        let mut archive = Archive::create_with_file(
+            tempfile::tempfile().unwrap()
+        ).unwrap();
         let mut content = HashMap::new();
 
         for item in ops {

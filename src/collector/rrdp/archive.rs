@@ -11,7 +11,9 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::error::RunFailed;
 use crate::utils::archive;
-use crate::utils::archive::{Archive, ArchiveError, FetchError, PublishError};
+use crate::utils::archive::{
+    Archive, ArchiveError, FetchError, OpenError, PublishError
+};
 use crate::utils::binio::{Compose, Parse};
 
 
@@ -28,22 +30,17 @@ pub struct ReadArchive {
 
 impl ReadArchive {
     pub fn open(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
-        let file = fs::File::open(path.as_ref()).map_err(|err| {
-            if matches!(err.kind(), io::ErrorKind::NotFound) {
-                warn!("RRDP repository file {} not found.", path.display());
+        let archive = archive::Archive::open(
+            path.as_ref(), false
+        ).map_err(|err| match err {
+            OpenError::NotFound => {
+                warn!(
+                    "RRDP repository file {} not found.", path.display()
+                );
                 RunFailed::retry()
             }
-            else {
-                error!(
-                    "Fatal: Failed to open RRDP repository file {}: {}",
-                    path.display(), err
-                );
-                RunFailed::fatal()
-            }
+            OpenError::Archive(err) => archive_err(err, path.as_ref())
         })?;
-        let archive = archive::Archive::new(file, false).map_err(|err| {
-            archive_err(err, path.as_ref())
-        })?.0;
         Ok(Self { path, archive })
     }
 
@@ -132,48 +129,37 @@ pub struct WriteArchive {
 
 impl WriteArchive {
     pub fn create(
-        file: fs::File, path: Arc<PathBuf>
+        path: Arc<PathBuf>
     ) -> Result<Self, RunFailed> {
-        eprintln!("Creating archive {}", path.display());
-        let archive = Archive::new(file, true).map_err(|err| {
+        let archive = Archive::create(path.as_ref()).map_err(|err| {
             archive_err(err, path.as_ref())
-        })?.0;
+        })?;
+        Ok(Self { path, archive })
+    }
+
+    pub fn create_with_file(
+        file: fs::File,
+        path: Arc<PathBuf>,
+    ) -> Result<Self, RunFailed> {
+        let archive = Archive::create_with_file(file).map_err(|err| {
+            archive_err(err, path.as_ref())
+        })?;
         Ok(Self { path, archive })
     }
 
     pub fn open(path: Arc<PathBuf>) -> Result<Option<Self>, RunFailed> {
-        eprintln!("Opening archive {}", path.display());
-        let file = match fs::OpenOptions::new().read(true).write(true).open(
-            path.as_ref()
-        ) {
-            Ok(file) => file,
-            Err(err) => {
-                if matches!(err.kind(), io::ErrorKind::NotFound) {
-                    return Ok(None)
-                }
-                else {
-                    error!(
-                        "Fatal: Failed to open RRDP repository file {}: {}",
-                        path.display(), err
-                    );
-                    return Err(RunFailed::fatal())
-                }
+        let archive = match Archive::open(path.as_ref(), true) {
+            Ok(archive) => archive,
+            Err(OpenError::NotFound) => return Ok(None),
+            Err(OpenError::Archive(err)) => {
+                return Err(archive_err(err, path.as_ref()))
             }
         };
-        let archive = Archive::new(file, true).map_err(|err| {
-            archive_err(err, path.as_ref())
-        })?.0;
         Ok(Some(Self { path, archive }))
     }
 
     pub fn verify(&self) -> Result<(), RunFailed> {
-        self.archive.verify().map_err(|_| {
-            eprintln!(
-                "Fatal: RRDP archive corrupt after update: {}",
-                self.path.display()
-            );
-            RunFailed::fatal()
-        })
+        self.archive.verify().map_err(|_| RunFailed::fatal())
     }
 
     pub fn path(&self) -> &Arc<PathBuf> {
