@@ -1136,10 +1136,9 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.13.0-dev"
+version = "0.13.0"
 dependencies = [
  "arbitrary",
- "bcder",
  "bytes",
  "chrono",
  "clap",
@@ -1183,9 +1182,9 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2e2cf92592175551ef134dba1b30f8d1526479e680399d3a1eef27136023373"
+checksum = "98a05b958a41ba8c923cf14bd2ad5f1aca3f3509c8ffd147c36e094346a0290b"
 dependencies = [
  "arbitrary",
  "base64",

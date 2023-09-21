@@ -1,10 +1,10 @@
 # Change Log
 
-## Unreleased next version
+## 0.13.0 ‘Should Have Started This in a Screen’
 
-Bug Fixes
+Released 2023-09-21
 
-Other Changes
+There have been no changes since 0.13.0-rc2.
 
 
 ## 0.13.0-rc2
