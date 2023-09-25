@@ -148,14 +148,14 @@ pub fn format_local_iso_date(date: DateTime<Local>) -> impl fmt::Display {
 #[cfg(test)]
 mod test {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn test_parse_http_date() {
-        let date = DateTime::<Utc>::from_utc(
-            chrono::naive::NaiveDate::from_ymd_opt(
+        let date = Utc.from_utc_datetime(
+            &chrono::naive::NaiveDate::from_ymd_opt(
                 1994, 11, 6
-            ).unwrap().and_hms_opt(8, 49, 37).unwrap(),
-            Utc
+            ).unwrap().and_hms_opt(8, 49, 37).unwrap()
         );
 
         assert_eq!(

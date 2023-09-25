@@ -1,10 +1,39 @@
 # Change Log
 
-## Unreleased future version
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Bug fixes
+
+Other changes
+
+
+## 0.13.0 ‘Should Have Started This in a Screen’
+
+Released 2023-09-21
+
+There have been no changes since 0.13.0-rc2.
+
+
+## 0.13.0-rc2
+
+Released 2023-09-13.
+
+This RC reflects the changes from release 0.12.2.
 
 Bug Fixes
 
-Other Changes
+* Update bcder to at least 0.7.3 to fix various decoding issues that could
+  lead to a panic when processing invalid RPKI objects.
+* Check the request URI when generating a path for storing a copy of a RRDP
+  response with the `rrdp-keep-responses` option to avoid path traversal.
+  ([#894]. Found by Haya Shulman, Donika Mirdita and Niklas Vogel.
+  Assigned CVE-2023-39916.)
+
+[#894]: https://github.com/NLnetLabs/routinator/pull/894
 
 
 ## 0.13.0-rc1
@@ -83,6 +112,24 @@ Other Changes
 [#881]: https://github.com/NLnetLabs/routinator/pull/881
 [rpki-rs #250]: https://github.com/NLnetLabs/rpki-rs/pull/250
 [draft-ietf-sidrops-aspa-profile-15]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/15/
+
+
+## 0.12.2 ‘Brutti, sporchi e cattivi’
+
+Release 2023-09-13.
+
+Bug Fixes
+
+* Fixed various decoding issues that could lead to a panic when processing
+  invalid RPKI objects. ([#891], via bcder release 0.7.3. Found by
+  Haya Shulman, Donika Mirdita and Niklas Vogel. Assigned CVE-2023-39915)
+* Check the request URI when generating a path for storing a copy of a RRDP
+  response with the `rrdp-keep-responses` option to avoid path traversal.
+  ([#892]. Found by Haya Shulman, Donika Mirdita and Niklas Vogel.
+  Assigned CVE-2023-39916.)
+
+[#891]: https://github.com/NLnetLabs/routinator/pull/891
+[#892]: https://github.com/NLnetLabs/routinator/pull/892
 
 
 ## 0.12.1 ‘Plan uw reis in de app’

@@ -1,10 +1,10 @@
 [package]
 # Note: some of these values are also used when building Debian packages below.
 name = "routinator"
-version = "0.13.0-dev"
+version = "0.13.1-dev"
 edition = "2021"
 rust-version = "1.70"
-authors = ["The NLnet Labs RPKI Team <rpki@nlnetlabs.nl>"]
+authors = ["NLnet Labs <rpki-team@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
 keywords = ["rpki", "routing-security", "bgp"]
@@ -30,7 +30,7 @@ pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.16.12"
-rpki            = { version = "0.17.1", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { version = "0.17.2", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 rustls-pemfile  = "1"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
@@ -39,13 +39,13 @@ tempfile        = "3.1.0"
 tokio           = { version = "1.24", features = [ "io-util", "macros", "process", "rt", "rt-multi-thread", "signal", "sync" ] }
 tokio-rustls    = "0.24.1"
 tokio-stream    = { version = "0.1", features = ["net"] }
-toml_edit       = "0.19.12"
+toml_edit       = "0.20"
 uuid            = "1.1"
 routinator-ui   = { version = "0.3.4", optional = true }
 
 
 [target.'cfg(unix)'.dependencies]
-nix             = "0.26.2"
+nix             = { version = "0.27.1", features = ["fs", "net", "process", "socket", "user"] }
 syslog          = "6"
 
 [features]

@@ -226,11 +226,13 @@ If you have installed Routinator using a package, by default the RPKI cache
 directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
 as an example. Note that the directory you choose must exist before the mount
 can be done. You should allocate at least 3GB for the cache, but giving it
-4GB will allow ample margin for future growth:
+4GB will allow ample margin for future growth. Lastly, *tmpfs* will behave
+just like a regular disk, so the same considerations apply to :ref:`inode
+usage<installation:Inode Usage>`:
 
 .. code-block:: bash
 
-    sudo mount -t tmpfs -o size=4G tmpfs /var/lib/routinator/rpki-cache
+    sudo mount -t tmpfs -o size=4G -o nr_inodes=2M tmpfs /var/lib/routinator/rpki-cache
 
 *Tmpfs* will behave just like a regular disk, so if it runs out of space
 Routinator will do a clean crash, stopping validation, the API, HTTP server
