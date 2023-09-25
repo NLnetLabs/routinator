@@ -31,4 +31,3 @@ mod base;
 mod rrdp;
 mod rsync;
 
-pub mod newrrdp;
