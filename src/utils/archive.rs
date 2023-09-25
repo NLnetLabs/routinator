@@ -333,9 +333,9 @@ impl<Meta: ObjectMeta> Archive<Meta> {
 
     /// Updates an object with new meta data and content.
     ///
-    /// The `check` closure is passed the meta data of the current object
-    /// and can be used to verify that the current meta data
-    /// fulfills certain requirements. 
+    /// The `check` closure received the meta data of the current object and
+    /// can be used to verify that the current meta data fulfills certain
+    /// requirements or return a consistency error otherwise.
     ///
     /// The method will return an error if there is no object with `name`.
     /// It will also return an error if the `check` closure fails or if the
@@ -380,9 +380,9 @@ impl<Meta: ObjectMeta> Archive<Meta> {
 
     /// Deletes an object.
     ///
-    /// The `check` closure is passed the meta data of the current object
-    /// and can be used to verify that the current meta data
-    /// fulfills certain requirements. 
+    /// The `check` closure received the meta data of the current object and
+    /// can be used to verify that the current meta data fulfills certain
+    /// requirements or return a consistency error otherwise.
     ///
     /// The method will return an error if there is no object with `name`.
     /// It will also return an error if the `check` closure fails or if the
@@ -468,8 +468,6 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     }
 
     /// Finds the start of the object with the given name.
-    ///
-    /// The returned position is right after the name.
     fn find(
         &self, hash: u64, name: &[u8]
     ) -> Result<Option<FoundObject>, ArchiveError> {
@@ -494,7 +492,8 @@ impl<Meta: ObjectMeta> Archive<Meta> {
 
     /// Finds empty space large enough to contain the given data.
     ///
-    /// Returns `None` if no such space can be found.
+    /// Returns `None` if no such space can be found. Otherwise returns
+    /// the object header of the empty space and the starting position.
     fn find_empty(
         &self, name: &[u8], data: &[u8]
     ) -> Result<Option<(ObjectHeader, NonZeroU64)>, ArchiveError> {
@@ -540,7 +539,12 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         + usize_to_u64(data.len())
     }
 
-    /// Returns whether an objects fits into a given space.
+    /// Returns whether an object fits into a given space.
+    ///
+    /// Specifically, checks that an object of a total size of `object_size`
+    /// (i.e., including header and name and meta) fits into empty space of
+    /// a total size of `empty_size`. This is true if they are the same or
+    /// if there is enough space left to add an empty object.
     fn fits(empty_size: u64, object_size: u64) -> bool {
         // Either the object fits exactly or there is enough space to add
         // an object header
@@ -555,7 +559,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
 impl<Meta> Archive<Meta> {
     /// The size of a single bucket.
     ///
-    /// This is equal to the size of integer type we are using for archive
+    /// This is equal to the size of the integer type we are using for archive
     /// positions, i.e., `u64`.
     const BUCKET_SIZE: usize = mem::size_of::<u64>();
 
@@ -563,7 +567,6 @@ impl<Meta> Archive<Meta> {
     ///
     /// The returned value will already be taken module the number of buckets.
     fn hash_name(&self, name: &[u8]) -> u64 {
-        assert!(!name.is_empty());
         let mut hasher = SipHasher24::new_with_key(&self.meta.hash_key);
         hasher.write(name);
         hasher.finish() % usize_to_u64(self.meta.bucket_count)
