@@ -197,6 +197,9 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     /// Returns the content of the object with the given name.
     ///
     /// Assumes that the object exists and returns an error if not.
+    ///
+    /// The method returns borrowed data if the archive is currently memory
+    /// mapped or owned data otherwise.
     pub fn fetch(
         &self,
         name: &[u8],
@@ -979,6 +982,7 @@ struct Storage {
     mmap: Option<mmapimpl::Mmap>,
 
     /// Do we need write permissions?
+    #[cfg(unix)]
     writable: bool,
 
     /// The size of the archive.
@@ -992,6 +996,7 @@ impl Storage {
             file: Mutex::new(file),
             #[cfg(unix)]
             mmap: None,
+            #[cfg(unix)]
             writable,
             size: 0,
         };
