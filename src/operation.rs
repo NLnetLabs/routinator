@@ -267,7 +267,7 @@ impl Server {
                             }
                             Err(err) => {
                                 if err.should_retry() {
-                                    if can_retry() {
+                                    if can_retry {
                                         info!(
                                             "Validation failed but \
                                              can be retried."

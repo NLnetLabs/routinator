@@ -88,6 +88,10 @@ impl<Meta> Archive<Meta> {
         )
     }
 
+    /// Create a new archive inside a given file.
+    ///
+    /// The file is trunacated back to zero length and the header and index
+    /// added.
     pub fn create_with_file(
         mut file: fs::File
     ) -> Result<Self, ArchiveError> {
@@ -106,6 +110,8 @@ impl<Meta> Archive<Meta> {
     }
 
     /// Opens an existing archive at the given path.
+    ///
+    /// Returns an error if the file doesn’t start with header and index.
     pub fn open(
         path: impl AsRef<Path>, writable: bool
     ) -> Result<Self, OpenError> {
@@ -188,6 +194,9 @@ impl<Meta> Archive<Meta> {
 /// # Access to specific objects
 ///
 impl<Meta: ObjectMeta> Archive<Meta> {
+    /// Returns the content of the object with the given name.
+    ///
+    /// Assumes that the object exists and returns an error if not.
     pub fn fetch(
         &self,
         name: &[u8],
@@ -202,6 +211,9 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         })
     }
 
+    /// Returns the content of the object with the given name as bytes.
+    ///
+    /// Assumes that the object exists and returns an error if not.
     pub fn fetch_bytes(
         &self,
         name: &[u8],
@@ -777,7 +789,7 @@ struct ObjectHeader {
     /// The size of the name.
     ///
     /// If this is `None`, this object is empty.
-    name_len: Option<NonZeroUsize>,
+    name_len: Option<usize>,
 }
 
 impl ObjectHeader {
@@ -790,7 +802,7 @@ impl ObjectHeader {
         size: u64, next: Option<NonZeroU64>, name: &[u8]
     ) -> Self {
         assert!(!name.is_empty());
-        ObjectHeader { size, next, name_len: NonZeroUsize::new(name.len()) }
+        ObjectHeader { size, next, name_len: Some(name.len()) }
     }
 
     /// Creates a new object header for an empty object.
@@ -803,7 +815,7 @@ impl ObjectHeader {
         Ok(Self {
             size: read.read_u64()?,
             next: NonZeroU64::new(read.read_u64()?),
-            name_len: NonZeroUsize::new(read.read_usize()?),
+            name_len: read.read_opt_usize()?,
         })
     }
 
@@ -835,7 +847,7 @@ impl ObjectHeader {
     ) -> Result<(), ArchiveError> {
         write.write_u64(self.size)?;
         write.write_nonzero_u64(self.next)?;
-        write.write_nonzero_usize(self.name_len)?;
+        write.write_opt_usize(self.name_len)?;
         Ok(())
     }
 
@@ -867,19 +879,19 @@ impl ObjectHeader {
     const SIZE:  u64 = usize_to_u64(
           mem::size_of::<u64>()
         + mem::size_of::<u64>()
-        + mem::size_of::<usize>()
+        + Storage::OPT_USIZE_SIZE
     );
 
     /// Returns the start of the meta data.
     fn meta_start(&self, start: u64) -> u64 {
-        start + Self::SIZE + nonzero_usize_to_u64(self.name_len)
+        start + Self::SIZE + opt_usize_to_u64(self.name_len)
     }
 
     /// Returns the start of the content.
     fn data_start<Meta: ObjectMeta>(&self, start: u64) -> u64 {
           start + Self::SIZE
         + usize_to_u64(Meta::SIZE)
-        + nonzero_usize_to_u64(self.name_len)
+        + opt_usize_to_u64(self.name_len)
     }
 
     /// Returns the size of the data.
@@ -1040,6 +1052,15 @@ impl Storage {
     }
 }
 
+/// # Stored size constants
+///
+/// They live here purely for the naming to make some sort of sense.
+impl Storage {
+    const OPT_USIZE_SIZE: usize
+        = mem::size_of::<u8>() + mem::size_of::<usize>();
+}
+
+
 //------------ StorageRead ---------------------------------------------------
 
 /// Reading data from the underlying storage.
@@ -1186,6 +1207,27 @@ impl<'a> StorageRead<'a> {
         Ok(usize::from_ne_bytes(self.read_array()?))
     }
 
+    /// Reads an optional `usize`.
+    ///
+    /// We don’t do any optimisations here and instead store this is an
+    /// one-byte boolean and, if that is 1, the length as a usize.
+    pub fn read_opt_usize(&mut self) -> Result<Option<usize>, ArchiveError> {
+        let opt = self.read_array::<1>()?;
+        let size = self.read_usize()?;
+        match opt[0] {
+            0 => {
+                if size != 0 {
+                    Err(ArchiveError::Corrupt)
+                }
+                else {
+                    Ok(None)
+                }
+            }
+            1 => Ok(Some(size)),
+            _ => Err(ArchiveError::Corrupt),
+        }
+    }
+
     /// Reads a `u64`.
     pub fn read_u64(&mut self) -> Result<u64, ArchiveError> {
         Ok(u64::from_ne_bytes(self.read_array()?))
@@ -1322,6 +1364,23 @@ impl<'a> StorageWrite<'a> {
         self.write(&value.to_ne_bytes())
     }
 
+    /// Write an optional `usize` to storage.
+    pub fn write_opt_usize(
+        &mut self, value: Option<usize>
+    ) -> Result<(), ArchiveError> {
+        match value {
+            Some(value) => {
+                self.write(b"\x01")?;
+                self.write_usize(value)?;
+            }
+            None => {
+                self.write(b"\0")?;
+                self.write_usize(0)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Writes a `u64` to storage.
     pub fn write_u64(&mut self, value: u64) -> Result<(), ArchiveError> {
         self.write(&value.to_ne_bytes())
@@ -1349,7 +1408,6 @@ mod mmapimpl {
     use std::borrow::Cow;
     use std::ffi::c_void;
     use std::io::{Seek, SeekFrom};
-    use std::os::fd::AsRawFd;
     use nix::sys::mman::{MapFlags, MsFlags, ProtFlags, mmap, msync, munmap};
 
 
@@ -1381,7 +1439,7 @@ mod mmapimpl {
                         ProtFlags::PROT_READ
                     },
                     MapFlags::MAP_SHARED,
-                    file.as_raw_fd(),
+                    Some(file),
                     0
                 )?
             };
@@ -1503,8 +1561,8 @@ const fn usize_to_u64(value: usize) -> u64 {
     value as u64
 }
 
-/// Converts an optional non-zero usize into a u64.
-fn nonzero_usize_to_u64(value: Option<NonZeroUsize>) -> u64 {
+/// Converts an optional usize into a u64.
+fn opt_usize_to_u64(value: Option<usize>) -> u64 {
     usize_to_u64(value.map(Into::into).unwrap_or(0))
 }
 
