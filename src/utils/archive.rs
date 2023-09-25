@@ -575,7 +575,7 @@ impl<Meta> Archive<Meta> {
     /// Returns the size of the index.
     ///
     /// There are one more buckets than the archive’s bucket count since that
-    /// counts without the empty bucket.
+    /// count is without the empty bucket.
     fn index_size(meta: &ArchiveMeta) -> u64 {
         usize_to_u64(
             (meta.bucket_count + 1) * Self::BUCKET_SIZE
@@ -720,9 +720,13 @@ pub trait ObjectMeta: Sized {
     type ConsistencyError: fmt::Debug;
 
     /// Write a meta data value.
+    ///
+    /// This method must try to write exactly `Self::SIZE` bytes.
     fn write(&self, write: &mut StorageWrite) -> Result<(), ArchiveError>;
 
     /// Read a meta data value.
+    ///
+    /// This method must try to read exactly `Self::SIZE` bytes.
     fn read(read: &mut StorageRead) -> Result<Self, ArchiveError>;
 }
 
@@ -782,8 +786,8 @@ impl ArchiveMeta {
 
 /// The header of an object.
 ///
-/// This header is of a fixed size and is followed directly by the variable
-/// length data.
+/// This header is of a fixed size and is followed directly by the name, meta.
+/// and content.
 #[derive(Clone, Copy, Debug)]
 struct ObjectHeader {
     /// The size of the object including the header.
@@ -794,20 +798,15 @@ struct ObjectHeader {
 
     /// The size of the name.
     ///
-    /// If this is `None`, this object is empty.
+    /// If this is `None`, this object is an empty object.
     name_len: Option<usize>,
 }
 
 impl ObjectHeader {
     /// Creates a new object header.
-    ///
-    /// # Panic
-    ///
-    /// This panics if the name is empty.
     fn new(
         size: u64, next: Option<NonZeroU64>, name: &[u8]
     ) -> Self {
-        assert!(!name.is_empty());
         ObjectHeader { size, next, name_len: Some(name.len()) }
     }
 
@@ -994,6 +993,7 @@ struct Storage {
 
 impl Storage {
     /// Creates a new storage value using the given file.
+    #[allow(unused_variables)]
     pub fn new(file: fs::File, writable: bool) -> Result<Self, io::Error> {
         let mut res = Self {
             file: Mutex::new(file),
