@@ -160,8 +160,10 @@ interface<user-interface>` are hosted under the ``/ui`` path and the
 allows you to just expose the UI and not any of the other paths, such as
 those serving the various :doc:`VRP output formats<output-formats>`.
 
-In this example we'll use NGINX, but other web servers will allow a similar,
-simple configuration. To only expose the user interface, this is what your
+NGINX
+"""""
+
+To only expose the user interface through NGINX, this is what your
 configuration needs at a minimum when running it on the same server as
 Routinator runs on, using port 8323.
 
@@ -181,4 +183,26 @@ documentation <https://nginx.org/en/docs/http/server_names.html>`_.
     location /api {
       proxy_pass http://127.0.0.1:8323/api;
     } 
+
+Apache
+""""""
+
+To achieve a similar goal with Apache, you can use this configuration.
+
+.. code-block:: apache
+
+    <VirtualHost *:443>
+       ProxyPreserveHost On
+       AllowEncodedSlashes On
+
+       <LocationMatch "^/$">
+           Redirect / /ui
+       </LocationMatch>
+
+       ProxyPass /api http://127.0.0.1:8323/api
+       ProxyPassReverse /api http://127.0.0.1:8323/api
+
+       ProxyPass /ui http://127.0.0.1:8323/ui
+       ProxyPassReverse /ui http://127.0.0.1:8323/ui
+    </VirtualHost>
 
