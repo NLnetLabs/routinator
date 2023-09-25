@@ -174,7 +174,7 @@ impl WriteArchive {
     ) -> Result<(), PublishError> {
         self.archive.publish(
             uri.as_ref(),
-            &RrdpObjectMeta::from_content(&content),
+            &RrdpObjectMeta::from_content(content),
             content
         )
     }
@@ -188,7 +188,7 @@ impl WriteArchive {
     ) -> Result<(), AccessError> {
         Ok(self.archive.update(
             uri.as_ref(),
-            &RrdpObjectMeta::from_content(&content),
+            &RrdpObjectMeta::from_content(content),
             content,
             |meta| {
                 if meta.hash == hash {

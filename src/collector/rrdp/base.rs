@@ -98,6 +98,7 @@ impl Collector {
         Run::new(self)
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Fatal> {
         let dir = dir.join("rrdp");
         debug!("Dumping RRDP collector content to {}", dir.display());
@@ -403,6 +404,7 @@ impl<'a> Run<'a> {
         Ok((res, true))
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn cleanup(
         &self,
         retain: &mut HashSet<uri::Https>
@@ -454,14 +456,12 @@ impl<'a> Run<'a> {
                     return Err(Fatal)
                 }
             }
-            else {
-                if let Err(err) = fs::remove_dir_all(entry.path()) {
-                    error!(
-                        "Fatal: failed to delete directory {}: {}",
-                        entry.path().display(), err
-                    );
-                    return Err(Fatal)
-                }
+            else if let Err(err) = fs::remove_dir_all(entry.path()) {
+                error!(
+                    "Fatal: failed to delete directory {}: {}",
+                    entry.path().display(), err
+                );
+                return Err(Fatal)
             }
         }
         Ok(())

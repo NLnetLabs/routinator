@@ -668,7 +668,7 @@ impl<'a, Meta: ObjectMeta> ObjectsIter<'a, Meta> {
                 let (next, res) = self.archive.file.read(pos.into(), |read| {
                     let header = ObjectHeader::read_from(read)?;
                     let name_len = match header.name_len {
-                        Some(len) => len.into(),
+                        Some(len) => len,
                         None => return Err(ArchiveError::Corrupt)
                     };
                     let name = read.read_slice(name_len)?;
@@ -833,7 +833,7 @@ impl ObjectHeader {
         storage.read(start, |read| {
             let header = Self::read_from(read)?;
             let name_len = match header.name_len {
-                Some(len) => len.into(),
+                Some(len) => len,
                 None => return Err(ArchiveError::Corrupt),
             };
             let name = read.read_slice(name_len)?;
@@ -897,7 +897,7 @@ impl ObjectHeader {
     /// Returns the size of the data.
     fn data_size<Meta: ObjectMeta>(&self) -> Result<usize, ArchiveError> {
         let name_len = match self.name_len {
-            Some(len) => usize_to_u64(usize::from(len)),
+            Some(len) => usize_to_u64(len),
             None => return Err(ArchiveError::Corrupt)
         };
         usize::try_from(

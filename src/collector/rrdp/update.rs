@@ -357,7 +357,7 @@ impl<'a> ProcessDelta for DeltaUpdate<'a> {
         let content = RrdpDataRead::new(
             data, &uri, self.collector.config().max_object_size
         ).read_all()?;
-        let res = match hash {
+        match hash {
             Some(hash) => {
                 self.archive.update_object(
                     &uri, hash, &content
@@ -385,8 +385,7 @@ impl<'a> ProcessDelta for DeltaUpdate<'a> {
                     }
                 })
             }
-        };
-        res
+        }
     }
 
     fn withdraw(
@@ -502,7 +501,7 @@ impl<'a, R: io::Read> RrdpDataRead<'a, R> {
         if let Err(io_err) = self.read_to_end(&mut content) {
             return Err(
                 match self.take_err() {
-                    Some(data_err) => data_err.into(),
+                    Some(data_err) => data_err,
                     None => RrdpDataReadError::Read(io_err),
                 }
             )
