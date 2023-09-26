@@ -1014,26 +1014,21 @@ impl Storage {
     /// Re-memory maps the storage.
     ///
     /// You can un-memory map the storage by setting `self.mmap` to `None`.
-    #[cfg(unix)]
     fn mmap(&mut self) -> Result<(), io::Error> {
-        self.mmap = mmapimpl::Mmap::new(&mut self.file.lock(), self.writable)?;
-        if let Some(mmap) = self.mmap.as_ref() {
-            self.size = mmap.size()
+        #[cfg(unix)]
+        {
+            self.mmap = mmapimpl::Mmap::new(
+                &mut self.file.lock(), self.writable
+            )?;
+            if let Some(mmap) = self.mmap.as_ref() {
+                self.size = mmap.size();
+                return Ok(())
+            }
         }
-        else {
-            let mut file = self.file.lock();
-            file.seek(SeekFrom::End(0))?;
-            self.size = file.stream_position()?; 
-        }
-        Ok(())
-    }
 
-    /// Re-memory maps the storage.
-    ///
-    /// Does nothing because we don’t support memory-mapped files on this
-    /// system (yet).
-    #[cfg(not(unix))]
-    fn mmap(&mut self) -> Result<(), io::Error> {
+        let mut file = self.file.lock();
+        file.seek(SeekFrom::End(0))?;
+        self.size = file.stream_position()?; 
         Ok(())
     }
 
@@ -1113,24 +1108,17 @@ impl<'a> StorageRead<'a> {
         }
 
         #[cfg(unix)]
-        match storage.mmap.as_ref() {
-            Some(mmap) => {
-                Ok(StorageRead(
-                    ReadInner::Mmap { mmap, pos: start }
-                ))
-            }
-            None => {
-                Ok(StorageRead(
-                    ReadInner::File { file: storage.file.lock() }
-                ))
-            }
+        if let Some(mmap) = storage.mmap.as_ref() {
+            return Ok(StorageRead(
+                ReadInner::Mmap { mmap, pos: start }
+            ))
         }
 
-        #[cfg(not(unix))]
+        let mut file = storage.file.lock();
+        file.seek(SeekFrom::Start(start))?;
         Ok(StorageRead(
-            ReadInner::File { file: storage.file.lock() }
+            ReadInner::File { file }
         ))
-        
     }
 
     /// Returns the current read position.
