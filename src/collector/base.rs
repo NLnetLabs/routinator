@@ -10,7 +10,7 @@ use log::info;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::{Config, FallbackPolicy};
-use crate::error::{Failed, RunFailed};
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::Metrics;
 use crate::engine::CaCert;
 use super::{rrdp, rsync};
@@ -78,6 +78,19 @@ impl Collector {
     pub fn ignite(&mut self) -> Result<(), Failed> {
         self.rrdp.as_mut().map_or(Ok(()), rrdp::Collector::ignite)?;
         self.rsync.as_mut().map_or(Ok(()), rsync::Collector::ignite)?;
+        Ok(())
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// Currently doesn’t do anything.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        if let Some(rrdp) = self.rrdp.as_ref() {
+            rrdp.sanitize()?;
+        }
+        if let Some(rsync) = self.rsync.as_ref() {
+            rsync.sanitize()?;
+        }
         Ok(())
     }
 

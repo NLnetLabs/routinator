@@ -915,6 +915,8 @@ impl ObjectHeader {
 //------------ FoundObject ---------------------------------------------------
 
 /// Information about an object found in the archive.
+///
+/// This is just so we don’t need to juggle tuples all the time.
 struct FoundObject {
     /// The start position of the object.
     start: u64,
@@ -940,6 +942,8 @@ impl FoundObject {
 
 
 //------------ Magic Cookie --------------------------------------------------
+//
+// The marker we use for a quick file type check.
 
 #[cfg(all(target_endian = "little", target_pointer_width = "16"))]
 const SYSTEM: u8 = b'A';
@@ -1024,6 +1028,10 @@ impl Storage {
         Ok(())
     }
 
+    /// Re-memory maps the storage.
+    ///
+    /// Does nothing because we don’t support memory-mapped files on this
+    /// system (yet).
     #[cfg(not(unix))]
     fn mmap(&mut self) -> Result<(), io::Error> {
         Ok(())
@@ -1410,6 +1418,9 @@ impl<'a> StorageWrite<'a> {
 
 }
 
+
+//------------ Mmap ----------------------------------------------------------#
+
 #[cfg(unix)]
 mod mmapimpl {
     use std::{fs, io, slice};
@@ -1419,13 +1430,18 @@ mod mmapimpl {
     use nix::sys::mman::{MapFlags, MsFlags, ProtFlags, mmap, msync, munmap};
 
 
+    /// A memory-mapped file.
     #[derive(Debug)]
     pub struct Mmap {
+        /// The pointer to the start of the memory.
         ptr: *mut c_void,
+
+        /// The size of the memory,
         len: usize,
     }
 
     impl Mmap {
+        /// Creates a new value mapping the given file and mode.
         pub fn new(
             file: &mut fs::File,
             writable: bool,
@@ -1454,6 +1470,7 @@ mod mmapimpl {
             Ok(Some(Mmap { ptr, len: size.into() }))
         }
 
+        /// Returns the size of the mapped file.
         pub fn size(&self) -> u64 {
             super::usize_to_u64(self.len)
         }
@@ -1468,16 +1485,19 @@ mod mmapimpl {
     }
 
     impl Mmap {
+        /// Returns the whole memory map.
         fn as_slice(&self) -> &[u8] {
             unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
         }
 
+        /// Returns the whole memory map mutably.
         fn as_slice_mut(&mut self) -> &mut [u8] {
             unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
         }
     }
 
     impl Mmap {
+        /// Reads data into the given buffer.
         pub fn read_into(
             &self, start: u64, buf: &mut [u8]
         ) -> Result<u64, io::Error> {
@@ -1486,6 +1506,9 @@ mod mmapimpl {
             Ok(end)
         }
 
+        /// Returns a cow of the given data.
+        ///
+        /// This will always be borrowed.
         pub fn read(
             &self, start: u64, len: usize,
         ) -> Result<(Cow<[u8]>, u64), io::Error> {
@@ -1513,6 +1536,9 @@ mod mmapimpl {
             Ok((self.as_slice()[start..end].into(), super::usize_to_u64(end)))
         }
 
+        /// Writes the given data starting at the given position.
+        ///
+        /// The data needs to fully fit into the current memory block.
         pub fn write(
             &mut self, start: u64, data: &[u8]
         ) -> Result<u64, io::Error> {
@@ -1541,6 +1567,7 @@ mod mmapimpl {
             Ok(super::usize_to_u64(end))
         }
 
+        /// Synchronizes the memory mapped data onto disk.
         pub fn sync(&self) -> Result<(), io::Error> {
             unsafe {
                 Ok(msync(self.ptr, self.len, MsFlags::MS_ASYNC)?)

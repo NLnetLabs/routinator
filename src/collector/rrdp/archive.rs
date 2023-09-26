@@ -44,6 +44,12 @@ impl ReadArchive {
         Ok(Self { path, archive })
     }
 
+    pub fn verify(path: &Path) -> Result<(), OpenError> {
+        let archive = archive::Archive::<RrdpObjectMeta>::open(path, false)?;
+        archive.verify()?;
+        Ok(())
+    }
+
     /// Loads an object from the archive.
     ///
     /// The object is identified by its rsync URI. If the object doesn’t
@@ -156,10 +162,6 @@ impl WriteArchive {
             }
         };
         Ok(Some(Self { path, archive }))
-    }
-
-    pub fn verify(&self) -> Result<(), RunFailed> {
-        self.archive.verify().map_err(|_| RunFailed::fatal())
     }
 
     pub fn path(&self) -> &Arc<PathBuf> {

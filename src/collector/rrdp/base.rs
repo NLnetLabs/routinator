@@ -13,13 +13,12 @@ use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
+use crate::utils::archive::{ArchiveError, OpenError};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
 use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
-use super::archive::{
-    FallbackTime, ReadArchive, RepositoryState, WriteArchive
-};
+use super::archive::{FallbackTime, ReadArchive, RepositoryState, WriteArchive};
 use super::http::{HttpClient, HttpStatus};
 use super::update::{
     DeltaUpdate, Notification, SnapshotError, SnapshotReason, SnapshotUpdate
@@ -92,6 +91,55 @@ impl Collector {
 
     pub fn ignite(&mut self) -> Result<(), Fatal> {
         self.http.ignite()
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// Validates all repository archives and deletes those that are corrupt.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        for entry in fatal::read_dir(&self.working_dir)? {
+            let entry = entry?;
+            if !entry.is_dir() || entry.file_name() == "tmp" {
+                continue;
+            }
+            for entry in fatal::read_dir(entry.path())? {
+                let entry = entry?;
+                if !entry.is_file() {
+                    continue;
+                }
+                match ReadArchive::verify(entry.path()) {
+                    Ok(()) | Err(OpenError::NotFound) => { }
+                    Err(OpenError::Archive(ArchiveError::Io(err))) => {
+                        error!(
+                            "Fatal: Failed to read RRDP repository archive\
+                             {}: {}",
+                             entry.path().display(), err
+                        );
+                        return Err(Fatal)
+                    }
+                    Err(OpenError::Archive(ArchiveError::Corrupt)) => {
+                        match fs::remove_file(entry.path()) {
+                            Ok(()) => {
+                                info!(
+                                    "Deleting corrupt RRDP repository \
+                                     archive {}.",
+                                    entry.path().display()
+                                );
+                            }
+                            Err(err) => {
+                                error!(
+                                    "Fatal: Failed to delete corrupt RRDP \
+                                    repository archive {}: {}.",
+                                    entry.path().display(), err
+                                );
+                                return Err(Fatal)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn start(&self) -> Run {

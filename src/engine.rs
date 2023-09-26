@@ -43,7 +43,7 @@ use rpki::uri;
 use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
-use crate::error::{Failed, RunFailed};
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
@@ -272,6 +272,18 @@ impl Engine {
     pub fn ignite(&mut self) -> Result<(), Failed> {
         if let Some(collector) = self.collector.as_mut() {
             collector.ignite()?;
+        }
+        Ok(())
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// This goes over the stored data and deletes what looks broken. It
+    /// should be called before retrying a failed restartable run.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        self.store.sanitize()?;
+        if let Some(collector) = self.collector.as_ref() {
+            collector.sanitize()?;
         }
         Ok(())
     }

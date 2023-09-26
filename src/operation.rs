@@ -268,6 +268,9 @@ impl Server {
                             Err(err) => {
                                 if err.should_retry() {
                                     if can_retry {
+                                        if validation.sanitize().is_err() {
+                                            break Err(Failed)
+                                        }
                                         info!(
                                             "Validation failed but \
                                              can be retried."
@@ -583,11 +586,15 @@ impl Vrps {
                     Ok(res) => break res,
                     Err(err) => {
                         if err.should_retry() {
-                            if !once {
+                            if once {
+                                error!(
+                                    "Restarted run failed again. Aborting."
+                                );
+                            }
+                            if engine.sanitize().is_ok() {
                                 once = true;
                                 continue
                             }
-                            error!("Restarted run failed again. Aborting.");
                         }
                         return Err(ExitError::Generic)
                     }

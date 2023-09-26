@@ -79,7 +79,7 @@ use rpki::uri;
 use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
-use crate::error::{Failed, RunFailed};
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::Metrics;
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse, ParseError};
@@ -144,6 +144,13 @@ impl Store {
         Ok(Store {
             path: Self::create_base_dir(config)?,
         })
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// Currently doesn’t do anything.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        Ok(())
     }
 
     /// Start a validation run with the store.

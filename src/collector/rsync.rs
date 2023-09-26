@@ -28,7 +28,7 @@ use log::{debug, error, info, warn};
 use rpki::uri;
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
-use crate::error::Failed;
+use crate::error::{Failed, Fatal};
 use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::fatal;
 use crate::utils::sync::{Mutex, RwLock};
@@ -111,6 +111,13 @@ impl Collector {
     pub fn ignite(&mut self) -> Result<(), Failed> {
         // We don’t need to do anything. But just in case we later will,
         // let’s keep the method around.
+        Ok(())
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// Currently doesn’t do anything.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
         Ok(())
     }
 
