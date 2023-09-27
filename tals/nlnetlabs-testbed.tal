@@ -1,10 +1,10 @@
-https://testbed.rpki.nlnetlabs.nl/ta/ta.cer
-rsync://testbed.rpki.nlnetlabs.nl/ta/ta.cer
+https://testbed.krill.cloud/ta/ta.cer
+rsync://testbed.krill.cloud/ta/ta.cer
 
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9Za7pjT3Se+S1FfquPRR
-6Q3a5xhPQu45NWpVJyWL4YGKmDpe81XqNLtEVEv6Zx42/SOQmPBc8oxa39jl3QqC
-XDa1iVcdK4zCJPtExGLYYWAt6QnGph5gTkjCiFWcIHvyrjAfJ0KO3g45LIr/RW1o
-k1sqsXI66cJVZZrlg22WaKKylss5m7YHQfL/Ij8iecpptxti4N5Y0glXUbehAF8t
-FLBDF4vKUhV84ZUQtRbydwypUcE/q7Q5Nzx6/PlymtRVI0ZorjxHUG3G66S0S5/B
-gcjZEKY7+3htOwLGrLJpf9N55LeByyeacgDNZjqNvJ28RpX9uIocbuiBz/bUIYp0
-ywIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsmn01gf+PSszG83TBG5R
+M9uC9sdL/E4qcwpGIYleAJUZc7R2aCEC+z3UKS4KimtCi6LLek5C4x2ho+nx24HK
+8JQIeF5IBtWZJ8UkXAz7mEIBtsFopxN+oXOYPnMFJNyBsjObw2XcwRjdapRybt90
+I+48bkntPXa3IWZF8dkcuNiGokcXRM9e0yOA3brgS7O61WeT/YMZaQ3B1Wpf1Dr3
+5Luv9Mj16LA0W/KeRwbwPYnM9Wr227AtDooG4i66pL1kZ7q1uylJ9kzm+jaippyk
+W760ty4lA7mgJC+2UMJea1wFIv9QHwejUVQt3H9eK1wJ4qNpZmvlo3eMD+F+Ms9l
+oQIDAQAB
