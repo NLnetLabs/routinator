@@ -175,6 +175,12 @@ the following command:
 
    cargo install --locked --no-default-features --features socks,native-tls routinator
 
+If you want to enable a specific feature in the container this is done via
+docker build args, e.g.
+
+.. code-block:: text
+  docker build . --build-arg CARGO_ARGS="--features aspa"
+
 Statically Linked Routinator
 ----------------------------
 
