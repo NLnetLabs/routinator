@@ -136,7 +136,7 @@ RUN chmod a+x /tmp/out/bin/*
 #
 # The previous build stage from which binaries are copied is controlled by the
 # MODE ARG (see above).
-FROM $(BASE_IMG) AS final
+FROM ${BASE_IMG} AS final
 
 # Copy binaries from the 'source' build stage into the image we are building
 COPY --from=source /tmp/out/bin/* /usr/local/bin/
