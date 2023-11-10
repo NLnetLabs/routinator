@@ -407,38 +407,38 @@ generated in a wide range of output formats for various use cases.
                         ROAs:    4896 verified;
                         VRPs:    6248 verified,    5956 final;
                 router certs:       0 verified;
-                 router keys:       0 verified,       0 final.
-                       ASPAs:       0 verified,       0 final.
+                 router keys:       0 verified,       0 final;
+                       ASPAs:       0 verified,       0 final;
             apnic: 
                         ROAs:   25231 verified;
                         VRPs:  109978 verified,  109717 final;
                 router certs:       0 verified;
-                 router keys:       0 verified,       0 final.
-                       ASPAs:       2 verified,       2 final.
+                 router keys:       0 verified,       0 final;
+                       ASPAs:       2 verified,       2 final;
             arin: 
                         ROAs:   63188 verified;
                         VRPs:   78064 verified,   76941 final;
                 router certs:       1 verified;
-                 router keys:       1 verified,       1 final.
-                       ASPAs:       7 verified,       7 final.
+                 router keys:       1 verified,       1 final;
+                       ASPAs:       7 verified,       7 final;
             lacnic: 
                         ROAs:   18036 verified;
                         VRPs:   32565 verified,   30929 final;
                 router certs:       0 verified;
-                 router keys:       0 verified,       0 final.
-                       ASPAs:       0 verified,       0 final.
+                 router keys:       0 verified,       0 final;
+                       ASPAs:       0 verified,       0 final;
             ripe: 
                         ROAs:   39081 verified;
                         VRPs:  211048 verified,  211043 final;
                 router certs:       2 verified;
-                 router keys:       2 verified,       2 final.
-                       ASPAs:      57 verified,      57 final.
+                 router keys:       2 verified,       2 final;
+                       ASPAs:      57 verified,      57 final;
             total: 
                         ROAs:  150432 verified;
                         VRPs:  437903 verified,  434586 final;
                 router certs:       3 verified;
-                 router keys:       3 verified,       3 final.
-                       ASPAs:      66 verified,      66 final.
+                 router keys:       3 verified,       3 final;
+                       ASPAs:      66 verified,      66 final;
 
           .. versionchanged:: 0.11.0
              Reformat, sort alphabetically and add 
