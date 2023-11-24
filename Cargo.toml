@@ -31,7 +31,7 @@ rand            = "0.8.1"
 reqwest         = { version = "0.11.0", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.16.12"
 rpki            = { version = "0.17.2", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
-rustls-pemfile  = "1"
+rustls-pemfile  = "1.0.2"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
 tempfile        = "3.1.0"
