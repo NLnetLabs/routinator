@@ -79,7 +79,7 @@ use rpki::uri;
 use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
-use crate::error::Failed;
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::Metrics;
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse, ParseError};
@@ -144,6 +144,13 @@ impl Store {
         Ok(Store {
             path: Self::create_base_dir(config)?,
         })
+    }
+
+    /// Sanitizes the stored data.
+    ///
+    /// Currently doesn’t do anything.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        Ok(())
     }
 
     /// Start a validation run with the store.
@@ -761,7 +768,7 @@ impl<'a> StoredPoint<'a> {
                 "Fatal: failed to write to file {}: {}",
                 tmp_path.display(), err
             );
-            return Err(UpdateError::Fatal)
+            return Err(UpdateError::fatal())
         }
         let tmp_object_start = match tmp_file.stream_position() {
             Ok(some) => some,
@@ -770,7 +777,7 @@ impl<'a> StoredPoint<'a> {
                     "Fatal: failed to get position in file {}: {}",
                     tmp_path.display(), err
                 );
-                return Err(UpdateError::Fatal)
+                return Err(UpdateError::fatal())
             }
         };
 
@@ -782,7 +789,7 @@ impl<'a> StoredPoint<'a> {
                             "Fatal: failed to write to file {}: {}",
                             tmp_path.display(), err
                         );
-                        return Err(UpdateError::Fatal)
+                        return Err(UpdateError::fatal())
                     }
                 }
                 Ok(None) => break,
@@ -811,7 +818,7 @@ impl<'a> StoredPoint<'a> {
                 "Fatal: failed to position file {}: {}",
                 self.path.display(), err
             );
-            return Err(UpdateError::Fatal)
+            return Err(UpdateError::fatal())
         }
 
         self.file = Some(file);
@@ -1117,19 +1124,33 @@ impl StoredObject {
 
 //============ Error Types ===================================================
 
+//------------ UpdateError ---------------------------------------------------
+
 /// An error happend while updating a publication point.
 #[derive(Clone, Copy, Debug)]
 pub enum UpdateError {
     /// The update needs to be aborted and rolled back.
     Abort,
 
-    /// Something really bad and fatal happened.
-    Fatal,
+    /// Something really bad happened that requires aborting the run.
+    Failed(RunFailed),
+}
+
+impl UpdateError {
+    pub fn fatal() -> Self {
+        UpdateError::Failed(RunFailed::fatal())
+    }
 }
 
 impl From<Failed> for UpdateError {
     fn from(_: Failed) -> Self {
-        UpdateError::Fatal
+        UpdateError::Failed(RunFailed::fatal())
+    }
+}
+
+impl From<RunFailed> for UpdateError {
+    fn from(err: RunFailed) -> Self {
+        UpdateError::Failed(err)
     }
 }
 

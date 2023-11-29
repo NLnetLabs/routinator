@@ -8,8 +8,10 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = "1"
 libfuzzer-sys = "0.4"
-rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { version = "0.17.1", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+tempfile        = "3.1.0"
 
 [dependencies.routinator]
 path = ".."
@@ -23,11 +25,16 @@ members = ["."]
 debug = 1
 
 [[bin]]
+name = "archive"
+path = "fuzz_targets/archive.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "construct_delta"
 path = "fuzz_targets/construct_delta.rs"
 test = false
 doc = false
-
 
 [[bin]]
 name = "merge_deltas"

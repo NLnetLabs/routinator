@@ -4,12 +4,13 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 use bytes::Bytes;
 use log::info;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::{Config, FallbackPolicy};
-use crate::error::Failed;
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::Metrics;
 use crate::engine::CaCert;
 use super::{rrdp, rsync};
@@ -77,6 +78,17 @@ impl Collector {
     pub fn ignite(&mut self) -> Result<(), Failed> {
         self.rrdp.as_mut().map_or(Ok(()), rrdp::Collector::ignite)?;
         self.rsync.as_mut().map_or(Ok(()), rsync::Collector::ignite)?;
+        Ok(())
+    }
+
+    /// Sanitizes the stored data.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        if let Some(rrdp) = self.rrdp.as_ref() {
+            rrdp.sanitize()?;
+        }
+        if let Some(rsync) = self.rsync.as_ref() {
+            rsync.sanitize()?;
+        }
         Ok(())
     }
 
@@ -178,7 +190,7 @@ impl<'a> Run<'a> {
     /// `Ok(None)`.
     pub fn repository<'s>(
         &'s self, ca: &'s CaCert
-    ) -> Result<Option<Repository<'s>>, Failed> {
+    ) -> Result<Option<Repository<'s>>, RunFailed> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
@@ -273,7 +285,7 @@ enum RepoInner<'a> {
     /// The repository is accessed via RRDP.
     Rrdp {
         /// The repository.
-        repository: rrdp::Repository,
+        repository: Arc<rrdp::ReadRepository>,
     },
 
     /// The repository is accessed via rsync.
@@ -285,7 +297,7 @@ enum RepoInner<'a> {
 
 impl<'a> Repository<'a> {
     /// Creates a RRDP repository.
-    fn rrdp(repository: rrdp::Repository) -> Self {
+    fn rrdp(repository: Arc<rrdp::ReadRepository>) -> Self {
         Repository(RepoInner::Rrdp { repository })
     }
 
@@ -307,7 +319,7 @@ impl<'a> Repository<'a> {
     /// information and returns `None`.
     pub fn load_object(
         &self, uri: &uri::Rsync
-    ) -> Result<Option<Bytes>, Failed> {
+    ) -> Result<Option<Bytes>, RunFailed> {
         match self.0 {
             RepoInner::Rrdp { ref repository } => {
                 repository.load_object(uri)
