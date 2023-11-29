@@ -115,13 +115,8 @@ impl<Meta> Archive<Meta> {
     pub fn open(
         path: impl AsRef<Path>, writable: bool
     ) -> Result<Self, OpenError> {
-        let mut file = if writable {
-            fs::OpenOptions::new().read(true).write(true).open(path)?
-        }
-        else {
-            fs::OpenOptions::new().read(true).open(path)?
-        };
-
+        let mut file = 
+            fs::OpenOptions::new().read(true).write(writable).open(path)?;
         let mut magic = [0; MAGIC_SIZE];
         file.read_exact(&mut magic)?;
         if magic != FILE_MAGIC {
@@ -565,7 +560,9 @@ impl<Meta> Archive<Meta> {
 
     /// Returns the hash value for a given name.
     ///
-    /// The returned value will already be taken module the number of buckets.
+    /// The returned value will already be taken modulo the number of buckets,
+    /// i.e., this is actually the bucket index for the name, not really its
+    /// hash.
     fn hash_name(&self, name: &[u8]) -> u64 {
         let mut hasher = SipHasher24::new_with_key(&self.meta.hash_key);
         hasher.write(name);
