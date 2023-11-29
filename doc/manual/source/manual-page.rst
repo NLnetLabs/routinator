@@ -901,8 +901,8 @@ These can be requested by providing different commands on the command line.
               option is provided, Routinator will run as that user after the
               listening sockets for HTTP and RTR have been created. This may
               cause problems, if the user is not allowed to write to the
-              directory given as repository directory or is not allowed to
-              read the TAL directory or local exception files.
+              directory given as repository directory or local exception
+              files.
 
        .. option:: --group=group-name
 
