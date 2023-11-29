@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::error::{Failed, RunFailed};
 use crate::metrics::RrdpRepositoryMetrics;
 use crate::utils::archive::{ArchiveError, PublishError};
-use super::archive::{AccessError, FallbackTime, RepositoryState, WriteArchive};
+use super::archive::{AccessError, FallbackTime, RepositoryState, RrdpArchive};
 use super::base::Collector;
 use super::http::{HttpClient, HttpResponse, HttpStatus};
 
@@ -136,7 +136,7 @@ pub struct SnapshotUpdate<'a> {
     collector: &'a Collector,
 
     /// The archive to store the snapshot into.
-    archive: &'a mut WriteArchive,
+    archive: &'a mut RrdpArchive,
 
     /// The notification file pointing to the snapshot.
     notify: &'a Notification,
@@ -148,7 +148,7 @@ pub struct SnapshotUpdate<'a> {
 impl<'a> SnapshotUpdate<'a> {
     pub fn new(
         collector: &'a Collector,
-        archive: &'a mut WriteArchive,
+        archive: &'a mut RrdpArchive,
         notify: &'a Notification,
         metrics: &'a mut RrdpRepositoryMetrics,
     ) -> Self {
@@ -260,7 +260,7 @@ pub struct DeltaUpdate<'a> {
     collector: &'a Collector,
 
     /// The archive the repository is stored in.
-    archive: &'a mut WriteArchive,
+    archive: &'a mut RrdpArchive,
 
     /// The session ID of the RRDP session.
     session_id: Uuid,
@@ -281,7 +281,7 @@ impl<'a> DeltaUpdate<'a> {
     /// Creates a new delta update.
     pub fn new(
         collector: &'a Collector,
-        archive: &'a mut WriteArchive,
+        archive: &'a mut RrdpArchive,
         session_id: Uuid,
         info: &'a DeltaInfo,
         metrics: &'a mut RrdpRepositoryMetrics,

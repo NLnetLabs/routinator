@@ -17,10 +17,10 @@ use crate::utils::archive::{
 use crate::utils::binio::{Compose, Parse};
 
 
-//------------ ReadArchive ---------------------------------------------------
+//------------ RrdpArchive ---------------------------------------------------
 
 #[derive(Debug)]
-pub struct ReadArchive {
+pub struct RrdpArchive {
     /// The path where everything from this repository lives.
     path: Arc<PathBuf>,
 
@@ -28,7 +28,37 @@ pub struct ReadArchive {
     archive: archive::Archive<RrdpObjectMeta>,
 }
 
-impl ReadArchive {
+impl RrdpArchive {
+    pub fn create(
+        path: Arc<PathBuf>
+    ) -> Result<Self, RunFailed> {
+        let archive = Archive::create(path.as_ref()).map_err(|err| {
+            archive_err(err, path.as_ref())
+        })?;
+        Ok(Self { path, archive })
+    }
+
+    pub fn create_with_file(
+        file: fs::File,
+        path: Arc<PathBuf>,
+    ) -> Result<Self, RunFailed> {
+        let archive = Archive::create_with_file(file).map_err(|err| {
+            archive_err(err, path.as_ref())
+        })?;
+        Ok(Self { path, archive })
+    }
+
+    pub fn try_open(path: Arc<PathBuf>) -> Result<Option<Self>, RunFailed> {
+        let archive = match Archive::open(path.as_ref(), true) {
+            Ok(archive) => archive,
+            Err(OpenError::NotFound) => return Ok(None),
+            Err(OpenError::Archive(err)) => {
+                return Err(archive_err(err, path.as_ref()))
+            }
+        };
+        Ok(Some(Self { path, archive }))
+    }
+
     pub fn open(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
         let archive = archive::Archive::open(
             path.as_ref(), false
@@ -44,6 +74,12 @@ impl ReadArchive {
         Ok(Self { path, archive })
     }
 
+    pub fn path(&self) -> &Arc<PathBuf> {
+        &self.path
+    }
+}
+
+impl RrdpArchive {
     pub fn verify(path: &Path) -> Result<(), OpenError> {
         let archive = archive::Archive::<RrdpObjectMeta>::open(path, false)?;
         archive.verify()?;
@@ -121,53 +157,7 @@ impl ReadArchive {
     }
 }
 
-
-//------------ WriteArchive --------------------------------------------------
-
-#[derive(Debug)]
-pub struct WriteArchive {
-    /// The path where everything from this repository lives.
-    path: Arc<PathBuf>,
-
-    /// The archive for the repository.
-    archive: Archive<RrdpObjectMeta>,
-}
-
-impl WriteArchive {
-    pub fn create(
-        path: Arc<PathBuf>
-    ) -> Result<Self, RunFailed> {
-        let archive = Archive::create(path.as_ref()).map_err(|err| {
-            archive_err(err, path.as_ref())
-        })?;
-        Ok(Self { path, archive })
-    }
-
-    pub fn create_with_file(
-        file: fs::File,
-        path: Arc<PathBuf>,
-    ) -> Result<Self, RunFailed> {
-        let archive = Archive::create_with_file(file).map_err(|err| {
-            archive_err(err, path.as_ref())
-        })?;
-        Ok(Self { path, archive })
-    }
-
-    pub fn open(path: Arc<PathBuf>) -> Result<Option<Self>, RunFailed> {
-        let archive = match Archive::open(path.as_ref(), true) {
-            Ok(archive) => archive,
-            Err(OpenError::NotFound) => return Ok(None),
-            Err(OpenError::Archive(err)) => {
-                return Err(archive_err(err, path.as_ref()))
-            }
-        };
-        Ok(Some(Self { path, archive }))
-    }
-
-    pub fn path(&self) -> &Arc<PathBuf> {
-        &self.path
-    }
-
+impl RrdpArchive {
     /// Publishes a new object to the archie.
     pub fn publish_object(
         &mut self,
@@ -218,24 +208,6 @@ impl WriteArchive {
                 }
             }
         )?)
-    }
-
-    pub fn load_state(&self) -> Result<RepositoryState, RunFailed> {
-        let data = match self.archive.fetch(b"state") {
-            Ok(data) => data,
-            Err(archive::FetchError::NotFound) => {
-                return Err(
-                    archive_err(ArchiveError::Corrupt, self.path.as_ref())
-                )
-            }
-            Err(archive::FetchError::Archive(err)) => {
-                return Err(archive_err(err, self.path.as_ref()))
-            }
-        };
-        let mut data = data.as_ref();
-        RepositoryState::parse(&mut data).map_err(|_| {
-            archive_err(ArchiveError::Corrupt, self.path.as_ref())
-        })
     }
 
     pub fn publish_state(

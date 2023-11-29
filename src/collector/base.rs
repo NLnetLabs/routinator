@@ -82,8 +82,6 @@ impl Collector {
     }
 
     /// Sanitizes the stored data.
-    ///
-    /// Currently doesn’t do anything.
     pub fn sanitize(&self) -> Result<(), Fatal> {
         if let Some(rrdp) = self.rrdp.as_ref() {
             rrdp.sanitize()?;

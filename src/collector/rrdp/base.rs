@@ -18,7 +18,7 @@ use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
 use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
-use super::archive::{FallbackTime, ReadArchive, RepositoryState, WriteArchive};
+use super::archive::{FallbackTime, RrdpArchive, RepositoryState};
 use super::http::{HttpClient, HttpStatus};
 use super::update::{
     DeltaUpdate, Notification, SnapshotError, SnapshotReason, SnapshotUpdate
@@ -107,7 +107,7 @@ impl Collector {
                 if !entry.is_file() {
                     continue;
                 }
-                match ReadArchive::verify(entry.path()) {
+                match RrdpArchive::verify(entry.path()) {
                     Ok(()) | Err(OpenError::NotFound) => { }
                     Err(OpenError::Archive(ArchiveError::Io(err))) => {
                         error!(
@@ -183,7 +183,7 @@ impl Collector {
         registry: &mut DumpRegistry,
         state_registry: &mut HashMap<uri::Https, RepositoryState>,
     ) -> Result<(), RunFailed> {
-        let archive = ReadArchive::open(repo_path.clone())?;
+        let archive = RrdpArchive::open(repo_path.clone())?;
         let state = archive.load_state()?;
         let target_path = registry.get_repo_path(Some(&state.rpki_notify));
         let object_path = target_path.join("rsync");
@@ -564,7 +564,7 @@ impl<'a> Run<'a> {
         path: Arc<PathBuf>,
         retain: &HashSet<uri::Https>
     ) -> Result<bool, RunFailed> {
-        let archive = ReadArchive::open(path)?;
+        let archive = RrdpArchive::open(path)?;
         let state = archive.load_state()?;
         Ok(retain.contains(&state.rpki_notify))
     }
@@ -644,13 +644,13 @@ impl LoadResult<Repository> {
 #[derive(Debug)]
 pub struct ReadRepository {
     /// The archive for the repository.
-    archive: ReadArchive,
+    archive: RrdpArchive,
 }
 
 impl ReadRepository {
     fn new(repository: &Repository) -> Result<Self, RunFailed> {
         Ok(Self {
-            archive: ReadArchive::open(repository.path.clone())?,
+            archive: RrdpArchive::open(repository.path.clone())?,
         })
     }
 
@@ -727,7 +727,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn try_update(
         mut self
     ) -> Result<(LoadResult<Repository>, RrdpRepositoryMetrics), RunFailed> {
-        let current = match WriteArchive::open(self.path.clone()) {
+        let current = match RrdpArchive::try_open(self.path.clone()) {
             Ok(Some(archive)) => {
                 let state = archive.load_state()?;
                 Some((archive, state))
@@ -735,7 +735,7 @@ impl<'a> RepositoryUpdate<'a> {
             Ok(None) => None,
             Err(err) => {
                 if err.should_retry() {
-                    // WriteArchive::open should already have deleted the
+                    // RrdpArchive::try_open should already have deleted the
                     // file, so we can happily pretend it never existed.
                     None
                 }
@@ -787,7 +787,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// Returns `Ok(false)` if the update failed.
     fn update(
         &mut self,
-        current: Option<(WriteArchive, RepositoryState)>,
+        current: Option<(RrdpArchive, RepositoryState)>,
     ) -> Result<bool, RunFailed> {
         let notify = match Notification::get(
             &self.collector.http, self.rpki_notify,
@@ -824,7 +824,7 @@ impl<'a> RepositoryUpdate<'a> {
     /// Handle the case of a Not Modified response.
     fn not_modified(
         &mut self,
-        current: Option<(WriteArchive, RepositoryState)>,
+        current: Option<(RrdpArchive, RepositoryState)>,
     ) -> Result<(), RunFailed> {
         info!("RRDP {}: Not modified.", self.rpki_notify);
         if let Some((mut archive, mut state)) = current {
@@ -844,7 +844,7 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<bool, RunFailed> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
         let (file, path) = self.collector.temp_file()?;
-        let mut archive = WriteArchive::create_with_file(file, path.clone())?;
+        let mut archive = RrdpArchive::create_with_file(file, path.clone())?;
         if let Err(err) = SnapshotUpdate::new(
             self.collector, &mut archive, notify, &mut self.metrics
         ).try_update() {
@@ -897,7 +897,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn delta_update(
         &mut self,
         notify: &Notification,
-        mut archive: WriteArchive,
+        mut archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
         let deltas = match self.calc_deltas(notify.content(), &state) {
