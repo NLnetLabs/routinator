@@ -13,6 +13,7 @@ use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::thread::available_parallelism;
 use std::time::Duration;
 use clap::{
     Command, Args, ArgAction, ArgMatches, FromArgMatches, Parser,
@@ -955,8 +956,11 @@ impl Config {
 
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
-                file.take_small_usize("validation-threads")?
-                    .unwrap_or_else(::num_cpus::get)
+                file.take_small_usize(
+                    "validation-threads"
+                )?.unwrap_or_else(|| {
+                    available_parallelism().map(|x| x.get()).unwrap_or(1)
+                })
             },
             refresh: {
                 Duration::from_secs(
@@ -1155,7 +1159,9 @@ impl Config {
             enable_bgpsec: false,
             enable_aspa: false,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
-            validation_threads: ::num_cpus::get(),
+            validation_threads: {
+                    available_parallelism().map(|x| x.get()).unwrap_or(1)
+            },
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             retry: Duration::from_secs(DEFAULT_RETRY),
             expire: Duration::from_secs(DEFAULT_EXPIRE),
@@ -2590,7 +2596,10 @@ mod test {
         assert!(config.extra_tals_dir.is_none());
         assert!(config.exceptions.is_empty());
         assert_eq!(config.strict, DEFAULT_STRICT);
-        assert_eq!(config.validation_threads, ::num_cpus::get());
+        assert_eq!(
+            config.validation_threads,
+            available_parallelism().map(|x| x.get()).unwrap_or(1),
+        );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
         assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
@@ -2673,7 +2682,10 @@ mod test {
         );
         assert!(config.exceptions.is_empty());
         assert!(!config.strict);
-        assert_eq!(config.validation_threads, ::num_cpus::get());
+        assert_eq!(
+            config.validation_threads,
+            available_parallelism().map(|x| x.get()).unwrap_or(1),
+        );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
         assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));

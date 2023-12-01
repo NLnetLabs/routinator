@@ -1150,7 +1150,6 @@ dependencies = [
  "listenfd",
  "log",
  "nix",
- "num_cpus",
  "pin-project-lite",
  "rand",
  "reqwest",
