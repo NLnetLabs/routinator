@@ -1,5 +1,19 @@
 # Change Log
 
+## As yet unreleased 0.13.1-rc1
+
+New
+
+Bug Fixes
+
+* The `dump` command will now succeed even if certain directories or files
+  in the repository cache are missing. ([#916])
+
+Other changes
+
+[#916]: https://github.com/NLnetLabs/routinator/pull/916
+
+
 ## 0.13.0 ‘Should Have Started This in a Screen’
 
 Released 2023-09-21
