@@ -174,7 +174,7 @@ impl Store {
         let target = target_base.join("ta");
         debug!("Dumping trust anchor certificates to {}", target.display());
         fatal::remove_dir_all(&target)?;
-        fatal::copy_dir_all(&source, &target)?;
+        fatal::try_copy_dir_all(&source, &target)?;
         debug!("Trust anchor certificate dump complete.");
         Ok(())
     }
@@ -188,7 +188,11 @@ impl Store {
         path: &Path,
         repos: &mut DumpRegistry,
     ) -> Result<(), Failed> {
-        for entry in fatal::read_dir(path)? {
+        let dir = match fatal::try_read_dir(path)? {
+            Some(dir) => dir,
+            None => return Ok(())
+        };
+        for entry in dir {
             let entry = entry?;
             if entry.is_dir() {
                 self.dump_tree(entry.path(), repos)?;
@@ -295,6 +299,7 @@ impl Store {
         &self,
         repos: DumpRegistry,
     ) -> Result<(), Failed> {
+        fatal::create_dir_all(repos.base_dir())?;
         let path = repos.base_dir().join("repositories.json");
         fatal::write_file(
             &path, 
