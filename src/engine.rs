@@ -2049,3 +2049,24 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
     }
 }
 
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn dump_empty_cache() {
+        let _ = crate::process::Process::init(); // May be inited already.
+        let src = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let target = target.path().join("dump");
+        let mut config = Config::default_with_paths(src.path().into());
+        config.rsync_command = "echo".into();
+        config.rsync_args = Some(vec!["some".into()]);
+        let engine = Engine::new(&config, true).unwrap();
+        engine.dump(&target).unwrap();
+    }
+}
+
