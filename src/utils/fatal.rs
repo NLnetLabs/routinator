@@ -130,6 +130,28 @@ pub fn read_dir(path: &Path) -> Result<ReadDir, Failed> {
 }
 
 
+//------------ try_read_dir --------------------------------------------------
+
+/// Returns an iterator over a directory if it exists.
+pub fn try_read_dir(path: &Path) -> Result<Option<ReadDir>, Failed> {
+    match fs::read_dir(path) {
+        Ok(iter) => Ok(Some(ReadDir { path, iter })),
+        Err(err) => {
+            if err.kind() == io::ErrorKind::NotFound {
+                Ok(None)
+            }
+            else {
+                error!(
+                    "Fatal: failed to open directory {}: {}",
+                    path.display(), IoErrorDisplay(err)
+                );
+                Err(Failed)
+            }
+        }
+    }
+}
+
+
 //------------ read_existing_dir ---------------------------------------------
 
 /// Returns an iterator over an existing directory.
@@ -316,15 +338,19 @@ pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
 }
 
 
-//------------ copy_dir_all --------------------------------------------------
+//------------ try_copy_dir_all ----------------------------------------------
 
 /// Copies the content of a directory.
 ///
-/// Creates the target directory with `create_dir_all`.  Errors out if
-/// anything goes wrong.
-pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
+/// Creates the target directory with `create_dir_all`. Errors out if
+/// anything goes wrong. The source path not existing is not an error.
+pub fn try_copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
+    let source_dir = match try_read_dir(source)? {
+        Some(entry) => entry,
+        None => return Ok(()),
+    };
     create_dir_all(target)?;
-    for entry in read_dir(source)? {
+    for entry in source_dir {
         let entry = entry?;
         if entry.is_file() {
             if let Err(err) = fs::copy(
@@ -338,7 +364,7 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
             }
         }
         else if entry.is_dir() {
-            copy_dir_all(
+            try_copy_dir_all(
                 entry.path(),
                 &target.join(entry.file_name())
             )?;
