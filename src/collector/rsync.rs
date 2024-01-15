@@ -549,20 +549,7 @@ impl RsyncCommand {
                     if let Some(mut pipe) = stderr_pipe {
                         let mut line = Vec::new();
                         while pipe.read_until(b'\n', &mut line).await? != 0 {
-                            // Drop the delimiter if there is one, don’t
-                            // log an empty line.
-                            let len = line.len();
-                            if len > 0 && line[len - 1] == b'\n' {
-                                let _ = line.pop();
-                            }
-                            if line.is_empty() {
-                                continue
-                            }
-                            warn!(
-                                "{}: {}",
-                                source,
-                                String::from_utf8_lossy(&line)
-                            );
+                            Self::log_err_line(source, &mut line);
                         }
                     }
                     Ok(())
@@ -699,6 +686,33 @@ impl RsyncCommand {
             destination.push('/');
         }
         Ok(destination)
+    }
+
+    /// Logs the line in the buffer.
+    fn log_err_line(
+        source: &Module,
+        line: &mut Vec<u8>,
+    ) {
+        let mut len = line.len();
+        if len > 0 && line[len - 1] == b'\n' {
+            len -= 1;
+        }
+
+        // On Windows, we may now have a \r at the end.
+        #[cfg(windows)]
+        if len > 0 && line[len - 1] == b'\r' {
+            len -= 1;
+        }
+
+        if len > 0 {
+            warn!(
+                "{}: {}",
+                source,
+                String::from_utf8_lossy(&line[..len])
+            );
+        }
+
+        line.clear();
     }
 }
 
