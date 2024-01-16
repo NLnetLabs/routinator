@@ -96,7 +96,7 @@ fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
         })?;
 
         let bits = match item {
-            RSAKey(bits) | PKCS8Key(bits) => bits,
+            RSAKey(bits) | PKCS8Key(bits) | ECKey(bits) => bits,
             _ => continue
         };
         if key.is_some() {
