@@ -4,14 +4,30 @@
 
 New
 
+* Added support for private keys marked as “EC PRIVATE KEY“ in the PEM files
+  for TLS server configuration. ([#921])
+* The rsync collector now logs stderr output of the rsync command directly
+  instead of collecting it and logging it in one go after the commend
+  returned. ([#290])
+
 Bug Fixes
 
 * The `dump` command will now succeed even if certain directories or files
   in the repository cache are missing. ([#916])
+* A more meaningful message is now printed when decoding RPKI objects
+  fails. It will still not give much detail but at least it isn’t
+  confusing any more. ([#917])
 
 Other changes
 
+* Updated the `nlnetlabs-testbed` TAL to the current location and key.
+  ([#922])
+
 [#916]: https://github.com/NLnetLabs/routinator/pull/916
+[#917]: https://github.com/NLnetLabs/routinator/pull/917
+[#920]: https://github.com/NLnetLabs/routinator/pull/920
+[#921]: https://github.com/NLnetLabs/routinator/pull/921
+[#922]: https://github.com/NLnetLabs/routinator/pull/922
 
 
 ## 0.13.0 ‘Should Have Started This in a Screen’
