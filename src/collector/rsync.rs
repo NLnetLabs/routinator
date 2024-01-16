@@ -26,6 +26,7 @@ use futures::{FutureExt, TryFutureExt};
 use futures::future::Either;
 use log::{debug, error, info, warn};
 use rpki::uri;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::Failed;
@@ -518,9 +519,10 @@ impl RsyncCommand {
             command.kill_on_drop(true);
             let mut child = command.spawn()?;
             let stdout_pipe = child.stdout.take();
-            let stderr_pipe = child.stderr.take();
+            let stderr_pipe = child.stderr.take().map(
+                tokio::io::BufReader::new
+            );
             let mut stdout = Vec::new();
-            let mut stderr = Vec::new();
             let res = tokio::try_join!(
                 match self.timeout {
                     None => Either::Left(child.wait().map(Ok)),
@@ -545,7 +547,10 @@ impl RsyncCommand {
                 },
                 async {
                     if let Some(mut pipe) = stderr_pipe {
-                        tokio::io::copy(&mut pipe, &mut stderr).await?;
+                        let mut line = Vec::new();
+                        while pipe.read_until(b'\n', &mut line).await? != 0 {
+                            Self::log_err_line(source, &mut line);
+                        }
                     }
                     Ok(())
                 },
@@ -569,11 +574,6 @@ impl RsyncCommand {
                     Err(err)
                 }
             };
-            if !stderr.is_empty() {
-                String::from_utf8_lossy(&stderr).lines().for_each(|l| {
-                    warn!("{}: {}", source, l);
-                })
-            }
             if !stdout.is_empty() {
                 String::from_utf8_lossy(&stdout).lines().for_each(|l| {
                     info!("{}: {}", source, l);
@@ -686,6 +686,33 @@ impl RsyncCommand {
             destination.push('/');
         }
         Ok(destination)
+    }
+
+    /// Logs the line in the buffer.
+    fn log_err_line(
+        source: &Module,
+        line: &mut Vec<u8>,
+    ) {
+        let mut len = line.len();
+        if len > 0 && line[len - 1] == b'\n' {
+            len -= 1;
+        }
+
+        // On Windows, we may now have a \r at the end.
+        #[cfg(windows)]
+        if len > 0 && line[len - 1] == b'\r' {
+            len -= 1;
+        }
+
+        if len > 0 {
+            warn!(
+                "{}: {}",
+                source,
+                String::from_utf8_lossy(&line[..len])
+            );
+        }
+
+        line.clear();
     }
 }
 
