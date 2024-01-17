@@ -1,6 +1,8 @@
 # Change Log
 
-## As yet unreleased 0.13.1-rc1
+## 0.13.1-rc1
+
+Released 2024-01-17.
 
 New
 
