@@ -2173,7 +2173,7 @@ impl<R> HashRead<R> {
     pub fn into_hash(self) -> rrdp::Hash {
         // Unwrap should be safe: This can only fail if the slice has the
         // wrong length.
-        rrdp::Hash::try_from(self.context.finish()).unwrap()
+        rrdp::Hash::try_from(self.context.finish().as_ref()).unwrap()
     }
 }
 
