@@ -4,11 +4,16 @@
 
 Breaking changes
 
+* Keep the content of an RRDP repository in a single file rather than
+  as individual files under a directory. ([#886])
+
 New
 
 Bug fixes
 
 Other changes
+
+[#886]: https://github.com/NLnetLabs/routinator/pull/88686
 
 
 ## 0.13.0 ‘Should Have Started This in a Screen’

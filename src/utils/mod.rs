@@ -1,5 +1,6 @@
 //! Various useful things.
 
+pub mod archive;
 pub mod binio;
 pub mod date;
 pub mod dump;

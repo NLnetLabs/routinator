@@ -31,7 +31,7 @@ use tokio::sync::oneshot;
 #[cfg(feature = "rta")] use crate::rta;
 use crate::{output, validity};
 use crate::config::Config;
-use crate::error::{ExitError, Failed};
+use crate::error::{ExitError, Failed, RunFailed};
 use crate::http::http_listener;
 use crate::metrics::{SharedRtrServerMetrics};
 use crate::output::{Output, OutputFormat};
@@ -249,6 +249,7 @@ impl Server {
         validation.ignite()?;
 
         let join = thread::spawn(move || {
+            let mut can_retry = true;
             let err = loop {
                 if let Some(log) = log.as_ref() {
                     log.start();
@@ -257,13 +258,39 @@ impl Server {
                     process.config(), true
                 ) {
                     Ok(exceptions) => {
-                        if Self::process_once(
+                        match Self::process_once(
                             process.config(), &validation, &history,
                             &mut notify, exceptions,
-                        ).is_err() {
-                            break Err(Failed);
+                        ) {
+                            Ok(()) => {
+                                history.read().refresh_wait()
+                            }
+                            Err(err) => {
+                                if err.should_retry() {
+                                    if can_retry {
+                                        if validation.sanitize().is_err() {
+                                            break Err(Failed)
+                                        }
+                                        info!(
+                                            "Validation failed but \
+                                             can be retried."
+                                        );
+                                        can_retry = false;
+                                        Duration::from_secs(0)
+                                    }
+                                    else {
+                                        error!(
+                                            "Retried validation failed again."
+                                        );
+                                        break Err(Failed);
+                                    }
+                                }
+                                else {
+                                    break Err(Failed);
+                                }
+                            }
                         }
-                        history.read().refresh_wait()
+
                     }
                     Err(_) => {
                         error!(
@@ -359,7 +386,7 @@ impl Server {
         history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
-    ) -> Result<(), Failed> {
+    ) -> Result<(), RunFailed> {
         info!("Starting a validation run.");
         history.mark_update_start();
         let (report, metrics) = ValidationReport::process(engine, config)?;
@@ -550,9 +577,30 @@ impl Vrps {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let exceptions = LocalExceptions::load(process.config(), true)?;
-        let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config(),
-        )?;
+        let (report, mut metrics) = {
+            // Retry once if we get a non-fatal error.
+            let mut once = false;
+
+            loop {
+                match ValidationReport::process(&engine, process.config()) {
+                    Ok(res) => break res,
+                    Err(err) => {
+                        if err.should_retry() {
+                            if once {
+                                error!(
+                                    "Restarted run failed again. Aborting."
+                                );
+                            }
+                            if engine.sanitize().is_ok() {
+                                once = true;
+                                continue
+                            }
+                        }
+                        return Err(ExitError::Generic)
+                    }
+                }
+            }
+        };
         let vrps = Arc::new(report.into_snapshot(&exceptions, &mut metrics));
         let rsync_complete = metrics.rsync_complete();
         let metrics = Arc::new(metrics);

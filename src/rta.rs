@@ -8,7 +8,7 @@ use rpki::repository::rta::{ResourceTaggedAttestation, Rta};
 use rpki::repository::tal::{Tal, TalUri};
 use crate::config::Config;
 use crate::engine::{CaCert, ProcessPubPoint, ProcessRun, Engine};
-use crate::error::Failed;
+use crate::error::{Failed, RunFailed};
 
 
 //------------ ValidationReport ----------------------------------------------
@@ -35,7 +35,7 @@ impl<'a> ValidationReport<'a> {
     pub fn process(
         &self,
         engine: &Engine,
-    ) -> Result<(), Failed> {
+    ) -> Result<(), RunFailed> {
         let mut run = engine.start(self)?;
         run.process()?;
         run.cleanup()?;

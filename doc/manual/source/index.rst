@@ -26,8 +26,7 @@ Open-source with professional support services
    NLnet Labs offers `professional support and consultancy services
    <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level
    agreement. Community support is available on `Discord
-   <https://discord.gg/8dvKB5Ykhy>`_, `Twitter
-   <https://twitter.com/routinator3000/>`_ and our `mailing list
+   <https://discord.gg/8dvKB5Ykhy>`_ and our `mailing list
    <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_. Routinator is
    liberally licensed under the `BSD 3-Clause license
    <https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.

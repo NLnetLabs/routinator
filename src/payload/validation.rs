@@ -34,7 +34,7 @@ use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
 use rpki::rtr::pdu::{ProviderAsns, RouterKeyInfo};
 use crate::config::{Config, FilterPolicy};
 use crate::engine::{CaCert, Engine, ProcessPubPoint, ProcessRun};
-use crate::error::Failed;
+use crate::error::{Failed, RunFailed};
 use crate::metrics::{Metrics, PayloadMetrics, VrpMetrics};
 use crate::slurm::LocalExceptions;
 use super::info::{PayloadInfo, PublishInfo};
@@ -95,7 +95,7 @@ impl ValidationReport {
     /// Creates a new validation report by running the engine.
     pub fn process(
         engine: &Engine, config: &Config,
-    ) -> Result<(Self, Metrics), Failed> {
+    ) -> Result<(Self, Metrics), RunFailed> {
         let report = Self::new(config);
         let mut run = engine.start(&report)?;
         run.process()?;
