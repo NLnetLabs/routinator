@@ -47,10 +47,10 @@ fuzz_target!{|data: (PayloadSnapshot, PayloadSnapshot, Serial)| {
     assert_eq!(delta_keys, set_keys);
 
     let old_aspas: HashMap<_, _> = old.aspas().map(|x| {
-        ((x.0.customer, x.0.afi), x.0.providers.clone())
+        (x.0.customer, x.0.providers.clone())
     }).collect();
     let new_aspas: HashMap<_, _> = new.aspas().map(|x| {
-        ((x.0.customer, x.0.afi), x.0.providers.clone())
+        (x.0.customer, x.0.providers.clone())
     }).collect();
     let delta_aspas: Vec<_> = delta.aspa_actions().map(|x| (x.0.clone(), x.1)).collect();
 
@@ -60,12 +60,12 @@ fuzz_target!{|data: (PayloadSnapshot, PayloadSnapshot, Serial)| {
                 return None
             }
         }
-        Some((Aspa::new(key.0, key.1, val.clone()), Action::Announce))
+        Some((Aspa::new(*key, val.clone()), Action::Announce))
     }).chain(
         old_aspas.keys().filter_map(|key| {
             if !new_aspas.contains_key(key) {
                 Some((
-                    Aspa::new(key.0, key.1, ProviderAsns::empty()),
+                    Aspa::new(*key, ProviderAsns::empty()),
                     Action::Withdraw
                 ))
             }

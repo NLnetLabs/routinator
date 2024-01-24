@@ -2,8 +2,6 @@ name: Packaging
 
 on:
   push:
-    branches:
-      - main
     tags:
       - v*
 

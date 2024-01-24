@@ -318,13 +318,21 @@ pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
 
 //------------ copy_dir_all --------------------------------------------------
 
-/// Copies the content of a directory.
+/// Copies the content of a directory if it exists.
 ///
 /// Creates the target directory with `create_dir_all`.  Errors out if
 /// anything goes wrong.
-pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
+///
+/// If the source directory does not exist, does nothing.
+pub fn copy_existing_dir_all(
+    source: &Path, target: &Path
+) -> Result<(), Failed> {
+    let source_dir = match read_existing_dir(source)? {
+        Some(entry) => entry,
+        None => return Ok(()),
+    };
     create_dir_all(target)?;
-    for entry in read_dir(source)? {
+    for entry in source_dir {
         let entry = entry?;
         if entry.is_file() {
             if let Err(err) = fs::copy(
@@ -338,7 +346,7 @@ pub fn copy_dir_all(source: &Path, target: &Path) -> Result<(), Failed> {
             }
         }
         else if entry.is_dir() {
-            copy_dir_all(
+            copy_existing_dir_all(
                 entry.path(),
                 &target.join(entry.file_name())
             )?;

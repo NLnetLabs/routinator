@@ -79,7 +79,7 @@ use rpki::uri;
 use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
-use crate::error::Failed;
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::Metrics;
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse, ParseError};
@@ -146,6 +146,13 @@ impl Store {
         })
     }
 
+    /// Sanitizes the stored data.
+    ///
+    /// Currently doesn’t do anything.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        Ok(())
+    }
+
     /// Start a validation run with the store.
     pub fn start(&self) -> Run {
         Run::new(self)
@@ -174,7 +181,7 @@ impl Store {
         let target = target_base.join("ta");
         debug!("Dumping trust anchor certificates to {}", target.display());
         fatal::remove_dir_all(&target)?;
-        fatal::copy_dir_all(&source, &target)?;
+        fatal::copy_existing_dir_all(&source, &target)?;
         debug!("Trust anchor certificate dump complete.");
         Ok(())
     }
@@ -188,7 +195,11 @@ impl Store {
         path: &Path,
         repos: &mut DumpRegistry,
     ) -> Result<(), Failed> {
-        for entry in fatal::read_dir(path)? {
+        let dir = match fatal::read_existing_dir(path)? {
+            Some(dir) => dir,
+            None => return Ok(())
+        };
+        for entry in dir {
             let entry = entry?;
             if entry.is_dir() {
                 self.dump_tree(entry.path(), repos)?;
@@ -295,6 +306,7 @@ impl Store {
         &self,
         repos: DumpRegistry,
     ) -> Result<(), Failed> {
+        fatal::create_dir_all(repos.base_dir())?;
         let path = repos.base_dir().join("repositories.json");
         fatal::write_file(
             &path, 
@@ -761,7 +773,7 @@ impl<'a> StoredPoint<'a> {
                 "Fatal: failed to write to file {}: {}",
                 tmp_path.display(), err
             );
-            return Err(UpdateError::Fatal)
+            return Err(UpdateError::fatal())
         }
         let tmp_object_start = match tmp_file.stream_position() {
             Ok(some) => some,
@@ -770,7 +782,7 @@ impl<'a> StoredPoint<'a> {
                     "Fatal: failed to get position in file {}: {}",
                     tmp_path.display(), err
                 );
-                return Err(UpdateError::Fatal)
+                return Err(UpdateError::fatal())
             }
         };
 
@@ -782,7 +794,7 @@ impl<'a> StoredPoint<'a> {
                             "Fatal: failed to write to file {}: {}",
                             tmp_path.display(), err
                         );
-                        return Err(UpdateError::Fatal)
+                        return Err(UpdateError::fatal())
                     }
                 }
                 Ok(None) => break,
@@ -811,7 +823,7 @@ impl<'a> StoredPoint<'a> {
                 "Fatal: failed to position file {}: {}",
                 self.path.display(), err
             );
-            return Err(UpdateError::Fatal)
+            return Err(UpdateError::fatal())
         }
 
         self.file = Some(file);
@@ -1117,19 +1129,33 @@ impl StoredObject {
 
 //============ Error Types ===================================================
 
+//------------ UpdateError ---------------------------------------------------
+
 /// An error happend while updating a publication point.
 #[derive(Clone, Copy, Debug)]
 pub enum UpdateError {
     /// The update needs to be aborted and rolled back.
     Abort,
 
-    /// Something really bad and fatal happened.
-    Fatal,
+    /// Something really bad happened that requires aborting the run.
+    Failed(RunFailed),
+}
+
+impl UpdateError {
+    pub fn fatal() -> Self {
+        UpdateError::Failed(RunFailed::fatal())
+    }
 }
 
 impl From<Failed> for UpdateError {
     fn from(_: Failed) -> Self {
-        UpdateError::Fatal
+        UpdateError::Failed(RunFailed::fatal())
+    }
+}
+
+impl From<RunFailed> for UpdateError {
+    fn from(err: RunFailed) -> Self {
+        UpdateError::Failed(err)
     }
 }
 

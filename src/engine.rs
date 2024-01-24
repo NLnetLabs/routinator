@@ -43,7 +43,7 @@ use rpki::uri;
 use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
-use crate::error::Failed;
+use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
@@ -276,6 +276,18 @@ impl Engine {
         Ok(())
     }
 
+    /// Sanitizes the stored data.
+    ///
+    /// This goes over the stored data and deletes what looks broken. It
+    /// should be called before retrying a failed restartable run.
+    pub fn sanitize(&self) -> Result<(), Fatal> {
+        self.store.sanitize()?;
+        if let Some(collector) = self.collector.as_ref() {
+            collector.sanitize()?;
+        }
+        Ok(())
+    }
+
     /// Starts a validation run.
     ///
     /// During the run, `processor` will be responsible for dealing with
@@ -329,6 +341,12 @@ pub struct Run<'a, P> {
     /// The processor for valid data.
     processor: P,
 
+    /// Was an error encountered during the run?
+    had_err: AtomicBool,
+
+    /// Was a fatal error encountered during the run?
+    is_fatal: AtomicBool,
+
     /// The metrics collected during the run.
     metrics: Metrics,
 }
@@ -343,6 +361,8 @@ impl<'a, P> Run<'a, P> {
     ) -> Self {
         Run {
             validation, collector, store, processor,
+            had_err: AtomicBool::new(false),
+            is_fatal: AtomicBool::new(false),
             metrics: Default::default()
         }
     }
@@ -378,7 +398,7 @@ impl<'a, P> Run<'a, P> {
 
 impl<'a, P: ProcessRun> Run<'a, P> {
     /// Performs the validation run.
-    pub fn process(&mut self) -> Result<(), Failed> {
+    pub fn process(&mut self) -> Result<(), RunFailed> {
         // If we don’t have any TALs, we ain’t got nothing to do.
         if self.validation.tals.is_empty() {
             return Ok(())
@@ -395,7 +415,6 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         // And off we trot.
 
         // Keep a flag to cancel everything if something goes wrong.
-        let had_err = AtomicBool::new(false);
         let thread_metrics = ArrayQueue::new(
             self.validation.validation_threads
         );
@@ -405,7 +424,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                     let mut metrics = metrics.fork();
                     while let Some(task) = tasks.pop() {
                         if self.process_task(
-                            task, &tasks, &mut metrics, &had_err,
+                            task, &tasks, &mut metrics,
                         ).is_err() {
                             break;
                         }
@@ -415,8 +434,13 @@ impl<'a, P: ProcessRun> Run<'a, P> {
             }
         });
 
-        if had_err.load(Ordering::Relaxed) {
-            return Err(Failed);
+        if self.had_err.load(Ordering::Relaxed) {
+            if self.is_fatal.load(Ordering::Relaxed) {
+                return Err(RunFailed::fatal())
+            }
+            else {
+                return Err(RunFailed::retry())
+            }
         }
 
         metrics.prepare_final(&mut self.metrics);
@@ -433,14 +457,13 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         task: Task<P::PubPoint>,
         tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
-        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         match task {
             Task::Tal(task) => {
-                self.process_tal_task(task, tasks, metrics, had_err)
+                self.process_tal_task(task, tasks, metrics)
             }
             Task::Ca(task) => {
-                self.process_ca_task(task, tasks, metrics, had_err)
+                self.process_ca_task(task, tasks, metrics)
             }
         }
     }
@@ -450,7 +473,6 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         &self, task: TalTask,
         tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
-        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
             let cert = match self.load_ta(uri, task.tal.info())? {
@@ -489,7 +511,7 @@ impl<'a, P: ProcessRun> Run<'a, P> {
                             repository_index: None,
                             defer: false,
                         },
-                        tasks, metrics, had_err
+                        tasks, metrics,
                     )
                 }
                 None => {
@@ -533,28 +555,35 @@ impl<'a, P: ProcessRun> Run<'a, P> {
         task: CaTask<P::PubPoint>,
         tasks: &SegQueue<Task<P::PubPoint>>,
         metrics: &mut RunMetrics,
-        had_err: &AtomicBool,
     ) -> Result<(), Failed> {
         let more_tasks = PubPoint::new(
             self, &task.cert, task.processor, task.repository_index,
         ).and_then(|point| {
             point.process(metrics)
-        }).map_err(|_| {
-            had_err.store(true, Ordering::Relaxed);
+        }).map_err(|err| {
+            self.run_failed(err);
             Failed
         })?;
         for task in more_tasks {
-            if had_err.load(Ordering::Relaxed) {
+            if self.had_err.load(Ordering::Relaxed) {
                 return Err(Failed)
             }
             if task.defer {
                 tasks.push(Task::Ca(task))
             }
             else {
-                self.process_ca_task(task, tasks, metrics, had_err)?;
+                self.process_ca_task(task, tasks, metrics)?;
             }
         }
         Ok(())
+    }
+
+    /// Marks the run as failed.
+    fn run_failed(&self, err: RunFailed) {
+        self.had_err.store(true, Ordering::Relaxed);
+        if err.is_fatal() {
+            self.is_fatal.store(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -591,7 +620,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         cert: &'a Arc<CaCert>,
         processor: P::PubPoint,
         repository_index: Option<usize>,
-    ) -> Result<Self, Failed> {
+    ) -> Result<Self, RunFailed> {
         Ok(PubPoint {
             run, cert, processor, repository_index,
             metrics: Default::default(),
@@ -605,7 +634,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     pub fn process(
         self,
         metrics: &mut RunMetrics,
-    ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
+    ) -> Result<Vec<CaTask<P::PubPoint>>, RunFailed> {
         let mut store = self.run.store.pub_point(self.cert)?;
         if let Some(collector) = self.run.collector.as_ref() {
             if let Some(collector) = collector.repository(self.cert)? {
@@ -615,12 +644,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     Ok(res) => return Ok(res),
                     Err(mut this) => {
                         this.metrics = Default::default();
-                        return this.process_stored(store, metrics)
+                        return Ok(this.process_stored(store, metrics)?)
                     }
                 }
             }
         }
-        self.process_stored(store, metrics)
+        Ok(self.process_stored(store, metrics)?)
     }
 
     /// Tries to update the stored data and validate at the same time.
@@ -640,7 +669,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         collector: collector::Repository,
         store: &mut StoredPoint,
         metrics: &mut RunMetrics,
-    ) -> Result<Result<Vec<CaTask<P::PubPoint>>, Self>, Failed> {
+    ) -> Result<Result<Vec<CaTask<P::PubPoint>>, Self>, RunFailed> {
         // Try to load the manifest from the collector. If there isn’t one,
         // we are done, too.
         let collected = match collector.load_object(
@@ -767,9 +796,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 // Update was aborted. We need to use the store.
                 Ok(Err(self))
             }
-            Err(store::UpdateError::Fatal) => {
+            Err(store::UpdateError::Failed(err)) => {
                 // We are doomed.
-                Err(Failed)
+                Err(err)
             }
         }
     }
@@ -784,14 +813,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         &mut self,
         manifest_bytes: Bytes,
         repository: &collector::Repository,
-    ) -> Result<Option<ValidPointManifest>, Failed> {
+    ) -> Result<Option<ValidPointManifest>, RunFailed> {
         let manifest = match Manifest::decode(
             manifest_bytes.clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(err) => {
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+                warn!(
+                    "{}: failed to decode manifest.",
+                    self.cert.rpki_manifest()
+                );
                 return Ok(None)
             }
         };
@@ -854,7 +886,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ee_cert: &ResourceCert,
         manifest: &ManifestContent,
         repository: &collector::Repository
-    ) -> Result<Option<(uri::Rsync, Crl, Bytes)>, Failed> {
+    ) -> Result<Option<(uri::Rsync, Crl, Bytes)>, RunFailed> {
         // Let’s first get the manifest CRL’s name relative to repo_uri. If
         // it ain’t relative at all, this is already invalid.
         let crl_uri = match ee_cert.crl_uri() {
@@ -916,9 +948,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(crl_bytes.clone()) {
             Ok(crl) => crl,
-            Err(err) => {
+            Err(_) => {
                 self.metrics.invalid_crls += 1;
-                warn!("{}: {}.", crl_uri, err);
+                warn!("{}: failed to decode CRL.", crl_uri);
                 return Ok(None)
             }
         };
@@ -1048,9 +1080,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             stored_manifest.manifest().clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(err) => {
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
+                warn!(
+                    "{}: failed to decode manifest.",
+                    self.cert.rpki_manifest(),
+                );
                 return Err(Failed);
             }
         };
@@ -1096,10 +1131,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(stored_manifest.crl().clone()) {
             Ok(crl) => crl,
-            Err(err) => {
-                warn!("{}: {}.", crl_uri, err);
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
+                warn!("{}: failed to decode CRL.", crl_uri);
                 return Err(Failed)
             }
         };
@@ -1242,9 +1277,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ) -> Result<(), Failed> {
         let cert = match Cert::decode(content) {
             Ok(cert) => cert,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_certs += 1;
+                warn!("{}: failed to decode certificate.", uri);
                 return Ok(())
             }
         };
@@ -1357,9 +1392,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(roa) => roa,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_roas += 1;
+                warn!("{}: failed to decode ROA.", uri);
                 return Ok(())
             }
         };
@@ -1392,8 +1427,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             ) {
                 Ok(aspa) => aspa,
                 Err(err) => {
-                    warn!("{}: {}.", uri, err);
                     manifest.metrics.invalid_aspas += 1;
+                    warn!("{}: failed to decode ASPA.", uri);
                     return Ok(())
                 }
             };
@@ -1424,9 +1459,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(obj) => obj,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;
+                warn!("{}: failed to decode GBR.", uri);
                 return Ok(())
             }
         };
@@ -2017,6 +2052,27 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
     ///
     /// The default implementation does nothing at all.
     fn cancel(self, _cert: &CaCert) {
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn dump_empty_cache() {
+        let _ = crate::process::Process::init(); // May be inited already.
+        let src = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let target = target.path().join("dump");
+        let mut config = Config::default_with_paths(src.path().into());
+        config.rsync_command = "echo".into();
+        config.rsync_args = Some(vec!["some".into()]);
+        let engine = Engine::new(&config, true).unwrap();
+        engine.dump(&target).unwrap();
     }
 }
 
