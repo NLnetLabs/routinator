@@ -1119,7 +1119,7 @@ impl Config {
     ///
     /// Uses default values for everything except for the cache directory
     /// which needs to be provided.
-    fn default_with_paths(cache_dir: PathBuf) -> Self {
+    pub fn default_with_paths(cache_dir: PathBuf) -> Self {
         Config {
             cache_dir,
             no_rir_tals: false,
