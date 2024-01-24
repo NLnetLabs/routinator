@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.13.1-dev"
+version = "0.13.1"
 dependencies = [
  "arbitrary",
  "bytes",

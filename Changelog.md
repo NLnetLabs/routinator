@@ -1,10 +1,10 @@
 # Change Log
 
-## Unreleased 0.13.1
+## 0.13.1 ‘Aziz, Light!’
 
-Bug fixes
+Released 2024-01-24.
 
-Other changes
+There have been no changes since 0.13.1-rc1.
 
 
 ## 0.13.1-rc1
