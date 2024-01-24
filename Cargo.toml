@@ -11,7 +11,7 @@ keywords = ["rpki", "routing-security", "bgp"]
 categories = ["command-line-utilities"]
 license = "BSD-3-Clause"
 readme = "README.md"
-exclude = [ ".github", "doc/manual" ]
+exclude = [ ".github", "doc/manual", "Dockerfile", ".dockerignore", ".readthedocs.yaml", ".gitignore" ]
 
 [dependencies]
 arbitrary       = { version = "1", optional = true, features = ["derive"] }
