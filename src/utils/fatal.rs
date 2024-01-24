@@ -318,12 +318,12 @@ pub fn write_file(path: &Path, contents: &[u8]) -> Result<(), Failed> {
 
 //------------ copy_dir_all --------------------------------------------------
 
-/// Copies the content of a directory.
+/// Copies the content of a directory if it exists.
 ///
 /// Creates the target directory with `create_dir_all`.  Errors out if
 /// anything goes wrong.
 ///
-/// If the source director does not exist, does nothing.
+/// If the source directory does not exist, does nothing.
 pub fn copy_existing_dir_all(
     source: &Path, target: &Path
 ) -> Result<(), Failed> {
