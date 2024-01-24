@@ -959,7 +959,7 @@ impl Config {
                 file.take_small_usize(
                     "validation-threads"
                 )?.unwrap_or_else(|| {
-                    available_parallelism().map(|x| x.get()).unwrap_or(1)
+                    Config::default_validation_threads()
                 })
             },
             refresh: {
@@ -1159,9 +1159,7 @@ impl Config {
             enable_bgpsec: false,
             enable_aspa: false,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
-            validation_threads: {
-                    available_parallelism().map(|x| x.get()).unwrap_or(1)
-            },
+            validation_threads: Config::default_validation_threads(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             retry: Duration::from_secs(DEFAULT_RETRY),
             expire: Duration::from_secs(DEFAULT_EXPIRE),
@@ -1186,6 +1184,11 @@ impl Config {
             group: None,
             tal_labels: HashMap::new(),
         }
+    }
+
+    /// Returns the default value for validation threads.
+    fn default_validation_threads() -> usize {
+        available_parallelism().map(|x| x.get()).unwrap_or(1)
     }
 
     /// Alters paths so that they are relative to a possible chroot.
@@ -2598,7 +2601,7 @@ mod test {
         assert_eq!(config.strict, DEFAULT_STRICT);
         assert_eq!(
             config.validation_threads,
-            available_parallelism().map(|x| x.get()).unwrap_or(1),
+            Config::default_validation_threads(),
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -2684,7 +2687,7 @@ mod test {
         assert!(!config.strict);
         assert_eq!(
             config.validation_threads,
-            available_parallelism().map(|x| x.get()).unwrap_or(1),
+            Config::default_validation_threads()
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
