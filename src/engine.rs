@@ -818,9 +818,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             manifest_bytes.clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(err) => {
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+                warn!(
+                    "{}: failed to decode manifest.",
+                    self.cert.rpki_manifest()
+                );
                 return Ok(None)
             }
         };
@@ -945,9 +948,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(crl_bytes.clone()) {
             Ok(crl) => crl,
-            Err(err) => {
+            Err(_) => {
                 self.metrics.invalid_crls += 1;
-                warn!("{}: {}.", crl_uri, err);
+                warn!("{}: failed to decode CRL.", crl_uri);
                 return Ok(None)
             }
         };
@@ -1077,9 +1080,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             stored_manifest.manifest().clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
-            Err(err) => {
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
+                warn!(
+                    "{}: failed to decode manifest.",
+                    self.cert.rpki_manifest(),
+                );
                 return Err(Failed);
             }
         };
@@ -1125,10 +1131,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Decode and validate the CRL.
         let mut crl = match Crl::decode(stored_manifest.crl().clone()) {
             Ok(crl) => crl,
-            Err(err) => {
-                warn!("{}: {}.", crl_uri, err);
+            Err(_) => {
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
+                warn!("{}: failed to decode CRL.", crl_uri);
                 return Err(Failed)
             }
         };
@@ -1271,9 +1277,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     ) -> Result<(), Failed> {
         let cert = match Cert::decode(content) {
             Ok(cert) => cert,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_certs += 1;
+                warn!("{}: failed to decode certificate.", uri);
                 return Ok(())
             }
         };
@@ -1386,9 +1392,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(roa) => roa,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_roas += 1;
+                warn!("{}: failed to decode ROA.", uri);
                 return Ok(())
             }
         };
@@ -1421,8 +1427,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             ) {
                 Ok(aspa) => aspa,
                 Err(err) => {
-                    warn!("{}: {}.", uri, err);
                     manifest.metrics.invalid_aspas += 1;
+                    warn!("{}: failed to decode ASPA.", uri);
                     return Ok(())
                 }
             };
@@ -1453,9 +1459,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             content, self.run.validation.strict
         ) {
             Ok(obj) => obj,
-            Err(err) => {
-                warn!("{}: {}.", uri, err);
+            Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;
+                warn!("{}: failed to decode GBR.", uri);
                 return Ok(())
             }
         };
