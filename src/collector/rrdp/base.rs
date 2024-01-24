@@ -208,6 +208,7 @@ impl Collector {
         repos: DumpRegistry,
         states: HashMap<uri::Https, RepositoryState>,
     ) -> Result<(), Fatal> {
+        fatal::create_dir_all(repos.base_dir())?;
         let path = repos.base_dir().join("repositories.json");
         if let Err(err) = fs::write(
             &path, 
