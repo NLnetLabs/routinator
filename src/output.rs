@@ -1399,12 +1399,12 @@ impl Summary {
                 tal.publication.valid_router_certs,
             ))?;
             line(format_args!(
-                "     router keys: {:7} verified, {:7} final.",
+                "     router keys: {:7} verified, {:7} final;",
                 tal.payload.router_keys.valid,
                 tal.payload.router_keys.contributed
             ))?;
             line(format_args!(
-                "           ASPAs: {:7} verified, {:7} final.",
+                "           ASPAs: {:7} verified, {:7} final;",
                 tal.publication.valid_aspas,
                 tal.payload.aspas.contributed
             ))?;
@@ -1424,12 +1424,12 @@ impl Summary {
             metrics.publication.valid_router_certs,
         ))?;
         line(format_args!(
-            "     router keys: {:7} verified, {:7} final.",
+            "     router keys: {:7} verified, {:7} final;",
             metrics.payload.router_keys.valid,
             metrics.payload.router_keys.contributed
         ))?;
         line(format_args!(
-            "           ASPAs: {:7} verified, {:7} final.",
+            "           ASPAs: {:7} verified, {:7} final;",
             metrics.publication.valid_aspas,
             metrics.payload.aspas.contributed
         ))?;
