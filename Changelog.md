@@ -6,6 +6,8 @@ Breaking changes
 
 * Keep the content of an RRDP repository in a single file rather than
   as individual files under a directory. ([#886])
+* Changed the `summary` output format to have all lines end in a
+  semicolon. ([#907])
 
 New
 
@@ -13,7 +15,8 @@ Bug fixes
 
 Other changes
 
-[#886]: https://github.com/NLnetLabs/routinator/pull/88686
+[#886]: https://github.com/NLnetLabs/routinator/pull/886
+[#907]: https://github.com/NLnetLabs/routinator/pull/907
 
 
 ## 0.13.0 ‘Should Have Started This in a Screen’
