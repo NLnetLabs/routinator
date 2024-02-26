@@ -2,12 +2,12 @@
 
 use std::io;
 use std::future::Future;
-use std::net::{TcpListener as StdListener};
+use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use futures::{pin_mut, StreamExt, TryStreamExt};
+use futures::{pin_mut, Stream};
 use futures::future::{pending, select_all};
 use log::error;
 use rpki::rtr::server::{NotifySender, Server, Socket};
@@ -15,7 +15,6 @@ use rpki::rtr::state::State;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::TlsAcceptor;
-use tokio_stream::wrappers::TcpListenerStream;
 use crate::config::Config;
 use crate::error::ExitError;
 use crate::metrics::{SharedRtrServerMetrics, RtrClientMetrics};
@@ -118,9 +117,9 @@ async fn single_rtr_listener(
         }
     };
     let tls = tls.map(TlsAcceptor::from);
-    let listener = TcpListenerStream::new(listener).and_then(|sock| async {
-        RtrStream::new(sock, tls.as_ref(), keepalive, server_metrics.clone())
-    }).boxed();
+    let listener = RtrListener {
+        tcp: listener, tls, keepalive, server_metrics
+    };
     if let Err(err) = Server::new(
         listener, sender, origins.clone()
     ).run().await {
@@ -128,6 +127,40 @@ async fn single_rtr_listener(
     }
 }
 
+
+//------------ RtrListener --------------------------------------------------
+
+/// A wrapper around an TCP listener that produces RTR streams.
+struct RtrListener {
+    tcp: TcpListener,
+    tls: Option<TlsAcceptor>,
+    keepalive: Option<Duration>,
+    server_metrics: SharedRtrServerMetrics,
+}
+
+impl Stream for RtrListener {
+    type Item = Result<RtrStream, io::Error>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        ctx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        match self.tcp.poll_accept(ctx) {
+            Poll::Ready(Ok((sock, addr))) => {
+                match RtrStream::new(
+                    sock, addr,
+                    self.tls.as_ref(), self.keepalive,
+                    self.server_metrics.clone()
+                ) {
+                    Ok(stream) => Poll::Ready(Some(Ok(stream))),
+                    Err(_) => Poll::Pending,
+                }
+            }
+            Poll::Ready(Err(err)) => Poll::Ready(Some(Err(err))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
 
 //------------ RtrStream ----------------------------------------------------
 
@@ -141,6 +174,7 @@ impl RtrStream {
     #[allow(clippy::redundant_async_block)] // False positive
     fn new(
         sock: TcpStream,
+        addr: SocketAddr,
         tls: Option<&TlsAcceptor>,
         keepalive: Option<Duration>,
         server_metrics: SharedRtrServerMetrics,
@@ -148,7 +182,7 @@ impl RtrStream {
         if let Some(duration) = keepalive {
             Self::set_keepalive(&sock, duration)?
         }
-        let metrics = Arc::new(RtrClientMetrics::new(sock.peer_addr()?.ip()));
+        let metrics = Arc::new(RtrClientMetrics::new(addr.ip()));
         let client_metrics = metrics.clone();
         tokio::spawn(async move {
             server_metrics.add_client(client_metrics).await

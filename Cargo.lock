@@ -1127,7 +1127,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rustls",
- "tokio-stream",
  "toml_edit",
  "uuid",
 ]
