@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next version in the 0.13 series
+## 0.13.2 ‘Existential Funk’
+
+Released 2024-01-26.
 
 Bug Fixes
 
@@ -9,13 +11,8 @@ Bug Fixes
   Nishimura, Atsushi Enomoto, Ruka Miyachi; Internet Multifeed Co., Japan.
   Assigned [CVE-2024-1622].)
 
-New
-
-Other Changes
-
 [#937]: https://github.com/NLnetLabs/routinator/pull/937
 [CVE-2024-1622]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2024-1622.txt
-
 
 
 ## 0.13.1 ‘Aziz, Light!’
