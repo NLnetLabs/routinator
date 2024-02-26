@@ -4,9 +4,18 @@
 
 Bug Fixes
 
+* Fix the RTR listener so that Routinator won’t exit if an incoming RTR
+  connection is closed again too quickly. ([#937], reported by Yohei
+  Nishimura, Atsushi Enomoto, Ruka Miyachi; Internet Multifeed Co., Japan.
+  Assigned [CVE-2024-1622].)
+
 New
 
 Other Changes
+
+[#937]: https://github.com/NLnetLabs/routinator/pull/937
+[CVE-2024-1622]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2024-1622.txt
+
 
 
 ## 0.13.1 ‘Aziz, Light!’
