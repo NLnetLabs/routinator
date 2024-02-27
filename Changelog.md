@@ -19,6 +19,60 @@ Other changes
 [#907]: https://github.com/NLnetLabs/routinator/pull/907
 
 
+## 0.13.2 ‘Existential Funk’
+
+Released 2024-01-26.
+
+Bug Fixes
+
+* Fix the RTR listener so that Routinator won’t exit if an incoming RTR
+  connection is closed again too quickly. ([#937], reported by Yohei
+  Nishimura, Atsushi Enomoto, Ruka Miyachi; Internet Multifeed Co., Japan.
+  Assigned [CVE-2024-1622].)
+
+[#937]: https://github.com/NLnetLabs/routinator/pull/937
+[CVE-2024-1622]: https://www.nlnetlabs.nl/downloads/routinator/CVE-2024-1622.txt
+
+
+## 0.13.1 ‘Aziz, Light!’
+
+Released 2024-01-24.
+
+There have been no changes since 0.13.1-rc1.
+
+
+## 0.13.1-rc1
+
+Released 2024-01-17.
+
+New
+
+* Added support for private keys marked as “EC PRIVATE KEY“ in the PEM files
+  for TLS server configuration. ([#921])
+* The rsync collector now logs stderr output of the rsync command directly
+  instead of collecting it and logging it in one go after the commend
+  returned. ([#290])
+
+Bug Fixes
+
+* The `dump` command will now succeed even if certain directories or files
+  in the repository cache are missing. ([#916])
+* A more meaningful message is now printed when decoding RPKI objects
+  fails. It will still not give much detail but at least it isn’t
+  confusing any more. ([#917])
+
+Other changes
+
+* Updated the `nlnetlabs-testbed` TAL to the current location and key.
+  ([#922])
+
+[#916]: https://github.com/NLnetLabs/routinator/pull/916
+[#917]: https://github.com/NLnetLabs/routinator/pull/917
+[#920]: https://github.com/NLnetLabs/routinator/pull/920
+[#921]: https://github.com/NLnetLabs/routinator/pull/921
+[#922]: https://github.com/NLnetLabs/routinator/pull/922
+
+
 ## 0.13.0 ‘Should Have Started This in a Screen’
 
 Released 2023-09-21
