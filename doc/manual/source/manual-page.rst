@@ -542,9 +542,11 @@ These can be requested by providing different commands on the command line.
                   For RPKI objects, *tal* provides the name of the trust
                   anchor locator the object was published under, *uri*
                   provides the rsync URI of the ROA or router certificate,
-                  *validity* provides the validity of the ROA itself, and
+                  *validity* provides the validity of the ROA itself,
                   *chainValidity* the validity considering the validity of
-                  the certificates along the validation chain.
+                  the certificates along the validation chain, and
+                  *stale* the time when any of the publication points along
+                  the validation chain becomes stale.
 
                   For  assertions from local exceptions, *path* will provide
                   the path of the local exceptions file and, optionally,
