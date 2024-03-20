@@ -710,6 +710,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // manifest.
         if let Some(mft) = store.manifest() {
             if collected.content.manifest_number() <= mft.manifest_number() {
+                warn!(
+                    "{}: manifest number is smaller than in stored version. \
+                     Using stored publication point.",
+                     self.cert.rpki_manifest(),
+                );
                 return Ok(Err(self))
             }
         }
