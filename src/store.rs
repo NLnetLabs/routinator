@@ -906,6 +906,7 @@ impl StoredManifest {
     ///
     /// The new value is created from the components of the stored manifest.
     /// See the methods with the same name for their meaning.
+    #[allow(clippy::too-many-arguments)]
     pub fn new(
         not_after: Time,
         manifest_number: Serial,
