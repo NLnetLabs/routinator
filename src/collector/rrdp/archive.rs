@@ -479,7 +479,9 @@ impl FallbackTime {
         // Saturating conversion between std’s and chrono’s Duration types.
         Utc::now() + chrono::Duration::from_std(
             rand::thread_rng().gen_range(self.min..self.max)
-        ).unwrap_or_else(|_| chrono::Duration::milliseconds(i64::MAX))
+        ).unwrap_or_else(|_| {
+            chrono::Duration::try_milliseconds(i64::MAX).unwrap()
+        })
     }
 }
 

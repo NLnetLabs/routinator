@@ -6,8 +6,8 @@
 
 use std::{error, fmt, io, slice};
 use bytes::Bytes;
-use rpki::rrdp;
-use rpki::uri;
+use rpki::{rrdp, uri};
+use rpki::repository::x509::Serial;
 use uuid::Uuid;
 
 
@@ -306,6 +306,25 @@ impl<R: io::Read> Parse<R> for rrdp::Hash {
         let mut res = [0u8; 32];
         source.read_exact(&mut res)?;
         Ok(res.into())
+    }
+}
+
+
+//------------ Serial --------------------------------------------------------
+
+impl<W: io::Write> Compose<W> for Serial {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        target.write_all(&self.into_array())
+    }
+}
+
+impl<R: io::Read> Parse<R> for Serial {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
+        let mut res = [0u8; 20];
+        source.read_exact(&mut res)?;
+        Self::from_array(res).map_err(|_| {
+            ParseError::format("invalid X.509 serial number")
+        })
     }
 }
 

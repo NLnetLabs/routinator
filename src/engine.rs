@@ -705,6 +705,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
+        // Check that the collected manifest’s manifest number is larger than
+        // the stored manifest’s. Otherwise return so we use the stored
+        // manifest.
+        if let Some(mft) = store.manifest() {
+            if collected.content.manifest_number() <= mft.manifest_number() {
+                return Ok(Err(self))
+            }
+        }
+
         // The manifest is fine, so we can now look at the objects. The
         // objects are fine if they are present and match the hash. If they
         // don’t we have to cancel the update. We also validate them while we
@@ -724,6 +733,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         let update_result = store.update(
             StoredManifest::new(
                 collected.ee_cert.validity().not_after(),
+                collected.content.manifest_number(),
                 self.cert.rpki_notify().cloned(),
                 self.cert.ca_repository().clone(),
                 self.cert.rpki_manifest().clone(),
@@ -1042,7 +1052,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                         return Err(Failed)
                     }
                     else {
-                        info!(
+                        debug!(
                             "Ignoring invalid stored publication point \
                              at {}: {}",
                             store.path().display(), err
