@@ -13,10 +13,18 @@ New
 
 Bug fixes
 
+* Fixed an issue where the refresh time was calculated as zero under
+  certain conditions until the dataset was updated. ([#940])
+* Add the current RRDP serial number to the RRDP server metrics when a
+  Not Modified response is received so that Prometheus shows a constant
+  value.
+
 Other changes
 
 [#886]: https://github.com/NLnetLabs/routinator/pull/886
 [#907]: https://github.com/NLnetLabs/routinator/pull/907
+[#940]: https://github.com/NLnetLabs/routinator/pull/940
+[#942]: https://github.com/NLnetLabs/routinator/pull/942
 
 
 ## 0.13.2 ‘Existential Funk’
