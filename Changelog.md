@@ -15,6 +15,10 @@ New
   validity of the manifest’s EE certificates. A new `stale` value shows
   the time when any of the publication points along the way will become
   stale. ([#945])
+* If a collected manifest has a lower manifest number than a stored
+  manifest for the same CA, the collected manifest is ignored and the
+  stored publication point is used instead. This implements a requirement
+  added in [RFC 9286]. ([#946])
 
 Bug fixes
 
@@ -31,6 +35,8 @@ Other changes
 [#940]: https://github.com/NLnetLabs/routinator/pull/940
 [#942]: https://github.com/NLnetLabs/routinator/pull/942
 [#945]: https://github.com/NLnetLabs/routinator/pull/945
+[#946]: https://github.com/NLnetLabs/routinator/pull/946
+[RFC 9286]: https://tools.ietf.org/html/rfc9286
 
 
 ## 0.13.2 ‘Existential Funk’
