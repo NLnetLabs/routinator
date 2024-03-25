@@ -705,16 +705,30 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
+        // Check that the collected manifest’s manifest number is larger than
+        // the stored manifest’s. Otherwise return so we use the stored
+        // manifest.
+        if let Some(mft) = store.manifest() {
+            if collected.content.manifest_number() <= mft.manifest_number() {
+                warn!(
+                    "{}: manifest number is smaller than in stored version. \
+                     Using stored publication point.",
+                     self.cert.rpki_manifest(),
+                );
+                return Ok(Err(self))
+            }
+        }
+
         // The manifest is fine, so we can continue.
         //
         // First, report its validity to the processor.
         collected.point_validity(&mut self.processor);
 
-        // We can look at the objects now. The
-        // objects are fine if they are present and match the hash. If they
-        // don’t we have to cancel the update. We also validate them while we
-        // are at it. This also collects all the child CAs that need
-        // processing later on in `ca_tasks`. 
+        // We can look at the objects now. The objects are fine if they are
+        // present and match the hash. If they don’t we have to cancel the
+        // update. We also validate them while we are at it. This also
+        // collects all the child CAs that need processing later on in
+        // `ca_tasks`. 
         //
         // However, the processor can decide it doesn’t like the publication
         // point at all. This is not an error -- the publication point is
@@ -729,6 +743,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         let update_result = store.update(
             StoredManifest::new(
                 collected.ee_cert.validity().not_after(),
+                collected.content.manifest_number(),
                 self.cert.rpki_notify().cloned(),
                 self.cert.ca_repository().clone(),
                 self.cert.rpki_manifest().clone(),
@@ -1049,7 +1064,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                         return Err(Failed)
                     }
                     else {
-                        info!(
+                        debug!(
                             "Ignoring invalid stored publication point \
                              at {}: {}",
                             store.path().display(), err

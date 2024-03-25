@@ -74,7 +74,7 @@ use rpki::crypto::digest::DigestAlgorithm;
 use rpki::repository::cert::Cert;
 use rpki::repository::manifest::ManifestHash;
 use rpki::repository::tal::TalUri;
-use rpki::repository::x509::Time;
+use rpki::repository::x509::{Serial, Time};
 use rpki::uri;
 use crate::collector;
 use crate::config::Config;
@@ -856,6 +856,8 @@ impl<'a> Iterator for StoredPoint<'a> {
 ///   [`not_after`][Self::not_after] method. This is used during cleanup to
 ///   determine whether to keep a publication point. It is stored to avoid
 ///   having to parse the whole manifest.
+/// * The manifest number. This is used to check whether new manifest try to
+///   go backwards.
 /// * The caRepository URI of the CA certificate that has issued the manifest
 ///   via the [`ca_repository`][Self::ca_repository] method.  This is
 ///   necessary to convert the file names mentioned on the manifest into their
@@ -871,6 +873,9 @@ impl<'a> Iterator for StoredPoint<'a> {
 pub struct StoredManifest {
     /// The expire time of the EE certificate of the manifest.
     not_after: Time,
+
+    /// The manifest number of the manifest.
+    manifest_number: Serial,
 
     /// The rpkiNotify URI of the issuing CA certificate.
     rpki_notify: Option<uri::Https>,
@@ -892,12 +897,19 @@ pub struct StoredManifest {
 }
 
 impl StoredManifest {
+    /// The version of the type.
+    ///
+    /// It was 0 before 0.14.0.
+    const VERSION: u8 = 1;
+
     /// Creates a new stored manifest.
     ///
     /// The new value is created from the components of the stored manifest.
     /// See the methods with the same name for their meaning.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         not_after: Time,
+        manifest_number: Serial,
         rpki_notify: Option<uri::Https>,
         ca_repository: uri::Rsync,
         manifest_uri: uri::Rsync,
@@ -906,16 +918,16 @@ impl StoredManifest {
         crl: Bytes,
     ) -> Self {
         StoredManifest {
-            not_after, rpki_notify, ca_repository,
+            not_after, manifest_number, rpki_notify, ca_repository,
             manifest_uri, manifest, crl_uri, crl
         }
     }
 
     /// Reads a stored manifest from an IO reader.
     pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
-        // Version number. Must be 0u8.
+        // Version number.
         let version = u8::parse(reader)?;
-        if version != 0 {
+        if version != Self::VERSION {
             return Err(ParseError::format(
                     format!("unexpected version {}", version)
             ))
@@ -931,6 +943,7 @@ impl StoredManifest {
                 ))
             }
         };
+        let manifest_number = Serial::parse(reader)?;
         let rpki_notify = Option::parse(reader)?;
         let ca_repository = uri::Rsync::parse(reader)?;
         let manifest_uri = uri::Rsync::parse(reader)?;
@@ -939,7 +952,7 @@ impl StoredManifest {
         let crl = Bytes::parse(reader)?;
 
         Ok(StoredManifest::new(
-            not_after, rpki_notify, ca_repository,
+            not_after, manifest_number, rpki_notify, ca_repository,
             manifest_uri, manifest, crl_uri, crl
         ))
     }
@@ -948,10 +961,10 @@ impl StoredManifest {
     pub fn write(
         &self, writer: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        // Version: 0u8.
-        0u8.compose(writer)?;
+        Self::VERSION.compose(writer)?;
 
         self.not_after.timestamp().compose(writer)?;
+        self.manifest_number.compose(writer)?;
         self.rpki_notify.compose(writer)?;
         self.ca_repository.compose(writer)?;
         self.manifest_uri.compose(writer)?;
@@ -975,6 +988,11 @@ impl StoredManifest {
     /// certificate included with the manifest.
     pub fn not_after(&self) -> Time {
         self.not_after
+    }
+
+    /// Returns the manifest number of the manifest.
+    pub fn manifest_number(&self) -> Serial {
+        self.manifest_number
     }
 
     /// Returns the rsync URI of the directory containing the objects.
@@ -1232,6 +1250,7 @@ mod test {
     fn write_read_stored_manifest() {
         let mut orig = StoredManifest::new(
             Time::utc(2021, 2, 18, 13, 22, 6),
+            Serial::from(12u64),
             Some(uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
             uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),

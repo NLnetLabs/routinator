@@ -126,7 +126,7 @@ impl SharedHistory {
                 // Since we increase the time, the created time may
                 // actually have moved into the future.
                 if now.timestamp() <= created.timestamp() {
-                    Some(created + chrono::Duration::seconds(1))
+                    Some(created + chrono::Duration::try_seconds(1).unwrap())
                 }
                 else {
                     Some(now)
