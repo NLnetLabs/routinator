@@ -170,7 +170,8 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
 
     fn point_validity(&mut self, manifest: Validity, stale: Time) {
         self.pub_point.refresh = cmp::min(
-            self.pub_point.refresh, manifest.not_after()
+            self.pub_point.refresh, 
+            cmp::min(manifest.not_after(), stale)
         );
         self.validity = self.validity.trim(manifest);
         self.point_stale = cmp::min(self.point_stale, stale);
