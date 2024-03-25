@@ -18,7 +18,7 @@
 /// the accompanying trait [`ProcessPubPoint`] dealing with individual
 /// publication points.
 
-use std::{fmt, fs, thread};
+use std::{cmp, fmt, fs, thread};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
@@ -719,15 +719,20 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         }
 
-        // The manifest is fine, so we can now look at the objects. The
-        // objects are fine if they are present and match the hash. If they
-        // don’t we have to cancel the update. We also validate them while we
-        // are at it. This also collects all the child CAs that need
-        // processing later on in `ca_tasks`. 
+        // The manifest is fine, so we can continue.
+        //
+        // First, report its validity to the processor.
+        collected.point_validity(&mut self.processor);
+
+        // We can look at the objects now. The objects are fine if they are
+        // present and match the hash. If they don’t we have to cancel the
+        // update. We also validate them while we are at it. This also
+        // collects all the child CAs that need processing later on in
+        // `ca_tasks`. 
         //
         // However, the processor can decide it doesn’t like the publication
         // point at all. This is not an error -- the publication point is
-        // correct from a store perspective --, but we must not process te
+        // correct from a store perspective --, but we must not process the
         // collected `ca_tasks`. We keep track of this through `point_ok` and,
         // if that happens to end up being `false` return an empty list to
         // signal that the publication point was processed successfully but
@@ -1044,6 +1049,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
+        manifest.point_validity(&mut self.processor);
+
         let mut ca_tasks = Vec::new();
         for object in &mut store {
             let object = match object {
@@ -1347,13 +1354,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         manifest.metrics.valid_ca_certs += 1;
 
-        let mut processor = match self.processor.process_ca(
+        let processor = match self.processor.process_ca(
             uri, &cert
         )? {
             Some(processor) => processor,
             None => return Ok(())
         };
-        processor.update_refresh(cert.cert().validity().not_after());
 
         // Defer operation if we need to update the repository part where
         // the CA lives.
@@ -1558,6 +1564,17 @@ impl ValidPointManifest {
 
         Ok(())
     }
+
+    /// Reports the validity to the given processor.
+    fn point_validity(&self, processor: &mut impl ProcessPubPoint) {
+        processor.point_validity(
+            self.ee_cert.validity(),
+            cmp::min(
+                self.content.next_update(),
+                self.crl.next_update(),
+            )
+        )
+    }
 }
 
 
@@ -1625,6 +1642,9 @@ struct CaTask<P> {
 //------------ CaCert --------------------------------------------------------
 
 /// A CA certificate plus references to all its parents.
+///
+/// Note that this does not represent the full publication point, only the
+/// certificate itself.
 #[derive(Clone, Debug)]
 pub struct CaCert {
     /// The CA certificate of this CA.
@@ -1655,12 +1675,6 @@ pub struct CaCert {
     /// The index of the TAL in the metrics.
     pub(crate) // XXX
     tal: usize,
-
-    /// The combined validity of the certificate.
-    ///
-    /// This is derived from the validity of all the parents and the
-    /// certificate itself.
-    combined_validity: Validity,
 }
 
 impl CaCert {
@@ -1710,10 +1724,6 @@ impl CaCert {
         chain_len: usize,
         tal: usize,
     ) -> Result<Arc<Self>, Failed> {
-        let combined_validity = match parent.as_ref() {
-            Some(ca) => cert.validity().trim(ca.combined_validity()),
-            None => cert.validity()
-        };
         let ca_repository = match cert.ca_repository() {
             Some(uri) => uri.clone(),
             None => {
@@ -1742,8 +1752,7 @@ impl CaCert {
             }
         };
         Ok(Arc::new(CaCert {
-            cert, uri, ca_repository, rpki_manifest, parent, chain_len, tal,
-            combined_validity,
+            cert, uri, ca_repository, rpki_manifest, parent, chain_len, tal
         }))
     }
 
@@ -1796,11 +1805,6 @@ impl CaCert {
     /// Returns a reference to the rpkiNotify URI of the certificate.
     pub fn rpki_notify(&self) -> Option<&uri::Https> {
         self.cert.rpki_notify()
-    }
-
-    /// Returns the combined validaty of the whole CA.
-    pub fn combined_validity(&self) -> Validity {
-        self.combined_validity
     }
 
     /// Returns whether the CA is in a different repository from its parent.
@@ -1962,9 +1966,17 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         let _ = repository_index;
     }
 
-    /// Updates the refresh time for this publication poont.
-    fn update_refresh(&mut self, not_after: Time) {
-        let _ = not_after;
+    /// Process the publication points’s validity.
+    ///
+    /// The validity of the manifest’s EE certificate is provided in
+    /// `manifest_ee`. The smaller of the manifest’s and CRL’s next update
+    /// time is given in `stale`.
+    fn point_validity(
+        &mut self,
+        manifest_ee: Validity,
+        stale: Time,
+    ) {
+        let _ = (manifest_ee, stale);
     }
 
     /// Determines whether an object with the given URI should be processed.

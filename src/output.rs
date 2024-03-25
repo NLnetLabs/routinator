@@ -1020,13 +1020,15 @@ impl ExtendedJson {
                     \"validity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }}, \
                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
-                    \"notAfter\": \"{}\" }} \
+                    \"notAfter\": \"{}\" }}, \
+                    \"stale\": \"{}\" \
                     }}",
                     json_str(roa.tal.name()),
                     format_iso_date(roa.roa_validity.not_before().into()),
                     format_iso_date(roa.roa_validity.not_after().into()),
                     format_iso_date(roa.chain_validity.not_before().into()),
                     format_iso_date(roa.chain_validity.not_after().into()),
+                    format_iso_date(roa.point_stale.into()),
                 )?;
             }
             if let Some(exc) = item.exception_info() {

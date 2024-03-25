@@ -829,6 +829,10 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<(), RunFailed> {
         info!("RRDP {}: Not modified.", self.rpki_notify);
         if let Some((mut archive, mut state)) = current {
+            // Copy serial and session to the metrics so they will still be
+            // present.
+            self.metrics.serial = Some(state.serial);
+            self.metrics.session = Some(state.session);
             state.touch(self.collector.config().fallback_time);
             archive.update_state(&state)?;
         }
