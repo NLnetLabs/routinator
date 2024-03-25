@@ -206,9 +206,10 @@ generated in a wide range of output formats for various use cases.
           For RPKI objects, *tal* provides the name of the trust anchor
           locator the object was published under, *uri* provides the rsync
           URI of the ROA or router certificate, *validity* provides the
-          validity of the ROA itself, and *chainValidity* the validity
+          validity of the ROA itself, *chainValidity* the validity
           considering the validity of the certificates along the validation
-          chain.
+          chain, and *stale* the time when any of the publication points along
+          the validation chain becomes stale.
 
           For  assertions from local exceptions, *path* will provide the path
           of the local exceptions file and, optionally, *comment* will
@@ -244,8 +245,9 @@ generated in a wide range of output formats for various use cases.
                       },
                       "chainValidity": {
                         "notBefore": "2022-07-25T20:47:37Z",
-                        "notAfter": "2023-02-24T12:31:01Z"
-                      }
+                        "notAfter": "2022-07-26T00:00:00Z"
+                      },
+                      "stale": "2022-07-26T00:00:00Z"
                     }]
                   }
                 ],
@@ -263,8 +265,9 @@ generated in a wide range of output formats for various use cases.
                     },
                     "chainValidity": {
                       "notBefore": "2022-07-25T20:47:37Z",
-                      "notAfter": "2023-02-24T12:31:01Z"
-                    }
+                      "notAfter": "2022-07-26T00:00:00Z"
+                    },
+                    "stale": "2022-07-26T00:00:00Z"
                   }]
                 }],
                 "aspas": [{
@@ -281,8 +284,9 @@ generated in a wide range of output formats for various use cases.
                       },
                       "chainValidity": {
                           "notBefore": "2023-04-18T14:32:13Z",
-                          "notAfter": "2024-04-11T07:26:24Z"
-                        }
+                          "notAfter": "2023-04-20T00:00:00Z"
+                      },
+                      "stale": "2022-07-26T00:00:00Z"
                     }]
                 }]
               }

@@ -54,8 +54,9 @@ in the :term:`json` and :term:`jsonext` output formats, e.g.:
                 },
                 "chainValidity": {
                     "notBefore": "2023-04-18T14:32:13Z",
-                    "notAfter": "2024-07-01T00:00:00Z"
-                }
+                    "notAfter": "2023-04-20T00:00:00Z"
+                },
+                "stale": "2023-04-20T00:00:00Z"
             }]
         }],
         "routerKeys": [],
@@ -73,8 +74,9 @@ in the :term:`json` and :term:`jsonext` output formats, e.g.:
               },
               "chainValidity": {
                   "notBefore": "2023-04-18T14:32:13Z",
-                  "notAfter": "2024-04-11T07:26:24Z"
-                }
+                  "notAfter": "2023-04-20T00:00:00Z"
+              },
+              "stale": "2023-04-20T00:00:00Z"
             }]
         }]
     }
@@ -125,8 +127,9 @@ in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
                 },
                 "chainValidity": {
                     "notBefore": "2021-05-06T12:51:30Z",
-                    "notAfter": "2022-07-01T00:00:00Z"
-                }
+                    "notAfter": "2021-05-08T00:00:00Z"
+                },
+                "stale": "2021-05-08T00:00:00Z"
             }]
         }],
         "routerKeys": [{
@@ -142,8 +145,9 @@ in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
                 },
                 "chainValidity": {
                     "notBefore": "2022-01-16T14:45:51Z",
-                    "notAfter": "2022-08-06T00:00:00Z"
-                }
+                    "notAfter": "2021-01-18T00:00:00Z"
+                },
+                "stale": "2021-01-18T00:00:00Z"
             }]
         }],
         "aspas": []
