@@ -905,6 +905,10 @@ impl<'a> RepositoryUpdate<'a> {
         mut archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
+        if let Err(reason) = notify.check_deltas(&state) {
+            return Ok(Some(reason))
+        }
+
         let deltas = match self.calc_deltas(notify.content(), &state) {
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
@@ -1013,6 +1017,5 @@ impl<'a> RepositoryUpdate<'a> {
 
         Ok(deltas)
     }
-
 }
 

@@ -119,7 +119,27 @@ impl Notification {
             best_before_ts: fallback.best_before().timestamp(),
             last_modified_ts: self.last_modified.map(|x| x.timestamp()),
             etag: self.etag.clone(),
+            delta_state: self.content.deltas().iter().map(|delta| {
+                (delta.serial(), delta.hash())
+            }).collect(),
         }
+    }
+
+    /// Checks that the deltas match those present in `state`.
+    ///
+    /// Ensures that for delta serial numbers present both in the notification
+    /// and the state the hash values match.
+    pub fn check_deltas(
+        &self, state: &RepositoryState
+    ) -> Result<(), SnapshotReason> {
+        for delta in self.content().deltas() {
+            if let Some(state_hash) = state.delta_state.get(&delta.serial()) {
+                if delta.hash() != *state_hash {
+                    return Err(SnapshotReason::DeltaMutation)
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -571,6 +591,9 @@ pub enum SnapshotReason {
     /// The delta set in the notification file is inconsistent.
     BadDeltaSet,
 
+    /// At least one delta hash has changed from a previous update.
+    DeltaMutation,
+
     /// A larger-than-supported serial number was encountered.
     LargeSerial,
 
@@ -596,6 +619,7 @@ impl SnapshotReason {
             NewRepository => "new-repository",
             NewSession => "new-session",
             BadDeltaSet => "inconsistent-delta-set",
+            DeltaMutation => "delta-mutation",
             LargeSerial => "large-serial",
             OutdatedLocal => "outdate-local",
             ConflictingDelta => "conflicting-delta",

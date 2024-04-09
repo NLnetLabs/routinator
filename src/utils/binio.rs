@@ -4,7 +4,8 @@
 //! how to serialize themselves. The module implements the traits for all the
 //! types we need.
 
-use std::{error, fmt, io, slice};
+use std::{error, fmt, hash, io, slice};
+use std::collections::HashMap;
 use bytes::Bytes;
 use rpki::{rrdp, uri};
 use rpki::repository::x509::Serial;
@@ -325,6 +326,44 @@ impl<R: io::Read> Parse<R> for Serial {
         Self::from_array(res).map_err(|_| {
             ParseError::format("invalid X.509 serial number")
         })
+    }
+}
+
+
+//------------ HashMap<K, V> -------------------------------------------------
+//
+// Encoded as the number of items as a u64 followed by pairs of key and value.
+
+impl<K: Compose<W>, V: Compose<W>, W: io::Write> Compose<W> for HashMap<K, V> {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        u64::try_from(self.len())
+        .map_err(|_| ParseError::format("excessively large vec"))?
+        .compose(target)?;
+        for (key, value) in self {
+            key.compose(target)?;
+            value.compose(target)?;
+        }
+        Ok(())
+    }
+}
+
+impl<K, V, R> Parse<R> for HashMap<K, V>
+where
+    K: Parse<R> + Eq + hash::Hash,
+    V: Parse<R>,
+    R: io::Read
+{
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
+        let len = usize::try_from(u64::parse(source)?).map_err(|_| {
+            ParseError::format("too many items in vec")
+        })?;
+        let mut res = HashMap::with_capacity(len);
+        for _ in 0..len {
+            if res.insert(K::parse(source)?, V::parse(source)?).is_some() {
+                return Err(ParseError::format("duplicate keys"))
+            }
+        }
+        Ok(res)
     }
 }
 
