@@ -82,13 +82,13 @@ impl Assets {
         )?;
         for item in self.0 {
             writeln!(dest,
-                r#"
+                "
                 Asset {{
-                    path: "{}",
-                    media_type: "{}",
+                    path: r#\"{}\"#,
+                    media_type: \"{}\",
                     content: &{:?},
                 }},
-                "#,
+                ",
                 item.path.display(),
                 item.media_type,
                 item.content.as_slice(),
