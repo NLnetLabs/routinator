@@ -5,7 +5,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{error, warn};
-use reqwest::header;
+use reqwest::{header, redirect};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
 use rpki::uri;
@@ -52,6 +52,9 @@ impl HttpClient {
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.tcp_keepalive(config.rrdp_tcp_keepalive);
         builder = builder.timeout(None); // Set per request.
+        builder = builder.redirect(
+            redirect::Policy::custom(Self::redirect_policy)
+        );
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
@@ -256,6 +259,29 @@ impl HttpClient {
         }
     }
     */
+
+    /// The redirect policy.
+    ///
+    /// We allow up to 10 redirects (reqwest’s default policy) but only if
+    /// the origin stays the same.
+    fn redirect_policy(attempt: redirect::Attempt) -> redirect::Action {
+        if attempt.previous().len() > 9 {
+            return attempt.stop();
+        }
+        let orig = match attempt.previous().first() {
+            Some(url) => url,
+            None => return attempt.follow() // Shouldn’t happen?
+        };
+        let new = attempt.url();
+        let orig = (orig.scheme(), orig.host(), orig.port());
+        let new = (new.scheme(), new.host(), new.port());
+        if orig == new {
+            attempt.follow()
+        }
+        else {
+            attempt.stop()
+        }
+    }
 }
 
 

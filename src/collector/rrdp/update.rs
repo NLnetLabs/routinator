@@ -98,6 +98,12 @@ impl Notification {
             warn!("RRDP {}: {}", uri, err);
             Failed
         })?;
+        if !content.has_matching_origins(&uri) {
+            warn!("RRDP {}: snapshot or delta files with different origin",
+                uri
+            );
+            return Err(Failed)
+        }
         content.sort_deltas();
         Ok(Notification { uri, content, etag, last_modified })
     }
