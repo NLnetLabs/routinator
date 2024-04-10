@@ -1,4 +1,5 @@
 use std::{cmp, io, fs};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -345,7 +346,7 @@ impl archive::ObjectMeta for RrdpObjectMeta {
 //------------ RepositoryState -----------------------------------------------
 
 /// The current state of an RRDP repository.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RepositoryState {
     /// The rpkiNotify URI of the repository.
     pub rpki_notify: uri::Https,
@@ -376,14 +377,22 @@ pub struct RepositoryState {
     /// This is the complete tag including the quotation marks and possibly
     /// the weak prefix.
     pub etag: Option<Bytes>,
+
+    /// Information of the deltas since in the last notificiation.
+    pub delta_state: HashMap<u64, rrdp::Hash>,
 }
 
 impl RepositoryState {
+    /// The current version of the data.
+    ///
+    /// This is 1 since version 0 was in the main branch for quite some time.
+    const VERSION: u8 = 1;
+
     /// Reads the state from an IO reader.
     fn parse(reader: &mut impl io::Read) -> Result<Self, io::Error> {
-        // Version number. Must be 0u8.
+        // Version number.
         let version = u8::parse(reader)?;
-        if version != 0 {
+        if version != Self::VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("unexpected version {}", version)
@@ -398,12 +407,13 @@ impl RepositoryState {
             best_before_ts: Parse::parse(reader)?,
             last_modified_ts: Parse::parse(reader)?,
             etag: Parse::parse(reader)?,
+            delta_state: Parse::parse(reader)?,
         })
     }
 
     /// Composes the encoded state.
     fn compose(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
-        0u8.compose(writer)?; // version
+        Self::VERSION.compose(writer)?; // version
         self.rpki_notify.compose(writer)?;
         self.session.compose(writer)?;
         self.serial.compose(writer)?;
@@ -411,6 +421,7 @@ impl RepositoryState {
         self.best_before_ts.compose(writer)?;
         self.last_modified_ts.compose(writer)?;
         self.etag.compose(writer)?;
+        self.delta_state.compose(writer)?;
         Ok(())
     }
 
@@ -516,6 +527,38 @@ impl From<archive::AccessError<HashMismatch>> for AccessError {
             archive::AccessError::Inconsistent(_) => AccessError::HashMismatch,
             archive::AccessError::Archive(err) => AccessError::Archive(err),
         }
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn compose_parse_repository_state() {
+        let state = RepositoryState {
+            rpki_notify: uri::Https::from_str(
+                "https://foo.bar/baz"
+            ).unwrap(),
+            session: Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8u128),
+            serial: 0x1234567812345678u64,
+            updated_ts: -12,
+            best_before_ts: 123789123789123,
+            last_modified_ts: Some(239123908123),
+            etag: None,
+            delta_state: [
+                (18, rrdp::Hash::from_data(b"123")),
+                (19, rrdp::Hash::from_data(b"332")),
+            ].iter().cloned().collect(),
+        };
+        let mut buf = Vec::new();
+        state.compose(&mut buf).unwrap();
+        let parsed = RepositoryState::parse(&mut buf.as_slice()).unwrap();
+        assert_eq!(state, parsed);
     }
 }
 
