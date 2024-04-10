@@ -19,6 +19,10 @@ New
   manifest for the same CA, the collected manifest is ignored and the
   stored publication point is used instead. This implements a requirement
   added in [RFC 9286]. ([#946])
+* The RRDP collector now falls back to a snapshot update if the hash of
+  a delta listed in the notification file has changed from the previous
+  update. This implements [draft-ietf-sidrops-rrdp-desynchronization-00].
+  ([#951])
 
 Bug fixes
 
@@ -36,7 +40,9 @@ Other changes
 [#942]: https://github.com/NLnetLabs/routinator/pull/942
 [#945]: https://github.com/NLnetLabs/routinator/pull/945
 [#946]: https://github.com/NLnetLabs/routinator/pull/946
+[#951]: https://github.com/NLnetLabs/routinator/pull/946
 [RFC 9286]: https://tools.ietf.org/html/rfc9286
+[draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
 
 ## 0.13.2 ‘Existential Funk’
