@@ -67,12 +67,11 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use chrono::{TimeZone, Utc};
 use log::{debug, error, info, warn};
 use rand::random;
 use rpki::crypto::digest::DigestAlgorithm;
-use rpki::repository::cert::Cert;
-use rpki::repository::manifest::ManifestHash;
+use rpki::repository::cert::{Cert, ResourceCert};
+use rpki::repository::manifest::{ManifestContent, ManifestHash};
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::{Serial, Time};
 use rpki::uri;
@@ -856,8 +855,8 @@ impl<'a> Iterator for StoredPoint<'a> {
 ///   [`not_after`][Self::not_after] method. This is used during cleanup to
 ///   determine whether to keep a publication point. It is stored to avoid
 ///   having to parse the whole manifest.
-/// * The manifest number. This is used to check whether new manifest try to
-///   go backwards.
+/// * The manifest number and thisUpdate time. These are used to check whether
+///   a new manifest tries to go backwards.
 /// * The caRepository URI of the CA certificate that has issued the manifest
 ///   via the [`ca_repository`][Self::ca_repository] method.  This is
 ///   necessary to convert the file names mentioned on the manifest into their
@@ -876,6 +875,9 @@ pub struct StoredManifest {
 
     /// The manifest number of the manifest.
     manifest_number: Serial,
+
+    /// The thisUpdate time of the manifest.
+    this_update: Time,
 
     /// The rpkiNotify URI of the issuing CA certificate.
     rpki_notify: Option<uri::Https>,
@@ -906,20 +908,24 @@ impl StoredManifest {
     ///
     /// The new value is created from the components of the stored manifest.
     /// See the methods with the same name for their meaning.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        not_after: Time,
-        manifest_number: Serial,
-        rpki_notify: Option<uri::Https>,
-        ca_repository: uri::Rsync,
-        manifest_uri: uri::Rsync,
-        manifest: Bytes,
+        ee_cert: &ResourceCert,
+        manifest: &ManifestContent,
+        ca_cert: &CaCert,
+        manifest_bytes: Bytes,
         crl_uri: uri::Rsync,
         crl: Bytes,
     ) -> Self {
         StoredManifest {
-            not_after, manifest_number, rpki_notify, ca_repository,
-            manifest_uri, manifest, crl_uri, crl
+            not_after: ee_cert.validity().not_after(),
+            manifest_number: manifest.manifest_number(),
+            this_update: manifest.this_update(),
+            rpki_notify: ca_cert.rpki_notify().cloned(),
+            ca_repository: ca_cert.ca_repository().clone(),
+            manifest_uri: ca_cert.rpki_manifest().clone(),
+            manifest: manifest_bytes,
+            crl_uri,
+            crl
         }
     }
 
@@ -932,29 +938,17 @@ impl StoredManifest {
                     format!("unexpected version {}", version)
             ))
         }
-
-        let not_after = match Utc.timestamp_opt(
-            i64::parse(reader)?, 0
-        ).single() {
-            Some(not_after) => not_after.into(),
-            None => {
-                return Err(ParseError::format(
-                    String::from("invalid not_after time")
-                ))
-            }
-        };
-        let manifest_number = Serial::parse(reader)?;
-        let rpki_notify = Option::parse(reader)?;
-        let ca_repository = uri::Rsync::parse(reader)?;
-        let manifest_uri = uri::Rsync::parse(reader)?;
-        let manifest = Bytes::parse(reader)?;
-        let crl_uri = uri::Rsync::parse(reader)?;
-        let crl = Bytes::parse(reader)?;
-
-        Ok(StoredManifest::new(
-            not_after, manifest_number, rpki_notify, ca_repository,
-            manifest_uri, manifest, crl_uri, crl
-        ))
+        Ok(StoredManifest {
+            not_after: Parse::parse(reader)?,
+            manifest_number: Parse::parse(reader)?,
+            this_update: Parse::parse(reader)?,
+            rpki_notify: Parse::parse(reader)?,
+            ca_repository: Parse::parse(reader)?,
+            manifest_uri: Parse::parse(reader)?,
+            manifest: Parse::parse(reader)?,
+            crl_uri: Parse::parse(reader)?,
+            crl: Parse::parse(reader)?,
+        })
     }
 
     /// Appends the stored manifest to a writer.
@@ -963,8 +957,9 @@ impl StoredManifest {
     ) -> Result<(), io::Error> {
         Self::VERSION.compose(writer)?;
 
-        self.not_after.timestamp().compose(writer)?;
+        self.not_after.compose(writer)?;
         self.manifest_number.compose(writer)?;
+        self.this_update.compose(writer)?;
         self.rpki_notify.compose(writer)?;
         self.ca_repository.compose(writer)?;
         self.manifest_uri.compose(writer)?;
@@ -993,6 +988,11 @@ impl StoredManifest {
     /// Returns the manifest number of the manifest.
     pub fn manifest_number(&self) -> Serial {
         self.manifest_number
+    }
+
+    /// Returns the thisUpdate field of the manifest.
+    pub fn this_update(&self) -> Time {
+        self.this_update
     }
 
     /// Returns the rsync URI of the directory containing the objects.
@@ -1248,16 +1248,25 @@ mod test {
 
     #[test]
     fn write_read_stored_manifest() {
-        let mut orig = StoredManifest::new(
-            Time::utc(2021, 2, 18, 13, 22, 6),
-            Serial::from(12u64),
-            Some(uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()),
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            Bytes::from(b"foobar".as_ref()),
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            Bytes::from(b"blablubb".as_ref())
-        );
+        let mut orig = StoredManifest {
+            not_after: Time::utc(2021, 2, 18, 13, 22, 6),
+            manifest_number: Serial::from(12u64),
+            this_update: Time::utc(2020, 1, 20, 16, 47, 6),
+            rpki_notify: Some(
+                uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()
+            ),
+            ca_repository: uri::Rsync::from_str(
+                "rsync://foo.bar/bla/blubb"
+            ).unwrap(),
+            manifest_uri: uri::Rsync::from_str(
+                "rsync://foo.bar/bla/blubb"
+            ).unwrap(),
+            manifest: Bytes::from(b"foobar".as_ref()),
+            crl_uri: uri::Rsync::from_str(
+                "rsync://foo.bar/bla/blubb"
+            ).unwrap(),
+            crl: Bytes::from(b"blablubb".as_ref())
+        };
         let mut written = Vec::new();
         orig.write(&mut written).unwrap();
         let decoded = StoredManifest::read(&mut written.as_slice()).unwrap();

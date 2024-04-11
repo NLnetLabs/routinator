@@ -7,8 +7,9 @@
 use std::{error, fmt, hash, io, slice};
 use std::collections::HashMap;
 use bytes::Bytes;
+use chrono::{TimeZone, Utc};
 use rpki::{rrdp, uri};
-use rpki::repository::x509::Serial;
+use rpki::repository::x509::{Serial, Time};
 use uuid::Uuid;
 
 
@@ -325,6 +326,25 @@ impl<R: io::Read> Parse<R> for Serial {
         source.read_exact(&mut res)?;
         Self::from_array(res).map_err(|_| {
             ParseError::format("invalid X.509 serial number")
+        })
+    }
+}
+
+
+//------------ Time ----------------------------------------------------------
+
+impl<W: io::Write> Compose<W> for Time {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        self.timestamp().compose(target)
+    }
+}
+
+impl<R: io::Read> Parse<R> for Time {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
+        Utc.timestamp_opt(
+            i64::parse(source)?, 0
+        ).single().map(Into::into).ok_or_else(|| {
+            ParseError::format("invalid timestamp")
         })
     }
 }

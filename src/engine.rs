@@ -705,14 +705,22 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
-        // Check that the collected manifest’s manifest number is larger than
-        // the stored manifest’s. Otherwise return so we use the stored
-        // manifest.
+        // Check that the collected manifest’s manifest number and thisUpdate
+        // fields are larger than the stored manifest’s. Otherwise return so
+        // we use the stored manifest.
         if let Some(mft) = store.manifest() {
             if collected.content.manifest_number() <= mft.manifest_number() {
                 warn!(
                     "{}: manifest number is smaller than in stored version. \
                      Using stored publication point.",
+                     self.cert.rpki_manifest(),
+                );
+                return Ok(Err(self))
+            }
+            if collected.content.this_update() <= mft.this_update() {
+                warn!(
+                    "{}: manifest thisUpdate is smaller than in stored \
+                     version. Using stored publication point.",
                      self.cert.rpki_manifest(),
                 );
                 return Ok(Err(self))
@@ -742,11 +750,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         let mut point_ok = true;
         let update_result = store.update(
             StoredManifest::new(
-                collected.ee_cert.validity().not_after(),
-                collected.content.manifest_number(),
-                self.cert.rpki_notify().cloned(),
-                self.cert.ca_repository().clone(),
-                self.cert.rpki_manifest().clone(),
+                &collected.ee_cert,
+                &collected.content,
+                &self.cert,
                 collected.manifest_bytes.clone(),
                 collected.crl_uri.clone(),
                 collected.crl_bytes.clone(),
