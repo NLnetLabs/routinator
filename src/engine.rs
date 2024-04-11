@@ -752,7 +752,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             StoredManifest::new(
                 &collected.ee_cert,
                 &collected.content,
-                &self.cert,
+                self.cert,
                 collected.manifest_bytes.clone(),
                 collected.crl_uri.clone(),
                 collected.crl_bytes.clone(),
