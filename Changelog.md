@@ -23,6 +23,9 @@ New
   a delta listed in the notification file has changed from the previous
   update. This implements [draft-ietf-sidrops-rrdp-desynchronization-00].
   ([#951])
+* The RRDP collector now enforces that all URIs referred to or redirected
+  to by an RRDP server have the same origin as the rpkiNotify URI in the
+  CA certificate. ([#953])
 
 Bug fixes
 
@@ -40,7 +43,8 @@ Other changes
 [#942]: https://github.com/NLnetLabs/routinator/pull/942
 [#945]: https://github.com/NLnetLabs/routinator/pull/945
 [#946]: https://github.com/NLnetLabs/routinator/pull/946
-[#951]: https://github.com/NLnetLabs/routinator/pull/946
+[#951]: https://github.com/NLnetLabs/routinator/pull/951
+[#953]: https://github.com/NLnetLabs/routinator/pull/953
 [RFC 9286]: https://tools.ietf.org/html/rfc9286
 [draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
