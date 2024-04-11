@@ -14,7 +14,7 @@
 //! too.
 
 use std::{fmt, fs, io, ops};
-use std::borrow::{Borrow, Cow, ToOwned};
+use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command as StdCommand, ExitStatus, Stdio};
