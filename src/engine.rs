@@ -711,15 +711,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         if let Some(mft) = store.manifest() {
             if collected.content.manifest_number() <= mft.manifest_number() {
                 warn!(
-                    "{}: manifest number is smaller than in stored version. \
-                     Using stored publication point.",
+                    "{}: manifest number is not greater than in stored \
+                     version. Using stored publication point.",
                      self.cert.rpki_manifest(),
                 );
                 return Ok(Err(self))
             }
             if collected.content.this_update() <= mft.this_update() {
                 warn!(
-                    "{}: manifest thisUpdate is smaller than in stored \
+                    "{}: manifest thisUpdate is not later than in stored \
                      version. Using stored publication point.",
                      self.cert.rpki_manifest(),
                 );
