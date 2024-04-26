@@ -15,10 +15,10 @@ New
   validity of the manifest’s EE certificates. A new `stale` value shows
   the time when any of the publication points along the way will become
   stale. ([#945])
-* If a collected manifest has a lower manifest number than a stored
-  manifest for the same CA, the collected manifest is ignored and the
-  stored publication point is used instead. This implements a requirement
-  added in [RFC 9286]. ([#946])
+* If a collected manifest has a lower manifest number or an older
+  thisUpdate field than a stored manifest for the same CA, the collected
+  manifest is ignored and the stored publication point is used instead.
+  This implements a requirement added in [RFC 9286]. ([#946], [#954])
 * The RRDP collector now falls back to a snapshot update if the hash of
   a delta listed in the notification file has changed from the previous
   update. This implements [draft-ietf-sidrops-rrdp-desynchronization-00].
@@ -45,6 +45,7 @@ Other changes
 [#946]: https://github.com/NLnetLabs/routinator/pull/946
 [#951]: https://github.com/NLnetLabs/routinator/pull/951
 [#953]: https://github.com/NLnetLabs/routinator/pull/953
+[#954]: https://github.com/NLnetLabs/routinator/pull/954
 [RFC 9286]: https://tools.ietf.org/html/rfc9286
 [draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
