@@ -1,11 +1,10 @@
 //! Handles endpoints related to output of payload sets.
 
-use std::convert::Infallible;
 use futures::stream;
-use hyper::{Body, Method, Request};
 use crate::config::Config;
 use crate::output::{Output, OutputFormat};
 use crate::payload::SharedHistory;
+use super::request::Request;
 use super::response::{Response, ResponseBuilder};
 
 
@@ -24,7 +23,7 @@ impl State {
 
     pub fn handle_get_or_head(
         &self,
-        req: &Request<Body>,
+        req: &Request,
         history: &SharedHistory,
     ) -> Option<Response> {
         let path = req.uri().path();
@@ -68,14 +67,13 @@ impl State {
         let res = ResponseBuilder::ok()
             .content_type(format.content_type())
             .etag(&etag).last_modified(created);
-        if *req.method() == Method::HEAD {
+        if req.is_head() {
             Some(res.empty())
         }
         else {
-            Some(res.body(Body::wrap_stream(stream::iter(
-                output.stream(snapshot, metrics, format)
-                    .map(Result::<_, Infallible>::Ok)
-            ))))
+            Some(res.stream(
+                stream::iter(output.stream(snapshot, metrics, format))
+            ))
         }
     }
 }

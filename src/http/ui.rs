@@ -5,7 +5,7 @@
 //! that represents a single file from the web resources.
 #![cfg(feature = "ui")]
 
-use hyper::{Body, Method, Request};
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 // Sensible settings for BASE_URL are either:
@@ -21,8 +21,8 @@ use super::response::{ContentType, Response, ResponseBuilder};
 const BASE_URL: &str = "/ui";
 const CATCH_ALL_URL: &str = "index.html";
 
-pub fn handle_get_or_head(req: &Request<Body>) -> Option<Response> {
-    let head = *req.method() == Method::HEAD;
+pub fn handle_get_or_head(req: &Request) -> Option<Response> {
+    let head = req.is_head();
     if req.uri().path() == "/" {
         return Some(Response::moved_permanently("/ui/"))
     }

@@ -1,8 +1,8 @@
 //! Handles endpoints related to the log.
 
 use std::sync::Arc;
-use hyper::{Body, Method, Request};
 use crate::process::LogOutput;
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 //------------ State ---------------------------------------------------------
@@ -18,11 +18,11 @@ impl State {
 
     pub fn handle_get_or_head(
         &self,
-        req: &Request<Body>,
+        req: &Request,
     ) -> Option<Response> {
         if req.uri().path() == "/log" {
             let res = ResponseBuilder::ok().content_type(ContentType::TEXT);
-            if *req.method() == Method::HEAD {
+            if req.is_head() {
                 Some(res.empty())
             }
             else {

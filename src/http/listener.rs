@@ -1,7 +1,6 @@
 //! The HTTP listener.
 
 use std::io;
-use std::convert::Infallible;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
@@ -9,9 +8,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use futures::pin_mut;
 use futures::future::{pending, select_all};
-use hyper::Server;
-use hyper::server::accept::Accept;
-use hyper::service::{make_service_fn, service_fn};
+use hyper::service::service_fn;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::error;
 use rpki::rtr::server::NotifySender;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -109,19 +107,6 @@ async fn single_http_listener(
     listener: StdListener,
     state: Arc<State>,
 ) {
-    let make_service = make_service_fn(|_conn| {
-        let state = state.clone();
-        async move {
-            Ok::<_, Infallible>(service_fn(move |req| {
-                let state = state.clone();
-                async move {
-                    Ok::<_, Infallible>(
-                        state.handle_request(req).await.into_hyper()
-                    )
-                }
-            }))
-        }
-    });
     let listener = HttpAccept {
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
@@ -133,8 +118,28 @@ async fn single_http_listener(
         tls: tls_config.map(Into::into),
         metrics: state.metrics().clone(),
     };
-    if let Err(err) = Server::builder(listener).serve(make_service).await {
-        error!("Fatal error in HTTP server {}: {}", addr, err);
+    loop {
+        let stream = match listener.accept().await {
+            Ok(some) => some,
+            Err(err) => {
+                error!("Fatal error in HTTP server {}: {}", addr, err);
+                break;
+            }
+        };
+        let service_state = state.clone();
+        tokio::task::spawn(async move {
+            let _ = hyper_util::server::conn::auto::Builder::new(
+                TokioExecutor::new()
+            ).serve_connection(
+                TokioIo::new(stream),
+                service_fn(move |req| {
+                    let state = service_state.clone();
+                    async move {
+                        state.handle_request(req.into()).await.into_hyper()
+                    }
+                })
+            ).await;
+        });
     }
 }
 
@@ -147,6 +152,18 @@ struct HttpAccept {
     metrics: Arc<HttpServerMetrics>,
 }
 
+impl HttpAccept {
+    async fn accept(&self) -> Result<HttpStream, io::Error> {
+        let (sock, _) = self.sock.accept().await?;
+        self.metrics.inc_conn_open();
+        Ok(HttpStream {
+            sock: MaybeTlsTcpStream::new(sock, self.tls.as_ref()),
+            metrics: self.metrics.clone()
+        })
+    }
+}
+
+/*
 impl Accept for HttpAccept {
     type Conn = HttpStream;
     type Error = io::Error;
@@ -172,6 +189,7 @@ impl Accept for HttpAccept {
         }
     }
 }
+*/
 
 
 struct HttpStream {
