@@ -163,34 +163,6 @@ impl HttpAccept {
     }
 }
 
-/*
-impl Accept for HttpAccept {
-    type Conn = HttpStream;
-    type Error = io::Error;
-
-    fn poll_accept(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context
-    ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
-        let sock = &mut self.sock;
-        pin_mut!(sock);
-        match sock.poll_accept(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Ok((sock, _addr))) => {
-                self.metrics.inc_conn_open();
-                Poll::Ready(Some(Ok(HttpStream {
-                    sock: MaybeTlsTcpStream::new(sock, self.tls.as_ref()),
-                    metrics: self.metrics.clone()
-                })))
-            }
-            Poll::Ready(Err(err)) => {
-                Poll::Ready(Some(Err(err)))
-            }
-        }
-    }
-}
-*/
-
 
 struct HttpStream {
     sock: MaybeTlsTcpStream,
