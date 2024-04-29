@@ -14,7 +14,8 @@ pub use self::response::ContentType;
 mod dispatch;
 mod listener;
 
-// The following module helps making responses.
+// The following modules helps dealing with requests and responses
+mod request;
 mod response;
 
 // Finally, these modules actually handle requests.

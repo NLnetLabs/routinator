@@ -2,20 +2,20 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
-use hyper::{Body, Method, Request};
 use rpki::resources::{Asn, Prefix};
 use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::validity::RouteValidity;
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
 pub fn handle_get_or_head(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
 ) -> Option<Response> {
-    let head = *req.method() == Method::HEAD;
+    let head = req.is_head();
     match req.uri().path() {
         "/validity" => {
             Some(handle_validity_query(head, history, req.uri().query()))

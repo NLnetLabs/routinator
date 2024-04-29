@@ -1,11 +1,10 @@
 //! Handles endpoints related to output of payload deltas.
 
-use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::Arc;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::stream;
-use hyper::{Body, Method, Request};
 use rpki::rtr::Serial;
 use rpki::rtr::payload::{Action, PayloadRef};
 use rpki::rtr::server::{NotifySender, PayloadDiff};
@@ -15,12 +14,13 @@ use crate::payload::{
 use crate::utils::fmt::WriteOrPanic;
 use crate::utils::date::format_iso_date;
 use crate::utils::json::JsonBuilder;
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 //------------ handle_get_or_head --------------------------------------------
 
 pub fn handle_get_or_head(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
 ) -> Option<Response> {
     if req.uri().path() != "/json-delta" {
@@ -37,7 +37,7 @@ pub fn handle_get_or_head(
         Err(response) => return Some(response)
     };
 
-    if *req.method() == Method::HEAD {
+    if req.is_head() {
         return Some(
             ResponseBuilder::ok().content_type(ContentType::JSON).empty()
         )
@@ -68,29 +68,29 @@ fn handle_delta(
     session: u64, from_serial: Serial, to_serial: Serial,
     delta: Arc<PayloadDelta>, created: DateTime<Utc>,
 ) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON)
-    .body(Body::wrap_stream(stream::iter(
-        DeltaStream::new(session, from_serial, to_serial, delta, created)
-        .map(Result::<_, Infallible>::Ok)
-    )))
+    ResponseBuilder::ok().content_type(ContentType::JSON).stream(
+        stream::iter(
+            DeltaStream::new(session, from_serial, to_serial, delta, created)
+        )
+    )
 }
 
 fn handle_reset(
     session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>,
     created: DateTime<Utc>,
 ) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON)
-    .body(Body::wrap_stream(stream::iter(
-        SnapshotStream::new(session, to_serial, snapshot, created)
-        .map(Result::<_, Infallible>::Ok)
-    )))
+    ResponseBuilder::ok().content_type(ContentType::JSON).stream(
+        stream::iter(
+            SnapshotStream::new(session, to_serial, snapshot, created)
+        )
+    )
 }
 
 
 //------------ handle_notify_get_or_head -------------------------------------
 
 pub async fn handle_notify_get_or_head(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
     notify: &NotifySender,
 ) -> Option<Response> {
@@ -107,7 +107,7 @@ pub async fn handle_notify_get_or_head(
         notify.subscribe().recv().await;
     }
 
-    if *req.method() == Method::HEAD {
+    if req.is_head() {
         Some(
             ResponseBuilder::ok().content_type(ContentType::JSON).empty()
         )
@@ -126,7 +126,7 @@ pub async fn handle_notify_get_or_head(
 }
 
 fn need_wait(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
 ) -> Result<bool, Response> {
     let version = match version_from_query(req.uri().query())? {
@@ -327,7 +327,7 @@ impl DeltaStream {
 }
 
 impl Iterator for DeltaStream {
-    type Item = Vec<u8>;
+    type Item = Bytes;
 
     fn next(&mut self) -> Option<Self::Item> {
         #[allow(clippy::question_mark)]
@@ -337,13 +337,13 @@ impl Iterator for DeltaStream {
         let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
-                return Some(vec)
+                return Some(vec.into())
             }
             if self.next_announce(&mut vec) {
                 continue;
             }
             if !self.next_withdraw(&mut vec) {
-                return Some(vec)
+                return Some(vec.into())
             }
         }
     }
@@ -450,7 +450,7 @@ impl SnapshotStream {
 }
 
 impl Iterator for SnapshotStream {
-    type Item = Vec<u8>;
+    type Item = Bytes;
 
     fn next(&mut self) -> Option<Self::Item> {
         use rpki::rtr::server::PayloadSet;
@@ -460,7 +460,7 @@ impl Iterator for SnapshotStream {
         let mut vec = self.header.take().unwrap_or_default();
         loop {
             if vec.len() > 64000 {
-                return Some(vec)
+                return Some(vec.into())
             }
             match iter.next() {
                 Some(payload) => {
@@ -477,7 +477,7 @@ impl Iterator for SnapshotStream {
 
         self.iter = None;
         DeltaStream::append_footer(&mut vec);
-        Some(vec)
+        Some(vec.into())
     }
 }
 

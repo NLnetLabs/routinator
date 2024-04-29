@@ -3,7 +3,6 @@
 use std::{cmp, fmt};
 use std::fmt::Write;
 use chrono::Utc;
-use hyper::{Body, Method, Request};
 use crate::config::FilterPolicy;
 use crate::metrics::{
     HttpServerMetrics, Metrics, PayloadMetrics, PublicationMetrics,
@@ -11,20 +10,22 @@ use crate::metrics::{
     VrpMetrics
 };
 use crate::payload::SharedHistory;
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
 pub async fn handle_get_or_head(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
 ) -> Option<Response> {
-    let head = *req.method() == Method::HEAD;
     match req.uri().path() {
-        "/metrics" => Some(handle_metrics(head, history, http, rtr).await),
+        "/metrics" => {
+            Some(handle_metrics(req.is_head(), history, http, rtr).await)
+        }
         _ => None
     }
 }

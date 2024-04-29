@@ -1,15 +1,25 @@
 //! Building responses.
 
+use std::convert::Infallible;
 use chrono::{DateTime, Utc};
-use hyper::{Body, Request, StatusCode};
+use futures::stream::{Stream, StreamExt};
+use http_body_util::{BodyExt, Empty, Full, StreamBody};
+use http_body_util::combinators::BoxBody;
+use hyper::body::{Body, Bytes, Frame};
+use hyper::StatusCode;
 use hyper::http::response::Builder;
 use crate::utils::date::{parse_http_date, format_http_date};
+use super::request::Request;
 
 
-//------------ Response -----------------------------------------------------
+//------------ ResponseBody --------------------------------------------------
 
-#[derive(Debug)]
-pub struct Response(hyper::Response<Body>);
+type ResponseBody = BoxBody<Bytes, Infallible>;
+
+
+//------------ Response ------------------------------------------------------
+
+pub struct Response(hyper::Response<ResponseBody>);
 
 impl Response {
     /// Creates a response indicating initial validation.
@@ -60,7 +70,7 @@ impl Response {
     /// request, returns the reponse. If a new response needs to be generated,
     /// returns `None`.
     pub fn maybe_not_modified(
-        req: &Request<Body>,
+        req: &Request,
         etag: &str,
         done: DateTime<Utc>,
     ) -> Option<Response> {
@@ -96,8 +106,10 @@ impl Response {
     }
 
     /// Converts the response into a hyper response.
-    pub fn into_hyper(self) -> hyper::Response<Body> {
-        self.0
+    pub fn into_hyper(
+        self
+    ) -> Result<hyper::Response<ResponseBody>, Infallible> {
+        Ok(self.0)
     }
 }
 
@@ -185,17 +197,36 @@ impl ResponseBuilder {
         }
     }
 
-    /// Finalizes the response by adding a body.
-    pub fn body(self, body: impl Into<Body>) -> Response {
+    fn finalize<B>(self, body: B) -> Response
+    where
+        B: Body<Data = Bytes, Error = Infallible> + Send + Sync + 'static
+    {
         Response(
-            self.builder.body(body.into())
-                .expect("broken HTTP response builder")
+            self.builder.body(
+                body.boxed()
+            ).expect("broken HTTP response builder")
         )
+    }
+
+    /// Finalizes the response by adding a body.
+    pub fn body(self, body: impl Into<Bytes>) -> Response {
+        self.finalize(Full::new(body.into()))
     }
 
     /// Finalies the response by adding an empty body.
     pub fn empty(self) -> Response {
-        self.body(Body::empty())
+        self.finalize(Empty::new())
+    }
+
+    pub fn stream<S>(self, body: S) -> Response
+    where
+        S: Stream<Item = Bytes> + Send + Sync + 'static
+    {
+        self.finalize(
+            StreamBody::new(body.map(|item| {
+                Ok(Frame::data(item))
+            }))
+        )
     }
 }
 
