@@ -531,7 +531,12 @@ impl<'a> Run<'a> {
                     entry_path.clone(), retain
                 ) {
                     Ok(some) => some,
-                    Err(err) if err.should_retry() => false,
+                    Err(err) if err.should_retry() => {
+                        // The RrdpArchive code has deleted the file already
+                        // in this case, so we musn’t do it again, so we
+                        // pretend we want to keep it.
+                        true
+                    }
                     Err(_) => return Err(Fatal),
                 };
                 if !keep {
