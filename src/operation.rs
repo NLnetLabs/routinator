@@ -308,6 +308,7 @@ impl Server {
                 // log rotation, we need to loop here. But then we need
                 // to recalculate timeout.
                 let deadline = Instant::now() + timeout;
+
                 let end = loop {
                     let timeout = deadline.saturating_duration_since(
                         Instant::now()

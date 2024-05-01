@@ -5,20 +5,20 @@
 //! that represents a single file from the web resources.
 #![cfg(feature = "ui")]
 
+use std::path::Path;
 use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
+use self::assets::{ASSETS, Asset};
 
-// Sensible settings for BASE_URL are either:
-// "/"   => just route everything from the domain-name without further ado, or
-// "/ui" => the default prodution setting in the Vue App, this means that all
-//          request URLs should either start with `/ui`.
-//
-// Note that this setting MUST correspond with the environment variable
-// VUE_APP_BASE_DIR in the Vue App (set by the .env.* files in routinator-ui).
-//
-// CATCH_ALL_URL is the path of the asset, that all unknown URLs starting with
-// BASE_URL will be redirected to. All other URLs will return a 404.
+/// Sensible settings for BASE_URL are either:
+/// * `"/"`: just route everything from the domain-name without further ado,
+///   or
+/// * `"/ui"`: the default prodution setting in the UI App, this means that
+///   all request URLs should start with `/ui`.
 const BASE_URL: &str = "/ui";
+
+/// The path of the asset, that all unknown URLs starting with
+/// BASE_URL will be redirected to. All other URLs will return a 404.
 const CATCH_ALL_URL: &str = "index.html";
 
 pub fn handle_get_or_head(req: &Request) -> Option<Response> {
@@ -27,12 +27,10 @@ pub fn handle_get_or_head(req: &Request) -> Option<Response> {
         return Some(Response::moved_permanently("/ui/"))
     }
 
-    let req_path = std::path::Path::new(req.uri().path());
+    let req_path = Path::new(req.uri().path());
     if let Ok(p) = req_path.strip_prefix(BASE_URL) {
-        match routinator_ui::endpoints::ui_resource(p) {
-            Some(endpoint) => {
-                Some(serve(head, endpoint.content, endpoint.content_type))
-            }
+        match get_asset(p) {
+            Some(asset) => Some(serve(head, asset)),
             None => {
                 // In order to have the frontend handle all routing and
                 // queryparams under BASE_URL, all unknown URLs that start
@@ -41,13 +39,10 @@ pub fn handle_get_or_head(req: &Request) -> Option<Response> {
                 // Note that we could be smarter about this and do a
                 // (somewhat convoluted) regex on the requested URL to figure
                 // out if it makes sense as a search prefix url.
-                if let Some(default) =
-                    routinator_ui::endpoints::ui_resource(
-                        std::path::Path::new(CATCH_ALL_URL)
-                    )
-                {
-                    Some(serve(head, default.content, default.content_type))
-                } else {
+                if let Some(default) = get_asset(Path::new(CATCH_ALL_URL)) {
+                    Some(serve(head, default))
+                }
+                else {
                     // if CATCH_ALL_URL is not defined in ui_resources
                     // we'll return a 404
                     Some(Response::not_found())
@@ -61,14 +56,27 @@ pub fn handle_get_or_head(req: &Request) -> Option<Response> {
     }
 }
 
+fn get_asset(path: &Path) -> Option<&Asset> {
+    let path = path.to_str()?;
+    ASSETS.iter().find(|asset| asset.path == path)
+}
+
 /// Creates the response from data and the content type.
-fn serve(head: bool, data: &'static [u8], ctype: &'static [u8]) -> Response {
-    let res = ResponseBuilder::ok().content_type(ContentType::external(ctype));
+fn serve(head: bool, asset: &Asset) -> Response {
+    let res = ResponseBuilder::ok().content_type(
+        ContentType::external(asset.media_type.as_bytes())
+    );
     if head {
         res.empty()
     }
     else {
-        res.body(data)
+        res.body(asset.content)
     }
+}
+
+
+
+mod assets {
+    include!(concat!(env!("OUT_DIR"), "/ui_assets.rs"));
 }
 
