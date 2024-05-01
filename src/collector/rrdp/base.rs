@@ -533,7 +533,7 @@ impl<'a> Run<'a> {
                     Ok(some) => some,
                     Err(err) if err.should_retry() => {
                         // The RrdpArchive code has deleted the file already
-                        // in this case, so we musn’t do it again, so we
+                        // in this case, so we mustn’t do it again, so we
                         // pretend we want to keep it.
                         true
                     }
