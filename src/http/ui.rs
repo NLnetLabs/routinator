@@ -41,11 +41,10 @@ pub fn handle_get_or_head(req: &Request<Body>) -> Option<Response> {
                 // Note that we could be smarter about this and do a
                 // (somewhat convoluted) regex on the requested URL to figure
                 // out if it makes sense as a search prefix url.
-                if let Some(default) = get_asset(
-                    std::path::Path::new(CATCH_ALL_URL)
-                ) {
+                if let Some(default) = get_asset(Path::new(CATCH_ALL_URL)) {
                     Some(serve(head, default))
-                } else {
+                }
+                else {
                     // if CATCH_ALL_URL is not defined in ui_resources
                     // we'll return a 404
                     Some(Response::not_found())
