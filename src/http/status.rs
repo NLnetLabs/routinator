@@ -3,7 +3,6 @@
 use std::cmp;
 use chrono::{DateTime, Duration, Utc};
 use clap::{crate_name, crate_version};
-use hyper::{Body, Method, Request};
 use crate::metrics::{
     HttpServerMetrics, PayloadMetrics, PublicationMetrics,
     RtrClientMetrics, SharedRtrServerMetrics, VrpMetrics,
@@ -11,18 +10,19 @@ use crate::metrics::{
 use crate::payload::SharedHistory;
 use crate::utils::fmt::WriteOrPanic;
 use crate::utils::json::JsonBuilder;
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 
 //------------ handle_get ----------------------------------------------------
 
 pub async fn handle_get_or_head(
-    req: &Request<Body>,
+    req: &Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &SharedRtrServerMetrics,
 ) -> Option<Response> {
-    let head = *req.method() == Method::HEAD;
+    let head = req.is_head();
     match req.uri().path() {
         "/status" => Some(handle_status(head, history, http, rtr).await),
         "/api/v1/status" => {

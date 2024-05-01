@@ -531,7 +531,12 @@ impl<'a> Run<'a> {
                     entry_path.clone(), retain
                 ) {
                     Ok(some) => some,
-                    Err(err) if err.should_retry() => false,
+                    Err(err) if err.should_retry() => {
+                        // The RrdpArchive code has deleted the file already
+                        // in this case, so we mustn’t do it again, so we
+                        // pretend we want to keep it.
+                        true
+                    }
                     Err(_) => return Err(Fatal),
                 };
                 if !keep {
@@ -829,6 +834,10 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<(), RunFailed> {
         info!("RRDP {}: Not modified.", self.rpki_notify);
         if let Some((mut archive, mut state)) = current {
+            // Copy serial and session to the metrics so they will still be
+            // present.
+            self.metrics.serial = Some(state.serial);
+            self.metrics.session = Some(state.session);
             state.touch(self.collector.config().fallback_time);
             archive.update_state(&state)?;
         }
@@ -901,6 +910,10 @@ impl<'a> RepositoryUpdate<'a> {
         mut archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
+        if let Err(reason) = notify.check_deltas(&state) {
+            return Ok(Some(reason))
+        }
+
         let deltas = match self.calc_deltas(notify.content(), &state) {
             Ok(deltas) => deltas,
             Err(reason) => return Ok(Some(reason)),
@@ -1009,6 +1022,5 @@ impl<'a> RepositoryUpdate<'a> {
 
         Ok(deltas)
     }
-
 }
 

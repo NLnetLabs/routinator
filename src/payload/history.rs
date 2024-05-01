@@ -74,26 +74,28 @@ impl SharedHistory {
 
         let mut history = self.write();
         history.metrics = Some(metrics.into());
-        if let Some(delta) = delta {
+        let res = if let Some(delta) = delta {
             // Data has changed.
             info!(
                 "Delta with {} announced and {} withdrawn items.",
                 delta.announce_len(),
                 delta.withdraw_len(),
             );
-            history.current = Some(snapshot.into());
             history.push_delta(delta);
             true
         }
         else if current.is_none() {
             // This is the first snapshot ever.
-            history.current = Some(snapshot.into());
             true
         }
         else {
             // Nothing has changed.
             false
-        }
+        };
+        // Update the snapshot. The refresh time and object information may
+        // have changed.
+        history.current = Some(snapshot.into());
+        res
     }
 
     /// Marks the beginning of an update cycle.
@@ -124,7 +126,7 @@ impl SharedHistory {
                 // Since we increase the time, the created time may
                 // actually have moved into the future.
                 if now.timestamp() <= created.timestamp() {
-                    Some(created + chrono::Duration::seconds(1))
+                    Some(created + chrono::Duration::try_seconds(1).unwrap())
                 }
                 else {
                     Some(now)

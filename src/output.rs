@@ -3,6 +3,7 @@
 use std::{error, fmt, io};
 use std::str::FromStr;
 use std::sync::Arc;
+use bytes::Bytes;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
 use log::{error, info};
@@ -139,7 +140,7 @@ impl OutputFormat {
         }
     }
 
-    fn formatter<W: io::Write>(self) -> Box<dyn Formatter<W> + Send> {
+    fn formatter<W: io::Write>(self) -> Box<dyn Formatter<W> + Send + Sync> {
         match self {
             OutputFormat::Csv => Box::new(Csv),
             OutputFormat::CompatCsv => Box::new(CompatCsv),
@@ -431,7 +432,7 @@ impl Output {
         snapshot: Arc<PayloadSnapshot>,
         metrics: Arc<Metrics>,
         format: OutputFormat,
-    ) -> impl Iterator<Item = Vec<u8>> {
+    ) -> impl Iterator<Item = Bytes> + Send + Sync + 'static {
         OutputStream::new(self, snapshot, metrics, format)
     }
 
@@ -471,7 +472,7 @@ struct OutputStream<Target> {
     snapshot: Arc<PayloadSnapshot>,
     metrics: Arc<Metrics>,
     state: StreamState,
-    formatter: Box<dyn Formatter<Target> + Send>,
+    formatter: Box<dyn Formatter<Target> + Send + Sync>,
 }
 
 enum StreamState {
@@ -643,20 +644,20 @@ impl<Target: io::Write> OutputStream<Target> {
 }
 
 impl Iterator for OutputStream<Vec<u8>> {
-    type Item = Vec<u8>;
+    type Item = Bytes;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut res = Vec::new();
         while self.write_next(&mut res).expect("write to vec failed") {
             if res.len() > 64000 {
-                return Some(res)
+                return Some(res.into())
             }
         }
         if res.is_empty() {
             None
         }
         else {
-            Some(res)
+            Some(res.into())
         }
     }
 }
@@ -1020,13 +1021,15 @@ impl ExtendedJson {
                     \"validity\": {{ \"notBefore\": \"{}\", \
                     \"notAfter\": \"{}\" }}, \
                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
-                    \"notAfter\": \"{}\" }} \
+                    \"notAfter\": \"{}\" }}, \
+                    \"stale\": \"{}\" \
                     }}",
                     json_str(roa.tal.name()),
                     format_iso_date(roa.roa_validity.not_before().into()),
                     format_iso_date(roa.roa_validity.not_after().into()),
                     format_iso_date(roa.chain_validity.not_before().into()),
                     format_iso_date(roa.chain_validity.not_after().into()),
+                    format_iso_date(roa.point_stale.into()),
                 )?;
             }
             if let Some(exc) = item.exception_info() {

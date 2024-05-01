@@ -1,13 +1,13 @@
 //! Rules on how to dispatch a request.
 
 use std::sync::Arc;
-use hyper::{Body, Method, Request};
 use rpki::rtr::server::NotifySender;
 use crate::config::Config;
 use crate::metrics::{HttpServerMetrics, SharedRtrServerMetrics};
 use crate::payload::SharedHistory;
 use crate::process::LogOutput;
 use super::{delta, log, metrics, payload, status, validity};
+use super::request::Request;
 use super::response::Response;
 
 //------------ State ---------------------------------------------------------
@@ -43,12 +43,9 @@ impl State {
         &self.metrics
     }
 
-    pub async fn handle_request(
-        &self,
-        req: Request<Body>,
-    ) -> Response {
+    pub async fn handle_request(&self, req: Request) -> Response {
         self.metrics.inc_requests();
-        if *req.method() != Method::GET && *req.method() != Method::HEAD {
+        if !req.is_get_or_head() {
             return Response::method_not_allowed()
         }
 

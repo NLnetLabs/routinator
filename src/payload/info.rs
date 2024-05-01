@@ -6,8 +6,7 @@ use std::sync::Arc;
 use rpki::uri;
 use rpki::repository::cert::{Cert, ResourceCert};
 use rpki::repository::tal::TalInfo;
-use rpki::repository::x509::Validity;
-use crate::engine::CaCert;
+use rpki::repository::x509::{Validity, Time};
 use crate::slurm::ExceptionInfo;
 
 //------------ PayloadInfo ---------------------------------------------------
@@ -144,11 +143,18 @@ pub struct PublishInfo {
 
     /// The validity of the validation chain.
     pub chain_validity: Validity,
+
+    /// When will the object’s publication point become stale?
+    pub point_stale: Time,
 }
 
 impl PublishInfo {
     /// Creates a new origin info from the EE certificate of a ROA.
-    pub fn signed_object(cert: &ResourceCert, ca_validity: Validity) -> Self {
+    pub fn signed_object(
+        cert: &ResourceCert,
+        ca_validity: Validity,
+        point_stale: Time,
+    ) -> Self {
         PublishInfo {
             tal: cert.tal().clone(),
             uri: cert.signed_object().cloned().map(|mut uri| {
@@ -156,17 +162,23 @@ impl PublishInfo {
             }),
             roa_validity: cert.validity(),
             chain_validity: cert.validity().trim(ca_validity),
+            point_stale,
         }
     }
 
     pub fn router_cert(
-        cert: &Cert, uri: &uri::Rsync, ca_cert: &CaCert
+        cert: &Cert,
+        uri: &uri::Rsync,
+        tal: Arc<TalInfo>,
+        ca_validity: Validity,
+        point_stale: Time,
     ) -> Self {
         PublishInfo {
-            tal: ca_cert.cert().tal().clone(),
+            tal,
             uri: Some(uri.clone()),
             roa_validity: cert.validity(),
-            chain_validity: cert.validity().trim(ca_cert.combined_validity())
+            chain_validity: cert.validity().trim(ca_validity),
+            point_stale,
         }
     }
 

@@ -11,12 +11,43 @@ Breaking changes
 
 New
 
+* The `chain_validity` value in the `jsonext` format now considers the
+  validity of the manifest’s EE certificates. A new `stale` value shows
+  the time when any of the publication points along the way will become
+  stale. ([#945])
+* If a collected manifest has a lower manifest number or an older
+  thisUpdate field than a stored manifest for the same CA, the collected
+  manifest is ignored and the stored publication point is used instead.
+  This implements a requirement added in [RFC 9286]. ([#946], [#954])
+* The RRDP collector now falls back to a snapshot update if the hash of
+  a delta listed in the notification file has changed from the previous
+  update. This implements [draft-ietf-sidrops-rrdp-desynchronization-00].
+  ([#951])
+* The RRDP collector now enforces that all URIs referred to or redirected
+  to by an RRDP server have the same origin as the rpkiNotify URI in the
+  CA certificate. ([#953])
+
 Bug fixes
+
+* Fixed an issue where the refresh time was calculated as zero under
+  certain conditions until the dataset was updated. ([#940])
+* Add the current RRDP serial number to the RRDP server metrics when a
+  Not Modified response is received so that Prometheus shows a constant
+  value.
 
 Other changes
 
 [#886]: https://github.com/NLnetLabs/routinator/pull/886
 [#907]: https://github.com/NLnetLabs/routinator/pull/907
+[#940]: https://github.com/NLnetLabs/routinator/pull/940
+[#942]: https://github.com/NLnetLabs/routinator/pull/942
+[#945]: https://github.com/NLnetLabs/routinator/pull/945
+[#946]: https://github.com/NLnetLabs/routinator/pull/946
+[#951]: https://github.com/NLnetLabs/routinator/pull/951
+[#953]: https://github.com/NLnetLabs/routinator/pull/953
+[#954]: https://github.com/NLnetLabs/routinator/pull/954
+[RFC 9286]: https://tools.ietf.org/html/rfc9286
+[draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
 
 ## 0.13.2 ‘Existential Funk’

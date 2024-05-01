@@ -6,25 +6,23 @@
 #![cfg(feature = "ui")]
 
 use std::path::Path;
-use hyper::{Body, Method, Request};
+use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 use self::assets::{ASSETS, Asset};
 
-// Sensible settings for BASE_URL are either:
-// "/"   => just route everything from the domain-name without further ado, or
-// "/ui" => the default prodution setting in the Vue App, this means that all
-//          request URLs should either start with `/ui`.
-//
-// Note that this setting MUST correspond with the environment variable
-// VUE_APP_BASE_DIR in the Vue App (set by the .env.* files in routinator-ui).
-//
-// CATCH_ALL_URL is the path of the asset, that all unknown URLs starting with
-// BASE_URL will be redirected to. All other URLs will return a 404.
+/// Sensible settings for BASE_URL are either:
+/// * `"/"`: just route everything from the domain-name without further ado,
+///   or
+/// * `"/ui"`: the default prodution setting in the UI App, this means that
+///   all request URLs should start with `/ui`.
 const BASE_URL: &str = "/ui";
+
+/// The path of the asset, that all unknown URLs starting with
+/// BASE_URL will be redirected to. All other URLs will return a 404.
 const CATCH_ALL_URL: &str = "index.html";
 
-pub fn handle_get_or_head(req: &Request<Body>) -> Option<Response> {
-    let head = *req.method() == Method::HEAD;
+pub fn handle_get_or_head(req: &Request) -> Option<Response> {
+    let head = req.is_head();
     if req.uri().path() == "/" {
         return Some(Response::moved_permanently("/ui/"))
     }

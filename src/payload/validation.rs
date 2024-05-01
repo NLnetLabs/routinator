@@ -133,7 +133,8 @@ impl<'a> ProcessRun for &'a ValidationReport {
             PubPointProcessor {
                 report: self,
                 pub_point: PubPoint::new_ta(cert, tal_index),
-                validity: cert.combined_validity(),
+                validity: cert.cert().validity(),
+                point_stale: cert.cert().validity().not_after(),
             }
         ))
     }
@@ -155,8 +156,11 @@ pub struct PubPointProcessor<'a> {
     /// The data being collected.
     pub_point: PubPoint,
 
-    /// The (combined) validity of the CA certificate.
+    /// The (combined) validity of the publication point.
     validity: Validity,
+
+    /// When will this publication point become stale.
+    point_stale: Time,
 }
 
 impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
@@ -164,10 +168,13 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         self.pub_point.repository_index = Some(repository_index)
     }
 
-    fn update_refresh(&mut self, not_after: Time) {
+    fn point_validity(&mut self, manifest: Validity, stale: Time) {
         self.pub_point.refresh = cmp::min(
-            self.pub_point.refresh, not_after
+            self.pub_point.refresh, 
+            cmp::min(manifest.not_after(), stale)
         );
+        self.validity = self.validity.trim(manifest);
+        self.point_stale = cmp::min(self.point_stale, stale);
     }
 
     fn want(&self, _uri: &uri::Rsync) -> Result<bool, Failed> {
@@ -183,7 +190,10 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
             PubPointProcessor {
                 report: self.report,
                 pub_point: PubPoint::new_ca(&self.pub_point, cert),
-                validity: cert.combined_validity(),
+                validity: self.validity.trim(cert.cert().validity()),
+                point_stale: cmp::min(
+                    self.point_stale, cert.cert().validity().not_after()
+                ),
             }
         ))
     }
@@ -233,7 +243,10 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         self.pub_point.update_refresh(cert.validity().not_after());
         self.pub_point.add_router_key(
             asns, id, key,
-            Arc::new(PublishInfo::router_cert(&cert, uri, ca_cert)),
+            Arc::new(PublishInfo::router_cert(
+                &cert, uri, ca_cert.cert().tal().clone(),
+                self.validity, self.point_stale,
+            )),
         );
         Ok(())
     }
@@ -245,7 +258,10 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         route: RouteOriginAttestation
     ) -> Result<(), Failed> {
         if self.pub_point.add_roa(
-            route, Arc::new(PublishInfo::signed_object(&cert, self.validity)),
+            route,
+            Arc::new(PublishInfo::signed_object(
+                &cert, self.validity, self.point_stale
+            )),
             self.report.limit_v4_len, self.report.limit_v6_len,
         ) {
             self.pub_point.update_refresh(cert.validity().not_after());
@@ -264,7 +280,10 @@ impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
         }
         self.pub_point.update_refresh(cert.validity().not_after());
         self.pub_point.add_aspa(
-            aspa, Arc::new(PublishInfo::signed_object(&cert, self.validity))
+            aspa,
+            Arc::new(PublishInfo::signed_object(
+                &cert, self.validity, self.point_stale
+            ))
         );
         Ok(())
     }
