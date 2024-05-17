@@ -22,7 +22,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
-use log::{error, info};
+use log::{error, info, warn};
 use rpki::resources::{Asn, Prefix};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
@@ -220,6 +220,7 @@ impl Server {
             self.detach,
             !process.config().http_listen.is_empty()
         )?;
+        warn!("Using config file {}.", process.config().config_file.display());
         process.setup_service(self.detach)?;
         let log = log.map(Arc::new);
         let rtr_metrics = SharedRtrServerMetrics::new(
@@ -577,6 +578,7 @@ impl Vrps {
         let mut engine = Engine::new(process.config(), !self.noupdate)?;
         engine.ignite()?;
         process.switch_logging(false, false)?;
+        warn!("Using config file {}.", process.config().config_file.display());
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = {
             // Retry once if we get a non-fatal error.

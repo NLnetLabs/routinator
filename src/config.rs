@@ -124,6 +124,13 @@ const DEFAULT_SYSLOG_FACILITY: Facility = Facility::LOG_DAEMON;
 /// [`to_toml`]: #method.to_toml
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
+    /// Path to the config file.
+    ///
+    /// This is the path that Routinator looked for the config file. This may
+    /// be the default path or a user-specified path and there may not be a
+    /// file there.
+    pub config_file: PathBuf,
+
     /// Path to the directory that contains the repository cache.
     pub cache_dir: PathBuf,
 
@@ -853,6 +860,7 @@ impl Config {
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Failed> {
         let log_target = Self::log_target_from_config_file(&mut file)?;
         let res = Config {
+            config_file: file.path.clone(),
             cache_dir: file.take_mandatory_path("repository-dir")?,
             no_rir_tals: file.take_bool("no-rir-tals")?.unwrap_or(false),
             bundled_tals: {
@@ -1120,10 +1128,14 @@ impl Config {
 
     /// Creates a default config with the given paths.
     ///
-    /// Uses default values for everything except for the cache directory
-    /// which needs to be provided.
-    pub fn default_with_paths(cache_dir: PathBuf) -> Self {
-        Config {
+    /// Uses default values for everything except for the config file path
+    /// and cache directory which needs to be provided.
+    pub fn default_with_paths(
+        config_file: PathBuf,
+        cache_dir: PathBuf,
+    ) -> Self {
+        Self {
+            config_file,
             cache_dir,
             no_rir_tals: false,
             bundled_tals: Vec::new(),
@@ -1504,11 +1516,13 @@ impl Default for Config {
         match home_dir() {
             Some(dir) => {
                 Config::default_with_paths(
+                    dir.join(".routinator.conf"),
                     dir.join(".rpki-cache/repository"),
                 )
             }
             None => {
                 Config::default_with_paths(
+                    PathBuf::from(""),
                     PathBuf::from(""),
                 )
             }
