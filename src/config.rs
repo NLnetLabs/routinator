@@ -2722,7 +2722,7 @@ mod test {
         let out_config = get_default_config();
         let out_file = out_config.to_string();
         let in_file = ConfigFile::parse(
-            &out_file, Path::new("/test/routinator.conf")
+            &out_file, Path::new("/home/test/.routinator.conf")
         ).unwrap();
         let in_config = Config::from_config_file(in_file).unwrap();
         assert_eq!(out_config, in_config);
