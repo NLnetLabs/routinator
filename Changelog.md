@@ -26,6 +26,9 @@ New
 * The RRDP collector now enforces that all URIs referred to or redirected
   to by an RRDP server have the same origin as the rpkiNotify URI in the
   CA certificate. ([#953])
+* The config file used is now printed for some commands. This should help
+  with avoiding confusion when running Routinator as different users.
+  ([#959])
 
 Bug fixes
 
@@ -46,6 +49,7 @@ Other changes
 [#951]: https://github.com/NLnetLabs/routinator/pull/951
 [#953]: https://github.com/NLnetLabs/routinator/pull/953
 [#954]: https://github.com/NLnetLabs/routinator/pull/954
+[#959]: https://github.com/NLnetLabs/routinator/pull/959
 [RFC 9286]: https://tools.ietf.org/html/rfc9286
 [draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
