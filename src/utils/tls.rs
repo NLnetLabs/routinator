@@ -12,7 +12,7 @@ use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::{Accept, TlsAcceptor};
-use tokio_rustls::rustls::{Certificate, PrivateKey};
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio_rustls::server::TlsStream;
 use crate::error::ExitError;
 
@@ -30,7 +30,6 @@ pub fn create_server_config(
 ) -> Result<ServerConfig, ExitError> {
 
     ServerConfig::builder()
-        .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(read_certs(cert_path)?, read_key(key_path)?)
         .map_err(|err| {
@@ -40,7 +39,9 @@ pub fn create_server_config(
 }
 
 /// Reads the certificates from the given PEM file.
-fn read_certs(cert_path: &Path) -> Result<Vec<Certificate>, ExitError> {
+fn read_certs(
+    cert_path: &Path
+) -> Result<Vec<CertificateDer<'static>>, ExitError> {
     rustls_pemfile::certs(
         &mut io::BufReader::new(
             File::open(cert_path).map_err(|err| {
@@ -51,25 +52,23 @@ fn read_certs(cert_path: &Path) -> Result<Vec<Certificate>, ExitError> {
                 ExitError::Generic
             })?
         )
-    ).map_err(|err| {
+    ).collect::<Result<_, _>>().map_err(|err| {
         error!(
             "Failed to read TLS certificate file '{}': {}.",
             cert_path.display(), err
         );
         ExitError::Generic
-    }).map(|mut certs| {
-        certs.drain(..).map(Certificate).collect()
     })
 }
 
 /// Reads the first private key from the given PEM file.
 ///
-/// The key may be a PKCS#1 RSA private key or a PKCS#8 private key. All
-/// other PEM items are ignored.
+/// The key may be a PKCS#1 RSA private key, a PKCS#8 private key, or a
+/// SEC1 encoded EC private key. All other PEM items are ignored.
 ///
 /// Errors out if opening or reading the file fails or if there isn’t exactly
 /// one private key in the file.
-fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
+fn read_key(key_path: &Path) -> Result<PrivateKeyDer<'static>, ExitError> {
     use rustls_pemfile::Item::*;
 
     let mut key_file = io::BufReader::new(
@@ -96,8 +95,10 @@ fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
         })?;
 
         let bits = match item {
-            RSAKey(bits) | PKCS8Key(bits) | ECKey(bits) => bits,
-            _ => continue
+            Pkcs1Key(bits) => bits.into(),
+            Pkcs8Key(bits) => bits.into(),
+            Sec1Key(bits) => bits.into(),
+            _ => continue,
         };
         if key.is_some() {
             error!(
@@ -106,7 +107,7 @@ fn read_key(key_path: &Path) -> Result<PrivateKey, ExitError> {
             );
             return Err(ExitError::Generic)
         }
-        key = Some(PrivateKey(bits))
+        key = Some(bits)
     }
 
     match key {
