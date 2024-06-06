@@ -7,7 +7,7 @@ use bytes::Bytes;
 use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
-use rpki::rrdp::{DeltaInfo, NotificationFile};
+use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::NamedTempFile;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
@@ -600,6 +600,9 @@ pub struct RrdpConfig {
 
     /// The maximum number of deltas we process before using a snapshot.
     pub max_delta_count: usize,
+
+    /// The maximum length of the delta list in a notification file.
+    pub max_delta_list_len: usize,
 }
 
 impl<'a> From<&'a Config> for RrdpConfig {
@@ -609,6 +612,7 @@ impl<'a> From<&'a Config> for RrdpConfig {
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
+            max_delta_list_len: config.rrdp_max_delta_list_len,
         }
     }
 }
@@ -799,6 +803,7 @@ impl<'a> RepositoryUpdate<'a> {
             &self.collector.http, self.rpki_notify,
             current.as_ref().map(|x| &x.1),
             &mut self.metrics.notify_status,
+            self.collector.config.max_delta_list_len,
         ) {
             Ok(Some(notify)) => notify,
             Ok(None) => {
@@ -910,6 +915,18 @@ impl<'a> RepositoryUpdate<'a> {
         mut archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
+        if let Err(err) = notify.content().delta_status() {
+            match err {
+                DeltaListError::Oversized => {
+                    info!(
+                        "RRDP {}: Overly large delta set in notification file",
+                        self.rpki_notify
+                    );
+                    return Ok(Some(SnapshotReason::LargeDeltaSet));
+                }
+            }
+        }
+
         if let Err(reason) = notify.check_deltas(&state) {
             return Ok(Some(reason))
         }

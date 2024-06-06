@@ -50,6 +50,7 @@ impl Notification {
         uri: &uri::Https,
         state: Option<&RepositoryState>,
         status: &mut HttpStatus,
+        delta_list_limit: usize,
     ) -> Result<Option<Self>, Failed> {
         let response = match http.conditional_response(
             uri,
@@ -79,7 +80,9 @@ impl Notification {
             Err(Failed)
         }
         else {
-            Notification::from_response(uri.clone(), response).map(Some)
+            Notification::from_response(
+                uri.clone(), response, delta_list_limit
+            ).map(Some)
         }
     }
 
@@ -88,12 +91,12 @@ impl Notification {
     ///
     /// Assumes that the response status was 200 OK.
     fn from_response(
-        uri: uri::Https, response: HttpResponse
+        uri: uri::Https, response: HttpResponse, delta_list_limit: usize
     ) -> Result<Self, Failed> {
         let etag = response.etag();
         let last_modified = response.last_modified();
-        let mut content = NotificationFile::parse(
-            io::BufReader::new(response)
+        let mut content = NotificationFile::parse_limited(
+            io::BufReader::new(response), delta_list_limit
         ).map_err(|err| {
             warn!("RRDP {}: {}", uri, err);
             Failed
@@ -597,6 +600,9 @@ pub enum SnapshotReason {
     /// The delta set in the notification file is inconsistent.
     BadDeltaSet,
 
+    /// The delta set in the notification file was too large.
+    LargeDeltaSet,
+
     /// At least one delta hash has changed from a previous update.
     DeltaMutation,
 
@@ -625,6 +631,7 @@ impl SnapshotReason {
             NewRepository => "new-repository",
             NewSession => "new-session",
             BadDeltaSet => "inconsistent-delta-set",
+            LargeDeltaSet => "large-delta-set",
             DeltaMutation => "delta-mutation",
             LargeSerial => "large-serial",
             OutdatedLocal => "outdate-local",
