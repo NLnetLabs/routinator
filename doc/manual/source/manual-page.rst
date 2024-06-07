@@ -1083,14 +1083,14 @@ All values can be overridden via the command line options.
             default is simply *rsync*.
 
       rsync-args
-            A list of strings containing the arguments to be passed to the
-            rsync command. Each string is an argument of its own.
+            A list of strings containing additional arguments to be passed
+            to the rsync command. Each string is an argument of its own.
 
-            If this option is not provided, Routinator will try to find out
-            if your rsync understands the ``--contimeout`` option and, if so,
-            will set it to 10 thus letting connection attempts time out after
-            ten seconds. If your rsync is too old to support this option, no
-            arguments are used.
+            The options ``-rtzO --delete`` are always passed to the command.
+            The options listed in the option are added to it.
+
+            If the option is not provided, will add ``--contimeout=10`` if
+            that is supported by the rsync command and ``--no-motd`` always.
 
       rsync-timeout
             An integer value specifying the number seconds an rsync command

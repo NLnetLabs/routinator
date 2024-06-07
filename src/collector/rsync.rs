@@ -478,6 +478,7 @@ impl RsyncCommand {
                 if let Some(max_size) = config.max_object_size {
                     args.push(format!("--max-size={}", max_size));
                 }
+                args.push("--no-motd".into());
                 args
             }
         };
@@ -618,7 +619,7 @@ impl RsyncCommand {
         for item in &self.args {
             cmd.arg(item);
         }
-        cmd.arg("-rltz")
+        cmd.arg("-rtzO")
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
