@@ -1089,8 +1089,10 @@ All values can be overridden via the command line options.
             The options ``-rtzO --delete`` are always passed to the command.
             The options listed in the option are added to it.
 
-            If the option is not provided, will add ``--contimeout=10`` if
-            that is supported by the rsync command and ``--no-motd`` always.
+            If the option is not provided, will add ``--contimeout=10``, if
+            it is supported by the rsync command, `--max-size` if the
+            ``max-object-size`` option has not been set to 0, and
+            ``--no-motd`` always.
 
       rsync-timeout
             An integer value specifying the number seconds an rsync command
