@@ -469,6 +469,8 @@ impl RsyncCommand {
             Some(ref args) => args.clone(),
             None => {
                 let mut args = Vec::new();
+                args.push("--no-motd".into());
+                args.push("-z".into());
                 let has_contimeout =
                    output.stdout.windows(12)
                    .any(|window| window == b"--contimeout");
@@ -478,7 +480,6 @@ impl RsyncCommand {
                 if let Some(max_size) = config.max_object_size {
                     args.push(format!("--max-size={}", max_size));
                 }
-                args.push("--no-motd".into());
                 args
             }
         };
@@ -619,7 +620,7 @@ impl RsyncCommand {
         for item in &self.args {
             cmd.arg(item);
         }
-        cmd.arg("-rtzO")
+        cmd.arg("-rtO")
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
