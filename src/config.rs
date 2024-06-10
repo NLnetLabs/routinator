@@ -2003,7 +2003,7 @@ struct ServerArgs {
 #[derive(Clone, Debug)]
 struct ConfigFile {
     /// The content of the file.
-    content: toml::Document,
+    content: toml::DocumentMut,
 
     /// The path to the config file.
     path: PathBuf,
@@ -2038,7 +2038,7 @@ impl ConfigFile {
 
     /// Parses the content of the file from a string.
     fn parse(content: &str, path: &Path) -> Result<Self, Failed> {
-        let content = match toml::Document::from_str(content) {
+        let content = match toml::DocumentMut::from_str(content) {
             Ok(content) => content,
             Err(err) => {
                 eprintln!(
