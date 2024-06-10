@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.14.0-rc1
+
+Released 2024-06-10.
 
 Breaking changes
 
@@ -46,8 +48,6 @@ Bug fixes
 * Add the current RRDP serial number to the RRDP server metrics when a
   Not Modified response is received so that Prometheus shows a constant
   value.
-
-Other changes
 
 [#886]: https://github.com/NLnetLabs/routinator/pull/886
 [#907]: https://github.com/NLnetLabs/routinator/pull/907
