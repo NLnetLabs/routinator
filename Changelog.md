@@ -8,6 +8,11 @@ Breaking changes
   as individual files under a directory. ([#886])
 * Changed the `summary` output format to have all lines end in a
   semicolon. ([#907])
+* Changed the options used for `rsync`. The options `-rtO --delete` are
+  now always used. The options set in the `rsync-args` are added or, if
+  that is not used, `-z` and `--no-motd`, as well as `--contimeout=10`
+  if it is supported by the rsync command, and `--max-size` if the
+  `max-object-size` option has not been set to 0. ([#962])
 
 New
 
@@ -19,6 +24,10 @@ New
   thisUpdate field than a stored manifest for the same CA, the collected
   manifest is ignored and the stored publication point is used instead.
   This implements a requirement added in [RFC 9286]. ([#946], [#954])
+* The number of delta entries in a RRDP notification file is now limited
+  to 500 by default. If there are more entries, the deltas are ignored and
+  the snapshot is used. The limit can be changed through the new
+  `rrdp-max-delta-list-len` configuration value. ([#961])
 * The RRDP collector now falls back to a snapshot update if the hash of
   a delta listed in the notification file has changed from the previous
   update. This implements [draft-ietf-sidrops-rrdp-desynchronization-00].
@@ -50,6 +59,8 @@ Other changes
 [#953]: https://github.com/NLnetLabs/routinator/pull/953
 [#954]: https://github.com/NLnetLabs/routinator/pull/954
 [#959]: https://github.com/NLnetLabs/routinator/pull/959
+[#961]: https://github.com/NLnetLabs/routinator/pull/961
+[#962]: https://github.com/NLnetLabs/routinator/pull/962
 [RFC 9286]: https://tools.ietf.org/html/rfc9286
 [draft-ietf-sidrops-rrdp-desynchronization-00]: https://datatracker.ietf.org/doc/draft-ietf-sidrops-rrdp-desynchronization/
 
