@@ -64,6 +64,9 @@ const DEFAULT_RRDP_FALLBACK_TIME: Duration = Duration::from_secs(3600);
 /// The default for the maximum number of deltas.
 const DEFAULT_RRDP_MAX_DELTA_COUNT: usize = 100;
 
+/// The default for the maximum number of deltas parsed.
+const DEFAULT_RRDP_MAX_DELTA_LIST_LEN: usize = 500;
+
 /// The default RRDP HTTP User Agent header value to send.
 const DEFAULT_RRDP_USER_AGENT: &str = concat!("Routinator/", crate_version!());
 
@@ -219,6 +222,12 @@ pub struct Config {
 
     /// The maxmimm number of deltas we allow before using snapshot.
     pub rrdp_max_delta_count: usize,
+
+    /// The maximum allowd length of the delta list in an RRDP notification.
+    ///
+    /// If this number is exceeded, the delta list will be discarded and
+    /// the snapshot will be used.
+    pub rrdp_max_delta_list_len: usize,
 
     /// RRDP timeout in seconds.
     ///
@@ -533,6 +542,11 @@ impl Config {
         // rrdp_max_delta_count
         if let Some(value) = args.rrdp_max_delta_count {
             self.rrdp_max_delta_count = value
+        }
+
+        // rrdp_max_delta_list_len
+        if let Some(value) = args.rrdp_max_delta_list_len {
+            self.rrdp_max_delta_list_len = value
         }
 
         // rrdp_timeout
@@ -915,6 +929,10 @@ impl Config {
                 file.take_usize("rrdp-max-delta-count")?
                 .unwrap_or(DEFAULT_RRDP_MAX_DELTA_COUNT)
             },
+            rrdp_max_delta_list_len: {
+                file.take_usize("rrdp-max-delta-list-len")?
+                .unwrap_or(DEFAULT_RRDP_MAX_DELTA_LIST_LEN)
+            },
             rrdp_timeout: {
                 match file.take_u64("rrdp-timeout")? {
                     Some(0) => None,
@@ -1157,6 +1175,7 @@ impl Config {
             rrdp_fallback: DEFAULT_RRDP_FALLBACK,
             rrdp_fallback_time: DEFAULT_RRDP_FALLBACK_TIME,
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
+            rrdp_max_delta_list_len: DEFAULT_RRDP_MAX_DELTA_LIST_LEN,
             rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
             rrdp_connect_timeout: None,
             rrdp_tcp_keepalive: Some(DEFAULT_RRDP_TCP_KEEPALIVE),
@@ -1343,6 +1362,9 @@ impl Config {
         );
         insert_int(
             &mut res, "rrdp-max-delta-count", self.rrdp_max_delta_count
+        );
+        insert_int(
+            &mut res, "rrdp-max-delta-list-len", self.rrdp_max_delta_list_len
         );
         insert_int(
             &mut res, "rrdp-timeout",
@@ -1795,6 +1817,10 @@ struct GlobalArgs {
     /// Maximum number of RRDP deltas before using snapshot
     #[arg(long, value_name = "COUNT")]
     rrdp_max_delta_count: Option<usize>,
+
+    /// Maximum allowed length of the delta list in a RRDP notification file.
+    #[arg(long, value_name = "LEN")]
+    rrdp_max_delta_list_len: Option<usize>,
 
     /// When to fall back to rsync if RRDP fails
     #[arg(long, value_name = "POLICY")]
