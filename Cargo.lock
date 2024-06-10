@@ -1126,8 +1126,9 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.18.3-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=limited-parse-notification#43ac83ba1fad42344329e2dedeacf7123fdabc92"
+version = "0.18.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7102b9a305889ef344e7b010dd256a53055ea1d436a7414277db053000f250ad"
 dependencies = [
  "arbitrary",
  "base64",

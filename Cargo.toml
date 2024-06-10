@@ -31,8 +31,7 @@ pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.12.4", default-features = false, features = ["blocking", "rustls-tls" ] }
 ring            = "0.17"
-#rpki            = { version = "0.18", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
-rpki            = { git = "https://github.com/NLnetLabs/rpki-rs.git", branch = "limited-parse-notification", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { version = "0.18.3", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 rustls-pemfile  = "2.1.2"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
