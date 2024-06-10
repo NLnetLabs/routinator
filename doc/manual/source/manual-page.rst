@@ -282,7 +282,7 @@ The available options are:
 .. option:: --rrdp-max-delta-list-len=len
  
       If the number of deltas included in the notification file of an RRDP
-      repository is larger than the value provied, the delta list is
+      repository is larger than the value provided, the delta list is
       considered empty instead and the snapshot is used. If the option is
       missing, the default of 500 is used.
 
@@ -1127,7 +1127,7 @@ All values can be overridden via the command line options.
             instead. If the value is missing, the default of 100 is used.
 
       rrdp-max-delta-list-len
-            An integer value that specified the maximum bumber of deltas
+            An integer value that specifies the maximum number of deltas
             listed the notification file of an RRDP repository before the
             list is considered empty instead and the snapshot is user.
             If the value is missing, the default of 500 is used.
