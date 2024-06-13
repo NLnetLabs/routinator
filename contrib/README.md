@@ -8,10 +8,12 @@ Currently, these are:
 
 Project: https://github.com/NLnetLabs/routinator-ui
 
-Included version: 0.4.0
+Included version: 0.4.1
 
 Import with:
 
+* `yarn install` (if dependencies have changed)
 * `yarn build --base /ui`
-* `cp -r public/* $ROUTINATOR/contrib/ui`
+* `rm -rf $ROUTINATOR/contrib/ui`
+* `cp -r public $ROUTINATOR/contrib/ui`
 
