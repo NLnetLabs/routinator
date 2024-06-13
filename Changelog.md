@@ -1,13 +1,15 @@
 # Change Log
 
-## Unreleased next version
+## 0.14.0-rc2
+
+Released 2024-06-13.
 
 Bug fixes
 
 * Updated the bundled Routinator UI to version 0.4.1. This fixes internal
-  linking.
+  linking. ([#965])
 
-Other changes
+[#965]: https://github.com/NLnetLabs/routinator/pull/965
 
 
 ## 0.14.0-rc1
