@@ -4,6 +4,9 @@
 
 Bug fixes
 
+* Updated the bundled Routinator UI to version 0.4.1. This fixes internal
+  linking.
+
 Other changes
 
 
@@ -15,6 +18,10 @@ Breaking changes
 
 * Keep the content of an RRDP repository in a single file rather than
   as individual files under a directory. ([#886])
+* Switched to the all-new version 0.4 of the Routinator UI. This also
+  changes the way we import the UI into Routinator by simply including the
+  built assets which means downloads are not necessary during the build
+  process any more. ([#952])
 * Changed the `summary` output format to have all lines end in a
   semicolon. ([#907])
 * Changed the options used for `rsync`. The options `-rtO --delete` are
@@ -63,6 +70,7 @@ Bug fixes
 [#945]: https://github.com/NLnetLabs/routinator/pull/945
 [#946]: https://github.com/NLnetLabs/routinator/pull/946
 [#951]: https://github.com/NLnetLabs/routinator/pull/951
+[#952]: https://github.com/NLnetLabs/routinator/pull/952
 [#953]: https://github.com/NLnetLabs/routinator/pull/953
 [#954]: https://github.com/NLnetLabs/routinator/pull/954
 [#959]: https://github.com/NLnetLabs/routinator/pull/959
