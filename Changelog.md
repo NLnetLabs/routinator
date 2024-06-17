@@ -4,6 +4,11 @@
 
 Bug fixes
 
+* Updated the bundled Routinator UI to version 0.4.1. This fixes internal
+  linking some more. ([#967])
+
+[#967]: https://github.com/NLnetLabs/routinator/pull/967
+
 Other changes
 
 
