@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased next version
+## 0.14.0-rc3
+
+Released on 2024-06-17.
 
 Bug fixes
 
@@ -8,8 +10,6 @@ Bug fixes
   linking some more. ([#967])
 
 [#967]: https://github.com/NLnetLabs/routinator/pull/967
-
-Other changes
 
 
 ## 0.14.0-rc2
