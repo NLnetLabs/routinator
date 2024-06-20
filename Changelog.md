@@ -1,10 +1,10 @@
 # Change Log
 
-## Unreleased next version
+## 0.14.0 ‘You Must Gather Your Party Before Venturing Forth’
 
-Bug Fixes
+Released on 2024-06-20.
 
-Other Changes
+There have been no changes since 0.14.0-rc3.
 
 
 ## 0.14.0-rc3
