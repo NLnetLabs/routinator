@@ -52,8 +52,6 @@ to get started.
 
          -  Debian Bookworm 12
          -  Debian Bullseye 11
-         -  Debian Buster 10
-         -  Debian Stretch 9
 
        Packages for the ``amd64``/``x86_64`` architecture are available for
        all listed versions. In addition, we offer ``armhf`` architecture
@@ -127,8 +125,6 @@ to get started.
 
          - Ubuntu Jammy 22.04 (LTS)
          - Ubuntu Focal 20.04 (LTS)
-         - Ubuntu Bionic 18.04 (LTS)
-         - Ubuntu Xenial 16.04 (LTS)
 
        Packages are available for the ``amd64``/``x86_64`` architecture only.
        
@@ -196,7 +192,7 @@ to get started.
    .. group-tab:: RHEL/CentOS
 
        To install a Routinator package, you need Red Hat Enterprise Linux
-       (RHEL) 7, 8 or 9, or compatible operating system such as Rocky Linux.
+       (RHEL) 8 or 9, or compatible operating system such as Rocky Linux.
        Packages are available for the ``amd64``/``x86_64`` architecture only.
        
        First create a file named :file:`/etc/yum.repos.d/nlnetlabs.repo`,
