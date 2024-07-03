@@ -3,3 +3,5 @@
 /rpki-cache/repository
 /.cargo
 /doc/manual/build/
+.vscode/
+.DS_Store
