@@ -189,7 +189,7 @@ to get started.
        
           sudo journalctl --unit=routinator
 
-   .. group-tab:: RHEL/CentOS
+   .. group-tab:: RHEL
 
        To install a Routinator package, you need Red Hat Enterprise Linux
        (RHEL) 8 or 9, or compatible operating system such as Rocky Linux.
@@ -354,7 +354,7 @@ Updating
 
           sudo apt --only-upgrade install routinator
 
-   .. group-tab:: RHEL/CentOS
+   .. group-tab:: RHEL
 
        To update an existing Routinator installation, you can use this
        command to get an overview of the available versions:
@@ -422,7 +422,7 @@ a specific version, if needed.
 
        .. code-block:: bash
 
-          sudo apt install routinator=0.9.0~rc2-1buster
+          sudo apt install routinator=0.13.0~rc3-1bookworm
 
    .. group-tab:: Ubuntu
 
@@ -457,9 +457,9 @@ a specific version, if needed.
 
        .. code-block:: bash
 
-          sudo apt install routinator=0.9.0~rc2-1bionic
+          sudo apt install routinator=0.13.0~rc3-1jammy
           
-   .. group-tab:: RHEL/CentOS
+   .. group-tab:: RHEL
 
        To install release candidates of Routinator, create an additional repo 
        file named :file:`/etc/yum.repos.d/nlnetlabs-testing.repo`, enter this
@@ -483,7 +483,7 @@ a specific version, if needed.
          
        .. code-block:: bash
          
-          sudo yum install -y routinator-0.9.0~rc2
+          sudo yum install -y routinator-0.13.0~rc3
              
    .. group-tab:: Docker
 
@@ -491,9 +491,9 @@ a specific version, if needed.
        builds based on the latest main branch are available on `Docker Hub
        <https://hub.docker.com/r/nlnetlabs/routinator/tags?page=1&ordering=last_updated>`_. 
        
-       For example, installing Routinator 0.9.0 RC2 is as simple as:
+       For example, installing Routinator 0.13.0 RC3 is as simple as:
         
        .. code-block:: text
        
-          sudo docker run <your usual arguments> nlnetlabs/routinator:v0.9.0-rc2
+          sudo docker run <your usual arguments> nlnetlabs/routinator:v0.13.0-rc3
                
