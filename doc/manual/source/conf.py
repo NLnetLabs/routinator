@@ -14,19 +14,13 @@
 #
 import os
 
-# Set canonical URL from the Read the Docs Domain
-html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
-
-# Tell Jinja2 templates the build is running on Read the Docs
-if os.environ.get("READTHEDOCS", "") == "True":
-    html_context["READTHEDOCS"] = True
-
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
 import toml
 import datetime
 import sphinx_rtd_theme
+import requests
 try:
     import versionwarning
     versionbanner = True
@@ -44,6 +38,19 @@ semver = toml.load('../../../Cargo.toml')
 
 # The short X.Y version
 version = semver.get('package').get('version')
+
+try:
+    response_versions = requests.get(
+        f"https://readthedocs.org/api/v2/version/?project__slug=routinator&active=true",
+        timeout=2,
+    ).json()
+    versions = [
+        (version["slug"], f"/{version['project']['language']}/{version['slug']}/")
+        for version in response_versions["results"]
+    ]
+except Exception:
+    versions = []
+
 rustversion = semver.get('package').get('rust-version')
 rst_epilog = f"""
 .. |rustversion| replace:: {rustversion}
@@ -82,7 +89,8 @@ extensions = [
     'sphinx_copybutton',
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
-    'notfound.extension'
+    'notfound.extension',
+    'sphinx_rtd_theme'
 ]
 if versionbanner:
     extensions.append('versionwarning.extension')
@@ -110,7 +118,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -157,6 +165,36 @@ html_static_path = ['resources']
 #
 # html_sidebars = {}
 
+# Set canonical URL from the Read the Docs Domain
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+scheme = "https"
+
+html_context = {
+        'html_theme': html_theme,
+        'current_version': version,
+        'version_slug': version,
+
+        'PRODUCTION_DOMAIN': "readthedocs.org",
+        'versions': versions,
+        # "downloads": downloads,
+        # "subprojects": subprojects,
+
+        'slug': "routinator",
+        'rtd_language': language,
+        'canonical_url': html_baseurl,
+
+        'conf_py_path': "/doc/manual/source/",
+
+        'github_user': "NLnetLabs",
+        'github_repo': "routinator",
+        'github_version': os.environ.get("READTHEDOCS_GIT_IDENTIFIER", "main"),
+        'display_github': True,
+        'READTHEDOCS': True,
+        'using_theme': False,
+        'new_theme': True,
+        'source_suffix': ".rst",
+        'docsearch_disabled': False,
+    }
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
