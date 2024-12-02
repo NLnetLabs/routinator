@@ -80,7 +80,7 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Rocky Linux 9 and Debian Bookworm as we haven't published any packages for
+# Disable upgrade testing on Ubuntu Noble as we haven't published any packages for
 # those O/S versions yet.
 test-exclude:
   - pkg: 'routinator'
