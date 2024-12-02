@@ -84,8 +84,5 @@ test-mode:
 # those O/S versions yet.
 test-exclude:
   - pkg: 'routinator'
-    image: 'rockylinux:9'
-    mode: 'upgrade-from-published'
-  - pkg: 'routinator'
-    image: 'debian:bookworm'
+    image: 'ubuntu:noble'
     mode: 'upgrade-from-published'
