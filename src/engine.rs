@@ -396,7 +396,7 @@ impl<'a, P> Run<'a, P> {
     }
 }
 
-impl<'a, P: ProcessRun> Run<'a, P> {
+impl<P: ProcessRun> Run<'_, P> {
     /// Performs the validation run.
     pub fn process(&mut self) -> Result<(), RunFailed> {
         // If we don’t have any TALs, we ain’t got nothing to do.
@@ -1595,7 +1595,7 @@ enum Task<'a, P> {
     Ca(CaTask<P>),
 }
 
-impl<'a, P> fmt::Debug for Task<'a, P> {
+impl<P> fmt::Debug for Task<'_, P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Task::Tal(ref inner) => {

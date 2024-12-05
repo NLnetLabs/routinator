@@ -25,7 +25,7 @@ impl JsonBuilder<'static> {
     }
 }
 
-impl<'a> JsonBuilder<'a> {
+impl JsonBuilder<'_> {
     pub fn member_object<F: FnOnce(&mut JsonBuilder)>(
         &mut self, key: impl fmt::Display, op: F
     ) {
@@ -150,9 +150,9 @@ impl<'a> JsonBuilder<'a> {
 pub fn json_str(val: impl fmt::Display) -> impl fmt::Display {
     struct WriteJsonStr<'a, 'f>(&'a mut fmt::Formatter<'f>);
 
-    impl<'a, 'f> fmt::Write for WriteJsonStr<'a, 'f> {
+    impl fmt::Write for WriteJsonStr<'_, '_> {
         fn write_str(&mut self, mut s: &str) -> fmt::Result {
-            while let Some(idx) = s.find(|ch| ch == '"' || ch == '\\') {
+            while let Some(idx) = s.find(['"', '\\']) {
                 self.0.write_str(&s[..idx])?;
                 self.0.write_str("\\")?;
                 write!(self.0, "{}", char::from(s.as_bytes()[idx]))?;
