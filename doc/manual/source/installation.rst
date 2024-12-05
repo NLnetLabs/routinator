@@ -123,6 +123,7 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Ubuntu versions:
 
+         - Ubuntu Noble 24.04 (LTS)
          - Ubuntu Jammy 22.04 (LTS)
          - Ubuntu Focal 20.04 (LTS)
 
@@ -304,6 +305,9 @@ to get started.
    ``routinator-init`` and ``--accept-arin-rpa``
 .. versionadded:: 0.13.0
    Packages for Debian Bookworm 12 and RHEL 9
+.. versionadded:: 0.14.1
+   Ubuntu packages for Noble 24.04 (LTS), remove packages for Debian Stretch 9,
+   Ubuntu Xenial 16.04 (LTS), and Ubuntu Bionic 18.04 (LTS)
 
 Updating
 --------
