@@ -163,7 +163,7 @@ pub struct PubPointProcessor<'a> {
     point_stale: Time,
 }
 
-impl<'a> ProcessPubPoint for PubPointProcessor<'a> {
+impl ProcessPubPoint for PubPointProcessor<'_> {
     fn repository_index(&mut self, repository_index: usize) {
         self.pub_point.repository_index = Some(repository_index)
     }
