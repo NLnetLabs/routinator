@@ -832,7 +832,7 @@ impl<'a> StoredPoint<'a> {
     }
 }
 
-impl<'a> Iterator for StoredPoint<'a> {
+impl Iterator for StoredPoint<'_> {
     type Item = Result<StoredObject, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {

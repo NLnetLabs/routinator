@@ -216,7 +216,6 @@ impl RtrStream {
                 target_os = "dragonfly",
                 target_os = "freebsd",
                 target_os = "linux",
-                target_os = "nacl"
             ))]
             setsockopt(
                 fd, sockopt::TcpKeepIdle,
