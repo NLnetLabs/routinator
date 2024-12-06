@@ -29,7 +29,7 @@
 //! If possible (currently on Unix systems only), the file is memory mapped
 //! for faster access.
 
-use std::{fmt, fs, io, mem};
+use std::{cmp, fmt, fs, io, mem};
 use std::borrow::Cow;
 use std::hash::Hasher;
 use std::marker::PhantomData;
@@ -136,11 +136,13 @@ impl<Meta> Archive<Meta> {
     /// The method traverses the entire archive and makes sure that the
     /// entiry file is covered by objects and that these objects aren’t
     /// overlapping.
-    pub fn verify(&self) -> Result<(), ArchiveError> {
+    pub fn verify(&self) -> Result<ArchiveStats, ArchiveError> {
         // We’re going to collect a list of all encountered objects in here.
         // Items are pair of the start position and the length.
         // At the end we check that they form a consecutive sequence.
         let mut objects = Vec::new();
+
+        let mut stats = ArchiveStats::default();
 
         // Step 1. Go over each index bucket and collect all the objects.
         // Check that the name hashes correctly.
@@ -154,6 +156,8 @@ impl<Meta> Archive<Meta> {
                     return Err(ArchiveError::Corrupt)
                 }
                 objects.push((u64::from(pos), header.size));
+                stats.object_count += 1;
+                stats.object_size += header.size;
                 start = header.next;
             }
         }
@@ -163,6 +167,15 @@ impl<Meta> Archive<Meta> {
         while let Some(pos) = start {
             let header = ObjectHeader::read(&self.file, pos.into())?;
             objects.push((u64::from(pos), header.size));
+            stats.empty_count += 1;
+            stats.empty_size += header.size;
+            if stats.empty_min == 0 {
+                stats.empty_min = header.size
+            }
+            else {
+                stats.empty_min = cmp::min(stats.empty_min, header.size);
+            }
+            stats.empty_max = cmp::max(stats.empty_max, header.size);
             start = header.next;
         }
 
@@ -175,7 +188,7 @@ impl<Meta> Archive<Meta> {
             }
         }
 
-        Ok(())
+        Ok(stats)
     }
 
     /// Returns an iterator over all the objects in the archive.
@@ -271,11 +284,21 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         if self.find(hash, name)?.is_some() {
             return Err(PublishError::AlreadyExists)
         }
+        self.publish_not_found(hash, name, meta, data)?;
+        Ok(())
+    }
+
+    fn publish_not_found(
+        &mut self,
+        hash: u64, name: &[u8], meta: &Meta, data: &[u8]
+    ) -> Result<(), ArchiveError> {
         match self.find_empty(name, data)? {
             Some((empty, pos)) => {
                 self.publish_replace(hash, name, meta, data, empty, pos)?
             }
-            None => self.publish_append(hash, name, meta, data)?,
+            None => {
+                self.publish_append(hash, name, meta, data)?
+            }
         }
         Ok(())
     }
@@ -368,7 +391,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         }
         else {
             self.delete_found(hash, found)?;
-            self.publish_append(hash, name, meta, data)?;
+            self.publish_not_found(hash, name, meta, data)?;
         }
         Ok(())
     }
@@ -934,6 +957,57 @@ impl FoundObject {
     /// Returns the start of the content.
     fn data_start<Meta: ObjectMeta>(&self) -> u64 {
         self.header.data_start::<Meta>(self.start)
+    }
+}
+
+
+//------------ ArchiveStats --------------------------------------------------
+
+/// Statistics for an archive.
+///
+/// A value of this type is returned by [`Archive::verify`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArchiveStats {
+    /// The number of objects in the archive.
+    pub object_count: u64,
+
+    /// The overall size of objects in bytes.
+    pub object_size: u64,
+
+    /// The number of blocks of empty space.
+    pub empty_count: u64,
+
+    /// The overall size of empty space.
+    pub empty_size: u64,
+
+    /// The smallest empty block.
+    pub empty_min: u64,
+
+    /// The largest empty block.
+    pub empty_max: u64,
+}
+
+impl ArchiveStats {
+    /// Prints the stats to stdout.
+    ///
+    /// Uses a two space indent.
+    pub fn print(self) {
+        println!("  object count: {}", self.object_count);
+        if self.object_count > 0 {
+            println!("  object size, sum: {}", self.object_size);
+            println!("  object size, avg: {}",
+                self.object_size / self.object_count
+            );
+        }
+        println!("  empty block count: {}", self.empty_count);
+        if self.empty_count > 0 {
+            println!("  empty size, sum: {}", self.empty_size);
+            println!("  empty size, min: {}", self.empty_min);
+            println!("  empty size, max: {}", self.empty_max);
+            println!(
+                "  empty size, avg: {}", self.empty_size / self.empty_count
+            );
+        }
     }
 }
 
