@@ -373,21 +373,14 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         ).map_err(AccessError::Inconsistent)?;
 
         let new_size = Self::object_size(name, data);
-        if Self::fits(found.header.size, new_size) {
-            // We can squeeze the new object data into its current space.
-            ObjectHeader::update_size(found.start, new_size, &mut self.file)?;
+
+        // Only update in place if the size is the same. This avoids small
+        // empty spaces that will never be reused.
+        if found.header.size == new_size {
             self.file.write(found.meta_start(), |write| {
                 meta.write(write)?;
                 write.write(data)
             })?;
-            // If there’s empty space, we need to mark and add that.
-            let empty_size = found.header.size - new_size;
-            if empty_size > 0 {
-                self.create_empty(
-                    found.start + new_size,
-                    empty_size,
-                )?;
-            }
         }
         else {
             self.delete_found(hash, found)?;
@@ -881,13 +874,6 @@ impl ObjectHeader {
         &self, storage: &mut Storage, start: u64
     ) -> Result<(), ArchiveError> {
         storage.write(start, |write| self.write_into(write))
-    }
-
-    /// Updates the object size of a header beginning at the given position.
-    fn update_size(
-        start: u64, new_size: u64, storage: &mut Storage
-    ) -> Result<(), ArchiveError> {
-        storage.write(start, |write| write.write_u64(new_size))
     }
 
     /// Updates the next pointer of a header beginning at the given position.
