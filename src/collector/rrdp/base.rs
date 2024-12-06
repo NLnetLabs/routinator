@@ -108,7 +108,7 @@ impl Collector {
                     continue;
                 }
                 match RrdpArchive::verify(entry.path()) {
-                    Ok(()) | Err(OpenError::NotFound) => { }
+                    Ok(_) | Err(OpenError::NotFound) => { }
                     Err(OpenError::Archive(ArchiveError::Io(err))) => {
                         error!(
                             "Fatal: Failed to read RRDP repository archive\
