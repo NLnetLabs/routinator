@@ -93,10 +93,6 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 [package.metadata.deb.variants.minimal]
 
 [package.metadata.generate-rpm]
-# "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
-# complain with "invalid-license".
-# See: https://fedoraproject.org/wiki/Licensing:Main?rd=Licensing
-license = "BSD"
 assets = [
     { source = "target/release/routinator", dest = "/usr/bin/routinator", mode = "755" },
     { source = "target/rpm/routinator.service", dest = "/lib/systemd/system/routinator.service", mode = "644" },
