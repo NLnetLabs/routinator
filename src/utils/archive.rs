@@ -1881,5 +1881,32 @@ mod test {
             Update  { name: b"4", data: b"bar" },
         ])
     }
+
+    #[test]
+    #[ignore]
+    fn test_real() {
+        let mut archive = Archive::create_with_file(
+            tempfile::tempfile().unwrap()
+        ).unwrap();
+
+        let ops = include_str!("../../test/rrdp/archive.txt");
+        let ops: std::str::Split<'_, &str> = ops.split("\n");
+        for line in ops {
+            let mut line_split = line.split(",");
+            let op = line_split.next().unwrap();
+            let name = line_split.next().unwrap();
+            let size = line_split.next().unwrap_or("0").parse::<usize>().unwrap_or_default();
+            let bytes = std::iter::repeat("X").take(size).collect::<String>();
+            if op == "PUBLISH" {
+                archive.publish(name.as_bytes(), &(), bytes.as_bytes());
+            } else if op == "DELETE" {
+                archive.delete(name.as_bytes(), |_| Ok(()));
+            } else if op == "UPDATE" {
+                archive.update(name.as_bytes(), &(), bytes.as_bytes(), |_| Ok(()));
+            }
+        }
+
+        assert!(true);
+    }
 }
 
