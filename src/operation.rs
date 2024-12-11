@@ -260,10 +260,10 @@ impl Server {
         let join = thread::spawn(move || {
             let mut can_retry = true;
             let err = loop {
-                eprintln!("Starting run");
                 if let Some(log) = log.as_ref() {
                     log.start();
                 }
+
                 let timeout = match LocalExceptions::load(
                     process.config(), true
                 ) {
@@ -320,11 +320,6 @@ impl Server {
                 let deadline = Instant::now() + timeout;
 
                 info!(
-                    "Next validation run scheduled in {} seconds",
-                    timeout.as_secs()
-                );
-
-                eprintln!(
                     "Next validation run scheduled in {} seconds",
                     timeout.as_secs()
                 );
