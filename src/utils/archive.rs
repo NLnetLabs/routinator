@@ -1886,26 +1886,54 @@ mod test {
     #[ignore]
     fn test_real() {
         let mut archive = Archive::create_with_file(
+            // fs::File::create_new("/tmp/routinator-archive").unwrap()
             tempfile::tempfile().unwrap()
         ).unwrap();
 
-        let ops = include_str!("../../test/rrdp/archive.txt");
-        let ops: std::str::Split<'_, &str> = ops.split("\n");
-        for line in ops {
-            let mut line_split = line.split(",");
-            let op = line_split.next().unwrap();
-            let name = line_split.next().unwrap();
-            let size = line_split.next().unwrap_or("0").parse::<usize>().unwrap_or_default();
-            let bytes = std::iter::repeat("X").take(size).collect::<String>();
-            if op == "PUBLISH" {
-                archive.publish(name.as_bytes(), &(), bytes.as_bytes());
-            } else if op == "DELETE" {
-                archive.delete(name.as_bytes(), |_| Ok(()));
-            } else if op == "UPDATE" {
-                archive.update(name.as_bytes(), &(), bytes.as_bytes(), |_| Ok(()));
+        for ops in [
+            include_str!("../../test/rrdp/mutations-2024-12-01.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-02.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-03.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-04.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-05.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-06.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-07.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-08.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-09.txt"),
+            include_str!("../../test/rrdp/mutations-2024-12-10.txt")
+        ] {
+            let ops_split = ops.split("\n");
+            for line in ops_split {
+                if line.trim() == "" {
+                    continue;
+                }
+                // eprintln!("{}", line);
+                let mut line_split = line.split(",");
+                let op = line_split.next().unwrap();
+                let name = line_split.next().unwrap();
+                let size = line_split.next().unwrap_or("0").parse::<usize>().unwrap_or_default();
+                let bytes = std::iter::repeat("X").take(size).collect::<String>();
+                if op == "PUBLISH" {
+                    let r = archive.publish(name.as_bytes(), &(), bytes.as_bytes());
+                    if r.is_err() {
+                        // dbg!(&r);
+                    }
+                } else if op == "DELETE" {
+                    let r = archive.delete(name.as_bytes(), |_| Ok(()));
+                    if r.is_err() {
+                        // dbg!(&r);
+                    }
+                } else if op == "UPDATE" {
+                    let r = archive.update(name.as_bytes(), &(), bytes.as_bytes(), |_| Ok(()));
+                    if r.is_err() {
+                        // dbg!(&r);
+                    }
+                }
             }
-        }
 
+            let a = archive.verify().unwrap();
+            a.print();
+        }
         assert!(true);
     }
 }
