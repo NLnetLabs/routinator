@@ -90,7 +90,8 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
     'notfound.extension',
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinxcontrib.jquery'
 ]
 if versionbanner:
     extensions.append('versionwarning.extension')
