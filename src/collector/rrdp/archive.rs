@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::error::RunFailed;
 use crate::utils::archive;
 use crate::utils::archive::{
-    Archive, ArchiveError, FetchError, OpenError, PublishError
+    Archive, ArchiveError, ArchiveStats, FetchError, OpenError, PublishError
 };
 use crate::utils::binio::{Compose, Parse};
 
@@ -81,10 +81,9 @@ impl RrdpArchive {
 }
 
 impl RrdpArchive {
-    pub fn verify(path: &Path) -> Result<(), OpenError> {
+    pub fn verify(path: &Path) -> Result<ArchiveStats, OpenError> {
         let archive = archive::Archive::<RrdpObjectMeta>::open(path, false)?;
-        archive.verify()?;
-        Ok(())
+        Ok(archive.verify()?)
     }
 
     /// Loads an object from the archive.
