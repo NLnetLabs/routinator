@@ -8,12 +8,16 @@ New
 
 Bug fixes
 
+* The validation HTTP endpoints now accept prefixes with non-zero host
+  bits. ([#987])
+
 Other changes
 
 * Added packaging support for Ubuntu 24.04 and removed support for
   Debian Stretch 9, Ubuntu Xenial 16.04, and Ubuntu Bionic 18.04. ([#980])
 
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
+[#987]: https://github.com/NLnetLabs/routinator/pull/987
 
 
 ## 0.14.0 ‘You Must Gather Your Party Before Venturing Forth’
