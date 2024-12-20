@@ -101,11 +101,11 @@ fn validity(
 ) -> Response {
     let asn = match Asn::from_str(asn) {
         Ok(asn) => asn,
-        Err(_) => return Response::bad_request()
+        Err(_) => { eprintln!("Bad ASN"); return Response::bad_request() }
     };
-    let prefix = match Prefix::from_str(prefix) {
+    let prefix = match Prefix::from_str_relaxed(prefix) {
         Ok(prefix) => prefix,
-        Err(_) => return Response::bad_request()
+        Err(err) => { eprintln!("Bad prefix: {err}"); return Response::bad_request() }
     };
     let res = ResponseBuilder::ok().content_type(ContentType::JSON);
     if head {
