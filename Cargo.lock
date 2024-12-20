@@ -1256,9 +1256,8 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7102b9a305889ef344e7b010dd256a53055ea1d436a7414277db053000f250ad"
+version = "0.18.4"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git#01024d58589e55f3658885b6700d537d1ca71f38"
 dependencies = [
  "arbitrary",
  "base64",
