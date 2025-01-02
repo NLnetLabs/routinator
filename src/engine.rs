@@ -1448,30 +1448,28 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         &mut self, uri: &uri::Rsync, content: Bytes,
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
-        #[cfg(feature = "aspa")] {
-            let aspa = match Aspa::decode(
-                content, self.run.validation.strict
-            ) {
-                Ok(aspa) => aspa,
-                Err(err) => {
-                    manifest.metrics.invalid_aspas += 1;
-                    warn!("{}: failed to decode ASPA.", uri);
-                    return Ok(())
-                }
-            };
-            match aspa.process(
-                self.cert.cert(),
-                self.run.validation.strict,
-                |cert| manifest.check_crl(cert)
-            ) {
-                Ok((cert, aspa)) => {
-                    manifest.metrics.valid_aspas += 1;
-                    self.processor.process_aspa(uri, cert, aspa)?
-                }
-                Err(err) => {
-                    manifest.metrics.invalid_aspas += 1;
-                    warn!("{}: {}.", uri, err)
-                }
+        let aspa = match Aspa::decode(
+            content, self.run.validation.strict
+        ) {
+            Ok(aspa) => aspa,
+            Err(err) => {
+                manifest.metrics.invalid_aspas += 1;
+                warn!("{}: failed to decode ASPA.", uri);
+                return Ok(())
+            }
+        };
+        match aspa.process(
+            self.cert.cert(),
+            self.run.validation.strict,
+            |cert| manifest.check_crl(cert)
+        ) {
+            Ok((cert, aspa)) => {
+                manifest.metrics.valid_aspas += 1;
+                self.processor.process_aspa(uri, cert, aspa)?
+            }
+            Err(err) => {
+                manifest.metrics.invalid_aspas += 1;
+                warn!("{}: {}.", uri, err)
             }
         }
         Ok(())
