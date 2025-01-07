@@ -285,8 +285,12 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
         self.pub_point.update_refresh(cert.validity().not_after());
         if aspa.provider_as_set().len() > self.report.aspa_provider_limit {
             warn!(
-                "{}: too many provider ASNs. Skipping ASPA for {}.",
-                uri, aspa.customer_as()
+                "{}: {} provider ASNs is over the limit of {}. \
+                 Skipping ASPA for {}.",
+                uri,
+                aspa.provider_as_set().len(),
+                self.report.aspa_provider_limit,
+                aspa.customer_as()
             );
             self.report.rejected.aspa_customers.push(aspa.customer_as());
             return Ok(())
