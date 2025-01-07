@@ -351,6 +351,11 @@ The available options are:
       If this option is present, BGPsec router keys will be processed
       during validation and included in the produced data set.
 
+.. option:: --enable-aspa
+
+      If this option is present, ASPA assertions will be processed
+      during validation and included in the produced data set.
+
 .. option:: --aspa-provider-limit
 
       Limits the number of provider ASNs allowed in an ASPA object. If more
@@ -1196,6 +1201,12 @@ All values can be overridden via the command line options.
             A boolean value specifying whether BGPsec router keys should be
             included in the published dataset. If false or missing, no router
             keys will be included.
+
+
+      enable-aspa
+            A boolean value specifying whether ASPA assertions should be
+            included in the published dataset. If false or missing, no ASPA
+            assertions will be included.
 
       aspa_provider_limit
             An integer value specifying the maximum number of provider ASNs
