@@ -10,7 +10,6 @@ image:
   - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
-  - 'centos:7'
   - 'rockylinux:8'    # compatible with EOL centos:8
   - 'rockylinux:9'
 target:
@@ -24,9 +23,6 @@ test-image:
   # in the original matrix. This is just how GitHub Actions matrix include rules work.
   - ""
 include:
-  - image: "centos:7"
-    systemd_service_unit_file: pkg/common/routinator-minimal.routinator.service
-
   # CentOS 8 became EOL and is in theory still usable as a build container as there is still a Docker image
   # available, and package installation can be done by switching the yum config in the container to use packages
   # from the CentOS 8 vault rather than the now offline actual CentOS 8 repository. However, due to experiencing
