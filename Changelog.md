@@ -24,13 +24,15 @@ Bug fixes
 Other changes
 
 * Added packaging support for Ubuntu 24.04 and removed support for
-  Debian Stretch 9, Ubuntu Xenial 16.04, and Ubuntu Bionic 18.04. ([#980])
+  Debian Stretch 9, Ubuntu Xenial 16.04, Ubuntu Bionic 18.04, and
+  Centos 7 ([#980], [#994])
 
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
 [#987]: https://github.com/NLnetLabs/routinator/pull/987
 [#989]: https://github.com/NLnetLabs/routinator/pull/989
 [#990]: https://github.com/NLnetLabs/routinator/pull/990
 [#992]: https://github.com/NLnetLabs/routinator/pull/992
+[#994]: https://github.com/NLnetLabs/routinator/pull/994
 [@sleinen]: https://github.com/sleinen
 
 
