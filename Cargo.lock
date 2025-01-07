@@ -1257,7 +1257,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.18.4"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git#01024d58589e55f3658885b6700d537d1ca71f38"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=aspa-provider-count#0403edaadf213d16994723a64c5d7af2f0a9ead3"
 dependencies = [
  "arbitrary",
  "base64",
