@@ -10,6 +10,8 @@ Bug fixes
 
 * The validation HTTP endpoints now accept prefixes with non-zero host
   bits. ([#987])
+* Removed duplicate `rtr_client_reset_queries` in HTTP metrics.
+  ([#992] by [@sleinen])
 
 Other changes
 
@@ -18,6 +20,8 @@ Other changes
 
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
 [#987]: https://github.com/NLnetLabs/routinator/pull/987
+[#992]: https://github.com/NLnetLabs/routinator/pull/992
+[@sleinen]: https://github.com/sleinen
 
 
 ## 0.14.0 ‘You Must Gather Your Party Before Venturing Forth’

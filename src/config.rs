@@ -93,6 +93,9 @@ const DEFAULT_MAX_CA_DEPTH: usize = 32;
 #[cfg(unix)]
 const DEFAULT_SYSLOG_FACILITY: Facility = Facility::LOG_DAEMON;
 
+/// The default limit of provider ASNs in ASPA objects.
+const DEFAULT_ASPA_PROVIDER_LIMIT: usize = 10_000;
+
 
 //------------ Config --------------------------------------------------------  
 
@@ -268,6 +271,12 @@ pub struct Config {
 
     /// Whether to process ASPA objects.
     pub enable_aspa: bool,
+
+    /// The maximum number of provider ASNs accepted in ASPA objects.
+    ///
+    /// If this number is exceeded, all ASPAs for the customer ASN of the
+    /// offending object are dropped.
+    pub aspa_provider_limit: usize,
 
     /// Whether to not cleanup the repository directory after a validation run.
     ///
@@ -619,6 +628,11 @@ impl Config {
         // enable_aspa
         if args.enable_aspa {
             self.enable_aspa = true
+        }
+
+        // aspa_provider_limit
+        if let Some(value) = args.aspa_provider_limit {
+            self.aspa_provider_limit = value;
         }
 
         // dirty_repository
@@ -974,6 +988,11 @@ impl Config {
 
             enable_aspa: file.take_bool("enable-aspa")?.unwrap_or(false),
 
+            aspa_provider_limit: {
+                file.take_usize("aspa-provider-limit")?
+                    .unwrap_or(DEFAULT_ASPA_PROVIDER_LIMIT)
+            },
+
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
                 file.take_small_usize(
@@ -1183,6 +1202,7 @@ impl Config {
             max_ca_depth: DEFAULT_MAX_CA_DEPTH,
             enable_bgpsec: false,
             enable_aspa: false,
+            aspa_provider_limit: DEFAULT_ASPA_PROVIDER_LIMIT,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: Config::default_validation_threads(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1409,6 +1429,7 @@ impl Config {
         insert_int(&mut res, "max-ca-depth", self.max_ca_depth);
         insert(&mut res, "enable-bgpsec", self.enable_bgpsec);
         insert(&mut res, "enable-aspa", self.enable_aspa);
+        insert_int(&mut res, "aspa-provider-limit", self.aspa_provider_limit);
         insert(&mut res, "dirty", self.dirty_repository);
         insert_int(&mut res, "validation-threads", self.validation_threads);
         insert_int(&mut res, "refresh", self.refresh.as_secs());
@@ -1867,6 +1888,10 @@ struct GlobalArgs {
     /// Include ASPA in the data set
     #[arg(long)]
     enable_aspa: bool,
+
+    /// Maximum number of provider ASNs in ASPA objects
+    #[arg(long, value_name = "COUNT")]
+    aspa_provider_limit: Option<usize>,
 
     /// Do not clean up repository directory after validation
     #[arg(long)]
