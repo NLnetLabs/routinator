@@ -1906,6 +1906,7 @@ mod test {
             // fs::File::create_new("/tmp/routinator-archive").unwrap()
             tempfile::tempfile().unwrap()
         ).unwrap();
+        let dummy = vec![b'X'; 10_000_000];
 
         for ops in [
             include_str!("../../test/rrdp/mutations-2024-12-01.txt"),
@@ -1929,9 +1930,9 @@ mod test {
                 let op = line_split.next().unwrap();
                 let name = line_split.next().unwrap();
                 let size = line_split.next().unwrap_or("0").parse::<usize>().unwrap_or_default();
-                let bytes = std::iter::repeat("X").take(size).collect::<String>();
+                let bytes = &dummy[..size];
                 if op == "PUBLISH" {
-                    let r = archive.publish(name.as_bytes(), &(), bytes.as_bytes());
+                    let r = archive.publish(name.as_bytes(), &(), bytes);
                     if r.is_err() {
                         // dbg!(&r);
                     }
@@ -1941,7 +1942,7 @@ mod test {
                         // dbg!(&r);
                     }
                 } else if op == "UPDATE" {
-                    let r = archive.update(name.as_bytes(), &(), bytes.as_bytes(), |_| Ok(()));
+                    let r = archive.update(name.as_bytes(), &(), bytes, |_| Ok(()));
                     if r.is_err() {
                         // dbg!(&r);
                     }
