@@ -44,7 +44,7 @@ ARG MODE=build
 # ========
 #
 # Only used when MODE=build.
-ARG BASE_IMG=alpine:3.18
+ARG BASE_IMG=alpine:3.21
 
 
 # CARGO_ARGS
