@@ -152,6 +152,16 @@ async fn handle_metrics(
         metrics.local.vrps().contributed
     );
 
+    // Large ASPAs
+    target.single(
+        Metric::new(
+            "aspa_large_provider_set",
+            "ASPAs customer ASNs rejected due to large provider set",
+            MetricType::Gauge
+        ),
+        metrics.snapshot.large_aspas
+    );
+
     // Collector metrics.
     rrdp_metrics(&mut target, &metrics.rrdp);
     rsync_metrics(&mut target, &metrics.rsync);
@@ -799,7 +809,7 @@ fn deprecated_metrics(
         Metric::new(
             "vrps_final", "final number of VRPs", MetricType::Gauge
         ),
-        metrics.payload.vrps().contributed
+        metrics.snapshot.payload.vrps().contributed
     );
 
     // Overall number of stale objects

@@ -115,7 +115,7 @@ async fn handle_status(
     writeln!(res);
 
     // vrps
-    writeln!(res, "vrps: {}", metrics.payload.vrps().valid);
+    writeln!(res, "vrps: {}", metrics.snapshot.payload.vrps().valid);
 
     // vrps-per-tal
     write!(res, "vrps-per-tal: ");
@@ -128,7 +128,7 @@ async fn handle_status(
         // unsafe-filtered-vrps
         writeln!(res,
             "unsafe-vrps: {}",
-            metrics.payload.vrps().marked_unsafe
+            metrics.snapshot.payload.vrps().marked_unsafe
         );
 
         // unsafe-vrps-per-tal
@@ -146,7 +146,7 @@ async fn handle_status(
     // locally-filtered-vrps
     writeln!(res,
         "locally-filtered-vrps: {}",
-        metrics.payload.vrps().locally_filtered
+        metrics.snapshot.payload.vrps().locally_filtered
     );
 
     // locally-filtered-vrps-per-tal
@@ -175,7 +175,7 @@ async fn handle_status(
     // final-vrps
     writeln!(res,
         "final-vrps: {}",
-        metrics.payload.vrps().contributed
+        metrics.snapshot.payload.vrps().contributed
     );
 
     // final-vrps-per-tal
@@ -373,7 +373,12 @@ async fn handle_api_status(
             target.member_raw("lastUpdateDuration", "null");
         }
 
-        json_payload_metrics(target, &metrics.payload);
+        json_payload_metrics(target, &metrics.snapshot.payload);
+
+        target.member_raw(
+            "aspasLargeProviderSet",
+            metrics.snapshot.large_aspas
+        );
 
         target.member_object("tals", |target| {
             for tal in &metrics.tals {
