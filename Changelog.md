@@ -13,6 +13,8 @@ New
   provider ASNs is encountered it as well as all other ASPA objects for
   the same customer ASN are ignored to avoid accidental false rejections
   of AS paths. The default value is 10,000. ([#989])
+* New `archive-stats` command that shows some statistics of an RRDP
+  archive. ([#982])
 
 Bug fixes
 
@@ -20,14 +22,19 @@ Bug fixes
   bits. ([#987])
 * Removed duplicate `rtr_client_reset_queries` in HTTP metrics.
   ([#992] by [@sleinen])
+* Improved disk space consumption of the new RRDP archives by re-using
+  empty space when updating an object and padding all objects to a
+  multiple of 256 bytes. ([#982])
 
 Other changes
 
+* The minimum supported Rust version is now 1.73. ([#982])
 * Added packaging support for Ubuntu 24.04 and removed support for
   Debian Stretch 9, Ubuntu Xenial 16.04, Ubuntu Bionic 18.04, and
   Centos 7 ([#980], [#994])
 
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
+[#982]: https://github.com/NLnetLabs/routinator/pull/982
 [#987]: https://github.com/NLnetLabs/routinator/pull/987
 [#989]: https://github.com/NLnetLabs/routinator/pull/989
 [#990]: https://github.com/NLnetLabs/routinator/pull/990
