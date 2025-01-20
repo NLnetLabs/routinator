@@ -396,7 +396,7 @@ impl<'a, P> Run<'a, P> {
     }
 }
 
-impl<'a, P: ProcessRun> Run<'a, P> {
+impl<P: ProcessRun> Run<'_, P> {
     /// Performs the validation run.
     pub fn process(&mut self) -> Result<(), RunFailed> {
         // If we don’t have any TALs, we ain’t got nothing to do.
@@ -1448,30 +1448,28 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         &mut self, uri: &uri::Rsync, content: Bytes,
         manifest: &mut ValidPointManifest,
     ) -> Result<(), Failed> {
-        #[cfg(feature = "aspa")] {
-            let aspa = match Aspa::decode(
-                content, self.run.validation.strict
-            ) {
-                Ok(aspa) => aspa,
-                Err(err) => {
-                    manifest.metrics.invalid_aspas += 1;
-                    warn!("{}: failed to decode ASPA.", uri);
-                    return Ok(())
-                }
-            };
-            match aspa.process(
-                self.cert.cert(),
-                self.run.validation.strict,
-                |cert| manifest.check_crl(cert)
-            ) {
-                Ok((cert, aspa)) => {
-                    manifest.metrics.valid_aspas += 1;
-                    self.processor.process_aspa(uri, cert, aspa)?
-                }
-                Err(err) => {
-                    manifest.metrics.invalid_aspas += 1;
-                    warn!("{}: {}.", uri, err)
-                }
+        let aspa = match Aspa::decode(
+            content, self.run.validation.strict
+        ) {
+            Ok(aspa) => aspa,
+            Err(err) => {
+                manifest.metrics.invalid_aspas += 1;
+                warn!("{}: failed to decode ASPA.", uri);
+                return Ok(())
+            }
+        };
+        match aspa.process(
+            self.cert.cert(),
+            self.run.validation.strict,
+            |cert| manifest.check_crl(cert)
+        ) {
+            Ok((cert, aspa)) => {
+                manifest.metrics.valid_aspas += 1;
+                self.processor.process_aspa(uri, cert, aspa)?
+            }
+            Err(err) => {
+                manifest.metrics.invalid_aspas += 1;
+                warn!("{}: {}.", uri, err)
             }
         }
         Ok(())
@@ -1595,7 +1593,7 @@ enum Task<'a, P> {
     Ca(CaTask<P>),
 }
 
-impl<'a, P> fmt::Debug for Task<'a, P> {
+impl<P> fmt::Debug for Task<'_, P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Task::Tal(ref inner) => {

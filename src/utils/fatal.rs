@@ -80,7 +80,7 @@ pub struct ReadDir<'a> {
     iter: fs::ReadDir,
 }
 
-impl<'a> Iterator for ReadDir<'a> {
+impl Iterator for ReadDir<'_> {
     type Item = Result<DirEntry, Failed>;
 
     fn next(&mut self) -> Option<Self::Item> {

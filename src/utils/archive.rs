@@ -29,7 +29,7 @@
 //! If possible (currently on Unix systems only), the file is memory mapped
 //! for faster access.
 
-use std::{fmt, fs, io, mem};
+use std::{cmp, fmt, fs, io, mem};
 use std::borrow::Cow;
 use std::hash::Hasher;
 use std::marker::PhantomData;
@@ -49,6 +49,11 @@ use crate::utils::sync::{Mutex, MutexGuard};
 /// This value has been picked out of thin air for now. We should probably
 /// switch to a model that derives this from from the size of a snapshot.
 const DEFAULT_BUCKET_COUNT: usize = 1024;
+
+/// The page size.
+///
+/// Object sizes will be rounded to the nearest multiple of this value.
+const PAGE_SIZE: usize = 256;
 
 
 //------------ Archive -------------------------------------------------------
@@ -136,11 +141,14 @@ impl<Meta> Archive<Meta> {
     /// The method traverses the entire archive and makes sure that the
     /// entiry file is covered by objects and that these objects aren’t
     /// overlapping.
-    pub fn verify(&self) -> Result<(), ArchiveError> {
+    pub fn verify(&self) -> Result<ArchiveStats, ArchiveError>
+    where Meta: ObjectMeta {
         // We’re going to collect a list of all encountered objects in here.
         // Items are pair of the start position and the length.
         // At the end we check that they form a consecutive sequence.
         let mut objects = Vec::new();
+
+        let mut stats = ArchiveStats::default();
 
         // Step 1. Go over each index bucket and collect all the objects.
         // Check that the name hashes correctly.
@@ -154,6 +162,11 @@ impl<Meta> Archive<Meta> {
                     return Err(ArchiveError::Corrupt)
                 }
                 objects.push((u64::from(pos), header.size));
+                stats.object_count += 1;
+                stats.object_size += header.size;
+                stats.padding_size += header.size.saturating_sub(
+                    Self::min_object_size(header.name_len, header.data_len)
+                );
                 start = header.next;
             }
         }
@@ -163,6 +176,15 @@ impl<Meta> Archive<Meta> {
         while let Some(pos) = start {
             let header = ObjectHeader::read(&self.file, pos.into())?;
             objects.push((u64::from(pos), header.size));
+            stats.empty_count += 1;
+            stats.empty_size += header.size;
+            if stats.empty_min == 0 {
+                stats.empty_min = header.size
+            }
+            else {
+                stats.empty_min = cmp::min(stats.empty_min, header.size);
+            }
+            stats.empty_max = cmp::max(stats.empty_max, header.size);
             start = header.next;
         }
 
@@ -175,7 +197,7 @@ impl<Meta> Archive<Meta> {
             }
         }
 
-        Ok(())
+        Ok(stats)
     }
 
     /// Returns an iterator over all the objects in the archive.
@@ -205,7 +227,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
             None => return Err(FetchError::NotFound),
         };
         self.file.read(found.data_start::<Meta>(), |read| {
-            Ok(read.read_slice(found.header.data_size::<Meta>()?)?)
+            Ok(read.read_slice(found.header.data_len)?)
         })
     }
 
@@ -252,7 +274,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
             check(
                 &Meta::read(read)?
             ).map_err(AccessError::Inconsistent)?;
-            Ok(read.read_slice(found.header.data_size::<Meta>()?)?)
+            Ok(read.read_slice(found.header.data_len)?)
         })
     }
 
@@ -271,11 +293,21 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         if self.find(hash, name)?.is_some() {
             return Err(PublishError::AlreadyExists)
         }
+        self.publish_not_found(hash, name, meta, data)?;
+        Ok(())
+    }
+
+    fn publish_not_found(
+        &mut self,
+        hash: u64, name: &[u8], meta: &Meta, data: &[u8]
+    ) -> Result<(), ArchiveError> {
         match self.find_empty(name, data)? {
             Some((empty, pos)) => {
                 self.publish_replace(hash, name, meta, data, empty, pos)?
             }
-            None => self.publish_append(hash, name, meta, data)?,
+            None => {
+                self.publish_append(hash, name, meta, data)?
+            }
         }
         Ok(())
     }
@@ -297,11 +329,12 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         self.unlink_empty(start.into(), empty.next)?;
         let empty_end = u64::from(start) + empty.size;
         let head = ObjectHeader::new(
-            Self::object_size(name, data), self.get_index(hash)?, name
+            Self::page_object_size(name, data),
+            self.get_index(hash)?,
+            name, data
         );
-        let object_end = self.write_object(
-            start.into(), head, name, meta, data
-        )?;
+        self.write_object(start.into(), head, name, meta, data)?;
+        let object_end = u64::from(start) + head.size;
         self.set_index(hash, start.into())?;
         if empty_end > object_end {
             empty.size = empty_end - object_end;
@@ -319,7 +352,9 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     ) -> Result<(), ArchiveError> {
         let start = self.file.size;
         let head = ObjectHeader::new(
-            Self::object_size(name, data), self.get_index(hash)?, name
+            Self::page_object_size(name, data),
+            self.get_index(hash)?,
+            name, data,
         );
         self.write_object(start, head, name, meta, data)?;
         self.set_index(hash, NonZeroU64::new(start))?;
@@ -341,7 +376,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
     ) -> Result<(), AccessError<Meta::ConsistencyError>> {
         let hash = self.hash_name(name);
-        let found = match self.find(hash, name)? {
+        let mut found = match self.find(hash, name)? {
             Some(found) => found,
             None => return Err(AccessError::NotFound),
         };
@@ -349,26 +384,17 @@ impl<Meta: ObjectMeta> Archive<Meta> {
             &self.file.read(found.meta_start(), |read| Meta::read(read))?
         ).map_err(AccessError::Inconsistent)?;
 
-        let new_size = Self::object_size(name, data);
-        if Self::fits(found.header.size, new_size) {
-            // We can squeeze the new object data into its current space.
-            ObjectHeader::update_size(found.start, new_size, &mut self.file)?;
-            self.file.write(found.meta_start(), |write| {
-                meta.write(write)?;
-                write.write(data)
-            })?;
-            // If there’s empty space, we need to mark and add that.
-            let empty_size = found.header.size - new_size;
-            if empty_size > 0 {
-                self.create_empty(
-                    found.start + new_size,
-                    empty_size,
-                )?;
-            }
+        let new_size = Self::page_object_size(name, data);
+
+        // Only update in place if the size stays the same. This avoids small
+        // empty spaces that will never be reused.
+        if found.header.size == new_size {
+            found.header.data_len = data.len();
+            self.write_object(found.start, found.header, name, meta, data)?;
         }
         else {
             self.delete_found(hash, found)?;
-            self.publish_append(hash, name, meta, data)?;
+            self.publish_not_found(hash, name, meta, data)?;
         }
         Ok(())
     }
@@ -421,17 +447,20 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         &mut self, start: u64, mut size: u64
     ) -> Result<(), ArchiveError> {
         let next_start = start.saturating_add(size);
-        if next_start < self.file.size {
+        if next_start == self.file.size {
+            self.file.set_len(start)?;
+        }
+        else {
             let header = ObjectHeader::read(&self.file, next_start)?;
-            if header.name_len.is_none() {
+            if header.is_empty {
                 self.unlink_empty(next_start, header.next)?;
                 size += header.size;
             }
+            ObjectHeader::new_empty(size, self.get_empty_index()?).write(
+                &mut self.file, start
+            )?;
+            self.set_empty_index(NonZeroU64::new(start))?;
         }
-        ObjectHeader::new_empty(size, self.get_empty_index()?).write(
-            &mut self.file, start
-        )?;
-        self.set_empty_index(NonZeroU64::new(start))?;
         Ok(())
     }
 
@@ -496,7 +525,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         if start.is_none() {
             return Ok(None)
         }
-        let size = Self::object_size(name, data);
+        let size = Self::page_object_size(name, data);
         let mut candidates = Vec::new();
         while let Some(pos) = start {
             let header = ObjectHeader::read(&self.file, pos.into())?;
@@ -516,22 +545,38 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     fn write_object(
         &mut self, start: u64,
         head: ObjectHeader, name: &[u8], meta: &Meta, data: &[u8]
-    ) -> Result<u64, ArchiveError> {
+    ) -> Result<(), ArchiveError> {
         self.file.write(start, |write| {
             head.write_into(write)?;
             write.write(name)?;
             meta.write(write)?;
             write.write(data)?;
-            Ok(write.pos()?)
+            let padding = usize::try_from(
+                head.size.checked_sub(
+                    Self::min_object_size(name.len(), data.len())
+                ).expect("paged size smaller than minimal size")
+            ).expect("padding larger than page size");
+            if padding > 0 {
+                static PAGE: [u8; PAGE_SIZE] = [0u8; PAGE_SIZE];
+                write.write(&PAGE[..padding])?;
+            }
+            Ok(())
         })
     }
 
     /// Returns the size of an object with the given name and content.
-    fn object_size(name: &[u8], data: &[u8]) -> u64 {
+    fn min_object_size(name_len: usize, data_len: usize) -> u64 {
           ObjectHeader::SIZE
-        + usize_to_u64(name.len())
+        + usize_to_u64(name_len)
         + usize_to_u64(Meta::SIZE)
-        + usize_to_u64(data.len())
+        + usize_to_u64(data_len)
+    }
+
+    /// Returns the object size rounded up to full pages.
+    fn page_object_size(name: &[u8], data: &[u8]) -> u64 {
+        Self::min_object_size(
+            name.len(), data.len()
+        ).next_multiple_of(usize_to_u64(PAGE_SIZE))
     }
 
     /// Returns whether an object fits into a given space.
@@ -670,14 +715,10 @@ impl<'a, Meta: ObjectMeta> ObjectsIter<'a, Meta> {
             if let Some(pos) = self.next {
                 let (next, res) = self.archive.file.read(pos.into(), |read| {
                     let header = ObjectHeader::read_from(read)?;
-                    let name_len = match header.name_len {
-                        Some(len) => len,
-                        None => return Err(ArchiveError::Corrupt)
-                    };
-                    let name = read.read_slice(name_len)?;
+                    let name = read.read_slice(header.name_len)?;
                     let meta = Meta::read(read)?;
-                    let data = read.read_slice(header.data_size::<Meta>()?)?;
-                    Ok((header.next, (name, meta, data)))
+                    let data = read.read_slice(header.data_len)?;
+                    Ok::<_, ArchiveError>((header.next, (name, meta, data)))
                 })?;
                 self.next = next;
                 return Ok(Some(res))
@@ -793,23 +834,38 @@ struct ObjectHeader {
     /// The next object of the hash bucket.
     next: Option<NonZeroU64>,
 
+    /// Is this an empty object?
+    is_empty: bool,
+
     /// The size of the name.
-    ///
-    /// If this is `None`, this object is an empty object.
-    name_len: Option<usize>,
+    name_len: usize,
+
+    /// The size of the data.
+    data_len: usize,
 }
 
 impl ObjectHeader {
     /// Creates a new object header.
     fn new(
-        size: u64, next: Option<NonZeroU64>, name: &[u8]
+        size: u64, next: Option<NonZeroU64>, name: &[u8], data: &[u8]
     ) -> Self {
-        ObjectHeader { size, next, name_len: Some(name.len()) }
+        ObjectHeader {
+            size,
+            next,
+            is_empty: false,
+            name_len: name.len(),
+            data_len: data.len()
+        }
     }
 
     /// Creates a new object header for an empty object.
     fn new_empty(size: u64, next: Option<NonZeroU64>) -> Self {
-        ObjectHeader { size, next, name_len: None }
+        ObjectHeader {
+            size, next,
+            is_empty: true,
+            name_len: 0,
+            data_len: 0,
+        }
     }
 
     /// Reads the contents of the header from a storage reader.
@@ -817,7 +873,9 @@ impl ObjectHeader {
         Ok(Self {
             size: read.read_u64()?,
             next: NonZeroU64::new(read.read_u64()?),
-            name_len: read.read_opt_usize()?,
+            is_empty: read.read_bool()?,
+            name_len: read.read_usize()?,
+            data_len: read.read_usize()?,
         })
     }
 
@@ -834,11 +892,7 @@ impl ObjectHeader {
     ) -> Result<(Self, Cow<[u8]>), ArchiveError> {
         storage.read(start, |read| {
             let header = Self::read_from(read)?;
-            let name_len = match header.name_len {
-                Some(len) => len,
-                None => return Err(ArchiveError::Corrupt),
-            };
-            let name = read.read_slice(name_len)?;
+            let name = read.read_slice(header.name_len)?;
             Ok((header, name))
         })
     }
@@ -849,7 +903,9 @@ impl ObjectHeader {
     ) -> Result<(), ArchiveError> {
         write.write_u64(self.size)?;
         write.write_nonzero_u64(self.next)?;
-        write.write_opt_usize(self.name_len)?;
+        write.write_bool(self.is_empty)?;
+        write.write_usize(self.name_len)?;
+        write.write_usize(self.data_len)?;
         Ok(())
     }
 
@@ -858,13 +914,6 @@ impl ObjectHeader {
         &self, storage: &mut Storage, start: u64
     ) -> Result<(), ArchiveError> {
         storage.write(start, |write| self.write_into(write))
-    }
-
-    /// Updates the object size of a header beginning at the given position.
-    fn update_size(
-        start: u64, new_size: u64, storage: &mut Storage
-    ) -> Result<(), ArchiveError> {
-        storage.write(start, |write| write.write_u64(new_size))
     }
 
     /// Updates the next pointer of a header beginning at the given position.
@@ -881,30 +930,21 @@ impl ObjectHeader {
     const SIZE:  u64 = usize_to_u64(
           mem::size_of::<u64>()
         + mem::size_of::<u64>()
-        + Storage::OPT_USIZE_SIZE
+        + mem::size_of::<u8>()
+        + mem::size_of::<usize>()
+        + mem::size_of::<usize>()
     );
 
     /// Returns the start of the meta data.
     fn meta_start(&self, start: u64) -> u64 {
-        start + Self::SIZE + opt_usize_to_u64(self.name_len)
+        start + Self::SIZE + usize_to_u64(self.name_len)
     }
 
     /// Returns the start of the content.
     fn data_start<Meta: ObjectMeta>(&self, start: u64) -> u64 {
           start + Self::SIZE
         + usize_to_u64(Meta::SIZE)
-        + opt_usize_to_u64(self.name_len)
-    }
-
-    /// Returns the size of the data.
-    fn data_size<Meta: ObjectMeta>(&self) -> Result<usize, ArchiveError> {
-        let name_len = match self.name_len {
-            Some(len) => usize_to_u64(len),
-            None => return Err(ArchiveError::Corrupt)
-        };
-        usize::try_from(
-            self.size - Self::SIZE- usize_to_u64(Meta::SIZE) - name_len
-        ).map_err(|_| ArchiveError::Corrupt)
+        + usize_to_u64(self.name_len)
     }
 }
 
@@ -938,6 +978,64 @@ impl FoundObject {
 }
 
 
+//------------ ArchiveStats --------------------------------------------------
+
+/// Statistics for an archive.
+///
+/// A value of this type is returned by [`Archive::verify`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArchiveStats {
+    /// The number of objects in the archive.
+    pub object_count: u64,
+
+    /// The overall size of objects in bytes.
+    pub object_size: u64,
+
+    /// The overall amount of padding.
+    pub padding_size: u64,
+
+    /// The number of blocks of empty space.
+    pub empty_count: u64,
+
+    /// The overall size of empty space.
+    pub empty_size: u64,
+
+    /// The smallest empty block.
+    pub empty_min: u64,
+
+    /// The largest empty block.
+    pub empty_max: u64,
+}
+
+impl ArchiveStats {
+    /// Prints the stats to stdout.
+    ///
+    /// Uses a two space indent.
+    pub fn print(self) {
+        println!("  object count: {}", self.object_count);
+        if self.object_count > 0 {
+            println!("  object size, sum: {}", self.object_size);
+            println!("  object size, avg: {}",
+                self.object_size / self.object_count
+            );
+            println!("  object padding, sum: {}", self.padding_size);
+            println!("  object padding, avg: {}",
+                self.padding_size / self.object_count
+            );
+        }
+        println!("  empty block count: {}", self.empty_count);
+        if self.empty_count > 0 {
+            println!("  empty size, sum: {}", self.empty_size);
+            println!("  empty size, min: {}", self.empty_min);
+            println!("  empty size, max: {}", self.empty_max);
+            println!(
+                "  empty size, avg: {}", self.empty_size / self.empty_count
+            );
+        }
+    }
+}
+
+
 //------------ Magic Cookie --------------------------------------------------
 //
 // The marker we use for a quick file type check.
@@ -960,7 +1058,7 @@ const SYSTEM: u8 = b'E';
 #[cfg(all(target_endian = "big", target_pointer_width = "64"))]
 const SYSTEM: u8 = b'F';
 
-const VERSION: u8 = 0;
+const VERSION: u8 = 1;
 
 const MAGIC_SIZE: usize = 6;
 const FILE_MAGIC: [u8; MAGIC_SIZE] = [
@@ -1058,14 +1156,13 @@ impl Storage {
         }
         Ok(res)
     }
-}
 
-/// # Stored size constants
-///
-/// They live here purely for the naming to make some sort of sense.
-impl Storage {
-    const OPT_USIZE_SIZE: usize
-        = mem::size_of::<u8>() + mem::size_of::<usize>();
+    /// Sets the storage to the given length.
+    pub fn set_len(&mut self, len: u64) -> Result<(), ArchiveError> {
+        self.file.lock().set_len(len)?;
+        self.mmap()?;
+        Ok(())
+    }
 }
 
 
@@ -1208,30 +1305,18 @@ impl<'a> StorageRead<'a> {
         Ok(usize::from_ne_bytes(self.read_array()?))
     }
 
-    /// Reads an optional `usize`.
-    ///
-    /// We don’t do any optimisations here and instead store this is an
-    /// one-byte boolean and, if that is 1, the length as a usize.
-    pub fn read_opt_usize(&mut self) -> Result<Option<usize>, ArchiveError> {
-        let opt = self.read_array::<1>()?;
-        let size = self.read_usize()?;
-        match opt[0] {
-            0 => {
-                if size != 0 {
-                    Err(ArchiveError::Corrupt)
-                }
-                else {
-                    Ok(None)
-                }
-            }
-            1 => Ok(Some(size)),
-            _ => Err(ArchiveError::Corrupt),
-        }
-    }
-
     /// Reads a `u64`.
     pub fn read_u64(&mut self) -> Result<u64, ArchiveError> {
         Ok(u64::from_ne_bytes(self.read_array()?))
+    }
+
+    /// Reads a `bool`.
+    pub fn read_bool(&mut self) -> Result<bool, ArchiveError> {
+        match self.read_array::<1>()? {
+            [0] => Ok(false),
+            [1] => Ok(true),
+            _ => Err(ArchiveError::Corrupt),
+        }
     }
 }
 
@@ -1365,23 +1450,6 @@ impl<'a> StorageWrite<'a> {
         self.write(&value.to_ne_bytes())
     }
 
-    /// Write an optional `usize` to storage.
-    pub fn write_opt_usize(
-        &mut self, value: Option<usize>
-    ) -> Result<(), ArchiveError> {
-        match value {
-            Some(value) => {
-                self.write(b"\x01")?;
-                self.write_usize(value)?;
-            }
-            None => {
-                self.write(b"\0")?;
-                self.write_usize(0)?;
-            }
-        }
-        Ok(())
-    }
-
     /// Writes a `u64` to storage.
     pub fn write_u64(&mut self, value: u64) -> Result<(), ArchiveError> {
         self.write(&value.to_ne_bytes())
@@ -1401,6 +1469,19 @@ impl<'a> StorageWrite<'a> {
         self.write(&value.map(Into::into).unwrap_or(0).to_ne_bytes())
     }
 
+    /// Writes a `bool` to storage.
+    pub fn write_bool(
+        &mut self, value: bool,
+    ) -> Result<(), ArchiveError> {
+        self.write(
+            if value {
+                b"\x01"
+            }
+            else {
+                b"\x00"
+            }
+        )
+    }
 }
 
 
@@ -1581,10 +1662,6 @@ const fn usize_to_u64(value: usize) -> u64 {
     value as u64
 }
 
-/// Converts an optional usize into a u64.
-fn opt_usize_to_u64(value: Option<usize>) -> u64 {
-    usize_to_u64(value.map(Into::into).unwrap_or(0))
-}
 
 
 //============ Error Types ===================================================

@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.14.1-dev"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.73"
 authors = ["NLnet Labs <rpki-team@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -31,7 +31,7 @@ pin-project-lite = "0.2.4"
 rand            = "0.8.1"
 reqwest         = { version = "0.12.4", default-features = false, features = ["blocking", "rustls-tls", "gzip" ] }
 ring            = "0.17"
-rpki            = { version = "0.18.4", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { version = "0.18.4", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ], git = "https://github.com/NLnetLabs/rpki-rs.git" }
 rustls-pemfile  = "2.1.2"
 serde           = { version = "1.0.95", features = [ "derive" ] }
 serde_json      = "1.0.57"
@@ -50,7 +50,6 @@ syslog          = "6"
 [features]
 default = [ "socks", "ui"]
 arbitrary = [ "dep:arbitrary", "chrono/arbitrary", "rpki/arbitrary" ]
-aspa = []
 native-tls = [ "reqwest/native-tls" ]
 rta = []
 socks = [ "reqwest/socks" ]
@@ -93,10 +92,6 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 [package.metadata.deb.variants.minimal]
 
 [package.metadata.generate-rpm]
-# "BSD" alone is the 3-clause license. Inheriting "license" from above causes rpmlint to
-# complain with "invalid-license".
-# See: https://fedoraproject.org/wiki/Licensing:Main?rd=Licensing
-license = "BSD"
 assets = [
     { source = "target/release/routinator", dest = "/usr/bin/routinator", mode = "755" },
     { source = "target/rpm/routinator.service", dest = "/lib/systemd/system/routinator.service", mode = "644" },

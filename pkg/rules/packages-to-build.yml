@@ -4,15 +4,12 @@
 pkg:
   - 'routinator'
 image:
-  - "ubuntu:xenial"   # ubuntu/16.04
-  - "ubuntu:bionic"   # ubuntu/18.04
   - "ubuntu:focal"    # ubuntu/20.04
   - "ubuntu:jammy"    # ubuntu/22.04
-  - "debian:stretch"  # debian/9
+  - "ubuntu:noble"    # ubuntu/24.04
   - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
-  - 'centos:7'
   - 'rockylinux:8'    # compatible with EOL centos:8
   - 'rockylinux:9'
 target:
@@ -26,9 +23,6 @@ test-image:
   # in the original matrix. This is just how GitHub Actions matrix include rules work.
   - ""
 include:
-  - image: "centos:7"
-    systemd_service_unit_file: pkg/common/routinator-minimal.routinator.service
-
   # CentOS 8 became EOL and is in theory still usable as a build container as there is still a Docker image
   # available, and package installation can be done by switching the yum config in the container to use packages
   # from the CentOS 8 vault rather than the now offline actual CentOS 8 repository. However, due to experiencing
@@ -82,12 +76,9 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Rocky Linux 9 and Debian Bookworm as we haven't published any packages for
+# Disable upgrade testing on Ubuntu Noble as we haven't published any packages for
 # those O/S versions yet.
 test-exclude:
   - pkg: 'routinator'
-    image: 'rockylinux:9'
-    mode: 'upgrade-from-published'
-  - pkg: 'routinator'
-    image: 'debian:bookworm'
+    image: 'ubuntu:noble'
     mode: 'upgrade-from-published'

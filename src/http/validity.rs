@@ -103,7 +103,7 @@ fn validity(
         Ok(asn) => asn,
         Err(_) => return Response::bad_request()
     };
-    let prefix = match Prefix::from_str(prefix) {
+    let prefix = match Prefix::from_str_relaxed(prefix) {
         Ok(prefix) => prefix,
         Err(_) => return Response::bad_request()
     };

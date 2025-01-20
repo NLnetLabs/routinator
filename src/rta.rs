@@ -84,7 +84,7 @@ impl<'a, 's> ValidateCa<'a, 's> {
     }
 }
 
-impl<'a, 's> ProcessPubPoint for ValidateCa<'a, 's> {
+impl ProcessPubPoint for ValidateCa<'_, '_> {
     fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
         Ok(uri.ends_with(".cer"))
     }

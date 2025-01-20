@@ -598,10 +598,8 @@ fn json_publication_metrics(
     target.member_raw("validROAs", metrics.valid_roas);
     target.member_raw("invalidROAs", metrics.invalid_roas);
     target.member_raw("validGBRs", metrics.valid_gbrs);
-    #[cfg(feature = "aspa")] {
-        target.member_raw("invalidASPAs", metrics.invalid_aspas);
-        target.member_raw("validASPAs", metrics.valid_aspas);
-    }
+    target.member_raw("invalidASPAs", metrics.invalid_aspas);
+    target.member_raw("validASPAs", metrics.valid_aspas);
     target.member_raw("invalidGBRs", metrics.invalid_gbrs);
     target.member_raw("otherObjects", metrics.others);
 }
@@ -630,11 +628,9 @@ fn json_payload_metrics(
         target.member_object("routerKeys", |target| {
             json_vrps_metrics(target, &payload.router_keys, false)
         });
-        #[cfg(feature = "aspa")] {
-            target.member_object("aspas", |target| {
-                json_vrps_metrics(target, &payload.aspas, false)
-            });
-        }
+        target.member_object("aspas", |target| {
+            json_vrps_metrics(target, &payload.aspas, false)
+        });
     });
 }
 

@@ -70,6 +70,7 @@ pub enum Operation {
     Update(Update),
     PrintConfig(PrintConfig),
     Dump(Dump),
+    ArchiveStats(ArchiveStats),
     Man(Man),
 }
 
@@ -93,6 +94,7 @@ impl Operation {
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
         let app = Dump::config_args(app);
+        let app = ArchiveStats::config_args(app);
         Man::config_args(app)
     }
 
@@ -131,6 +133,11 @@ impl Operation {
             Some(("dump", matches)) => {
                 Operation::Dump( Dump::from_arg_matches(matches, cur_dir)?)
             }
+            Some(("archive-stats", matches)) => {
+                Operation::ArchiveStats(
+                    ArchiveStats::from_arg_matches(matches)?
+                )
+            }
             Some(("man", matches)) => {
                 Operation::Man(Man::from_arg_matches(matches)?)
             }
@@ -167,6 +174,7 @@ impl Operation {
             Operation::Update(cmd) => cmd.run(process),
             Operation::PrintConfig(cmd) => cmd.run(process),
             Operation::Dump(cmd) => cmd.run(process),
+            Operation::ArchiveStats(cmd) => cmd.run(process),
             Operation::Man(cmd) => cmd.run(process),
         }
     }
@@ -255,6 +263,7 @@ impl Server {
                 if let Some(log) = log.as_ref() {
                     log.start();
                 }
+
                 let timeout = match LocalExceptions::load(
                     process.config(), true
                 ) {
@@ -309,6 +318,11 @@ impl Server {
                 // log rotation, we need to loop here. But then we need
                 // to recalculate timeout.
                 let deadline = Instant::now() + timeout;
+
+                info!(
+                    "Next validation run scheduled in {} seconds",
+                    timeout.as_secs()
+                );
 
                 let end = loop {
                     let timeout = deadline.saturating_duration_since(
@@ -1180,6 +1194,57 @@ impl Dump {
         process.switch_logging(false, false)?;
         engine.dump(&self.output)?;
         Ok(())
+    }
+}
+
+
+//------------ ArchiveStats --------------------------------------------------
+
+/// Prints archive statistics.
+#[derive(Clone, Debug, Parser)]
+pub struct ArchiveStats {
+    /// Archive file.
+    #[arg(value_name = "PATH")]
+    archive: PathBuf,
+}
+
+impl ArchiveStats {
+    /// Adds the command configuration to a clap app.
+    pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
+        // config
+        app.subcommand(
+            ArchiveStats::augment_args(
+                clap::Command::new("archive-stats")
+                    .about("Prints statics for an RRDP archive")
+                    .after_help(AFTER_HELP)
+            )
+        )
+    }
+
+    /// Creates a command from clap matches.
+    pub fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Failed> {
+        Ok(
+            <ArchiveStats as FromArgMatches>::from_arg_matches(
+                matches
+            ).unwrap()
+        )
+    }
+
+    fn run(self, process: Process) -> Result<(), ExitError> {
+        use crate::collector::RrdpArchive;
+
+        process.switch_logging(false, false)?;
+        match RrdpArchive::verify(&self.archive) {
+            Ok(stats) => {
+                println!("RRDP archive {}:", self.archive.display());
+                stats.print();
+                Ok(())
+            }
+            Err(err) => {
+                eprintln!("Archive is corrupt: {err}");
+                Err(ExitError::Generic)
+            }
+        }
     }
 }
 

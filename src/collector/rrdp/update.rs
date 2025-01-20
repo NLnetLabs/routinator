@@ -221,7 +221,7 @@ impl<'a> SnapshotUpdate<'a> {
     }
 }
 
-impl<'a> ProcessSnapshot for SnapshotUpdate<'a> {
+impl ProcessSnapshot for SnapshotUpdate<'_> {
     type Err = SnapshotError;
 
     fn meta(
@@ -353,7 +353,7 @@ impl<'a> DeltaUpdate<'a> {
     }
 }
 
-impl<'a> ProcessDelta for DeltaUpdate<'a> {
+impl ProcessDelta for DeltaUpdate<'_> {
     type Err = DeltaError;
 
     fn meta(
@@ -523,7 +523,7 @@ impl<'a, R> RrdpDataRead<'a, R> {
     }
 }
 
-impl<'a, R: io::Read> RrdpDataRead<'a, R> {
+impl<R: io::Read> RrdpDataRead<'_, R> {
     /// Reads the data into a vec.
     pub fn read_all(mut self) -> Result<Vec<u8>, RrdpDataReadError> {
         let mut content = Vec::new();
@@ -539,7 +539,7 @@ impl<'a, R: io::Read> RrdpDataRead<'a, R> {
     }
 }
 
-impl<'a, R: io::Read> io::Read for RrdpDataRead<'a, R> {
+impl<R: io::Read> io::Read for RrdpDataRead<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
         let res = match self.reader.read(buf) {
             Ok(res) => res,

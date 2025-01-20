@@ -257,16 +257,14 @@ fn object_metrics<'a>(
             .label("state", "invalid")
             .value(metrics.invalid_roas);
 
-        #[cfg(feature = "aspa")] {
-            target.multi(metric).label(group.label(), name)
-                .label("type", "aspa")
-                .label("state", "valid")
-                .value(metrics.valid_aspas);
-            target.multi(metric).label(group.label(), name)
-                .label("type", "aspa")
-                .label("state", "invalid")
-                .value(metrics.invalid_aspas);
-        }
+        target.multi(metric).label(group.label(), name)
+            .label("type", "aspa")
+            .label("state", "valid")
+            .value(metrics.valid_aspas);
+        target.multi(metric).label(group.label(), name)
+            .label("type", "aspa")
+            .label("state", "invalid")
+            .value(metrics.invalid_aspas);
 
         target.multi(metric).label(group.label(), name)
             .label("type", "gbr")
@@ -419,20 +417,18 @@ fn payload_metrics<'a>(
                 .value(metrics.contributed);
         }
 
-        #[cfg(feature = "aspa")] {
-            target.multi(valid_metric)
-                .label(group.label(), name)
-                .label("type", "aspas")
-                .value(metrics.aspas.valid);
-            target.multi(duplicate_metric)
-                .label(group.label(), name)
-                .label("type", "aspas")
-                .value(metrics.aspas.duplicate);
-            target.multi(contributed_metric)
-                .label(group.label(), name)
-                .label("type", "aspas")
-                .value(metrics.aspas.contributed);
-        }
+        target.multi(valid_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.valid);
+        target.multi(duplicate_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.duplicate);
+        target.multi(contributed_metric)
+            .label(group.label(), name)
+            .label("type", "aspas")
+            .value(metrics.aspas.contributed);
     }
 }
 
@@ -674,18 +670,6 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
         target.header(item);
         metrics.fold_clients(0, |count, client| {
             *count += client.serial_queries();
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
-        });
-
-        let item = Metric::new(
-            "rtr_client_reset_queries",
-            "number of of reset queries by a client address",
-            MetricType::Counter,
-        );
-        target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            *count += client.reset_queries();
         }).for_each(|(addr, count)| {
             target.multi(item).label("addr", addr).value(count)
         });
