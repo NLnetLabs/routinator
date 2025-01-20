@@ -52,6 +52,7 @@ impl HttpClient {
         builder = builder.user_agent(&config.rrdp_user_agent);
         builder = builder.tcp_keepalive(config.rrdp_tcp_keepalive);
         builder = builder.timeout(None); // Set per request.
+        builder = builder.gzip(true);
         builder = builder.redirect(
             redirect::Policy::custom(Self::redirect_policy)
         );
