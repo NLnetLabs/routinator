@@ -15,6 +15,9 @@ New
   of AS paths. The default value is 10,000. ([#989])
 * New `archive-stats` command that shows some statistics of an RRDP
   archive. ([#982])
+* Re-enabled the use of GZIP compression in HTTP request sent by the RRDP
+  collector. Measures to deal with exploding data have been implemented in
+  [rpki-rs#319]. ([#997])
 
 Bug fixes
 
@@ -40,7 +43,9 @@ Other changes
 [#990]: https://github.com/NLnetLabs/routinator/pull/990
 [#992]: https://github.com/NLnetLabs/routinator/pull/992
 [#994]: https://github.com/NLnetLabs/routinator/pull/994
+[#997]: https://github.com/NLnetLabs/routinator/pull/997
 [@sleinen]: https://github.com/sleinen
+[rpki-rs#319]: https://github.com/NLnetLabs/rpki-rs/pull/319
 
 
 ## 0.14.0 ‘You Must Gather Your Party Before Venturing Forth’
