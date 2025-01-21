@@ -8,11 +8,10 @@ New
 
 * ASPA support is now always compiled in and available if `enable-aspa` is
   set. The `aspa` Cargo feature has been removed. ([#990])
-* New configuration option `aspa-provider-limit` that limits the number of
-  provider ASNs allowed in an ASPA objects. If an object with more
-  provider ASNs is encountered it as well as all other ASPA objects for
-  the same customer ASN are ignored to avoid accidental false rejections
-  of AS paths. The default value is 10,000. ([#989])
+* If merging mutliple ASPA objects for a single customer ASN results in
+  more than 16,380 provider ASNs, the ASPA is dropped. (Note that ASPA
+  objects with more than 16,380 provider ASNs are already rejected during
+  parsing.) ([#996])
 * New `archive-stats` command that shows some statistics of an RRDP
   archive. ([#982])
 * Re-enabled the use of GZIP compression in HTTP request sent by the RRDP
@@ -39,10 +38,10 @@ Other changes
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
 [#982]: https://github.com/NLnetLabs/routinator/pull/982
 [#987]: https://github.com/NLnetLabs/routinator/pull/987
-[#989]: https://github.com/NLnetLabs/routinator/pull/989
 [#990]: https://github.com/NLnetLabs/routinator/pull/990
 [#992]: https://github.com/NLnetLabs/routinator/pull/992
 [#994]: https://github.com/NLnetLabs/routinator/pull/994
+[#996]: https://github.com/NLnetLabs/routinator/pull/996
 [#997]: https://github.com/NLnetLabs/routinator/pull/997
 [@sleinen]: https://github.com/sleinen
 [rpki-rs#319]: https://github.com/NLnetLabs/rpki-rs/pull/319
