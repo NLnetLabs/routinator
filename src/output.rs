@@ -1419,8 +1419,8 @@ impl Summary {
         ))?;
         line(format_args!(
             "            VRPs: {:7} verified, {:7} final;",
-            metrics.payload.vrps().valid,
-            metrics.payload.vrps().contributed
+            metrics.snapshot.payload.vrps().valid,
+            metrics.snapshot.payload.vrps().contributed
         ))?;
         line(format_args!(
             "    router certs: {:7} verified;",
@@ -1428,13 +1428,13 @@ impl Summary {
         ))?;
         line(format_args!(
             "     router keys: {:7} verified, {:7} final;",
-            metrics.payload.router_keys.valid,
-            metrics.payload.router_keys.contributed
+            metrics.snapshot.payload.router_keys.valid,
+            metrics.snapshot.payload.router_keys.contributed
         ))?;
         line(format_args!(
             "           ASPAs: {:7} verified, {:7} final;",
             metrics.publication.valid_aspas,
-            metrics.payload.aspas.contributed
+            metrics.snapshot.payload.aspas.contributed
         ))?;
         Ok(())
     }
