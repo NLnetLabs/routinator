@@ -15,7 +15,7 @@
 
 use std::cmp;
 use std::collections::hash_map;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use crossbeam_queue::SegQueue;
 use log::{info, warn};
@@ -75,9 +75,6 @@ pub struct ValidationReport {
 
     /// How are we dealing with unsafe VRPs?
     unsafe_vrps: FilterPolicy,
-
-    /// Maximum number of provider ASNs on ASPA objects.
-    aspa_provider_limit: usize,
 }
 
 impl ValidationReport {
@@ -92,7 +89,6 @@ impl ValidationReport {
             limit_v4_len: config.limit_v4_len,
             limit_v6_len: config.limit_v6_len,
             unsafe_vrps: config.unsafe_vrps,
-            aspa_provider_limit: config.aspa_provider_limit,
         }
     }
 
@@ -275,7 +271,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
 
     fn process_aspa(
         &mut self,
-        uri: &uri::Rsync,
+        _uri: &uri::Rsync,
         cert: ResourceCert,
         aspa: AsProviderAttestation
     ) -> Result<(), Failed> {
@@ -283,18 +279,6 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
             return Ok(())
         }
         self.pub_point.update_refresh(cert.validity().not_after());
-        if aspa.provider_as_set().len() > self.report.aspa_provider_limit {
-            warn!(
-                "{}: {} provider ASNs is over the limit of {}. \
-                 Skipping ASPA for {}.",
-                uri,
-                aspa.provider_as_set().len(),
-                self.report.aspa_provider_limit,
-                aspa.customer_as()
-            );
-            self.report.rejected.aspa_customers.push(aspa.customer_as());
-            return Ok(())
-        }
         self.pub_point.add_aspa(
             aspa,
             Arc::new(PublishInfo::signed_object(
@@ -529,7 +513,6 @@ pub struct PubAspa {
 pub struct RejectedResources {
     v4: IpBlocks,
     v6: IpBlocks,
-    aspa_customers: HashSet<Asn>,
 }
 
 impl RejectedResources {
@@ -560,9 +543,6 @@ struct RejectedResourcesBuilder {
 
     /// The queue of rejected AS blocks.
     asns: SegQueue<AsBlock>,
-
-    /// The queue of rejected ASPA customer ASNs.
-    aspa_customers: SegQueue<Asn>,
 }
 
 impl RejectedResourcesBuilder {
@@ -598,7 +578,6 @@ impl RejectedResourcesBuilder {
         RejectedResources {
             v4: v4.finalize(),
             v6: v6.finalize(),
-            aspa_customers: self.aspa_customers.into_iter().collect(),
         }
     }
 }
@@ -774,11 +753,6 @@ impl<'a> SnapshotBuilder<'a> {
     fn process_aspa(&mut self, aspa: PubAspa, metrics: &mut AllVrpMetrics) {
         metrics.update(|m| m.aspas.valid += 1);
 
-        if self.rejected.aspa_customers.contains(&aspa.customer) {
-            metrics.update(|m| m.aspas.marked_unsafe += 1);
-            return
-        }
-
         // SLURM filtering goes here ...
 
         match self.aspas.entry(aspa.customer) {
@@ -806,7 +780,7 @@ impl<'a> SnapshotBuilder<'a> {
 
         self.insert_assertions(metrics);
         metrics.finalize();
-        self.into_snapshot()
+        self.into_snapshot(metrics)
     }
 
     fn insert_assertions(&mut self, metrics: &mut Metrics) {
@@ -816,22 +790,22 @@ impl<'a> SnapshotBuilder<'a> {
                     entry.insert(info.into());
                     if origin.is_v4() {
                         metrics.local.v4_origins.contributed += 1;
-                        metrics.payload.v4_origins.contributed += 1;
+                        metrics.snapshot.payload.v4_origins.contributed += 1;
                     }
                     else {
                         metrics.local.v6_origins.contributed += 1;
-                        metrics.payload.v6_origins.contributed += 1;
+                        metrics.snapshot.payload.v6_origins.contributed += 1;
                     }
                 }
                 hash_map::Entry::Occupied(mut entry) => {
                     entry.get_mut().add_local(info);
                     if origin.is_v4() {
                         metrics.local.v4_origins.duplicate += 1;
-                        metrics.payload.v4_origins.duplicate += 1;
+                        metrics.snapshot.payload.v4_origins.duplicate += 1;
                     }
                     else {
                         metrics.local.v6_origins.duplicate += 1;
-                        metrics.payload.v6_origins.duplicate += 1;
+                        metrics.snapshot.payload.v6_origins.duplicate += 1;
                     }
                 }
             }
@@ -842,12 +816,12 @@ impl<'a> SnapshotBuilder<'a> {
                 hash_map::Entry::Vacant(entry) => {
                     entry.insert(info.into());
                     metrics.local.router_keys.contributed += 1;
-                    metrics.payload.router_keys.contributed += 1;
+                    metrics.snapshot.payload.router_keys.contributed += 1;
                 }
                 hash_map::Entry::Occupied(mut entry) => {
                     entry.get_mut().add_local(info);
                     metrics.local.router_keys.duplicate += 1;
-                    metrics.payload.router_keys.duplicate += 1;
+                    metrics.snapshot.payload.router_keys.duplicate += 1;
                 }
             }
         }
@@ -855,7 +829,7 @@ impl<'a> SnapshotBuilder<'a> {
         // XXX ASPA assertions.
     }
 
-    fn into_snapshot(self) -> PayloadSnapshot {
+    fn into_snapshot(self, metrics: &mut Metrics) -> PayloadSnapshot {
         PayloadSnapshot::new(
             self.origins.into_iter(),
             self.router_keys.into_iter(),
@@ -871,6 +845,7 @@ impl<'a> SnapshotBuilder<'a> {
                                  with {} provider ASNs.",
                                 customer, providers.len()
                             );
+                            metrics.snapshot.large_aspas += 1;
                             None
                         }
                     }
@@ -901,7 +876,7 @@ impl<'a> AllVrpMetrics<'a> {
                 Some(index) => Some(&mut metrics.repositories[index].payload),
                 None => None
             },
-            all: &mut metrics.payload,
+            all: &mut metrics.snapshot.payload,
         }
     }
 

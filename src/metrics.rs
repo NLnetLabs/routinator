@@ -47,7 +47,7 @@ pub struct Metrics {
     pub local: PayloadMetrics,
 
     /// Overall payload metrics.
-    pub payload: PayloadMetrics,
+    pub snapshot: SnapshotMetrics,
 }
 
 impl Metrics {
@@ -61,7 +61,7 @@ impl Metrics {
             repositories: Vec::new(),
             publication: Default::default(),
             local: Default::default(),
-            payload: Default::default(),
+            snapshot: Default::default(),
         }
     }
 
@@ -74,7 +74,7 @@ impl Metrics {
             metric.finalize();
         }
         self.local.finalize();
-        self.payload.finalize();
+        self.snapshot.finalize();
     }
 
     /// Returns the time the metrics were created as a Unix timestamp.
@@ -370,6 +370,31 @@ impl ops::AddAssign for PublicationMetrics {
 }
 
 
+//------------ SnapshotMetrics -----------------------------------------------
+
+/// Metrics regarding the full payload set.
+#[derive(Clone, Debug, Default)]
+pub struct SnapshotMetrics {
+    /// Payload metrics portion.
+    pub payload: PayloadMetrics,
+
+    /// The number of ASPA customer ASNs that had too large ASPAs.
+    ///
+    /// This number is subtracted from `payload.aspa.valid` through the
+    /// `finalize` method, so you don’t have to do that yourself.
+    pub large_aspas: u32,
+}
+
+impl SnapshotMetrics {
+    /// Finalizes the metrics by summing up the generated attributes.
+    pub fn finalize(&mut self) {
+        self.payload.finalize();
+        self.payload.aspas.valid =
+            self.payload.aspas.valid.saturating_sub(self.large_aspas);
+    }
+}
+
+
 //------------ PayloadMetrics ------------------------------------------------
 
 /// Metrics regarding the generated payload set.
@@ -389,6 +414,9 @@ pub struct PayloadMetrics {
 
     /// The metrics for ASPA payload.
     pub aspas: VrpMetrics,
+
+    /// The number of ASPA payload that was too large.
+    pub large_aspas: u32,
 
     /// The metrics for all payload items.
     pub all: VrpMetrics,

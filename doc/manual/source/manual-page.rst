@@ -356,13 +356,6 @@ The available options are:
       If this option is present, ASPA assertions will be processed
       during validation and included in the produced data set.
 
-.. option:: --aspa-provider-limit
-
-      Limits the number of provider ASNs allowed in an ASPA object. If more
-      providers are given, all ASPA assertions for the customer ASN are
-      dropped to avoid false rejections. The default value if not changed
-      via configuration or this option is 10,000 provider ASNs.
-
 .. option:: --dirty
 
       If this option is present, unused files and directories will not be
@@ -1207,13 +1200,6 @@ All values can be overridden via the command line options.
             A boolean value specifying whether ASPA assertions should be
             included in the published dataset. If false or missing, no ASPA
             assertions will be included.
-
-      aspa_provider_limit
-            An integer value specifying the maximum number of provider ASNs
-            allowed in an ASPA object. If more providers are given, all ASPA
-            assertions for the customer ASN are dropped to avoid false
-            rejections. If the option is missing, a default of 10,000
-            provider ASNs is used.
 
       dirty
             A boolean value which, if true, specifies that unused files and
