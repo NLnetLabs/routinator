@@ -8,7 +8,7 @@ Currently, these are:
 
 Project: https://github.com/NLnetLabs/routinator-ui
 
-Included version: 0.4.1
+Included version: 0.4.3
 
 Import with:
 
