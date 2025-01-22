@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Bug fixes
+
+Other changes
+
+
 ## 0.14.1 ‘Black Cats And Voodoo Dolls’
 
 Released 2025-01-22.
