@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Jun 20, 2024" "0.14.1-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Jan 22, 2025" "0.14.1" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -39,6 +39,8 @@ routinator \- RPKI relying party software
 \fBroutinator\fP [\fBoptions\fP] \fI\%server\fP [\fBserver\-options\fP]
 .sp
 \fBroutinator\fP [\fBoptions\fP] \fI\%update\fP [\fBupdate\-options\fP]
+.sp
+\fBroutinator\fP [\fBarchive\-stats\fP] \fI\%archive\-stats\fP \fIpath\fP
 .sp
 \fBroutinator\fP \fI\%man\fP [\fB\-o \fP\fIfile\fP]
 .sp
@@ -114,7 +116,7 @@ The option can be given more than once.
 Specifies a directory containing additional trust anchor locators
 (TALs) to use. Routinator will use all files in this directory with
 an extension of \fI\&.tal\fP as TALs. These files need to be in the format
-described by \fI\%RFC 8630\fP\&.
+described by \X'tty: link https://datatracker.ietf.org/doc/html/rfc8630.html'\fI\%RFC 8630\fP\X'tty: link'\&.
 .sp
 Note that Routinator will use all TALs provided. That means that if a
 TAL in this directory is one of the bundled TALs, then these resources
@@ -125,7 +127,7 @@ will be validated twice.
 .B \-x file, \-\-exceptions=file
 Provides the path to a local exceptions file. The option can be used
 multiple times to specify more than one file to use. Each file is a
-JSON file as described in \fI\%RFC 8416\fP\&. It lists both route origins that
+JSON file as described in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8416.html'\fI\%RFC 8416\fP\X'tty: link'\&. It lists both route origins that
 should be filtered out of the output as well as origins that should be
 added.
 .UNINDENT
@@ -403,6 +405,12 @@ certificate before it is rejected. The default value is 32.
 .TP
 .B \-\-enable\-bgpsec
 If this option is present, BGPsec router keys will be processed
+during validation and included in the produced data set.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-enable\-aspa
+If this option is present, ASPA assertions will be processed
 during validation and included in the produced data set.
 .UNINDENT
 .INDENT 0.0
@@ -837,7 +845,7 @@ Specifies a local address and port to listen on for incoming
 RTR connections.
 .sp
 Routinator supports both protocol version 0 defined in
-\fI\%RFC 6810\fP and version 1 defined in \fI\%RFC 8210\fP\&. However, it
+\X'tty: link https://datatracker.ietf.org/doc/html/rfc6810.html'\fI\%RFC 6810\fP\X'tty: link' and version 1 defined in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link'\&. However, it
 does not support router keys introduced in version 1.  IPv6
 addresses must be enclosed in square brackets. You can provide
 the option multiple times to let Routinator listen on multiple
@@ -950,7 +958,7 @@ objects in the repository expire earlier. The default value is
 .B \-\-retry=seconds
 The amount of seconds to suggest to an RTR client to wait
 before trying to request data again if that failed. The default
-value is 600 seconds, as recommended in \fI\%RFC 8210\fP\&.
+value is 600 seconds, as recommended in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link'\&.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -960,7 +968,7 @@ it cannot refresh it. After that time, the client should
 discard the data. Note that this value was introduced in
 version 1 of the RTR protocol and is thus not relevant for
 clients that only implement version 0. The default value, as
-recommended in \fI\%RFC 8210\fP, is 7200 seconds.
+recommended in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link', is 7200 seconds.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -1072,6 +1080,12 @@ correctly referenced by a valid manifest. This part contains one
 directory for each RRDP repository similarly structured to the \fIrrdp\fP
 directory and one additional directory \fIrsync\fP that contains files
 collected via rsync.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B archive\-stats
+Prints some statistics about the content of an RRDP archive file to
+standard out. This is likely only useful for development.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -1301,6 +1315,11 @@ A boolean value specifying whether BGPsec router keys should be
 included in the published dataset. If false or missing, no router
 keys will be included.
 .TP
+.B enable\-aspa
+A boolean value specifying whether ASPA assertions should be
+included in the published dataset. If false or missing, no ASPA
+assertions will be included.
+.TP
 .B dirty
 A boolean value which, if true, specifies that unused files and
 directories should not be deleted from the repository directory
@@ -1514,7 +1533,7 @@ Returns a JSON object describing whether the route announcement given
 by its origin AS Number and address prefix is RPKI valid, invalid, or
 not found.  The returned object is compatible with that provided by the
 RIPE NCC RPKI Validator. For more information, see
-\fI\%https://ripe.net/support/documentation/developer\-documentation/rpki\-validator\-api\fP
+\X'tty: link https://ripe.net/support/documentation/developer-documentation/rpki-validator-api'\fI\%https://ripe.net/support/documentation/developer\-documentation/rpki\-validator\-api\fP\X'tty: link'
 .TP
 .B /validity?asn=as\-number&prefix=prefix
 Same as above but with a more form\-friendly calling convention.
@@ -1660,15 +1679,15 @@ relaxed decoding mode.
 .INDENT 3.5
 .INDENT 0.0
 .TP
-Resource Certificates (\fI\%RFC 6487\fP)
+Resource Certificates (\X'tty: link https://datatracker.ietf.org/doc/html/rfc6487.html'\fI\%RFC 6487\fP\X'tty: link')
 Resource certificates are defined as a profile on the more general
-Internet PKI certificates defined in \fI\%RFC 5280\fP\&.
+Internet PKI certificates defined in \X'tty: link https://datatracker.ietf.org/doc/html/rfc5280.html'\fI\%RFC 5280\fP\X'tty: link'\&.
 .INDENT 7.0
 .TP
 .B Subject and Issuer
 The RFC restricts the type used for CommonName attributes to
 PrintableString, allowing only a subset of ASCII characters,
-while \fI\%RFC 5280\fP allows a number of additional string types.
+while \X'tty: link https://datatracker.ietf.org/doc/html/rfc5280.html'\fI\%RFC 5280\fP\X'tty: link' allows a number of additional string types.
 At least one CA produces resource certificates with
 Utf8Strings.
 .sp
@@ -1678,13 +1697,13 @@ number and types of attributes. This seems justified since RPKI
 explicitly does not use these fields.
 .UNINDENT
 .TP
-Signed Objects (\fI\%RFC 6488\fP)
+Signed Objects (\X'tty: link https://datatracker.ietf.org/doc/html/rfc6488.html'\fI\%RFC 6488\fP\X'tty: link')
 Signed objects are defined as a profile on CMS messages defined in
-\fI\%RFC 5652\fP\&.
+\X'tty: link https://datatracker.ietf.org/doc/html/rfc5652.html'\fI\%RFC 5652\fP\X'tty: link'\&.
 .INDENT 7.0
 .TP
 .B DER Encoding
-\fI\%RFC 6488\fP demands all signed objects to be DER encoded while
+\X'tty: link https://datatracker.ietf.org/doc/html/rfc6488.html'\fI\%RFC 6488\fP\X'tty: link' demands all signed objects to be DER encoded while
 the more general CMS format allows any BER encoding \-\- DER is a
 stricter subset of the more general BER. At least one CA does
 indeed produce BER encoded signed objects.
@@ -1722,6 +1741,6 @@ update the repository fail.
 .SH AUTHOR
 Jaap Akkerhuis wrote the original version of this manual page, Martin Hoffmann extended it for later versions.
 .SH COPYRIGHT
-2018–2024, NLnet Labs
+2018–2025, NLnet Labs
 .\" Generated by docutils manpage writer.
 .
