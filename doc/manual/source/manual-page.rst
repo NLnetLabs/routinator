@@ -12,6 +12,8 @@ Synopsis
 
 :program:`routinator` [``options``] :subcmd:`update` [``update-options``]
 
+:program:`routinator` [``archive-stats``] :subcmd:`archive-stats` :samp:`{path}`
+
 :program:`routinator` :subcmd:`man` [:samp:`-o {file}`]
 
 :program:`routinator` ``-h``
@@ -972,6 +974,15 @@ These can be requested by providing different commands on the command line.
        directory for each RRDP repository similarly structured to the *rrdp*
        directory and one additional directory *rsync* that contains files
        collected via rsync.
+
+.. subcmd:: archive-stats
+
+       Prints some statistics about the content of an RRDP archive file to
+       standard out. This is likely only useful for development.
+
+       .. option: file
+
+              The RRDP archive file for which statistics should be shown.
 
 .. subcmd:: man
 
