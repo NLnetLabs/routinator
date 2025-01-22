@@ -34,6 +34,7 @@ Other changes
 * Added packaging support for Ubuntu 24.04 and removed support for
   Debian Stretch 9, Ubuntu Xenial 16.04, Ubuntu Bionic 18.04, and
   Centos 7 ([#980], [#994])
+* Upgraded the bundled routinator-ui to release [ui-0.4.3][0.4.3].
 
 [#980]: https://github.com/NLnetLabs/routinator/pull/980
 [#982]: https://github.com/NLnetLabs/routinator/pull/982
@@ -45,6 +46,7 @@ Other changes
 [#997]: https://github.com/NLnetLabs/routinator/pull/997
 [@sleinen]: https://github.com/sleinen
 [rpki-rs#319]: https://github.com/NLnetLabs/rpki-rs/pull/319
+[ui-0.4.3]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.4.3
 
 
 ## 0.14.0 ‘You Must Gather Your Party Before Venturing Forth’
