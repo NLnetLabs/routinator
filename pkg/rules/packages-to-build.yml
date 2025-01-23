@@ -79,6 +79,4 @@ test-mode:
 # Disable upgrade testing on Ubuntu Noble as we haven't published any packages for
 # those O/S versions yet.
 test-exclude:
-  - pkg: 'routinator'
-    image: 'ubuntu:noble'
-    mode: 'upgrade-from-published'
+
