@@ -366,7 +366,7 @@ impl fmt::Display for IoErrorDisplay {
         use nix::errno::Errno;
 
         if matches!(
-            self.0.raw_os_error().map(Errno::from_i32),
+            self.0.raw_os_error().map(Errno::from_raw),
             Some(Errno::ENOSPC)
         ) {
             f.write_str("No space or inodes left on device")
