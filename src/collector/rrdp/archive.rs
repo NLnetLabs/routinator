@@ -488,7 +488,7 @@ impl FallbackTime {
     pub fn best_before(self) -> DateTime<Utc> {
         // Saturating conversion between std’s and chrono’s Duration types.
         Utc::now() + chrono::Duration::from_std(
-            rand::thread_rng().gen_range(self.min..self.max)
+            rand::rng().random_range(self.min..self.max)
         ).unwrap_or_else(|_| {
             chrono::Duration::try_milliseconds(i64::MAX).unwrap()
         })
