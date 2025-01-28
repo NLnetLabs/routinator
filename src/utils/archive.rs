@@ -34,7 +34,7 @@ use std::borrow::Cow;
 use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::num::{NonZeroU64, NonZeroUsize};
-use std::ops::Range;
+use std::ops::{DerefMut, Range};
 use std::path::Path;
 use std::io::{Read, Seek, SeekFrom, Write};
 use bytes::Bytes;
@@ -1255,37 +1255,18 @@ impl<'a> StorageRead<'a> {
                 Ok(res)
             }
             ReadInner::File { ref mut file }  => {
-                // XXX This may or may not be sound. We’re not using read_exact
-                //     just to be a little more sure?
                 let mut buf = Vec::with_capacity(len);
-                let mut len = len;
-                unsafe {
-                    buf.set_len(len);
-                    let mut buf = buf.as_mut_slice();
-                    while len > 0 {
-                        let read = file.read(buf)?;
-                        if read == 0 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::UnexpectedEof,
-                                "unexpected end of file"
-                            ).into())
-                        }
-
-                        // Let’s not panic if Read::read is broken and rather
-                        // error out.
-                        buf = match buf.get_mut(read..) {
-                            Some(buf) => buf,
-                            None => {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    "read claimed to read beyond buffer len"
-                                ).into())
-                            }
-                        };
-
-                        len -= read;
-                    }
-                }
+                file.deref_mut().take(
+                    u64::try_from(len).map_err(|_| {
+                        // This only happens on 128 bit systems with
+                        // ridiculously large lengths, but I don’t want to
+                        // panic.
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            "excessively large length"
+                        )
+                    })?
+                ).read_to_end(&mut buf)?;
                 Ok(buf.into())
             }
         }
