@@ -491,14 +491,9 @@ impl SyslogLogger {
                 self.0.debug(record.args())
             }
         }.map_err(|err| {
-            match err.0 {
-                syslog::ErrorKind::Io(err) => err,
-                syslog::ErrorKind::Msg(err) => {
-                    io::Error::new(io::ErrorKind::Other, err)
-                }
-                err => {
-                    io::Error::new(io::ErrorKind::Other, format!("{}", err))
-                }
+            match err {
+                syslog::Error::Io(err) => err,
+                err => io::Error::new(io::ErrorKind::Other, err),
             }
         })
     }
