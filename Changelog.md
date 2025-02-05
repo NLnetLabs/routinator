@@ -10,6 +10,16 @@ Bug fixes
 
 Other changes
 
+* Upgrades the bundled Routinator UI to release [0.4.4][routinator-ui v0.4.4].
+  ([#1008])
+* Upgrades various dependencies. ([#1004], [#1005], [#1006])
+
+[#1004]: https://github.com/NLnetLabs/routinator/pull/1004
+[#1005]: https://github.com/NLnetLabs/routinator/pull/1005
+[#1006]: https://github.com/NLnetLabs/routinator/pull/1006
+[#1008]: https://github.com/NLnetLabs/routinator/pull/1008
+[routinator-ui v0.4.4]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.4.4
+
 
 ## 0.14.1 ‘Black Cats And Voodoo Dolls’
 
