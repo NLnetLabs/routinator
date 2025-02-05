@@ -1493,6 +1493,7 @@ mod mmapimpl {
     use std::borrow::Cow;
     use std::ffi::c_void;
     use std::io::{Seek, SeekFrom};
+    use std::ptr::NonNull;
     use nix::sys::mman::{MapFlags, MsFlags, ProtFlags, mmap, msync, munmap};
 
 
@@ -1500,7 +1501,7 @@ mod mmapimpl {
     #[derive(Debug)]
     pub struct Mmap {
         /// The pointer to the start of the memory.
-        ptr: *mut c_void,
+        ptr: NonNull<c_void>,
 
         /// The size of the memory,
         len: usize,
@@ -1529,7 +1530,7 @@ mod mmapimpl {
                         ProtFlags::PROT_READ
                     },
                     MapFlags::MAP_SHARED,
-                    Some(file),
+                    file,
                     0
                 )?
             };
@@ -1553,12 +1554,20 @@ mod mmapimpl {
     impl Mmap {
         /// Returns the whole memory map.
         fn as_slice(&self) -> &[u8] {
-            unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
+            unsafe {
+                slice::from_raw_parts(
+                    self.ptr.as_ptr() as *const u8, self.len
+                )
+            }
         }
 
         /// Returns the whole memory map mutably.
         fn as_slice_mut(&mut self) -> &mut [u8] {
-            unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
+            unsafe {
+                slice::from_raw_parts_mut(
+                    self.ptr.as_ptr() as *mut u8, self.len
+                )
+            }
         }
     }
 
