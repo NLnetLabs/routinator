@@ -626,21 +626,20 @@ use self::noop::ServiceImpl;
 mod unix {
     use std::env::set_current_dir;
     use std::ffi::CString;
-    use std::os::unix::io::RawFd;
+    use std::fs::{File, OpenOptions};
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
     use std::path::Path;
     use log::error;
     use nix::libc;
-    use nix::fcntl::{flock, open, FlockArg, OFlag};
-    use nix::unistd::{
-        chown, chroot, fork, getpid, setgid, setuid, write, Gid, Uid
-    };
-    use nix::sys::stat::Mode;
+    use nix::fcntl::{Flock, FlockArg};
+    use nix::unistd::{chown, chroot, fork, getpid, setgid, setuid, Gid, Uid};
     use crate::config::Config;
     use crate::error::Failed;
 
     #[derive(Debug, Default)]
     pub struct ServiceImpl {
-        pid_file: Option<RawFd>,
+        pid_file: Option<Flock<File>>,
         uid: Option<Uid>,
         gid: Option<Gid>,
     }
@@ -685,7 +684,7 @@ mod unix {
         }
 
         pub fn drop_privileges(
-            self, config: &mut Config
+            mut self, config: &mut Config
         ) -> Result<(), Failed> {
             config.adjust_chroot_paths()?;
             if let Some(path) = config.chroot.as_ref() {
@@ -714,12 +713,13 @@ mod unix {
         }
 
         fn create_pid_file(&mut self, path: &Path) -> Result<(), Failed> {
-            let fd = match open(
-                path,
-                OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_TRUNC,
-                Mode::from_bits_truncate(0o666)
-            ) {
-                Ok(fd) => fd,
+            let file = OpenOptions::new()
+                .read(false).write(true)
+                .create(true).truncate(true)
+                .mode(0o666)
+                .open(path);
+            let file = match file {
+                Ok(file) => file,
                 Err(err) => {
                     error!("Fatal: failed to create PID file {}: {}",
                         path.display(), err
@@ -727,34 +727,29 @@ mod unix {
                     return Err(Failed)
                 }
             };
-            if let Err(err) = flock(fd, FlockArg::LockExclusiveNonblock) {
-                error!("Fatal: cannot lock PID file {}: {}",
-                    path.display(), err
-                );
-                return Err(Failed)
-            }
-            self.pid_file = Some(fd);
+            let file = match Flock::lock(
+                file, FlockArg::LockExclusiveNonblock
+            ) {
+                Ok(file) => file,
+                Err((_, err)) => {
+                    error!("Fatal: cannot lock PID file {}: {}",
+                        path.display(), err
+                    );
+                    return Err(Failed)
+                }
+            };
+            self.pid_file = Some(file);
             Ok(())
         }
 
-        fn write_pid_file(&self) -> Result<(), Failed> {
-            if let Some(pid_file) = self.pid_file {
+        fn write_pid_file(&mut self) -> Result<(), Failed> {
+            if let Some(pid_file) = self.pid_file.as_mut() {
                 let pid = format!("{}", getpid());
-                match write(pid_file, pid.as_bytes()) {
-                    Ok(len) if len == pid.len() => {}
-                    Ok(_) => {
-                        error!(
-                            "Fatal: failed to write PID to PID file: \
-                             short write"
-                        );
-                        return Err(Failed)
-                    }
-                    Err(err) => {
-                        error!(
-                            "Fatal: failed to write PID to PID file: {}", err
-                        );
-                        return Err(Failed)
-                    }
+                if let Err(err) = pid_file.write_all(pid.as_bytes()) {
+                    error!(
+                        "Fatal: failed to write PID to PID file: {}", err
+                    );
+                    return Err(Failed)
                 }
             }
             Ok(())
