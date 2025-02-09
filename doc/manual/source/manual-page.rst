@@ -1276,7 +1276,7 @@ All values can be overridden via the command line options.
 
       http-listen
             An array of string values each providing an address and port
-            on which the HTTP server should listene. Address and
+            on which the HTTP server should listen. Address and
             port should be separated by a colon. IPv6 address should be
             enclosed in square brackets.
 
