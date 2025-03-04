@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.14.2-rc1
+
+Released 2025-03-04.
 
 Other changes
 
