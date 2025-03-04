@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.2 ‘Roll Initiative!’
+
+Released 2025-03-04.
+
+There have been no changes since 0.14.2-rc1.
+
+
 ## 0.14.2-rc1
 
 Released 2025-03-04.
