@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased next version
+
+Other changes
+
+* Upgrades the bundled Routinator UI to release [0.4.5][routinator-ui v0.4.5].
+  ([#1014])
+
+[#1015]: https://github.com/NLnetLabs/routinator/pull/1015
+[routinator-ui v0.4.5]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.4.5
+
+
 ## 0.14.1 ‘Black Cats And Voodoo Dolls’
 
 Released 2025-01-22.
