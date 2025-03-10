@@ -25,22 +25,22 @@ impl Response {
     /// Creates a response indicating initial validation.
     pub fn initial_validation() -> Self {
         ResponseBuilder::service_unavailable()
-            .content_type(ContentType::TEXT)
-            .body("Initial validation ongoing. Please wait.")
+            .content_type(ContentType::JSON)
+            .body("{\"error\": \"Initial validation ongoing. Please wait.\"}")
     }
 
     /// Returns a Bad Request response.
     pub fn bad_request() -> Self {
         ResponseBuilder::bad_request()
-            .content_type(ContentType::TEXT)
-            .body("Bad Request")
+            .content_type(ContentType::JSON)
+            .body("{\"error\": \"Bad Request\"}")
     }
 
-    /// Returns a Not Modified response.
+    /// Returns a Not Found response.
     pub fn not_found() -> Self {
         ResponseBuilder::not_found()
-            .content_type(ContentType::TEXT)
-            .body("Not Found")
+            .content_type(ContentType::JSON)
+            .body("{\"error\": \"Not Found\"}")
     }
 
     /// Returns a Not Modified response.
@@ -51,8 +51,8 @@ impl Response {
     /// Returns a Method Not Allowed response.
     pub fn method_not_allowed() -> Self {
         ResponseBuilder::method_not_allowed()
-            .content_type(ContentType::TEXT)
-            .body("Method not allowed.")
+            .content_type(ContentType::JSON)
+            .body("{\"error\": \"Method not allowed.\"}")
     }
 
     /// Returns a Moved Permanently response pointing to the given location.
