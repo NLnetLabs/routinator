@@ -1365,8 +1365,9 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
             }
         }
         write!(target,
-            "      ]\
-            \n    }}")
+            "      ],\
+            \n      \"comment\": \"{}\"\
+            \n    }}", info.tal_name().unwrap_or("N/A"))
     }
 
     fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
