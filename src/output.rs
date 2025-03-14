@@ -53,8 +53,11 @@ pub enum OutputFormat {
     /// JSON format with extended information.
     ExtendedJson,
 
-    /// JSON format using the SLURM scheme.
+    /// JSON format using the SLURM version 1 scheme.
     Slurm,
+
+    /// JSON format using the SLURM version 2 scheme.
+    Slurm2,
 
     /// OpenBGPD configuration format.
     ///
@@ -96,6 +99,7 @@ impl OutputFormat {
         ("json", OutputFormat::Json),
         ("jsonext", OutputFormat::ExtendedJson),
         ("slurm", OutputFormat::Slurm),
+        ("slurm2", OutputFormat::Slurm2),
         ("openbgpd", OutputFormat::Openbgpd),
         ("bird1", OutputFormat::Bird1),
         ("bird2", OutputFormat::Bird2),
@@ -134,7 +138,7 @@ impl OutputFormat {
             OutputFormat::ExtendedCsv
                 => ContentType::CSV,
             OutputFormat::Json | OutputFormat::ExtendedJson |
-            OutputFormat::Slurm
+            OutputFormat::Slurm | OutputFormat::Slurm2
                 => ContentType::JSON,
             _ => ContentType::TEXT,
         }
@@ -148,6 +152,7 @@ impl OutputFormat {
             OutputFormat::Json => Box::new(Json),
             OutputFormat::ExtendedJson => Box::new(ExtendedJson),
             OutputFormat::Slurm => Box::new(Slurm),
+            OutputFormat::Slurm2 => Box::new(Slurm2),
             OutputFormat::Openbgpd => Box::new(Openbgpd),
             OutputFormat::Bird1 => Box::new(Bird1),
             OutputFormat::Bird2 => Box::new(Bird2),
@@ -1242,6 +1247,130 @@ impl<W: io::Write> Formatter<W> for Slurm {
             \n      }}",
             info.tal_name().unwrap_or("N/A")
         )
+    }
+
+    fn footer(
+        &self, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+           "\n    ]\
+            \n  }}\
+            \n}}"
+        )
+    }
+
+    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+
+    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
+    }
+}
+
+
+//------------ Slurm2 --------------------------------------------------------
+
+struct Slurm2;
+
+impl<W: io::Write> Formatter<W> for Slurm2 {
+    fn header(
+        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            "{{\
+            \n  \"slurmVersion\": 2,\
+            \n  \"validationOutputFilters\": {{\
+            \n    \"prefixFilters\": [ ],\
+            \n    \"bgpsecFilters\": [ ],\
+            \n    \"aspaFilters\": [ ]\
+            \n  }},\
+            \n  \"locallyAddedAssertions\": {{\
+            \n    \"prefixAssertions\": ["
+        )
+    }
+
+    fn origin(
+        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        writeln!(target,
+            "      {{\
+            \n        \"asn\": {},\
+            \n        \"prefix\": \"{}/{}\",",
+            origin.asn.into_u32(),
+            origin.prefix.addr(), origin.prefix.prefix_len()
+        )?;
+        if let Some(max_len) = origin.prefix.max_len() {
+            writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
+        }
+        write!(target,
+            "        \"comment\": \"{}\"\
+            \n      }}",
+            info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target,
+            "\n    ],\
+             \n    \"bgpsecAssertions\": ["
+        )
+    }
+
+    fn router_key(
+        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+             "      {{\
+            \n        \"asn\": {},\
+            \n        \"SKI\": \"",
+            key.asn.into_u32(),
+        )?;
+        base64::Slurm.write_encoded_slice(
+            key.key_identifier.as_slice(),
+            target,
+        )?;
+        write!(target, "\",\
+            \n        \"routerPublicKey\": \""
+        )?;
+        base64::Slurm.write_encoded_slice(key.key_info.as_slice(), target)?;
+        write!(target, "\",\
+            \n        \"comment\": \"{}\"
+            \n      }}",
+            info.tal_name().unwrap_or("N/A")
+        )
+    }
+
+    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, "\n    ],\n    \"aspaAssertions\": [")
+    }
+
+    fn aspa(
+        &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
+    ) -> Result<(), io::Error> {
+        write!(target,
+            "    {{ \
+            \n      \"customerAsid\": \"{}\", \
+            \n      \"providers\": [", aspa.customer
+        )?;
+
+        let mut first = true;
+        for item in aspa.providers.iter() {
+            if first {
+                write!(target, "        \"{}\"", item)?;
+                first = false;
+            }
+            else {
+                write!(target, ", \n        \"{}\"", item)?;
+            }
+        }
+        write!(target,
+            "      ]\
+            \n    }}")
+    }
+
+    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+        writeln!(target, ",")
     }
 
     fn footer(
