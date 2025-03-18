@@ -1349,25 +1349,25 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
         &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
     ) -> Result<(), io::Error> {
         write!(target,
-            "    {{ \
-            \n      \"customerAsid\": \"{}\", \
-            \n      \"providers\": [", aspa.customer
+            "      {{ \
+            \n        \"customerAsid\": {}, \
+            \n        \"providers\": [", aspa.customer.into_u32()
         )?;
 
         let mut first = true;
         for item in aspa.providers.iter() {
             if first {
-                write!(target, "        \"{}\"", item)?;
+                write!(target, "\n          {}", item.into_u32())?;
                 first = false;
             }
             else {
-                write!(target, ", \n        \"{}\"", item)?;
+                write!(target, ", \n          {}", item.into_u32())?;
             }
         }
         write!(target,
-            "      ],\
-            \n      \"comment\": \"{}\"\
-            \n    }}", info.tal_name().unwrap_or("N/A"))
+            "\n        ],\
+            \n        \"comment\": \"{}\"\
+            \n      }}", info.tal_name().unwrap_or("N/A"))
     }
 
     fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
