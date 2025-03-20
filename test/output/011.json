@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "generated": 0,
+    "generatedTime": "1970-01-01T00:00:00Z"
+  },
+  "routerKeys": [
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "ta": "N/A" },
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "ta": "N/A" }
+  ],
+  "aspas": [
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" },
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" }
+  ]
+}

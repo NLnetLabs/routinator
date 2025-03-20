@@ -1,0 +1,19 @@
+{
+  "slurmVersion": 2,
+  "validationOutputFilters": {
+    "prefixFilters": [ ],
+    "bgpsecFilters": [ ],
+    "aspaFilters": [ ]
+  },
+  "locallyAddedAssertions": {
+    "prefixAssertions": [
+
+    ],
+    "bgpsecAssertions": [
+
+    ],
+    "aspaAssertions": [
+
+    ]
+  }
+}

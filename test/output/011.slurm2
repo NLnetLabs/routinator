@@ -1,0 +1,49 @@
+{
+  "slurmVersion": 2,
+  "validationOutputFilters": {
+    "prefixFilters": [ ],
+    "bgpsecFilters": [ ],
+    "aspaFilters": [ ]
+  },
+  "locallyAddedAssertions": {
+    "prefixAssertions": [
+
+    ],
+    "bgpsecAssertions": [
+      {
+        "asn": 1234,
+        "SKI": "AAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "comment": "N/A"
+      },
+      {
+        "asn": 1234,
+        "SKI": "AAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "comment": "N/A"
+      }
+    ],
+    "aspaAssertions": [
+      { 
+        "customerAsid": 1234, 
+        "providers": [
+          1, 
+          2, 
+          3, 
+          4
+        ],
+        "comment": "N/A"
+      },
+      { 
+        "customerAsid": 1234, 
+        "providers": [
+          1, 
+          2, 
+          3, 
+          4
+        ],
+        "comment": "N/A"
+      }
+    ]
+  }
+}
