@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "generated": 0,
+    "generatedTime": "1970-01-01T00:00:00Z"
+  }
+,
+  "aspas": [
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" },
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" }
+  ]
+}

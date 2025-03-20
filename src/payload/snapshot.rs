@@ -53,7 +53,7 @@ impl Default for PayloadSnapshot {
 
 impl PayloadSnapshot {
     /// Creates a new snapshot from its parts.
-    pub(super) fn new(
+    pub fn new(
         origins: impl Iterator<Item = (RouteOrigin, PayloadInfo)>,
         router_keys: impl Iterator<Item = (RouterKey, PayloadInfo)>,
         aspas: impl Iterator<Item = (Aspa, PayloadInfo)>,
