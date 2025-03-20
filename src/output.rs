@@ -603,54 +603,6 @@ impl<Target: io::Write> OutputStream<Target> {
         self.state = next;
         Ok(true)
     }
-
-//    /// Progresses from the header state to the next state.
-//     fn progress_header(
-//         &self, target: &mut Target
-//     ) -> Result<StreamState, io::Error> {
-//         if self.output.route_origins {
-//             self.formatter.before_origins(target)?;
-//             Ok(StreamState::Origin {
-//                 iter: self.snapshot.clone().arc_origin_iter(),
-//                 first: true,
-//             })
-//         }
-//         else {
-//             self.progress_origin(target)
-//         }
-//     }
-
-//     /// Progresses from the origin state to the next state.
-//     fn progress_origin(
-//         &self, target: &mut Target
-//     ) -> Result<StreamState, io::Error> {
-//         if self.output.router_keys {
-//             self.formatter.before_router_keys(target)?;
-//             Ok(StreamState::Key {
-//                 iter: self.snapshot.clone().arc_router_key_iter(),
-//                 first: true
-//             })
-//         }
-//         else {
-//             self.progress_key(target)
-//         }
-//     }
-
-//     /// Progresses from the router key state to the next state.
-//     fn progress_key(
-//         &self, target: &mut Target
-//     ) -> Result<StreamState, io::Error> {
-//         if self.output.aspas {
-//             self.formatter.before_aspas(target)?;
-//             Ok(StreamState::Aspa {
-//                 iter: self.snapshot.clone().arc_aspa_iter(),
-//                 first: true
-//             })
-//         }
-//         else {
-//             Ok(StreamState::Done)
-//         }
-//     }
 }
 
 impl Iterator for OutputStream<Vec<u8>> {
