@@ -921,7 +921,7 @@ impl<W: io::Write> Formatter<W> for Json {
     fn header(
         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<StreamState, io::Error> {
-        writeln!(target,
+        write!(target,
             "{{\
             \n  \"metadata\": {{\
             \n    \"generated\": {},\
