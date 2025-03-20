@@ -10,6 +10,7 @@ Bug fixes
 
 Other changes
 
+* Add package.homepage to Cargo.toml ([#1024])
 * Upgrades the bundled Routinator UI to release [0.4.5][routinator-ui v0.4.5].
   ([#1014])
 * Upgrades various dependencies. ([#1004], [#1005], [#1006])
@@ -18,6 +19,7 @@ Other changes
 [#1005]: https://github.com/NLnetLabs/routinator/pull/1005
 [#1006]: https://github.com/NLnetLabs/routinator/pull/1006
 [#1014]: https://github.com/NLnetLabs/routinator/pull/1014
+[#1024]: https://github.com/NLnetLabs/routinator/pull/1024
 [routinator-ui v0.4.5]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.4.5
 
 

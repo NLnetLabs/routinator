@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "generated": 0,
+    "generatedTime": "1970-01-01T00:00:00Z"
+  },
+  "routerKeys": [
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "source": [ { "type": "exception", "path": null }] },
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "source": [ { "type": "exception", "path": null }] }
+  ]
+}

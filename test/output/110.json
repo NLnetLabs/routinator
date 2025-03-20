@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "generated": 0,
+    "generatedTime": "1970-01-01T00:00:00Z"
+  }
+,
+  "roas": [
+    { "asn": "AS1234", "prefix": "12.34.56.0/24", "maxLength": 24, "ta": "N/A" },
+    { "asn": "AS1234", "prefix": "12.34.56.0/24", "maxLength": 24, "ta": "N/A" }
+  ],
+  "routerKeys": [
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "ta": "N/A" },
+    { "asn": "AS1234", "SKI": "0000000000000000000000000000000000000000", "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "ta": "N/A" }
+  ]
+}

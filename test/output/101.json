@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "generated": 0,
+    "generatedTime": "1970-01-01T00:00:00Z"
+  }
+,
+  "roas": [
+    { "asn": "AS1234", "prefix": "12.34.56.0/24", "maxLength": 24, "ta": "N/A" },
+    { "asn": "AS1234", "prefix": "12.34.56.0/24", "maxLength": 24, "ta": "N/A" }
+  ],
+  "aspas": [
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" },
+    { "customer": "AS1234", "providers": ["AS1", "AS2", "AS3", "AS4"], "ta": "N/A" }
+  ]
+}

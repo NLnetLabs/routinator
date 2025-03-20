@@ -1672,3 +1672,123 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
 // }
 
 
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use chrono::DateTime;
+    use rpki::{crypto::KeyIdentifier, repository::x509::Time, resources::MaxLenPrefix, rtr::pdu::{ProviderAsns, RouterKeyInfo}};
+    use std::{fs::{self}, io::BufWriter, path::PathBuf};
+
+    use crate::slurm::ExceptionInfo;
+
+    use super::*;
+
+    #[test]
+    fn outputs() {
+        for format in OutputFormat::VALUES { 
+            if matches!(format.1, OutputFormat::Rpsl) {
+                // RPSL includes the current time, making unit tests impossible
+                continue;
+            }
+            for variation in [
+                (true, true, true),
+                (true, true, false),
+                (true, false, true),
+                (true, false, false),
+                (false, true, true),
+                (false, true, false),
+                (false, false, true),
+                (false, false, false),
+            ] {
+                let output_format = format.1.clone();
+
+                let mut output = Output::new();
+
+                let payload_info = ExceptionInfo {
+                    path: None,
+                    comment: None
+                };
+                let payload_info: Arc<ExceptionInfo> = Arc::new(payload_info);
+
+                let mut origins: Vec<(RouteOrigin, PayloadInfo)> = vec![];
+                {
+                    let ro = RouteOrigin::new(
+                        MaxLenPrefix::from_str("12.34.56.0/24").unwrap(), 
+                        Asn::from_u32(1234)
+                    );
+                    origins.push((ro.clone(), payload_info.clone().into()));
+                    origins.push((ro.clone(), payload_info.clone().into()));
+                }
+
+                let mut router_keys: Vec<(RouterKey, PayloadInfo)> = vec![];
+                {
+                    let key_info = RouterKeyInfo::try_from(vec![0u8; 64]).unwrap();
+                    let key_identifier = KeyIdentifier::from([0u8; 20]);
+                    let rk = RouterKey::new(key_identifier, Asn::from_u32(1234), key_info);
+                    router_keys.push((rk.clone(), payload_info.clone().into()));
+                    router_keys.push((rk.clone(), payload_info.clone().into()));
+                }
+
+                let mut aspas: Vec<(Aspa, PayloadInfo)> = vec![];
+                {
+                    let providers = ProviderAsns::try_from_iter(vec![1, 2, 3, 4].iter().map(|x| Asn::from_u32(*x))).unwrap();
+                    let aspa = Aspa::new(
+                        Asn::from_u32(1234),
+                        providers
+                    );
+                    aspas.push((aspa.clone(), payload_info.clone().into()));
+                    aspas.push((aspa.clone(), payload_info.clone().into()));
+                }
+
+                let datetime = DateTime::from_timestamp(0, 0).unwrap();
+                let snapshot = PayloadSnapshot::new(
+                    origins.into_iter(),
+                    router_keys.into_iter(),
+                    aspas.into_iter(),
+                    Some(Time::new(datetime))
+                );
+                let snapshot = Arc::new(snapshot);
+
+                let metrics = Metrics {
+                    time: datetime,
+                    rsync: Vec::new(),
+                    rrdp: Vec::new(),
+                    tals: Vec::new(),
+                    repositories: Vec::new(),
+                    publication: Default::default(),
+                    local: Default::default(),
+                    snapshot: Default::default(),
+                };
+                let metrics = Arc::new(metrics);
+
+                if !variation.0 {
+                    output.no_route_origins();
+                }
+                if !variation.1 {
+                    output.no_router_keys();
+                }
+                if !variation.2 {
+                    output.no_aspas();
+                }
+
+                let mut buf = BufWriter::new(Vec::new());
+
+                let _ = output.write(snapshot, metrics, output_format,  &mut buf).unwrap();
+
+                let bytes = buf.into_inner().unwrap();
+                let string = String::from_utf8(bytes).unwrap();
+
+                let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                d.push("test/output");
+                d.push(format!("{}{}{}.{}", variation.0 as u32, variation.1 as u32, variation.2 as u32, format.0));
+
+                assert_eq!(string, fs::read_to_string(d).unwrap());
+
+                // Code to write the presumed correct output to the folder:
+                // let mut file = File::create(format!("/home/koen/Code/routinator2/test/output/{}{}{}.{}", variation.0 as u32, variation.1 as u32, variation.2 as u32, format.0)).unwrap();
+                // file.write_all(string.as_bytes()).unwrap();
+            }
+        }
+    }
+}
