@@ -7,6 +7,9 @@
   "locallyAddedAssertions": {
     "prefixAssertions": [
 
+    ],
+    "bgpsecAssertions": [
+
     ]
   }
 }

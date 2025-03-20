@@ -1,0 +1,47 @@
+{
+  "slurmVersion": 2,
+  "validationOutputFilters": {
+    "prefixFilters": [ ],
+    "bgpsecFilters": [ ],
+    "aspaFilters": [ ]
+  },
+  "locallyAddedAssertions": {
+    "prefixAssertions": [
+      {
+        "asn": 1234,
+        "prefix": "12.34.56.0/24",
+        "comment": "N/A"
+      },
+      {
+        "asn": 1234,
+        "prefix": "12.34.56.0/24",
+        "comment": "N/A"
+      }
+    ],
+    "bgpsecAssertions": [
+
+    ],
+    "aspaAssertions": [
+      { 
+        "customerAsid": 1234, 
+        "providers": [
+          1, 
+          2, 
+          3, 
+          4
+        ],
+        "comment": "N/A"
+      },
+      { 
+        "customerAsid": 1234, 
+        "providers": [
+          1, 
+          2, 
+          3, 
+          4
+        ],
+        "comment": "N/A"
+      }
+    ]
+  }
+}

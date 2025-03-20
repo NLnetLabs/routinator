@@ -1,12 +1,22 @@
 {
-  "slurmVersion": 1,
+  "slurmVersion": 2,
   "validationOutputFilters": {
     "prefixFilters": [ ],
-    "bgpsecFilters": [ ]
+    "bgpsecFilters": [ ],
+    "aspaFilters": [ ]
   },
   "locallyAddedAssertions": {
     "prefixAssertions": [
-
+      {
+        "asn": 1234,
+        "prefix": "12.34.56.0/24",
+        "comment": "N/A"
+      },
+      {
+        "asn": 1234,
+        "prefix": "12.34.56.0/24",
+        "comment": "N/A"
+      }
     ],
     "bgpsecAssertions": [
       {
@@ -21,6 +31,9 @@
         "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "comment": "N/A"
       }
+    ],
+    "aspaAssertions": [
+
     ]
   }
 }

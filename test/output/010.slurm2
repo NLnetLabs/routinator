@@ -1,8 +1,9 @@
 {
-  "slurmVersion": 1,
+  "slurmVersion": 2,
   "validationOutputFilters": {
     "prefixFilters": [ ],
-    "bgpsecFilters": [ ]
+    "bgpsecFilters": [ ],
+    "aspaFilters": [ ]
   },
   "locallyAddedAssertions": {
     "prefixAssertions": [
@@ -21,6 +22,9 @@
         "routerPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "comment": "N/A"
       }
+    ],
+    "aspaAssertions": [
+
     ]
   }
 }
