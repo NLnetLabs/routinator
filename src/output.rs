@@ -1841,16 +1841,23 @@ mod test {
 
                 let mut router_keys: Vec<(RouterKey, PayloadInfo)> = vec![];
                 {
-                    let key_info = RouterKeyInfo::try_from(vec![0u8; 64]).unwrap();
+                    let key_info = 
+                    RouterKeyInfo::try_from(vec![0u8; 64]).unwrap();
                     let key_identifier = KeyIdentifier::from([0u8; 20]);
-                    let rk = RouterKey::new(key_identifier, Asn::from_u32(1234), key_info);
+                    let rk = RouterKey::new(
+                        key_identifier, 
+                        Asn::from_u32(1234), 
+                        key_info
+                    );
                     router_keys.push((rk.clone(), payload_info.clone().into()));
                     router_keys.push((rk.clone(), payload_info.clone().into()));
                 }
 
                 let mut aspas: Vec<(Aspa, PayloadInfo)> = vec![];
                 {
-                    let providers = ProviderAsns::try_from_iter([1, 2, 3, 4].iter().map(|x| Asn::from_u32(*x))).unwrap();
+                    let providers = ProviderAsns::try_from_iter(
+                        [1, 2, 3, 4].iter()
+                        .map(|x| Asn::from_u32(*x))).unwrap();
                     let aspa = Aspa::new(
                         Asn::from_u32(1234),
                         providers
@@ -1899,11 +1906,16 @@ mod test {
 
                 let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 d.push("test/output");
-                d.push(format!("{}{}{}.{}", variation.0 as u32, variation.1 as u32, variation.2 as u32, format.0));
+                d.push(format!("{}{}{}.{}", 
+                    variation.0 as u32, 
+                    variation.1 as u32, 
+                    variation.2 as u32, 
+                    format.0
+                ));
 
                 println!("{} {:#?}", format.0, variation);
-                // git automatically changes \n to \r\n on Windows (and back again when committing)
-                // This breaks the test otherwise
+                // git automatically changes \n to \r\n on Windows (and back 
+                // again when committing). This breaks the test.
                 let file = fs::read_to_string(d).unwrap().replace("\r\n", "\n");
                 assert_eq!(string, file);
 
