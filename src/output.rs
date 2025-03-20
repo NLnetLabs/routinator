@@ -1902,7 +1902,10 @@ mod test {
                 d.push(format!("{}{}{}.{}", variation.0 as u32, variation.1 as u32, variation.2 as u32, format.0));
 
                 println!("{} {:#?}", format.0, variation);
-                assert_eq!(string, fs::read_to_string(d).unwrap());
+                // git automatically changes \n to \r\n on Windows (and back again when committing)
+                // This breaks the test otherwise
+                let file = fs::read_to_string(d).unwrap().replace("\r\n", "\n");
+                assert_eq!(string, file);
 
                 // Code to write the presumed correct output to the folder:
                 // let mut file = fs::File::create(d).unwrap();
