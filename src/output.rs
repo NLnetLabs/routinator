@@ -145,21 +145,22 @@ impl OutputFormat {
     }
 
     fn formatter<W: io::Write>(self) -> Box<dyn Formatter<W> + Send + Sync> {
-        match self {
-            OutputFormat::Csv => Box::new(Csv),
-            OutputFormat::CompatCsv => Box::new(CompatCsv),
-            OutputFormat::ExtendedCsv => Box::new(ExtendedCsv),
-            OutputFormat::Json => Box::new(Json),
-            OutputFormat::ExtendedJson => Box::new(ExtendedJson),
-            OutputFormat::Slurm => Box::new(Slurm),
-            OutputFormat::Slurm2 => Box::new(Slurm2),
-            OutputFormat::Openbgpd => Box::new(Openbgpd),
-            OutputFormat::Bird1 => Box::new(Bird1),
-            OutputFormat::Bird2 => Box::new(Bird2),
-            OutputFormat::Rpsl => Box::new(Rpsl),
-            OutputFormat::Summary => Box::new(Summary),
-            OutputFormat::None => Box::new(NoOutput),
-        }
+        Box::new(Slurm2)
+        // match self {
+        //     OutputFormat::Csv => Box::new(Csv),
+        //     OutputFormat::CompatCsv => Box::new(CompatCsv),
+        //     OutputFormat::ExtendedCsv => Box::new(ExtendedCsv),
+        //     OutputFormat::Json => Box::new(Json),
+        //     OutputFormat::ExtendedJson => Box::new(ExtendedJson),
+        //     OutputFormat::Slurm => Box::new(Slurm),
+        //     OutputFormat::Slurm2 => Box::new(Slurm2),
+        //     OutputFormat::Openbgpd => Box::new(Openbgpd),
+        //     OutputFormat::Bird1 => Box::new(Bird1),
+        //     OutputFormat::Bird2 => Box::new(Bird2),
+        //     OutputFormat::Rpsl => Box::new(Rpsl),
+        //     OutputFormat::Summary => Box::new(Summary),
+        //     OutputFormat::None => Box::new(NoOutput),
+        // }
     }
 }
 
@@ -480,12 +481,19 @@ struct OutputStream<Target> {
     formatter: Box<dyn Formatter<Target> + Send + Sync>,
 }
 
+#[derive(Clone, Copy)]
 enum StreamState {
     Header,
-    Origin { iter: SnapshotArcOriginIter, first: bool },
-    Key { iter: SnapshotArcRouterKeyIter, first: bool },
-    Aspa { iter: SnapshotArcAspaIter, first: bool },
-    Done,
+    OriginBefore,
+    Origin,
+    OriginAfter,
+    KeyBefore,
+    Key,
+    KeyAfter,
+    AspaBefore,
+    Aspa,
+    AspaAfter,
+    Done
 }
 
 impl<Target: io::Write> OutputStream<Target> {
@@ -515,79 +523,96 @@ impl<Target: io::Write> OutputStream<Target> {
             StreamState::Header => {
                 self.formatter.header(
                     &self.snapshot, &self.metrics, target
-                )?;
-                self.progress_header(target)?
-            }
-            StreamState::Origin { ref mut iter, ref mut first } => {
+                )?
+            },
+            StreamState::OriginBefore => {
+                self.formatter.before_origins(target, self.output.route_origins)?
+            },
+            StreamState::Origin => {
+                let mut iter = self.snapshot.clone().arc_origin_iter();
+                let mut first = true;
                 loop {
                     let (origin, info) = match iter.next_with_info() {
                         Some((origin, info)) => (origin, info),
                         None => {
-                            self.formatter.after_origins(target)?;
                             break
                         }
                     };
                     if !self.output.include_origin(origin) {
                         continue
                     }
-                    if *first {
-                        *first = false;
+                    if first {
+                        first = false;
                     }
                     else {
                         self.formatter.origin_delimiter(target)?;
                     }
                     self.formatter.origin(origin, info, target)?;
-                    return Ok(true)
                 }
-                self.progress_origin(target)?
-            }
-            StreamState::Key { ref mut iter, ref mut first } => {
+                StreamState::OriginAfter
+            },
+            StreamState::OriginAfter => {
+                self.formatter.after_origins(target)?
+            },
+            StreamState::KeyBefore => {
+                self.formatter.before_router_keys(target, self.output.router_keys)?
+            },
+            StreamState::Key => {
+                let mut iter = self.snapshot.clone().arc_router_key_iter();
+                let mut first = true;
                 loop {
                     let (key, info) = match iter.next_with_info() {
                         Some((key, info)) => (key, info),
                         None => {
-                            self.formatter.after_router_keys(target)?;
                             break
                         }
                     };
                     if !self.output.include_router_key(key) {
                         continue
                     }
-                    if *first {
-                        *first = false;
+                    if first {
+                        first = false;
                     }
                     else {
                         self.formatter.router_key_delimiter(target)?;
                     }
                     self.formatter.router_key(key, info, target)?;
-                    return Ok(true)
                 }
-                self.progress_key(target)?
-            }
-            StreamState::Aspa { ref mut iter, ref mut first } => {
+                StreamState::KeyAfter
+            },
+            StreamState::KeyAfter => {
+                self.formatter.after_router_keys(target)?
+            },
+            StreamState::AspaBefore => {
+                self.formatter.before_aspas(target, self.output.aspas)?
+            },
+            StreamState::Aspa => {
+                let mut iter = self.snapshot.clone().arc_aspa_iter();
+                let mut first = true;
                 loop {
                     let (aspa, info) = match iter.next_with_info() {
                         Some((aspa, info)) => (aspa, info),
                         None => {
-                            self.formatter.after_aspas(target)?;
                             break
                         }
                     };
                     if !self.output.include_aspa(aspa) {
                         continue
                     }
-                    if *first {
-                        *first = false;
+                    if first {
+                        first = false;
                     }
                     else {
                         self.formatter.aspa_delimiter(target)?;
                     }
                     self.formatter.aspa(aspa, info, target)?;
-                    return Ok(true)
                 }
-                StreamState::Done
-            }
-            StreamState::Done => return Ok(false)
+                StreamState::AspaAfter
+            },
+            StreamState::AspaAfter => {
+                self.formatter.after_aspas(target)?
+            },
+            StreamState::Done => return Ok(false),
         };
 
         if matches!(next, StreamState::Done) {
@@ -599,53 +624,53 @@ impl<Target: io::Write> OutputStream<Target> {
         Ok(true)
     }
 
-    /// Progresses from the header state to the next state.
-    fn progress_header(
-        &self, target: &mut Target
-    ) -> Result<StreamState, io::Error> {
-        if self.output.route_origins {
-            self.formatter.before_origins(target)?;
-            Ok(StreamState::Origin {
-                iter: self.snapshot.clone().arc_origin_iter(),
-                first: true,
-            })
-        }
-        else {
-            self.progress_origin(target)
-        }
-    }
+//    /// Progresses from the header state to the next state.
+//     fn progress_header(
+//         &self, target: &mut Target
+//     ) -> Result<StreamState, io::Error> {
+//         if self.output.route_origins {
+//             self.formatter.before_origins(target)?;
+//             Ok(StreamState::Origin {
+//                 iter: self.snapshot.clone().arc_origin_iter(),
+//                 first: true,
+//             })
+//         }
+//         else {
+//             self.progress_origin(target)
+//         }
+//     }
 
-    /// Progresses from the origin state to the next state.
-    fn progress_origin(
-        &self, target: &mut Target
-    ) -> Result<StreamState, io::Error> {
-        if self.output.router_keys {
-            self.formatter.before_router_keys(target)?;
-            Ok(StreamState::Key {
-                iter: self.snapshot.clone().arc_router_key_iter(),
-                first: true
-            })
-        }
-        else {
-            self.progress_key(target)
-        }
-    }
+//     /// Progresses from the origin state to the next state.
+//     fn progress_origin(
+//         &self, target: &mut Target
+//     ) -> Result<StreamState, io::Error> {
+//         if self.output.router_keys {
+//             self.formatter.before_router_keys(target)?;
+//             Ok(StreamState::Key {
+//                 iter: self.snapshot.clone().arc_router_key_iter(),
+//                 first: true
+//             })
+//         }
+//         else {
+//             self.progress_key(target)
+//         }
+//     }
 
-    /// Progresses from the router key state to the next state.
-    fn progress_key(
-        &self, target: &mut Target
-    ) -> Result<StreamState, io::Error> {
-        if self.output.aspas {
-            self.formatter.before_aspas(target)?;
-            Ok(StreamState::Aspa {
-                iter: self.snapshot.clone().arc_aspa_iter(),
-                first: true
-            })
-        }
-        else {
-            Ok(StreamState::Done)
-        }
-    }
+//     /// Progresses from the router key state to the next state.
+//     fn progress_key(
+//         &self, target: &mut Target
+//     ) -> Result<StreamState, io::Error> {
+//         if self.output.aspas {
+//             self.formatter.before_aspas(target)?;
+//             Ok(StreamState::Aspa {
+//                 iter: self.snapshot.clone().arc_aspa_iter(),
+//                 first: true
+//             })
+//         }
+//         else {
+//             Ok(StreamState::Done)
+//         }
+//     }
 }
 
 impl Iterator for OutputStream<Vec<u8>> {
@@ -693,15 +718,15 @@ impl error::Error for QueryError { }
 trait Formatter<W> {
     fn header(
         &self, snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
+    ) -> Result<StreamState, io::Error> {
         let _ = (snapshot, metrics, target);
-        Ok(())
+        Ok(StreamState::OriginBefore)
     }
 
     fn before_origins(
-        &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+        &self, _target: &mut W, _origins: bool
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::Origin)
     }
 
     fn origin(
@@ -715,14 +740,14 @@ trait Formatter<W> {
 
     fn after_origins(
         &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::KeyBefore)
     }
 
     fn before_router_keys(
-        &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+        &self, _target: &mut W, _keys: bool
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::Key)
     }
 
     fn router_key(
@@ -738,14 +763,14 @@ trait Formatter<W> {
 
     fn after_router_keys(
         &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::AspaBefore)
     }
 
     fn before_aspas(
-        &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+        &self, _target: &mut W, _aspas: bool
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::Aspa)
     }
 
     fn aspa(
@@ -761,512 +786,512 @@ trait Formatter<W> {
 
     fn after_aspas(
         &self, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
+    ) -> Result<StreamState, io::Error> {
+        Ok(StreamState::Done)
     }
 
     fn footer(
         &self, metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
+    ) -> Result<StreamState, io::Error> {
         let _ = (metrics, target);
-        Ok(())
+        Ok(StreamState::Done)
     }
 }
 
 
 //------------ Csv -----------------------------------------------------------
 
-struct Csv;
+// struct Csv;
 
-impl<W: io::Write> Formatter<W> for Csv {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "ASN,IP Prefix,Max Length,Trust Anchor")
-    }
+// impl<W: io::Write> Formatter<W> for Csv {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "ASN,IP Prefix,Max Length,Trust Anchor")
+//     }
 
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "{},{}/{},{},{}",
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-            info.tal_name().unwrap_or("N/A"),
-        )
-    }
-}
-
-
-//------------ CompatCsv -----------------------------------------------------
-
-struct CompatCsv;
-
-impl<W: io::Write> Formatter<W> for CompatCsv {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(
-            target, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\""
-        )
-    }
-
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-            info.tal_name().unwrap_or("N/A"),
-        )
-    }
-}
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "{},{}/{},{},{}",
+//             origin.asn,
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//             info.tal_name().unwrap_or("N/A"),
+//         )
+//     }
+// }
 
 
-//------------ ExtendedCsv ---------------------------------------------------
+// //------------ CompatCsv -----------------------------------------------------
 
-struct ExtendedCsv;
+// struct CompatCsv;
 
-impl ExtendedCsv {
-    // 2017-08-25 13:12:19
-    const TIME_ITEMS: &'static [Item<'static>] = &[
-        Item::Numeric(Numeric::Year, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Month, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Day, Pad::Zero),
-        Item::Literal(" "),
-        Item::Numeric(Numeric::Hour, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Minute, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Second, Pad::Zero),
-    ];
-}
+// impl<W: io::Write> Formatter<W> for CompatCsv {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(
+//             target, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\""
+//         )
+//     }
 
-impl<W: io::Write> Formatter<W> for ExtendedCsv {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "URI,ASN,IP Prefix,Max Length,Not Before,Not After")
-    }
-
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target, "{},{},{}/{},{},",
-            info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-        )?;
-        match info.validity() {
-            Some(validity) => {
-                writeln!(target, "{},{}",
-                    validity.not_before().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    ),
-                    validity.not_after().format_with_items(
-                        Self::TIME_ITEMS.iter().cloned()
-                    )
-                )
-            }
-            None => writeln!(target, "N/A,N/A"),
-        }
-    }
-}
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
+//             origin.asn,
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//             info.tal_name().unwrap_or("N/A"),
+//         )
+//     }
+// }
 
 
-//------------ Json ----------------------------------------------------------
+// //------------ ExtendedCsv ---------------------------------------------------
 
-struct Json;
+// struct ExtendedCsv;
 
-impl<W: io::Write> Formatter<W> for Json {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-            "{{\
-            \n  \"metadata\": {{\
-            \n    \"generated\": {},\
-            \n    \"generatedTime\": \"{}\"\
-            \n  }}",
-            metrics.time.timestamp(),
-            format_iso_date(metrics.time)
-        )
-    }
+// impl ExtendedCsv {
+//     // 2017-08-25 13:12:19
+//     const TIME_ITEMS: &'static [Item<'static>] = &[
+//         Item::Numeric(Numeric::Year, Pad::Zero),
+//         Item::Literal("-"),
+//         Item::Numeric(Numeric::Month, Pad::Zero),
+//         Item::Literal("-"),
+//         Item::Numeric(Numeric::Day, Pad::Zero),
+//         Item::Literal(" "),
+//         Item::Numeric(Numeric::Hour, Pad::Zero),
+//         Item::Literal(":"),
+//         Item::Numeric(Numeric::Minute, Pad::Zero),
+//         Item::Literal(":"),
+//         Item::Numeric(Numeric::Second, Pad::Zero),
+//     ];
+// }
 
-    fn before_origins(
-        &self, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-            ",\
-            \n  \"roas\": ["
-        )
-    }
+// impl<W: io::Write> Formatter<W> for ExtendedCsv {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "URI,ASN,IP Prefix,Max Length,Not Before,Not After")
+//     }
 
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-            \"maxLength\": {}, \"ta\": \"{}\" }}",
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-            info.tal_name().unwrap_or("N/A"),
-        )
-    }
-
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
-
-    fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",\n  \"routerKeys\": [")
-    }
-
-    fn router_key(
-        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
-            \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
-            key.asn,
-            key.key_identifier,
-            key.key_info,
-            info.tal_name().unwrap_or("N/A"),
-        )
-    }
-
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
-
-    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",\n  \"aspas\": [")
-    }
-
-    fn aspa(
-        &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
-        )?;
-
-        let mut first = true;
-        for item in aspa.providers.iter() {
-            if first {
-                write!(target, "\"{}\"", item)?;
-                first = false;
-            }
-            else {
-                write!(target, ", \"{}\"", item)?;
-            }
-        }
-
-        write!(
-            target, "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
-        )
-    }
-
-    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
-
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "\n}}")
-    }
-}
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target, "{},{},{}/{},{},",
+//             info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
+//             origin.asn,
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//         )?;
+//         match info.validity() {
+//             Some(validity) => {
+//                 writeln!(target, "{},{}",
+//                     validity.not_before().format_with_items(
+//                         Self::TIME_ITEMS.iter().cloned()
+//                     ),
+//                     validity.not_after().format_with_items(
+//                         Self::TIME_ITEMS.iter().cloned()
+//                     )
+//                 )
+//             }
+//             None => writeln!(target, "N/A,N/A"),
+//         }
+//     }
+// }
 
 
-//------------ ExtendedJson --------------------------------------------------
+// //------------ Json ----------------------------------------------------------
 
-struct ExtendedJson;
+// struct Json;
 
-impl ExtendedJson {
-    fn payload_info(
-        info: &PayloadInfo, rpki_type: &str, target: &mut impl io::Write
-    ) -> Result<(), io::Error> {
-        let mut first = true;
-        for item in info {
-            if let Some(roa) = item.publish_info() {
-                if !first {
-                    write!(target, ", ")?;
-                }
-                else {
-                    first = false;
-                }
-                write!(target,
-                    " {{ \"type\": \"{}\", \"uri\": ",
-                    rpki_type,
-                )?;
-                match roa.uri.as_ref() {
-                    Some(uri) => write!(target, "\"{}\"", uri)?,
-                    None => write!(target, "null")?
-                }
+// impl<W: io::Write> Formatter<W> for Json {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//             "{{\
+//             \n  \"metadata\": {{\
+//             \n    \"generated\": {},\
+//             \n    \"generatedTime\": \"{}\"\
+//             \n  }}",
+//             metrics.time.timestamp(),
+//             format_iso_date(metrics.time)
+//         )
+//     }
 
-                write!(target,
-                    ", \"tal\": \"{}\", \
-                    \"validity\": {{ \"notBefore\": \"{}\", \
-                    \"notAfter\": \"{}\" }}, \
-                    \"chainValidity\": {{ \"notBefore\": \"{}\", \
-                    \"notAfter\": \"{}\" }}, \
-                    \"stale\": \"{}\" \
-                    }}",
-                    json_str(roa.tal.name()),
-                    format_iso_date(roa.roa_validity.not_before().into()),
-                    format_iso_date(roa.roa_validity.not_after().into()),
-                    format_iso_date(roa.chain_validity.not_before().into()),
-                    format_iso_date(roa.chain_validity.not_after().into()),
-                    format_iso_date(roa.point_stale.into()),
-                )?;
-            }
-            if let Some(exc) = item.exception_info() {
-                if !first {
-                    write!(target, ", ")?;
-                }
-                else {
-                    first = false;
-                }
-                write!(target, " {{ \"type\": \"exception\", \"path\": ")?;
-                match exc.path.as_ref() {
-                    Some(path) => {
-                        write!(target, "\"{}\"", json_str(path.display()))?
-                    }
-                    None => write!(target, "null")?,
-                }
-                if let Some(comment) = exc.comment.as_ref() {
-                    write!(
-                        target, ", \"comment\": \"{}\"", json_str(comment)
-                    )?
-                }
-                write!(target, " }}")?;
-            }
-        }
-        Ok(())
-    }
-}
+//     fn before_origins(
+//         &self, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//             ",\
+//             \n  \"roas\": ["
+//         )
+//     }
 
-impl<W: io::Write> Formatter<W> for ExtendedJson {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "{{\
-            \n  \"metadata\": {{\
-            \n    \"generated\": {},\
-            \n    \"generatedTime\": \"{}\"\
-            \n  }}",
-            metrics.time.timestamp(),
-            format_iso_date(metrics.time)
-        )
-    }
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+//             \"maxLength\": {}, \"ta\": \"{}\" }}",
+//             origin.asn,
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//             info.tal_name().unwrap_or("N/A"),
+//         )
+//     }
 
-    fn before_origins(
-        &self, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-            ",\
-            \n  \"roas\": ["
-        )
-    }
+//     fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
 
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-            \"maxLength\": {}, \"source\": [",
-            origin.asn,
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-        )?;
-        Self::payload_info(info, "roa", target)?;
-        write!(target, "] }}")
-    }
+//     fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
 
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
+//     fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",\n  \"routerKeys\": [")
+//     }
 
-    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
+//     fn router_key(
+//         &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+//             \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
+//             key.asn,
+//             key.key_identifier,
+//             key.key_info,
+//             info.tal_name().unwrap_or("N/A"),
+//         )
+//     }
 
-    fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",\n  \"routerKeys\": [")
-    }
+//     fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
 
-    fn router_key(
-        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
-            \"routerPublicKey\": \"{}\", \"source\": [",
-            key.asn,
-            key.key_identifier,
-            key.key_info,
-        )?;
-        Self::payload_info(info, "cer", target)?;
-        write!(target, "] }}")
-    }
+//     fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
 
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
+//     fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",\n  \"aspas\": [")
+//     }
 
-    fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
+//     fn aspa(
+//         &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
+//         )?;
 
-    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",\n  \"aspas\": [")
-    }
+//         let mut first = true;
+//         for item in aspa.providers.iter() {
+//             if first {
+//                 write!(target, "\"{}\"", item)?;
+//                 first = false;
+//             }
+//             else {
+//                 write!(target, ", \"{}\"", item)?;
+//             }
+//         }
 
-    fn aspa(
-        &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-            "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
-        )?;
+//         write!(
+//             target, "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
+//         )
+//     }
 
-        let mut first = true;
-        for item in aspa.providers.iter() {
-            if first {
-                write!(target, "\"{}\"", item)?;
-                first = false;
-            }
-            else {
-                write!(target, ", \"{}\"", item)?;
-            }
-        }
+//     fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
 
-        write!(target, "], \"source\": [")?;
-        Self::payload_info(info, "aspa", target)?;
-        write!(target, "] }}")
-    }
+//     fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
 
-    fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-
-    fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
-        write!(target, "\n  ]")
-    }
-
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "\n}}")
-    }
-}
+//     fn footer(
+//         &self, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "\n}}")
+//     }
+// }
 
 
-//------------ Slurm ---------------------------------------------------------
+// //------------ ExtendedJson --------------------------------------------------
 
-struct Slurm;
+// struct ExtendedJson;
 
-impl<W: io::Write> Formatter<W> for Slurm {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-            "{{\
-            \n  \"slurmVersion\": 1,\
-            \n  \"validationOutputFilters\": {{\
-            \n    \"prefixFilters\": [ ],\
-            \n    \"bgpsecFilters\": [ ]\
-            \n  }},\
-            \n  \"locallyAddedAssertions\": {{\
-            \n    \"prefixAssertions\": ["
-        )
-    }
+// impl ExtendedJson {
+//     fn payload_info(
+//         info: &PayloadInfo, rpki_type: &str, target: &mut impl io::Write
+//     ) -> Result<(), io::Error> {
+//         let mut first = true;
+//         for item in info {
+//             if let Some(roa) = item.publish_info() {
+//                 if !first {
+//                     write!(target, ", ")?;
+//                 }
+//                 else {
+//                     first = false;
+//                 }
+//                 write!(target,
+//                     " {{ \"type\": \"{}\", \"uri\": ",
+//                     rpki_type,
+//                 )?;
+//                 match roa.uri.as_ref() {
+//                     Some(uri) => write!(target, "\"{}\"", uri)?,
+//                     None => write!(target, "null")?
+//                 }
 
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-            "      {{\
-            \n        \"asn\": {},\
-            \n        \"prefix\": \"{}/{}\",",
-            origin.asn.into_u32(),
-            origin.prefix.addr(), origin.prefix.prefix_len()
-        )?;
-        if let Some(max_len) = origin.prefix.max_len() {
-            writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
-        }
-        write!(target,
-            "        \"comment\": \"{}\"\
-            \n      }}",
-            info.tal_name().unwrap_or("N/A")
-        )
-    }
+//                 write!(target,
+//                     ", \"tal\": \"{}\", \
+//                     \"validity\": {{ \"notBefore\": \"{}\", \
+//                     \"notAfter\": \"{}\" }}, \
+//                     \"chainValidity\": {{ \"notBefore\": \"{}\", \
+//                     \"notAfter\": \"{}\" }}, \
+//                     \"stale\": \"{}\" \
+//                     }}",
+//                     json_str(roa.tal.name()),
+//                     format_iso_date(roa.roa_validity.not_before().into()),
+//                     format_iso_date(roa.roa_validity.not_after().into()),
+//                     format_iso_date(roa.chain_validity.not_before().into()),
+//                     format_iso_date(roa.chain_validity.not_after().into()),
+//                     format_iso_date(roa.point_stale.into()),
+//                 )?;
+//             }
+//             if let Some(exc) = item.exception_info() {
+//                 if !first {
+//                     write!(target, ", ")?;
+//                 }
+//                 else {
+//                     first = false;
+//                 }
+//                 write!(target, " {{ \"type\": \"exception\", \"path\": ")?;
+//                 match exc.path.as_ref() {
+//                     Some(path) => {
+//                         write!(target, "\"{}\"", json_str(path.display()))?
+//                     }
+//                     None => write!(target, "null")?,
+//                 }
+//                 if let Some(comment) = exc.comment.as_ref() {
+//                     write!(
+//                         target, ", \"comment\": \"{}\"", json_str(comment)
+//                     )?
+//                 }
+//                 write!(target, " }}")?;
+//             }
+//         }
+//         Ok(())
+//     }
+// }
 
-    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target,
-            "\n    ],\
-             \n    \"bgpsecAssertions\": ["
-        )
-    }
+// impl<W: io::Write> Formatter<W> for ExtendedJson {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "{{\
+//             \n  \"metadata\": {{\
+//             \n    \"generated\": {},\
+//             \n    \"generatedTime\": \"{}\"\
+//             \n  }}",
+//             metrics.time.timestamp(),
+//             format_iso_date(metrics.time)
+//         )
+//     }
 
-    fn router_key(
-        &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(target,
-             "      {{\
-            \n        \"asn\": {},\
-            \n        \"SKI\": \"",
-            key.asn.into_u32(),
-        )?;
-        base64::Slurm.write_encoded_slice(
-            key.key_identifier.as_slice(),
-            target,
-        )?;
-        write!(target, "\",\
-            \n        \"routerPublicKey\": \""
-        )?;
-        base64::Slurm.write_encoded_slice(key.key_info.as_slice(), target)?;
-        write!(target, "\",\
-            \n        \"comment\": \"{}\"
-            \n      }}",
-            info.tal_name().unwrap_or("N/A")
-        )
-    }
+//     fn before_origins(
+//         &self, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//             ",\
+//             \n  \"roas\": ["
+//         )
+//     }
 
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target,
-           "\n    ]\
-            \n  }}\
-            \n}}"
-        )
-    }
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+//             \"maxLength\": {}, \"source\": [",
+//             origin.asn,
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//         )?;
+//         Self::payload_info(info, "roa", target)?;
+//         write!(target, "] }}")
+//     }
 
-    fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
+//     fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
 
-    fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, ",")
-    }
-}
+//     fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
+
+//     fn before_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",\n  \"routerKeys\": [")
+//     }
+
+//     fn router_key(
+//         &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+//             \"routerPublicKey\": \"{}\", \"source\": [",
+//             key.asn,
+//             key.key_identifier,
+//             key.key_info,
+//         )?;
+//         Self::payload_info(info, "cer", target)?;
+//         write!(target, "] }}")
+//     }
+
+//     fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
+
+//     fn after_router_keys(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
+
+//     fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",\n  \"aspas\": [")
+//     }
+
+//     fn aspa(
+//         &self, aspa: &Aspa, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//             "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
+//         )?;
+
+//         let mut first = true;
+//         for item in aspa.providers.iter() {
+//             if first {
+//                 write!(target, "\"{}\"", item)?;
+//                 first = false;
+//             }
+//             else {
+//                 write!(target, ", \"{}\"", item)?;
+//             }
+//         }
+
+//         write!(target, "], \"source\": [")?;
+//         Self::payload_info(info, "aspa", target)?;
+//         write!(target, "] }}")
+//     }
+
+//     fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
+
+//     fn after_aspas(&self, target: &mut W) -> Result<(), io::Error> {
+//         write!(target, "\n  ]")
+//     }
+
+//     fn footer(
+//         &self, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "\n}}")
+//     }
+// }
+
+
+// //------------ Slurm ---------------------------------------------------------
+
+// struct Slurm;
+
+// impl<W: io::Write> Formatter<W> for Slurm {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//             "{{\
+//             \n  \"slurmVersion\": 1,\
+//             \n  \"validationOutputFilters\": {{\
+//             \n    \"prefixFilters\": [ ],\
+//             \n    \"bgpsecFilters\": [ ]\
+//             \n  }},\
+//             \n  \"locallyAddedAssertions\": {{\
+//             \n    \"prefixAssertions\": ["
+//         )
+//     }
+
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//             "      {{\
+//             \n        \"asn\": {},\
+//             \n        \"prefix\": \"{}/{}\",",
+//             origin.asn.into_u32(),
+//             origin.prefix.addr(), origin.prefix.prefix_len()
+//         )?;
+//         if let Some(max_len) = origin.prefix.max_len() {
+//             writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
+//         }
+//         write!(target,
+//             "        \"comment\": \"{}\"\
+//             \n      }}",
+//             info.tal_name().unwrap_or("N/A")
+//         )
+//     }
+
+//     fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target,
+//             "\n    ],\
+//              \n    \"bgpsecAssertions\": ["
+//         )
+//     }
+
+//     fn router_key(
+//         &self, key: &RouterKey, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(target,
+//              "      {{\
+//             \n        \"asn\": {},\
+//             \n        \"SKI\": \"",
+//             key.asn.into_u32(),
+//         )?;
+//         base64::Slurm.write_encoded_slice(
+//             key.key_identifier.as_slice(),
+//             target,
+//         )?;
+//         write!(target, "\",\
+//             \n        \"routerPublicKey\": \""
+//         )?;
+//         base64::Slurm.write_encoded_slice(key.key_info.as_slice(), target)?;
+//         write!(target, "\",\
+//             \n        \"comment\": \"{}\"
+//             \n      }}",
+//             info.tal_name().unwrap_or("N/A")
+//         )
+//     }
+
+//     fn footer(
+//         &self, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target,
+//            "\n    ]\
+//             \n  }}\
+//             \n}}"
+//         )
+//     }
+
+//     fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
+
+//     fn router_key_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
+//         writeln!(target, ",")
+//     }
+// }
 
 
 //------------ Slurm2 --------------------------------------------------------
@@ -1276,7 +1301,7 @@ struct Slurm2;
 impl<W: io::Write> Formatter<W> for Slurm2 {
     fn header(
         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
+    ) -> Result<StreamState, io::Error> {
         writeln!(target,
             "{{\
             \n  \"slurmVersion\": 2,\
@@ -1285,9 +1310,19 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
             \n    \"bgpsecFilters\": [ ],\
             \n    \"aspaFilters\": [ ]\
             \n  }},\
-            \n  \"locallyAddedAssertions\": {{\
-            \n    \"prefixAssertions\": ["
-        )
+            \n  \"locallyAddedAssertions\": {{"
+        )?;
+        Ok(StreamState::OriginBefore)
+    }
+
+    fn before_origins(
+            &self, target: &mut W, origins: bool
+        ) -> Result<StreamState, io::Error> {
+        writeln!(target, "            \n    \"prefixAssertions\": [")?;
+        match origins {
+            true => Ok(StreamState::Origin),
+            false => Ok(StreamState::OriginAfter)
+        }
     }
 
     fn origin(
@@ -1310,11 +1345,22 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
         )
     }
 
-    fn after_origins(&self, target: &mut W) -> Result<(), io::Error> {
+    fn after_origins(&self, target: &mut W) -> Result<StreamState, io::Error> {
         writeln!(target,
-            "\n    ],\
-             \n    \"bgpsecAssertions\": ["
-        )
+            "\n    ],"
+        )?;
+        Ok(StreamState::KeyBefore)
+    }
+
+    fn before_router_keys(
+            &self, target: &mut W, keys: bool
+        ) -> Result<StreamState, io::Error> {
+        writeln!(target, 
+        "    \"bgpsecAssertions\": [")?;
+        match keys {
+            true => Ok(StreamState::Key),
+            false => Ok(StreamState::KeyAfter)
+        }
     }
 
     fn router_key(
@@ -1341,8 +1387,19 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
         )
     }
 
-    fn before_aspas(&self, target: &mut W) -> Result<(), io::Error> {
-        writeln!(target, "\n    ],\n    \"aspaAssertions\": [")
+    fn after_router_keys(
+            &self, target: &mut W
+        ) -> Result<StreamState, io::Error> {
+        writeln!(target, "\n    ],")?;
+        Ok(StreamState::AspaBefore)
+    }
+
+    fn before_aspas(&self, target: &mut W, aspas: bool) -> Result<StreamState, io::Error> {
+        writeln!(target, "    \"aspaAssertions\": [")?;
+        match aspas {
+            true => Ok(StreamState::Aspa),
+            false => Ok(StreamState::AspaAfter)
+        }
     }
 
     fn aspa(
@@ -1370,18 +1427,25 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
             \n      }}", info.tal_name().unwrap_or("N/A"))
     }
 
+    fn after_aspas(
+            &self, target: &mut W
+        ) -> Result<StreamState, io::Error> {
+        writeln!(target, "\n    ]")?;
+        Ok(StreamState::Done)
+    }
+
     fn aspa_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
         writeln!(target, ",")
     }
 
     fn footer(
         &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
+    ) -> Result<StreamState, io::Error> {
         writeln!(target,
-           "\n    ]\
-            \n  }}\
+           "\n  }}\
             \n}}"
-        )
+        )?;
+        Ok(StreamState::Done)
     }
 
     fn origin_delimiter(&self, target: &mut W) -> Result<(), io::Error> {
@@ -1393,218 +1457,218 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
     }
 }
 
-//------------ Openbgpd ------------------------------------------------------
+// //------------ Openbgpd ------------------------------------------------------
 
-struct Openbgpd;
+// struct Openbgpd;
 
-impl<W: io::Write> Formatter<W> for Openbgpd {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "roa-set {{")
-    }
+// impl<W: io::Write> Formatter<W> for Openbgpd {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "roa-set {{")
+//     }
 
-    fn footer(
-        &self, _metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "}}")
-    }
+//     fn footer(
+//         &self, _metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "}}")
+//     }
 
-    fn origin(
-        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        write!(
-            target, "    {}/{}",
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-        )?;
-        let max_len = origin.prefix.resolved_max_len();
-        if origin.prefix.prefix_len() < max_len {
-            write!(target, " maxlen {}", max_len)?;
-        }
-        writeln!(target, " source-as {}", u32::from(origin.asn))
-    }
-}
-
-
-//------------ Bird1 ---------------------------------------------------------
-
-struct Bird1;
-
-impl<W: io::Write> Formatter<W> for Bird1 {
-    fn origin(
-        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "roa {}/{} max {} as {};",
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-            u32::from(origin.asn)
-        )
-    }
-}
+//     fn origin(
+//         &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         write!(
+//             target, "    {}/{}",
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//         )?;
+//         let max_len = origin.prefix.resolved_max_len();
+//         if origin.prefix.prefix_len() < max_len {
+//             write!(target, " maxlen {}", max_len)?;
+//         }
+//         writeln!(target, " source-as {}", u32::from(origin.asn))
+//     }
+// }
 
 
-//------------ Bird2 ---------------------------------------------------------
+// //------------ Bird1 ---------------------------------------------------------
 
-struct Bird2;
+// struct Bird1;
 
-impl<W: io::Write> Formatter<W> for Bird2 {
-    fn origin(
-        &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        writeln!(target, "route {}/{} max {} as {};",
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.prefix.resolved_max_len(),
-            u32::from(origin.asn)
-        )
-    }
-}
-
-
-//------------ Rpsl ----------------------------------------------------------
-
-struct Rpsl;
-
-impl Rpsl {
-    const TIME_ITEMS: &'static [Item<'static>] = &[
-        Item::Numeric(Numeric::Year, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Month, Pad::Zero),
-        Item::Literal("-"),
-        Item::Numeric(Numeric::Day, Pad::Zero),
-        Item::Literal("T"),
-        Item::Numeric(Numeric::Hour, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Minute, Pad::Zero),
-        Item::Literal(":"),
-        Item::Numeric(Numeric::Second, Pad::Zero),
-        Item::Literal("Z"),
-    ];
-}
-
-impl<W: io::Write> Formatter<W> for Rpsl {
-    fn origin(
-        &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
-    ) -> Result<(), io::Error> {
-        let now = Utc::now().format_with_items(
-            Self::TIME_ITEMS.iter().cloned()
-        );
-        writeln!(target,
-            "\n{}: {}/{}\norigin: {}\n\
-            descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
-            last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
-            if origin.prefix.addr().is_ipv4() { "route" }
-            else { "route6" },
-            origin.prefix.addr(), origin.prefix.prefix_len(),
-            origin.asn, now, now,
-            info.tal_name().map(|name| {
-                name.to_uppercase()
-            }).unwrap_or_else(|| "N/A".into())
-        )
-    }
-}
+// impl<W: io::Write> Formatter<W> for Bird1 {
+//     fn origin(
+//         &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "roa {}/{} max {} as {};",
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//             u32::from(origin.asn)
+//         )
+//     }
+// }
 
 
+// //------------ Bird2 ---------------------------------------------------------
 
-//------------ Summary -------------------------------------------------------
+// struct Bird2;
 
-/// Output only a summary.
-pub struct Summary;
+// impl<W: io::Write> Formatter<W> for Bird2 {
+//     fn origin(
+//         &self, origin: RouteOrigin, _info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         writeln!(target, "route {}/{} max {} as {};",
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.prefix.resolved_max_len(),
+//             u32::from(origin.asn)
+//         )
+//     }
+// }
 
-impl Summary {
-    fn produce_header(
-        metrics: &Metrics,
-        mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
-    ) -> Result<(), io::Error> {
-        line(format_args!("Summary at {}", metrics.time))?;
-        for tal in &metrics.tals {
-            line(format_args!("{}: ", tal.name()))?;
-            line(format_args!(
-                "            ROAs: {:7} verified;",
-                tal.publication.valid_roas
-            ))?;
-            line(format_args!(
-                "            VRPs: {:7} verified, {:7} final;",
-                tal.payload.vrps().valid,
-                tal.payload.vrps().contributed
-            ))?;
-            line(format_args!(
-                "    router certs: {:7} verified;",
-                tal.publication.valid_router_certs,
-            ))?;
-            line(format_args!(
-                "     router keys: {:7} verified, {:7} final;",
-                tal.payload.router_keys.valid,
-                tal.payload.router_keys.contributed
-            ))?;
-            line(format_args!(
-                "           ASPAs: {:7} verified, {:7} final;",
-                tal.publication.valid_aspas,
-                tal.payload.aspas.contributed
-            ))?;
-        }
-        line(format_args!("total: "))?;
-        line(format_args!(
-            "            ROAs: {:7} verified;",
-            metrics.publication.valid_roas
-        ))?;
-        line(format_args!(
-            "            VRPs: {:7} verified, {:7} final;",
-            metrics.snapshot.payload.vrps().valid,
-            metrics.snapshot.payload.vrps().contributed
-        ))?;
-        line(format_args!(
-            "    router certs: {:7} verified;",
-            metrics.publication.valid_router_certs,
-        ))?;
-        line(format_args!(
-            "     router keys: {:7} verified, {:7} final;",
-            metrics.snapshot.payload.router_keys.valid,
-            metrics.snapshot.payload.router_keys.contributed
-        ))?;
-        line(format_args!(
-            "           ASPAs: {:7} verified, {:7} final;",
-            metrics.publication.valid_aspas,
-            metrics.snapshot.payload.aspas.contributed
-        ))?;
-        Ok(())
-    }
 
-    pub fn log(metrics: &Metrics) {
-        Self::produce_header(metrics, |args| {
-            info!("{}", args);
-            Ok(())
-        }).unwrap()
-    }
-}
+// //------------ Rpsl ----------------------------------------------------------
 
-impl<W: io::Write> Formatter<W> for Summary {
-    fn header(
-        &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
-    ) -> Result<(), io::Error> {
-        Self::produce_header(metrics, |args| {
-            writeln!(target, "{}", args)
-        })
-    }
+// struct Rpsl;
 
-    fn origin(
-        &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
-    }
-}
+// impl Rpsl {
+//     const TIME_ITEMS: &'static [Item<'static>] = &[
+//         Item::Numeric(Numeric::Year, Pad::Zero),
+//         Item::Literal("-"),
+//         Item::Numeric(Numeric::Month, Pad::Zero),
+//         Item::Literal("-"),
+//         Item::Numeric(Numeric::Day, Pad::Zero),
+//         Item::Literal("T"),
+//         Item::Numeric(Numeric::Hour, Pad::Zero),
+//         Item::Literal(":"),
+//         Item::Numeric(Numeric::Minute, Pad::Zero),
+//         Item::Literal(":"),
+//         Item::Numeric(Numeric::Second, Pad::Zero),
+//         Item::Literal("Z"),
+//     ];
+// }
+
+// impl<W: io::Write> Formatter<W> for Rpsl {
+//     fn origin(
+//         &self, origin: RouteOrigin, info: &PayloadInfo, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         let now = Utc::now().format_with_items(
+//             Self::TIME_ITEMS.iter().cloned()
+//         );
+//         writeln!(target,
+//             "\n{}: {}/{}\norigin: {}\n\
+//             descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
+//             last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
+//             if origin.prefix.addr().is_ipv4() { "route" }
+//             else { "route6" },
+//             origin.prefix.addr(), origin.prefix.prefix_len(),
+//             origin.asn, now, now,
+//             info.tal_name().map(|name| {
+//                 name.to_uppercase()
+//             }).unwrap_or_else(|| "N/A".into())
+//         )
+//     }
+// }
 
 
 
-//------------ NoOutput-------------------------------------------------------
+// //------------ Summary -------------------------------------------------------
 
-struct NoOutput;
+// /// Output only a summary.
+// pub struct Summary;
 
-impl<W: io::Write> Formatter<W> for NoOutput {
-    fn origin(
-        &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
-    ) -> Result<(), io::Error> {
-        Ok(())
-    }
-}
+// impl Summary {
+//     fn produce_header(
+//         metrics: &Metrics,
+//         mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
+//     ) -> Result<(), io::Error> {
+//         line(format_args!("Summary at {}", metrics.time))?;
+//         for tal in &metrics.tals {
+//             line(format_args!("{}: ", tal.name()))?;
+//             line(format_args!(
+//                 "            ROAs: {:7} verified;",
+//                 tal.publication.valid_roas
+//             ))?;
+//             line(format_args!(
+//                 "            VRPs: {:7} verified, {:7} final;",
+//                 tal.payload.vrps().valid,
+//                 tal.payload.vrps().contributed
+//             ))?;
+//             line(format_args!(
+//                 "    router certs: {:7} verified;",
+//                 tal.publication.valid_router_certs,
+//             ))?;
+//             line(format_args!(
+//                 "     router keys: {:7} verified, {:7} final;",
+//                 tal.payload.router_keys.valid,
+//                 tal.payload.router_keys.contributed
+//             ))?;
+//             line(format_args!(
+//                 "           ASPAs: {:7} verified, {:7} final;",
+//                 tal.publication.valid_aspas,
+//                 tal.payload.aspas.contributed
+//             ))?;
+//         }
+//         line(format_args!("total: "))?;
+//         line(format_args!(
+//             "            ROAs: {:7} verified;",
+//             metrics.publication.valid_roas
+//         ))?;
+//         line(format_args!(
+//             "            VRPs: {:7} verified, {:7} final;",
+//             metrics.snapshot.payload.vrps().valid,
+//             metrics.snapshot.payload.vrps().contributed
+//         ))?;
+//         line(format_args!(
+//             "    router certs: {:7} verified;",
+//             metrics.publication.valid_router_certs,
+//         ))?;
+//         line(format_args!(
+//             "     router keys: {:7} verified, {:7} final;",
+//             metrics.snapshot.payload.router_keys.valid,
+//             metrics.snapshot.payload.router_keys.contributed
+//         ))?;
+//         line(format_args!(
+//             "           ASPAs: {:7} verified, {:7} final;",
+//             metrics.publication.valid_aspas,
+//             metrics.snapshot.payload.aspas.contributed
+//         ))?;
+//         Ok(())
+//     }
+
+//     pub fn log(metrics: &Metrics) {
+//         Self::produce_header(metrics, |args| {
+//             info!("{}", args);
+//             Ok(())
+//         }).unwrap()
+//     }
+// }
+
+// impl<W: io::Write> Formatter<W> for Summary {
+//     fn header(
+//         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
+//     ) -> Result<(), io::Error> {
+//         Self::produce_header(metrics, |args| {
+//             writeln!(target, "{}", args)
+//         })
+//     }
+
+//     fn origin(
+//         &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
+//     ) -> Result<(), io::Error> {
+//         Ok(())
+//     }
+// }
+
+
+
+// //------------ NoOutput-------------------------------------------------------
+
+// struct NoOutput;
+
+// impl<W: io::Write> Formatter<W> for NoOutput {
+//     fn origin(
+//         &self, _origin: RouteOrigin, _info: &PayloadInfo, _target: &mut W
+//     ) -> Result<(), io::Error> {
+//         Ok(())
+//     }
+// }
 
 
