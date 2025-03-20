@@ -15,8 +15,7 @@ use crate::config::Config;
 use crate::error::Failed;
 use crate::http::ContentType;
 use crate::payload::{
-    PayloadInfo, PayloadSnapshot, SnapshotArcAspaIter, SnapshotArcOriginIter,
-    SnapshotArcRouterKeyIter,
+    PayloadInfo, PayloadSnapshot
 };
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
@@ -530,13 +529,7 @@ impl<Target: io::Write> OutputStream<Target> {
             StreamState::Origin => {
                 let mut iter = self.snapshot.clone().arc_origin_iter();
                 let mut first = true;
-                loop {
-                    let (origin, info) = match iter.next_with_info() {
-                        Some((origin, info)) => (origin, info),
-                        None => {
-                            break
-                        }
-                    };
+                while let Some((origin, info)) = iter.next_with_info() {
                     if !self.output.include_origin(origin) {
                         continue
                     }
@@ -559,13 +552,7 @@ impl<Target: io::Write> OutputStream<Target> {
             StreamState::Key => {
                 let mut iter = self.snapshot.clone().arc_router_key_iter();
                 let mut first = true;
-                loop {
-                    let (key, info) = match iter.next_with_info() {
-                        Some((key, info)) => (key, info),
-                        None => {
-                            break
-                        }
-                    };
+                while let Some((key, info)) = iter.next_with_info() {
                     if !self.output.include_router_key(key) {
                         continue
                     }
@@ -588,13 +575,7 @@ impl<Target: io::Write> OutputStream<Target> {
             StreamState::Aspa => {
                 let mut iter = self.snapshot.clone().arc_aspa_iter();
                 let mut first = true;
-                loop {
-                    let (aspa, info) = match iter.next_with_info() {
-                        Some((aspa, info)) => (aspa, info),
-                        None => {
-                            break
-                        }
-                    };
+                while let Some((aspa, info)) = iter.next_with_info() {
                     if !self.output.include_aspa(aspa) {
                         continue
                     }
@@ -1814,6 +1795,7 @@ impl<W: io::Write> Formatter<W> for NoOutput {
 mod test {
     use chrono::DateTime;
     use rpki::{crypto::KeyIdentifier, repository::x509::Time, resources::MaxLenPrefix, rtr::pdu::{ProviderAsns, RouterKeyInfo}};
+    #[allow(unused_imports)]
     use std::{fs::{self}, io::BufWriter, path::PathBuf, io::Write};
 
     use crate::slurm::ExceptionInfo;
@@ -1837,7 +1819,7 @@ mod test {
                 (false, false, true),
                 (false, false, false),
             ] {
-                let output_format = format.1.clone();
+                let output_format = format.1;
 
                 let mut output = Output::new();
 
@@ -1853,8 +1835,8 @@ mod test {
                         MaxLenPrefix::from_str("12.34.56.0/24").unwrap(), 
                         Asn::from_u32(1234)
                     );
-                    origins.push((ro.clone(), payload_info.clone().into()));
-                    origins.push((ro.clone(), payload_info.clone().into()));
+                    origins.push((ro, payload_info.clone().into()));
+                    origins.push((ro, payload_info.clone().into()));
                 }
 
                 let mut router_keys: Vec<(RouterKey, PayloadInfo)> = vec![];
@@ -1868,7 +1850,7 @@ mod test {
 
                 let mut aspas: Vec<(Aspa, PayloadInfo)> = vec![];
                 {
-                    let providers = ProviderAsns::try_from_iter(vec![1, 2, 3, 4].iter().map(|x| Asn::from_u32(*x))).unwrap();
+                    let providers = ProviderAsns::try_from_iter([1, 2, 3, 4].iter().map(|x| Asn::from_u32(*x))).unwrap();
                     let aspa = Aspa::new(
                         Asn::from_u32(1234),
                         providers
@@ -1910,7 +1892,7 @@ mod test {
 
                 let mut buf = BufWriter::new(Vec::new());
 
-                let _ = output.write(snapshot, metrics, output_format,  &mut buf).unwrap();
+                output.write(snapshot, metrics, output_format,  &mut buf).unwrap();
 
                 let bytes = buf.into_inner().unwrap();
                 let string = String::from_utf8(bytes).unwrap();
