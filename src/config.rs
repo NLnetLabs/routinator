@@ -996,12 +996,7 @@ impl Config {
                 )
             },
             min_refresh: {
-                let val = file.take_u64("min-refresh")?;
-                if let Some(val) = val {
-                    Some(Duration::from_secs(val))
-                } else {
-                    None
-                }
+                file.take_u64("min-refresh")?.map(Duration::from_secs)
             },
             retry: {
                 Duration::from_secs(
