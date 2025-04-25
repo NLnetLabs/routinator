@@ -283,6 +283,9 @@ pub struct Config {
     /// The refresh interval for repository validation.
     pub refresh: Duration,
 
+    /// The minimum refresh interval for repository validation.
+    pub min_refresh: Option<Duration>,
+
     /// The RTR retry inverval to be announced to a client.
     pub retry: Duration,
 
@@ -725,6 +728,11 @@ impl Config {
             self.refresh = Duration::from_secs(value)
         }
 
+        // min-refresh
+        if let Some(value) = args.min_refresh {
+            self.min_refresh = Some(Duration::from_secs(value))
+        }
+
         // retry
         if let Some(value) = args.retry {
             self.retry = Duration::from_secs(value)
@@ -987,6 +995,14 @@ impl Config {
                     file.take_u64("refresh")?.unwrap_or(DEFAULT_REFRESH)
                 )
             },
+            min_refresh: {
+                let val = file.take_u64("min-refresh")?;
+                if let Some(val) = val {
+                    Some(Duration::from_secs(val))
+                } else {
+                    None
+                }
+            },
             retry: {
                 Duration::from_secs(
                     file.take_u64("retry")?.unwrap_or(DEFAULT_RETRY)
@@ -1186,6 +1202,7 @@ impl Config {
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: Config::default_validation_threads(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
+            min_refresh: None,
             retry: Duration::from_secs(DEFAULT_RETRY),
             expire: Duration::from_secs(DEFAULT_EXPIRE),
             history_size: DEFAULT_HISTORY_SIZE,
@@ -1905,9 +1922,13 @@ struct GlobalArgs {
 /// The server-related command line arguments.
 #[derive(Clone, Debug, Parser)]
 struct ServerArgs {
-    /// Refresh interval in seconds [default 3600]
+    /// Refresh interval in seconds [default 600]
     #[arg(long, value_name = "SECONDS")]
     refresh: Option<u64>,
+
+    /// Refresh interval in seconds [default 600]
+    #[arg(long, value_name = "SECONDS")]
+    min_refresh: Option<u64>,
 
     /// RTR retry interval in seconds [default 600]
     #[arg(long, value_name = "SECONDS")]
