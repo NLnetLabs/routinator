@@ -1,4 +1,4 @@
-/// The Routinator binary.
+//! The Routinator binary.
 
 use std::env::current_dir;
 use std::process::exit;

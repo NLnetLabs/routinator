@@ -1,8 +1,8 @@
-/// Utilities for dealing with the file system.
-///
-/// This module contains variations on some of the functions provided by
-/// `std::fs` that instead of returning `std::io::Error` log that error and
-/// return our own [`Failed`] instead.
+//! Utilities for dealing with the file system.
+//!
+//! This module contains variations on some of the functions provided by
+//! `std::fs` that instead of returning `std::io::Error` log that error and
+//! return our own [`Failed`] instead.
 
 use std::{fmt, fs, io};
 use std::ffi::{OsStr, OsString};
