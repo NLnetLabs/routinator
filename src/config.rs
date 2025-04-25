@@ -1429,6 +1429,9 @@ impl Config {
         insert(&mut res, "dirty", self.dirty_repository);
         insert_int(&mut res, "validation-threads", self.validation_threads);
         insert_int(&mut res, "refresh", self.refresh.as_secs());
+        if let Some(min_refresh) = self.min_refresh.as_ref() {
+            insert_int(&mut res, "min-refresh", min_refresh.as_secs());
+        }
         insert_int(&mut res, "retry", self.retry.as_secs());
         insert_int(&mut res, "expire", self.expire.as_secs());
         insert_int(&mut res, "history-size", self.history_size);
@@ -2661,6 +2664,7 @@ mod test {
             Config::default_validation_threads(),
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
+        assert_eq!(config.min_refresh, None);
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
         assert_eq!(config.expire, Duration::from_secs(DEFAULT_EXPIRE));
         assert_eq!(config.history_size, DEFAULT_HISTORY_SIZE);
