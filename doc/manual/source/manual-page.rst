@@ -1331,8 +1331,13 @@ All values can be overridden via the command line options.
       refresh
             An integer value specifying the number of seconds Routinator
             should wait between consecutive validation runs in server mode.
-            The next validation run will happen earlier, if objects expire
-            earlier. The default is 600 seconds.
+            The next validation run will happen earlier if objects expire
+            earlier and min-refresh is set. The default is 600 seconds.
+
+      min-refresh
+            An integer value specifying the number of seconds Routinator
+            should at least wait between consecutive validation runs in server 
+            mode. If not set this will default to refresh. 
 
       retry
             An integer value specifying the number of seconds an RTR client
