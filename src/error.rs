@@ -1,15 +1,15 @@
-/// Error types used by multiple modules.
-///
-/// There are two error types that are used widely within the Routinator
-/// library.
-///
-/// The most important is [`Failed`]. This error indicates that an
-/// operation had to be canceled for some reason and callers can assume
-/// that all diagnostic information has been logged and they need not do
-/// anything further.
-///
-/// Secondly, [`ExitError`] is used when the program should be terminated. It
-/// provides enough information to determine the exit code of the program.
+//! Error types used by multiple modules.
+//!
+//! There are two error types that are used widely within the Routinator
+//! library.
+//!
+//! The most important is [`Failed`]. This error indicates that an
+//! operation had to be canceled for some reason and callers can assume
+//! that all diagnostic information has been logged and they need not do
+//! anything further.
+//!
+//! Secondly, [`ExitError`] is used when the program should be terminated. It
+//! provides enough information to determine the exit code of the program.
 
 use log::error;
 

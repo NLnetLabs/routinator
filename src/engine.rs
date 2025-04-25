@@ -1,22 +1,22 @@
-/// Updating and processing of RPKI data.
-///
-/// This module provides types and traits implementing validation of RPKI data
-/// from a set of trust anchor locators to some output data.
-///
-/// Data validation is configured through [`Engine`] so that the
-/// configuration can be used for multiple validation runs. This includes both
-/// a [collector][crate::collector::Collector] and
-/// [store][crate::store::Store] to use for validation.
-///
-/// Individual validation runs are managed through [`Run`]. Such a runner can
-/// be obtained from validation via its [`start`][Engine::start] method.
-/// It in turn provides the [`process`][Run::process] method which drives the
-/// actual validation.
-///
-/// Engine runs are generic over what exactly should be done with valid
-/// RPKI data. The trait [`ProcessRun`] represents a full validation run with
-/// the accompanying trait [`ProcessPubPoint`] dealing with individual
-/// publication points.
+//! Updating and processing of RPKI data.
+//!
+//! This module provides types and traits implementing validation of RPKI data
+//! from a set of trust anchor locators to some output data.
+//!
+//! Data validation is configured through [`Engine`] so that the
+//! configuration can be used for multiple validation runs. This includes both
+//! a [collector][crate::collector::Collector] and
+//! [store][crate::store::Store] to use for validation.
+//!
+//! Individual validation runs are managed through [`Run`]. Such a runner can
+//! be obtained from validation via its [`start`][Engine::start] method.
+//! It in turn provides the [`process`][Run::process] method which drives the
+//! actual validation.
+//!
+//! Engine runs are generic over what exactly should be done with valid
+//! RPKI data. The trait [`ProcessRun`] represents a full validation run with
+//! the accompanying trait [`ProcessPubPoint`] dealing with individual
+//! publication points.
 
 use std::{cmp, fmt, fs, thread};
 use std::borrow::Cow;

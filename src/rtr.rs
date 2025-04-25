@@ -1,4 +1,4 @@
-/// Support for the RPKI-to-Router Protocol.
+//! Support for the RPKI-to-Router Protocol.
 
 use std::io;
 use std::future::Future;

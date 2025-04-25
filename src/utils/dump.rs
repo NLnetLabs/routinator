@@ -1,4 +1,4 @@
-/// Utilities for creating data dumps.
+//! Utilities for creating data dumps.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
