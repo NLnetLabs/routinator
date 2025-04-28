@@ -304,8 +304,8 @@ generated in a wide range of output formats for various use cases.
     slurm
           The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by :RFC:`8416` (also
-          known as SLURM). The produced file will have empty validation
-          output filters.
+          known as SLURM version 1). The produced file will have empty 
+          validation output filters. This version does not support ASPA.
 
           .. code-block:: json
 
@@ -347,8 +347,9 @@ generated in a wide range of output formats for various use cases.
     slurm2
           The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by 
-          draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM version 2). 
-          The produced file will have empty validation output filters.
+          `draft-ietf-sidrops-aspa-slurm-02 <https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-slurm/>`_ 
+          (also known as SLURM version 2). The produced file will have empty 
+          validation output filters.
 
           .. code-block:: json
 

@@ -580,8 +580,8 @@ These can be requested by providing different commands on the command line.
            slurm
                   The list is formatted as locally added assertions of a
                   local exceptions file defined by RFC 8416 (also known as
-                  SLURM). The produced file will have empty validation
-                  output filters.
+                  SLURM version 1). The produced file will have empty 
+                  validation output filters.
 
            slurm2
                   The list is formatted as locally added assertions of a
