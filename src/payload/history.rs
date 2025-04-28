@@ -214,6 +214,9 @@ pub struct PayloadHistory {
     /// The time to wait between updates,
     refresh: Duration,
 
+    // The time to at least wait between updates
+    min_refresh: Option<Duration>,
+
     /// How to deal with unsafe VRPs.
     unsafe_vrps: FilterPolicy,
 
@@ -255,6 +258,7 @@ impl PayloadHistory {
             },
             keep: config.history_size,
             refresh: config.refresh,
+            min_refresh: config.min_refresh,
             unsafe_vrps: config.unsafe_vrps,
             last_update_start: Utc::now(),
             last_update_done: None,
@@ -293,9 +297,16 @@ impl PayloadHistory {
 
     /// Returns the duration until the next refresh should start.
     pub fn refresh_wait(&self) -> Duration {
-        self.next_update_start
-        .duration_since(SystemTime::now())
-        .unwrap_or_else(|_| Duration::from_secs(0))
+        let wait_time = match self.min_refresh {
+            None => self.refresh,
+            Some(refresh) => refresh
+        };
+        cmp::max(
+            self.next_update_start
+            .duration_since(SystemTime::now())
+            .unwrap_or_else(|_| Duration::from_secs(0)),
+            wait_time
+        )
     }
 
     /// Returns the duration until a new set of data will likely be available.
