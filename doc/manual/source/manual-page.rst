@@ -580,7 +580,15 @@ These can be requested by providing different commands on the command line.
            slurm
                   The list is formatted as locally added assertions of a
                   local exceptions file defined by RFC 8416 (also known as
-                  SLURM). The produced file will have empty validation
+                  SLURM version 1). The produced file will have empty 
+                  validation output filters. This version does not support 
+                  ASPA.
+
+           slurm2
+                  The list is formatted as locally added assertions of a
+                  local exceptions file defined by 
+                  draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM 
+                  version 2). The produced file will have empty validation 
                   output filters.
 
            openbgpd
