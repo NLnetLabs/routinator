@@ -6,6 +6,15 @@ Breaking changes
 
 New
 
+* Add support for SLURM v2 as output format which includes ASPA payload.
+  ([#1021])
+* Changed refresh behaviour to better cope with short-lived objects. By
+  default, Routinator will now wait for the time defined by `refresh` even
+  if objects expire earlier. The new `min-refresh` option can be used to
+  specify a short minimum refresh time if objects expire before the
+  refresh time. If this value is set to 0, the old behaviour is restored.
+  ([#1027])
+
 Bug fixes
 
 Other changes
@@ -17,7 +26,9 @@ Other changes
 [#1005]: https://github.com/NLnetLabs/routinator/pull/1005
 [#1006]: https://github.com/NLnetLabs/routinator/pull/1006
 [#1014]: https://github.com/NLnetLabs/routinator/pull/1014
+[#1021]: https://github.com/NLnetLabs/routinator/pull/1021
 [#1024]: https://github.com/NLnetLabs/routinator/pull/1024
+[#1027]: https://github.com/NLnetLabs/routinator/pull/1027
 
 
 ## 0.14.2 ‘Roll Initiative!’
