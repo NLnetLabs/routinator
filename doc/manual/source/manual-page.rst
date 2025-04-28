@@ -856,6 +856,21 @@ These can be requested by providing different commands on the command line.
               The amount of seconds the server should wait after having
               finished updating and validating the local repository before
               starting to update again. The next update will be earlier if
+              objects in the repository expire earlier and min-refresh is set. 
+              The default value is 600 seconds.
+
+       .. option:: --min-refresh=seconds
+
+              The amount of seconds the server should at least wait after 
+              having finished updating and validating the local repository 
+              before starting to update again. If not set this will default to
+              refresh.
+
+       .. option:: --refresh=seconds
+
+              The amount of seconds the server should wait after having
+              finished updating and validating the local repository before
+              starting to update again. The next update will be earlier if
               objects in the repository expire earlier. The default value is
               600 seconds.
 
