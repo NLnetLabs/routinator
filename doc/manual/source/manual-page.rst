@@ -583,6 +583,13 @@ These can be requested by providing different commands on the command line.
                   SLURM). The produced file will have empty validation
                   output filters.
 
+           slurm2
+                  The list is formatted as locally added assertions of a
+                  local exceptions file defined by 
+                  draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM 
+                  version 2). The produced file will have empty validation 
+                  output filters.
+
            openbgpd
                   Choosing this format causes Routinator to produce a
                   *roa-set* configuration item for the OpenBGPD

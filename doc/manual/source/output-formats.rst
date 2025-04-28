@@ -344,6 +344,60 @@ generated in a wide range of output formats for various use cases.
 
           .. versionadded:: 0.11.0
 
+    slurm2
+          The list is formatted as locally added assertions of a :doc:`local
+          exceptions<local-exceptions>` file defined by 
+          draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM version 2). 
+          The produced file will have empty validation output filters.
+
+          .. code-block:: json
+
+            {
+              "slurmVersion": 2,
+              "validationOutputFilters": {
+                "prefixFilters": [ ],
+                "bgpsecFilters": [ ],
+                "aspaFilters": [ ]
+              },
+              "locallyAddedAssertions": {
+                "prefixAssertions": [
+                  {
+                    "asn": 196615,
+                    "prefix": "93.175.147.0/24",
+                    "maxPrefixLength": 24,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd03::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  },
+                  {
+                    "asn": 196615,
+                    "prefix": "2001:7fb:fd04::/48",
+                    "maxPrefixLength": 48,
+                    "comment": "ripe"
+                  }
+                ],
+                "bgpsecAssertions": [
+
+                ],
+                "aspaAssertions": [
+                  {
+                    "customerAsid": 64496,
+                    "providerSet": [
+                      64497, 
+                      64498
+                    ],
+                    "comment": ""
+                  }
+                ]
+              }
+            }
+
+          .. versionadded:: 0.14.3
+
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
           configuration item for the OpenBGPD configuration.
