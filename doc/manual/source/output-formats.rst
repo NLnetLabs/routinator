@@ -386,8 +386,8 @@ generated in a wide range of output formats for various use cases.
                 ],
                 "aspaAssertions": [
                   {
-                    "customerAsid": 64496,
-                    "providerSet": [
+                    "customerAsn": 64496,
+                    "providerAsns": [
                       64497, 
                       64498
                     ],

@@ -25,8 +25,8 @@
     ],
     "aspaAssertions": [
       { 
-        "customerAsid": 1234, 
-        "providers": [
+        "customerAsn": 1234, 
+        "providerAsns": [
           1, 
           2, 
           3, 
@@ -35,8 +35,8 @@
         "comment": "N/A"
       },
       { 
-        "customerAsid": 1234, 
-        "providers": [
+        "customerAsn": 1234, 
+        "providerAsns": [
           1, 
           2, 
           3, 
