@@ -87,6 +87,7 @@ fn handle_validity_query(
     validity(head, &asn, &prefix, current)
 }
 
+#[allow(clippy::result_large_err)]
 fn validity_check(
     history: &SharedHistory
 ) -> Result<Arc<PayloadSnapshot>, Response> {

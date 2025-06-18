@@ -402,7 +402,7 @@ impl ParseError {
         err: impl Into<Box<dyn error::Error + Send + Sync>>
     ) -> Self {
         ParseError {
-            err: io::Error::new(io::ErrorKind::Other, err),
+            err: io::Error::other(err),
             is_fatal: false,
         }
     }

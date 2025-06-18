@@ -1261,10 +1261,7 @@ impl<'a> StorageRead<'a> {
                         // This only happens on 128 bit systems with
                         // ridiculously large lengths, but I don’t want to
                         // panic.
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            "excessively large length"
-                        )
+                        io::Error::other("excessively large length")
                     })?
                 ).read_to_end(&mut buf)?;
                 Ok(buf.into())
