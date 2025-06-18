@@ -125,6 +125,7 @@ pub async fn handle_notify_get_or_head(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn need_wait(
     req: &Request,
     history: &SharedHistory,
@@ -140,6 +141,7 @@ fn need_wait(
 
 //------------ Helpers -------------------------------------------------------
 
+#[allow(clippy::result_large_err)]
 fn version_from_query(
     query: Option<&str>
 ) -> Result<Option<(u64, Serial)>, Response> {

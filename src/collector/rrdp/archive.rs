@@ -392,8 +392,7 @@ impl RepositoryState {
         // Version number.
         let version = u8::parse(reader)?;
         if version != Self::VERSION {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 format!("unexpected version {}", version)
             ))
         }
