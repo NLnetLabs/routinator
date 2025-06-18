@@ -1437,8 +1437,8 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
     ) -> Result<(), io::Error> {
         write!(target,
             "      {{ \
-            \n        \"customerAsid\": {}, \
-            \n        \"providers\": [", aspa.customer.into_u32()
+            \n        \"customerAsn\": {}, \
+            \n        \"providerAsns\": [", aspa.customer.into_u32()
         )?;
 
         let mut first = true;
