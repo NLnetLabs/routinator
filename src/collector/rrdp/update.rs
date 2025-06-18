@@ -545,9 +545,7 @@ impl<R: io::Read> io::Read for RrdpDataRead<'_, R> {
             Ok(res) => res,
             Err(err) => {
                 self.err = Some(RrdpDataReadError::Read(err));
-                return Err(io::Error::new(
-                    io::ErrorKind::Other, "reading data failed",
-                ))
+                return Err(io::Error::other("reading data failed"))
             }
         };
         if let Some(left) = self.left {
@@ -560,9 +558,7 @@ impl<R: io::Read> io::Read for RrdpDataRead<'_, R> {
                     self.err = Some(
                         RrdpDataReadError::LargeObject(self.uri.clone())
                     );
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other, "size limit exceeded"
-                    ))
+                    return Err(io::Error::other("size limit exceeded"))
                 }
             };
             if res64 > left {
@@ -570,9 +566,7 @@ impl<R: io::Read> io::Read for RrdpDataRead<'_, R> {
                 self.err = Some(
                     RrdpDataReadError::LargeObject(self.uri.clone())
                 );
-                Err(io::Error::new(
-                    io::ErrorKind::Other, "size limit exceeded")
-                )
+                Err(io::Error::other("size limit exceeded"))
             }
             else {
                 self.left = Some(left - res64);

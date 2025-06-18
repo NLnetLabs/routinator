@@ -493,7 +493,7 @@ impl SyslogLogger {
         }.map_err(|err| {
             match err {
                 syslog::Error::Io(err) => err,
-                err => io::Error::new(io::ErrorKind::Other, err),
+                err => io::Error::other(err),
             }
         })
     }

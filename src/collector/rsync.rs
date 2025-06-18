@@ -610,10 +610,7 @@ impl RsyncCommand {
                     "rsync: illegal destination path {}.",
                     destination.display()
                 );
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "illegal destination path"
-                ));
+                return Err(io::Error::other("illegal destination path"));
             }
         };
         let mut cmd = AsyncCommand::new(&self.command);

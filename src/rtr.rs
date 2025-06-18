@@ -230,7 +230,7 @@ impl RtrStream {
 
             Ok(())
         })(sock, duration).map_err(|err: nix::errno::Errno| {
-            io::Error::new(io::ErrorKind::Other, err)
+            io::Error::other(err)
         })
     }
 

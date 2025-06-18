@@ -384,8 +384,7 @@ impl RequestList {
                     match Prefix::from_str(prefix) {
                         Ok(prefix) => prefix,
                         Err(_) => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(io::Error::other(
                                 format!(
                                     "line {}: expecting prefix, got '{}'",
                                     line_no + 1, prefix
@@ -400,8 +399,7 @@ impl RequestList {
             match tokens.next() {
                 Some("=>") => { }
                 Some(token) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         format!(
                             "line {}: expecting '=>', got '{}'",
                             line_no + 1, token
@@ -409,8 +407,7 @@ impl RequestList {
                     ))
                 }
                 None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         format!(
                             "line {}: expecting '=>', got end of line",
                             line_no + 1
@@ -424,8 +421,7 @@ impl RequestList {
                     match Asn::from_str(asn) {
                         Ok(asn) => asn,
                         Err(_) => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(io::Error::other(
                                 format!(
                                     "line {}: expecting AS number, got '{}'",
                                     line_no + 1, asn
@@ -435,8 +431,7 @@ impl RequestList {
                     }
                 }
                 None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         format!(
                             "line {}: expecting AS number, got end of line",
                             line_no + 1
@@ -448,8 +443,7 @@ impl RequestList {
             match tokens.next() {
                 Some("#") | None => { }
                 Some(token) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         format!(
                             "line {}: expecting '#'  or end of line, got '{}'",
                             line_no + 1, token
