@@ -10,8 +10,9 @@ image:
   - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
-  - 'rockylinux:8'    # compatible with EOL centos:8
-  - 'rockylinux:9'
+  - 'almalinux:8'    # compatible with EOL centos:8
+  - 'almalinux:9'
+  - 'almalinux:10'
 target:
   - 'x86_64'
 test-image:
