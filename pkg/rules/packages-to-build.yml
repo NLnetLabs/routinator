@@ -33,10 +33,13 @@ include:
   # the archive that we produce below which is in turn based by default on the container image used to build. We
   # therefore in this case need to specify that the O/S we are building for has a different name than the Docker
   # image we are building it in.
-  - image: 'rockylinux:8'
+  - image: 'almalinux:8'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
 
-  - image: 'rockylinux:9'
+  - image: 'almalinux:9'
+    systemd_service_unit_file: pkg/common/routinator.routinator.service
+
+  - image: 'almalinux:10'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
@@ -61,12 +64,12 @@ include:
   # to be run in the package testing phase, which will install the package in an LXC container running the 
   # specified 'test-image' instead of the 'image' it was built in.
   - pkg: 'routinator'
-    image: 'rockylinux:9'
+    image: 'almalinux:9'
     target: 'x86_64'
     test-image: 'almalinux:9'
 
   - pkg: 'routinator'
-    image: 'rockylinux:9'
+    image: 'almalinux:9'
     target: 'x86_64'
     test-image: 'centos:9-Stream'
 
