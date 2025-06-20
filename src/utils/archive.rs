@@ -82,7 +82,8 @@ pub struct Archive<Meta> {
 impl<Meta> Archive<Meta> {
     /// Creates a new archive at the given path.
     ///
-    /// The archive is opened for reading and writing.
+    /// The archive is opened for reading and writing. The archive will never
+    /// be memory-mapped.
     ///
     /// If there already is a file at the given path, the function fails.
     pub fn create(path: impl AsRef<Path>) -> Result<Self, ArchiveError> {
@@ -97,6 +98,9 @@ impl<Meta> Archive<Meta> {
     ///
     /// The file is trunacated back to zero length and the header and index
     /// added.
+    ///
+    /// When created using this function, the archive will never be
+    /// memory-mapped.
     pub fn create_with_file(
         mut file: fs::File
     ) -> Result<Self, ArchiveError> {
@@ -108,7 +112,7 @@ impl<Meta> Archive<Meta> {
         file.set_len(len)?;
 
         Ok(Self {
-            file: Storage::new(file, true)?,
+            file: Storage::new(file, false, true)?,
             meta,
             marker: PhantomData,
         })
@@ -130,7 +134,7 @@ impl<Meta> Archive<Meta> {
         let meta = ArchiveMeta::read(&mut file)?;
 
         Ok(Self {
-            file: Storage::new(file, writable)?,
+            file: Storage::new(file, true, writable)?,
             meta,
             marker: PhantomData,
         })
@@ -1082,6 +1086,10 @@ struct Storage {
     #[cfg(unix)]
     mmap: Option<mmapimpl::Mmap>,
 
+    /// Should we try to memory map the file?
+    #[cfg(unix)]
+    try_mmap: bool,
+
     /// Do we need write permissions?
     #[cfg(unix)]
     writable: bool,
@@ -1093,11 +1101,17 @@ struct Storage {
 impl Storage {
     /// Creates a new storage value using the given file.
     #[allow(unused_variables)]
-    pub fn new(file: fs::File, writable: bool) -> Result<Self, io::Error> {
+    pub fn new(
+        file: fs::File,
+        try_mmap: bool,
+        writable: bool,
+    ) -> Result<Self, io::Error> {
         let mut res = Self {
             file: Mutex::new(file),
             #[cfg(unix)]
             mmap: None,
+            #[cfg(unix)]
+            try_mmap,
             #[cfg(unix)]
             writable,
             size: 0,
@@ -1111,7 +1125,7 @@ impl Storage {
     /// You can un-memory map the storage by setting `self.mmap` to `None`.
     fn mmap(&mut self) -> Result<(), io::Error> {
         #[cfg(unix)]
-        {
+        if self.try_mmap {
             self.mmap = mmapimpl::Mmap::new(
                 &mut self.file.lock(), self.writable
             )?;
