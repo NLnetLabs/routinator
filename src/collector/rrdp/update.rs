@@ -14,7 +14,10 @@ use uuid::Uuid;
 use crate::error::{Failed, RunFailed};
 use crate::metrics::RrdpRepositoryMetrics;
 use crate::utils::archive::{ArchiveError, PublishError};
-use super::archive::{AccessError, FallbackTime, RepositoryState, RrdpArchive};
+use super::archive::{
+    AccessError, FallbackTime, RepositoryState, RrdpArchive,
+    SnapshotRrdpArchive,
+};
 use super::base::Collector;
 use super::http::{HttpClient, HttpResponse, HttpStatus};
 
@@ -165,7 +168,7 @@ pub struct SnapshotUpdate<'a> {
     collector: &'a Collector,
 
     /// The archive to store the snapshot into.
-    archive: &'a mut RrdpArchive,
+    archive: &'a mut SnapshotRrdpArchive,
 
     /// The notification file pointing to the snapshot.
     notify: &'a Notification,
@@ -177,7 +180,7 @@ pub struct SnapshotUpdate<'a> {
 impl<'a> SnapshotUpdate<'a> {
     pub fn new(
         collector: &'a Collector,
-        archive: &'a mut RrdpArchive,
+        archive: &'a mut SnapshotRrdpArchive,
         notify: &'a Notification,
         metrics: &'a mut RrdpRepositoryMetrics,
     ) -> Self {
@@ -217,6 +220,7 @@ impl<'a> SnapshotUpdate<'a> {
                 self.collector.config().fallback_time
             )
         )?;
+        self.archive.finalize()?;
         Ok(())
     }
 }
@@ -256,7 +260,7 @@ impl ProcessSnapshot for SnapshotUpdate<'_> {
             PublishError::AlreadyExists => {
                 SnapshotError::DuplicateObject(uri.clone())
             }
-            PublishError::Archive(ArchiveError::Corrupt) => {
+            PublishError::Archive(ArchiveError::Corrupt(_)) => {
                 warn!(
                     "Temporary RRDP repository file {} became corrupt.",
                     self.archive.path().display(),

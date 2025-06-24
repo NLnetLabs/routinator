@@ -13,7 +13,8 @@ use crate::config::Config;
 use crate::error::RunFailed;
 use crate::utils::archive;
 use crate::utils::archive::{
-    Archive, ArchiveError, ArchiveStats, FetchError, OpenError, PublishError
+    Archive, AppendArchive, ArchiveError, ArchiveStats, FetchError,
+    OpenError, PublishError,
 };
 use crate::utils::binio::{Compose, Parse};
 
@@ -112,7 +113,10 @@ impl RrdpArchive {
             Ok(data) => data,
             Err(archive::FetchError::NotFound) => {
                 return Err(
-                    archive_err(ArchiveError::Corrupt, self.path.as_ref())
+                    archive_err(
+                        ArchiveError::Corrupt("state object missing"),
+                        self.path.as_ref()
+                    )
                 )
             }
             Err(archive::FetchError::Archive(err)) => {
@@ -121,7 +125,10 @@ impl RrdpArchive {
         };
         let mut data = data.as_ref();
         RepositoryState::parse(&mut data).map_err(|_| {
-            archive_err(ArchiveError::Corrupt, self.path.as_ref())
+            archive_err(
+                ArchiveError::Corrupt("parse error"),
+                self.path.as_ref()
+            )
         })
     }
 
@@ -136,7 +143,7 @@ impl RrdpArchive {
             iter.filter_map(|item| {
                 let (name, _meta, data) = match item {
                     Ok(some) => some,
-                    Err(ArchiveError::Corrupt) => {
+                    Err(ArchiveError::Corrupt(_)) => {
                         return Some(Err(RunFailed::retry()))
                     }
                     Err(ArchiveError::Io(_)) => {
@@ -150,7 +157,7 @@ impl RrdpArchive {
             })
         }).map_err(|err| {
             match err {
-                ArchiveError::Corrupt => RunFailed::retry(),
+                ArchiveError::Corrupt(_) => RunFailed::retry(),
                 ArchiveError::Io(_) => RunFailed::fatal(),
             }
         })
@@ -263,15 +270,91 @@ impl RrdpArchive {
 }
 
 
+//------------ SnapshotRrdpArchive -------------------------------------------
+
+#[derive(Debug)]
+pub struct SnapshotRrdpArchive {
+    /// The path where everything from this repository lives.
+    path: Arc<PathBuf>,
+
+    /// The archive for the repository.
+    archive: AppendArchive<RrdpObjectMeta>,
+}
+
+impl SnapshotRrdpArchive {
+    pub fn create_with_file(
+        file: fs::File,
+        path: Arc<PathBuf>,
+    ) -> Result<Self, RunFailed> {
+        let archive = AppendArchive::create_with_file(file).map_err(|err| {
+            archive_err(err, path.as_ref())
+        })?;
+        Ok(Self { path, archive })
+    }
+
+    pub fn path(&self) -> &Arc<PathBuf> {
+        &self.path
+    }
+
+    /// Publishes a new object to the archie.
+    pub fn publish_object(
+        &mut self,
+        uri: &uri::Rsync,
+        content: &[u8]
+    ) -> Result<(), PublishError> {
+        self.archive.publish(
+            uri.as_ref(),
+            &RrdpObjectMeta::from_content(content),
+            content
+        )
+    }
+
+    pub fn publish_state(
+        &mut self, state: &RepositoryState
+    ) -> Result<(), RunFailed> {
+        let mut buf = Vec::new();
+        state.compose(&mut buf).expect("writing to vec failed");
+        self.archive.publish(
+            b"state", &Default::default(), &buf
+        ).map_err(|err| match err {
+            archive::PublishError::Archive(ArchiveError::Io(err)) => {
+                error!(
+                    "Fatal: Failed write to RRDP repository archive {}: {}",
+                    self.path.display(), err
+                );
+                RunFailed::fatal()
+            }
+            _ => {
+                warn!(
+                    "Failed to write local RRDP repository state in {}.",
+                    self.path.display()
+                );
+                RunFailed::retry()
+            }
+        })
+    }
+
+    pub fn finalize(&mut self) -> Result<(), RunFailed> {
+        self.archive.finalize().map_err(|err| {
+            error!(
+                "Fatal: Failed to write RRDP repository archive {}: {}",
+                self.path.display(), err
+            );
+            RunFailed::fatal()
+        })
+    }
+}
+
+
 //------------ archive_err ---------------------------------------------------
 
 fn archive_err(err: ArchiveError, path: &Path) -> RunFailed {
     match err {
-        ArchiveError::Corrupt => {
+        ArchiveError::Corrupt(err) => {
             warn!(
-                "RRDP repository file '{}' is corrupt. \
+                "RRDP repository file '{}' is corrupt ('{}'). \
                 Deleting and starting again.",
-                path.display()
+                path.display(), err,
             );
             match fs::remove_file(path) {
                 Ok(()) => {
