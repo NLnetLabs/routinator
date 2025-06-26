@@ -38,6 +38,18 @@ include:
   - image: 'rockylinux:9'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
 
+  # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bookworm upon which
+  # Raspbian 12 is based.
+  - pkg: 'routinator'
+    image: 'debian:bookworm'
+    target: 'armv7-unknown-linux-musleabihf'
+
+  # package for the Raspberry Pi 4b 64-bit cross compiled variant of the Debian Bookworm upon which
+  # Raspbian 12 is based.
+  - pkg: 'routinator'
+    image: 'debian:bookworm'
+    target: 'aarch64-unknown-linux-musl'
+
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
   # Raspbian 11 is based.
   - pkg: 'routinator'
