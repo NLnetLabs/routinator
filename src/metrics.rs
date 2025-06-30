@@ -606,7 +606,7 @@ impl RtrServerMetrics {
     pub fn new(detailed: bool) -> Self {
         Self {
             global: Default::default(),
-            client: detailed.then(|| Default::default())
+            client: detailed.then(Default::default)
         }
     }
 
@@ -624,6 +624,7 @@ impl RtrServerMetrics {
     }
 
     /// Returns an iterator over the per-client metrics if enabled.
+    #[allow(clippy::type_complexity)]
     pub fn clients(
         &self
     ) -> Option<Arc<Vec<(IpAddr, Arc<RtrMetricsData>)>>> {
