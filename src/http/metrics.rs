@@ -896,14 +896,14 @@ impl<'a> LabelValue<'a> {
             self.target.buf.push_str(", ");
         }
         write!(
-            &mut self.target.buf, "{}=\"{}\"", name, value
+            &mut self.target.buf, "{name}=\"{value}\""
         ).expect("writing to string");
         self
     }
 
     pub fn value(self, value: impl fmt::Display) {
         writeln!(
-            &mut self.target.buf, "}} {}", value
+            &mut self.target.buf, "}} {value}"
         ).expect("writing to string");
     }
 }

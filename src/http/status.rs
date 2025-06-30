@@ -77,16 +77,16 @@ async fn handle_status(
     );
 
     // serial
-    writeln!(res, "serial: {}", serial);
+    writeln!(res, "serial: {serial}");
 
     // last-update-start-at and -ago
     writeln!(res, "last-update-start-at:  {}", now - start);
-    writeln!(res, "last-update-start-ago: {}", start);
+    writeln!(res, "last-update-start-ago: {start}");
 
     // last-update-done-at and -ago
     if let Some(done) = done {
         writeln!(res, "last-update-done-at:   {}", now - done);
-        writeln!(res, "last-update-done-ago:  {}", done);
+        writeln!(res, "last-update-done-ago:  {done}");
     }
     else {
         writeln!(res, "last-update-done-at:   -");
@@ -95,7 +95,7 @@ async fn handle_status(
 
     // last-update-duration
     if let Some(duration) = duration {
-        writeln!(res, "last-update-duration:  {}", duration);
+        writeln!(res, "last-update-duration:  {duration}");
     }
     else {
         writeln!(res, "last-update-duration:  -");
@@ -238,7 +238,7 @@ async fn handle_status(
             );
         }
         if let Some(serial) = metrics.serial {
-            write!(res, ", serial={}", serial)
+            write!(res, ", serial={serial}")
         }
         writeln!(res)
     }
@@ -262,7 +262,7 @@ async fn handle_status(
         clients.iter().for_each(|(addr, data)| {
             write!(res, "    {}: connections={}, ", addr, data.open());
             if let Some(serial) = data.serial() {
-                write!(res, "serial={}, ", serial);
+                write!(res, "serial={serial}, ");
             }
             else {
                 write!(res, "serial=N/A, ");
