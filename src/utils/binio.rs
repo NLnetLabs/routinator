@@ -149,7 +149,7 @@ impl<R: io::Read> Parse<R> for uri::Rsync {
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         Self::from_bytes(bits.into()).map_err(|err| {
-            ParseError::format(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {err}"))
         })
     }
 }
@@ -177,7 +177,7 @@ impl<R: io::Read> Parse<R> for uri::Https {
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         Self::from_bytes(bits.into()).map_err(|err| {
-            ParseError::format(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {err}"))
         })
     }
 }
@@ -214,7 +214,7 @@ impl<R: io::Read> Parse<R> for Option<uri::Https> {
         let mut bits = vec![0u8; len];
         source.read_exact(&mut bits)?;
         uri::Https::from_bytes(bits.into()).map_err(|err| {
-            ParseError::format(format!("bad URI: {}", err))
+            ParseError::format(format!("bad URI: {err}"))
         }).map(Some)
     }
 }

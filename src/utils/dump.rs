@@ -64,7 +64,7 @@ impl DumpRegistry {
         else {
             let mut i = 1;
             loop {
-                let name = format!("{}-{}", authority, i);
+                let name = format!("{authority}-{i}");
                 if !self.rrdp_dirs.contains(&name) {
                     self.rrdp_dirs.insert(name.clone());
                     self.rrdp_uris.insert(uri.clone(), name.clone()); 

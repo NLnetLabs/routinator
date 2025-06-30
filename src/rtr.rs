@@ -40,13 +40,13 @@ pub fn rtr_listener(
         listeners.push((String::from("systemd socket"), None, extra));
     }
     for addr in &config.rtr_listen {
-        listeners.push((format!("{}", addr), None, net::bind(addr)?));
+        listeners.push((format!("{addr}"), None, net::bind(addr)?));
     }
     if !config.rtr_tls_listen.is_empty() {
         let tls_config = create_tls_config(config)?;
         for addr in &config.rtr_tls_listen {
             listeners.push((
-                format!("{}", addr),
+                format!("{addr}"),
                 Some(tls_config.clone()),
                 net::bind(addr)?
             ));

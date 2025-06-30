@@ -70,7 +70,7 @@ impl Process {
     fn init_logging() -> Result<(), Failed> {
         log::set_max_level(LevelFilter::Warn);
         if let Err(err) = log::set_logger(&GLOBAL_LOGGER) {
-            eprintln!("Failed to initialize logger: {}.\nAborting.", err);
+            eprintln!("Failed to initialize logger: {err}.\nAborting.");
             return Err(Failed)
         }
         Ok(())
@@ -347,7 +347,7 @@ impl Logger {
         match self.target.lock().deref() {
             #[cfg(unix)]
             LogBackend::Syslog(_) => {
-                eprintln!("Logging to syslog failed: {}. Exiting.", err);
+                eprintln!("Logging to syslog failed: {err}. Exiting.");
             }
             LogBackend::File { ref path, .. } => {
                 eprintln!(

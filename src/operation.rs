@@ -1047,7 +1047,7 @@ impl ValidateDocument {
         match rta_validation.finalize() {
             Ok(rta) => {
                 for block in rta.as_resources().iter() {
-                    println!("{}", block);
+                    println!("{block}");
                 }
                 for block in rta.v4_resources().iter() {
                     println!("{}", block.display_v4());
