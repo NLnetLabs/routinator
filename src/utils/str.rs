@@ -19,7 +19,7 @@ pub fn str_from_ascii(src: &[u8]) -> Result<&str, AsciiError> {
 /// Appends the hex representation of a bytes slice to a string.
 pub fn append_hex(src: &[u8], target: &mut String) {
     for &ch in src {
-        write!(target, "{:02x}", ch).expect(
+        write!(target, "{ch:02x}").expect(
             "appending to string failed"
         );
     }

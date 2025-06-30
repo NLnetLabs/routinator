@@ -310,11 +310,11 @@ impl DeltaStream {
                 let mut first = true;
                 for asn in aspa.providers.iter() {
                     if first {
-                        write!(vec, "\"{}\"", asn);
+                        write!(vec, "\"{asn}\"");
                         first = false
                     }
                     else {
-                        write!(vec, ", \"{}\"", asn);
+                        write!(vec, ", \"{asn}\"");
                     }
                 }
                 write!(vec, "]\n\n    }}");

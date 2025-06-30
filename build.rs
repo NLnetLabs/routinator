@@ -118,7 +118,7 @@ fn main() {
 
     let mut assets = Assets::default();
     if let Err(err) = assets.load_dir(UI_DIR.into()) {
-        eprintln!("{}", err);
+        eprintln!("{err}");
         process::exit(1);
     }
 
@@ -129,6 +129,6 @@ fn main() {
         process::exit(1)
     }
 
-    println!("cargo:rerun-if-changed={}", UI_DIR);
+    println!("cargo:rerun-if-changed={UI_DIR}");
 }
 

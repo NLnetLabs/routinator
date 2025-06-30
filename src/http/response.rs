@@ -61,7 +61,7 @@ impl Response {
         ResponseBuilder::moved_permanently()
             .content_type(ContentType::TEXT)
             .location(location)
-            .body(format!("Moved permanently to {}", location))
+            .body(format!("Moved permanently to {location}"))
     }
 
     /// Returns a 304 Not Modified response if appropriate.

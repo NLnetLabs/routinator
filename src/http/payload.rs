@@ -56,7 +56,7 @@ impl State {
             _ => return Some(Response::initial_validation()),
         };
 
-        let etag = format!("\"{:x}-{}\"", session, serial);
+        let etag = format!("\"{session:x}-{serial}\"");
 
         if let Some(response) = Response::maybe_not_modified(
             req, &etag, created
