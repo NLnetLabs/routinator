@@ -478,7 +478,7 @@ impl RsyncCommand {
                     args.push("--contimeout=10".into());
                 }
                 if let Some(max_size) = config.max_object_size {
-                    args.push(format!("--max-size={}", max_size));
+                    args.push(format!("--max-size={max_size}"));
                 }
                 args
             }

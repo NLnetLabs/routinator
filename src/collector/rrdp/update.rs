@@ -727,33 +727,31 @@ impl fmt::Display for SnapshotError {
         match *self {
             SnapshotError::Http(ref err) => err.fmt(f),
             SnapshotError::HttpStatus(status) => {
-                write!(f, "HTTP {}", status)
+                write!(f, "HTTP {status}")
             }
             SnapshotError::Rrdp(ref err) => err.fmt(f),
             SnapshotError::SessionMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "session ID mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             SnapshotError::SerialMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "serial number mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             SnapshotError::DuplicateObject(ref uri) => {
-                write!(f, "duplicate object: {}", uri)
+                write!(f, "duplicate object: {uri}")
             }
             SnapshotError::HashMismatch => {
                 write!(f, "hash value mismatch")
             }
             SnapshotError::LargeObject(ref uri) => {
-                write!(f, "object exceeds size limit: {}", uri)
+                write!(f, "object exceeds size limit: {uri}")
             }
             SnapshotError::RunFailed(_) => Ok(()),
         }
@@ -842,57 +840,52 @@ impl fmt::Display for DeltaError {
         match *self {
             DeltaError::Http(ref err) => err.fmt(f),
             DeltaError::HttpStatus(status) => {
-                write!(f, "HTTP {}", status)
+                write!(f, "HTTP {status}")
             }
             DeltaError::Rrdp(ref err) => err.fmt(f),
             DeltaError::SessionMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "session ID mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             DeltaError::SerialMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "serial number mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             DeltaError::MissingObject { ref uri } => {
                 write!(
                     f,
-                    "reference to missing object {}",
-                    uri
+                    "reference to missing object {uri}"
                 )
             }
             DeltaError::ObjectAlreadyPresent { ref uri } => {
                 write!(
                     f,
-                    "attempt to add already present object {}",
-                    uri
+                    "attempt to add already present object {uri}"
                 )
             }
             DeltaError::ObjectHashMismatch { ref uri } => {
                 write!(
                     f,
-                    "local object {} has different hash",
-                    uri
+                    "local object {uri} has different hash"
                 )
             }
             DeltaError::ObjectRepeated { ref uri } => {
-                write!(f, "object appears multiple times: {}", uri)
+                write!(f, "object appears multiple times: {uri}")
             }
             DeltaError::LargeObject(ref uri) => {
-                write!(f, "object exceeds size limit: {}", uri)
+                write!(f, "object exceeds size limit: {uri}")
             }
             DeltaError::DeltaHashMismatch => {
                 write!(f, "delta file hash value mismatch")
             }
             DeltaError::Archive(ref err) => {
-                write!(f, "archive error: {}", err)
+                write!(f, "archive error: {err}")
             }
         }
     }

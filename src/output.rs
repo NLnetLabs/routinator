@@ -971,11 +971,11 @@ impl<W: io::Write> Formatter<W> for Json {
         let mut first = true;
         for item in aspa.providers.iter() {
             if first {
-                write!(target, "\"{}\"", item)?;
+                write!(target, "\"{item}\"")?;
                 first = false;
             }
             else {
-                write!(target, ", \"{}\"", item)?;
+                write!(target, ", \"{item}\"")?;
             }
         }
 
@@ -1020,11 +1020,10 @@ impl ExtendedJson {
                     first = false;
                 }
                 write!(target,
-                    " {{ \"type\": \"{}\", \"uri\": ",
-                    rpki_type,
+                    " {{ \"type\": \"{rpki_type}\", \"uri\": ",
                 )?;
                 match roa.uri.as_ref() {
-                    Some(uri) => write!(target, "\"{}\"", uri)?,
+                    Some(uri) => write!(target, "\"{uri}\"")?,
                     None => write!(target, "null")?
                 }
 
@@ -1174,11 +1173,11 @@ impl<W: io::Write> Formatter<W> for ExtendedJson {
         let mut first = true;
         for item in aspa.providers.iter() {
             if first {
-                write!(target, "\"{}\"", item)?;
+                write!(target, "\"{item}\"")?;
                 first = false;
             }
             else {
-                write!(target, ", \"{}\"", item)?;
+                write!(target, ", \"{item}\"")?;
             }
         }
 
@@ -1246,7 +1245,7 @@ impl<W: io::Write> Formatter<W> for Slurm {
             origin.prefix.addr(), origin.prefix.prefix_len()
         )?;
         if let Some(max_len) = origin.prefix.max_len() {
-            writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
+            writeln!(target, "        \"maxPrefixLength\": {max_len},")?;
         }
         write!(target,
             "        \"comment\": \"{}\"\
@@ -1366,7 +1365,7 @@ impl<W: io::Write> Formatter<W> for Slurm2 {
             origin.prefix.addr(), origin.prefix.prefix_len()
         )?;
         if let Some(max_len) = origin.prefix.max_len() {
-            writeln!(target, "        \"maxPrefixLength\": {},", max_len)?;
+            writeln!(target, "        \"maxPrefixLength\": {max_len},")?;
         }
         write!(target,
             "        \"comment\": \"{}\"\
@@ -1524,7 +1523,7 @@ impl<W: io::Write> Formatter<W> for Openbgpd {
         )?;
         let max_len = origin.prefix.resolved_max_len();
         if origin.prefix.prefix_len() < max_len {
-            write!(target, " maxlen {}", max_len)?;
+            write!(target, " maxlen {max_len}")?;
         }
         writeln!(target, " source-as {}", u32::from(origin.asn))
     }
@@ -1714,7 +1713,7 @@ impl<W: io::Write> Formatter<W> for Summary {
         &self, _snapshot: &PayloadSnapshot, metrics: &Metrics, target: &mut W
     ) -> Result<StreamState, io::Error> {
         Self::produce_header(metrics, |args| {
-            writeln!(target, "{}", args)
+            writeln!(target, "{args}")
         })?;
         Ok(StreamState::Done)
     }
