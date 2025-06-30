@@ -1,11 +1,10 @@
 //! Handling of endpoints related to the status.
 
-use std::cmp;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use clap::{crate_name, crate_version};
 use crate::metrics::{
     HttpServerMetrics, PayloadMetrics, PublicationMetrics,
-    RtrClientMetrics, SharedRtrServerMetrics, VrpMetrics,
+    RtrServerMetrics, VrpMetrics,
 };
 use crate::payload::SharedHistory;
 use crate::utils::fmt::WriteOrPanic;
@@ -20,7 +19,7 @@ pub async fn handle_get_or_head(
     req: &Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
-    rtr: &SharedRtrServerMetrics,
+    rtr: &RtrServerMetrics,
 ) -> Option<Response> {
     let head = req.is_head();
     match req.uri().path() {
@@ -40,7 +39,7 @@ async fn handle_status(
     head: bool,
     history: &SharedHistory,
     server_metrics: &HttpServerMetrics,
-    rtr_metrics: &SharedRtrServerMetrics,
+    rtr_metrics: &RtrServerMetrics,
 ) -> Response {
     let (metrics, serial, start, done, duration, unsafe_vrps) = {
         let history = history.read();
@@ -244,34 +243,31 @@ async fn handle_status(
         writeln!(res)
     }
 
-    let detailed_rtr = rtr_metrics.detailed();
-    let rtr_metrics = rtr_metrics.read().await;
+    let rtr = rtr_metrics.global();
 
     // rtr
     writeln!(res,
         "rtr-connections: {} current",
-        rtr_metrics.current_connections(),
+        rtr.open(),
     );
     writeln!(res,
         "rtr-data: {} bytes sent, {} bytes received",
-        rtr_metrics.bytes_written(),
-        rtr_metrics.bytes_read()
+        rtr.bytes_written(),
+        rtr.bytes_read()
     );
 
-    if detailed_rtr {
+    if let Some(clients) = rtr_metrics.clients() {
         // rtr-clients
         writeln!(res, "rtr-clients:");
-        rtr_metrics.fold_clients(
-            RtrClientStatus::default(), RtrClientStatus::fold
-        ).for_each(|(addr, data)| {
-            write!(res, "    {}: connections={}, ", addr, data.connections);
-            if let Some(serial) = data.serial {
+        clients.iter().for_each(|(addr, data)| {
+            write!(res, "    {}: connections={}, ", addr, data.open());
+            if let Some(serial) = data.serial() {
                 write!(res, "serial={}, ", serial);
             }
             else {
                 write!(res, "serial=N/A, ");
             }
-            if let Some(update) = data.updated {
+            if let Some(update) = data.updated() {
                 let update = Utc::now() - update;
                 write!(
                     res,
@@ -282,7 +278,7 @@ async fn handle_status(
             else {
                 write!(res, "updated=N/A, ");
             }
-            if let Some(update) = data.last_reset {
+            if let Some(update) = data.last_reset() {
                 let update = Utc::now() - update;
                 write!(
                     res,
@@ -295,8 +291,8 @@ async fn handle_status(
             }
             writeln!(res,
                 "reset-queries={}, serial-queries={}, read={}, written={}",
-                data.reset_queries, data.serial_queries,
-                data.bytes_read, data.bytes_written,
+                data.reset_queries(), data.serial_queries(),
+                data.bytes_read(), data.bytes_written(),
             );
         });
     }
@@ -327,7 +323,7 @@ async fn handle_api_status(
     head: bool,
     history: &SharedHistory,
     server_metrics: &HttpServerMetrics,
-    rtr_metrics: &SharedRtrServerMetrics,
+    rtr_metrics: &RtrServerMetrics,
 ) -> Response {
     let (metrics, serial, start, done, duration) = {
         let history = history.read();
@@ -348,8 +344,6 @@ async fn handle_api_status(
     }
 
     let now = Utc::now();
-    let detailed_rtr = rtr_metrics.detailed();
-    let rtr_metrics = rtr_metrics.read().await;
 
     let res = JsonBuilder::build(|target| {
         target.member_str("version",
@@ -491,67 +485,64 @@ async fn handle_api_status(
         });
 
         target.member_object("rtr", |target| {
+            let rtr = rtr_metrics.global();
             target.member_raw(
                 "currentConnections",
-                rtr_metrics.current_connections()
+                rtr.open()
             );
             target.member_raw(
-                "bytesRead", rtr_metrics.bytes_read()
+                "bytesRead", rtr.bytes_read()
             );
             target.member_raw(
-                "bytesWritten", rtr_metrics.bytes_written()
+                "bytesWritten", rtr.bytes_written()
             );
 
-            if detailed_rtr {
+            if let Some(clients) = rtr_metrics.clients() {
                 target.member_object("clients", |target| {
-                    rtr_metrics.fold_clients(
-                        RtrClientStatus::default(), RtrClientStatus::fold
-                   ).for_each(
-                        |(addr, data)| {
-                            target.member_object(addr, |target| {
-                                target.member_raw(
-                                    "connections", data.connections
+                   clients.iter().for_each(|(addr, data)| {
+                        target.member_object(addr, |target| {
+                            target.member_raw(
+                                "connections", data.open()
+                            );
+                            if let Some(serial) = data.serial() {
+                                target.member_raw("serial", serial);
+                            }
+                            else {
+                                target.member_raw("serial", "null");
+                            }
+                            if let Some(update) = data.updated() {
+                                target.member_str(
+                                    "updated",
+                                    update.format("%+")
                                 );
-                                if let Some(serial) = data.serial {
-                                    target.member_raw("serial", serial);
-                                }
-                                else {
-                                    target.member_raw("serial", "null");
-                                }
-                                if let Some(update) = data.updated {
-                                    target.member_str(
-                                        "updated",
-                                        update.format("%+")
-                                    );
-                                }
-                                else {
-                                    target.member_raw("updated", "null");
-                                }
-                                if let Some(update) = data.last_reset {
-                                    target.member_str(
-                                        "lastReset",
-                                        update.format("%+")
-                                    );
-                                }
-                                else {
-                                    target.member_raw("lastReset", "null");
-                                }
-                                target.member_raw(
-                                    "resetQueries", data.reset_queries
+                            }
+                            else {
+                                target.member_raw("updated", "null");
+                            }
+                            if let Some(update) = data.last_reset() {
+                                target.member_str(
+                                    "lastReset",
+                                    update.format("%+")
                                 );
-                                target.member_raw(
-                                    "serialQueries", data.serial_queries
-                                );
-                                target.member_raw(
-                                    "read", data.bytes_read
-                                );
-                                target.member_raw(
-                                    "written", data.bytes_written
-                                );
-                            })
-                        }
-                    );
-                });
+                            }
+                            else {
+                                target.member_raw("lastReset", "null");
+                            }
+                            target.member_raw(
+                                "resetQueries", data.reset_queries()
+                            );
+                            target.member_raw(
+                                "serialQueries", data.serial_queries()
+                            );
+                            target.member_raw(
+                                "read", data.bytes_read()
+                            );
+                            target.member_raw(
+                                "written", data.bytes_written()
+                            );
+                        })
+                    }
+                )});
             }
         });
 
@@ -664,56 +655,6 @@ fn handle_version(head: bool) -> Response {
     }
     else {
         res.body(crate_version!())
-    }
-}
-
-
-//------------ RtrClientStatus -----------------------------------------------
-
-// Helper struct to keep RTR client data.
-#[derive(Clone, Default)]
-struct RtrClientStatus {
-    connections: usize,
-    serial: Option<u32>,
-    updated: Option<DateTime<Utc>>,
-    last_reset: Option<DateTime<Utc>>,
-    reset_queries: u32,
-    serial_queries: u32,
-    bytes_read: u64,
-    bytes_written: u64,
-}
-
-impl RtrClientStatus {
-    fn fold(&mut self, client: &RtrClientMetrics) {
-        if client.is_open() {
-            self.connections += 1;
-        }
-        self.serial = match (
-            self.serial, client.serial().map(u32::from)
-        ) {
-            (Some(left), Some(right)) => Some(cmp::max(left, right)),
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None
-        };
-        self.updated = match (self.updated, client.updated()) {
-            (Some(left), Some(right)) => Some(cmp::max(left, right)),
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None
-        };
-        self.last_reset = match
-            (self.last_reset, client.last_reset())
-        {
-            (Some(left), Some(right)) => Some(cmp::max(left, right)),
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None
-        };
-        self.reset_queries += client.reset_queries();
-        self.serial_queries += client.serial_queries();
-        self.bytes_read += client.bytes_read();
-        self.bytes_written += client.bytes_written();
     }
 }
 

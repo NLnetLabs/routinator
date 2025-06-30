@@ -16,6 +16,7 @@ exclude = [ ".github", "doc/manual", "Dockerfile", ".dockerignore", ".readthedoc
 
 [dependencies]
 arbitrary       = { version = "1", optional = true, features = ["derive"] }
+arc-swap        = "1"
 bytes           = "1.0.0"
 chrono          = "0.4.35"
 clap            = { version = "4.4", features = [ "wrap_help", "cargo", "derive" ] }

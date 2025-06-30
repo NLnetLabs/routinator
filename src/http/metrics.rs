@@ -1,12 +1,12 @@
 //! Handling of the metrics endpoint.
 
-use std::{cmp, fmt};
+use std::fmt;
 use std::fmt::Write;
 use chrono::Utc;
 use crate::config::FilterPolicy;
 use crate::metrics::{
     HttpServerMetrics, Metrics, PayloadMetrics, PublicationMetrics,
-    RrdpRepositoryMetrics, RsyncModuleMetrics, SharedRtrServerMetrics,
+    RrdpRepositoryMetrics, RsyncModuleMetrics, RtrServerMetrics,
     VrpMetrics
 };
 use crate::payload::SharedHistory;
@@ -20,7 +20,7 @@ pub async fn handle_get_or_head(
     req: &Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
-    rtr: &SharedRtrServerMetrics,
+    rtr: &RtrServerMetrics,
 ) -> Option<Response> {
     match req.uri().path() {
         "/metrics" => {
@@ -37,7 +37,7 @@ async fn handle_metrics(
     head: bool,
     history: &SharedHistory,
     http: &HttpServerMetrics,
-    rtr: &SharedRtrServerMetrics,
+    rtr: &RtrServerMetrics,
 ) -> Response {
     let (metrics, serial, start, done, duration, unsafe_vrps) = {
         let history = history.read();
@@ -167,7 +167,7 @@ async fn handle_metrics(
     rsync_metrics(&mut target, &metrics.rsync);
 
     // Server metrics.
-    rtr_metrics(&mut target, rtr).await;
+    rtr_metrics(&mut target, rtr);
     http_metrics(&mut target, http);
 
     //  Deprecated metrics.
@@ -530,9 +530,8 @@ fn rsync_metrics(target: &mut Target, metrics: &[RsyncModuleMetrics]) {
     }
 }
 
-async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
-    let detailed = metrics.detailed();
-    let metrics = metrics.read().await;
+fn rtr_metrics(target: &mut Target, metrics: &RtrServerMetrics) {
+    let global = metrics.global();
 
     target.single(
         Metric::new(
@@ -540,7 +539,7 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             "number of currently open RTR connections",
             MetricType::Gauge
         ),
-        metrics.current_connections()
+        global.open()
     );
     target.single(
         Metric::new(
@@ -548,7 +547,7 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             "total number of bytes read from RTR connections",
             MetricType::Counter
         ),
-        metrics.bytes_read()
+        global.bytes_read()
     );
     target.single(
         Metric::new(
@@ -556,22 +555,18 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             "total number of bytes written to RTR connections",
             MetricType::Counter
         ),
-        metrics.bytes_written()
+        global.bytes_written()
     );
 
-    if detailed {
+    if let Some(clients) = metrics.clients() {
         let item = Metric::new(
             "rtr_client_connections",
             "number of currently open connections per client address",
             MetricType::Gauge
         );
         target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            if client.is_open() {
-                *count += 1
-            }
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
+        clients.iter().for_each(|(addr, data)| {
+            target.multi(item).label("addr", addr).value(data.open())
         });
 
         let item = Metric::new(
@@ -580,15 +575,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Gauge
         );
         target.header(item);
-        metrics.fold_clients(None, |serial, client| {
-            *serial = match (*serial, client.serial().map(u32::from)) {
-                (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                (Some(left), None) => Some(left),
-                (None, Some(right)) => Some(right),
-                (None, None) => None
-            };
-        }).for_each(|(addr, count)| {
-            match count {
+        clients.iter().for_each(|(addr, data)| {
+            match data.serial() {
                 Some(count) => {
                     target.multi(item).label("addr", addr).value(count);
                 }
@@ -604,15 +592,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Gauge
         );
         target.header(item);
-        metrics.fold_clients(None, |update, client| {
-            *update = match (*update, client.updated()) {
-                (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                (Some(left), None) => Some(left),
-                (None, Some(right)) => Some(right),
-                (None, None) => None
-            };
-        }).for_each(|(addr, update)| {
-            match update {
+        clients.iter().for_each(|(addr, data)| {
+            match data.updated() {
                 Some(update) => {
                     let duration = Utc::now() - update;
                     target.multi(item).label("addr", addr).value(
@@ -635,15 +616,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Gauge
         );
         target.header(item);
-        metrics.fold_clients(None, |update, client| {
-            *update = match (*update, client.last_reset()) {
-                (Some(left), Some(right)) => Some(cmp::max(left, right)),
-                (Some(left), None) => Some(left),
-                (None, Some(right)) => Some(right),
-                (None, None) => None
-            };
-        }).for_each(|(addr, update)| {
-            match update {
+        clients.iter().for_each(|(addr, data)| {
+            match data.last_reset() {
                 Some(update) => {
                     let duration = Utc::now() - update;
                     target.multi(item).label("addr", addr).value(
@@ -666,10 +640,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Counter,
         );
         target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            *count += client.reset_queries();
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
+        clients.iter().for_each(|(addr, data)| {
+            target.multi(item).label("addr", addr).value(data.reset_queries())
         });
 
         let item = Metric::new(
@@ -678,10 +650,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Counter,
         );
         target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            *count += client.serial_queries();
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
+        clients.iter().for_each(|(addr, data)| {
+            target.multi(item).label("addr", addr).value(data.serial_queries())
         });
 
         let item = Metric::new(
@@ -690,10 +660,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Counter,
         );
         target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            *count += client.bytes_read();
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
+        clients.iter().for_each(|(addr, data)| {
+            target.multi(item).label("addr", addr).value(data.bytes_read())
         });
 
         let item = Metric::new(
@@ -702,10 +670,8 @@ async fn rtr_metrics(target: &mut Target, metrics: &SharedRtrServerMetrics) {
             MetricType::Counter
         );
         target.header(item);
-        metrics.fold_clients(0, |count, client| {
-            *count += client.bytes_written();
-        }).for_each(|(addr, count)| {
-            target.multi(item).label("addr", addr).value(count)
+        clients.iter().for_each(|(addr, data)| {
+            target.multi(item).label("addr", addr).value(data.bytes_written())
         });
     }
 }
