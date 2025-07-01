@@ -751,10 +751,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // child CAs. This is a preventative measure to stop CA children from
         // trying to influence the processing of the other children. It also
         // adds randomness to visiting the repositories, reducing peak load.
-        let mut items_random = Vec::new();
-        for item in items {
-            items_random.push(item);
-        }
+        let mut items_random = Vec::from_iter(items);
         items_random.shuffle(&mut rand::rng());
         let mut items = items_random.into_iter();
 
