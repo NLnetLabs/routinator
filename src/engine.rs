@@ -191,8 +191,7 @@ impl Engine {
                     Ok(entry) => entry,
                     Err(err) => {
                         error!(
-                            "Failed to iterate over tal directory: {}",
-                            err
+                            "Failed to iterate over tal directory: {err}"
                         );
                         return Err(Failed)
                     }
@@ -481,8 +480,7 @@ impl<P: ProcessRun> Run<'_, P> {
             };
             if cert.subject_public_key_info() != task.tal.key_info() {
                 warn!(
-                    "Trust anchor {}: key doesn’t match TAL.",
-                    uri
+                    "Trust anchor {uri}: key doesn’t match TAL."
                 );
                 continue;
             }
@@ -491,7 +489,7 @@ impl<P: ProcessRun> Run<'_, P> {
             ) {
                 Ok(cert) => CaCert::root(cert, uri.clone(), task.index),
                 Err(err) => {
-                    warn!("Trust anchor {}: {}.", uri, err);
+                    warn!("Trust anchor {uri}: {err}.");
                     continue;
                 }
             };
@@ -499,7 +497,7 @@ impl<P: ProcessRun> Run<'_, P> {
                 Ok(cert) => cert,
                 Err(_) => continue,
             };
-            debug!("Found valid trust anchor {}. Processing.", uri);
+            debug!("Found valid trust anchor {uri}. Processing.");
 
             match self.processor.process_ta(
                 task.tal, uri, &cert, cert.tal
@@ -515,7 +513,7 @@ impl<P: ProcessRun> Run<'_, P> {
                     )
                 }
                 None => {
-                    debug!("Skipping trust anchor {}.", uri);
+                    debug!("Skipping trust anchor {uri}.");
                     return Ok(())
                 }
             }
@@ -784,13 +782,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let content = match collector.load_object(&uri)? {
                     Some(content) => content,
                     None => {
-                        warn!("{}: failed to load.", uri);
+                        warn!("{uri}: failed to load.");
                         return Err(store::UpdateError::Abort)
                     }
                 };
 
                 if hash.verify(&content).is_err() {
-                    warn!("{}: file has wrong manifest hash.", uri);
+                    warn!("{uri}: file has wrong manifest hash.");
                     return Err(store::UpdateError::Abort)
                 }
 
@@ -946,14 +944,14 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     Some(bytes) => bytes,
                     None => {
                         self.metrics.invalid_crls += 1;
-                        warn!("{}: failed to load.", crl_uri);
+                        warn!("{crl_uri}: failed to load.");
                         return Ok(None)
                     }
                 };
                 let hash = ManifestHash::new(hash, manifest.file_hash_alg());
                 if hash.verify(&bytes).is_err() {
                     self.metrics.invalid_crls += 1;
-                    warn!("{}: file has wrong hash.", crl_uri);
+                    warn!("{crl_uri}: file has wrong hash.");
                     return Ok(None)
                 }
                 crl_bytes = Some(bytes);
@@ -976,7 +974,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(crl) => crl,
             Err(_) => {
                 self.metrics.invalid_crls += 1;
-                warn!("{}: failed to decode CRL.", crl_uri);
+                warn!("{crl_uri}: failed to decode CRL.");
                 return Ok(None)
             }
         };
@@ -984,18 +982,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.cert.cert().subject_public_key_info()
         ) {
             self.metrics.invalid_crls += 1;
-            warn!("{}: {}.", crl_uri, err);
+            warn!("{crl_uri}: {err}.");
             return Ok(None)
         }
         if crl.is_stale() {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{}: stale CRL.", crl_uri);
+                    warn!("{crl_uri}: stale CRL.");
                     return Ok(None)
                 }
                 FilterPolicy::Warn => {
-                    warn!("{}: stale CRL.", crl_uri);
+                    warn!("{crl_uri}: stale CRL.");
                 }
                 FilterPolicy::Accept => { }
             }
@@ -1162,14 +1160,14 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
-                warn!("{}: failed to decode CRL.", crl_uri);
+                warn!("{crl_uri}: failed to decode CRL.");
                 return Err(Failed)
             }
         };
         if let Err(err) = crl.verify_signature(
             self.cert.cert().subject_public_key_info()
         ) {
-            warn!("{}: {}.", crl_uri, err);
+            warn!("{crl_uri}: {err}.");
             self.metrics.invalid_manifests += 1;
             self.metrics.invalid_crls += 1;
             return Err(Failed)
@@ -1178,13 +1176,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{}: stale CRL.", crl_uri);
+                    warn!("{crl_uri}: stale CRL.");
                     self.metrics.invalid_manifests += 1;
                     self.metrics.invalid_crls += 1;
                     return Err(Failed)
                 }
                 FilterPolicy::Warn => {
-                    warn!("{}: stale CRL.", crl_uri);
+                    warn!("{crl_uri}: stale CRL.");
                 }
                 FilterPolicy::Accept => { }
             }
@@ -1284,13 +1282,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
         else if uri.ends_with(".crl") {
             if *uri != manifest.crl_uri {
-                warn!("{}: stray CRL.", uri);
+                warn!("{uri}: stray CRL.");
                 manifest.metrics.stray_crls += 1;
             }
         }
         else {
             manifest.metrics.others += 1;
-            warn!("{}: unknown object type.", uri);
+            warn!("{uri}: unknown object type.");
         }
         Ok(true)
     }
@@ -1307,7 +1305,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(cert) => cert,
             Err(_) => {
                 manifest.metrics.invalid_certs += 1;
-                warn!("{}: failed to decode certificate.", uri);
+                warn!("{uri}: failed to decode certificate.");
                 return Ok(())
             }
         };
@@ -1328,7 +1326,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<(), Failed> {
         if self.cert.check_loop(&cert).is_err() {
-            warn!("{}: certificate loop detected.", uri);
+            warn!("{uri}: certificate loop detected.");
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1337,13 +1335,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ) {
             Ok(cert) => cert,
             Err(err) => {
-                warn!("{}: {}.", uri, err);
+                warn!("{uri}: {err}.");
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
         if let Err(err) = manifest.check_crl(&cert) {
-            warn!("{}: {}.", uri, err);
+            warn!("{uri}: {err}.");
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1396,12 +1394,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         if let Err(err) = cert.validate_router(
             self.cert.cert(), self.run.validation.strict
         ) {
-            warn!("{}: {}.", uri, err);
+            warn!("{uri}: {err}.");
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         };
         if let Err(err) = manifest.check_crl(&cert) {
-            warn!("{}: {}.", uri, err);
+            warn!("{uri}: {err}.");
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1421,7 +1419,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(roa) => roa,
             Err(_) => {
                 manifest.metrics.invalid_roas += 1;
-                warn!("{}: failed to decode ROA.", uri);
+                warn!("{uri}: failed to decode ROA.");
                 return Ok(())
             }
         };
@@ -1436,7 +1434,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_roas += 1;
-                warn!("{}: {}.", uri, err)
+                warn!("{uri}: {err}.")
             }
         }
         Ok(())
@@ -1454,7 +1452,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(aspa) => aspa,
             Err(err) => {
                 manifest.metrics.invalid_aspas += 1;
-                warn!("{}: failed to decode ASPA.", uri);
+                warn!("{uri}: failed to decode ASPA.");
                 return Ok(())
             }
         };
@@ -1469,7 +1467,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_aspas += 1;
-                warn!("{}: {}.", uri, err)
+                warn!("{uri}: {err}.")
             }
         }
         Ok(())
@@ -1486,7 +1484,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(obj) => obj,
             Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;
-                warn!("{}: failed to decode GBR.", uri);
+                warn!("{uri}: failed to decode GBR.");
                 return Ok(())
             }
         };
@@ -1501,7 +1499,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_gbrs += 1;
-                warn!("{}: {}.", uri, err)
+                warn!("{uri}: {err}.")
             }
         }
         Ok(())
@@ -1700,16 +1698,14 @@ impl CaCert {
             Some(chain_len) => chain_len,
             None => {
                 error!(
-                    "CA {}: CA depth overrun.",
-                    uri
+                    "CA {uri}: CA depth overrun."
                 );
                 return Err(Failed)
             }
         };
         if chain_len > max_depth {
             error!(
-                "CA {}: CA depth overrun.",
-                uri
+                "CA {uri}: CA depth overrun."
             );
             return Err(Failed)
         }
@@ -1734,9 +1730,8 @@ impl CaCert {
                 // This is actually checked during certificate validation,
                 // so this should never happen.
                 error!(
-                    "CA cert {} has no repository URI. \
-                     Why has it not been rejected yet?",
-                    uri
+                    "CA cert {uri} has no repository URI. \
+                     Why has it not been rejected yet?"
                 );
                 return Err(Failed)
             }
@@ -1748,9 +1743,8 @@ impl CaCert {
                 // This is actually checked during certificate validation,
                 // so this should never happen.
                 error!(
-                    "CA cert {} has no manifest URI. \
-                     Why has it not been rejected yet?",
-                    uri
+                    "CA cert {uri} has no manifest URI. \
+                     Why has it not been rejected yet?"
                 );
                 return Err(Failed)
             }

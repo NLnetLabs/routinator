@@ -62,7 +62,7 @@ impl Notification {
                 response
             }
             Err(err) => {
-                warn!("RRDP {}: {}", uri, err);
+                warn!("RRDP {uri}: {err}");
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
@@ -97,12 +97,11 @@ impl Notification {
         let mut content = NotificationFile::parse_limited(
             io::BufReader::new(response), delta_list_limit
         ).map_err(|err| {
-            warn!("RRDP {}: {}", uri, err);
+            warn!("RRDP {uri}: {err}");
             Failed
         })?;
         if !content.has_matching_origins(&uri) {
-            warn!("RRDP {}: snapshot or delta files with different origin",
-                uri
+            warn!("RRDP {uri}: snapshot or delta files with different origin"
             );
             return Err(Failed)
         }

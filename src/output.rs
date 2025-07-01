@@ -170,7 +170,7 @@ impl FromStr for OutputFormat {
 
     fn from_str(value: &str) -> Result<Self, Failed> {
         Self::try_from_str(value).ok_or_else(|| {
-            error!("Unknown output format: {}", value);
+            error!("Unknown output format: {value}");
             Failed
         })
     }
@@ -1702,7 +1702,7 @@ impl Summary {
 
     pub fn log(metrics: &Metrics) {
         Self::produce_header(metrics, |args| {
-            info!("{}", args);
+            info!("{args}");
             Ok(())
         }).unwrap()
     }

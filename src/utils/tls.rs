@@ -33,7 +33,7 @@ pub fn create_server_config(
         .with_no_client_auth()
         .with_single_cert(read_certs(cert_path)?, read_key(key_path)?)
         .map_err(|err| {
-            error!("Failed to create {} TLS server config: {}", service, err);
+            error!("Failed to create {service} TLS server config: {err}");
             ExitError::Generic
         })
 }

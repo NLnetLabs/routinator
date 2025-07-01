@@ -416,7 +416,9 @@ impl SnapshotArcAspaIter {
 
     /// Returns the next item and its information.
     pub fn next_with_info(&mut self) -> Option<(&Aspa, &PayloadInfo)> {
-        self.snapshot.aspas.get(self.next).map(|res| { self.next +=1; res })
+        let res = self.snapshot.aspas.get(self.next)?;
+        self.next += 1;
+        Some(res)
     }
 }
  
