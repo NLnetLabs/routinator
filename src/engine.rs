@@ -745,14 +745,14 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // signal that the publication point was processed successfully but
         // shouldn’t be considered further.
         let mut ca_tasks = Vec::new();
-        let mut items = collected.content.iter();
+        let items = collected.content.iter();
 
         // Randomise the manifest to ensure a non-predictable ordering of the
         // child CAs. This is a preventative measure to stop CA children from
         // trying to influence the processing of the other children. It also
         // adds randomness to visiting the repositories, reducing peak load.
         let mut items_random = Vec::new();
-        while let Some(item) = items.next() {
+        for item in items {
             items_random.push(item);
         }
         items_random.shuffle(&mut rand::rng());
