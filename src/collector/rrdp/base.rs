@@ -366,15 +366,14 @@ impl<'a> Run<'a> {
         };
         if response.content_length() > self.collector.config().max_object_size {
             warn!(
-                "Trust anchor certificate {} exceeds size limit. \
-                 Ignoring.",
-                uri
+                "Trust anchor certificate {uri} exceeds size limit. \
+                 Ignoring."
             );
             return None
         }
         let mut bytes = Vec::new();
         if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {}: {}", uri, err);
+            info!("Failed to get trust anchor {uri}: {err}");
             return None
         }
         Some(Bytes::from(bytes))
@@ -428,8 +427,7 @@ impl<'a> Run<'a> {
             let mut metrics = RrdpRepositoryMetrics::new(rpki_notify.clone());
             metrics.notify_status = HttpStatus::Rejected;
             warn!(
-                "{}: Dubious host name. Not using the repository.",
-                rpki_notify
+                "{rpki_notify}: Dubious host name. Not using the repository."
             );
             (LoadResult::Unavailable, metrics)
         }

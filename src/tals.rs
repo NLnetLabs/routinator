@@ -26,7 +26,7 @@ pub fn collect_tals(config: &Config) -> Result<Vec<Tal>, Failed> {
             }
         }
         if !added {
-            error!("Unknown TAL '{}' in --tal option", name);
+            error!("Unknown TAL '{name}' in --tal option");
             return Err(Failed)
         }
     }

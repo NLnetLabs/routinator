@@ -2065,8 +2065,7 @@ impl ConfigFile {
                 Ok(dir) => dir,
                 Err(err) => {
                     error!(
-                        "Fatal: Can't determine current directory: {}.",
-                        err
+                        "Fatal: Can't determine current directory: {err}."
                     );
                     return Err(Failed);
                 }

@@ -72,7 +72,7 @@ impl HttpClient {
                 Ok(proxy) => proxy,
                 Err(err) => {
                     error!(
-                        "Invalid rrdp-proxy '{}': {}", proxy, err
+                        "Invalid rrdp-proxy '{proxy}': {err}"
                     );
                     return Err(Fatal)
                 }
@@ -105,7 +105,7 @@ impl HttpClient {
         let client = match builder.build() {
             Ok(client) => client,
             Err(err) => {
-                error!("Failed to initialize HTTP client: {}.", err);
+                error!("Failed to initialize HTTP client: {err}.");
                 return Err(Fatal)
             }
         };

@@ -112,7 +112,7 @@ async fn single_rtr_listener(
     let listener = match TcpListener::from_std(listener) {
         Ok(listener) => listener,
         Err(err) => {
-            error!("Fatal error listening on {}: {}", addr, err);
+            error!("Fatal error listening on {addr}: {err}");
             return;
         }
     };
@@ -123,7 +123,7 @@ async fn single_rtr_listener(
     if let Err(err) = Server::new(
         listener, sender, origins.clone()
     ).run().await {
-        error!("Fatal error in RTR server {}: {}", addr, err);
+        error!("Fatal error in RTR server {addr}: {err}");
     }
 }
 

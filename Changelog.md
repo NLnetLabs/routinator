@@ -20,6 +20,8 @@ Bug fixes
 Other changes
 
 * Add package.homepage to Cargo.toml ([#1024])
+* Added building packages for ARMv6 and ARM64 for Debian Bookworm.
+  ([#1036])
 * Upgrades various dependencies. ([#1004], [#1005], [#1006])
 
 [#1004]: https://github.com/NLnetLabs/routinator/pull/1004
@@ -29,6 +31,7 @@ Other changes
 [#1021]: https://github.com/NLnetLabs/routinator/pull/1021
 [#1024]: https://github.com/NLnetLabs/routinator/pull/1024
 [#1027]: https://github.com/NLnetLabs/routinator/pull/1027
+[#1036]: https://github.com/NLnetLabs/routinator/pull/1036
 
 
 ## 0.14.2 ‘Roll Initiative!’

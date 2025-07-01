@@ -230,7 +230,7 @@ impl<'a> Run<'a> {
                 }
 
                 if first && self.rsync.is_some() {
-                    info!("RRDP {}: Falling back to rsync.", rrdp_uri);
+                    info!("RRDP {rrdp_uri}: Falling back to rsync.");
                 }
             }
         }

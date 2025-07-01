@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.14.2-dev"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.82"
 authors = ["NLnet Labs <rpki-team@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -45,7 +45,7 @@ uuid            = "1.1"
 
 
 [target.'cfg(unix)'.dependencies]
-nix             = { version = "0.29.0", features = ["fs", "mman", "net", "process", "socket", "user"] }
+nix             = { version = "0.30.1", features = ["fs", "mman", "net", "process", "socket", "user"] }
 syslog          = "7"
 
 [features]

@@ -209,7 +209,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
             || !cert.as_resources().is_present()
         {
             warn!(
-                "{}: router certificate does not contain AS resources.", uri
+                "{uri}: router certificate does not contain AS resources."
             );
             return Ok(())
         }
@@ -217,8 +217,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
             Ok(blocks) => blocks,
             Err(_) => {
                 warn!(
-                    "{}: router certificate contains invalid AS resources.",
-                    uri
+                    "{uri}: router certificate contains invalid AS resources."
                 );
                 return Ok(())
             }
@@ -227,7 +226,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
         let key = cert.subject_public_key_info();
         if !key.allow_router_cert() {
             warn!(
-                "{}: router certificate has invalid key algorithm.", uri
+                "{uri}: router certificate has invalid key algorithm."
             );
             return Ok(())
         }
@@ -235,7 +234,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
             Ok(key) => key,
             Err(_) => {
                 warn!(
-                    "{}: excessively large key in router certificate.", uri
+                    "{uri}: excessively large key in router certificate."
                 );
                 return Ok(())
             }
@@ -312,7 +311,7 @@ impl ProcessPubPoint for PubPointProcessor<'_> {
                 warn!("   {}", block.display_v6());
             }
             for block in cert.cert().as_resources().iter() {
-                warn!("   {}", block);
+                warn!("   {block}");
             }
         }
         self.report.rejected.extend_from_cert(cert);
