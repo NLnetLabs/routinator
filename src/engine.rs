@@ -28,6 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
 use crossbeam_queue::{ArrayQueue, SegQueue};
 use log::{debug, error, info, warn};
+use rand::seq::SliceRandom;
 use rpki::crypto::keys::KeyIdentifier;
 #[allow(unused_imports)]
 use rpki::repository::aspa::{Aspa, AsProviderAttestation};
@@ -745,6 +746,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // shouldn’t be considered further.
         let mut ca_tasks = Vec::new();
         let mut items = collected.content.iter();
+
+        // Randomise the manifest to ensure a non-predictable ordering of the
+        // child CAs. This is a preventative measure to stop CA children from
+        // trying to influence the processing of the other children. It also
+        // adds randomness to visiting the repositories, reducing peak load.
+        let mut items_random = Vec::new();
+        while let Some(item) = items.next() {
+            items_random.push(item);
+        }
+        items_random.shuffle(&mut rand::rng());
+        let mut items = items_random.into_iter();
+
         let mut point_ok = true;
         let update_result = store.update(
             StoredManifest::new(
