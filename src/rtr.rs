@@ -17,7 +17,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::TlsAcceptor;
 use crate::config::Config;
 use crate::error::ExitError;
-use crate::metrics::{SharedRtrServerMetrics, RtrClientMetrics};
+use crate::metrics::{RtrServerMetrics, RtrClientMetrics};
 use crate::payload::SharedHistory;
 use crate::utils::{net, tls};
 use crate::utils::tls::MaybeTlsTcpStream;
@@ -28,7 +28,7 @@ use crate::utils::tls::MaybeTlsTcpStream;
 /// Returns a future for all RTR listeners.
 pub fn rtr_listener(
     history: SharedHistory,
-    metrics: SharedRtrServerMetrics,
+    metrics: Arc<RtrServerMetrics>,
     config: &Config,
     sender: NotifySender,
     extra_listener: Option<StdListener>,
@@ -79,7 +79,7 @@ fn create_tls_config(
 
 async fn _rtr_listener(
     origins: SharedHistory,
-    metrics: SharedRtrServerMetrics,
+    metrics: Arc<RtrServerMetrics>,
     sender: NotifySender,
     listeners: Vec<(String, Option<Arc<tls::ServerConfig>>, StdListener)>,
     keepalive: Option<Duration>,
@@ -105,7 +105,7 @@ async fn single_rtr_listener(
     tls: Option<Arc<tls::ServerConfig>>,
     listener: StdListener,
     origins: SharedHistory,
-    server_metrics: SharedRtrServerMetrics,
+    server_metrics: Arc<RtrServerMetrics>,
     sender: NotifySender,
     keepalive: Option<Duration>,
 ) {
@@ -135,7 +135,7 @@ struct RtrListener {
     tcp: TcpListener,
     tls: Option<TlsAcceptor>,
     keepalive: Option<Duration>,
-    server_metrics: SharedRtrServerMetrics,
+    server_metrics: Arc<RtrServerMetrics>,
 }
 
 impl Stream for RtrListener {
@@ -150,7 +150,7 @@ impl Stream for RtrListener {
                 match RtrStream::new(
                     sock, addr,
                     self.tls.as_ref(), self.keepalive,
-                    self.server_metrics.clone()
+                    &self.server_metrics,
                 ) {
                     Ok(stream) => Poll::Ready(Some(Ok(stream))),
                     Err(_) => Poll::Pending,
@@ -167,7 +167,7 @@ impl Stream for RtrListener {
 /// A wrapper around a stream socket that takes care of updating metrics.
 struct RtrStream {
     sock: MaybeTlsTcpStream,
-    metrics: Arc<RtrClientMetrics>,
+    metrics: RtrClientMetrics,
 }
 
 impl RtrStream {
@@ -177,16 +177,13 @@ impl RtrStream {
         addr: SocketAddr,
         tls: Option<&TlsAcceptor>,
         keepalive: Option<Duration>,
-        server_metrics: SharedRtrServerMetrics,
+        server_metrics: &RtrServerMetrics,
     ) -> Result<Self, io::Error> {
         if let Some(duration) = keepalive {
             Self::set_keepalive(&sock, duration)?
         }
-        let metrics = Arc::new(RtrClientMetrics::new(addr.ip()));
-        let client_metrics = metrics.clone();
-        tokio::spawn(async move {
-            server_metrics.add_client(client_metrics).await
-        });
+        let metrics = server_metrics.get_client(addr.ip());
+        metrics.update(|metrics| metrics.inc_open());
         Ok(RtrStream {
             sock: MaybeTlsTcpStream::new(sock, tls),
             metrics
@@ -244,7 +241,9 @@ impl RtrStream {
 
 impl Socket for RtrStream {
     fn update(&self, state: State, reset: bool) {
-        self.metrics.update_now(state.serial(), reset);
+        self.metrics.update(|metrics| {
+            metrics.update_now(state.serial(), reset)
+        });
     }
 }
 
@@ -257,9 +256,8 @@ impl AsyncRead for RtrStream {
         pin_mut!(sock);
         let res = sock.poll_read(cx, buf);
         if let Poll::Ready(Ok(())) = res {
-            self.metrics.inc_bytes_read(
-                (buf.filled().len().saturating_sub(len)) as u64
-            )    
+            let len = buf.filled().len().saturating_sub(len) as u64;
+            self.metrics.update(|metrics| metrics.inc_bytes_read(len));
         }
         res
     }
@@ -273,7 +271,7 @@ impl AsyncWrite for RtrStream {
         pin_mut!(sock);
         let res = sock.poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = res {
-            self.metrics.inc_bytes_written(n as u64)
+            self.metrics.update(|metrics| metrics.inc_bytes_written(n as u64))
         }
         res
     }
@@ -297,7 +295,7 @@ impl AsyncWrite for RtrStream {
 
 impl Drop for RtrStream {
     fn drop(&mut self) {
-        self.metrics.close()
+        self.metrics.update(|metrics| metrics.dec_open())
     }
 }
 
