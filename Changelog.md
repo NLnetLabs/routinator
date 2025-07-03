@@ -14,6 +14,8 @@ New
   specify a short minimum refresh time if objects expire before the
   refresh time. If this value is set to 0, the old behaviour is restored.
   ([#1027])
+* The order in which manifest entries are processed is now randomized.
+  ([#1041])
 
 Bug fixes
 
@@ -34,6 +36,7 @@ Other changes
 [#1027]: https://github.com/NLnetLabs/routinator/pull/1027
 [#1034]: https://github.com/NLnetLabs/routinator/pull/1034
 [#1036]: https://github.com/NLnetLabs/routinator/pull/1036
+[#1041]: https://github.com/NLnetLabs/routinator/pull/1041
 
 
 ## 0.14.2 ‘Roll Initiative!’
