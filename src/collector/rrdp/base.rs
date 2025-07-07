@@ -18,7 +18,9 @@ use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
 use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
-use super::archive::{FallbackTime, RrdpArchive, RepositoryState};
+use super::archive::{
+    FallbackTime, RrdpArchive, RepositoryState, SnapshotRrdpArchive,
+};
 use super::http::{HttpClient, HttpStatus};
 use super::update::{
     DeltaUpdate, Notification, SnapshotError, SnapshotReason, SnapshotUpdate
@@ -117,7 +119,7 @@ impl Collector {
                         );
                         return Err(Fatal)
                     }
-                    Err(OpenError::Archive(ArchiveError::Corrupt)) => {
+                    Err(OpenError::Archive(ArchiveError::Corrupt(_))) => {
                         match fs::remove_file(entry.path()) {
                             Ok(()) => {
                                 info!(
@@ -857,7 +859,9 @@ impl<'a> RepositoryUpdate<'a> {
     ) -> Result<bool, RunFailed> {
         debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
         let (file, path) = self.collector.temp_file()?;
-        let mut archive = RrdpArchive::create_with_file(file, path.clone())?;
+        let mut archive = SnapshotRrdpArchive::create_with_file(
+            file, path.clone()
+        )?;
         if let Err(err) = SnapshotUpdate::new(
             self.collector, &mut archive, notify, &mut self.metrics
         ).try_update() {
