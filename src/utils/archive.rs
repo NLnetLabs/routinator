@@ -31,12 +31,13 @@
 
 use std::{cmp, fmt, fs, io, mem};
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::ops::{DerefMut, Range};
 use std::path::Path;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use bytes::Bytes;
 use siphasher::sip::SipHasher24;
 use crate::utils::sync::{Mutex, MutexGuard};
@@ -125,7 +126,7 @@ impl<Meta> Archive<Meta> {
         let mut magic = [0; MAGIC_SIZE];
         file.read_exact(&mut magic)?;
         if magic != FILE_MAGIC {
-            return Err(ArchiveError::Corrupt.into())
+            return Err(ArchiveError::Corrupt("invalid magic").into())
         }
         let meta = ArchiveMeta::read(&mut file)?;
 
@@ -158,8 +159,8 @@ impl<Meta> Archive<Meta> {
                 let (header, name) = ObjectHeader::read_with_name(
                     &self.file, pos.into()
                 )?;
-                if self.hash_name(&name) != idx {
-                    return Err(ArchiveError::Corrupt)
+                if self.meta.hash_name(&name) != idx {
+                    return Err(ArchiveError::Corrupt("incorrect hash"))
                 }
                 objects.push((u64::from(pos), header.size));
                 stats.object_count += 1;
@@ -193,7 +194,7 @@ impl<Meta> Archive<Meta> {
 
         for window in objects.windows(2) {
             if window[1].0 != window[0].0 + window[0].1 {
-                return Err(ArchiveError::Corrupt)
+                return Err(ArchiveError::Corrupt("broken sequence"))
             }
         }
 
@@ -221,7 +222,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         &self,
         name: &[u8],
     ) -> Result<Cow<[u8]>, FetchError> {
-        let hash = self.hash_name(name);
+        let hash = self.meta.hash_name(name);
         let found = match self.find(hash, name)? {
             Some(found) => found,
             None => return Err(FetchError::NotFound),
@@ -265,7 +266,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         name: &[u8],
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
     ) -> Result<Cow<[u8]>, AccessError<Meta::ConsistencyError>> {
-        let hash = self.hash_name(name);
+        let hash = self.meta.hash_name(name);
         let found = match self.find(hash, name)? {
             Some(found) => found,
             None => return Err(AccessError::NotFound),
@@ -289,7 +290,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     pub fn publish(
         &mut self, name: &[u8], meta: &Meta, data: &[u8]
     ) -> Result<(), PublishError> {
-        let hash = self.hash_name(name);
+        let hash = self.meta.hash_name(name);
         if self.find(hash, name)?.is_some() {
             return Err(PublishError::AlreadyExists)
         }
@@ -375,7 +376,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         name: &[u8], meta: &Meta, data: &[u8],
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
     ) -> Result<(), AccessError<Meta::ConsistencyError>> {
-        let hash = self.hash_name(name);
+        let hash = self.meta.hash_name(name);
         let mut found = match self.find(hash, name)? {
             Some(found) => found,
             None => return Err(AccessError::NotFound),
@@ -413,7 +414,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         name: &[u8],
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
     ) -> Result<(), AccessError<Meta::ConsistencyError>> {
-        let hash = self.hash_name(name);
+        let hash = self.meta.hash_name(name);
         let found = match self.find(hash, name)? {
             Some(found) => found,
             None => return Err(AccessError::NotFound),
@@ -488,7 +489,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         }
 
         // We are not in the chain at all???
-        Err(ArchiveError::Corrupt)
+        Err(ArchiveError::Corrupt("empty object not in empty chain"))
     }
 
     /// Finds the start of the object with the given name.
@@ -603,17 +604,6 @@ impl<Meta> Archive<Meta> {
     /// positions, i.e., `u64`.
     const BUCKET_SIZE: usize = mem::size_of::<u64>();
 
-    /// Returns the hash value for a given name.
-    ///
-    /// The returned value will already be taken modulo the number of buckets,
-    /// i.e., this is actually the bucket index for the name, not really its
-    /// hash.
-    fn hash_name(&self, name: &[u8]) -> u64 {
-        let mut hasher = SipHasher24::new_with_key(&self.meta.hash_key);
-        hasher.write(name);
-        hasher.finish() % usize_to_u64(self.meta.bucket_count)
-    }
-
     /// Returns the size of the index.
     ///
     /// There are one more buckets than the archive’s bucket count since that
@@ -670,6 +660,135 @@ impl<Meta> Archive<Meta> {
         self.file.write(self.empty_index_pos(), |write| {
             write.write_u64(pos.map(Into::into).unwrap_or(0))
         })
+    }
+}
+
+
+//------------ AppendArchive -------------------------------------------------
+
+/// A version of the archive that only allows appending new objects.
+///
+/// The append archive keeps the index and the set of added object names in
+/// memory, significantly speeding up the process of preparing to append an
+/// object. Since it doesn’t update the index on disk after each append, you
+/// need to call [`finalize`][Self::finalize] when you are done writing the
+/// file.
+#[derive(Debug)]
+pub struct AppendArchive<Meta> {
+    /// The physical file.
+    file: BufWriter<fs::File>,
+
+    /// The index of the file.
+    index: AppendIndex,
+
+    /// The object names we’ve already seen.
+    names: HashSet<Box<[u8]>>,
+
+    /// The meta data of the archive.
+    meta: ArchiveMeta,
+
+    /// A marker for the Meta type argument.
+    marker: PhantomData<Meta>,
+}
+
+impl<Meta: ObjectMeta> AppendArchive<Meta> {
+    /// Creates a new archive at the given path.
+    ///
+    /// The archive is opened for reading and writing.
+    ///
+    /// If there already is a file at the given path, the function fails.
+    pub fn create(path: impl AsRef<Path>) -> Result<Self, ArchiveError> {
+        Self::create_with_file(
+            fs::OpenOptions::new()
+                .read(true).write(true).create_new(true)
+                .open(path)?
+        )
+    }
+
+    /// Create a new archive inside a given file.
+    ///
+    /// The file is trunacated back to zero length and the header and an
+    /// empty index added.
+    pub fn create_with_file(
+        mut file: fs::File
+    ) -> Result<Self, ArchiveError> {
+        let index = AppendIndex::new();
+        file.set_len(0)?;
+        let meta = ArchiveMeta::new(index.bucket_count());
+        file.write_all(&FILE_MAGIC)?;
+        meta.write(&mut file)?;
+        let len = file.stream_position()? + index.index_size();
+        file.set_len(len)?;
+        file.seek(SeekFrom::End(0))?;
+
+        Ok(Self {
+            file: BufWriter::new(file),
+            index,
+            names: Default::default(),
+            meta,
+            marker: PhantomData,
+        })
+    }
+
+    /// Publishes (i.e., adds) a new object.
+    ///
+    /// The object will be identified by the given `name` and carry the
+    /// given `meta` data and contents `data`.
+    ///
+    /// The method will return an error if there already is an object by
+    /// `name`. It will also error if the archive cannot be accessed.
+    pub fn publish(
+        &mut self, name: &[u8], meta: &Meta, data: &[u8]
+    ) -> Result<(), PublishError> {
+        if self.names.contains(name) {
+            return Err(PublishError::AlreadyExists)
+        }
+        let hash = self.meta.hash_name(name);
+        let start = self.file.stream_position()?;
+        let head = ObjectHeader::new(
+            Archive::<Meta>::page_object_size(name, data),
+            self.index.get(hash),
+            name, data,
+        );
+        self.write_object(head, name, meta, data)?;
+        self.index.set(hash, NonZeroU64::new(start));
+        self.names.insert(name.into());
+        Ok(())
+    }
+
+    /// Writes an object.
+    fn write_object(
+        &mut self, head: ObjectHeader, name: &[u8], meta: &Meta, data: &[u8]
+    ) -> Result<(), ArchiveError> {
+        let mut write = StorageWrite::new_raw_append(&mut self.file);
+        head.write_into(&mut write)?;
+        write.write(name)?;
+        meta.write(&mut write)?;
+        write.write(data)?;
+        let padding = usize::try_from(
+            head.size.checked_sub(
+                Archive::<Meta>::min_object_size(name.len(), data.len())
+            ).expect("paged size smaller than minimal size")
+        ).expect("padding larger than page size");
+        if padding > 0 {
+            static PAGE: [u8; PAGE_SIZE] = [0u8; PAGE_SIZE];
+            write.write(&PAGE[..padding])?;
+        }
+        Ok(())
+    }
+
+    /// Finalizes appending to the archive.
+    ///
+    /// The method writes the index to the file. Thus it must be called when
+    /// you are done appening objects.
+    pub fn finalize(&mut self) -> Result<(), ArchiveError> {
+        // Write the index.
+        self.file.seek(SeekFrom::Start(
+            usize_to_u64(MAGIC_SIZE) + ArchiveMeta::size()
+        ))?;
+        self.index.write(&mut self.file)?;
+        self.file.flush()?;
+        Ok(())
     }
 }
 
@@ -816,6 +935,20 @@ impl ArchiveMeta {
         source.read_exact(&mut buf)?;
         res.bucket_count = usize::from_ne_bytes(buf);
         Ok(res)
+    }
+
+    /// Returns the hash value for a given name.
+    ///
+    /// The returned value will already be taken modulo the number of buckets,
+    /// i.e., this is actually the bucket index for the name, not really its
+    /// hash.
+    fn hash_name(&self, name: &[u8]) -> u64 {
+        // We can’t use std’s DefaultHasher here because it picks a new
+        // random key every time while we need to use the same key every
+        // time.
+        let mut hasher = SipHasher24::new_with_key(&self.hash_key);
+        hasher.write(name);
+        hasher.finish() % usize_to_u64(self.bucket_count)
     }
 }
 
@@ -974,6 +1107,69 @@ impl FoundObject {
     /// Returns the start of the content.
     fn data_start<Meta: ObjectMeta>(&self) -> u64 {
         self.header.data_start::<Meta>(self.start)
+    }
+}
+
+
+//------------ AppendIndex ---------------------------------------------------
+
+/// The index of an `AppendArchive`.
+///
+/// The append archive doesn’t update the index every time it adds an object
+/// but rather keeps it all in memory until it is done. This type is where it
+/// keeps that index.
+// 
+//  XXX The current implementation is very naive and probably would benefit
+//      from some clever improvements.
+#[derive(Debug)]
+struct AppendIndex {
+    index: [Option<NonZeroU64>; DEFAULT_BUCKET_COUNT],
+}
+
+impl AppendIndex {
+    /// Creates a new empty index.
+    fn new() -> Self {
+        Self {
+            index: [None; DEFAULT_BUCKET_COUNT],
+        }
+    }
+
+    /// Returns the bucket count of the index.
+    ///
+    /// The actual index has one more bucket than this number as there also
+    /// is the empty bucket.
+    fn bucket_count(&self) -> usize {
+        DEFAULT_BUCKET_COUNT
+    }
+
+    /// The size of the written out index.
+    ///
+    /// This includes the empty bucket.
+    fn index_size(&self) -> u64 {
+        usize_to_u64((DEFAULT_BUCKET_COUNT + 1) * mem::size_of::<u64>())
+    }
+
+    /// Returns the starting position of the first object with the given hash.
+    fn get(&self, hash: u64) -> Option<NonZeroU64> {
+        self.index[hash as usize % DEFAULT_BUCKET_COUNT]
+    }
+
+    /// Updates the starting position of the first object with the given hash.
+    fn set(&mut self, hash: u64, value: Option<NonZeroU64>) {
+        self.index[hash as usize % DEFAULT_BUCKET_COUNT] = value;
+    }
+
+    /// Writes out the index to the given file.
+    ///
+    /// The method assumes that the file is positioned at the start position
+    /// of the index.
+    fn write(&self, file: &mut impl io::Write) -> Result<(), io::Error> {
+        for &item in self.index.as_slice() {
+            file.write_all(
+                &item.map(u64::from).unwrap_or(0).to_ne_bytes()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1293,7 +1489,7 @@ impl<'a> StorageRead<'a> {
         match self.read_array::<1>()? {
             [0] => Ok(false),
             [1] => Ok(true),
-            _ => Err(ArchiveError::Corrupt),
+            _ => Err(ArchiveError::Corrupt("illegal value in bool")),
         }
     }
 }
@@ -1327,6 +1523,11 @@ enum WriteInner<'a> {
     Append {
         file: MutexGuard<'a, fs::File>,
     },
+
+    /// We are appending to a raw file.
+    RawAppend {
+        file: &'a mut BufWriter<fs::File>,
+    }
 }
 
 impl<'a> StorageWrite<'a> {
@@ -1335,7 +1536,7 @@ impl<'a> StorageWrite<'a> {
         storage: &'a mut Storage, pos: u64
     ) -> Result<Self, ArchiveError> {
         if pos >= storage.size {
-            return Err(ArchiveError::Corrupt)
+            return Err(ArchiveError::Corrupt("update writer past end of file"))
         }
 
         #[cfg(unix)]
@@ -1369,6 +1570,11 @@ impl<'a> StorageWrite<'a> {
         Ok(Self(WriteInner::Append { file }))
     }
 
+    /// Creates a new storage writer for appending data.
+    fn new_raw_append(file: &'a mut BufWriter<fs::File>) -> Self {
+        Self(WriteInner::RawAppend { file })
+    }
+
     /// Finishes writing.
     ///
     /// Returns whether a memory-map needs to be renewed.
@@ -1387,6 +1593,10 @@ impl<'a> StorageWrite<'a> {
                 file.flush()?;
                 Ok(true)
             }
+            WriteInner::RawAppend { file } => {
+                file.flush()?;
+                Ok(true)
+            }
         }
     }
 
@@ -1397,6 +1607,7 @@ impl<'a> StorageWrite<'a> {
             WriteInner::Mmap { pos, .. } => Ok(pos),
             WriteInner::Overwrite { ref mut file } => file.stream_position(),
             WriteInner::Append { ref mut file } => file.stream_position(),
+            WriteInner::RawAppend { ref mut file } => file.stream_position(),
         }
     }
 
@@ -1418,6 +1629,9 @@ impl<'a> StorageWrite<'a> {
                 Ok(file.write_all(data)?)
             }
             WriteInner::Append { ref mut file, .. }  => {
+                Ok(file.write_all(data)?)
+            }
+            WriteInner::RawAppend { ref mut file, .. }  => {
                 Ok(file.write_all(data)?)
             }
          }
@@ -1659,7 +1873,7 @@ const fn usize_to_u64(value: usize) -> u64 {
 #[derive(Debug)]
 pub enum ArchiveError {
     /// The archive is corrupt and cannot be used any more.
-    Corrupt,
+    Corrupt(&'static str),
 
     /// An IO error happened while accessing the underlying file.
     Io(io::Error),
@@ -1674,7 +1888,7 @@ impl From<io::Error> for ArchiveError {
 impl fmt::Display for ArchiveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ArchiveError::Corrupt => f.write_str("archive corrupted"),
+            ArchiveError::Corrupt(s) => write!(f, "archive corrupted: {s}"),
             ArchiveError::Io(ref err) => write!(f, "{err}")
         }
     }
@@ -1734,6 +1948,12 @@ pub enum PublishError {
 impl From<ArchiveError> for PublishError {
     fn from(err: ArchiveError) -> Self {
         Self::Archive(err)
+    }
+}
+
+impl From<io::Error> for PublishError {
+    fn from(err: io::Error) -> Self {
+        Self::Archive(err.into())
     }
 }
 
