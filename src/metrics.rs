@@ -702,7 +702,7 @@ impl RtrClientMetrics {
 #[derive(Debug)]
 pub struct RtrMetricsData {
     /// The number of currently open connections.
-    open: AtomicUsize,
+    current_connections: AtomicUsize,
 
     /// The serial number of the last successful update.
     ///
@@ -738,7 +738,7 @@ pub struct RtrMetricsData {
 impl Default for RtrMetricsData {
     fn default() -> Self {
         Self {
-            open: AtomicUsize::new(0),
+            current_connections: AtomicUsize::new(0),
             serial: AtomicU32::new(u32::MAX),
             updated: AtomicI64::new(i64::MIN),
             last_reset: AtomicI64::new(i64::MIN),
@@ -752,18 +752,18 @@ impl Default for RtrMetricsData {
 
 impl RtrMetricsData {
     /// Return the number of currently open connections.
-    pub fn open(&self) -> usize {
-        self.open.load(Relaxed)
+    pub fn current_connections(&self) -> usize {
+        self.current_connections.load(Relaxed)
     }
 
-    /// Increases the count of open connections.
-    pub fn inc_open(&self) {
-        self.open.fetch_add(1, Relaxed);
+    /// Increases the count of currently open connections.
+    pub fn inc_current_connections(&self) {
+        self.current_connections.fetch_add(1, Relaxed);
     }
 
-    /// Decreases the count of open connections.
-    pub fn dec_open(&self) {
-        self.open.fetch_sub(1, Relaxed);
+    /// Decreases the count of currently open connections.
+    pub fn dec_current_connections(&self) {
+        self.current_connections.fetch_sub(1, Relaxed);
     }
 
     /// Returns the serial number last seen.

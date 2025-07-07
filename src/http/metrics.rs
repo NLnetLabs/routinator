@@ -539,7 +539,7 @@ fn rtr_metrics(target: &mut Target, metrics: &RtrServerMetrics) {
             "number of currently open RTR connections",
             MetricType::Gauge
         ),
-        global.open()
+        global.current_connections()
     );
     target.single(
         Metric::new(
@@ -566,7 +566,9 @@ fn rtr_metrics(target: &mut Target, metrics: &RtrServerMetrics) {
         );
         target.header(item);
         clients.iter().for_each(|(addr, data)| {
-            target.multi(item).label("addr", addr).value(data.open())
+            target.multi(item).label(
+                "addr", addr
+            ).value(data.current_connections())
         });
 
         let item = Metric::new(

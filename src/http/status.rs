@@ -248,7 +248,7 @@ async fn handle_status(
     // rtr
     writeln!(res,
         "rtr-connections: {} current",
-        rtr.open(),
+        rtr.current_connections(),
     );
     writeln!(res,
         "rtr-data: {} bytes sent, {} bytes received",
@@ -260,7 +260,10 @@ async fn handle_status(
         // rtr-clients
         writeln!(res, "rtr-clients:");
         clients.iter().for_each(|(addr, data)| {
-            write!(res, "    {}: connections={}, ", addr, data.open());
+            write!(res,
+                "    {}: connections={}, ",
+                addr, data.current_connections()
+            );
             if let Some(serial) = data.serial() {
                 write!(res, "serial={serial}, ");
             }
@@ -488,7 +491,7 @@ async fn handle_api_status(
             let rtr = rtr_metrics.global();
             target.member_raw(
                 "currentConnections",
-                rtr.open()
+                rtr.current_connections()
             );
             target.member_raw(
                 "bytesRead", rtr.bytes_read()
@@ -502,7 +505,7 @@ async fn handle_api_status(
                    clients.iter().for_each(|(addr, data)| {
                         target.member_object(addr, |target| {
                             target.member_raw(
-                                "connections", data.open()
+                                "connections", data.current_connections()
                             );
                             if let Some(serial) = data.serial() {
                                 target.member_raw("serial", serial);

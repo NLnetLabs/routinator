@@ -183,7 +183,7 @@ impl RtrStream {
             Self::set_keepalive(&sock, duration)?
         }
         let metrics = server_metrics.get_client(addr.ip());
-        metrics.update(|metrics| metrics.inc_open());
+        metrics.update(|metrics| metrics.inc_current_connections());
         Ok(RtrStream {
             sock: MaybeTlsTcpStream::new(sock, tls),
             metrics
@@ -295,7 +295,7 @@ impl AsyncWrite for RtrStream {
 
 impl Drop for RtrStream {
     fn drop(&mut self) {
-        self.metrics.update(|metrics| metrics.dec_open())
+        self.metrics.update(|metrics| metrics.dec_current_connections())
     }
 }
 
