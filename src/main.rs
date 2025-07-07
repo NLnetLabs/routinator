@@ -15,8 +15,7 @@ fn _main() -> Result<(), ExitError> {
         Ok(dir) => dir,
         Err(err) => {
             error!(
-                "Fatal: cannot get current directory ({}). Aborting.",
-                err
+                "Fatal: cannot get current directory ({err}). Aborting."
             );
             return Err(ExitError::Generic);
         }

@@ -235,7 +235,7 @@ impl<'a> RouteValidity<'a> {
             indent = indent,
         )?;
         if let Some(reason) = self.reason() {
-            writeln!(target, "{}    \"reason\": \"{}\",", indent, reason)?;
+            writeln!(target, "{indent}    \"reason\": \"{reason}\",")?;
         }
         writeln!(
             target,
@@ -260,8 +260,7 @@ impl<'a> RouteValidity<'a> {
             target, "\n\
             {indent}    }}\n\
             {indent}  }}\n\
-            {indent}}}",
-            indent = indent
+            {indent}}}"
         )
     }
 
@@ -271,7 +270,7 @@ impl<'a> RouteValidity<'a> {
         vrps: &[(RouteOrigin, &'a PayloadInfo)],
         target: &mut W
     ) -> Result<(), io::Error> {
-        write!(target, "{}      \"{}\": [", indent, category)?;
+        write!(target, "{indent}      \"{category}\": [")?;
         let mut first = true;
         for item in vrps.iter() {
             if first {
@@ -295,7 +294,7 @@ impl<'a> RouteValidity<'a> {
                 indent = indent
             )?
         }
-        write!(target, "\n{}      ]", indent)
+        write!(target, "\n{indent}      ]")
     }
 
 }

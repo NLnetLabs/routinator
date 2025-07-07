@@ -1886,7 +1886,7 @@ impl fmt::Display for ArchiveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ArchiveError::Corrupt(s) => write!(f, "archive corrupted: {s}"),
-            ArchiveError::Io(ref err) => write!(f, "{}", err)
+            ArchiveError::Io(ref err) => write!(f, "{err}")
         }
     }
 }
@@ -1924,7 +1924,7 @@ impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             OpenError::NotFound => f.write_str("not found"),
-            OpenError::Archive(ref err) => write!(f, "{}", err),
+            OpenError::Archive(ref err) => write!(f, "{err}"),
         }
     }
 }

@@ -111,7 +111,7 @@ async fn single_http_listener(
         sock: match TcpListener::from_std(listener) {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Failed on listening on {}: {}", addr,err);
+                error!("Failed on listening on {addr}: {err}");
                 return
             }
         },
@@ -122,7 +122,7 @@ async fn single_http_listener(
         let stream = match listener.accept().await {
             Ok(some) => some,
             Err(err) => {
-                error!("Fatal error in HTTP server {}: {}", addr, err);
+                error!("Fatal error in HTTP server {addr}: {err}");
                 break;
             }
         };

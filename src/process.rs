@@ -70,7 +70,7 @@ impl Process {
     fn init_logging() -> Result<(), Failed> {
         log::set_max_level(LevelFilter::Warn);
         if let Err(err) = log::set_logger(&GLOBAL_LOGGER) {
-            eprintln!("Failed to initialize logger: {}.\nAborting.", err);
+            eprintln!("Failed to initialize logger: {err}.\nAborting.");
             return Err(Failed)
         }
         Ok(())
@@ -148,8 +148,7 @@ impl Process {
                 }
                 Err(err) => {
                     error!(
-                        "Fatal: failed to get systemd_listen socket:  {}",
-                        err
+                        "Fatal: failed to get systemd_listen socket:  {err}"
                     );
                     Err(Failed)
                 }
@@ -186,7 +185,7 @@ impl Process {
     /// Returns a Tokio runtime based on the configuration.
     pub fn runtime(&self) -> Result<Runtime, Failed> {
         Runtime::new().map_err(|err| {
-            error!("Failed to create runtime: {}", err);
+            error!("Failed to create runtime: {err}");
             Failed
         })
     }
@@ -347,7 +346,7 @@ impl Logger {
         match self.target.lock().deref() {
             #[cfg(unix)]
             LogBackend::Syslog(_) => {
-                eprintln!("Logging to syslog failed: {}. Exiting.", err);
+                eprintln!("Logging to syslog failed: {err}. Exiting.");
             }
             LogBackend::File { ref path, .. } => {
                 eprintln!(
@@ -473,7 +472,7 @@ impl SyslogLogger {
         match logger {
             Ok(logger) => Ok(Self(logger)),
             Err(err) => {
-                error!("Cannot connect to syslog: {}", err);
+                error!("Cannot connect to syslog: {err}");
                 Err(Failed)
             }
         }
@@ -697,13 +696,13 @@ mod unix {
             }
             if let Some(gid) = self.gid {
                 if let Err(err) = setgid(gid) {
-                    error!("Fatal: failed to set group: {}", err);
+                    error!("Fatal: failed to set group: {err}");
                     return Err(Failed)
                 }
             }
             if let Some(uid) = self.uid {
                 if let Err(err) = setuid(uid) {
-                    error!("Fatal: failed to set user: {}", err);
+                    error!("Fatal: failed to set user: {err}");
                     return Err(Failed)
                 }
             }
@@ -747,7 +746,7 @@ mod unix {
                 let pid = format!("{}", getpid());
                 if let Err(err) = pid_file.write_all(pid.as_bytes()) {
                     error!(
-                        "Fatal: failed to write PID to PID file: {}", err
+                        "Fatal: failed to write PID to PID file: {err}"
                     );
                     return Err(Failed)
                 }
@@ -764,7 +763,7 @@ mod unix {
                     Ok(())
                 }
                 Err(err) => {
-                    error!("Fatal: failed to detach: {}", err);
+                    error!("Fatal: failed to detach: {err}");
                     Err(Failed)
                 }
             }
@@ -778,7 +777,7 @@ mod unix {
             let cname = match CString::new(name.clone()) {
                 Ok(name) => name,
                 Err(_) => {
-                    error!("Fatal: invalid user ID '{}'", name);
+                    error!("Fatal: invalid user ID '{name}'");
                     return Err(Failed)
                 }
             };
@@ -796,7 +795,7 @@ mod unix {
             match uid {
                 Some(uid) => Ok(Some(Uid::from_raw(uid))),
                 None => {
-                    error!("Fatal: unknown user ID '{}'", name);
+                    error!("Fatal: unknown user ID '{name}'");
                     Err(Failed)
                 }
             }
@@ -810,7 +809,7 @@ mod unix {
             let cname = match CString::new(name.clone()) {
                 Ok(name) => name,
                 Err(_) => {
-                    error!("Fatal: invalid user ID '{}'", name);
+                    error!("Fatal: invalid user ID '{name}'");
                     return Err(Failed)
                 }
             };
@@ -828,7 +827,7 @@ mod unix {
             match gid {
                 Some(gid) => Ok(Some(Gid::from_raw(gid))),
                 None => {
-                    error!("Fatal: unknown group ID '{}'", name);
+                    error!("Fatal: unknown group ID '{name}'");
                     Err(Failed)
                 }
             }

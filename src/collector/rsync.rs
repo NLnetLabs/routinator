@@ -283,8 +283,7 @@ impl<'a> Run<'a> {
         // Check if the module name is dubious. If so, skip updating.
         if self.collector.filter_dubious && uri.has_dubious_authority() {
             warn!(
-                "{}: Dubious host name. Skipping update.",
-                module
+                "{module}: Dubious host name. Skipping update."
             )
         }
         else {
@@ -333,7 +332,7 @@ impl<'a> Run<'a> {
             }
             Err(err) => {
                 if err.kind() == io::ErrorKind::NotFound {
-                    info!("{}: not found in local repository", uri);
+                    info!("{uri}: not found in local repository");
                 } else {
                     error!(
                         "Failed to open file '{}': {}",
@@ -452,8 +451,7 @@ impl RsyncCommand {
             Ok(output) => output,
             Err(err) => {
                 error!(
-                    "Failed to run rsync: {}",
-                    err
+                    "Failed to run rsync: {err}"
                 );
                 return Err(Failed)
             }
@@ -478,7 +476,7 @@ impl RsyncCommand {
                     args.push("--contimeout=10".into());
                 }
                 if let Some(max_size) = config.max_object_size {
-                    args.push(format!("--max-size={}", max_size));
+                    args.push(format!("--max-size={max_size}"));
                 }
                 args
             }
@@ -576,8 +574,7 @@ impl RsyncCommand {
                 Err(err) => {
                     if let Err(kill_err) = child.kill().await {
                         warn!(
-                            "{}: Failed to kill rsync process: {}",
-                            source, kill_err
+                            "{source}: Failed to kill rsync process: {kill_err}"
                         );
                     }
                     Err(err)
@@ -585,11 +582,11 @@ impl RsyncCommand {
             };
             if !stdout.is_empty() {
                 String::from_utf8_lossy(&stdout).lines().for_each(|l| {
-                    info!("{}: {}", source, l);
+                    info!("{source}: {l}");
                 })
             }
             if let Err(ref err) = status {
-                warn!("{}: {}", source, err);
+                warn!("{source}: {err}");
             }
             status
         })
@@ -601,7 +598,7 @@ impl RsyncCommand {
         source: &Module,
         destination: &Path
     ) -> Result<AsyncCommand, io::Error> {
-        info!("rsyncing from {}.", source);
+        info!("rsyncing from {source}.");
         fs::create_dir_all(destination)?;
         let destination = match Self::format_destination(destination) {
             Ok(some) => some,
@@ -621,7 +618,7 @@ impl RsyncCommand {
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
-        debug!("{}: Running command {:?}", source, cmd);
+        debug!("{source}: Running command {cmd:?}");
         Ok(cmd)
     }
 

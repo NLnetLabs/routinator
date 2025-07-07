@@ -935,7 +935,7 @@ impl StoredManifest {
         let version = u8::parse(reader)?;
         if version != Self::VERSION {
             return Err(ParseError::format(
-                    format!("unexpected version {}", version)
+                    format!("unexpected version {version}")
             ))
         }
         Ok(StoredManifest {
@@ -1073,7 +1073,7 @@ impl StoredObject {
         };
         if version != 0 {
             return Err(ParseError::format(
-                format!("unexpected version {}", version)
+                format!("unexpected version {version}")
             ))
         }
 
@@ -1088,7 +1088,7 @@ impl StoredObject {
             }
             hash_type => {
                 return Err(ParseError::format(
-                    format!("unsupported hash type {}", hash_type)
+                    format!("unsupported hash type {hash_type}")
                 ));
             }
         };

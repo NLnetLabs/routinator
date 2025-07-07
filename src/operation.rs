@@ -419,7 +419,7 @@ impl Server {
                 output::Summary::log(&metrics)
             }
             info!(
-                "New serial is {}.", serial
+                "New serial is {serial}."
             );
         }
         if must_notify {
@@ -648,8 +648,7 @@ impl Vrps {
                 err.kind() != io::ErrorKind::BrokenPipe
             {
                 error!(
-                    "Failed to output result: {}",
-                    err
+                    "Failed to output result: {err}"
                 );
             }
             Err(ExitError::Generic)
@@ -846,7 +845,7 @@ impl Validate {
                     validity::RequestList::from_json_reader(
                         &mut file
                     ).map_err(|err| {
-                        error!("Failed to read input: {}'", err);
+                        error!("Failed to read input: {err}'");
                         ExitError::Generic
                     })
                 }
@@ -854,7 +853,7 @@ impl Validate {
                     validity::RequestList::from_plain_reader(
                         file
                     ).map_err(|err| {
-                        error!("Failed to read input: {}'", err);
+                        error!("Failed to read input: {err}'");
                         ExitError::Generic
                     })
                 }
@@ -926,7 +925,7 @@ impl Validate {
                     result.write_plain(&mut stdout)
                 };
                 res.map_err(|err| {
-                    error!("Failed to write output: {}", err);
+                    error!("Failed to write output: {err}");
                     ExitError::Generic
                 })
             }
@@ -1047,7 +1046,7 @@ impl ValidateDocument {
         match rta_validation.finalize() {
             Ok(rta) => {
                 for block in rta.as_resources().iter() {
-                    println!("{}", block);
+                    println!("{block}");
                 }
                 for block in rta.v4_resources().iter() {
                     println!("{}", block.display_v4());
@@ -1315,7 +1314,7 @@ impl Man {
                     }
                 };
                 if let Err(err) = file.write_all(MAN_PAGE) {
-                    error!("Failed to write to output file: {}", err);
+                    error!("Failed to write to output file: {err}");
                     return Err(Failed.into())
                 }
                 info!(
@@ -1327,7 +1326,7 @@ impl Man {
                 let out = io::stdout();
                 let mut out = out.lock();
                 if let Err(err) = out.write_all(MAN_PAGE) {
-                    error!("Failed to write man page: {}", err);
+                    error!("Failed to write man page: {err}");
                     return Err(Failed.into())
                 }
             }
@@ -1343,21 +1342,19 @@ impl Man {
         let mut file = NamedTempFile::new().map_err(|err| {
             error!(
                 "Can't display man page: \
-                 Failed to create temporary file: {}.",
-                err
+                 Failed to create temporary file: {err}."
             );
             Failed
         })?;
         file.write_all(MAN_PAGE).map_err(|err| {
             error!(
                 "Can't display man page: \
-                Failed to write to temporary file: {}.",
-                err
+                Failed to write to temporary file: {err}."
             );
             Failed
         })?;
         Command::new("man").arg(file.path()).status().map_err(|err| {
-            error!("Failed to run man: {}", err);
+            error!("Failed to run man: {err}");
             Failed
         }).and_then(|exit| {
             if exit.success() {
@@ -1395,14 +1392,14 @@ impl SignalListener {
             usr1: match signal(SignalKind::user_defined1()) {
                 Ok(usr1) => usr1,
                 Err(err) => {
-                    error!("Attaching to signal USR1 failed: {}", err);
+                    error!("Attaching to signal USR1 failed: {err}");
                     return Err(Failed)
                 }
             },
             usr2: match signal(SignalKind::user_defined2()) {
                 Ok(usr2) => usr2,
                 Err(err) => {
-                    error!("Attaching to signal USR2 failed: {}", err);
+                    error!("Attaching to signal USR2 failed: {err}");
                     return Err(Failed)
                 }
             },

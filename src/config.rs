@@ -1675,7 +1675,7 @@ impl FromStr for FilterPolicy {
             "reject" => Ok(FilterPolicy::Reject),
             "warn" => Ok(FilterPolicy::Warn),
             "accept" => Ok(FilterPolicy::Accept),
-            _ => Err(format!("invalid policy '{}'", s))
+            _ => Err(format!("invalid policy '{s}'"))
         }
     }
 }
@@ -1722,7 +1722,7 @@ impl FromStr for FallbackPolicy {
             "never" => Ok(FallbackPolicy::Never),
             "stale" => Ok(FallbackPolicy::Stale),
             "new" => Ok(FallbackPolicy::New),
-            _ => Err(format!("invalid policy '{}'", s))
+            _ => Err(format!("invalid policy '{s}'"))
         }
     }
 }
@@ -2065,8 +2065,7 @@ impl ConfigFile {
                 Ok(dir) => dir,
                 Err(err) => {
                     error!(
-                        "Fatal: Can't determine current directory: {}.",
-                        err
+                        "Fatal: Can't determine current directory: {err}."
                     );
                     return Err(Failed);
                 }
@@ -2563,7 +2562,7 @@ impl ConfigFile {
                 else {
                     first = false
                 }
-                print!("{}", key);
+                print!("{key}");
             }
             error!(".");
             Err(Failed)

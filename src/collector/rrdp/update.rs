@@ -7,7 +7,6 @@ use chrono::{DateTime, Utc};
 use log::{error, warn};
 use reqwest::StatusCode;
 use ring::digest;
-use ring::constant_time::verify_slices_are_equal;
 use rpki::{rrdp, uri};
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
@@ -66,7 +65,7 @@ impl Notification {
                 response
             }
             Err(err) => {
-                warn!("RRDP {}: {}", uri, err);
+                warn!("RRDP {uri}: {err}");
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
@@ -101,12 +100,11 @@ impl Notification {
         let mut content = NotificationFile::parse_limited(
             io::BufReader::new(response), delta_list_limit
         ).map_err(|err| {
-            warn!("RRDP {}: {}", uri, err);
+            warn!("RRDP {uri}: {err}");
             Failed
         })?;
         if !content.has_matching_origins(&uri) {
-            warn!("RRDP {}: snapshot or delta files with different origin",
-                uri
+            warn!("RRDP {uri}: snapshot or delta files with different origin"
             );
             return Err(Failed)
         }
@@ -208,13 +206,9 @@ impl<'a> SnapshotUpdate<'a> {
 
         let mut reader = io::BufReader::new(HashRead::new(response));
         self.process(&mut reader)?;
-        let hash = reader.into_inner().into_hash();
-        if verify_slices_are_equal(
-            hash.as_ref(),
-            self.notify.content.snapshot().hash().as_ref()
-        ).is_err() {
-            return Err(SnapshotError::HashMismatch)
-        }
+        reader.into_inner().verify_hash(
+            self.notify.content.snapshot().hash()
+        )?;
         self.archive.publish_state(
             &self.notify.to_repository_state(
                 self.collector.config().fallback_time
@@ -346,13 +340,7 @@ impl<'a> DeltaUpdate<'a> {
 
         let mut reader = io::BufReader::new(HashRead::new(response));
         self.process(&mut reader)?;
-        let hash = reader.into_inner().into_hash();
-        if verify_slices_are_equal(
-            hash.as_ref(),
-            self.info.hash().as_ref()
-        ).is_err() {
-            return Err(DeltaError::DeltaHashMismatch)
-        }
+        reader.into_inner().verify_hash(self.info.hash())?;
         Ok(())
     }
 }
@@ -462,11 +450,16 @@ impl<R> HashRead<R> {
         }
     }
 
-    /// Converts the reader into the hash.
-    pub fn into_hash(self) -> rrdp::Hash {
-        // Unwrap should be safe: This can only fail if the slice has the
-        // wrong length.
-        rrdp::Hash::try_from(self.context.finish()).unwrap()
+    /// Checks that the hash matches the provided hash.
+    pub fn verify_hash(
+        self, expected: rrdp::Hash
+    ) -> Result<(), HashMismatch> {
+        if self.context.finish().as_ref() != expected.as_ref() {
+            Err(HashMismatch)
+        }
+        else {
+            Ok(())
+        }
     }
 }
 
@@ -657,6 +650,12 @@ enum RrdpDataReadError {
 }
 
 
+//------------ HashMismatch --------------------------------------------------
+
+/// The hash of a snapshot or delta didn’t match the expected value.
+struct HashMismatch;
+
+
 //------------ SnapshotError -------------------------------------------------
 
 /// An error happened during snapshot processing.
@@ -726,38 +725,42 @@ impl From<RrdpDataReadError> for SnapshotError {
     }
 }
 
+impl From<HashMismatch> for SnapshotError {
+    fn from(_: HashMismatch) -> Self {
+        Self::HashMismatch
+    }
+}
+
 impl fmt::Display for SnapshotError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             SnapshotError::Http(ref err) => err.fmt(f),
             SnapshotError::HttpStatus(status) => {
-                write!(f, "HTTP {}", status)
+                write!(f, "HTTP {status}")
             }
             SnapshotError::Rrdp(ref err) => err.fmt(f),
             SnapshotError::SessionMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "session ID mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             SnapshotError::SerialMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "serial number mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             SnapshotError::DuplicateObject(ref uri) => {
-                write!(f, "duplicate object: {}", uri)
+                write!(f, "duplicate object: {uri}")
             }
             SnapshotError::HashMismatch => {
                 write!(f, "hash value mismatch")
             }
             SnapshotError::LargeObject(ref uri) => {
-                write!(f, "object exceeds size limit: {}", uri)
+                write!(f, "object exceeds size limit: {uri}")
             }
             SnapshotError::RunFailed(_) => Ok(()),
         }
@@ -841,62 +844,63 @@ impl From<RrdpDataReadError> for DeltaError {
     }
 }
 
+impl From<HashMismatch> for DeltaError {
+    fn from(_: HashMismatch) -> Self {
+        Self::DeltaHashMismatch
+    }
+}
+
 impl fmt::Display for DeltaError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             DeltaError::Http(ref err) => err.fmt(f),
             DeltaError::HttpStatus(status) => {
-                write!(f, "HTTP {}", status)
+                write!(f, "HTTP {status}")
             }
             DeltaError::Rrdp(ref err) => err.fmt(f),
             DeltaError::SessionMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "session ID mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "session ID mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             DeltaError::SerialMismatch { ref expected, ref received } => {
                 write!(
                     f,
-                    "serial number mismatch (notification_file: {}, \
-                     snapshot file: {}",
-                     expected, received
+                    "serial number mismatch (notification_file: {expected}, \
+                     snapshot file: {received}"
                 )
             }
             DeltaError::MissingObject { ref uri } => {
                 write!(
                     f,
-                    "reference to missing object {}",
-                    uri
+                    "reference to missing object {uri}"
                 )
             }
             DeltaError::ObjectAlreadyPresent { ref uri } => {
                 write!(
                     f,
-                    "attempt to add already present object {}",
-                    uri
+                    "attempt to add already present object {uri}"
                 )
             }
             DeltaError::ObjectHashMismatch { ref uri } => {
                 write!(
                     f,
-                    "local object {} has different hash",
-                    uri
+                    "local object {uri} has different hash"
                 )
             }
             DeltaError::ObjectRepeated { ref uri } => {
-                write!(f, "object appears multiple times: {}", uri)
+                write!(f, "object appears multiple times: {uri}")
             }
             DeltaError::LargeObject(ref uri) => {
-                write!(f, "object exceeds size limit: {}", uri)
+                write!(f, "object exceeds size limit: {uri}")
             }
             DeltaError::DeltaHashMismatch => {
                 write!(f, "delta file hash value mismatch")
             }
             DeltaError::Archive(ref err) => {
-                write!(f, "archive error: {}", err)
+                write!(f, "archive error: {err}")
             }
         }
     }
