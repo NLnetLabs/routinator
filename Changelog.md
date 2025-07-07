@@ -16,8 +16,14 @@ New
   ([#1027])
 * The order in which manifest entries are processed is now randomized.
   ([#1041])
+* Reduced the overhead of storing RRDP snapshot downloads, significantly
+  improving the snapshot update times. ([#1035])
 
 Bug fixes
+
+* Re-implemented RRDP client metrics based on the much simpler model used
+  by RTRTR to fix recurring errors in the metrics. ([#1039])
+
 
 Other changes
 
@@ -35,7 +41,9 @@ Other changes
 [#1024]: https://github.com/NLnetLabs/routinator/pull/1024
 [#1027]: https://github.com/NLnetLabs/routinator/pull/1027
 [#1034]: https://github.com/NLnetLabs/routinator/pull/1034
+[#1035]: https://github.com/NLnetLabs/routinator/pull/1035
 [#1036]: https://github.com/NLnetLabs/routinator/pull/1036
+[#1039]: https://github.com/NLnetLabs/routinator/pull/1039
 [#1041]: https://github.com/NLnetLabs/routinator/pull/1041
 
 
