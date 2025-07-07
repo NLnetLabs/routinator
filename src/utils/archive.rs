@@ -943,6 +943,9 @@ impl ArchiveMeta {
     /// i.e., this is actually the bucket index for the name, not really its
     /// hash.
     fn hash_name(&self, name: &[u8]) -> u64 {
+        // We can’t use std’s DefaultHasher here because it picks a new
+        // random key every time while we need to use the same key every
+        // time.
         let mut hasher = SipHasher24::new_with_key(&self.hash_key);
         hasher.write(name);
         hasher.finish() % usize_to_u64(self.bucket_count)
@@ -1120,14 +1123,14 @@ impl FoundObject {
 //      from some clever improvements.
 #[derive(Debug)]
 struct AppendIndex {
-    index: Box<[Option<NonZeroU64>; DEFAULT_BUCKET_COUNT]>,
+    index: [Option<NonZeroU64>; DEFAULT_BUCKET_COUNT],
 }
 
 impl AppendIndex {
     /// Creates a new empty index.
     fn new() -> Self {
         Self {
-            index: Box::new([None; DEFAULT_BUCKET_COUNT]),
+            index: [None; DEFAULT_BUCKET_COUNT],
         }
     }
 
