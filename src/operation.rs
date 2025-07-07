@@ -33,7 +33,7 @@ use crate::{output, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed, RunFailed};
 use crate::http::http_listener;
-use crate::metrics::{SharedRtrServerMetrics};
+use crate::metrics::RtrServerMetrics;
 use crate::output::{Output, OutputFormat};
 use crate::payload::{PayloadSnapshot, SharedHistory, ValidationReport};
 use crate::process::Process;
@@ -231,9 +231,9 @@ impl Server {
         warn!("Using config file {}.", process.config().config_file.display());
         process.setup_service(self.detach)?;
         let log = log.map(Arc::new);
-        let rtr_metrics = SharedRtrServerMetrics::new(
+        let rtr_metrics = Arc::new(RtrServerMetrics::new(
             process.config().rtr_client_metrics
-        );
+        ));
 
         let history = SharedHistory::from_config(process.config());
         let mut notify = NotifySender::new();
