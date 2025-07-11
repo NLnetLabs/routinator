@@ -24,6 +24,7 @@ Assumptions
 -----------
 
 Routinator should:
+
 * Retrieve repository data from repositories in a reasonable time
 * Parse this repository data correctly and in a reasonable time
 * Not let one repository impact the outcome of another repository, unless that repository is a child of the former repository
@@ -34,6 +35,7 @@ Routinator should:
 * Keep resource (memory, file system, etc.) consumption within reasonable bounds
 
 General assumptions:
+
 * The user uses an authentic copy of Routinator
 * An attacker does not have administrative control over the host system Routinator runs on
 * An attacker does not have write-access to Routinator’s cache directories
@@ -42,10 +44,12 @@ General assumptions:
 * Published repository data is authentic, i.e., resource holders maintain confidentiality of the key pairs used to sign statements in the RPKI
 
 Routinator guarantees the following: 
+
 * Unsigned or incorrectly signed objects in the RPKI will not end up in the validated RPKI payloads provided to routers
 * For a repository that is reachable, when repository data set up in a reasonable and best practice compliant manner, modifications in the RPKI will be processed by Routinator in a reasonable time.
 
 An adversary with network access on-path between Routinator and a repository could:
+
 * Block access to the repository or degrade throughput of access to repository data
 * Downgrade the transport used for repository access from RRDP (which provides confidentiality and integrity at the transport level) to rsync (which does not). This behaviour is mandated by RFCXXX. After such a downgrade, the attacker can: 
   * Inject objects, withhold objects and manipulate objects, leading to rejection of otherwise valid repository data.
@@ -53,10 +57,12 @@ An adversary with network access on-path between Routinator and a repository cou
 * Infer the configuration of Routinator with respect to the configured TALs and timeouts and other network-related settings
 
 An adversary who compromises the host system could:
+
 * Stop, modify, and manipulate Routinator
 * Modify the Routinator configuration
 * Add, modify or remove trusted TALs, thus allowing for injection or removal of valid RPKI payloads
 * Bypass Routinator and provide incorrect data as validated RPKI payload to routers
 
-An adversary who compromises a resource holder’s key material could:
+An adversary who compromises a resource holder's key material could:
+
 * Sign valid statements that will then be successfully validated and included in the payload data to routers. This includes the ability to hijack a prefix or invalidate a genuine announcement.
