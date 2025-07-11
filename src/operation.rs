@@ -891,7 +891,7 @@ impl Validate {
         let result = requests.validity(&snapshot);
         match self.output.as_ref() {
             Some(path) => {
-                let mut file = match fs::File::create(path) {
+                let file = match fs::File::create(path) {
                     Ok(file) => file,
                     Err(err) => {
                         error!(
@@ -901,12 +901,14 @@ impl Validate {
                         return Err(ExitError::Generic)
                     }
                 };
+                let mut stream = io::BufWriter::new(file);
                 let res = if self.json {
-                    result.write_json(&mut file)
+                    result.write_json(&mut stream)
                 }
                 else {
-                    result.write_plain(&mut file)
+                    result.write_plain(&mut stream)
                 };
+                let res = res.and_then(|_| stream.flush());
                 res.map_err(|err| {
                     error!(
                         "Failed to write to output file '{}': {}",
