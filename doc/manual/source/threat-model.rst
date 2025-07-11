@@ -51,9 +51,11 @@ Routinator guarantees the following:
 An adversary with network access on-path between Routinator and a repository could:
 
 * Block access to the repository or degrade throughput of access to repository data
-* Downgrade the transport used for repository access from RRDP (which provides confidentiality and integrity at the transport level) to rsync (which does not). This behaviour is mandated by RFCXXX. After such a downgrade, the attacker can: 
+* Downgrade the transport used for repository access from RRDP (which provides confidentiality and integrity at the transport level) to rsync (which does not). This behaviour was decided by the community. After such a downgrade, the attacker can: 
+
   * Inject objects, withhold objects and manipulate objects, leading to rejection of otherwise valid repository data.
   * Replay old objects, suppressing updates to older objects for their validity period
+
 * Infer the configuration of Routinator with respect to the configured TALs and timeouts and other network-related settings
 
 An adversary who compromises the host system could:
