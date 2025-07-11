@@ -805,7 +805,7 @@ impl Validate {
                 Ok(validity::RequestList::single(prefix, asn))
             }
             ValidateWhat::File(ref path) => {
-                let mut file = match fs::File::open(path) {
+                let file = match fs::File::open(path) {
                     Ok(file) => file,
                     Err(err) => {
                         error!(
@@ -815,9 +815,10 @@ impl Validate {
                         return Err(ExitError::Generic)
                     }
                 };
+                let mut stream = io::BufReader::new(file);
                 if self.json {
                     validity::RequestList::from_json_reader(
-                        &mut file
+                        &mut stream
                     ).map_err(|err| {
                         error!(
                             "Failed to read input file '{}': {}'",
@@ -828,7 +829,7 @@ impl Validate {
                 }
                 else {
                     validity::RequestList::from_plain_reader(
-                        io::BufReader::new(file)
+                        &mut stream
                     ).map_err(|err| {
                         error!(
                             "Failed to read input file '{}': {}'",
