@@ -8,7 +8,7 @@ What is Routinator?
 
 Routinator is an RPKI (Resource Public Key Infrastructure) relying party client that retrieves data from the various RPKI repositories, checks its validity, and produces a validated payload for consumption by BGP (Border Gateway Protocol) routers. 
 
-BGP routers are the backbone of the Internet. They provide the protocols that allow your packet to reach its destination. This is done by networks announcing to neighbouring networks what destination can be reached via them. Traditionally this was done on good faith -- the RPKI adds a way to partially verify these statements.
+BGP routers are the backbone of the Internet. They use protocols that allow your packet to reach its destination. This is done by networks announcing to neighbouring networks what destination can be reached via them. Traditionally this was done on good faith -- the RPKI adds a way to partially verify these statements.
 
 The data Routinator retrieves from the repositories, as well as the repositories themselves, are untrusted. Objects are validated using cryptographic signatures that can only be made by resource holders, and contents are checked according to the schema, and data is checked against the constraints in the certificate.
 
@@ -33,7 +33,7 @@ Routinator should:
   * Run correctly even if the input data is malformed
   * Only contain validated and correct data in the data sent to routers
   * Reject invalid data without impacting availability and integrity of valid data
-  
+
 * Keep resource (memory, file system, etc.) consumption within reasonable bounds
 
 General assumptions:
