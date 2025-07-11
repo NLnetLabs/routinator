@@ -29,9 +29,11 @@ Routinator should:
 * Parse this repository data correctly and in a reasonable time
 * Not let one repository impact the outcome of another repository, unless that repository is a child of the former repository
 * For data thus retrieved, be able to provide correct, complete, non-malformed, validated payloads to routers:
+
   * Run correctly even if the input data is malformed
   * Only contain validated and correct data in the data sent to routers
   * Reject invalid data without impacting availability and integrity of valid data
+  
 * Keep resource (memory, file system, etc.) consumption within reasonable bounds
 
 General assumptions:
