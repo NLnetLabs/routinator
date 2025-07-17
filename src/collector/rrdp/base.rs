@@ -151,7 +151,10 @@ impl Collector {
     #[allow(clippy::mutable_key_type)]
     pub fn dump(&self, dir: &Path) -> Result<(), Fatal> {
         let dir = dir.join("rrdp");
-        debug!("Dumping RRDP collector content to {}", dir.display());
+        debug!("Dumping RRDP collector content from {} to {}", 
+            self.working_dir.display(), 
+            dir.display()
+        );
         let mut registry = DumpRegistry::new(dir);
         let mut states = HashMap::new();
         for entry in fatal::read_dir(&self.working_dir)? {
