@@ -130,7 +130,10 @@ impl Collector {
     /// Dumps the content of the rsync collector.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         let target = dir.join("rsync");
-        debug!("Dumping rsync collector content to {}", target.display());
+        debug!("Dumping rsync collector content from {} to {}", 
+            self.working_dir.base.display(), 
+            target.display()
+        );
 
         if let Err(err) = fs::remove_dir_all(&target) {
             if err.kind() != io::ErrorKind::NotFound {

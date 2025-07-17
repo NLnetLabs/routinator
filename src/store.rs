@@ -161,7 +161,10 @@ impl Store {
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
         self.dump_ta_certs(dir)?;
         let dir = dir.join("store");
-        debug!("Dumping store content to {}", dir.display());
+        debug!("Dumping store content from {} to {}", 
+            self.path.display(), 
+            dir.display()
+        );
         fatal::remove_dir_all(&dir)?;
         let mut repos = DumpRegistry::new(dir);
         self.dump_tree(&self.rsync_repository_path(), &mut repos)?;
