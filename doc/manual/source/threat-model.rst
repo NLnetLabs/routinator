@@ -68,4 +68,4 @@ An adversary who compromises a resource holder's key material could:
 * Sign valid statements that will then be successfully validated and included in the payload data to routers. This includes the ability to hijack a prefix or invalidate a genuine announcement.
 
 .. rubric:: Footnotes
-  .. [#f1] Based on the `threat model by restic <https://github.com/restic/restic/blob/master/doc/design.rst#threat-model>`_.
+.. [#f1] Based on the `threat model by restic <https://github.com/restic/restic/blob/master/doc/design.rst#threat-model>`_.
