@@ -16,8 +16,8 @@ There are two kinds of data:
 
 We have created a threat model for Routinator [#f1]_, where we outline the assumptions of the system that Routinator runs on, and the guarantees Routinator provides given that those assumptions are met. The model concludes with a description of threats posed by atttackers with different capabilities.
 
-Assumptions
------------
+Goals, Assumptions & Guarantees
+-------------------------------
 
 Routinator should:
 
@@ -49,6 +49,7 @@ Routinator guarantees the following:
 Examples of what an attacker can achieve
 ----------------------------------------
 With the aforementioned assumptions and guarantees in mind, the following are examples of things an adversary with various capabilities can achieve.
+
 An adversary with network access on-path between Routinator and a repository could:
 
 * Block access to the repository or degrade throughput of access to repository data
