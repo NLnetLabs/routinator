@@ -30,7 +30,7 @@ Routinator should:
   * only include validated and correct data in the data sent to routers.
   * reject invalid data without impacting availability and integrity of valid data (that is not dependent on the rejected data).
 
-* Keep resource (memory, file system, etc.) consumption within reasonable bounds.
+* keep resource (memory, file system, etc.) consumption within reasonable bounds.
 
 General assumptions:
 
@@ -73,7 +73,7 @@ An adversary who compromises the host system could:
 
 An adversary who compromises a resource holder's key material could:
 
-* Sign valid statements that will then be successfully validated and included in the payload data to routers. This includes the ability to hijack a prefix or invalidate a genuine announcement.
+* sign valid statements that will then be successfully validated and included in the payload data to routers. This includes the ability to hijack a prefix or invalidate a genuine announcement.
 
 .. rubric:: Footnotes
 .. [#f1] Based on the `threat model for restic <https://github.com/restic/restic/blob/master/doc/design.rst#threat-model>`_.
