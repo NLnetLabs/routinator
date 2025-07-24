@@ -162,7 +162,7 @@ impl PayloadDelta {
     /// Returns an iterator over the actions.
     pub fn actions(
         &self
-    ) -> impl Iterator<Item = (PayloadRef, Action)> + '_ {
+    ) -> impl Iterator<Item = (PayloadRef<'_>, Action)> + '_ {
         self.origin_actions().map(|(p, a)| (p.into(), a)).chain(
             self.router_key_actions().map(|(p, a)| (p.into(), a))
         ).chain(
@@ -664,7 +664,7 @@ impl DeltaArcIter {
 }
 
 impl PayloadDiff for DeltaArcIter {
-    fn next(&mut self) -> Option<(PayloadRef, Action)> {
+    fn next(&mut self) -> Option<(PayloadRef<'_>, Action)> {
         if matches!(self.current_type, PayloadType::Origin) {
             if let Some(res) = self.delta.origins.get(self.next) {
                 self.next += 1;

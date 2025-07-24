@@ -204,7 +204,7 @@ impl<Meta> Archive<Meta> {
     /// Returns an iterator over all the objects in the archive.
     ///
     /// The iterator will _not_ traverse objects in any kind of order.
-    pub fn objects(&self) -> Result<ObjectsIter<Meta>, ArchiveError> {
+    pub fn objects(&self) -> Result<ObjectsIter<'_, Meta>, ArchiveError> {
         ObjectsIter::new(self)
     }
 }
@@ -221,7 +221,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
     pub fn fetch(
         &self,
         name: &[u8],
-    ) -> Result<Cow<[u8]>, FetchError> {
+    ) -> Result<Cow<'_, [u8]>, FetchError> {
         let hash = self.meta.hash_name(name);
         let found = match self.find(hash, name)? {
             Some(found) => found,
@@ -265,7 +265,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         &self,
         name: &[u8],
         check: impl FnOnce(&Meta) -> Result<(), Meta::ConsistencyError>,
-    ) -> Result<Cow<[u8]>, AccessError<Meta::ConsistencyError>> {
+    ) -> Result<Cow<'_, [u8]>, AccessError<Meta::ConsistencyError>> {
         let hash = self.meta.hash_name(name);
         let found = match self.find(hash, name)? {
             Some(found) => found,
@@ -1022,7 +1022,7 @@ impl ObjectHeader {
     /// Reads the header and name from the given archive position.
     fn read_with_name(
         storage: &Storage, start: u64
-    ) -> Result<(Self, Cow<[u8]>), ArchiveError> {
+    ) -> Result<(Self, Cow<'_, [u8]>), ArchiveError> {
         storage.read(start, |read| {
             let header = Self::read_from(read)?;
             let name = read.read_slice(header.name_len)?;
@@ -1778,7 +1778,7 @@ mod mmapimpl {
         /// This will always be borrowed.
         pub fn read(
             &self, start: u64, len: usize,
-        ) -> Result<(Cow<[u8]>, u64), io::Error> {
+        ) -> Result<(Cow<'_, [u8]>, u64), io::Error> {
             let start = match usize::try_from(start) {
                 Ok(start) => start,
                 Err(_) => {

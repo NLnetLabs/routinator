@@ -83,7 +83,7 @@ impl PayloadSnapshot {
     /// Returns an iterator over all payload.
     pub fn payload(
         &self
-    ) -> impl Iterator<Item = PayloadRef> {
+    ) -> impl Iterator<Item = PayloadRef<'_>> {
         self.origins.iter_payload().chain(
             self.router_keys.iter_payload()
         ).chain(
@@ -108,7 +108,7 @@ impl PayloadSnapshot {
     /// Returns an iterator over route origins as payload.
     pub fn origin_payload(
         &self
-    ) -> impl Iterator<Item = PayloadRef> {
+    ) -> impl Iterator<Item = PayloadRef<'_>> {
         self.origins.iter_payload()
     }
 
@@ -122,7 +122,7 @@ impl PayloadSnapshot {
     /// Returns an iterator over router keys as payload.
     pub fn router_key_payload(
         &self
-    ) -> impl Iterator<Item = PayloadRef> {
+    ) -> impl Iterator<Item = PayloadRef<'_>> {
         self.router_keys.iter_payload()
     }
 
@@ -136,7 +136,7 @@ impl PayloadSnapshot {
     /// Returns an iterator over ASPAs as payload.
     pub fn aspa_payload(
         &self
-    ) -> impl Iterator<Item = PayloadRef> {
+    ) -> impl Iterator<Item = PayloadRef<'_>> {
         self.aspas.iter_payload()
     }
 
@@ -211,13 +211,17 @@ impl<P> PayloadCollection<P> {
     }
 
     /// Returns an iterator over the payload.
-    pub fn iter_ref(&self) -> impl Iterator<Item = (PayloadRef, &PayloadInfo)>
-    where for<'a> &'a P: Into<PayloadRef<'a>> {
+    pub fn iter_ref(
+        &self
+    ) -> impl Iterator<Item = (PayloadRef<'_>, &PayloadInfo)>
+    where
+        for<'a> &'a P: Into<PayloadRef<'a>>
+    {
         self.vec.iter().map(|item| ((&item.0).into(), &item.1))
     }
 
     /// Returns an iterator over just the payload.
-    pub fn iter_payload(&self) -> impl Iterator<Item = PayloadRef>
+    pub fn iter_payload(&self) -> impl Iterator<Item = PayloadRef<'_>>
     where for<'a> &'a P: Into<PayloadRef<'a>> {
         self.vec.iter().map(|item| (&item.0).into())
     }
@@ -294,7 +298,9 @@ impl SnapshotArcIter {
     }
 
     /// Returns the next item and its information.
-    pub fn next_with_info(&mut self) -> Option<(PayloadRef, &PayloadInfo)> {
+    pub fn next_with_info(
+        &mut self
+    ) -> Option<(PayloadRef<'_>, &PayloadInfo)> {
         if matches!(self.current_type, PayloadType::Origin) {
             if let Some(res) = self.snapshot.origins.get(self.next) {
                 self.next += 1;
@@ -319,7 +325,7 @@ impl SnapshotArcIter {
 }
 
 impl PayloadSet for SnapshotArcIter {
-    fn next(&mut self) -> Option<PayloadRef> {
+    fn next(&mut self) -> Option<PayloadRef<'_>> {
         self.next_with_info().map(|(res, _)| res)
     }
 }

@@ -144,7 +144,7 @@ impl Collector {
         Ok(())
     }
 
-    pub fn start(&self) -> Run {
+    pub fn start(&self) -> Run<'_> {
         Run::new(self)
     }
 

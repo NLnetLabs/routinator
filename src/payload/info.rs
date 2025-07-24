@@ -43,7 +43,7 @@ impl PayloadInfo {
     }
 
     /// Returns an iterator over the chain of information.
-    pub fn iter(&self) -> PayloadInfoIter {
+    pub fn iter(&self) -> PayloadInfoIter<'_> {
         PayloadInfoIter { info: Some(self) }
     }
 

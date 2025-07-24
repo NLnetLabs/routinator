@@ -153,7 +153,7 @@ impl Store {
     }
 
     /// Start a validation run with the store.
-    pub fn start(&self) -> Run {
+    pub fn start(&self) -> Run<'_> {
         Run::new(self)
     }
 

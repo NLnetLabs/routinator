@@ -93,7 +93,7 @@ impl Collector {
     }
 
     /// Starts a new validation run using this collector.
-    pub fn start(&self) -> Run {
+    pub fn start(&self) -> Run<'_> {
         Run::new(self)
     }
 
