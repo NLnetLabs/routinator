@@ -18,6 +18,8 @@ New
   ([#1041])
 * Reduced the overhead of storing RRDP snapshot downloads, significantly
   improving the snapshot update times. ([#1035])
+* The `dump` command now prints the source directories of the data it
+  dumps. ([#1045])
 
 Bug fixes
 
@@ -45,6 +47,7 @@ Other changes
 [#1036]: https://github.com/NLnetLabs/routinator/pull/1036
 [#1039]: https://github.com/NLnetLabs/routinator/pull/1039
 [#1041]: https://github.com/NLnetLabs/routinator/pull/1041
+[#1045]: https://github.com/NLnetLabs/routinator/pull/1045
 
 
 ## 0.14.2 ‘Roll Initiative!’
