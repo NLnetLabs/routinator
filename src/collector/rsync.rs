@@ -123,7 +123,7 @@ impl Collector {
     }
 
     /// Start a validation run on the collector.
-    pub fn start(&self) -> Run {
+    pub fn start(&self) -> Run<'_> {
         Run::new(self)
     }
 
@@ -775,7 +775,7 @@ impl Module {
     /// function may have to convert upper ASCII case letters into lower case
     /// to create a canonical value. If this has to happen, an [`OwnedModule`]
     /// is returned via the cow.
-    pub fn from_uri(uri: &uri::Rsync) -> Cow<Module> {
+    pub fn from_uri(uri: &uri::Rsync) -> Cow<'_, Module> {
         match uri.canonical_module() {
             Cow::Borrowed(s) => {
                 Cow::Borrowed(unsafe { Module::from_str(s) })

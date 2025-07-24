@@ -116,7 +116,7 @@ impl Iterator for ReadDir<'_> {
 //------------ read_dir ------------------------------------------------------
 
 /// Returns an iterator over a directory, logging fatal errors on any error.
-pub fn read_dir(path: &Path) -> Result<ReadDir, Failed> {
+pub fn read_dir(path: &Path) -> Result<ReadDir<'_>, Failed> {
     match fs::read_dir(path) {
         Ok(iter) => Ok(ReadDir { path, iter }),
         Err(err) => {
@@ -135,7 +135,7 @@ pub fn read_dir(path: &Path) -> Result<ReadDir, Failed> {
 /// Returns an iterator over an existing directory.
 ///
 /// Returns `None` if the repository doesn’t exist.
-pub fn read_existing_dir(path: &Path) -> Result<Option<ReadDir>, Failed> {
+pub fn read_existing_dir(path: &Path) -> Result<Option<ReadDir<'_>>, Failed> {
     match fs::read_dir(path) {
         Ok(iter) => Ok(Some(ReadDir { path, iter })),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),

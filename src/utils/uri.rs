@@ -13,7 +13,7 @@ use rpki::crypto::{Digest, DigestAlgorithm};
 /// An extension trait for URI kind of types.
 pub trait UriExt {
     fn get_authority(&self) -> &str;
-    fn unique_components(&self) -> (Cow<str>, Digest);
+    fn unique_components(&self) -> (Cow<'_, str>, Digest);
 
     /// Returns whether the URI has a dubious authority.
     ///
@@ -80,7 +80,7 @@ impl UriExt for uri::Https {
         self.authority()
     }
 
-    fn unique_components(&self) -> (Cow<str>, Digest) {
+    fn unique_components(&self) -> (Cow<'_, str>, Digest) {
         let authority = self.canonical_authority();
         let mut digest = DigestAlgorithm::sha256().start();
         digest.update(b"https://");
@@ -96,7 +96,7 @@ impl UriExt for uri::Rsync {
         self.authority()
     }
 
-    fn unique_components(&self) -> (Cow<str>, Digest) {
+    fn unique_components(&self) -> (Cow<'_, str>, Digest) {
         let authority = self.canonical_authority();
         let mut digest = DigestAlgorithm::sha256().start();
         digest.update(b"rsync://");

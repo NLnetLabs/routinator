@@ -29,7 +29,7 @@ impl<T: ?Sized> RwLock<T> {
     /// The method panics if the lock is poisoned, i.e., if a writer panicked
     /// while holding the write lock. It may also panic if the current thread
     /// already holds the lock.
-    pub fn read(&self) -> RwLockReadGuard<T> {
+    pub fn read(&self) -> RwLockReadGuard<'_, T> {
         self.0.read().expect("acquiring a poisoned rwlock")
     }
 
@@ -43,7 +43,7 @@ impl<T: ?Sized> RwLock<T> {
     /// The method panics if the lock is poisoned, i.e., if a writer panicked
     /// while holding the write lock. It may also panic if the current thread
     /// already holds the lock.
-    pub fn write(&self) -> RwLockWriteGuard<T> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         self.0.write().expect("acquiring a poisoned rwlock")
     }
 }
@@ -82,7 +82,7 @@ impl<T: ?Sized> Mutex<T> {
     /// The method panics if the lock is poisoned, i.e., if a panic occured
     /// while holding the lock. It may also panic if the current thread
     /// already holds the lock.
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         self.0.lock().expect("acquiring a poisoned mutex")
     }
 }

@@ -296,7 +296,7 @@ impl Engine {
     /// The method returns a [`Run`] that drives the validation run.
     pub fn start<P: ProcessRun>(
         &self, processor: P
-    ) -> Result<Run<P>, Failed> {
+    ) -> Result<Run<'_, P>, Failed> {
         info!("Using the following TALs:");
         for tal in &self.tals {
             info!("  * {}", tal.info().name());

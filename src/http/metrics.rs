@@ -814,7 +814,7 @@ impl Target {
         metric.header(self)
     }
     
-    pub fn multi(&mut self, metric: Metric) -> LabelValue {
+    pub fn multi(&mut self, metric: Metric) -> LabelValue<'_> {
         metric.multi(self)
     }
 }
@@ -869,7 +869,7 @@ impl Metric {
         ).expect("writing to string");
     }
 
-    fn multi(self, target: &mut Target) -> LabelValue {
+    fn multi(self, target: &mut Target) -> LabelValue<'_> {
         LabelValue::new(self, target)
     }
 }
