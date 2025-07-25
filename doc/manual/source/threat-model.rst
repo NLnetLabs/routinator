@@ -43,20 +43,20 @@ capabilities.
 
 Routinator should:
 
--  retrieve repository data from repositories in a reasonable time.
+-  retrieve repository data from repositories in a reasonable time,
 
--  parse retrieved repository data correctly and in a reasonable time.
+-  parse retrieved repository data correctly and in a reasonable time,
 
 -  not let one repository impact the outcome of another repository, unless
-   that repository is a child of the former repository.
+   that repository is a child of the former repository,
 
 -  be able to provide complete, non-malformed, validated payloads to routers
    for data thus retrieved, and:
 
-   -  run correctly even if the input data is malformed.
-   -  only include validated and correct data in the data sent to routers.
+   -  run correctly even if the input data is malformed,
+   -  only include validated and correct data in the data sent to routers,
    -  reject invalid data without impacting availability and integrity of
-      valid data (that is not dependent on the rejected data).
+      valid data (that is not dependent on the rejected data),
 
 -  keep resource (memory, file system, etc.) consumption within reasonable
    bounds.
@@ -93,7 +93,7 @@ An adversary with network access on-path between Routinator and a repository
 could:
 
 -  block access to the repository or degrade throughput of access to
-   repository data.
+   repository data,
 
 -  downgrade the transport used for repository access from RRDP (which
    provides confidentiality and integrity at the transport level) to rsync
@@ -102,10 +102,10 @@ could:
 
    -  inject objects, withhold objects and manipulate objects at the transport
       level, leading to rejection by Routinator of otherwise valid repository
-      data.
+      data,
 
    -  replay old objects, suppressing updates to older objects for their
-      validity period.
+      validity period,
 
 -  infer the configuration of Routinator with respect to the configured TALs
    and timeouts and other network-related settings.
@@ -119,12 +119,12 @@ of the aforementioned assumptions.
 
 An adversary who compromises the host system could:
 
--  stop, modify, and manipulate Routinator.
--  modify the Routinator configuration.
+-  stop, modify, and manipulate Routinator,
+-  modify the Routinator configuration,
 -  add, modify or remove trusted TALs, thus allowing for injection or removal
-   of valid RPKI payloads.
+   of valid RPKI payloads,
 -  bypass Routinator and provide incorrect data as validated RPKI payload to
-   routers
+   routers.
 
 An adversary who compromises a resource holder's key material could:
 
