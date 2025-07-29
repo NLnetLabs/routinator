@@ -108,5 +108,5 @@ test-mode:
 
 # Disable upgrade testing on Ubuntu Focal as there are no longer LXC images for it
 test-exclude:
-  - 'ubuntu:focal'
+  - image: 'ubuntu:focal'
 
