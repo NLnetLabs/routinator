@@ -106,9 +106,12 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Ubuntu Focal as there are no longer LXC images for it
+# Disable testing on Ubuntu Focal as there are no longer LXC images for it
+# Disable testing on Alma Linux 10 as there are no LXC images for it yet
+# Disable upgrade testing on Debian Trixie as there is nothing to upgrade from 
 test-exclude:
-  - image: 'ubuntu:focal'
+  - image: 'ubuntu:focal' 
+  - image: 'almalinux:10'
   - pkg: 'routinator'
     image: 'debian:trixie'
     mode: 'upgrade-from-published'
