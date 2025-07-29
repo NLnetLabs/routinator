@@ -41,6 +41,7 @@ include:
 
   - image: 'almalinux:10'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
+    test-image: 'almalinux:9'
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Trixie upon which
   # Raspbian 13 is based.
@@ -98,11 +99,6 @@ include:
     image: 'almalinux:9'
     target: 'x86_64'
     test-image: 'centos:9-Stream'
-
-  - pkg: 'routinator'
-    image: 'almalinux:10'
-    target: 'x86_64'
-    test-image: 'almalinux:9'
 
 # 'mode' is not used by the package building workflow job, but is used by the package testing workflow job.
 # Ploutos will not include this key when using this matrix definition to generate package building matrix
