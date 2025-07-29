@@ -4,6 +4,7 @@
 pkg:
   - 'routinator'
 image:
+  - "ubuntu:focal"    # ubuntu/20.04
   - "ubuntu:jammy"    # ubuntu/22.04
   - "ubuntu:noble"    # ubuntu/24.04
   - "debian:bullseye" # debian/11
@@ -105,7 +106,7 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Ubuntu Noble as we haven't published any packages for
-# those O/S versions yet.
-# test-exclude:
+# Disable upgrade testing on Ubuntu Focal as there are no longer LXC images for it
+test-exclude:
+  - 'ubuntu:focal'
 
