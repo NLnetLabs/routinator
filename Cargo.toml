@@ -103,6 +103,9 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 [package.metadata.deb.variants.debian-bullseye]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
 
+[package.metadata.deb.variants.debian-bullseye-armv7-unknown-linux-musleabihf]
+systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
+
 [package.metadata.deb.variants.minimal]
 
 [package.metadata.generate-rpm]
