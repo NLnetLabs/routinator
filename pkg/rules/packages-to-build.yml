@@ -99,6 +99,11 @@ include:
     target: 'x86_64'
     test-image: 'centos:9-Stream'
 
+  - pkg: 'routinator'
+    image: 'almalinux:10'
+    target: 'x86_64'
+    test-image: 'almalinux:9'
+
 # 'mode' is not used by the package building workflow job, but is used by the package testing workflow job.
 # Ploutos will not include this key when using this matrix definition to generate package building matrix
 # permutations but will use it when generating package testing permutations.
@@ -111,7 +116,6 @@ test-mode:
 # Disable upgrade testing on Debian Trixie as there is nothing to upgrade from 
 test-exclude:
   - image: 'ubuntu:focal'
-  - image: 'almalinux:10'
   - pkg: 'routinator'
     image: 'debian:trixie'
     mode: 'upgrade-from-published'
