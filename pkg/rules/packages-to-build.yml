@@ -111,7 +111,12 @@ test-mode:
 # Disable upgrade testing on Debian Trixie as there is nothing to upgrade from 
 test-exclude:
   - image: 'ubuntu:focal' 
-  - image: 'almalinux:10'
+  - pkg: 'routinator'
+    image: 'almalinux:10'
+    mode: 'fresh-install'
+  - pkg: 'routinator'
+    image: 'almalinux:10'
+    mode: 'upgrade-from-published'
   - pkg: 'routinator'
     image: 'debian:trixie'
     mode: 'upgrade-from-published'
