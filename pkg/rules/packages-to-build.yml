@@ -39,8 +39,8 @@ include:
   - image: 'almalinux:9'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
 
-  - image: 'almalinux:10'
-    systemd_service_unit_file: pkg/common/routinator.routinator.service
+  # - image: 'almalinux:10'
+  #   systemd_service_unit_file: pkg/common/routinator.routinator.service
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Trixie upon which
   # Raspbian 13 is based.
@@ -110,13 +110,8 @@ test-mode:
 # Disable testing on Alma Linux 10 as there are no LXC images for it yet
 # Disable upgrade testing on Debian Trixie as there is nothing to upgrade from 
 test-exclude:
-  - image: 'ubuntu:focal' 
-  - pkg: 'routinator'
-    image: 'almalinux:10'
-    mode: 'fresh-install'
-  - pkg: 'routinator'
-    image: 'almalinux:10'
-    mode: 'upgrade-from-published'
+  - image: 'ubuntu:focal'
+  - image: 'almalinux:10'
   - pkg: 'routinator'
     image: 'debian:trixie'
     mode: 'upgrade-from-published'
