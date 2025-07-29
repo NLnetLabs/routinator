@@ -4,10 +4,8 @@
 pkg:
   - 'routinator'
 image:
-  - "ubuntu:focal"    # ubuntu/20.04
   - "ubuntu:jammy"    # ubuntu/22.04
   - "ubuntu:noble"    # ubuntu/24.04
-  - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
   - "debian:trixie"   # debian/13
