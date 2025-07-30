@@ -7,9 +7,9 @@ image:
   - "ubuntu:focal"    # ubuntu/20.04
   - "ubuntu:jammy"    # ubuntu/22.04
   - "ubuntu:noble"    # ubuntu/24.04
-  - "debian:buster"   # debian/10
   - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
+  - "debian:trixie"   # debian/13
   - 'almalinux:8'    # compatible with EOL centos:8
   - 'almalinux:9'
   - 'almalinux:10'
@@ -41,6 +41,19 @@ include:
 
   - image: 'almalinux:10'
     systemd_service_unit_file: pkg/common/routinator.routinator.service
+
+  # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Trixie upon which
+  # Raspbian 13 is based.
+  - pkg: 'routinator'
+    image: 'debian:trixie'
+    target: 'armv7-unknown-linux-musleabihf'
+    test-image: 'debian:trixie/armhf'
+
+  # package for the Raspberry Pi 4b 64-bit cross compiled variant of the Debian Trixie upon which
+  # Raspbian 13 is based.
+  - pkg: 'routinator'
+    image: 'debian:trixie'
+    target: 'aarch64-unknown-linux-musl'
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bookworm upon which
   # Raspbian 12 is based.
@@ -93,7 +106,10 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-# Disable upgrade testing on Ubuntu Noble as we haven't published any packages for
-# those O/S versions yet.
-# test-exclude:
-
+# Disable testing on Ubuntu Focal as there are no longer LXC images for it
+# Disable testing on Alma Linux 10 as there are no LXC images for it yet
+# Disable upgrade testing on Debian Trixie as there is nothing to upgrade from 
+test-exclude:
+  - pkg: 'routinator'
+    image: 'debian:trixie'
+    mode: 'upgrade-from-published'

@@ -50,6 +50,7 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Debian versions:
 
+         -  Debian Trixie 13
          -  Debian Bookworm 12
          -  Debian Bullseye 11
 
