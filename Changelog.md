@@ -28,9 +28,9 @@ Bug fixes
 
 
 Other changes
-* Improved performance of file system operations on validate subcommand.
-  ([#1043])
 
+* Improved performance of file system operations on validate subcommand.
+  ([#1043] by [@kawaemon])
 * Add package.homepage to Cargo.toml ([#1024])
 * Added building packages for RHEL 10. ([#1034])
 * Added building packages for ARMv6 and ARM64 for Debian Bookworm.
@@ -49,7 +49,9 @@ Other changes
 [#1036]: https://github.com/NLnetLabs/routinator/pull/1036
 [#1039]: https://github.com/NLnetLabs/routinator/pull/1039
 [#1041]: https://github.com/NLnetLabs/routinator/pull/1041
+[#1043]: https://github.com/NLnetLabs/routinator/pull/1043
 [#1045]: https://github.com/NLnetLabs/routinator/pull/1045
+[@kawaemon]: https://github.com/kawaemon
 
 
 ## 0.14.2 ‘Roll Initiative!’
