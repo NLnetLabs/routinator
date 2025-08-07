@@ -28,6 +28,8 @@ Bug fixes
 
 
 Other changes
+* Improved performance of file system operations on validate subcommand.
+  ([#1043])
 
 * Add package.homepage to Cargo.toml ([#1024])
 * Added building packages for RHEL 10. ([#1034])

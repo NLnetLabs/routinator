@@ -805,8 +805,8 @@ impl Validate {
                 Ok(validity::RequestList::single(prefix, asn))
             }
             ValidateWhat::File(ref path) => {
-                let mut file = match fs::File::open(path) {
-                    Ok(file) => file,
+                let mut stream = match fs::File::open(path) {
+                    Ok(file) => io::BufReader::new(file),
                     Err(err) => {
                         error!(
                             "Failed to open input file '{}': {}'",
@@ -817,7 +817,7 @@ impl Validate {
                 };
                 if self.json {
                     validity::RequestList::from_json_reader(
-                        &mut file
+                        &mut stream
                     ).map_err(|err| {
                         error!(
                             "Failed to read input file '{}': {}'",
@@ -828,7 +828,7 @@ impl Validate {
                 }
                 else {
                     validity::RequestList::from_plain_reader(
-                        io::BufReader::new(file)
+                        &mut stream
                     ).map_err(|err| {
                         error!(
                             "Failed to read input file '{}': {}'",
@@ -891,8 +891,8 @@ impl Validate {
         let result = requests.validity(&snapshot);
         match self.output.as_ref() {
             Some(path) => {
-                let mut file = match fs::File::create(path) {
-                    Ok(file) => file,
+                let mut stream = match fs::File::create(path) {
+                    Ok(file) => io::BufWriter::new(file),
                     Err(err) => {
                         error!(
                             "Failed to open output file '{}': {}",
@@ -902,11 +902,12 @@ impl Validate {
                     }
                 };
                 let res = if self.json {
-                    result.write_json(&mut file)
+                    result.write_json(&mut stream)
                 }
                 else {
-                    result.write_plain(&mut file)
+                    result.write_plain(&mut stream)
                 };
+                let res = res.and_then(|_| stream.flush());
                 res.map_err(|err| {
                     error!(
                         "Failed to write to output file '{}': {}",
