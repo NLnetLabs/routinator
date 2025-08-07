@@ -35,8 +35,8 @@ impl State {
         };
 
         let mut output = self.output.clone();
-        if output.update_from_query(req.uri().query()).is_err() {
-            return Some(Response::bad_request())
+        if let Err(err) = output.update_from_query(req.uri().query()) {
+            return Some(Response::bad_request(req.is_api(), err))
         };
 
         let (session, serial, created, snapshot, metrics) = {
@@ -53,7 +53,7 @@ impl State {
             (Some(snapshot), Some(metrics), Some(created)) => {
                 (snapshot, metrics, created)
             }
-            _ => return Some(Response::initial_validation()),
+            _ => return Some(Response::initial_validation(req.is_api())),
         };
 
         let etag = format!("\"{session:x}-{serial}\"");
