@@ -48,7 +48,9 @@ use crate::error::{Failed, Fatal, RunFailed};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
-use crate::store::{Store, StoredManifest, StoredObject, StoredPoint};
+use crate::store::{
+    Store, StoredManifest, StoredObject, StoredPoint, StoredStatus
+};
 use crate::utils::str::str_from_ascii;
 
 
@@ -164,6 +166,18 @@ impl Engine {
         };
         res.reload_tals()?;
         Ok(res)
+    }
+
+    /// Disables the use of the collector, if previously enabled.
+    ///
+    /// Should be called before [`ignite`][Self::ignite].
+    pub fn disable_collector(&mut self) {
+        self.collector = None;
+    }
+
+    /// Returns the store status of the last run.
+    pub fn store_status(&self) -> Result<Option<StoredStatus>, Failed> {
+        self.store.status()
     }
 
     /// Reloads the set of TALs.

@@ -19,10 +19,10 @@ use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rpki::resources::{Asn, Prefix};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
@@ -435,6 +435,7 @@ impl Server {
 //------------ Vrps ----------------------------------------------------------
 
 /// Produce a list of Validated ROA Payload.
+#[derive(Debug)]
 pub struct Vrps {
     /// The destination to output the list to.
     ///
@@ -450,6 +451,9 @@ pub struct Vrps {
 
     /// Don’t update the repository.
     noupdate: bool,
+
+    /// Only update the repository if the cache is older than this.
+    update_after: Option<Duration>,
 
     /// Return an error on incomplete update.
     complete: bool,
@@ -502,8 +506,19 @@ struct VrpsArgs {
     no_aspas: bool,
 
     /// Don't update the local cache
-    #[arg(short, long)]
+    #[arg(
+        short, long,
+        conflicts_with = "update_after",
+    )]
     noupdate: bool,
+
+    /// Only update the cache if the last run was at least this long ago.
+    #[arg(
+        short, long,
+        value_name = "MINTUES",
+        conflicts_with = "noupdate",
+    )]
+    update_after: Option<u32>,
 
     /// Return an error status on incomplete update
     #[arg(long)]
@@ -576,6 +591,11 @@ impl Vrps {
             format,
             output,
             noupdate: args.noupdate,
+            update_after: args.update_after.map(|minutes| {
+                // Safety: a u32 converted to a u64 multiplied by 60 always
+                //         fits.
+                Duration::from_secs(u64::from(minutes) * 60)
+            }),
             complete: args.complete,
         })
     }
@@ -590,6 +610,21 @@ impl Vrps {
     fn run(mut self, process: Process) -> Result<(), ExitError> {
         self.output.update_from_config(process.config());
         let mut engine = Engine::new(process.config(), !self.noupdate)?;
+
+        // Disable collector if update_after demands it. If anything goes
+        // wrong here, we simply keep the collector in place.
+        if let Some(duration) = self.update_after {
+            if let Some(status) = engine.store_status()? {
+                if let Ok(age) = SystemTime::from(
+                    status.last_update
+                ).elapsed() {
+                    if age < duration {
+                        engine.disable_collector()
+                    }
+                }
+            }
+        }
+
         engine.ignite()?;
         process.switch_logging(false, false)?;
         warn!("Using config file {}.", process.config().config_file.display());
