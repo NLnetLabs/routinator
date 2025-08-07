@@ -22,7 +22,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant, SystemTime};
 #[cfg(feature = "rta")] use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use rpki::resources::{Asn, Prefix};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
