@@ -32,7 +32,7 @@ Other changes
 * Improved performance of file system operations on validate subcommand.
   ([#1043] by [@kawaemon])
 * Add package.homepage to Cargo.toml ([#1024])
-* Added building packages for RHEL 10. ([#1034])
+* Added building packages for RHEL 10 and Debian 13. ([#1034], [#1047])
 * Added building packages for ARMv6 and ARM64 for Debian Bookworm.
   ([#1036])
 * Upgrades various dependencies. ([#1004], [#1005], [#1006])
@@ -51,6 +51,7 @@ Other changes
 [#1041]: https://github.com/NLnetLabs/routinator/pull/1041
 [#1043]: https://github.com/NLnetLabs/routinator/pull/1043
 [#1045]: https://github.com/NLnetLabs/routinator/pull/1045
+[#1047]: https://github.com/NLnetLabs/routinator/pull/1047
 [@kawaemon]: https://github.com/kawaemon
 
 
