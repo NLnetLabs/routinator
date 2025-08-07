@@ -625,6 +625,11 @@ These can be requested by providing different commands on the command line.
 
            The repository will not be updated before producing the list.
 
+    .. option:: --u, --update-after=minutes
+
+           The repostory will only be updated if the last update was more
+           than the given number of minutes ago.
+
     .. option:: --complete
 
            If any of the rsync commands needed to update the repository

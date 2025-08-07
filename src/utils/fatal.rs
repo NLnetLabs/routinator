@@ -262,6 +262,40 @@ pub fn open_file(path: &Path) -> Result<File, Failed> {
 }
 
 
+//------------ open_existing_file --------------------------------------------
+
+/// Opens a file if it exists.
+pub fn open_existing_file(path: &Path) -> Result<Option<File>, Failed> {
+    match File::open(path) {
+        Ok(file) => Ok(Some(file)),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(err) => {
+            error!(
+                "Fatal: failed to open file {}: {}",
+                path.display(), IoErrorDisplay(err)
+            );
+            Err(Failed)
+        }
+    }
+}
+
+
+//------------ create_file ---------------------------------------------------
+
+/// Opens a file in write-only mode.
+///
+/// Create a file if it does not exist, and truncates it if it does.
+pub fn create_file(path: &Path) -> Result<File, Failed> {
+    File::create(path).map_err(|err| {
+        error!(
+            "Fatal: failed to open file {}: {}",
+            path.display(), IoErrorDisplay(err)
+        );
+        Failed
+    })
+}
+
+
 //------------ read_file -----------------------------------------------------
 
 /// Reads a file’s entire content into a vec.
