@@ -45,14 +45,14 @@ pub fn handle_get_or_head(req: &Request) -> Option<Response> {
                 else {
                     // if CATCH_ALL_URL is not defined in ui_resources
                     // we'll return a 404
-                    Some(Response::not_found())
+                    Some(Response::not_found(false))
                 }
             }
         }
     } else {
         // This is the last handler in the chain, so if the requested URL did
         // not start with BASE_URL, we're returning 404.
-        Some(Response::not_found())
+        Some(Response::not_found(false))
     }
 }
 

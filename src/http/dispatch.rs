@@ -46,7 +46,7 @@ impl State {
     pub async fn handle_request(&self, req: Request) -> Response {
         self.metrics.inc_requests();
         if !req.is_get_or_head() {
-            return Response::method_not_allowed()
+            return Response::method_not_allowed(req.is_api())
         }
 
         if let Some(response) = self.payload.handle_get_or_head(
@@ -87,7 +87,7 @@ impl State {
             return response
         }
         
-        Response::not_found()
+        Response::not_found(req.is_api())
     }
 }
 
