@@ -44,7 +44,7 @@ async fn handle_metrics(
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return Response::initial_validation(),
+                None => return Response::initial_validation(false),
             },
             history.serial(),
             history.last_update_start(),

@@ -1,5 +1,6 @@
 //! Building responses.
 
+use std::fmt;
 use std::convert::Infallible;
 use chrono::{DateTime, Utc};
 use futures::stream::{Stream, StreamExt};
@@ -9,6 +10,7 @@ use hyper::body::{Body, Bytes, Frame};
 use hyper::StatusCode;
 use hyper::http::response::Builder;
 use crate::utils::date::{parse_http_date, format_http_date};
+use crate::utils::json::JsonBuilder;
 use super::request::Request;
 
 
@@ -23,42 +25,75 @@ pub struct Response(hyper::Response<ResponseBody>);
 
 impl Response {
     /// Creates a response indicating initial validation.
-    pub fn initial_validation() -> Self {
-        ResponseBuilder::service_unavailable()
-            .content_type(ContentType::TEXT)
-            .body("Initial validation ongoing. Please wait.")
+    pub fn initial_validation(api: bool) -> Self {
+        Self::error(
+            api,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Initial validation ongoing. Please wait."
+        )
     }
 
     /// Returns a Bad Request response.
-    pub fn bad_request() -> Self {
-        ResponseBuilder::bad_request()
-            .content_type(ContentType::TEXT)
-            .body("Bad Request")
+    pub fn bad_request(api: bool, message: impl fmt::Display) -> Self {
+        Self::error(api, StatusCode::BAD_REQUEST, message)
     }
 
     /// Returns a Not Modified response.
-    pub fn not_found() -> Self {
-        ResponseBuilder::not_found()
-            .content_type(ContentType::TEXT)
-            .body("Not Found")
+    pub fn not_found(api: bool) -> Self {
+        Self::error(api, StatusCode::NOT_FOUND, "resource not found")
     }
 
     /// Returns a Not Modified response.
     pub fn not_modified(etag: &str, done: DateTime<Utc>) -> Self {
-        ResponseBuilder::not_modified().etag(etag).last_modified(done).empty()
+        ResponseBuilder::new(
+            StatusCode::NOT_MODIFIED
+        ).etag(etag).last_modified(done).empty()
     }
 
     /// Returns a Method Not Allowed response.
-    pub fn method_not_allowed() -> Self {
-        ResponseBuilder::method_not_allowed()
-            .content_type(ContentType::TEXT)
-            .body("Method not allowed.")
+    pub fn method_not_allowed(api: bool) -> Self {
+        Self::error(
+            api, StatusCode::METHOD_NOT_ALLOWED,
+            "method not allowed"
+        )
+    }
+
+    /// Creates an error response.
+    ///
+    /// If `api` is `true`, the reponse will havea JSON body, otherwise a
+    /// plain text body is used.
+    ///
+    /// The status code of the response is taken from `status` and the
+    /// error message included in the body from `message`.
+    pub fn error(
+        api: bool,
+        status: StatusCode,
+        message: impl fmt::Display
+    ) -> Self {
+        if api {
+            ResponseBuilder::new(
+                status
+            ).content_type(
+                ContentType::JSON
+            ).body(
+                JsonBuilder::build(|json| {
+                    json.member_str("error", message);
+                })
+            )
+        }
+        else {
+            ResponseBuilder::new(
+                status
+            ).content_type(
+                ContentType::TEXT
+            ).body(message.to_string())
+        }
     }
 
     /// Returns a Moved Permanently response pointing to the given location.
     #[allow(dead_code)]
     pub fn moved_permanently(location: &str) -> Self {
-        ResponseBuilder::moved_permanently()
+        ResponseBuilder::new(StatusCode::MOVED_PERMANENTLY)
             .content_type(ContentType::TEXT)
             .location(location)
             .body(format!("Moved permanently to {location}"))
@@ -124,42 +159,16 @@ pub struct ResponseBuilder {
 impl ResponseBuilder {
     /// Creates a new builder with the given status.
     pub fn new(status: StatusCode) -> Self {
-        ResponseBuilder { builder:  Builder::new().status(status) }
+        ResponseBuilder {
+            builder:  Builder::new().status(status).header(
+                "Access-Control-Allow-Origin", "*"
+            )
+        }
     }
 
     /// Creates a new builder for a 200 OK response.
     pub fn ok() -> Self {
         Self::new(StatusCode::OK)
-    }
-
-    /// Creates a new builder for a Service Unavailable response.
-    pub fn service_unavailable() -> Self {
-        Self::new(StatusCode::SERVICE_UNAVAILABLE)
-    }
-
-    /// Creates a new builder for a Bad Request response.
-    pub fn bad_request() -> Self {
-        Self::new(StatusCode::BAD_REQUEST)
-    }
-
-    /// Creates a new builder for a Not Found response.
-    pub fn not_found() -> Self {
-        Self::new(StatusCode::NOT_FOUND)
-    }
-
-    /// Creates a new builder for a Not Modified response.
-    pub fn not_modified() -> Self {
-        Self::new(StatusCode::NOT_MODIFIED)
-    }
-
-    /// Creates a new builder for a Method Not Allowed response.
-    pub fn method_not_allowed() -> Self {
-        Self::new(StatusCode::METHOD_NOT_ALLOWED)
-    }
-
-    /// Creates a new builder for a Moved Permanently response.
-    pub fn moved_permanently() -> Self {
-        Self::new(StatusCode::MOVED_PERMANENTLY)
     }
 
     /// Adds the content type header.

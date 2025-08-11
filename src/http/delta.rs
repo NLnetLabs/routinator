@@ -29,7 +29,7 @@ pub fn handle_get_or_head(
     let history = history.read();
 
     if !history.is_active() {
-        return Some(Response::initial_validation())
+        return Some(Response::initial_validation(true))
     }
 
     let version = match version_from_query(req.uri().query()) {
@@ -59,7 +59,7 @@ pub fn handle_get_or_head(
 
     let snapshot = match history.current() {
         Some(snapshot) => snapshot,
-        None => return Some(Response::initial_validation()),
+        None => return Some(Response::initial_validation(true)),
     };
     Some(handle_reset(history.session(), history.serial(), snapshot, created))
 }
@@ -155,28 +155,47 @@ fn version_from_query(
     for (key, value) in form_urlencoded::parse(query.as_ref()) {
         if key == "session" {
             if session.is_some() {
-                return Err(Response::bad_request());
+                return Err(Response::bad_request(
+                    true, "duplicate 'session' argument in query"
+                ));
             }
             session = Some(u64::from_str(&value).map_err(|_| {
-                Response::bad_request()
+                Response::bad_request(
+                    true, "invalid 'session' argument in query"
+                )
             })?);
         }
         else if key == "serial" {
             if serial.is_some() {
-                return Err(Response::bad_request());
+                return Err(Response::bad_request(
+                    true, "duplicate 'serial' argument in query"
+                ));
             }
             serial = Some(Serial::from_str(&value).map_err(|_| {
-                Response::bad_request()
+                Response::bad_request(
+                    true, "invalid 'serial' argument in query"
+                )
             })?);
         }
         else {
-            return Err(Response::bad_request());
+            return Err(Response::bad_request(
+                true, format_args!("unexpected argument '{key}' in query")
+            ));
         }
     }
     match (session, serial) {
         (Some(session), Some(serial)) => Ok(Some((session, serial))),
         (None, None) => Ok(None),
-        _ => Err(Response::bad_request())
+        (Some(_), None) => {
+            Err(Response::bad_request(
+                true, "missing 'serial' argument in query"
+            ))
+        }
+        (None, Some(_)) => {
+            Err(Response::bad_request(
+                true, "missing 'session' argument in query"
+            ))
+        }
     }
 }
 
