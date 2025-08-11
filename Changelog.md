@@ -20,6 +20,11 @@ New
   improving the snapshot update times. ([#1035])
 * The `dump` command now prints the source directories of the data it
   dumps. ([#1045])
+* Added a `--update-after` option to the `vrps` subcommand that skips
+  updating the local cache if the last successful validation run was known
+  to be less than a given number of minutes ago. ([#1049])
+* Error responses for API-related HTTP endpoints now contain JSON bodies.
+  ([#1050])
 
 Bug fixes
 
@@ -52,6 +57,7 @@ Other changes
 [#1043]: https://github.com/NLnetLabs/routinator/pull/1043
 [#1045]: https://github.com/NLnetLabs/routinator/pull/1045
 [#1047]: https://github.com/NLnetLabs/routinator/pull/1047
+[#1049]: https://github.com/NLnetLabs/routinator/pull/1049
 [@kawaemon]: https://github.com/kawaemon
 
 
