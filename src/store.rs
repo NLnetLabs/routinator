@@ -152,6 +152,23 @@ impl Store {
         Ok(())
     }
 
+    /// Loads the status of the last run.
+    pub fn status(&self) -> Result<Option<StoredStatus>, Failed> {
+        let path = self.status_path();
+        let Some(mut file) = fatal::open_existing_file(&path)? else {
+            return Ok(None)
+        };
+        match StoredStatus::read(&mut file) {
+            Ok(status) => Ok(Some(status)),
+            Err(err) => {
+                error!("Failed to read store status file {}: {}",
+                    path.display(), err
+                );
+                Err(Failed)
+            }
+        }
+    }
+
     /// Start a validation run with the store.
     pub fn start(&self) -> Run<'_> {
         Run::new(self)
@@ -335,6 +352,14 @@ impl Store {
         )
     }
 
+    /// The name of the status file.
+    const STATUS_NAME: &'static str = "status.bin";
+
+    /// Returns the path for the status file.
+    fn status_path(&self) -> PathBuf {
+        self.path.join(Self::STATUS_NAME)
+    }
+
     /// Returns the path to use for the trust anchor at the given URI.
     fn ta_path(&self, uri: &TalUri) -> PathBuf {
         match *uri {
@@ -447,6 +472,16 @@ impl<'a> Run<'a> {
     /// If you are not interested in the metrics, you can simple drop the
     /// value, instead.
     pub fn done(self, _metrics: &mut Metrics) {
+        let path = self.store.status_path();
+        let Ok(mut file) = fatal::create_file(&path) else {
+            return
+        };
+        if let Err(err) = StoredStatus::new(Time::now()).write(&mut file) {
+            error!(
+                "Failed to write store status file {}: {}",
+                path.display(), err
+            );
+        }
     }
 
     /// Loads a stored trust anchor certificate.
@@ -1144,6 +1179,49 @@ impl StoredObject {
     /// Converts the stored object into the object’s raw bytes.
     pub fn into_content(self) -> Bytes {
         self.content
+    }
+}
+
+
+//------------ StoredStatus --------------------------------------------------
+
+/// Information about the status of the store.
+#[derive(Clone, Debug)]
+pub struct StoredStatus {
+    /// The time the last update was finished.
+    pub last_update: Time,
+}
+
+impl StoredStatus {
+    /// The version of the type.
+    const VERSION: u8 = 0;
+
+    /// Creates a new value.
+    pub fn new(last_update: Time) -> Self {
+        Self { last_update }
+    }
+
+    /// Reads the stored status from an IO reader.
+    pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
+        // Version number.
+        let version = u8::parse(reader)?;
+        if version != Self::VERSION {
+            return Err(ParseError::format(
+                    format!("unexpected version {version}")
+            ))
+        }
+        Ok(Self {
+            last_update: Parse::parse(reader)?
+        })
+    }
+
+    /// Appends the stored status to a writer.
+    pub fn write(
+        &self, writer: &mut impl io::Write
+    ) -> Result<(), io::Error> {
+        Self::VERSION.compose(writer)?;
+        self.last_update.compose(writer)?;
+        Ok(())
     }
 }
 
