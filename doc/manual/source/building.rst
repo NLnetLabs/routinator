@@ -179,6 +179,8 @@ Building the UI
 
 Routinator by default ships with an UI that can be accessed on http://localhost:8232/ui/. The UI is independent from Routinator, and lives in a separate repository, namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. 
 
+The UI depends on being mounted on the ``/ui`` path. In case you want to change the path or change anything about the UI (e.g. logos, colours, language), you can do so quite easily.
+
 In this example, we will show how to set up the Routinator UI at https://example.org/routinator with a Routinator instance at https://routinator.example.net/ using nginx. This will work equally well with an Apache web server or most other web servers.
 
 First download the routinator-ui repository and build it. The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
