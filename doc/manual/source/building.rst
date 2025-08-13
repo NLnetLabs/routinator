@@ -198,7 +198,11 @@ The output files will appear in a folder ``public``. Copy these files to your ng
     mkdir /var/www/html/routinator
     cp -r public/* /var/www/html/routinator/
 
-For the Routinator instance, you might wish to run it behind a reverse proxy as well. See :ref:`our documentation on using a reverse proxy <http-service:Using a Reverse Proxy>` how to do that.
+For the Routinator instance, you might wish to run it behind a reverse proxy as well. See :ref:`our documentation on using a reverse proxy <http-service:Using a Reverse Proxy>` how to do that. You might have to add a CORS header to allow the UI to request resources from the Routinator instance:
+
+.. code-block::
+    
+    add_header Access-Control-Allow-Origin https://example.org;
 
 
 Statically Linked Routinator
