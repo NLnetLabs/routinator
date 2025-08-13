@@ -181,8 +181,9 @@ The UI Routinator uses lives in a separate repository, namely
 `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. 
 
 Build and copy over to Routinator using:
+
 .. code-block:: bash
-    
+
     yarn install
     yarn build --base /ui
     rm -rf $ROUTINATOR/contrib/ui
