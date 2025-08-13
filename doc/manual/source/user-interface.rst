@@ -49,6 +49,10 @@ service, developed and hosted by NLnet Labs at `bgp-api.net
     <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five
     Regional Internet Registries. These are updated daily.
 
+You may wish to host the UI on a different machine than the machine Routinator 
+runs on, or on a path that is different from ``/ui``. See our documentation for 
+:ref:`building the UI <building:Building the UI>` on how to do that.
+
 .. versionadded:: 0.8.3
 .. versionchanged:: 0.10.0
    The Prefix Check
