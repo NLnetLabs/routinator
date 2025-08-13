@@ -174,6 +174,27 @@ Docker build args, e.g.
 
    docker build . --build-arg CARGO_ARGS="--features native-tls"
 
+Building the UI
+---------------
+
+The UI Routinator uses lives in a separate repository, namely 
+`routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. 
+
+Build and copy over to Routinator using:
+.. code-block:: bash
+    yarn install
+    yarn build --base /ui
+    rm -rf $ROUTINATOR/contrib/ui
+    cp -r public $ROUTINATOR/contrib/ui
+
+By default the UI will assume Routinator runs on the same host. The UI can also
+work standalone from Routinator. To do this, set the ``ROUTINATOR_API_HOST`` 
+environment variable with a URL to your own Routinator instance (e.g. https://routinator.example.org) 
+before running ``yarn build``. These files can then be mounted behind a web 
+server such as nginx as they are merely static files. By default, Routinator 
+will use /ui as base URL. Make sure to change this to your own path.
+
+
 Statically Linked Routinator
 ----------------------------
 
