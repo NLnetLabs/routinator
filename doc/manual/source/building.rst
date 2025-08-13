@@ -174,6 +174,39 @@ Docker build args, e.g.
 
    docker build . --build-arg CARGO_ARGS="--features native-tls"
 
+Building the UI
+---------------
+
+Routinator by default ships with an UI that can be accessed on http://localhost:8232/ui/. The UI is independent from Routinator, and lives in a separate repository, namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. 
+
+The UI depends on being mounted on the ``/ui`` path. In case you want to change the path or change anything about the UI (e.g. logos, colours, language), you can do so quite easily.
+
+In this example, we will show how to set up the Routinator UI at https://example.org/routinator with a Routinator instance at https://routinator.example.net/ using nginx. This will work equally well with an Apache web server or most other web servers.
+
+First download the routinator-ui repository and build it. The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
+
+.. code-block:: bash
+
+    git clone https://github.com/NLnetLabs/routinator-ui
+    cd ./routinator-ui
+    yarn install
+    ROUTINATOR_API_HOST=https://routinator.example.net yarn build --base /routinator
+
+The output files will appear in a folder ``public``. Copy these files to your nginx folder for the UI, e.g. ``/var/www/html/routinator``. This works out of the box with the default configuration using ``try_files``, though you likely want to harden your setup which we will not cover here.
+
+.. code-block:: bash
+
+    apt-get -y install nginx
+    mkdir /var/www/html/routinator
+    cp -r public/* /var/www/html/routinator/
+
+For the Routinator instance, you might wish to run it behind a reverse proxy as well. See :ref:`our documentation on using a reverse proxy <http-service:Using a Reverse Proxy>` how to do that. You might have to add a CORS header to allow the UI to request resources from the Routinator instance:
+
+.. code-block::
+    
+    add_header Access-Control-Allow-Origin https://example.org;
+
+
 Statically Linked Routinator
 ----------------------------
 
