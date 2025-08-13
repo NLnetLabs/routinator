@@ -182,6 +182,7 @@ The UI Routinator uses lives in a separate repository, namely
 
 Build and copy over to Routinator using:
 .. code-block:: bash
+    
     yarn install
     yarn build --base /ui
     rm -rf $ROUTINATOR/contrib/ui
