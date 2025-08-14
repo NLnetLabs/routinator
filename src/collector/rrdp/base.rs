@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::{cmp, fs, io};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -868,9 +869,40 @@ impl<'a> RepositoryUpdate<'a> {
         if let Err(err) = SnapshotUpdate::new(
             self.collector, &mut archive, notify, &mut self.metrics
         ).try_update() {
+            // XXX This should probably be done nicer. The problem is that I
+            // cannot peek into the response stream to see if it has a chance
+            // of being processable (e.g. is empty). This means that it will
+            // end up as an XML error, which whilst technically true is not
+            // really helpful in the case of a broken/timed out HTTP stream.
             if let SnapshotError::RunFailed(err) = err {
                 debug!("RRDP {}: snapshot update failed.", self.rpki_notify);
                 return Err(err)
+            }
+            else if let SnapshotError::Http(err) = err {
+                if let Some(source) = err.source() {
+                    warn!(
+                        "RRDP {}: Failed to process snapshot file {}: {} ({})",
+                        self.rpki_notify, notify.content().snapshot().uri(), 
+                        err, source
+                    );
+                } else {
+                    warn!(
+                        "RRDP {}: Failed to process snapshot file {}: {}",
+                        self.rpki_notify, notify.content().snapshot().uri(), 
+                        err
+                    );
+                }
+                return Ok(false)
+            } 
+            else if let SnapshotError::Rrdp(err) = err {
+
+                let mut err: &dyn Error = &err;
+                while let Some(e) = err.source() {
+                    err = e;
+                }
+                warn!("RRDP {}: Failed to process snapshot file XML {}: {}", 
+                    self.rpki_notify, notify.content().snapshot().uri(), err);
+                return Ok(false);
             }
             else {
                 warn!(

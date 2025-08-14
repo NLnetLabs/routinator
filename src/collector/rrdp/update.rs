@@ -1,4 +1,5 @@
 
+use std::error::Error;
 use std::{error, fmt, io};
 use std::collections::HashSet;
 use std::io::Read;
@@ -65,7 +66,11 @@ impl Notification {
                 response
             }
             Err(err) => {
-                warn!("RRDP {uri}: {err}");
+                if let Some(source) = err.source() {
+                    warn!("RRDP {uri}: {err} ({source})");
+                } else {
+                    warn!("RRDP {uri}: {err}");
+                }
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
