@@ -45,7 +45,7 @@ impl State {
 
     pub async fn handle_request(&self, req: Request) -> Response {
         self.metrics.inc_requests();
-        if !req.is_get_or_head() {
+        if !req.is_get_or_head() && !req.is_post() {
             return Response::method_not_allowed(req.is_api())
         }
 
@@ -77,7 +77,7 @@ impl State {
         ).await {
             return response
         }
-        if let Some(response) = validity::handle_get_or_head(
+        if let Some(response) = validity::handle(
             &req, &self.history) {
             return response
         }
