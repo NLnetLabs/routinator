@@ -9,7 +9,7 @@ use hyper::header::HeaderMap;
 
 pub struct Request {
     parts: hyper::http::request::Parts,
-    body: Bytes,
+    body: Option<Bytes>,
 }
 
 impl Request {
@@ -35,7 +35,7 @@ impl Request {
     }
 
     /// Returns the body of the request
-    pub fn body(&self) -> &Bytes {
+    pub fn body(&self) -> &Option<Bytes> {
         &self.body
     }
 
@@ -51,7 +51,10 @@ impl Request {
         self.parts.uri.path().starts_with("/api/")
     }
 
-    pub fn new(parts: hyper::http::request::Parts, body: Bytes) -> Self {
+    pub fn new(
+        parts: hyper::http::request::Parts, 
+        body: Option<Bytes>
+    ) -> Self {
         Self { parts, body }
     }
 }

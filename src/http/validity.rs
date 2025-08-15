@@ -106,7 +106,29 @@ fn handle_validity_batch(
     let Some(current) = origins.read().current() else {
         return Response::initial_validation(true)
     };
-    let mut reader = BufReader::new(Cursor::new(req.body()));
+
+    let Some(ct_header) = req.headers().get(hyper::header::CONTENT_TYPE) else {
+        return Response::bad_request(
+            true, "missing content-type header"
+        )
+    };
+    let Ok(ct_header) = ct_header.to_str() else {
+        return Response::bad_request(
+            true, "bad content-type header"
+        )
+    };
+    if ct_header.to_lowercase() != "application/json" {
+        return Response::bad_request(
+            true, "wrong content-type header"
+        )
+    }
+
+    let Some(body) = req.body() else {
+        return Response::bad_request(
+            true, "body missing"
+        )
+    };
+    let mut reader = BufReader::new(Cursor::new(body));
     
     let Ok(requests) = RequestList::from_json_reader(&mut reader) else {
         return Response::bad_request(
