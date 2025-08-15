@@ -6,8 +6,10 @@ use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use bytes::Bytes;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
+use http_body_util::BodyExt;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::error;
@@ -17,6 +19,7 @@ use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use crate::config::Config;
 use crate::error::ExitError;
+use crate::http::request::Request;
 use crate::metrics::{HttpServerMetrics, RtrServerMetrics};
 use crate::payload::SharedHistory;
 use crate::process::LogOutput;
@@ -132,10 +135,16 @@ async fn single_http_listener(
                 TokioExecutor::new()
             ).serve_connection(
                 TokioIo::new(stream),
-                service_fn(move |req| {
+                service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let state = service_state.clone();
                     async move {
-                        state.handle_request(req.into()).await.into_hyper()
+                        let (parts, body) = req.into_parts();
+                        let body = match body.collect().await {
+                            Ok(b) => b.to_bytes(),
+                            Err(_) => Bytes::new()
+                        };
+                        let req = Request::new(parts, body);
+                        state.handle_request(req).await.into_hyper()
                     }
                 })
             ).await;
