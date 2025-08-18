@@ -176,14 +176,20 @@ Docker build args, e.g.
 
 Building the UI
 ---------------
+The UI is independent from Routinator, and lives in a separate repository, namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. First download the routinator-ui repository and build it. The routinator-ui is made using React with TypeScript, and you need `Node and Yarn <https://nodejs.org/en/download>`_ for this. Building it is as simple as running:
 
-Routinator by default ships with an UI that can be accessed on http://localhost:8232/ui/. The UI is independent from Routinator, and lives in a separate repository, namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. 
+.. code-block:: bash
 
-The UI depends on being mounted on the ``/ui`` path. In case you want to change the path or change anything about the UI (e.g. logos, colours, language), you can do so quite easily.
+    yarn
+    yarn build --base /abcdefgh
+
+This will install all the dependencies and build the final files, that you can host on your webserver. In case you just want the latest build files, you can find those on the GitHub releases page -- these will use ``/ui`` as path.
+
+Routinator by default ships with this UI that can be accessed on http://localhost:8232/ui/. For most users this will be enough. The UI that ships with Routinator requires that the path to the UI is ``/ui``, using a different path (e.g. using a proxy) will require you to build the UI yourself. Similarly if you want to change any of the wording, colours, logos, etc., or wish to run the UI on a server differing from the one that Routinator is running on.
 
 In this example, we will show how to set up the Routinator UI at https://example.org/routinator with a Routinator instance at https://routinator.example.net/ using nginx. This will work equally well with an Apache web server or most other web servers.
 
-First download the routinator-ui repository and build it. You need `Node and Yarn <https://nodejs.org/en/download>`_ for this. The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
+ The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
 
 .. code-block:: bash
 
