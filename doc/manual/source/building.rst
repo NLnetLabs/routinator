@@ -183,7 +183,7 @@ The UI depends on being mounted on the ``/ui`` path. In case you want to change 
 
 In this example, we will show how to set up the Routinator UI at https://example.org/routinator with a Routinator instance at https://routinator.example.net/ using nginx. This will work equally well with an Apache web server or most other web servers.
 
-First download the routinator-ui repository and build it. The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
+First download the routinator-ui repository and build it. You need `Node and Yarn <https://nodejs.org/en/download>`_ for this. The ``--base`` option specifies the path relative to the domain the UI lives, in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable sets the path where the Routinator API lives.
 
 .. code-block:: bash
 
