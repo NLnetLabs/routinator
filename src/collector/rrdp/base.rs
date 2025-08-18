@@ -11,6 +11,7 @@ use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::NamedTempFile;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
+use crate::log::LogBookWriter;
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::archive::{ArchiveError, OpenError};
@@ -401,10 +402,10 @@ impl<'a> Run<'a> {
     /// is the first attempt at updating the repository.
     pub fn load_repository(
         &self, rpki_notify: &uri::Https
-    ) -> Result<(LoadResult, bool), RunFailed> {
+    ) -> Result<LoadResult, RunFailed> {
         // If we already tried updating, we can return already.
         if let Some(repo) = self.updated.read().get(rpki_notify) {
-            return Ok((repo.read()?, false))
+            return Ok(repo.read()?)
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
@@ -420,27 +421,38 @@ impl<'a> Run<'a> {
         let _lock = mutex.lock();
         if let Some(repo) = self.updated.read().get(rpki_notify) {
             self.running.write().remove(rpki_notify);
-            return Ok((repo.read()?, false))
+            return Ok(repo.read()?)
         }
+
+        let mut log = LogBookWriter::new(
+            self.collector.config.log_repository_issues.then(|| {
+                format!("RRDP {}: ", rpki_notify)
+            })
+        );
 
         // Now we can update the repository. But we only do this if we like
         // the URI.
-        let (repo, metrics) = if
+        let (repo, mut metrics) = if
             self.collector.config().filter_dubious
             && rpki_notify.has_dubious_authority()
         {
             let mut metrics = RrdpRepositoryMetrics::new(rpki_notify.clone());
             metrics.notify_status = HttpStatus::Rejected;
-            warn!(
-                "{rpki_notify}: Dubious host name. Not using the repository."
-            );
+            log.warn(format_args!(
+                "Dubious host name. Not using the repository."
+            ));
             (LoadResult::Unavailable, metrics)
         }
         else {
             RepositoryUpdate::new(
-                self.collector, rpki_notify
+                self.collector, rpki_notify, &mut log,
             )?.try_update()?
         };
+
+        let log = log.into_book();
+        if !log.is_empty() {
+            metrics.log_book = Some(log);
+        }
 
         // Insert metrics.
         self.metrics.lock().push(metrics);
@@ -453,7 +465,7 @@ impl<'a> Run<'a> {
         // Remove from running.
         self.running.write().remove(rpki_notify);
 
-        Ok((res, true))
+        Ok(res)
     }
 
     #[allow(clippy::mutable_key_type)]
@@ -606,6 +618,9 @@ pub struct RrdpConfig {
 
     /// The maximum length of the delta list in a notification file.
     pub max_delta_list_len: usize,
+
+    /// Log issues also to the process log?
+    pub log_repository_issues: bool,
 }
 
 impl<'a> From<&'a Config> for RrdpConfig {
@@ -616,6 +631,7 @@ impl<'a> From<&'a Config> for RrdpConfig {
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
             max_delta_list_len: config.rrdp_max_delta_list_len,
+            log_repository_issues: config.log_repository_issues,
         }
     }
 }
@@ -722,17 +738,21 @@ struct RepositoryUpdate<'a> {
     path: Arc<PathBuf>,
     rpki_notify: &'a uri::Https,
     metrics: RrdpRepositoryMetrics,
+    log: &'a mut LogBookWriter,
 }
 
 impl<'a> RepositoryUpdate<'a> {
     fn new(
-        collector: &'a Collector, rpki_notify: &'a uri::Https,
+        collector: &'a Collector,
+        rpki_notify: &'a uri::Https,
+        log: &'a mut LogBookWriter,
     ) -> Result<Self, RunFailed> {
         Ok(Self {
             collector,
             path: Arc::new(collector.repository_path(rpki_notify)?),
             rpki_notify,
             metrics: RrdpRepositoryMetrics::new(rpki_notify.clone()),
+            log,
         })
     }
 
@@ -778,18 +798,15 @@ impl<'a> RepositoryUpdate<'a> {
             LoadResult::Current
         }
         else if let Some(date) = best_before {
-            info!(
-                "RRDP {}: Update failed and \
-                current copy is expired since {}.",
-                self.rpki_notify, date
-            );
+            self.log.info(format_args!(
+                "Update failed and current copy is expired since {date}.",
+            ));
             LoadResult::Stale
         }
         else {
-            info!(
-                "RRDP {}: Update failed and there is no current copy.",
-                self.rpki_notify
-            );
+            self.log.info(format_args!(
+                "Update failed and there is no current copy."
+            ));
             LoadResult::Unavailable
         };
         Ok((res, self.metrics))
@@ -807,6 +824,7 @@ impl<'a> RepositoryUpdate<'a> {
             current.as_ref().map(|x| &x.1),
             &mut self.metrics.notify_status,
             self.collector.config.max_delta_list_len,
+            &mut self.log,
         ) {
             Ok(Some(notify)) => notify,
             Ok(None) => {
@@ -840,7 +858,7 @@ impl<'a> RepositoryUpdate<'a> {
         &mut self,
         current: Option<(RrdpArchive, RepositoryState)>,
     ) -> Result<(), RunFailed> {
-        info!("RRDP {}: Not modified.", self.rpki_notify);
+        self.log.info(format_args!("Not modified."));
         if let Some((mut archive, mut state)) = current {
             // Copy serial and session to the metrics so they will still be
             // present.
@@ -860,23 +878,23 @@ impl<'a> RepositoryUpdate<'a> {
         &mut self,
         notify: &Notification,
     ) -> Result<bool, RunFailed> {
-        debug!("RRDP {}: updating from snapshot.", self.rpki_notify);
+        self.log.debug(format_args!("updating from snapshot."));
         let (file, path) = self.collector.temp_file()?;
         let mut archive = SnapshotRrdpArchive::create_with_file(
             file, path.clone()
         )?;
         if let Err(err) = SnapshotUpdate::new(
-            self.collector, &mut archive, notify, &mut self.metrics
+            self.collector, &mut archive, notify, &mut self.metrics,
         ).try_update() {
             if let SnapshotError::RunFailed(err) = err {
-                debug!("RRDP {}: snapshot update failed.", self.rpki_notify);
+                self.log.debug(format_args!("snapshot update failed."));
                 return Err(err)
             }
             else {
-                warn!(
-                    "RRDP {}: failed to process snapshot file {}: {}",
-                    self.rpki_notify, notify.content().snapshot().uri(), err
-                );
+                self.log.warn(format_args!(
+                    "failed to process snapshot file {}: {}",
+                    notify.content().snapshot().uri(), err
+                ));
                 return Ok(false)
             }
         }
@@ -904,7 +922,7 @@ impl<'a> RepositoryUpdate<'a> {
             return Err(RunFailed::fatal())
         }
 
-        debug!("RRDP {}: snapshot update completed.", self.rpki_notify);
+        self.log.debug(format_args!("snapshot update completed."));
         Ok(true)
     }
 
@@ -923,10 +941,9 @@ impl<'a> RepositoryUpdate<'a> {
         if let Err(err) = notify.content().delta_status() {
             match err {
                 DeltaListError::Oversized => {
-                    info!(
-                        "RRDP {}: Overly large delta set in notification file",
-                        self.rpki_notify
-                    );
+                    self.log.info(format_args!(
+                        "Overly large delta set in notification file",
+                    ));
                     return Ok(Some(SnapshotReason::LargeDeltaSet));
                 }
             }
@@ -944,19 +961,17 @@ impl<'a> RepositoryUpdate<'a> {
         if !deltas.is_empty() {
             let count = deltas.len();
             for (i, info) in deltas.iter().enumerate() {
-                debug!(
-                    "RRDP {}: Delta update step ({}/{}).",
-                    self.rpki_notify, i + 1, count
-                );
+                self.log.debug(format_args!(
+                    "Delta update step ({}/{}).", i + 1, count
+                ));
                 if let Err(err) = DeltaUpdate::new(
                     self.collector, &mut archive,
                     notify.content().session_id(),
                     info, &mut self.metrics
                 ).try_update() {
-                    warn!(
-                        "RRDP {}: failed to process delta: {}",
-                        self.rpki_notify, err,
-                    );
+                    self.log.warn(format_args!(
+                        "failed to process delta: {}", err,
+                    ));
                     return Ok(Some(SnapshotReason::ConflictingDelta))
                 }
             }
@@ -976,7 +991,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        debug!("RRDP {}: Delta update completed.", self.rpki_notify);
+        self.log.debug(format_args!("Delta update completed."));
         Ok(None)
     }
 
@@ -985,17 +1000,19 @@ impl<'a> RepositoryUpdate<'a> {
     /// Returns an empty slice if no update is necessary.
     /// Returns a non-empty slice of the sequence of deltas to be applied.
     fn calc_deltas<'b>(
-        &self,
+        &mut self,
         notify: &'b NotificationFile,
         state: &RepositoryState
     ) -> Result<&'b [DeltaInfo], SnapshotReason> {
         if notify.session_id() != state.session {
-            debug!("New session. Need to get snapshot.");
+            self.log.debug(format_args!(
+                "New session. Need to get snapshot."
+            ));
             return Err(SnapshotReason::NewSession)
         }
-        debug!("{}: Serials: us {}, them {}.",
-            self.rpki_notify, state.serial, notify.serial()
-        );
+        self.log.debug(format_args!(
+            "Serials: us {}, them {}.", state.serial, notify.serial()
+        ));
         if notify.serial() == state.serial {
             return Ok(&[]);
         }
@@ -1007,7 +1024,9 @@ impl<'a> RepositoryUpdate<'a> {
         if notify.deltas().last().map(|delta| delta.serial())
             != Some(notify.serial())
         {
-            debug!("Last delta serial differs from current serial.");
+            self.log.debug(format_args!(
+                "Last delta serial differs from current serial."
+            ));
             return Err(SnapshotReason::BadDeltaSet)
         }
 
@@ -1020,13 +1039,15 @@ impl<'a> RepositoryUpdate<'a> {
             let first = match deltas.first() {
                 Some(first) => first,
                 None => {
-                    debug!("Ran out of deltas.");
+                    self.log.debug(format_args!("Ran out of deltas."));
                     return Err(SnapshotReason::BadDeltaSet)
                 }
             };
             match first.serial().cmp(&serial) {
                 cmp::Ordering::Greater => {
-                    debug!("First delta is too new ({})", first.serial());
+                    self.log.debug(format_args!(
+                        "First delta is too new ({})", first.serial()
+                    ));
                     return Err(SnapshotReason::OutdatedLocal)
                 }
                 cmp::Ordering::Equal => break,
@@ -1035,10 +1056,9 @@ impl<'a> RepositoryUpdate<'a> {
         }
 
         if deltas.len() > self.collector.config.max_delta_count {
-            debug!(
-                "RRDP: {}: Too many delta steps required ({})",
-                self.rpki_notify, deltas.len()
-            );
+            self.log.debug(format_args!(
+                "Too many delta steps required ({})", deltas.len()
+            ));
             return Err(SnapshotReason::TooManyDeltas)
         }
 

@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use bytes::Bytes;
-use log::info;
 use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::{Config, FallbackPolicy};
@@ -194,7 +193,7 @@ impl<'a> Run<'a> {
         // See if we should and can use RRDP
         if let Some(rrdp_uri) = ca.rpki_notify() {
             if let Some(ref rrdp) = self.rrdp {
-                let (repo, first) = rrdp.load_repository(rrdp_uri)?;
+                let repo = rrdp.load_repository(rrdp_uri)?;
                 match repo {
                     rrdp::LoadResult::Unavailable => {
                         // Update failed and no local copy at all. Both
@@ -227,10 +226,6 @@ impl<'a> Run<'a> {
                         // Hurrah!
                         return Ok(Some(Repository::rrdp(repo)))
                     }
-                }
-
-                if first && self.rsync.is_some() {
-                    info!("RRDP {rrdp_uri}: Falling back to rsync.");
                 }
             }
         }

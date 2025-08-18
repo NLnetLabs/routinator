@@ -243,6 +243,53 @@ async fn handle_status(
         writeln!(res)
     }
 
+    // RRDP logs
+    if metrics.has_rrdp_logs() {
+        writeln!(res, "rrdp-logs:");
+        for item in &metrics.rrdp {
+            if let Some(log) = &item.log_book {
+                writeln!(res, "    {}:", item.notify_uri);
+                for message in log {
+                    writeln!(res,
+                        "        [{}] {}",
+                        message.level,
+                        message.content,
+                    );
+                }
+            }
+        }
+    }
+
+    // rsync logs
+    if metrics.has_rsync_logs() {
+        writeln!(res, "rsync-logs:");
+        for item in &metrics.rsync {
+            if let Some(log) = &item.log_book {
+                writeln!(res, "    {}:", item.module);
+                for message in log {
+                    writeln!(res,
+                        "        [{}] {}",
+                        message.level,
+                        message.content,
+                    );
+                }
+            }
+        }
+    }
+
+    // pub_point_logs
+    if !metrics.pub_point_logs.is_empty() {
+        writeln!(res, "pub-point-issues:");
+        for (uri, book) in &metrics.pub_point_logs {
+            writeln!(res, "    {}:", uri);
+            for message in book {
+                writeln!(
+                    res, "        [{}] {}", message.level, message.content
+                );
+            }
+        }
+    }
+
     let rtr = rtr_metrics.global();
 
     // rtr
@@ -430,6 +477,20 @@ async fn handle_api_status(
                         }
                         Err(_) => target.member_raw("duration", "null")
                     }
+                    if let Some(book) = &metrics.log_book {
+                        target.member_array("issues", |target| {
+                            for message in book {
+                                target.array_object(|target| {
+                                    target.member_str(
+                                        "level", message.level
+                                    );
+                                    target.member_str(
+                                        "messages", &message.content
+                                    );
+                                })
+                            }
+                        })
+                    }
                 })
             }
         });
@@ -483,7 +544,34 @@ async fn handle_api_status(
                             target.member_raw("snapshot_reason", "null");
                         }
                     }
+                    if let Some(book) = &metrics.log_book {
+                        target.member_array("issues", |target| {
+                            for message in book {
+                                target.array_object(|target| {
+                                    target.member_str(
+                                        "level", message.level
+                                    );
+                                    target.member_str(
+                                        "messages", &message.content
+                                    );
+                                })
+                            }
+                        })
+                    }
                 })
+            }
+        });
+
+        target.member_object("pubPointIssues", |target| {
+            for (uri, book) in &metrics.pub_point_logs {
+                target.member_array(uri, |target| {
+                    for message in book {
+                        target.array_object(|target| {
+                            target.member_str("level", message.level);
+                            target.member_str("message", &message.content);
+                        });
+                    }
+                });
             }
         });
 

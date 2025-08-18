@@ -336,6 +336,9 @@ pub struct Config {
     /// The target to log to.
     pub log_target: LogTarget,
 
+    /// Should we log repository issues?
+    pub log_repository_issues: bool,
+
     /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
 
@@ -646,6 +649,11 @@ impl Config {
         }
         else if args.quiet == 1 {
             self.log_level = LevelFilter::Error
+        }
+
+        // log_repository_issues
+        if args.log_repository_issues {
+            self.log_repository_issues = true
         }
 
         Ok(())
@@ -1045,6 +1053,9 @@ impl Config {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target,
+            log_repository_issues: {
+                file.take_bool("log-repository-issues")?.unwrap_or(false)
+            },
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
@@ -1214,6 +1225,7 @@ impl Config {
             http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
+            log_repository_issues: false,
             pid_file: None,
             working_dir: None,
             chroot: None,
@@ -1507,6 +1519,7 @@ impl Config {
                 insert(&mut  res, "log-file", file.display().to_string());
             }
         }
+        insert(&mut res, "log-repository-issues", self.log_repository_issues);
         if let Some(ref file) = self.pid_file {
             insert(&mut res, "pid-file", file.display().to_string());
         }
@@ -1912,6 +1925,10 @@ struct GlobalArgs {
     /// Log to this file
     #[arg(long, value_name = "PATH")]
     logfile: Option<String>,
+
+    /// Log repository issues
+    #[arg(long)]
+    log_repository_issues: bool,
 }
 
 

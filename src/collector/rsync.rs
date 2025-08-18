@@ -16,6 +16,7 @@
 use std::{fmt, fs, io, ops};
 use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
+use std::marker::Unpin;
 use std::path::{Path, PathBuf};
 use std::process::{Command as StdCommand, ExitStatus, Stdio};
 use std::str::FromStr;
@@ -24,12 +25,13 @@ use std::time::{Duration, SystemTime};
 use bytes::Bytes;
 use futures::{FutureExt, TryFutureExt};
 use futures::future::Either;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use rpki::uri;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::{Failed, Fatal};
+use crate::log::LogBookWriter;
 use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::fatal;
 use crate::utils::sync::{Mutex, RwLock};
@@ -52,6 +54,9 @@ pub struct Collector {
 
     /// Whether to filter dubious authorities in rsync URIs.
     filter_dubious: bool,
+
+    /// Whether to log issues also to the process log?
+    log_repository_issues: bool,
 }
  
 
@@ -103,7 +108,8 @@ impl Collector {
                     Self::create_working_dir(config)?
                 ),
                 command: Some(RsyncCommand::new(config)?),
-                filter_dubious: !config.allow_dubious_hosts
+                filter_dubious: !config.allow_dubious_hosts,
+                log_repository_issues: config.log_repository_issues,
             }))
         }
     }
@@ -283,17 +289,24 @@ impl<'a> Run<'a> {
             return
         }
 
+        let mut log = LogBookWriter::new(
+            self.collector.log_repository_issues.then(|| {
+                format!("rsync {}: ", module)
+            })
+        );
+
         // Check if the module name is dubious. If so, skip updating.
         if self.collector.filter_dubious && uri.has_dubious_authority() {
-            warn!(
-                "{module}: Dubious host name. Skipping update."
-            )
+            log.warn(format_args!(
+                "Dubious host name. Skipping update."
+            ))
         }
         else {
             // Run the actual update.
             let metrics = command.update(
                 module.as_ref(),
-                &self.collector.working_dir.module_path(module.as_ref())
+                &self.collector.working_dir.module_path(module.as_ref()),
+                log
             );
 
             // Insert into updated map and metrics.
@@ -334,9 +347,7 @@ impl<'a> Run<'a> {
                 }
             }
             Err(err) => {
-                if err.kind() == io::ErrorKind::NotFound {
-                    info!("{uri}: not found in local repository");
-                } else {
+                if err.kind() != io::ErrorKind::NotFound {
                     error!(
                         "Failed to open file '{}': {}",
                         path.display(), err
@@ -495,16 +506,19 @@ impl RsyncCommand {
     pub fn update(
         &self,
         source: &Module,
-        destination: &Path
+        destination: &Path,
+        mut log: LogBookWriter,
     ) -> RsyncModuleMetrics {
         let start = SystemTime::now();
         let status = self.command(
-            source, destination
-        ).and_then(|cmd| self.run(source, cmd));
+            source, destination, &mut log,
+        ).and_then(|cmd| self.run(source, cmd, &mut log));
+        let log = log.into_book();
         RsyncModuleMetrics {
             module: source.to_uri(),
             status,
             duration: SystemTime::now().duration_since(start),
+            log_book: (!log.is_empty()).then(|| log),
         }
     }
 
@@ -512,7 +526,8 @@ impl RsyncCommand {
     fn run(
         &self,
         source: &Module,
-        mut command: AsyncCommand
+        mut command: AsyncCommand,
+        log: &mut LogBookWriter,
     ) -> Result<ExitStatus, io::Error> {
         // Because we can’t have a timeout on a child process with just std,
         // we resort to Tokio here: We fire up a current-thread runtime and
@@ -522,17 +537,20 @@ impl RsyncCommand {
             .enable_io()
             .enable_time()
             .build()?;
+        let mut stdout = log.clone();
+        let mut stderr = log.clone();
 
         runtime.block_on(async {
             command.stdout(Stdio::piped());
             command.stderr(Stdio::piped());
             command.kill_on_drop(true);
             let mut child = command.spawn()?;
-            let stdout_pipe = child.stdout.take();
+            let stdout_pipe = child.stdout.take().map(
+                tokio::io::BufReader::new
+            );
             let stderr_pipe = child.stderr.take().map(
                 tokio::io::BufReader::new
             );
-            let mut stdout = Vec::new();
             let res = tokio::try_join!(
                 match self.timeout {
                     None => Either::Left(child.wait().map(Ok)),
@@ -549,21 +567,12 @@ impl RsyncCommand {
                         )
                     }
                 },
-                async {
-                    if let Some(mut pipe) = stdout_pipe {
-                        tokio::io::copy(&mut pipe, &mut stdout).await?;
-                    }
-                    Ok(())
-                },
-                async {
-                    if let Some(mut pipe) = stderr_pipe {
-                        let mut line = Vec::new();
-                        while pipe.read_until(b'\n', &mut line).await? != 0 {
-                            Self::log_err_line(source, &mut line);
-                        }
-                    }
-                    Ok(())
-                },
+                Self::process_output(
+                    stdout_pipe, &mut stdout, log::Level::Info,
+                ),
+                Self::process_output(
+                    stderr_pipe, &mut stderr, log::Level::Warn,
+                ),
             );
             let status = match res {
                 Ok((Ok(status), _, _)) => {
@@ -583,13 +592,12 @@ impl RsyncCommand {
                     Err(err)
                 }
             };
-            if !stdout.is_empty() {
-                String::from_utf8_lossy(&stdout).lines().for_each(|l| {
-                    info!("{source}: {l}");
-                })
-            }
+
+            log.append(stdout);
+            log.append(stderr);
+            log.sort();
             if let Err(ref err) = status {
-                warn!("{source}: {err}");
+                log.warn(format_args!("{err}"));
             }
             status
         })
@@ -599,17 +607,17 @@ impl RsyncCommand {
     fn command(
         &self,
         source: &Module,
-        destination: &Path
+        destination: &Path,
+        log: &mut LogBookWriter,
     ) -> Result<AsyncCommand, io::Error> {
-        info!("rsyncing from {source}.");
         fs::create_dir_all(destination)?;
         let destination = match Self::format_destination(destination) {
             Ok(some) => some,
             Err(_) => {
-                error!(
-                    "rsync: illegal destination path {}.",
+                log.error(format_args!(
+                    "illegal destination path {}.",
                     destination.display()
-                );
+                ));
                 return Err(io::Error::other("illegal destination path"));
             }
         };
@@ -621,7 +629,7 @@ impl RsyncCommand {
            .arg("--delete")
            .arg(source.to_string())
            .arg(destination);
-        debug!("{source}: Running command {cmd:?}");
+        log.debug(format_args!("running command {cmd:?}"));
         Ok(cmd)
     }
 
@@ -695,30 +703,34 @@ impl RsyncCommand {
     }
 
     /// Logs the line in the buffer.
-    fn log_err_line(
-        source: &Module,
-        line: &mut Vec<u8>,
-    ) {
-        let mut len = line.len();
-        if len > 0 && line[len - 1] == b'\n' {
-            len -= 1;
-        }
+    async fn process_output(
+        pipe: Option<impl AsyncBufReadExt + Unpin>,
+        target: &mut LogBookWriter,
+        level: log::Level,
+    ) -> Result<(), io::Error> {
+        let Some(mut pipe) = pipe else { return Ok(()) };
+        let mut line = Vec::new();
+        while pipe.read_until(b'\n', &mut line).await? != 0 {
+            let mut len = line.len();
+            if len > 0 && line[len - 1] == b'\n' {
+                len -= 1;
+            }
 
-        // On Windows, we may now have a \r at the end.
-        #[cfg(windows)]
-        if len > 0 && line[len - 1] == b'\r' {
-            len -= 1;
-        }
+            // On Windows, we may now have a \r at the end.
+            #[cfg(windows)]
+            if len > 0 && line[len - 1] == b'\r' {
+                len -= 1;
+            }
 
-        if len > 0 {
-            warn!(
-                "{}: {}",
-                source,
-                String::from_utf8_lossy(&line[..len])
-            );
-        }
+            if len > 0 {
+                target.log(level, format_args!("{}",
+                    String::from_utf8_lossy(&line[..len])
+                ));
+            }
 
-        line.clear();
+            line.clear();
+        }
+        Ok(())
     }
 }
 

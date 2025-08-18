@@ -45,6 +45,7 @@ use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
 use crate::error::{Failed, Fatal, RunFailed};
+use crate::log::{LogBook, LogBookWriter};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
@@ -116,6 +117,9 @@ pub struct Engine {
 
     /// Maximum depth of the CA chain.
     max_ca_depth: usize,
+
+    /// Should we log repository issues to the process log?
+    log_repository_issues: bool,
 }
 
 impl Engine {
@@ -161,6 +165,7 @@ impl Engine {
             validation_threads: config.validation_threads,
             dirty_repository: config.dirty_repository,
             max_ca_depth: config.max_ca_depth,
+            log_repository_issues: config.log_repository_issues,
         };
         res.reload_tals()?;
         Ok(res)
@@ -610,6 +615,9 @@ struct PubPoint<'a, P: ProcessRun> {
     /// collected during object processing via `ValidPointManifest` so we can
     /// drop it if the point gets cancelled.
     metrics: PublicationMetrics,
+
+    /// The log book writer for this publication point.
+    log: LogBookWriter,
 }
 
 impl<'a, P: ProcessRun> PubPoint<'a, P> {
@@ -623,6 +631,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         Ok(PubPoint {
             run, cert, processor, repository_index,
             metrics: Default::default(),
+            log: LogBookWriter::new(
+                run.validation.log_repository_issues.then(|| {
+                    format!("{}: ", cert.ca_repository())
+                })
+            ),
         })
     }
 
@@ -709,19 +722,19 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // we use the stored manifest.
         if let Some(mft) = store.manifest() {
             if collected.content.manifest_number() <= mft.manifest_number() {
-                warn!(
-                    "{}: manifest number is not greater than in stored \
-                     version. Using stored publication point.",
+                self.log.warn(format_args!(
+                    "manifest {}: manifest number is not greater than in \
+                     stored version. Using stored publication point.",
                      self.cert.rpki_manifest(),
-                );
+                ));
                 return Ok(Err(self))
             }
             if collected.content.this_update() <= mft.this_update() {
-                warn!(
-                    "{}: manifest thisUpdate is not later than in stored \
-                     version. Using stored publication point.",
+                self.log.warn(format_args!(
+                    "manifest {}: manifest thisUpdate is not later than in \
+                     stored version. Using stored publication point.",
                      self.cert.rpki_manifest(),
-                );
+                ));
                 return Ok(Err(self))
             }
         }
@@ -773,10 +786,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let file = match str_from_ascii(item.file()) {
                     Ok(file) => file,
                     Err(_) => {
-                        warn!("{}: illegal file name '{}'.",
+                        self.log.warn(format_args!(
+                            "manifest {} contains illegal file name '{}'.",
                             self.cert.rpki_manifest(),
                             String::from_utf8_lossy(item.file())
-                        );
+                        ));
                         return Err(store::UpdateError::Abort)
                     }
                 };
@@ -791,13 +805,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let content = match collector.load_object(&uri)? {
                     Some(content) => content,
                     None => {
-                        warn!("{uri}: failed to load.");
+                        self.log.warn(format_args!(
+                            "{uri}: failed to load."
+                        ));
                         return Err(store::UpdateError::Abort)
                     }
                 };
 
                 if hash.verify(&content).is_err() {
-                    warn!("{uri}: file has wrong manifest hash.");
+                    self.log.warn(format_args!(
+                        "{uri}: file has wrong manifest hash."
+                    ));
                     return Err(store::UpdateError::Abort)
                 }
 
@@ -853,10 +871,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(manifest) => manifest,
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                warn!(
-                    "{}: failed to decode manifest.",
+                self.log.warn(format_args!(
+                    "failed to decode manifest {}.",
                     self.cert.rpki_manifest()
-                );
+                ));
                 return Ok(None)
             }
         };
@@ -866,14 +884,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(some) => some,
             Err(err) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+                self.log.warn(format_args!(
+                    "manifest {}: {}.", self.cert.rpki_manifest(), err
+                ));
                 return Ok(None)
             }
         };
 
         if content.this_update() > Time::now() {
             self.metrics.premature_manifests += 1;
-            warn!("{}: premature manifest", self.cert.rpki_manifest());
+            self.log.warn(format_args!(
+                "premature manifest {}", self.cert.rpki_manifest()
+            ));
             return Ok(None)
         }
 
@@ -881,11 +903,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.metrics.stale_manifests += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{}: stale manifest", self.cert.rpki_manifest());
+                    self.log.warn(format_args!(
+                        "rejecting stale manifest {}",
+                        self.cert.rpki_manifest()
+                    ));
                     return Ok(None)
                 }
                 FilterPolicy::Warn => {
-                    warn!("{}: stale manifest", self.cert.rpki_manifest());
+                    self.log.warn(format_args!(
+                        "stale manifest {}", self.cert.rpki_manifest()
+                    ));
                 }
                 FilterPolicy::Accept => { }
             }
@@ -925,9 +952,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         let crl_uri = match ee_cert.crl_uri() {
             // RFC 6481: MUST end in .crl.
             Some(some) if some.ends_with(".crl") => some.clone(),
-            _ => {
+            Some(some) => {
                 self.metrics.invalid_manifests += 1;
-                warn!("{}: invalid CRL URI.", self.cert.rpki_manifest());
+                self.log.warn(format_args!("invalid CRL URI {}", some));
+                return Ok(None)
+            }
+            None => {
+                self.metrics.invalid_manifests += 1;
+                self.log.warn(format_args!(
+                    "missing CRL URI on manifest {}",
+                    self.cert.rpki_manifest()
+                ));
                 return Ok(None)
             }
         };
@@ -935,10 +970,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(name) => name,
             None => {
                 self.metrics.invalid_manifests += 1;
-                warn!(
-                    "{}: CRL URI outside repository directory.",
-                    self.cert.rpki_manifest()
-                );
+                self.log.warn(format_args!(
+                    "CRL URI {crl_uri} outside repository directory."
+                ));
                 return Ok(None)
             }
         };
@@ -953,14 +987,18 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     Some(bytes) => bytes,
                     None => {
                         self.metrics.invalid_crls += 1;
-                        warn!("{crl_uri}: failed to load.");
+                        self.log.warn(format_args!(
+                            "{crl_uri}: failed to load."
+                        ));
                         return Ok(None)
                     }
                 };
                 let hash = ManifestHash::new(hash, manifest.file_hash_alg());
                 if hash.verify(&bytes).is_err() {
                     self.metrics.invalid_crls += 1;
-                    warn!("{crl_uri}: file has wrong hash.");
+                    self.log.warn(format_args!(
+                        "file {crl_uri} has wrong hash."
+                    ));
                     return Ok(None)
                 }
                 crl_bytes = Some(bytes);
@@ -970,10 +1008,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(some) => some,
             None => {
                 self.metrics.invalid_crls += 1;
-                warn!(
-                    "{}: CRL not listed on manifest.",
-                    self.cert.rpki_manifest()
-                );
+                self.log.warn(format_args!("CRL not listed on manifest."));
                 return Ok(None)
             }
         };
@@ -983,7 +1018,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(crl) => crl,
             Err(_) => {
                 self.metrics.invalid_crls += 1;
-                warn!("{crl_uri}: failed to decode CRL.");
+                self.log.warn(format_args!(
+                    "CRL {crl_uri}: failed to decode."
+                ));
                 return Ok(None)
             }
         };
@@ -991,18 +1028,20 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.cert.cert().subject_public_key_info()
         ) {
             self.metrics.invalid_crls += 1;
-            warn!("{crl_uri}: {err}.");
+            self.log.warn(format_args!("CRL {crl_uri}: {err}."));
             return Ok(None)
         }
         if crl.is_stale() {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{crl_uri}: stale CRL.");
+                    self.log.warn(format_args!(
+                        "rejecting stale CRL {crl_uri}."
+                    ));
                     return Ok(None)
                 }
                 FilterPolicy::Warn => {
-                    warn!("{crl_uri}: stale CRL.");
+                    self.log.warn(format_args!("stale CRL {crl_uri}."));
                 }
                 FilterPolicy::Accept => { }
             }
@@ -1016,10 +1055,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // Finally: has the manifest’s cert been revoked?
         if crl.contains(ee_cert.serial_number()) {
             self.metrics.invalid_manifests += 1;
-            warn!(
-                "{}: certificate has been revoked.",
-                self.cert.rpki_manifest()
-            );
+            self.log.warn(format_args!(
+                "manifest certificate has been revoked."
+            ));
             return Ok(None)
         }
 
@@ -1044,10 +1082,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             None => {
                 // We don’t seem to have this point in the store either.
                 // Warn and return.
-                warn!(
-                    "{}: no valid manifest {} found.",
-                    self.cert.uri(), self.cert.rpki_manifest()
-                );
+                self.log.warn(format_args!(
+                    "no valid manifest {} found.",
+                    self.cert.rpki_manifest()
+                ));
                 self.metrics.missing_manifests += 1;
                 self.reject_point(metrics);
                 return Ok(Vec::new())
@@ -1117,10 +1155,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(manifest) => manifest,
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                warn!(
-                    "{}: failed to decode manifest.",
+                self.log.warn(format_args!(
+                    "failed to decode manifest {}.",
                     self.cert.rpki_manifest(),
-                );
+                ));
                 return Err(Failed);
             }
         };
@@ -1129,7 +1167,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ) {
             Ok(some) => some,
             Err(err) => {
-                warn!("{}: {}.", self.cert.rpki_manifest(), err);
+                self.log.warn(format_args!(
+                    "manifest {}: {}.",
+                    self.cert.rpki_manifest(), err
+                ));
                 self.metrics.invalid_manifests += 1;
                 return Err(Failed);
             }
@@ -1138,12 +1179,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.metrics.stale_manifests += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{}: stale manifest", self.cert.rpki_manifest());
+                    self.log.warn(format_args!(
+                        "rejecting stale manifest {}",
+                        self.cert.rpki_manifest()
+                    ));
                     self.metrics.invalid_manifests += 1;
                     return Err(Failed);
                 }
                 FilterPolicy::Warn => {
-                    warn!("{}: stale manifest", self.cert.rpki_manifest());
+                    self.log.warn(format_args!(
+                        "stale manifest {}", self.cert.rpki_manifest()
+                    ));
                 }
                 FilterPolicy::Accept => { }
             }
@@ -1154,10 +1200,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(uri) => uri.clone(),
             None => {
                 // This should have been ruled out in manifest validation.
-                warn!(
-                    "{}: manifest without CRL URI.",
-                    self.cert.rpki_manifest()
-                );
+                self.log.warn(format_args!("manifest without CRL URI."));
                 self.metrics.invalid_manifests += 1;
                 return Err(Failed)
             }
@@ -1169,14 +1212,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
-                warn!("{crl_uri}: failed to decode CRL.");
+                self.log.warn(format_args!(
+                    "failed to decode CRL {crl_uri}."
+                ));
                 return Err(Failed)
             }
         };
         if let Err(err) = crl.verify_signature(
             self.cert.cert().subject_public_key_info()
         ) {
-            warn!("{crl_uri}: {err}.");
+            self.log.warn(format_args!("CRL {crl_uri}: {err}."));
             self.metrics.invalid_manifests += 1;
             self.metrics.invalid_crls += 1;
             return Err(Failed)
@@ -1185,13 +1230,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
                 FilterPolicy::Reject => {
-                    warn!("{crl_uri}: stale CRL.");
+                    self.log.warn(format_args!(
+                        "rejecting stale CRL {crl_uri}."
+                    ));
                     self.metrics.invalid_manifests += 1;
                     self.metrics.invalid_crls += 1;
                     return Err(Failed)
                 }
                 FilterPolicy::Warn => {
-                    warn!("{crl_uri}: stale CRL.");
+                    self.log.warn(format_args!(
+                        "stale CRL {crl_uri}."
+                    ));
                 }
                 FilterPolicy::Accept => { }
             }
@@ -1207,10 +1256,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // XXX This shouldn’t really happen because if it were we would never
         //     have stored this manifest.
         if crl.contains(ee_cert.serial_number()) {
-            warn!(
-                "{}: certificate has been revoked.",
+            self.log.warn(format_args!(
+                "manifest {}: certificate has been revoked.",
                 self.cert.rpki_manifest()
-            );
+            ));
             self.metrics.invalid_manifests += 1;
             return Err(Failed)
         }
@@ -1245,6 +1294,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         self.metrics.rejected_points += 1;
         self.apply_metrics(metrics);
         self.processor.cancel(self.cert);
+        let log = self.log.into_book();
+        if !log.is_empty() {
+            metrics.append_log(self.cert.ca_repository().clone(), log);
+        }
     }
 
     fn apply_metrics(
@@ -1258,7 +1311,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         metrics.apply(
             &self.metrics,
             repository_index,
-            self.cert.tal
+            self.cert.tal,
         );
     }
 
@@ -1291,13 +1344,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
         else if uri.ends_with(".crl") {
             if *uri != manifest.crl_uri {
-                warn!("{uri}: stray CRL.");
+                self.log.warn(format_args!("stray CRL {uri}."));
                 manifest.metrics.stray_crls += 1;
             }
         }
         else {
             manifest.metrics.others += 1;
-            warn!("{uri}: unknown object type.");
+            self.log.warn(format_args!(
+                "object {uri}: unknown type."
+            ));
         }
         Ok(true)
     }
@@ -1314,7 +1369,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(cert) => cert,
             Err(_) => {
                 manifest.metrics.invalid_certs += 1;
-                warn!("{uri}: failed to decode certificate.");
+                self.log.warn(format_args!(
+                    "certificate {uri}: failed to decode."
+                ));
                 return Ok(())
             }
         };
@@ -1335,7 +1392,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<(), Failed> {
         if self.cert.check_loop(&cert).is_err() {
-            warn!("{uri}: certificate loop detected.");
+            self.log.warn(format_args!(
+                "CA certificate {uri}: certificate loop detected."
+            ));
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1344,13 +1403,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ) {
             Ok(cert) => cert,
             Err(err) => {
-                warn!("{uri}: {err}.");
+                self.log.warn(format_args!(
+                    "CA certificagte {uri}: {err}."
+                ));
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
             }
         };
         if let Err(err) = manifest.check_crl(&cert) {
-            warn!("{uri}: {err}.");
+            self.log.warn(format_args!(
+                "CA certificate {uri}: {err}."
+            ));
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1403,12 +1466,16 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         if let Err(err) = cert.validate_router(
             self.cert.cert(), self.run.validation.strict
         ) {
-            warn!("{uri}: {err}.");
+            self.log.warn(format_args!(
+                "router certificate {uri}: {err}."
+            ));
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         };
         if let Err(err) = manifest.check_crl(&cert) {
-            warn!("{uri}: {err}.");
+            self.log.warn(format_args!(
+                "router certificate {uri}: {err}."
+            ));
             manifest.metrics.invalid_certs += 1;
             return Ok(())
         }
@@ -1428,7 +1495,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(roa) => roa,
             Err(_) => {
                 manifest.metrics.invalid_roas += 1;
-                warn!("{uri}: failed to decode ROA.");
+                self.log.warn(format_args!(
+                    "ROA {uri}: failed to decode."
+                ));
                 return Ok(())
             }
         };
@@ -1443,7 +1512,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_roas += 1;
-                warn!("{uri}: {err}.")
+                self.log.warn(format_args!(
+                    "ROA {uri}: {err}."
+                ))
             }
         }
         Ok(())
@@ -1461,7 +1532,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(aspa) => aspa,
             Err(err) => {
                 manifest.metrics.invalid_aspas += 1;
-                warn!("{uri}: failed to decode ASPA.");
+                self.log.warn(format_args!(
+                    "ASPA {uri}: failed to decode."
+                ));
                 return Ok(())
             }
         };
@@ -1476,7 +1549,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_aspas += 1;
-                warn!("{uri}: {err}.")
+                self.log.warn(format_args!(
+                    "ASPA {uri}: {err}."
+                ))
             }
         }
         Ok(())
@@ -1493,7 +1568,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(obj) => obj,
             Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;
-                warn!("{uri}: failed to decode GBR.");
+                self.log.warn(format_args!(
+                    "GBR {uri}: failed to decode."
+                ));
                 return Ok(())
             }
         };
@@ -1508,7 +1585,9 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
             Err(err) => {
                 manifest.metrics.invalid_gbrs += 1;
-                warn!("{uri}: {err}.")
+                self.log.warn(format_args!(
+                    "GBR {uri}: {err}."
+                ))
             }
         }
         Ok(())
@@ -1851,6 +1930,9 @@ struct RunMetrics {
     /// The overall metrics.
     publication: PublicationMetrics,
 
+    /// The log books for publication points with issues.
+    log_books: Vec<(uri::Rsync, LogBook)>,
+
     /// The indexes of repositories in the repository metrics vec.
     ///
     /// The key is the string representation of the rpkiNotify or rsync
@@ -1866,6 +1948,7 @@ impl RunMetrics {
             repositories: Default::default(),
             publication: Default::default(),
             repository_indexes: self.repository_indexes.clone(),
+            log_books: Default::default(),
         }
     }
 
@@ -1892,7 +1975,7 @@ impl RunMetrics {
     /// Apply publication metrics.
     pub fn apply(
         &mut self, metrics: &PublicationMetrics,
-        repository_index: usize, tal_index: usize
+        repository_index: usize, tal_index: usize,
     ) {
         while self.repositories.len() <= repository_index {
             self.repositories.push(Default::default())
@@ -1905,6 +1988,11 @@ impl RunMetrics {
         self.tals[tal_index] += metrics;
 
         self.publication += metrics;
+    }
+
+    /// Adds a log book.
+    pub fn append_log(&mut self, uri: uri::Rsync, book: LogBook) {
+        self.log_books.push((uri, book))
     }
 
     /// Prepares the final metrics.
@@ -1926,7 +2014,7 @@ impl RunMetrics {
     ///
     /// This only collapses the publication metrics since those are the ones
     /// collected by the engine.
-    pub fn collapse(self, target: &mut Metrics) {
+    pub fn collapse(mut self, target: &mut Metrics) {
         for (target, metric) in target.tals.iter_mut().zip(self.tals) {
             target.publication += metric
         }
@@ -1936,6 +2024,7 @@ impl RunMetrics {
             target.publication += metric
         }
         target.publication += self.publication;
+        target.pub_point_logs.append(&mut self.log_books);
     }
 }
 

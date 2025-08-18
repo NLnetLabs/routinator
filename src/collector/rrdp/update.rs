@@ -11,6 +11,7 @@ use rpki::{rrdp, uri};
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
 use crate::error::{Failed, RunFailed};
+use crate::log::LogBookWriter;
 use crate::metrics::RrdpRepositoryMetrics;
 use crate::utils::archive::{ArchiveError, PublishError};
 use super::archive::{
@@ -53,6 +54,7 @@ impl Notification {
         state: Option<&RepositoryState>,
         status: &mut HttpStatus,
         delta_list_limit: usize,
+        log: &mut LogBookWriter,
     ) -> Result<Option<Self>, Failed> {
         let response = match http.conditional_response(
             uri,
@@ -65,7 +67,7 @@ impl Notification {
                 response
             }
             Err(err) => {
-                warn!("RRDP {uri}: {err}");
+                log.warn(format_args!("{err}"));
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
@@ -75,15 +77,15 @@ impl Notification {
             Ok(None)
         }
         else if response.status() != StatusCode::OK {
-            warn!(
-                "RRDP {}: Getting notification file failed with status {}",
-                uri, response.status()
-            );
+            log.warn(format_args!(
+                "Getting notification file failed with status {}",
+                response.status()
+            ));
             Err(Failed)
         }
         else {
             Notification::from_response(
-                uri.clone(), response, delta_list_limit
+                uri.clone(), response, delta_list_limit, log,
             ).map(Some)
         }
     }
@@ -93,19 +95,23 @@ impl Notification {
     ///
     /// Assumes that the response status was 200 OK.
     fn from_response(
-        uri: uri::Https, response: HttpResponse, delta_list_limit: usize
+        uri: uri::Https,
+        response: HttpResponse,
+        delta_list_limit: usize,
+        log: &mut LogBookWriter,
     ) -> Result<Self, Failed> {
         let etag = response.etag();
         let last_modified = response.last_modified();
         let mut content = NotificationFile::parse_limited(
             io::BufReader::new(response), delta_list_limit
         ).map_err(|err| {
-            warn!("RRDP {uri}: {err}");
+            log.warn(format_args!("{err}"));
             Failed
         })?;
         if !content.has_matching_origins(&uri) {
-            warn!("RRDP {uri}: snapshot or delta files with different origin"
-            );
+            log.warn(format_args!(
+                "snapshot or delta files with different origin"
+            ));
             return Err(Failed)
         }
         content.sort_deltas();
