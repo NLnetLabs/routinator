@@ -5,6 +5,9 @@
 //! necessary networking services based on the current configuration and
 //! returns a future that drives the server.
 
+// Allow the dispatcher to return the original request in the Err variant.
+#![allow(clippy::result_large_err)]
+
 pub use self::listener::http_listener;
 pub use self::response::ContentType;
 
