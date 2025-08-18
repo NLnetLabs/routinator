@@ -18,22 +18,22 @@ impl State {
 
     pub fn handle_get_or_head(
         &self,
-        req: &Request,
-    ) -> Option<Response> {
+        req: Request,
+    ) -> Result<Response, Request> {
         if req.uri().path() == "/log" {
             let res = ResponseBuilder::ok().content_type(ContentType::TEXT);
             if req.is_head() {
-                Some(res.empty())
+                Ok(res.empty())
             }
             else {
                 match self.log.as_ref() {
-                    Some(log) => Some(res.body(log.get_output())),
-                    None => Some(res.empty())
+                    Some(log) => Ok(res.body(log.get_output())),
+                    None => Ok(res.empty())
                 }
             }
         }
         else {
-            None
+            Err(req)
         }
     }
 }

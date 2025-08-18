@@ -1,6 +1,6 @@
 //! Request handling.
 
-use bytes::Bytes;
+use hyper::body::Incoming;
 use hyper::{Method, Uri};
 use hyper::header::HeaderMap;
 
@@ -9,7 +9,7 @@ use hyper::header::HeaderMap;
 
 pub struct Request {
     parts: hyper::http::request::Parts,
-    body: Option<Bytes>,
+    body: Option<Incoming>,
 }
 
 impl Request {
@@ -35,8 +35,8 @@ impl Request {
     }
 
     /// Returns the body of the request
-    pub fn body(&self) -> &Option<Bytes> {
-        &self.body
+    pub fn body(self) -> Option<Incoming> {
+        self.body
     }
 
     /// Returns the headers.
@@ -53,7 +53,7 @@ impl Request {
 
     pub fn new(
         parts: hyper::http::request::Parts, 
-        body: Option<Bytes>
+        body: Option<Incoming>
     ) -> Self {
         Self { parts, body }
     }

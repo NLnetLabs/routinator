@@ -8,7 +8,6 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use futures::pin_mut;
 use futures::future::{pending, select_all};
-use http_body_util::{BodyExt, Limited};
 use hyper::service::service_fn;
 use hyper::Method;
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -30,8 +29,6 @@ use super::dispatch::State;
 
 //------------ http_listener -------------------------------------------------
 
-/// Maximum size of a POST request body
-const LIMIT: usize = 100_000;
 
 /// Returns a future for all HTTP server listeners.
 pub fn http_listener(
@@ -144,12 +141,7 @@ async fn single_http_listener(
                         let (parts, body) = req.into_parts();
                         let req = match parts.method {
                             Method::POST => {
-                                let body = match 
-                                    Limited::new(body, LIMIT).collect().await {
-                                    Ok(b) => Some(b.to_bytes()),
-                                    Err(_) => None
-                                };
-                                Request::new(parts, body)
+                                Request::new(parts, Some(body))
                             },
                             _ => {
                                 Request::new(parts, None)

@@ -3,6 +3,7 @@
 use std::io::{BufReader, Cursor};
 use std::str::FromStr;
 use std::sync::Arc;
+use http_body_util::BodyExt;
 use rpki::resources::{Asn, Prefix};
 use crate::payload::{PayloadSnapshot, SharedHistory};
 use crate::validity::{RequestList, RouteValidity};
@@ -10,24 +11,25 @@ use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 
 
+const LIMIT: usize = 100_000;
 //------------ handle_get ----------------------------------------------------
 
-pub fn handle(
-    req: &Request,
+pub async fn handle(
+    req: Request,
     history: &SharedHistory,
-) -> Option<Response> {
+) -> Result<Response, Request> {
     let head = req.is_head();
     match req.uri().path() {
         path if path == "/validity" && req.is_get_or_head() => {
-            Some(handle_validity_query(head, history, req.uri().query()))
+            Ok(handle_validity_query(head, history, req.uri().query()))
         }
         path if path == "/validity" && req.is_post() => {
-            Some(handle_validity_batch(history, req))
+            Ok(handle_validity_batch(history, req).await)
         }
         path if path.starts_with("/api/v1/validity/") => {
-            Some(handle_validity_path(head, history, &path[17..]))
+            Ok(handle_validity_path(head, history, &path[17..]))
         }
-        _ => None
+        _ => Err(req)
     }
 }
 
@@ -99,26 +101,26 @@ fn handle_validity_query(
     validity(head, &asn, &prefix, current)
 }
 
-fn handle_validity_batch(
+async fn handle_validity_batch(
     origins: &SharedHistory,
-    req: &Request
+    req: Request
 ) -> Response {
     let Some(current) = origins.read().current() else {
         return Response::initial_validation(true)
     };
 
     let Some(ct_header) = req.headers().get(hyper::header::CONTENT_TYPE) else {
-        return Response::bad_request(
+        return Response::unsupported_media_type(
             true, "missing content-type header"
         )
     };
     let Ok(ct_header) = ct_header.to_str() else {
-        return Response::bad_request(
+        return Response::unsupported_media_type(
             true, "bad content-type header"
         )
     };
-    if ct_header.to_lowercase() != "application/json" {
-        return Response::bad_request(
+    if !str::eq_ignore_ascii_case(ct_header, "application/json") {
+        return Response::unsupported_media_type(
             true, "wrong content-type header"
         )
     }
@@ -128,6 +130,11 @@ fn handle_validity_batch(
             true, "body missing"
         )
     };
+    let body = http_body_util::Limited::new(body, LIMIT).collect().await;
+    let Ok(body) = body else {
+        return Response::bad_request(true, "body missing");
+    };
+    let body = body.to_bytes();
     let mut reader = BufReader::new(Cursor::new(body));
     
     let Ok(requests) = RequestList::from_json_reader(&mut reader) else {
@@ -139,9 +146,7 @@ fn handle_validity_batch(
     let res = ResponseBuilder::ok().content_type(ContentType::JSON);
     let mut json = Vec::new();
     let Ok(_) = validity_list.write_json(&mut json) else {
-        return Response::bad_request(
-            true, "could not write JSON"
-        )
+        return Response::internal_server_error(true)
     };
     res.body(json)
 }

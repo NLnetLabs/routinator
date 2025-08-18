@@ -16,19 +16,19 @@ use super::response::{ContentType, Response, ResponseBuilder};
 //------------ handle_get ----------------------------------------------------
 
 pub async fn handle_get_or_head(
-    req: &Request,
+    req: Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &RtrServerMetrics,
-) -> Option<Response> {
+) -> Result<Response, Request> {
     let head = req.is_head();
     match req.uri().path() {
-        "/status" => Some(handle_status(head, history, http, rtr).await),
+        "/status" => Ok(handle_status(head, history, http, rtr).await),
         "/api/v1/status" => {
-            Some(handle_api_status(head, history, http, rtr).await)
+            Ok(handle_api_status(head, history, http, rtr).await)
         },
-        "/version" => Some(handle_version(head)),
-        _ => None
+        "/version" => Ok(handle_version(head)),
+        _ => Err(req)
     }
 }
 

@@ -23,20 +23,23 @@ impl State {
 
     pub fn handle_get_or_head(
         &self,
-        req: &Request,
+        req: Request,
         history: &SharedHistory,
-    ) -> Option<Response> {
+    ) -> Result<Response, Request> {
         let path = req.uri().path();
         let format = if path == "/api/v1/origins/" {
             OutputFormat::Json
         }
         else {
-            OutputFormat::from_path(req.uri().path())?
+            let Some(format) = OutputFormat::from_path(req.uri().path()) else {
+                return Err(req);
+            };
+            format
         };
 
         let mut output = self.output.clone();
         if let Err(err) = output.update_from_query(req.uri().query()) {
-            return Some(Response::bad_request(req.is_api(), err))
+            return Ok(Response::bad_request(req.is_api(), err))
         };
 
         let (session, serial, created, snapshot, metrics) = {
@@ -53,25 +56,25 @@ impl State {
             (Some(snapshot), Some(metrics), Some(created)) => {
                 (snapshot, metrics, created)
             }
-            _ => return Some(Response::initial_validation(req.is_api())),
+            _ => return Ok(Response::initial_validation(req.is_api())),
         };
 
         let etag = format!("\"{session:x}-{serial}\"");
 
         if let Some(response) = Response::maybe_not_modified(
-            req, &etag, created
+            &req, &etag, created
         ) {
-            return Some(response)
+            return Ok(response)
         }
 
         let res = ResponseBuilder::ok()
             .content_type(format.content_type())
             .etag(&etag).last_modified(created);
         if req.is_head() {
-            Some(res.empty())
+            Ok(res.empty())
         }
         else {
-            Some(res.stream(
+            Ok(res.stream(
                 stream::iter(output.stream(snapshot, metrics, format))
             ))
         }
