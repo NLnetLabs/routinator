@@ -254,9 +254,6 @@ pub struct Config {
     /// RRDP HTTP User Agent.
     pub rrdp_user_agent: String,
 
-    /// Should we keep RRDP responses and if so where?
-    pub rrdp_keep_responses: Option<PathBuf>,
-
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
 
@@ -592,11 +589,6 @@ impl Config {
         // rrdp_proxies
         if let Some(list) = args.rrdp_proxy {
             self.rrdp_proxies = list
-        }
-
-        // rrdp_keep_responses
-        if let Some(path) = args.rrdp_keep_responses {
-            self.rrdp_keep_responses = Some(path)
         }
 
         // max_object_size
@@ -966,7 +958,6 @@ impl Config {
                 file.take_string_array("rrdp-proxies")?.unwrap_or_default()
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
-            rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
                     Some(0) => None,
@@ -1189,7 +1180,6 @@ impl Config {
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
-            rrdp_keep_responses: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             max_ca_depth: DEFAULT_MAX_CA_DEPTH,
             enable_bgpsec: false,
@@ -1409,11 +1399,6 @@ impl Config {
                 }).collect()
             )
         );
-        if let Some(path) = self.rrdp_keep_responses.as_ref() {
-            insert(
-                &mut res,"rrdp-keep-responses", format!("{}", path.display())
-            );
-        }
         insert_int(
             &mut res, "max-object-size",
             self.max_object_size.unwrap_or(0),
@@ -1862,10 +1847,6 @@ struct GlobalArgs {
     /// Proxy server for RRDP (HTTP or SOCKS5)
     #[arg(long, value_name = "URI")]
     rrdp_proxy: Option<Vec<String>>,
-
-    /// Keep RRDP responses in the given directory
-    #[arg(long, value_name = "PATH")]
-    rrdp_keep_responses: Option<PathBuf>,
 
     /// Maximum size of downloaded objects (0 for no limit)
     #[arg(long, value_name = "BYTES")]

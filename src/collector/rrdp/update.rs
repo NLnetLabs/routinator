@@ -59,7 +59,6 @@ impl Notification {
             uri,
             state.and_then(|state| state.etag.as_ref()),
             state.and_then(|state| state.last_modified()),
-            true
         ) {
             Ok(response) => {
                 *status = response.status().into();
@@ -192,7 +191,7 @@ impl<'a> SnapshotUpdate<'a> {
 
     pub fn try_update(mut self) -> Result<(), SnapshotError> {
         let response = match self.collector.http().response(
-            self.notify.content.snapshot().uri(), false
+            self.notify.content.snapshot().uri()
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
@@ -326,7 +325,7 @@ impl<'a> DeltaUpdate<'a> {
 
     pub fn try_update(mut self) -> Result<(), DeltaError> {
         let response = match self.collector.http().response(
-            self.info.uri(), false
+            self.info.uri()
         ) {
             Ok(response) => {
                 self.metrics.payload_status = Some(response.status().into());
