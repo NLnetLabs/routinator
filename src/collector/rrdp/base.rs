@@ -405,7 +405,7 @@ impl<'a> Run<'a> {
     ) -> Result<LoadResult, RunFailed> {
         // If we already tried updating, we can return already.
         if let Some(repo) = self.updated.read().get(rpki_notify) {
-            return Ok(repo.read()?)
+            return repo.read()
         }
 
         // Get a clone of the (arc-ed) mutex. Make a new one if there isn’t
@@ -421,7 +421,7 @@ impl<'a> Run<'a> {
         let _lock = mutex.lock();
         if let Some(repo) = self.updated.read().get(rpki_notify) {
             self.running.write().remove(rpki_notify);
-            return Ok(repo.read()?)
+            return repo.read()
         }
 
         let mut log = LogBookWriter::new(
@@ -824,7 +824,7 @@ impl<'a> RepositoryUpdate<'a> {
             current.as_ref().map(|x| &x.1),
             &mut self.metrics.notify_status,
             self.collector.config.max_delta_list_len,
-            &mut self.log,
+            self.log,
         ) {
             Ok(Some(notify)) => notify,
             Ok(None) => {

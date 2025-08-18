@@ -518,7 +518,7 @@ impl RsyncCommand {
             module: source.to_uri(),
             status,
             duration: SystemTime::now().duration_since(start),
-            log_book: (!log.is_empty()).then(|| log),
+            log_book: (!log.is_empty()).then_some(log),
         }
     }
 
