@@ -6,7 +6,7 @@ Breaking changes
 
 New
 
-* Add support for SLURM v2 as output format which includes ASPA payload.
+* Added support for SLURM v2 as output format which includes ASPA payload.
   ([#1021])
 * Changed refresh behaviour to better cope with short-lived objects. By
   default, Routinator will now wait for the time defined by `refresh` even
@@ -20,17 +20,26 @@ New
   improving the snapshot update times. ([#1035])
 * The `dump` command now prints the source directories of the data it
   dumps. ([#1045])
+* Added a `--update-after` option to the `vrps` subcommand that skips
+  updating the local cache if the last successful validation run was known
+  to be less than a given number of minutes ago. ([#1049])
+* Error responses for API-related HTTP endpoints now contain JSON bodies.
+  ([#1050])
 
 Bug fixes
 
 * Re-implemented RRDP client metrics based on the much simpler model used
   by RTRTR to fix recurring errors in the metrics. ([#1039])
+* Changed the message logged when an RRDP update times out to actually say
+  that. ([#1052])
 
 
 Other changes
 
+* Improved performance of file system operations on validate subcommand.
+  ([#1043] by [@kawaemon])
 * Add package.homepage to Cargo.toml ([#1024])
-* Added building packages for RHEL 10. ([#1034])
+* Added building packages for RHEL 10 and Debian 13. ([#1034], [#1047])
 * Added building packages for ARMv6 and ARM64 for Debian Bookworm.
   ([#1036])
 * Upgrades various dependencies. ([#1004], [#1005], [#1006])
@@ -47,7 +56,12 @@ Other changes
 [#1036]: https://github.com/NLnetLabs/routinator/pull/1036
 [#1039]: https://github.com/NLnetLabs/routinator/pull/1039
 [#1041]: https://github.com/NLnetLabs/routinator/pull/1041
+[#1043]: https://github.com/NLnetLabs/routinator/pull/1043
 [#1045]: https://github.com/NLnetLabs/routinator/pull/1045
+[#1047]: https://github.com/NLnetLabs/routinator/pull/1047
+[#1049]: https://github.com/NLnetLabs/routinator/pull/1049
+[#1052]: https://github.com/NLnetLabs/routinator/pull/1052
+[@kawaemon]: https://github.com/kawaemon
 
 
 ## 0.14.2 ‘Roll Initiative!’

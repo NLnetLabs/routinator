@@ -31,6 +31,13 @@ impl Request {
     pub fn headers(&self) -> &HeaderMap {
         self.hyper.headers()
     }
+
+    /// Returns whether the request is an API request.
+    ///
+    /// API requests have their path start with `/api/`.
+    pub fn is_api(&self) -> bool {
+        self.hyper.uri().path().starts_with("/api/")
+    }
 }
 
 

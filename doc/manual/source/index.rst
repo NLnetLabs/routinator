@@ -101,6 +101,7 @@ Open-source with professional support services
    :name: toc-reference
    
    manual-page
+   threat-model
    json-metrics
    prometheus-metrics
    unsafe-vrps

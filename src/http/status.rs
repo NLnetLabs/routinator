@@ -46,7 +46,7 @@ async fn handle_status(
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return Response::initial_validation(),
+                None => return Response::initial_validation(false),
             },
             history.serial(),
             history.last_update_start(),
@@ -380,7 +380,7 @@ async fn handle_api_status(
         (
             match history.metrics() {
                 Some(metrics) => metrics,
-                None => return Response::initial_validation()
+                None => return Response::initial_validation(true)
             },
             history.serial(),
             history.last_update_start(),

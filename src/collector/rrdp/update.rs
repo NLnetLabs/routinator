@@ -1,4 +1,5 @@
 
+use std::error::Error;
 use std::{error, fmt, io};
 use std::collections::HashSet;
 use std::io::Read;
@@ -67,7 +68,11 @@ impl Notification {
                 response
             }
             Err(err) => {
-                log.warn(format_args!("{err}"));
+                if let Some(source) = err.source() {
+                    log.warn(format_args!("{err} ({source})"));
+                } else {
+                    log.warn(format_args!("{err}"));
+                }
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
