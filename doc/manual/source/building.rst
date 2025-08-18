@@ -204,9 +204,9 @@ https://example.org/routinator with a Routinator instance at
 https://routinator.example.net/ using nginx. This will work equally well with 
 an Apache web server or most other web servers.
 
- The ``--base`` option specifies the path relative to the domain the UI lives, 
- in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable 
- sets the path where the Routinator API lives.
+The ``--base`` option specifies the path relative to the domain the UI lives, 
+in our case ``/routinator``. The ``ROUTINATOR_API_HOST`` environment variable 
+sets the path where the Routinator API lives.
 
 .. code-block:: bash
 
