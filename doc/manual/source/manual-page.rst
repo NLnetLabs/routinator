@@ -405,6 +405,12 @@ The available options are:
 
       Redirect logging output to the given file.
 
+.. option:: --log-repository-issues
+
+      Log information about problems encountered while fetching and validating
+      data. Normally, this information is only made available via the status
+      HTTP endpoints.
+
 .. option:: -h, --help
 
       Print some help information.
@@ -1285,6 +1291,14 @@ All values can be overridden via the command line options.
             to syslog. The default value if this entry is missing is
             *daemon*.
 
+
+      log-repository-issues
+
+            A boolean that indicates when present and set to true that
+            information about problems encountered while fetching and
+            validating data should be logged. Normally, this information is
+            only made available via the status HTTP endpoints.
+
       rtr-listen
             An array of string values each providing an address and port on
             which the RTR server should listen in TCP mode. Address and port
@@ -1426,6 +1440,10 @@ The service only supports GET requests with the following paths:
       Returns the current status of the Routinator instance. This is similar
       to the output of the **/metrics** endpoint but in a more human friendly
       format.
+
+      This endpoint also includes a list of issues encountered while fetching
+      data sorted by repository and validating data sorted by publication
+      point.
 
 /api/v1/status
       Returns the current status in JSON format.
