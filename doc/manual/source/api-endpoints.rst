@@ -62,3 +62,5 @@ information and the ``/metrics``, ``/status`` and
    The ``/api/v1/status`` path
 .. versionadded:: 0.13.0
    The ``/json-delta/notify`` path
+.. versionadded:: 0.15.0
+   The ``/validity`` POST endpoint
