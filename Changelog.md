@@ -4,6 +4,13 @@
 
 Breaking changes
 
+* Removed the `rrdp-keep-responses` feature. We suggest the use of an HTTP
+  proxy such as [mitmproxy] instead. ([#1055])
+* Messages about issues with repositories and publication points are now
+  logged separately and by default are only visible in the status HTTP
+  server endpoints. The new `log-repository-issues` option can be used to
+  have these messages also written to the log. ([#1054])
+
 New
 
 * Added support for SLURM v2 as output format which includes ASPA payload.
@@ -25,6 +32,9 @@ New
   to be less than a given number of minutes ago. ([#1049])
 * Error responses for API-related HTTP endpoints now contain JSON bodies.
   ([#1050])
+* The `/validity` HTTP server endpoint now accepts POST requests with a
+  JSON body containing multiple routes to be checked all at once.
+  ([#1053])
 
 Bug fixes
 
@@ -61,7 +71,10 @@ Other changes
 [#1047]: https://github.com/NLnetLabs/routinator/pull/1047
 [#1049]: https://github.com/NLnetLabs/routinator/pull/1049
 [#1052]: https://github.com/NLnetLabs/routinator/pull/1052
+[#1053]: https://github.com/NLnetLabs/routinator/pull/1053
+[#1055]: https://github.com/NLnetLabs/routinator/pull/1055
 [@kawaemon]: https://github.com/kawaemon
+[mitmproxy]: https://www.mitmproxy.org/
 
 
 ## 0.14.2 ‘Roll Initiative!’
