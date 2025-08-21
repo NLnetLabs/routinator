@@ -20,25 +20,25 @@ use super::response::{ContentType, Response, ResponseBuilder};
 //------------ handle_get_or_head --------------------------------------------
 
 pub fn handle_get_or_head(
-    req: &Request,
+    req: Request,
     history: &SharedHistory,
-) -> Option<Response> {
+) -> Result<Response, Request> {
     if req.uri().path() != "/json-delta" {
-        return None
+        return Err(req)
     }
     let history = history.read();
 
     if !history.is_active() {
-        return Some(Response::initial_validation(true))
+        return Ok(Response::initial_validation(true))
     }
 
     let version = match version_from_query(req.uri().query()) {
         Ok(version) => version,
-        Err(response) => return Some(response)
+        Err(response) => return Ok(response)
     };
 
     if req.is_head() {
-        return Some(
+        return Ok(
             ResponseBuilder::ok().content_type(ContentType::JSON).empty()
         )
     }
@@ -50,7 +50,7 @@ pub fn handle_get_or_head(
     if let Some((session, serial)) = version {
         if session == history.session() {
             if let Some(delta) = history.delta_since(serial) {
-                return Some(handle_delta(
+                return Ok(handle_delta(
                     session, serial, history.serial(), delta, created
                 ))
             }
@@ -59,9 +59,9 @@ pub fn handle_get_or_head(
 
     let snapshot = match history.current() {
         Some(snapshot) => snapshot,
-        None => return Some(Response::initial_validation(true)),
+        None => return Ok(Response::initial_validation(true)),
     };
-    Some(handle_reset(history.session(), history.serial(), snapshot, created))
+    Ok(handle_reset(history.session(), history.serial(), snapshot, created))
 }
 
 fn handle_delta(
@@ -90,17 +90,17 @@ fn handle_reset(
 //------------ handle_notify_get_or_head -------------------------------------
 
 pub async fn handle_notify_get_or_head(
-    req: &Request,
+    req: Request,
     history: &SharedHistory,
     notify: &NotifySender,
-) -> Option<Response> {
+) -> Result<Response, Request> {
     if req.uri().path() != "/json-delta/notify" {
-        return None
+        return Err(req)
     }
 
-    let wait = match need_wait(req, history) {
+    let wait = match need_wait(&req, history) {
         Ok(wait) => wait,
-        Err(resp) => return Some(resp),
+        Err(resp) => return Ok(resp),
     };
 
     if wait {
@@ -108,13 +108,13 @@ pub async fn handle_notify_get_or_head(
     }
 
     if req.is_head() {
-        Some(
+        Ok(
             ResponseBuilder::ok().content_type(ContentType::JSON).empty()
         )
     }
     else {
         let (session, serial) = history.read().session_and_serial();
-        Some(
+        Ok(
             ResponseBuilder::ok().content_type(ContentType::JSON).body(
                 JsonBuilder::build(|json| {
                     json.member_raw("session", session);

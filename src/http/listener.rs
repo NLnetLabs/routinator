@@ -9,6 +9,7 @@ use std::task::{Context, Poll};
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::service::service_fn;
+use hyper::Method;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::error;
 use rpki::rtr::server::NotifySender;
@@ -17,6 +18,7 @@ use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use crate::config::Config;
 use crate::error::ExitError;
+use crate::http::request::Request;
 use crate::log::LogOutput;
 use crate::metrics::{HttpServerMetrics, RtrServerMetrics};
 use crate::payload::SharedHistory;
@@ -26,6 +28,7 @@ use super::dispatch::State;
 
 
 //------------ http_listener -------------------------------------------------
+
 
 /// Returns a future for all HTTP server listeners.
 pub fn http_listener(
@@ -132,10 +135,19 @@ async fn single_http_listener(
                 TokioExecutor::new()
             ).serve_connection(
                 TokioIo::new(stream),
-                service_fn(move |req| {
+                service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let state = service_state.clone();
                     async move {
-                        state.handle_request(req.into()).await.into_hyper()
+                        let (parts, body) = req.into_parts();
+                        let req = match parts.method {
+                            Method::POST => {
+                                Request::new(parts, Some(body))
+                            },
+                            _ => {
+                                Request::new(parts, None)
+                            }
+                        };
+                        state.handle_request(req).await.into_hyper()
                     }
                 })
             ).await;

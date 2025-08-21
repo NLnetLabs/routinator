@@ -58,6 +58,17 @@ impl Response {
         )
     }
 
+    // Returns a Unsupported Media Type response.
+    pub fn unsupported_media_type(api: bool, message: impl fmt::Display) -> Self {
+        Self::error(api, StatusCode::UNSUPPORTED_MEDIA_TYPE, message)
+    }
+
+    // Returns a Internal Server Error.
+    pub fn internal_server_error(api: bool) -> Self {
+        Self::error(api, StatusCode::INTERNAL_SERVER_ERROR, 
+        "internal server error")
+    }
+
     /// Creates an error response.
     ///
     /// If `api` is `true`, the reponse will havea JSON body, otherwise a

@@ -17,16 +17,16 @@ use super::response::{ContentType, Response, ResponseBuilder};
 //------------ handle_get ----------------------------------------------------
 
 pub async fn handle_get_or_head(
-    req: &Request,
+    req: Request,
     history: &SharedHistory,
     http: &HttpServerMetrics,
     rtr: &RtrServerMetrics,
-) -> Option<Response> {
+) -> Result<Response, Request> {
     match req.uri().path() {
         "/metrics" => {
-            Some(handle_metrics(req.is_head(), history, http, rtr).await)
+            Ok(handle_metrics(req.is_head(), history, http, rtr).await)
         }
-        _ => None
+        _ => Err(req)
     }
 }
 

@@ -45,47 +45,55 @@ impl State {
 
     pub async fn handle_request(&self, req: Request) -> Response {
         self.metrics.inc_requests();
-        if !req.is_get_or_head() {
+        if !req.is_get_or_head() && !req.is_post() {
             return Response::method_not_allowed(req.is_api())
         }
 
-        if let Some(response) = self.payload.handle_get_or_head(
-            &req, &self.history
+        let req = match self.payload.handle_get_or_head(
+            req, &self.history
         ) {
-            return response
-        }
-        if let Some(response) = delta::handle_notify_get_or_head(
-            &req, &self.history, &self.notify,
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match delta::handle_notify_get_or_head(
+            req, &self.history, &self.notify,
         ).await {
-            return response
-        }
-        if let Some(response) = delta::handle_get_or_head(
-            &req, &self.history
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match delta::handle_get_or_head(
+            req, &self.history
         ) {
-            return response
-        }
-        if let Some(response) = self.log.handle_get_or_head(&req) {
-            return response
-        }
-        if let Some(response) = metrics::handle_get_or_head(
-            &req, &self.history, &self.metrics, &self.rtr_metrics
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match self.log.handle_get_or_head(req) {
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match metrics::handle_get_or_head(
+            req, &self.history, &self.metrics, &self.rtr_metrics
         ).await {
-            return response
-        }
-        if let Some(response) = status::handle_get_or_head(
-            &req, &self.history, &self.metrics, &self.rtr_metrics
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match status::handle_get_or_head(
+            req, &self.history, &self.metrics, &self.rtr_metrics
         ).await {
-            return response
-        }
-        if let Some(response) = validity::handle_get_or_head(
-            &req, &self.history) {
-            return response
-        }
+            Ok(response) => return response,
+            Err(req) => req
+        };
+        let req = match validity::handle(
+            req, &self.history).await {
+                Ok(response) => return response,
+                Err(req) => req
+        };
 
         #[cfg(feature = "ui")]
-        if let Some(response) = super::ui::handle_get_or_head(&req) {
-            return response
-        }
+        let req = match super::ui::handle_get_or_head(req) {
+            Ok(response) => return response,
+            Err(req) => req
+        };
         
         Response::not_found(req.is_api())
     }

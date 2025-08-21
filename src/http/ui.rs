@@ -21,16 +21,16 @@ const BASE_URL: &str = "/ui";
 /// BASE_URL will be redirected to. All other URLs will return a 404.
 const CATCH_ALL_URL: &str = "index.html";
 
-pub fn handle_get_or_head(req: &Request) -> Option<Response> {
+pub fn handle_get_or_head(req: Request) -> Result<Response, Request> {
     let head = req.is_head();
     if req.uri().path() == "/" {
-        return Some(Response::moved_permanently("/ui/"))
+        return Ok(Response::moved_permanently("/ui/"))
     }
 
     let req_path = Path::new(req.uri().path());
     if let Ok(p) = req_path.strip_prefix(BASE_URL) {
         match get_asset(p) {
-            Some(asset) => Some(serve(head, asset)),
+            Some(asset) => Ok(serve(head, asset)),
             None => {
                 // In order to have the frontend handle all routing and
                 // queryparams under BASE_URL, all unknown URLs that start
@@ -40,19 +40,19 @@ pub fn handle_get_or_head(req: &Request) -> Option<Response> {
                 // (somewhat convoluted) regex on the requested URL to figure
                 // out if it makes sense as a search prefix url.
                 if let Some(default) = get_asset(Path::new(CATCH_ALL_URL)) {
-                    Some(serve(head, default))
+                    Ok(serve(head, default))
                 }
                 else {
                     // if CATCH_ALL_URL is not defined in ui_resources
                     // we'll return a 404
-                    Some(Response::not_found(false))
+                    Ok(Response::not_found(false))
                 }
             }
         }
     } else {
         // This is the last handler in the chain, so if the requested URL did
         // not start with BASE_URL, we're returning 404.
-        Some(Response::not_found(false))
+        Ok(Response::not_found(false))
     }
 }
 
