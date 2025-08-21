@@ -58,6 +58,7 @@ pub mod config;
 pub mod engine;
 pub mod error;
 pub mod http;
+pub mod log;
 pub mod metrics;
 pub mod operation;
 pub mod output;

@@ -20,6 +20,7 @@ use rpki::repository::tal::TalInfo;
 use rpki::rtr::state::Serial;
 use uuid::Uuid;
 use crate::collector::{HttpStatus, SnapshotReason};
+use crate::log::LogBook;
 use crate::utils::sync::Mutex;
 
 
@@ -51,6 +52,9 @@ pub struct Metrics {
 
     /// Overall payload metrics.
     pub snapshot: SnapshotMetrics,
+
+    /// The log books for publication points with issues.
+    pub pub_point_logs: Vec<(uri::Rsync, LogBook)>,
 }
 
 impl Metrics {
@@ -65,6 +69,7 @@ impl Metrics {
             publication: Default::default(),
             local: Default::default(),
             snapshot: Default::default(),
+            pub_point_logs: Default::default(),
         }
     }
 
@@ -78,6 +83,9 @@ impl Metrics {
         }
         self.local.finalize();
         self.snapshot.finalize();
+        self.pub_point_logs.sort_by(|left, right| {
+            left.0.as_str().cmp(right.0.as_str())
+        });
     }
 
     /// Returns the time the metrics were created as a Unix timestamp.
@@ -95,6 +103,16 @@ impl Metrics {
             }
         }
         true
+    }
+
+    /// Returns whether any RRPD metrics have non-empty logs.
+    pub fn has_rrdp_logs(&self) -> bool {
+        self.rrdp.iter().any(|item| item.log_book.is_some())
+    }
+
+    /// Returns whether any rsync metrics have non-empty logs.
+    pub fn has_rsync_logs(&self) -> bool {
+        self.rsync.iter().any(|item| item.log_book.is_some())
     }
 }
 
@@ -143,6 +161,11 @@ pub struct RrdpRepositoryMetrics {
 
     /// The duration of the last update.
     pub duration: Result<Duration, SystemTimeError>,
+
+    /// The log book if there were any issues.
+    ///
+    /// If there we issues logged, this will be `None`.
+    pub log_book: Option<LogBook>,
 }
 
 impl RrdpRepositoryMetrics {
@@ -154,7 +177,8 @@ impl RrdpRepositoryMetrics {
             serial: None,
             snapshot_reason: None,
             payload_status: None,
-            duration: Ok(Duration::from_secs(0))
+            duration: Ok(Duration::from_secs(0)),
+            log_book: None,
         }
     }
 
@@ -182,6 +206,7 @@ pub struct RsyncModuleMetrics {
     pub module: uri::Rsync,
     pub status: Result<process::ExitStatus, io::Error>,
     pub duration: Result<Duration, SystemTimeError>,
+    pub log_book: Option<LogBook>,
 }
 
 
