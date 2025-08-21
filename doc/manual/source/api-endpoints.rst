@@ -1,7 +1,7 @@
 API Endpoints
 =============
 
-The HTTP service supports GET requests on the following paths:
+The HTTP service supports **GET** requests on the following paths:
 
 ``/api/v1/status``
      Returns exhaustive information in JSON format on all trust anchors,
@@ -41,6 +41,16 @@ The HTTP service supports GET requests on the following paths:
      the provided values, the request will not return until a new data set is
      available. This can be used as a means to get notified when the data set
      has been updated.
+
+The HTTP service supports **POST** requests on the following path:
+
+``/validity``
+     Returns a JSON object describing the validity of multiple routes. This
+     expects a JSON body in the same format as 
+     :ref:`the validate command <validity-checker:Reading Input From a File>`.
+     Also make sure to set the ``Content-Type`` header to ``application/json``
+     when sending the request. The request body size is limited to 100 kB. The
+     output format matches that of the validate command.
 
 In addition, the ``/log`` endpoint returns :doc:`logging<logging>`
 information and the ``/metrics``, ``/status`` and
