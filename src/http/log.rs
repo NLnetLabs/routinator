@@ -1,7 +1,7 @@
 //! Handles endpoints related to the log.
 
 use std::sync::Arc;
-use crate::process::LogOutput;
+use crate::log::LogOutput;
 use super::request::Request;
 use super::response::{ContentType, Response, ResponseBuilder};
 

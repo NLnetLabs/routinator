@@ -2,8 +2,20 @@ Logging
 =======
 
 To let you analyse the validated ROA payload (VRP) data set as well as its
-overall health, Routinator logs an extensive amount of information. The log
-levels used by syslog are utilised to allow filtering this information for
+overall health, Routinator provides an extensive amount of information. The
+information regarding its own health is written to the configured log.
+
+All information about issues encountered during fetching and validating data
+is stored separately and can be retrieved through the status HTTP endpoints.
+It is collected per RRDP or rsync repository and publication point, rather
+than as lines mixed in with the log, making it easier to see possible issues
+for repositories or publication points.
+
+If you rather prefer to have all information in one place, you can use the
+``--log-repository-issues`` command line option to request writing this data
+to the log as well.
+
+Log levels are utilised to allow filtering this information for
 particular use cases.
 
 The log levels represent the following information:

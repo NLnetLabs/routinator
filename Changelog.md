@@ -6,7 +6,7 @@ Breaking changes
 
 New
 
-* Add support for SLURM v2 as output format which includes ASPA payload.
+* Added support for SLURM v2 as output format which includes ASPA payload.
   ([#1021])
 * Changed refresh behaviour to better cope with short-lived objects. By
   default, Routinator will now wait for the time defined by `refresh` even
@@ -30,6 +30,8 @@ Bug fixes
 
 * Re-implemented RRDP client metrics based on the much simpler model used
   by RTRTR to fix recurring errors in the metrics. ([#1039])
+* Changed the message logged when an RRDP update times out to actually say
+  that. ([#1052])
 
 
 Other changes
@@ -58,6 +60,7 @@ Other changes
 [#1045]: https://github.com/NLnetLabs/routinator/pull/1045
 [#1047]: https://github.com/NLnetLabs/routinator/pull/1047
 [#1049]: https://github.com/NLnetLabs/routinator/pull/1049
+[#1052]: https://github.com/NLnetLabs/routinator/pull/1052
 [@kawaemon]: https://github.com/kawaemon
 
 

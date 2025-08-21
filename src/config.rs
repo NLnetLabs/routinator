@@ -254,9 +254,6 @@ pub struct Config {
     /// RRDP HTTP User Agent.
     pub rrdp_user_agent: String,
 
-    /// Should we keep RRDP responses and if so where?
-    pub rrdp_keep_responses: Option<PathBuf>,
-
     /// Optional size limit for objects.
     pub max_object_size: Option<u64>,
 
@@ -335,6 +332,9 @@ pub struct Config {
 
     /// The target to log to.
     pub log_target: LogTarget,
+
+    /// Should we log repository issues?
+    pub log_repository_issues: bool,
 
     /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
@@ -594,11 +594,6 @@ impl Config {
             self.rrdp_proxies = list
         }
 
-        // rrdp_keep_responses
-        if let Some(path) = args.rrdp_keep_responses {
-            self.rrdp_keep_responses = Some(path)
-        }
-
         // max_object_size
         if let Some(value) = args.max_object_size {
             if value == 0 {
@@ -646,6 +641,11 @@ impl Config {
         }
         else if args.quiet == 1 {
             self.log_level = LevelFilter::Error
+        }
+
+        // log_repository_issues
+        if args.log_repository_issues {
+            self.log_repository_issues = true
         }
 
         Ok(())
@@ -966,7 +966,6 @@ impl Config {
                 file.take_string_array("rrdp-proxies")?.unwrap_or_default()
             },
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
-            rrdp_keep_responses: file.take_path("rrdp-keep-responses")?,
             max_object_size: {
                 match file.take_u64("max-object-size")? {
                     Some(0) => None,
@@ -1045,6 +1044,9 @@ impl Config {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target,
+            log_repository_issues: {
+                file.take_bool("log-repository-issues")?.unwrap_or(false)
+            },
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
@@ -1189,7 +1191,6 @@ impl Config {
             rrdp_root_certs: Vec::new(),
             rrdp_proxies: Vec::new(),
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
-            rrdp_keep_responses: None,
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             max_ca_depth: DEFAULT_MAX_CA_DEPTH,
             enable_bgpsec: false,
@@ -1214,6 +1215,7 @@ impl Config {
             http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
+            log_repository_issues: false,
             pid_file: None,
             working_dir: None,
             chroot: None,
@@ -1409,11 +1411,6 @@ impl Config {
                 }).collect()
             )
         );
-        if let Some(path) = self.rrdp_keep_responses.as_ref() {
-            insert(
-                &mut res,"rrdp-keep-responses", format!("{}", path.display())
-            );
-        }
         insert_int(
             &mut res, "max-object-size",
             self.max_object_size.unwrap_or(0),
@@ -1507,6 +1504,7 @@ impl Config {
                 insert(&mut  res, "log-file", file.display().to_string());
             }
         }
+        insert(&mut res, "log-repository-issues", self.log_repository_issues);
         if let Some(ref file) = self.pid_file {
             insert(&mut res, "pid-file", file.display().to_string());
         }
@@ -1863,10 +1861,6 @@ struct GlobalArgs {
     #[arg(long, value_name = "URI")]
     rrdp_proxy: Option<Vec<String>>,
 
-    /// Keep RRDP responses in the given directory
-    #[arg(long, value_name = "PATH")]
-    rrdp_keep_responses: Option<PathBuf>,
-
     /// Maximum size of downloaded objects (0 for no limit)
     #[arg(long, value_name = "BYTES")]
     max_object_size: Option<u64>,
@@ -1912,6 +1906,10 @@ struct GlobalArgs {
     /// Log to this file
     #[arg(long, value_name = "PATH")]
     logfile: Option<String>,
+
+    /// Log repository issues
+    #[arg(long)]
+    log_repository_issues: bool,
 }
 
 

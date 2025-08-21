@@ -1826,16 +1826,8 @@ mod test {
                 );
                 let snapshot = Arc::new(snapshot);
 
-                let metrics = Metrics {
-                    time: datetime,
-                    rsync: Vec::new(),
-                    rrdp: Vec::new(),
-                    tals: Vec::new(),
-                    repositories: Vec::new(),
-                    publication: Default::default(),
-                    local: Default::default(),
-                    snapshot: Default::default(),
-                };
+                let mut metrics = Metrics::new();
+                metrics.time = datetime;
                 let metrics = Arc::new(metrics);
 
                 if !variation.0 {

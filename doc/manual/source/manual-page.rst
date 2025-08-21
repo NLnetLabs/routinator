@@ -327,15 +327,6 @@ The available options are:
       option can be given multiple times in which case proxies are tried in
       the given order.
 
-.. option:: --rrdp-keep-responses=path
-
-      If this option is enabled, the bodies of all HTTPS responses received
-      from RRDP servers will be stored under *path*. The sub-path will be
-      constructed using the components of the requested URI. For the
-      responses to the notification files, the timestamp is appended to the
-      path to make it possible to distinguish the series of requests made
-      over time.
-
 .. option:: --max-object-size=BYTES
 
       Limits the size of individual objects received via either rsync or RRDP
@@ -404,6 +395,12 @@ The available options are:
 .. option:: --logfile=path
 
       Redirect logging output to the given file.
+
+.. option:: --log-repository-issues
+
+      Log information about problems encountered while fetching and validating
+      data. Normally, this information is only made available via the status
+      HTTP endpoints.
 
 .. option:: -h, --help
 
@@ -1210,14 +1207,6 @@ All values can be overridden via the command line options.
             RRDP connections. The proxies are tried in order for each
             request. HTTP and SOCKS5 proxies are supported.
 
-      rrdp-keep-responses
-            A string containing a path to a directory into which the bodies
-            of all HTTPS responses received from RRDP servers will be stored.
-            The sub-path will be constructed using the components of the
-            requested URI. For the responses to the notification files, the
-            timestamp is appended to the path to make it possible to
-            distinguish the series of requests made over time.
-
       max-object-size
             An integer value that provides a limit for the size of individual
             objects received via either rsync or RRDP to the given number of
@@ -1289,6 +1278,14 @@ All values can be overridden via the command line options.
             A string value specifying the syslog facility to use for logging
             to syslog. The default value if this entry is missing is
             *daemon*.
+
+
+      log-repository-issues
+
+            A boolean that indicates when present and set to true that
+            information about problems encountered while fetching and
+            validating data should be logged. Normally, this information is
+            only made available via the status HTTP endpoints.
 
       rtr-listen
             An array of string values each providing an address and port on
@@ -1431,6 +1428,10 @@ The service only supports GET requests with the following paths:
       Returns the current status of the Routinator instance. This is similar
       to the output of the **/metrics** endpoint but in a more human friendly
       format.
+
+      This endpoint also includes a list of issues encountered while fetching
+      data sorted by repository and validating data sorted by publication
+      point.
 
 /api/v1/status
       Returns the current status in JSON format.

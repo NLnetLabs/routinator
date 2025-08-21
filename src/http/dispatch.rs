@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use rpki::rtr::server::NotifySender;
 use crate::config::Config;
+use crate::log::LogOutput;
 use crate::metrics::{HttpServerMetrics, RtrServerMetrics};
 use crate::payload::SharedHistory;
-use crate::process::LogOutput;
 use super::{delta, log, metrics, payload, status, validity};
 use super::request::Request;
 use super::response::Response;
