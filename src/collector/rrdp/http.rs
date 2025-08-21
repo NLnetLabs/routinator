@@ -1,10 +1,9 @@
 use std::{fs, io};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use log::{error, warn};
+use log::error;
 use reqwest::{header, redirect};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
@@ -24,9 +23,6 @@ pub struct HttpClient {
     /// This will be of the error variant until `ignite` has been called. Yes,
     /// that is not ideal but 
     client: Result<Client, Option<ClientBuilder>>,
-
-    /// The base directory for storing copies of responses if that is enabled.
-    response_dir: Option<PathBuf>,
 
     /// The timeout for requests.
     timeout: Option<Duration>,
@@ -81,7 +77,6 @@ impl HttpClient {
         }
         Ok(HttpClient {
             client: Err(Some(builder)),
-            response_dir: config.rrdp_keep_responses.clone(),
             timeout: config.rrdp_timeout,
         })
     }
@@ -160,9 +155,8 @@ impl HttpClient {
     pub fn response(
         &self,
         uri: &uri::Https,
-        multi: bool,
     ) -> Result<HttpResponse, reqwest::Error> {
-        self._response(uri, self.client().get(uri.as_str()), multi)
+        self._response(self.client().get(uri.as_str()))
     }
 
     pub fn conditional_response(
@@ -170,7 +164,6 @@ impl HttpClient {
         uri: &uri::Https,
         etag: Option<&Bytes>,
         last_modified: Option<DateTime<Utc>>,
-        multi: bool,
     ) -> Result<HttpResponse, reqwest::Error> {
         let mut request = self.client().get(uri.as_str());
         if let Some(etag) = etag {
@@ -184,15 +177,13 @@ impl HttpClient {
                 format_http_date(last_modified)
             );
         }
-        self._response(uri, request, multi)
+        self._response(request)
     }
 
     /// Creates a response from a request builder.
     fn _response(
         &self,
-        uri: &uri::Https,
         mut request: RequestBuilder,
-        multi: bool
     ) -> Result<HttpResponse, reqwest::Error> {
         if let Some(timeout) = self.timeout {
             request = request.timeout(timeout);
@@ -200,66 +191,9 @@ impl HttpClient {
         request.send().and_then(|response| {
             response.error_for_status()
         }).map(|response| {
-            HttpResponse::create(response, uri, &self.response_dir, multi)
+            HttpResponse::create(response)
         })
     }
-
-    /*
-    /// Requests, parses, and returns the given RRDP notification file.
-    ///
-    /// The value referred to by `status` will be updated to the received
-    /// status code or `HttpStatus::Error` if the request failed.
-    ///
-    /// Returns the notification file on success.
-    pub fn notification_file(
-        &self,
-        uri: &uri::Https,
-        state: Option<&RepositoryState>,
-        status: &mut HttpStatus,
-    ) -> Result<Option<Notification>, Failed> {
-        let mut request = self.client().get(uri.as_str());
-        if let Some(state) = state {
-            if let Some(etag) = state.etag.as_ref() {
-                request = request.header(
-                    header::IF_NONE_MATCH, etag.as_ref()
-                );
-            }
-            if let Some(ts) = state.last_modified_ts {
-                if let Some(datetime) = Utc.timestamp_opt(ts, 0).single() {
-                    request = request.header(
-                        header::IF_MODIFIED_SINCE,
-                        format_http_date(datetime)
-                    );
-                }
-            }
-        }
-        let response = match self._response(uri, request, true) {
-            Ok(response) => {
-                *status = response.status().into();
-                response
-            }
-            Err(err) => {
-                warn!("RRDP {}: {}", uri, err);
-                *status = HttpStatus::Error;
-                return Err(Failed)
-            }
-        };
-
-        if response.status() == StatusCode::NOT_MODIFIED {
-            Ok(None)
-        }
-        else if response.status() != StatusCode::OK {
-            warn!(
-                "RRDP {}: Getting notification file failed with status {}",
-                uri, response.status()
-            );
-            Err(Failed)
-        }
-        else {
-            Notification::from_response(uri, response).map(Some)
-        }
-    }
-    */
 
     /// The redirect policy.
     ///
@@ -292,9 +226,6 @@ impl HttpClient {
 pub struct HttpResponse {
     /// The wrapped reqwest response.
     response: Response,
-
-    /// A file to also store read data into.
-    file: Option<fs::File>,
 }
 
 impl HttpResponse {
@@ -308,62 +239,8 @@ impl HttpResponse {
     /// will be the ISO timestamp of the current time.
     pub fn create(
         response: Response,
-        uri: &uri::Https,
-        response_dir: &Option<PathBuf>,
-        multi: bool
     ) -> Self {
-        HttpResponse {
-            response,
-            file: response_dir.as_ref().and_then(|base| {
-                Self::open_file(base, uri, multi)
-            })
-        }
-    }
-
-    /// Opens the file mirroring file.
-    ///
-    /// See [`create`][Self::create] for the rules.
-    fn open_file(
-        base: &Path, uri: &uri::Https, multi: bool
-    ) -> Option<fs::File> {
-        let path = base.join(&uri.as_str()[8..]);
-        let path = if multi {
-            path.join(Utc::now().to_rfc3339())
-        }
-        else {
-            path
-        };
-
-        let parent = match path.parent() {
-            Some(parent) => parent,
-            None => {
-                warn!(
-                    "Cannot keep HTTP response; \
-                    URI translated into a bad path '{}'",
-                    path.display()
-                );
-                return None
-            }
-        };
-        if let Err(err) = fs::create_dir_all(parent) {
-            warn!(
-                "Cannot keep HTTP response; \
-                creating directory {} failed: {}",
-                parent.display(), err
-            );
-            return None
-        }
-        match fs::File::create(&path) {
-            Ok(file) => Some(file),
-            Err(err) => {
-                warn!(
-                    "Cannot keep HTTP response; \
-                    creating file {} failed: {}",
-                    path.display(), err
-                );
-                None
-            }
-        }
+        HttpResponse { response }
     }
 
     /// Returns the value of the content length header if present.
@@ -457,11 +334,7 @@ impl HttpResponse {
 
 impl io::Read for HttpResponse {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let res = self.response.read(buf)?;
-        if let Some(file) = self.file.as_mut() {
-            file.write_all(&buf[..res])?;
-        }
-        Ok(res)
+        self.response.read(buf)
     }
 }
 

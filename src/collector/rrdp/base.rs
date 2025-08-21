@@ -366,7 +366,7 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let mut response = match self.collector.http.response(uri, false) {
+        let mut response = match self.collector.http.response(uri) {
             Ok(response) => response,
             Err(_) => return None,
         };

@@ -327,15 +327,6 @@ The available options are:
       option can be given multiple times in which case proxies are tried in
       the given order.
 
-.. option:: --rrdp-keep-responses=path
-
-      If this option is enabled, the bodies of all HTTPS responses received
-      from RRDP servers will be stored under *path*. The sub-path will be
-      constructed using the components of the requested URI. For the
-      responses to the notification files, the timestamp is appended to the
-      path to make it possible to distinguish the series of requests made
-      over time.
-
 .. option:: --max-object-size=BYTES
 
       Limits the size of individual objects received via either rsync or RRDP
@@ -1209,14 +1200,6 @@ All values can be overridden via the command line options.
             A list of string each providing the URI for a proxy for outgoing
             RRDP connections. The proxies are tried in order for each
             request. HTTP and SOCKS5 proxies are supported.
-
-      rrdp-keep-responses
-            A string containing a path to a directory into which the bodies
-            of all HTTPS responses received from RRDP servers will be stored.
-            The sub-path will be constructed using the components of the
-            requested URI. For the responses to the notification files, the
-            timestamp is appended to the path to make it possible to
-            distinguish the series of requests made over time.
 
       max-object-size
             An integer value that provides a limit for the size of individual
