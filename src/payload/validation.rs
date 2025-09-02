@@ -94,10 +94,10 @@ impl ValidationReport {
 
     /// Creates a new validation report by running the engine.
     pub fn process(
-        engine: &Engine, config: &Config,
+        engine: &Engine, config: &Config, initial: bool,
     ) -> Result<(Self, Metrics), RunFailed> {
         let report = Self::new(config);
-        let mut run = engine.start(&report)?;
+        let mut run = engine.start(&report, initial)?;
         run.process()?;
         run.cleanup()?;
         let metrics = run.done();

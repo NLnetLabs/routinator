@@ -258,6 +258,7 @@ impl Server {
         validation.ignite()?;
 
         let join = thread::spawn(move || {
+            let mut initial = true;
             let mut can_retry = true;
             let err = loop {
                 if let Some(log) = log.as_ref() {
@@ -268,16 +269,31 @@ impl Server {
                     process.config(), true
                 ) {
                     Ok(exceptions) => {
+                        let initial_run = initial;
+                        initial = false;
                         match Self::process_once(
                             process.config(), &validation, &history,
-                            &mut notify, exceptions,
+                            &mut notify, exceptions, initial_run,
                         ) {
                             Ok(()) => {
-                                history.read().refresh_wait()
+                                // Immediately start a new run after the
+                                // initial run.
+                                if initial_run {
+                                    Duration::from_secs(0)
+                                }
+                                else {
+                                    history.read().refresh_wait()
+                                }
                             }
                             Err(err) => {
                                 if err.should_retry() {
-                                    if can_retry {
+                                    if initial_run {
+                                        info!(
+                                            "Retrying full validation run."
+                                        );
+                                        Duration::from_secs(0)
+                                    }
+                                    else if can_retry {
                                         if validation.sanitize().is_err() {
                                             break Err(Failed)
                                         }
@@ -402,10 +418,13 @@ impl Server {
         history: &SharedHistory,
         notify: &mut NotifySender,
         exceptions: LocalExceptions,
+        initial: bool,
     ) -> Result<(), RunFailed> {
         info!("Starting a validation run.");
         history.mark_update_start();
-        let (report, metrics) = ValidationReport::process(engine, config)?;
+        let (report, metrics) = ValidationReport::process(
+            engine, config, initial
+        )?;
         let must_notify = history.update(
             report, &exceptions, metrics,
         );
@@ -634,7 +653,9 @@ impl Vrps {
             let mut once = false;
 
             loop {
-                match ValidationReport::process(&engine, process.config()) {
+                match ValidationReport::process(
+                    &engine, process.config(), false
+                ) {
                     Ok(res) => break res,
                     Err(err) => {
                         if err.should_retry() {
@@ -903,7 +924,7 @@ impl Validate {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let (report, mut metrics) = ValidationReport::process(
-            &engine, process.config(),
+            &engine, process.config(), false,
         )?;
         let snapshot = report.into_snapshot(
             &LocalExceptions::load(process.config(), false)?,
@@ -1143,7 +1164,7 @@ impl Update {
         engine.ignite()?;
         process.switch_logging(false, false)?;
         let (_, metrics) = ValidationReport::process(
-            &engine, process.config(),
+            &engine, process.config(), false
         )?;
         if self.complete && !metrics.rsync_complete() {
             Err(ExitError::IncompleteUpdate)
