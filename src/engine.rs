@@ -805,6 +805,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         let mut point_ok = true;
         let update_result = store.update(
+            &self.run.validation.store,
             StoredManifest::new(
                 &collected.ee_cert,
                 &collected.content,

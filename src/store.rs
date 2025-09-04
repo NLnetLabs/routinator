@@ -511,7 +511,7 @@ impl<'a> Run<'a> {
     /// back to using rsync. Because rsync is ‘authoritative’ for the object
     /// URIs, it is safe to use objects received via rsync in RRDP
     /// repositories.
-    pub fn repository(&self, ca_cert: &CaCert) -> Repository<'a> {
+    pub fn repository(&self, ca_cert: &CaCert) -> Repository {
         Repository::new(self.store, ca_cert.rpki_notify().cloned())
     }
 
@@ -527,7 +527,7 @@ impl<'a> Run<'a> {
     /// repositories.
     pub fn pub_point(
         &self, ca_cert: &CaCert
-    ) -> Result<StoredPoint<'a>, Failed> {
+    ) -> Result<StoredPoint, Failed> {
         self.repository(ca_cert).get_point(ca_cert.rpki_manifest())
     }
 }
@@ -563,9 +563,7 @@ impl Run<'_> {
         retain: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
         Self::cleanup_dir_tree(base, |path| {
-            if let Some(stored) = StoredPoint::load_quietly(
-                self.store, path.into(),
-            ) {
+            if let Some(stored) = StoredPoint::load_quietly(path.into()) {
                 if stored.retain(self.started) {
                     if let Some(uri) = stored.header.rpki_notify.as_ref() {
                         retain.add_rrdp_repository(uri)
@@ -674,10 +672,7 @@ impl Run<'_> {
 /// You can get access to a publication point via
 /// [`get_point`][Self::get_point].
 ///
-pub struct Repository<'a> {
-    /// The store we are part of.
-    store: &'a Store,
-
+pub struct Repository {
     /// The path where the repository lives.
     path: PathBuf,
 
@@ -685,14 +680,13 @@ pub struct Repository<'a> {
     rpki_notify: Option<uri::Https>,
 }
 
-impl<'a> Repository<'a> {
+impl Repository {
     /// Creates a repository object for the given repository.
     ///
     /// The repository is identified by the RRDP URI. Each RRDP “server” gets
     /// its own repository and all rsync “servers” share one.
-    fn new(store: &'a Store, rpki_notify: Option<uri::Https>) -> Self {
+    fn new(store: &Store, rpki_notify: Option<uri::Https>) -> Self {
         Self {
-            store,
             path: if let Some(rpki_notify) = rpki_notify.as_ref() {
                 store.rrdp_repository_path(rpki_notify)
             }
@@ -722,9 +716,8 @@ impl<'a> Repository<'a> {
     /// information stored for the point or not.
     pub fn get_point(
         &self, manifest_uri: &uri::Rsync
-    ) -> Result<StoredPoint<'a>, Failed> {
+    ) -> Result<StoredPoint, Failed> {
         StoredPoint::open(
-            self.store,
             self.point_path(manifest_uri),
             manifest_uri, self.rpki_notify.as_ref(),
         )
@@ -752,10 +745,7 @@ impl<'a> Repository<'a> {
 /// [`manifest`][Self::manifest] and acts as an iterator over the
 /// publication point’s objects. The method [`update`][Self::update] allows
 /// atomically updating the information.
-pub struct StoredPoint<'a> {
-    /// A reference to the underlying store.
-    store: &'a Store,
-
+pub struct StoredPoint {
     /// The path to the file-system location of the repository.
     path: PathBuf,
 
@@ -781,14 +771,13 @@ pub struct StoredPoint<'a> {
     file: Option<File>,
 }
 
-impl<'a> StoredPoint<'a> {
+impl StoredPoint {
     /// Opens the stored point.
     ///
     /// If there is a file at the given path, it is opened, the manifest is
     /// read and positioned at the first stored object. Otherwise there will
     /// be no manifest and no objects.
     fn open(
-        store: &'a Store,
         path: PathBuf,
         manifest_uri: &uri::Rsync,
         rpki_notify: Option<&uri::Https>,
@@ -796,7 +785,7 @@ impl<'a> StoredPoint<'a> {
         let mut file = match File::open(&path) {
             Ok(file) => file,
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                return Self::create(store, path, manifest_uri, rpki_notify);
+                return Self::create(path, manifest_uri, rpki_notify);
             }
             Err(err) => {
                 error!(
@@ -810,7 +799,7 @@ impl<'a> StoredPoint<'a> {
         let mut header = match StoredPointHeader::read(&mut file) {
             Ok(header) => header,
             Err(err) if !err.is_fatal() => {
-                return Self::create(store, path, manifest_uri, rpki_notify);
+                return Self::create(path, manifest_uri, rpki_notify);
             }
             Err(err) => {
                 error!(
@@ -843,7 +832,7 @@ impl<'a> StoredPoint<'a> {
             }
 
             return Ok(Self {
-                store, path,
+                path,
                 is_new: false,
                 header,
                 manifest: None,
@@ -863,7 +852,7 @@ impl<'a> StoredPoint<'a> {
         };
 
         Ok(Self {
-            store, path,
+            path,
             is_new: false,
             header,
             manifest: Some(manifest),
@@ -878,7 +867,6 @@ impl<'a> StoredPoint<'a> {
     ///
     /// Creates the file and sets it to an initial status.
     fn create(
-        store: &'a Store,
         path: PathBuf,
         manifest_uri: &uri::Rsync,
         rpki_notify: Option<&uri::Https>,
@@ -908,7 +896,7 @@ impl<'a> StoredPoint<'a> {
         }
 
         Ok(StoredPoint {
-            store, path,
+            path,
             is_new: true,
             header,
             manifest: None,
@@ -921,7 +909,7 @@ impl<'a> StoredPoint<'a> {
     ///
     /// Does not create a value if the point does not exist. Does not output
     /// any error messages and just returns `None` if loading fails.
-    pub fn load_quietly(store: &'a Store, path: PathBuf) -> Option<Self> {
+    pub fn load_quietly(path: PathBuf) -> Option<Self> {
         let mut file = File::open(&path).ok()?;
         let header = StoredPointHeader::read(&mut file).ok()?;
         let manifest = match header.update_status {
@@ -931,7 +919,7 @@ impl<'a> StoredPoint<'a> {
             UpdateStatus::LastAttempt(_) => None,
         };
         Some(Self {
-            store, path,
+            path,
             is_new: false,
             header, manifest,
             file: Some(file)
@@ -957,10 +945,11 @@ impl<'a> StoredPoint<'a> {
     /// to write the necessary code.
     pub fn update(
         &mut self,
+        store: &Store,
         manifest: StoredManifest,
         mut objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
     ) -> Result<(), UpdateError> {
-        let mut tmp_file = self.store.tmp_file()?;
+        let mut tmp_file = store.tmp_file()?;
         
         self.header.update_status = UpdateStatus::Success(Time::now());
 
@@ -1052,7 +1041,7 @@ impl<'a> StoredPoint<'a> {
     }
 }
 
-impl StoredPoint<'_> {
+impl StoredPoint {
     /// Returns a reference to the path of the file.
     pub fn path(&self) -> &Path {
         &self.path
@@ -1069,7 +1058,7 @@ impl StoredPoint<'_> {
     }
 }
 
-impl Iterator for StoredPoint<'_> {
+impl Iterator for StoredPoint {
     type Item = Result<StoredObject, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
