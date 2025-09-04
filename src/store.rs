@@ -947,10 +947,18 @@ impl StoredPoint {
         &mut self,
         store: &Store,
         manifest: StoredManifest,
+        objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
+    ) -> Result<(), UpdateError> {
+        let tmp_file = store.tmp_file()?;
+        self._update(tmp_file, manifest, objects)
+    }
+
+    pub fn _update(
+        &mut self,
+        mut tmp_file: NamedTempFile,
+        manifest: StoredManifest,
         mut objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
     ) -> Result<(), UpdateError> {
-        let mut tmp_file = store.tmp_file()?;
-        
         self.header.update_status = UpdateStatus::Success(Time::now());
 
         if let Err(err) = self.header.write(&mut tmp_file) {
@@ -1327,7 +1335,11 @@ impl StoredObject {
     pub fn read(
         reader: &mut impl io::Read
     ) -> Result<Option<Self>, ParseError> {
-        let uri = uri::Rsync::parse(reader)?;
+        let uri = match uri::Rsync::parse(reader) {
+            Ok(uri) => uri,
+            Err(err) if err.is_eof() => return Ok(None),
+            Err(err) => return Err(err),
+        };
         let hash = match u8::parse(reader)? {
             0 => None,
             1 => {
@@ -1449,6 +1461,84 @@ impl From<Failed> for UpdateError {
 impl From<RunFailed> for UpdateError {
     fn from(err: RunFailed) -> Self {
         UpdateError::Failed(err)
+    }
+}
+
+
+//============ Tests =========================================================
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+    use super::*;
+
+    #[test]
+    fn read_write() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let path = dir.path().join("stored.bin");
+        let manifest_uri = uri::Rsync::from_str(
+            "rsync://example.com/test/test.mft"
+        ).unwrap();
+        let rpki_notify = Some(uri::Https::from_str(
+            "https://example.com/notification.xml"
+        ).unwrap());
+
+        // StoredManifest::new is too smart, so we need to make this manually.
+        let manifest = StoredManifest {
+            not_after: Time::utc(2025, 10, 01, 16, 10, 22),
+            manifest_number: Serial::default(),
+            this_update: Time::utc(2010, 06, 03, 08, 11, 00),
+            ca_repository: uri::Rsync::from_str(
+                "rsync://example.com/test/"
+            ).unwrap(),
+            manifest: Bytes::from_static(b"deadbeef"),
+            crl_uri: uri::Rsync::from_str(
+                "rsync://example.com/test/test.crl"
+            ).unwrap(),
+            crl: Bytes::from_static(b"crlbytesgohere"),
+        };
+
+        let objects = [
+            StoredObject::new(
+                uri::Rsync::from_str(
+                    "rsync://example.com/test/obj1.bin"
+                ).unwrap(),
+                Bytes::from_static(b"object1content"),
+                Some(ManifestHash::new(
+                    Bytes::copy_from_slice(
+                        DigestAlgorithm::sha256().digest(
+                            b"object1content"
+                        ).as_ref()
+                    ),
+                    DigestAlgorithm::sha256()
+                ))
+            ),
+            StoredObject::new(
+                uri::Rsync::from_str(
+                    "rsync://example.com/test/obj2.bin"
+                ).unwrap(),
+                Bytes::from_static(b"object2stuff"),
+                None,
+            ),
+        ];
+
+        let mut point = StoredPoint::open(
+            path.clone(), &manifest_uri, rpki_notify.as_ref()
+        ).unwrap();
+        let mut objects_iter = objects.iter();
+        point._update(
+            NamedTempFile::new_in(&dir).unwrap(),
+            manifest.clone(),
+            || Ok(objects_iter.next().cloned())
+        ).unwrap();
+        drop(point);
+
+        let mut point = StoredPoint::load_quietly(path.clone()).unwrap();
+        assert_eq!(point.manifest, Some(manifest));
+        assert_eq!(point.next().unwrap().unwrap(), objects[0]);
+        assert_eq!(point.next().unwrap().unwrap(), objects[1]);
+        assert!(point.next().is_none());
     }
 }
 
