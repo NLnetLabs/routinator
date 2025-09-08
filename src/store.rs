@@ -157,7 +157,7 @@ impl Store {
     ///
     /// The function is called implicitly by [`new`][Self::new].
     //  (Or, well, not really, but they both only call `create_base_dir`, so
-    //   from a user perspeective it does.)
+    //   from a user perspective it does.)
     pub fn init(config: &Config) -> Result<(), Failed> {
         Self::create_base_dir(config)?;
         Ok(())
