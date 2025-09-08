@@ -823,7 +823,7 @@ impl StoredPoint {
                      re-open: {}",
                     path.display(), err
                 );
-                return Failed
+                Failed
 
             })?;
 
@@ -1499,9 +1499,9 @@ mod test {
 
         // StoredManifest::new is too smart, so we need to make this manually.
         let manifest = StoredManifest {
-            not_after: Time::utc(2025, 10, 01, 16, 10, 22),
+            not_after: Time::utc(2025, 10, 1, 16, 10, 22),
             manifest_number: Serial::default(),
-            this_update: Time::utc(2010, 06, 03, 08, 11, 00),
+            this_update: Time::utc(2010, 6, 3, 8, 11, 0),
             ca_repository: uri::Rsync::from_str(
                 "rsync://example.com/test/"
             ).unwrap(),
