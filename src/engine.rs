@@ -328,7 +328,12 @@ impl Engine {
         }
         Ok(Run::new(
             self,
-            self.collector.as_ref().map(Collector::start),
+            if initial {
+                None
+            }
+            else {
+                self.collector.as_ref().map(Collector::start)
+            },
             self.store.start(),
             processor,
             initial,
