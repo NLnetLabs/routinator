@@ -816,16 +816,29 @@ impl StoredPoint {
             // We never succeeded. Update the status and return.
             header.update_status = UpdateStatus::LastAttempt(Time::now());
 
+            drop(file);
+            let mut file = File::create(&path).map_err(|err| {
+                error!(
+                    "Failed to update stored publication point at {}: \
+                     re-open: {}",
+                    path.display(), err
+                );
+                return Failed
+
+            })?;
+
             if let Err(err) = file.seek(SeekFrom::Start(0)) {
                 error!(
-                    "Failed to update stored publication point at {}: {}",
+                    "Failed to update stored publication point at {}: \
+                     seek failed: {}",
                     path.display(), err
                 );
                 return Err(Failed)
             }
             if let Err(err) = header.write(&mut file) {
                 error!(
-                    "Failed to update stored publication point at {}: {}",
+                    "Failed to update stored publication point at {}: \
+                     write failed: {}",
                     path.display(), err
                 );
                 return Err(Failed)
