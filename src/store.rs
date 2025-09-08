@@ -68,7 +68,7 @@
 
 use std::{fs, io};
 use std::fs::File;
-use std::io::{BufReader, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use log::error;
@@ -968,23 +968,25 @@ impl StoredPoint {
 
     pub fn _update(
         &mut self,
-        mut tmp_file: NamedTempFile,
+        tmp_file: NamedTempFile,
         manifest: StoredManifest,
         mut objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
     ) -> Result<(), UpdateError> {
+        let mut tmp_file = BufWriter::new(tmp_file);
+
         self.header.update_status = UpdateStatus::Success(Time::now());
 
         if let Err(err) = self.header.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_file.path().display(), err
+                tmp_file.get_ref().path().display(), err
             );
             return Err(UpdateError::fatal())
         }
         if let Err(err) = manifest.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_file.path().display(), err
+                tmp_file.get_ref().path().display(), err
             );
             return Err(UpdateError::fatal())
         }
@@ -993,7 +995,7 @@ impl StoredPoint {
             Err(err) => {
                 error!(
                     "Fatal: failed to get position in file {}: {}",
-                    tmp_file.path().display(), err
+                    tmp_file.get_ref().path().display(), err
                 );
                 return Err(UpdateError::fatal())
             }
@@ -1002,11 +1004,20 @@ impl StoredPoint {
             if let Err(err) = object.write(&mut tmp_file) {
                 error!(
                     "Fatal: failed to write to file {}: {}",
-                    tmp_file.path().display(), err
+                    tmp_file.get_ref().path().display(), err
                 );
                 return Err(UpdateError::fatal())
             }
         }
+
+        let tmp_file = tmp_file.into_inner().map_err(|err| {
+            let (err, tmp_file) = err.into_parts();
+            error!(
+                "Fatal: failed to write to file {}: {}",
+                tmp_file.get_ref().path().display(), err
+            );
+            UpdateError::fatal()
+        })?;
 
         // I think we need to drop `self.file` first so it gets closed and the
         // path unlocked on Windows?
