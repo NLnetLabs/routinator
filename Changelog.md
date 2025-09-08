@@ -13,6 +13,10 @@ Breaking changes
 
 New
 
+* Added a quick initial run after starting the server which only uses
+  stored data and aborts if any required data hasn’t been requested
+  before to deal with configuration changes. This will shorten the wait
+  time for an initial data set when restarting Routinator. ([#1057])
 * Added support for SLURM v2 as output format which includes ASPA payload.
   ([#1021])
 * Changed refresh behaviour to better cope with short-lived objects. By
@@ -73,6 +77,7 @@ Other changes
 [#1052]: https://github.com/NLnetLabs/routinator/pull/1052
 [#1053]: https://github.com/NLnetLabs/routinator/pull/1053
 [#1055]: https://github.com/NLnetLabs/routinator/pull/1055
+[#1057]: https://github.com/NLnetLabs/routinator/pull/1057
 [@kawaemon]: https://github.com/kawaemon
 [mitmproxy]: https://www.mitmproxy.org/
 
