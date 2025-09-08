@@ -350,6 +350,34 @@ impl<R: io::Read> Parse<R> for Time {
 }
 
 
+//------------ Option<Time> --------------------------------------------------
+
+impl<W: io::Write> Compose<W> for Option<Time> {
+    fn compose(&self, target: &mut W) -> Result<(), io::Error> {
+        match self {
+            Some(time) => time.timestamp(),
+            None => i64::MIN
+        }.compose(target)
+    }
+}
+
+impl<R: io::Read> Parse<R> for Option<Time> {
+    fn parse(source: &mut R) -> Result<Self, ParseError> {
+        let timestamp = i64::parse(source)?;
+        if timestamp == i64::MIN {
+            Ok(None)
+        }
+        else {
+            Utc.timestamp_opt(
+                timestamp, 0
+            ).single().map(|time| Some(time.into())).ok_or_else(|| {
+                ParseError::format("invalid timestamp")
+            })
+        }
+    }
+}
+
+
 //------------ HashMap<K, V> -------------------------------------------------
 //
 // Encoded as the number of items as a u64 followed by pairs of key and value.

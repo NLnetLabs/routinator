@@ -312,9 +312,15 @@ impl Engine {
     /// During the run, `processor` will be responsible for dealing with
     /// valid objects. It must implement the [`ProcessRun`] trait.
     ///
+    /// If `initial` is set to `true`, this will be an initial run which
+    /// will operate without the collectors and return a non-fatal failure
+    /// if any required publication points have not been referenced in the
+    /// store, indicating that likely the configuration has changed and a
+    /// full run is necessary.
+    ///
     /// The method returns a [`Run`] that drives the validation run.
     pub fn start<P: ProcessRun>(
-        &self, processor: P
+        &self, processor: P, initial: bool,
     ) -> Result<Run<'_, P>, Failed> {
         info!("Using the following TALs:");
         for tal in &self.tals {
@@ -322,9 +328,15 @@ impl Engine {
         }
         Ok(Run::new(
             self,
-            self.collector.as_ref().map(Collector::start),
+            if initial {
+                None
+            }
+            else {
+                self.collector.as_ref().map(Collector::start)
+            },
             self.store.start(),
-            processor
+            processor,
+            initial,
         ))
     }
 
@@ -360,6 +372,11 @@ pub struct Run<'a, P> {
     /// The processor for valid data.
     processor: P,
 
+    /// Is this an inital run?
+    ///
+    /// If `true`, a missing stored point will lead to a non-fatal error.
+    initial: bool,
+
     /// Was an error encountered during the run?
     had_err: AtomicBool,
 
@@ -377,9 +394,10 @@ impl<'a, P> Run<'a, P> {
         collector: Option<collector::Run<'a>>,
         store: store::Run<'a>,
         processor: P,
+        initial: bool
     ) -> Self {
         Run {
-            validation, collector, store, processor,
+            validation, collector, store, processor, initial,
             had_err: AtomicBool::new(false),
             is_fatal: AtomicBool::new(false),
             metrics: Default::default()
@@ -662,6 +680,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         metrics: &mut RunMetrics,
     ) -> Result<Vec<CaTask<P::PubPoint>>, RunFailed> {
         let mut store = self.run.store.pub_point(self.cert)?;
+        if self.run.initial && store.is_new() {
+            info!(
+                "Initial quick validation failed: \
+                 encountered new publication point '{}'.",
+                self.cert.rpki_manifest()
+            );
+            self.run.run_failed(RunFailed::retry());
+            return Err(RunFailed::retry());
+        }
         if let Some(collector) = self.run.collector.as_ref() {
             if let Some(collector) = collector.repository(self.cert)? {
                 match self.process_collected(
@@ -710,8 +737,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // the stored manifest refers to the same CA repository URI, just to
         // be sure.
         let same = if let Some(mft) = store.manifest() {
-            mft.manifest() == &collected
-                && mft.ca_repository() == self.cert.ca_repository()
+            mft.manifest == collected
+                && mft.ca_repository == *self.cert.ca_repository()
         }
         else {
             false
@@ -735,7 +762,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // fields are larger than the stored manifest’s. Otherwise return so
         // we use the stored manifest.
         if let Some(mft) = store.manifest() {
-            if collected.content.manifest_number() <= mft.manifest_number() {
+            if collected.content.manifest_number() <= mft.manifest_number {
                 self.log.warn(format_args!(
                     "manifest {}: manifest number is not greater than in \
                      stored version. Using stored publication point.",
@@ -743,7 +770,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 ));
                 return Ok(Err(self))
             }
-            if collected.content.this_update() <= mft.this_update() {
+            if collected.content.this_update() <= mft.this_update {
                 self.log.warn(format_args!(
                     "manifest {}: manifest thisUpdate is not later than in \
                      stored version. Using stored publication point.",
@@ -783,6 +810,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         let mut point_ok = true;
         let update_result = store.update(
+            &self.run.validation.store,
             StoredManifest::new(
                 &collected.ee_cert,
                 &collected.content,
@@ -1091,7 +1119,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         mut store: StoredPoint,
         metrics: &mut RunMetrics,
     ) -> Result<Vec<CaTask<P::PubPoint>>, Failed> {
-        let manifest = match store.take_manifest() {
+        let manifest = match store.manifest() {
             Some(manifest) => manifest,
             None => {
                 // We don’t seem to have this point in the store either.
@@ -1140,7 +1168,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 }
             };
             if !self.process_object(
-                object.uri(), object.content().clone(),
+                &object.uri, object.content.clone(),
                 &mut manifest, &mut ca_tasks
             )? {
                 self.reject_point(metrics);
@@ -1160,11 +1188,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
     /// the stored manifest.
     fn validate_stored_manifest(
         &mut self,
-        stored_manifest: StoredManifest,
+        stored_manifest: &StoredManifest,
     ) -> Result<ValidPointManifest, Failed> {
         // Decode and validate the manifest.
         let manifest = match Manifest::decode(
-            stored_manifest.manifest().clone(), self.run.validation.strict
+            stored_manifest.manifest.clone(), self.run.validation.strict
         ) {
             Ok(manifest) => manifest,
             Err(_) => {
@@ -1221,7 +1249,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         };
 
         // Decode and validate the CRL.
-        let mut crl = match Crl::decode(stored_manifest.crl().clone()) {
+        let mut crl = match Crl::decode(stored_manifest.crl.clone()) {
             Ok(crl) => crl,
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
@@ -1282,8 +1310,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         self.metrics.valid_crls += 1;
         Ok(ValidPointManifest {
             ee_cert, content, crl_uri, crl,
-            manifest_bytes: stored_manifest.manifest().clone(),
-            crl_bytes: stored_manifest.crl().clone(),
+            manifest_bytes: stored_manifest.manifest.clone(),
+            crl_bytes: stored_manifest.crl.clone(),
             metrics: Default::default(),
         })
     }

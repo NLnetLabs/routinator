@@ -1,4 +1,4 @@
-//! A store for correctly published RPKI objects.
+//! A store for RPKI objects.
 //!
 //! To be more resistant against accidental or malicious errors in the data
 //! published by repositories, we retain a separate copy of all RPKI data that
@@ -37,8 +37,11 @@
 //! signedObject URI of its manifest, starting with the authority part of the
 //! URI and then just following along. The file contains status information,
 //! the manifest, the CRL, and each object. It starts with a serialized
-//! [`StoredManifest`] which is followed by a sequence of serialized
-//! [`StoredObject`]s for all the objects as given on the manifest.
+//! [`StoredPointHeader`] which is primarily used to mark points requested
+//! but never successfully retrieved. If a point was successfully retrieved,
+//! the header is followed by a [`StoredManifest`] which in turn is followed
+//! by a sequence of serialized [`StoredObject`]s for all the objects as
+//! given on the manifest.
 //!
 //! All publication points that are hosted in an RRDP repository are stored
 //! under `rrdp`, independently of whether they have been retrieved via RRDP
@@ -62,19 +65,20 @@
 //! actually complete and correct. File names here are named using eight
 //! random hex-digits.
 
+
 use std::{fs, io};
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
-use log::{debug, error, info, warn};
-use rand::random;
-use rpki::crypto::digest::DigestAlgorithm;
+use log::error;
+use rpki::uri;
+use rpki::crypto::DigestAlgorithm;
 use rpki::repository::cert::{Cert, ResourceCert};
 use rpki::repository::manifest::{ManifestContent, ManifestHash};
 use rpki::repository::tal::TalUri;
 use rpki::repository::x509::{Serial, Time};
-use rpki::uri;
+use tempfile::NamedTempFile;
 use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
@@ -89,12 +93,13 @@ use crate::utils::uri::UriExt;
 
 //------------ Store ---------------------------------------------------------
 
-/// A store for correctly published RPKI objects.
+/// A store for RPKI objects.
 ///
 /// The store retains a copy of curated, published RPKI data. Its intended use
 /// is for keeping the most recent data of a given RPKI publication point that
-/// was found to be correctly published. However, the store doesn’t enforce
-/// this, and can be used for other purposes as well.
+/// was found to be correctly published as well as keeping track of which
+/// publication points have been requested which is used during optimistic
+/// startup.
 ///
 /// A store can be created via the [`new`][Store::new] function which will
 /// initialize a new store on disk if necessary and open it. If you only want
@@ -108,6 +113,26 @@ use crate::utils::uri::UriExt;
 pub struct Store {
     /// The base path for the store.
     path: PathBuf,
+}
+
+impl Store {
+    /// The name of the status file.
+    const STATUS_NAME: &'static str = "status.bin";
+
+    /// The dirctory for TA certificates retrieved via rsync.
+    const RSYNC_TA_PATH: &'static str = "ta/rsync";
+
+    /// The dirctory for TA certificates retrieved via HTTPS.
+    const HTTPS_TA_PATH: &'static str = "ta/https";
+
+    /// The directory for the RRDP repositories.
+    const RRDP_BASE: &'static str = "rrdp";
+
+    /// The directory for the rsync repository.
+    const RSYNC_PATH: &'static str = "rsync";
+
+    /// The name of the directory where the temporary files go.
+    const TMP_BASE: &'static str = "tmp";
 }
 
 impl Store {
@@ -132,7 +157,7 @@ impl Store {
     ///
     /// The function is called implicitly by [`new`][Self::new].
     //  (Or, well, not really, but they both only call `create_base_dir`, so
-    //   from a user persepective it does.)
+    //   from a user perspective it does.)
     pub fn init(config: &Config) -> Result<(), Failed> {
         Self::create_base_dir(config)?;
         Ok(())
@@ -152,6 +177,11 @@ impl Store {
         Ok(())
     }
 
+    /// Start a validation run with the store.
+    pub fn start(&self) -> Run<'_> {
+        Run::new(self)
+    }
+
     /// Loads the status of the last run.
     pub fn status(&self) -> Result<Option<StoredStatus>, Failed> {
         let path = self.status_path();
@@ -169,39 +199,88 @@ impl Store {
         }
     }
 
-    /// Start a validation run with the store.
-    pub fn start(&self) -> Run<'_> {
-        Run::new(self)
+    /// Returns the path for the status file.
+    fn status_path(&self) -> PathBuf {
+        self.path.join(Self::STATUS_NAME)
     }
 
-    /// Dumps the content of the store.
+    /// Returns the path to use for the trust anchor at the given URI.
+    fn ta_path(&self, uri: &TalUri) -> PathBuf {
+        match *uri {
+            TalUri::Rsync(ref uri) => {
+                self.path.join(
+                    uri.unique_path(Self::RSYNC_TA_PATH, ".cer")
+                )
+            }
+            TalUri::Https(ref uri) => {
+                self.path.join(
+                    uri.unique_path(Self::HTTPS_TA_PATH, ".cer")
+                )
+            }
+        }
+    }
+
+    /// Returns the path where the RRDP repositories are stored.
+    fn rrdp_repository_base(&self) -> PathBuf {
+        self.path.join(Self::RRDP_BASE)
+    }
+
+    /// Returns the path for the RRDP repository with the given rpkiNotify URI.
+    fn rrdp_repository_path(&self, uri: &uri::Https) -> PathBuf {
+        self.path.join(uri.unique_path(Self::RRDP_BASE, ""))
+    }
+
+    /// Returns the path where the combined rsync repository is stored.
+    fn rsync_repository_path(&self) -> PathBuf {
+        self.path.join(Self::RSYNC_PATH)
+    }
+
+    /// Creates and returns a temporary file.
+    ///
+    /// The file is created in the store’s temporary path. If this succeeds,
+    /// the path and file object are returned.
+    fn tmp_file(&self) -> Result<NamedTempFile, Failed> {
+        let tmp_dir = self.path.join(Self::TMP_BASE);
+        fatal::create_dir_all(&tmp_dir)?;
+        NamedTempFile::new_in(&tmp_dir).map_err(|err| {
+            error!(
+                "Fatal: failed to create temporary file in {}: {}",
+                tmp_dir.display(), err
+            );
+            Failed
+        })
+    }
+}
+
+/// # Dumping of stored data
+impl Store {
+    /// Dumps the content of the store to `dir`.
     pub fn dump(&self, dir: &Path) -> Result<(), Failed> {
-        self.dump_ta_certs(dir)?;
+        // TA certificates.
+        self.dump_subdir(Self::RSYNC_TA_PATH, dir)?;
+        self.dump_subdir(Self::HTTPS_TA_PATH, dir)?;
+
+        // Dump store content.
         let dir = dir.join("store");
-        debug!("Dumping store content from {} to {}", 
-            self.path.display(), 
-            dir.display()
-        );
         fatal::remove_dir_all(&dir)?;
         let mut repos = DumpRegistry::new(dir);
-        self.dump_tree(&self.rsync_repository_path(), &mut repos)?;
-        self.dump_tree(&self.rrdp_repository_base(), &mut repos)?;
+        self.dump_point_tree(&self.rsync_repository_path(), &mut repos)?;
+        self.dump_point_tree(&self.rrdp_repository_base(), &mut repos)?;
+
         self.dump_repository_json(repos)?;
-        debug!("Store dump complete.");
         Ok(())
     }
 
-    /// Dumps all the stored trust anchor certificates.
-    fn dump_ta_certs(
+    /// Dumps all the complete sub-directory.
+    fn dump_subdir(
         &self,
-        target_base: &Path
+        subdir: &str,
+        target_base: &Path,
     ) -> Result<(), Failed> {
-        let source = self.path.join("ta");
-        let target = target_base.join("ta");
-        debug!("Dumping trust anchor certificates to {}", target.display());
+        let source = self.path.join(subdir);
+        let target = target_base.join(subdir);
         fatal::remove_dir_all(&target)?;
         fatal::copy_existing_dir_all(&source, &target)?;
-        debug!("Trust anchor certificate dump complete.");
         Ok(())
     }
 
@@ -209,7 +288,7 @@ impl Store {
     ///
     /// The point’s repository and rsync URI is determined from the stored
     /// points themselves. The target path is being determined from `repos`.
-    fn dump_tree(
+    fn dump_point_tree(
         &self,
         path: &Path,
         repos: &mut DumpRegistry,
@@ -221,7 +300,7 @@ impl Store {
         for entry in dir {
             let entry = entry?;
             if entry.is_dir() {
-                self.dump_tree(entry.path(), repos)?;
+                self.dump_point_tree(entry.path(), repos)?;
             }
             else if entry.is_file() {
                 self.dump_point(entry.path(), repos)?;
@@ -236,17 +315,14 @@ impl Store {
         path: &Path,
         repos: &mut DumpRegistry,
     ) -> Result<(), Failed> {
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(err) => {
-                error!(
-                    "Fatal: failed to open file {}: {}",
-                    path.display(), err
-                );
-                return Err(Failed)
-            }
-        };
-        let manifest = match StoredManifest::read(&mut file) {
+        let mut file = File::open(path).map_err(|err| {
+            error!(
+                "Fatal: failed to open file {}: {}",
+                path.display(), err
+            );
+            Failed
+        })?;
+        let header = match StoredPointHeader::read(&mut file) {
             Ok(some) => some,
             Err(err) => {
                 error!(
@@ -256,26 +332,30 @@ impl Store {
                 return Ok(())
             }
         };
+        let manifest = StoredManifest::read(&mut file).map_err(|err| {
+            error!(
+                "Fatal: failed to read file {}: {}",
+                path.display(), err
+            );
+            Failed
+        })?;
 
-        let repo_dir = repos.get_repo_path(manifest.rpki_notify.as_ref());
+        let repo_dir = repos.get_repo_path(header.rpki_notify.as_ref());
 
+        // Manifest and CRL are in `manifest`.
         self.dump_object(
-            &repo_dir, &manifest.manifest_uri, &manifest.manifest
+            &repo_dir, &header.manifest_uri, &manifest.manifest
         )?;
         self.dump_object(&repo_dir, &manifest.crl_uri, &manifest.crl)?;
 
-        loop {
-            let object = match StoredObject::read(&mut file) {
-                Ok(Some(object)) => object,
-                Ok(None) => break,
-                Err(err) => {
-                    warn!(
-                        "Partially skipping {}: failed to read file: {}",
-                        path.display(), err
-                    );
-                    return Ok(())
-                }
-            };
+        // Loop all other objects.
+        while let Some(object) = StoredObject::read(&mut file).map_err(|err| {
+            error!(
+                "Fatal: failed to read file {}: {}",
+                path.display(), err
+            );
+            Failed
+        })? {
             self.dump_object(&repo_dir, &object.uri, &object.content)?;
         }
 
@@ -351,88 +431,6 @@ impl Store {
             }).as_bytes()
         )
     }
-
-    /// The name of the status file.
-    const STATUS_NAME: &'static str = "status.bin";
-
-    /// Returns the path for the status file.
-    fn status_path(&self) -> PathBuf {
-        self.path.join(Self::STATUS_NAME)
-    }
-
-    /// Returns the path to use for the trust anchor at the given URI.
-    fn ta_path(&self, uri: &TalUri) -> PathBuf {
-        match *uri {
-            TalUri::Rsync(ref uri) => {
-                self.path.join(
-                    uri.unique_path("ta/rsync", ".cer")
-                )
-            }
-            TalUri::Https(ref uri) => {
-                self.path.join(
-                    uri.unique_path("ta/https", ".cer")
-                )
-            }
-        }
-    }
-
-    /// The name of the directory where all the RRDP repositories go.
-    const RRDP_BASE: &'static str = "rrdp";
-
-    /// Returns the path where all the RRDP repositories are stored.
-    fn rrdp_repository_base(&self) -> PathBuf {
-        self.path.join(Self::RRDP_BASE)
-    }
-
-    /// Returns the path for the RRDP repository with the given rpkiNotify URI.
-    fn rrdp_repository_path(&self, uri: &uri::Https) -> PathBuf {
-        self.path.join(uri.unique_path(Self::RRDP_BASE, ""))
-    }
-
-    /// Returns the path where the combined rsync repository is stored.
-    fn rsync_repository_path(&self) -> PathBuf {
-        self.path.join("rsync")
-    }
-
-    /// The name of the directory where the temporary files go.
-    const TMP_BASE: &'static str = "tmp";
-
-    /// Creates and returns a temporary file.
-    ///
-    /// The file is created in the store’s temporary path. If this succeeds,
-    /// the path and file object are returned.
-    fn tmp_file(&self) -> Result<(PathBuf, File), Failed> {
-        let tmp_dir = self.path.join(Self::TMP_BASE);
-        fatal::create_dir_all(&tmp_dir)?;
-        for _ in 0..100 {
-            let tmp_path = tmp_dir.join(format!("{:08x}", random::<u32>()));
-            let file = {
-                fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&tmp_path)
-            };
-            match file {
-                Ok(file) => return Ok((tmp_path, file)),
-                Err(ref err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                    continue
-                }
-                Err(err) => {
-                    error!(
-                        "Fatal: failed to create temporary file {}: {}",
-                        tmp_path.display(), err
-                    );
-                    return Err(Failed)
-                }
-            }
-        }
-
-        error!(
-            "Fatal: repeatedly failed to create temporary file in {}",
-            tmp_dir.display()
-        );
-        Err(Failed)
-    }
 }
 
 
@@ -442,19 +440,19 @@ impl Store {
 ///
 /// The type provides access to the stored versions of trust anchor
 /// certificates via the [`load_ta`][Self::load_ta] method and repositories
-/// through the [`repository`][Self::repository] method.
+/// through the [`repository`][Self::repository] method or publication points
+/// directly via [pub_point}[Self::pub_point].
 ///
 /// Stored trust anchor certificates can be updated via
-/// [`update_ta`][Self::update_ta] on [`Run`] directly, while the
-/// [`Repository`] provides means to that for all other data.
-///
-/// This type references the underlying [`Store`]. It can be used with
-/// multiple threads using
-/// [crossbeam’s](https://github.com/crossbeam-rs/crossbeam) scoped threads.
+/// [`update_ta`][Self::update_ta] on [`Run`] directly, while
+/// [`StoredPoint`] provides means to that for RPKI objects.
 #[derive(Debug)]
 pub struct Run<'a> {
     /// A reference to the underlying store.
     store: &'a Store,
+
+    /// The time this run was started.
+    started: Time,
 }
 
 impl<'a> Run<'a> {
@@ -462,16 +460,17 @@ impl<'a> Run<'a> {
     fn new(
         store: &'a Store,
     ) -> Self {
-        Run { store }
+        Run { 
+            store,
+            started: Time::now(),
+        }
     }
 
     /// Finishes the validation run.
     ///
     /// Updates the `metrics` with the store run’s metrics.
-    ///
-    /// If you are not interested in the metrics, you can simple drop the
-    /// value, instead.
-    pub fn done(self, _metrics: &mut Metrics) {
+    pub fn done(self, metrics: &mut Metrics) {
+        let _ = metrics;
         let path = self.store.status_path();
         let Ok(mut file) = fatal::create_file(&path) else {
             return
@@ -512,14 +511,8 @@ impl<'a> Run<'a> {
     /// back to using rsync. Because rsync is ‘authoritative’ for the object
     /// URIs, it is safe to use objects received via rsync in RRDP
     /// repositories.
-    pub fn repository(&self, ca_cert: &CaCert) -> Repository<'a> {
-        let (path, rrdp) = if let Some(rpki_notify) = ca_cert.rpki_notify() {
-            (self.store.rrdp_repository_path(rpki_notify), true)
-        }
-        else {
-            (self.store.rsync_repository_path(), false)
-        };
-        Repository::new(self.store, path, rrdp)
+    pub fn repository(&self, ca_cert: &CaCert) -> Repository {
+        Repository::new(self.store, ca_cert.rpki_notify().cloned())
     }
 
     /// Accesses the publication point for the provided RPKI CA.
@@ -534,10 +527,12 @@ impl<'a> Run<'a> {
     /// repositories.
     pub fn pub_point(
         &self, ca_cert: &CaCert
-    ) -> Result<StoredPoint<'a>, Failed> {
+    ) -> Result<StoredPoint, Failed> {
         self.repository(ca_cert).get_point(ca_cert.rpki_manifest())
     }
+}
 
+impl Run<'_> {
     /// Cleans up the store.
     ///
     /// All publication points that have an expired manifest will be removed.
@@ -557,22 +552,6 @@ impl<'a> Run<'a> {
         Ok(())
     }
 
-    /// Cleans up the trust anchors.
-    ///
-    /// Deletes all files that either don’t successfully parse as certificates
-    /// or that are expired certificates.
-    fn cleanup_ta(&self) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.store.path.join("ta"), |path| {
-            let content = fatal::read_file(path)?;
-            if let Ok(cert) = Cert::decode(Bytes::from(content)) {
-                if cert.validity().not_after() > Time::now() {
-                    return Ok(true)
-                }
-            }
-            Ok(false)
-        })
-    }
-
     /// Cleans up a tree with publication points.
     ///
     /// Deletes all publication points with an expired manifest as well as
@@ -583,16 +562,14 @@ impl<'a> Run<'a> {
         base: &Path,
         retain: &mut collector::Cleanup,
     ) -> Result<(), Failed> {
-        cleanup_dir_tree(base, |path| {
-            if let Ok(stored) = StoredManifest::read(
-                &mut fatal::open_file(path)?
-            ) {
-                if stored.retain() {
-                    if let Some(uri) = stored.rpki_notify.as_ref() {
+        Self::cleanup_dir_tree(base, |path| {
+            if let Some(stored) = StoredPoint::load_quietly(path.into()) {
+                if stored.retain(self.started) {
+                    if let Some(uri) = stored.header.rpki_notify.as_ref() {
                         retain.add_rrdp_repository(uri)
                     }
                     else {
-                        retain.add_rsync_module(&stored.manifest_uri)
+                        retain.add_rsync_module(&stored.header.manifest_uri)
                     }
                     return Ok(true)
                 }
@@ -601,10 +578,84 @@ impl<'a> Run<'a> {
         })
     }
 
-    fn cleanup_tmp(&self) -> Result<(), Failed> {
-        cleanup_dir_tree(&self.store.path.join("tmp"), |_path| {
+    /// Cleans up the trust anchors.
+    ///
+    /// Deletes all files that either don’t successfully parse as certificates
+    /// or that are expired certificates.
+    fn cleanup_ta(&self) -> Result<(), Failed> {
+        Self::cleanup_dir_tree(&self.store.path.join("ta"), |path| {
+            let content = fatal::read_file(path)?;
+            if let Ok(cert) = Cert::decode(Bytes::from(content)) {
+                if cert.validity().not_after() > Time::now() {
+                    return Ok(true)
+                }
+            }
             Ok(false)
         })
+    }
+
+    fn cleanup_tmp(&self) -> Result<(), Failed> {
+        Self::cleanup_dir_tree(&self.store.path.join("tmp"), |_path| {
+            Ok(false)
+        })
+    }
+
+    /// Cleans up a directory tree.
+    ///
+    /// If the closure returns `Ok(false)` for a file with the given path, the
+    /// file will be deleted. If all files in a directory are deleted, that
+    /// directory is deleted.
+    fn cleanup_dir_tree(
+        base: &Path,
+        mut keep: impl FnMut(&Path) -> Result<bool, Failed>
+    ) -> Result<(), Failed> {
+        /// Actual recursion.
+        ///
+        /// If `top` is `true`, we ignore if the directory `path` is missing.
+        ///
+        /// Returns whether the `base` needs to be kept. I.e., if `Ok(false)`
+        /// is returned, the calling recursing step will perform a
+        /// `delete_dir_all(base)`.
+        fn recurse(
+            base: &Path,
+            top: bool,
+            op: &mut impl FnMut(&Path) -> Result<bool, Failed>
+        ) -> Result<bool, Failed> {
+            let dir = if top {
+                match fatal::read_existing_dir(base)? {
+                    Some(dir) => dir,
+                    None => return Ok(false),
+                }
+            }
+            else {
+                fatal::read_dir(base)?
+            };
+
+            let mut keep = false;
+            for entry in dir {
+                let entry = entry?;
+                if entry.is_dir() {
+                    if !recurse(entry.path(), false, op)? {
+                        fatal::remove_dir_all(entry.path())?;
+                    }
+                    else {
+                        keep = true;
+                    }
+                }
+                else if entry.is_file() {
+                    if !op(entry.path())? {
+                        fatal::remove_file(entry.path())?;
+                    }
+                    else {
+                        keep = true;
+                    }
+                }
+                // Let’s not try deleting non-file-and-non-dir things here but
+                // leave it to remove_dir_all to give it a shot.
+            }
+            Ok(keep)
+        }
+        recurse(base, true, &mut keep).map(|_| ())
     }
 }
 
@@ -621,26 +672,39 @@ impl<'a> Run<'a> {
 /// You can get access to a publication point via
 /// [`get_point`][Self::get_point].
 ///
-pub struct Repository<'a> {
-    /// The store we are part of.
-    store: &'a Store,
-
+pub struct Repository {
     /// The path where the repository lives.
     path: PathBuf,
 
-    /// Are we using an rrdp tree?
-    is_rrdp: bool,
+    /// The RRPD URI for the repository or `None` if this is the rsync repo.
+    rpki_notify: Option<uri::Https>,
 }
 
-impl<'a> Repository<'a> {
-    /// Creates a repository object on a store using the given tree names.
-    fn new(store: &'a Store, path: PathBuf, is_rrdp: bool) -> Self {
-        Repository { store, path, is_rrdp }
+impl Repository {
+    /// Creates a repository object for the given repository.
+    ///
+    /// The repository is identified by the RRDP URI. Each RRDP “server” gets
+    /// its own repository and all rsync “servers” share one.
+    fn new(store: &Store, rpki_notify: Option<uri::Https>) -> Self {
+        Self {
+            path: if let Some(rpki_notify) = rpki_notify.as_ref() {
+                store.rrdp_repository_path(rpki_notify)
+            }
+            else {
+                store.rsync_repository_path()
+            },
+            rpki_notify
+        }
+    }
+
+    /// Returns the RRDP URI if present.
+    pub fn rpki_notify(&self) -> Option<&uri::Https> {
+        self.rpki_notify.as_ref()
     }
 
     /// Returns whether this is an RRDP repository.
     pub fn is_rrdp(&self) -> bool {
-        self.is_rrdp
+        self.rpki_notify.is_some()
     }
 
     /// Opens the given stored publication point.
@@ -652,9 +716,10 @@ impl<'a> Repository<'a> {
     /// information stored for the point or not.
     pub fn get_point(
         &self, manifest_uri: &uri::Rsync
-    ) -> Result<StoredPoint<'a>, Failed> {
+    ) -> Result<StoredPoint, Failed> {
         StoredPoint::open(
-            self.store, self.point_path(manifest_uri), self.is_rrdp
+            self.point_path(manifest_uri),
+            manifest_uri, self.rpki_notify.as_ref(),
         )
     }
 
@@ -680,45 +745,47 @@ impl<'a> Repository<'a> {
 /// [`manifest`][Self::manifest] and acts as an iterator over the
 /// publication point’s objects. The method [`update`][Self::update] allows
 /// atomically updating the information.
-pub struct StoredPoint<'a> {
-    /// A reference to the underlying store.
-    store: &'a Store,
-
+pub struct StoredPoint {
     /// The path to the file-system location of the repository.
     path: PathBuf,
 
-    /// The file with all the information we need.
+    /// Is the this a newly discovered stored point?
+    is_new: bool,
+
+    /// The header of the stored point.
     ///
-    /// There will only be something here if there actually is a stored
-    /// point on disk yet.
-    file: Option<File>,
+    /// This will always be present, even if the point is new.
+    header: StoredPointHeader,
 
     /// The stored manifest for the point if there is one.
     manifest: Option<StoredManifest>,
 
-    /// Is this a publication point with in an RRDP repository?
-    is_rrdp: bool,
+    /// The file with all the information we need.
+    ///
+    /// The file will only be present if a point has been successfully
+    /// stored before. I.e, if the point is present but never was
+    /// successfully updated, this will still be `None`.
+    ///
+    /// If present, the file will be positioned at the begining of the next
+    /// stored object to be loaded.
+    file: Option<File>,
 }
 
-impl<'a> StoredPoint<'a> {
+impl StoredPoint {
     /// Opens the stored point.
     ///
-    /// If there is a file at the given path, it is opened. Otherwise, er,
-    /// well, it is not.
+    /// If there is a file at the given path, it is opened, the manifest is
+    /// read and positioned at the first stored object. Otherwise there will
+    /// be no manifest and no objects.
     fn open(
-        store: &'a Store,
         path: PathBuf,
-        is_rrdp: bool,
+        manifest_uri: &uri::Rsync,
+        rpki_notify: Option<&uri::Https>,
     ) -> Result<Self, Failed> {
         let mut file = match File::open(&path) {
             Ok(file) => file,
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(StoredPoint {
-                    store, path,
-                    file: None,
-                    manifest: None,
-                    is_rrdp
-                })
+                return Self::create(path, manifest_uri, rpki_notify);
             }
             Err(err) => {
                 error!(
@@ -729,64 +796,152 @@ impl<'a> StoredPoint<'a> {
             }
         };
 
-        let manifest = match StoredManifest::read(&mut file) {
-            Ok(manifest) => Some(manifest),
+        let mut header = match StoredPointHeader::read(&mut file) {
+            Ok(header) => header,
+            Err(err) if !err.is_fatal() => {
+                return Self::create(path, manifest_uri, rpki_notify);
+            }
             Err(err) => {
-                if err.is_fatal() {
-                    error!(
-                        "Failed to read stored publication point at {}: {}",
-                        path.display(), err
-                    );
-                    return Err(Failed)
-                }
-                else {
-                    info!(
-                        "Ignoring invalid stored publication point at {}: {}",
-                        path.display(), err
-                    );
-                    None
-                }
+                error!(
+                    "Failed to read stored publication point at {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
             }
         };
 
-        Ok(StoredPoint {
-            store, path,
-            file: if manifest.is_some() {
-                Some(file)
+        // From here on all errors are considered fatal.
+
+        if matches!(header.update_status, UpdateStatus::LastAttempt(_)) {
+            // We never succeeded. Update the status and return.
+            header.update_status = UpdateStatus::LastAttempt(Time::now());
+
+            drop(file);
+            let mut file = File::create(&path).map_err(|err| {
+                error!(
+                    "Failed to update stored publication point at {}: \
+                     re-open: {}",
+                    path.display(), err
+                );
+                Failed
+
+            })?;
+
+            if let Err(err) = file.seek(SeekFrom::Start(0)) {
+                error!(
+                    "Failed to update stored publication point at {}: \
+                     seek failed: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
             }
-            else {
-                None
-            },
-            manifest,
-            is_rrdp
+            if let Err(err) = header.write(&mut file) {
+                error!(
+                    "Failed to update stored publication point at {}: \
+                     write failed: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+
+            return Ok(Self {
+                path,
+                is_new: false,
+                header,
+                manifest: None,
+                file: None,
+            })
+        }
+
+        let manifest = match StoredManifest::read(&mut file) {
+            Ok(manifest) => manifest,
+            Err(err) => {
+                error!(
+                    "Failed to read stored publication point at {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+
+        Ok(Self {
+            path,
+            is_new: false,
+            header,
+            manifest: Some(manifest),
+            file: Some(file)
         })
     }
 
-    /// Returns a reference to the path of the file.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Returns whether the stored point is for an RRDP repository.
-    pub fn is_rrdp(&self) -> bool {
-        self.is_rrdp
-    }
-
-    /// Returns a reference to the stored manifest if available.
+    /// Creates a new, empty stored point.
     ///
-    /// The manifest will not be available if there is no previously stored
-    /// version of the publication point and an update has not succeeded yet,
-    /// or if the manifest has been taken out via
-    /// [`take_manifest`][Self::take_manifest].
-    pub fn manifest(&self) -> Option<&StoredManifest> {
-        self.manifest.as_ref()
+    /// This is called either when the stored point doesn’t exist or there is
+    /// one but it is of the wrong version.
+    ///
+    /// Creates the file and sets it to an initial status.
+    fn create(
+        path: PathBuf,
+        manifest_uri: &uri::Rsync,
+        rpki_notify: Option<&uri::Https>,
+    ) -> Result<Self, Failed> {
+        if let Some(path) = path.parent() {
+            fatal::create_dir_all(path)?;
+        }
+        let mut file = match File::create(&path) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Failed to create stored publication point at {}: {}",
+                    path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        let header = StoredPointHeader::new(
+            manifest_uri.clone(), rpki_notify.cloned(),
+        );
+        if let Err(err) = header.write(&mut file) {
+            error!(
+                "Failed to write stored publication point at {}: {}",
+                path.display(), err
+            );
+            return Err(Failed)
+        }
+
+        Ok(StoredPoint {
+            path,
+            is_new: true,
+            header,
+            manifest: None,
+            file: None,
+        })
+        
     }
 
-    /// Takes the stored manifest from the point.
+    /// Loads an existing stored point from a path.
     ///
-    /// Afterwards, [`manifest`][Self::manifest] will return `None`.
-    pub fn take_manifest(&mut self) -> Option<StoredManifest> {
-        self.manifest.take()
+    /// Does not create a value if the point does not exist. Does not output
+    /// any error messages and just returns `None` if loading fails.
+    pub fn load_quietly(path: PathBuf) -> Option<Self> {
+        let mut file = File::open(&path).ok()?;
+        let header = StoredPointHeader::read(&mut file).ok()?;
+        let manifest = match header.update_status {
+            UpdateStatus::Success(_) => {
+                Some(StoredManifest::read(&mut file).ok()?)
+            }
+            UpdateStatus::LastAttempt(_) => None,
+        };
+        Some(Self {
+            path,
+            is_new: false,
+            header, manifest,
+            file: Some(file)
+        })
+    }
+
+    /// Returns whether the point was newly discovered during this run.
+    pub fn is_new(&self) -> bool {
+        self.is_new
     }
 
     /// Replaces the data of the stored point.
@@ -798,17 +953,38 @@ impl<'a> StoredPoint<'a> {
     /// returned. Otherwise, `self` represents the new point. It is
     /// positioned at the first object, i.e., if it is iterated over, the
     /// first object will be returned next.
+    ///
+    /// The closure here acts as a poor man’s generator which makes it easier
+    /// to write the necessary code.
     pub fn update(
         &mut self,
+        store: &Store,
+        manifest: StoredManifest,
+        objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
+    ) -> Result<(), UpdateError> {
+        let tmp_file = store.tmp_file()?;
+        self._update(tmp_file, manifest, objects)
+    }
+
+    pub fn _update(
+        &mut self,
+        mut tmp_file: NamedTempFile,
         manifest: StoredManifest,
         mut objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
     ) -> Result<(), UpdateError> {
-        let (tmp_path, mut tmp_file) = self.store.tmp_file()?;
+        self.header.update_status = UpdateStatus::Success(Time::now());
 
+        if let Err(err) = self.header.write(&mut tmp_file) {
+            error!(
+                "Fatal: failed to write to file {}: {}",
+                tmp_file.path().display(), err
+            );
+            return Err(UpdateError::fatal())
+        }
         if let Err(err) = manifest.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_path.display(), err
+                tmp_file.path().display(), err
             );
             return Err(UpdateError::fatal())
         }
@@ -817,64 +993,216 @@ impl<'a> StoredPoint<'a> {
             Err(err) => {
                 error!(
                     "Fatal: failed to get position in file {}: {}",
-                    tmp_path.display(), err
+                    tmp_file.path().display(), err
                 );
                 return Err(UpdateError::fatal())
             }
         };
-
-        loop {
-            match objects() {
-                Ok(Some(object)) => {
-                    if let Err(err) = object.write(&mut tmp_file) {
-                        error!(
-                            "Fatal: failed to write to file {}: {}",
-                            tmp_path.display(), err
-                        );
-                        return Err(UpdateError::fatal())
-                    }
-                }
-                Ok(None) => break,
-                Err(err) => {
-                    drop(tmp_file);
-                    fatal::remove_file(&tmp_path)?;
-                    return Err(err)
-                }
+        while let Some(object) = objects()? {
+            if let Err(err) = object.write(&mut tmp_file) {
+                error!(
+                    "Fatal: failed to write to file {}: {}",
+                    tmp_file.path().display(), err
+                );
+                return Err(UpdateError::fatal())
             }
         }
 
-        drop(tmp_file);
-        let existing = self.file.is_some();
+        // I think we need to drop `self.file` first so it gets closed and the
+        // path unlocked on Windows?
         drop(self.file.take());
-
-        if existing {
-            fatal::remove_file(&self.path)?;
+        match tmp_file.persist(&self.path) {
+            Ok(file) => self.file = Some(file),
+            Err(err) => {
+                error!(
+                    "Failed to persist temporary file {} to {}: {}",
+                    err.file.path().display(), self.path.display(),
+                    err.error,
+                );
+                return Err(UpdateError::fatal())
+            }
         }
-        else if let Some(path) = self.path.parent() {
-            fatal::create_dir_all(path)?;
-        }
-        fatal::rename(&tmp_path, &self.path)?;
-        let mut file = fatal::open_file(&self.path)?;
-        if let Err(err) = file.seek(SeekFrom::Start(tmp_object_start)) {
-            error!(
-                "Fatal: failed to position file {}: {}",
-                self.path.display(), err
-            );
-            return Err(UpdateError::fatal())
-        }
-
-        self.file = Some(file);
         self.manifest = Some(manifest);
+
+        // Position the file at the first object. (The if will always be
+        // true, so this is fine.)
+        if let Some(file) = self.file.as_mut() {
+            if let Err(err) = file.seek(SeekFrom::Start(tmp_object_start)) {
+                error!(
+                    "Fatal: failed to position file {}: {}",
+                    self.path.display(), err
+                );
+                return Err(UpdateError::fatal())
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns whether the point should be retained.
+    ///
+    /// If the point had a successful update, it will retained until the
+    /// `notAfter` time of the manifest’s certificate. Otherwise it will be
+    /// retained if the last update attempted was after `update_start` (i.e.,
+    /// there was an attempt to update the point during this validation run).
+    fn retain(&self, update_start: Time) -> bool {
+        if let Some(manifest) = self.manifest.as_ref() {
+            manifest.not_after > Time::now()
+        }
+        else if let UpdateStatus::LastAttempt(when)
+            = self.header.update_status
+        {
+            when >= update_start
+        }
+        else {
+            // Update status says success but we don’t have a manifest? That
+            // can’t happen, so say “no”.
+            false
+        }
+    }
+}
+
+impl StoredPoint {
+    /// Returns a reference to the path of the file.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Returns a reference to the stored manifest if available.
+    ///
+    /// The manifest will not be available if there is no previously stored
+    /// version of the publication point and an update has not succeeded yet,
+    /// or if the manifest has been taken out via
+    /// [`take_manifest`][Self::take_manifest].
+    pub fn manifest(&self) -> Option<&StoredManifest> {
+        self.manifest.as_ref()
+    }
+}
+
+impl Iterator for StoredPoint {
+    type Item = Result<StoredObject, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        StoredObject::read(self.file.as_mut()?).transpose()
+    }
+}
+
+
+//------------ StoredPointHeader ---------------------------------------------
+
+/// The header of the a stored publication point.
+///
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct StoredPointHeader {
+    /// The manifest’s rsync URI.
+    manifest_uri: uri::Rsync,
+
+    /// The rpkiNotify URI of the issuing CA certificate.
+    rpki_notify: Option<uri::Https>,
+
+    /// The update status of the point.
+    ///
+    /// Tells use whether we have ever seen a successful update or when we
+    /// last tried.
+    update_status: UpdateStatus,
+}
+
+impl StoredPointHeader {
+    /// The version of the type.
+    ///
+    /// This was part of `StoredManifest` before 0.15 with value 1 and
+    /// before 0.14 with value 0.
+    const VERSION: u8 = 2;
+
+    /// Creates a new stored status.
+    ///
+    /// Assumes that updates have never succeeded.
+    pub fn new(
+        manifest_uri: uri::Rsync,
+        rpki_notify: Option<uri::Https>,
+    ) -> Self {
+        Self {
+            manifest_uri, rpki_notify,
+            update_status: UpdateStatus::LastAttempt(Time::now()),
+        }
+    }
+
+    /// Reads a stored point status from an IO reader.
+    pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
+        // Version number.
+        let version = u8::parse(reader)?;
+        if version != Self::VERSION {
+            return Err(ParseError::format(
+                    format!("unexpected version {version}")
+            ))
+        }
+        Ok(Self {
+            manifest_uri: Parse::parse(reader)?,
+            rpki_notify: Parse::parse(reader)?,
+            update_status: UpdateStatus::read(reader)?,
+        })
+    }
+
+    /// Writes the stored point status to a writer.
+    pub fn write(
+        &self, writer: &mut impl io::Write
+    ) -> Result<(), io::Error> {
+        Self::VERSION.compose(writer)?;
+
+        self.manifest_uri.compose(writer)?;
+        self.rpki_notify.compose(writer)?;
+        self.update_status.write(writer)?;
 
         Ok(())
     }
 }
 
-impl Iterator for StoredPoint<'_> {
-    type Item = Result<StoredObject, ParseError>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        StoredObject::read(self.file.as_mut()?).transpose()
+//------------ UpdateStatus --------------------------------------------------
+
+/// The update status of a stored point.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum UpdateStatus {
+    /// There was a successful update at the given time.
+    ///
+    /// Strictly speaking, we don’t need this time. But it may come in
+    /// handy.
+    Success(Time),
+
+    /// There never was a successful update, last attempt at the given time.
+    ///
+    /// Note that once we had success, we stick with `Self::Success`. This
+    /// variant is for before first success only.
+    LastAttempt(Time),
+}
+
+impl UpdateStatus {
+    /// Reads a stored point status from an IO reader.
+    pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
+        match u8::parse(reader)? {
+            0 => Ok(UpdateStatus::Success(Parse::parse(reader)?)),
+            1 => Ok(UpdateStatus::LastAttempt(Parse::parse(reader)?)),
+            _ => {
+                Err(ParseError::format(
+                    "invalid update status".to_string()
+                ))
+            }
+        }
+    }
+
+    /// Writes the stored point status to a writer.
+    pub fn write(self, writer: &mut impl io::Write) -> Result<(), io::Error> {
+        match self {
+            Self::Success(time) => {
+                0u8.compose(writer)?;
+                time.compose(writer)?;
+            }
+            Self::LastAttempt(time) => {
+                1u8.compose(writer)?;
+                time.compose(writer)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -909,39 +1237,28 @@ impl Iterator for StoredPoint<'_> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StoredManifest {
     /// The expire time of the EE certificate of the manifest.
-    not_after: Time,
+    pub not_after: Time,
 
     /// The manifest number of the manifest.
-    manifest_number: Serial,
+    pub manifest_number: Serial,
 
     /// The thisUpdate time of the manifest.
-    this_update: Time,
-
-    /// The rpkiNotify URI of the issuing CA certificate.
-    rpki_notify: Option<uri::Https>,
+    pub this_update: Time,
 
     /// The CA repository rsync URI of the issuing CA certificate.
-    ca_repository: uri::Rsync,
-
-    /// The manifest’s rsync URI.
-    manifest_uri: uri::Rsync,
+    pub ca_repository: uri::Rsync,
 
     /// The raw content of the manifest.
-    manifest: Bytes,
+    pub manifest: Bytes,
 
     /// The CRL’s rsync URI.
-    crl_uri: uri::Rsync,
+    pub crl_uri: uri::Rsync,
 
     /// The raw content of the CRL.
-    crl: Bytes,
+    pub crl: Bytes,
 }
 
 impl StoredManifest {
-    /// The version of the type.
-    ///
-    /// It was 0 before 0.14.0.
-    const VERSION: u8 = 1;
-
     /// Creates a new stored manifest.
     ///
     /// The new value is created from the components of the stored manifest.
@@ -958,9 +1275,7 @@ impl StoredManifest {
             not_after: ee_cert.validity().not_after(),
             manifest_number: manifest.manifest_number(),
             this_update: manifest.this_update(),
-            rpki_notify: ca_cert.rpki_notify().cloned(),
             ca_repository: ca_cert.ca_repository().clone(),
-            manifest_uri: ca_cert.rpki_manifest().clone(),
             manifest: manifest_bytes,
             crl_uri,
             crl
@@ -969,20 +1284,11 @@ impl StoredManifest {
 
     /// Reads a stored manifest from an IO reader.
     pub fn read(reader: &mut impl io::Read) -> Result<Self, ParseError> {
-        // Version number.
-        let version = u8::parse(reader)?;
-        if version != Self::VERSION {
-            return Err(ParseError::format(
-                    format!("unexpected version {version}")
-            ))
-        }
         Ok(StoredManifest {
             not_after: Parse::parse(reader)?,
             manifest_number: Parse::parse(reader)?,
             this_update: Parse::parse(reader)?,
-            rpki_notify: Parse::parse(reader)?,
             ca_repository: Parse::parse(reader)?,
-            manifest_uri: Parse::parse(reader)?,
             manifest: Parse::parse(reader)?,
             crl_uri: Parse::parse(reader)?,
             crl: Parse::parse(reader)?,
@@ -993,70 +1299,15 @@ impl StoredManifest {
     pub fn write(
         &self, writer: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        Self::VERSION.compose(writer)?;
-
         self.not_after.compose(writer)?;
         self.manifest_number.compose(writer)?;
         self.this_update.compose(writer)?;
-        self.rpki_notify.compose(writer)?;
         self.ca_repository.compose(writer)?;
-        self.manifest_uri.compose(writer)?;
         self.manifest.compose(writer)?;
         self.crl_uri.compose(writer)?;
         self.crl.compose(writer)?;
 
         Ok(())
-    }
-
-    /// Returns whether we should retain the stored manifest.
-    fn retain(&self) -> bool {
-        self.not_after > Time::now()
-    }
-}
-
-impl StoredManifest {
-    /// Returns the expire time of the manifest.
-    ///
-    /// This should be equal to the ‘not after’ validity time of the EE
-    /// certificate included with the manifest.
-    pub fn not_after(&self) -> Time {
-        self.not_after
-    }
-
-    /// Returns the manifest number of the manifest.
-    pub fn manifest_number(&self) -> Serial {
-        self.manifest_number
-    }
-
-    /// Returns the thisUpdate field of the manifest.
-    pub fn this_update(&self) -> Time {
-        self.this_update
-    }
-
-    /// Returns the rsync URI of the directory containing the objects.
-    ///
-    /// As the manifest only lists relative file names, this URI is necessary
-    /// to convert them into full rsync URIs.
-    ///
-    /// The URI should be taken from the ‘caRepository’ subject information
-    /// access extension of the CA certificate that was used to issue the
-    /// manifest’s EE certificate.
-    pub fn ca_repository(&self) -> &uri::Rsync {
-        &self.ca_repository
-    }
-
-    /// Returns the bytes of the manifest.
-    pub fn manifest(&self) -> &Bytes {
-        &self.manifest
-    }
-
-    /// Returns the bytes of the publication point’s CRL.
-    ///
-    /// This CRL should be the CRL referenced via the CRL distribution
-    /// point of the manifest’s EE certificate. It should be correctly 
-    /// referenced at that location on the manifest.
-    pub fn crl(&self) -> &Bytes {
-        &self.crl
     }
 }
 
@@ -1074,13 +1325,13 @@ impl StoredManifest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredObject {
     /// The URI of the object.
-    uri: uri::Rsync,
+    pub uri: uri::Rsync,
 
     /// The manifest hash of the object if available.
-    hash: Option<ManifestHash>,
+    pub hash: Option<ManifestHash>,
 
     /// The content of the object.
-    content: Bytes,
+    pub content: Bytes,
 }
 
 impl StoredObject {
@@ -1097,25 +1348,11 @@ impl StoredObject {
     pub fn read(
         reader: &mut impl io::Read
     ) -> Result<Option<Self>, ParseError> {
-        // Version number. Must be 0u8.
-        let version = match u8::parse(reader) {
-            Ok(version) => version,
-            Err(err) => {
-                if err.is_eof() {
-                    return Ok(None)
-                }
-                else {
-                    return Err(err)
-                }
-            }
+        let uri = match uri::Rsync::parse(reader) {
+            Ok(uri) => uri,
+            Err(err) if err.is_eof() => return Ok(None),
+            Err(err) => return Err(err),
         };
-        if version != 0 {
-            return Err(ParseError::format(
-                format!("unexpected version {version}")
-            ))
-        }
-
-        let uri = uri::Rsync::parse(reader)?;
         let hash = match u8::parse(reader)? {
             0 => None,
             1 => {
@@ -1139,9 +1376,6 @@ impl StoredObject {
     pub fn write(
         &self, writer: &mut impl io::Write
     ) -> Result<(), io::Error> {
-        // Version: 0u8.
-        0u8.compose(writer)?;
-
         self.uri.compose(writer)?;
 
         // Hash.
@@ -1164,21 +1398,6 @@ impl StoredObject {
         self.content.compose(writer)?;
 
         Ok(())
-    }
-
-    /// Returns the URI of the object.
-    pub fn uri(&self) -> &uri::Rsync {
-        &self.uri
-    }
-
-    /// Returns the stored object’s content.
-    pub fn content(&self) -> &Bytes {
-        &self.content
-    }
-
-    /// Converts the stored object into the object’s raw bytes.
-    pub fn into_content(self) -> Bytes {
-        self.content
     }
 }
 
@@ -1259,67 +1478,6 @@ impl From<RunFailed> for UpdateError {
 }
 
 
-//============ Helper Functions ==============================================
-
-/// Cleans up a directory tree.
-///
-/// If the closure returns `Ok(false)` for a file with the given path, the
-/// file will be deleted. If all files in a directory are deleted, that
-/// directory is deleted.
-fn cleanup_dir_tree(
-    base: &Path,
-    mut keep: impl FnMut(&Path) -> Result<bool, Failed>
-) -> Result<(), Failed> {
-    /// Actual recursion.
-    ///
-    /// If `top` is `true`, we ignore if the directory `path` is missing.
-    ///
-    /// Returns whether the `base` needs to be kept. I.e., if `Ok(false)`
-    /// is returned, the calling recursing step will perform a
-    /// `delete_dir_all(base)`.
-    fn recurse(
-        base: &Path,
-        top: bool,
-        op: &mut impl FnMut(&Path) -> Result<bool, Failed>
-    ) -> Result<bool, Failed> {
-        let dir = if top {
-            match fatal::read_existing_dir(base)? {
-                Some(dir) => dir,
-                None => return Ok(false),
-            }
-        }
-        else {
-            fatal::read_dir(base)?
-        };
-
-        let mut keep = false;
-        for entry in dir {
-            let entry = entry?;
-            if entry.is_dir() {
-                if !recurse(entry.path(), false, op)? {
-                    fatal::remove_dir_all(entry.path())?;
-                }
-                else {
-                    keep = true;
-                }
-            }
-            else if entry.is_file() {
-                if !op(entry.path())? {
-                    fatal::remove_file(entry.path())?;
-                }
-                else {
-                    keep = true;
-                }
-            }
-            // Let’s not try deleting non-file-and-non-dir things here but
-            // leave it to remove_dir_all to give it a shot.
-        }
-        Ok(keep)
-    }
-    recurse(base, true, &mut keep).map(|_| ())
-}
-
-
 //============ Tests =========================================================
 
 #[cfg(test)]
@@ -1328,51 +1486,72 @@ mod test {
     use super::*;
 
     #[test]
-    fn write_read_stored_manifest() {
-        let mut orig = StoredManifest {
-            not_after: Time::utc(2021, 2, 18, 13, 22, 6),
-            manifest_number: Serial::from(12u64),
-            this_update: Time::utc(2020, 1, 20, 16, 47, 6),
-            rpki_notify: Some(
-                uri::Https::from_str("https://foo.bar/bla/blubb").unwrap()
-            ),
+    fn read_write() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let path = dir.path().join("stored.bin");
+        let manifest_uri = uri::Rsync::from_str(
+            "rsync://example.com/test/test.mft"
+        ).unwrap();
+        let rpki_notify = Some(uri::Https::from_str(
+            "https://example.com/notification.xml"
+        ).unwrap());
+
+        // StoredManifest::new is too smart, so we need to make this manually.
+        let manifest = StoredManifest {
+            not_after: Time::utc(2025, 10, 1, 16, 10, 22),
+            manifest_number: Serial::default(),
+            this_update: Time::utc(2010, 6, 3, 8, 11, 0),
             ca_repository: uri::Rsync::from_str(
-                "rsync://foo.bar/bla/blubb"
+                "rsync://example.com/test/"
             ).unwrap(),
-            manifest_uri: uri::Rsync::from_str(
-                "rsync://foo.bar/bla/blubb"
-            ).unwrap(),
-            manifest: Bytes::from(b"foobar".as_ref()),
+            manifest: Bytes::from_static(b"deadbeef"),
             crl_uri: uri::Rsync::from_str(
-                "rsync://foo.bar/bla/blubb"
+                "rsync://example.com/test/test.crl"
             ).unwrap(),
-            crl: Bytes::from(b"blablubb".as_ref())
+            crl: Bytes::from_static(b"crlbytesgohere"),
         };
-        let mut written = Vec::new();
-        orig.write(&mut written).unwrap();
-        let decoded = StoredManifest::read(&mut written.as_slice()).unwrap();
-        assert_eq!(orig, decoded);
 
-        orig.rpki_notify = None;
-        let mut written = Vec::new();
-        orig.write(&mut written).unwrap();
-        let decoded = StoredManifest::read(&mut written.as_slice()).unwrap();
-        assert_eq!(orig, decoded);
-    }
+        let objects = [
+            StoredObject::new(
+                uri::Rsync::from_str(
+                    "rsync://example.com/test/obj1.bin"
+                ).unwrap(),
+                Bytes::from_static(b"object1content"),
+                Some(ManifestHash::new(
+                    Bytes::copy_from_slice(
+                        DigestAlgorithm::sha256().digest(
+                            b"object1content"
+                        ).as_ref()
+                    ),
+                    DigestAlgorithm::sha256()
+                ))
+            ),
+            StoredObject::new(
+                uri::Rsync::from_str(
+                    "rsync://example.com/test/obj2.bin"
+                ).unwrap(),
+                Bytes::from_static(b"object2stuff"),
+                None,
+            ),
+        ];
 
-    #[test]
-    fn write_read_stored_object() {
-        let orig = StoredObject::new(
-            uri::Rsync::from_str("rsync://foo.bar/bla/blubb").unwrap(),
-            Bytes::from(b"foobar".as_ref()),
-            None
-        );
-        let mut written = Vec::new();
-        orig.write(&mut written).unwrap();
-        let decoded = StoredObject::read(
-            &mut written.as_slice()
-        ).unwrap().unwrap();
-        assert_eq!(orig, decoded);
+        let mut point = StoredPoint::open(
+            path.clone(), &manifest_uri, rpki_notify.as_ref()
+        ).unwrap();
+        let mut objects_iter = objects.iter();
+        point._update(
+            NamedTempFile::new_in(&dir).unwrap(),
+            manifest.clone(),
+            || Ok(objects_iter.next().cloned())
+        ).unwrap();
+        drop(point);
+
+        let mut point = StoredPoint::load_quietly(path.clone()).unwrap();
+        assert_eq!(point.manifest, Some(manifest));
+        assert_eq!(point.next().unwrap().unwrap(), objects[0]);
+        assert_eq!(point.next().unwrap().unwrap(), objects[1]);
+        assert!(point.next().is_none());
     }
 }
 
