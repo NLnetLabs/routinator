@@ -432,12 +432,25 @@ impl Server {
         let must_notify = history.update(
             report, &exceptions, metrics,
         );
+        history.mark_update_done();
         if log::max_level() >= log::Level::Info {
-            info!("Validation completed.");
-            let (metrics, serial) = {
+            let (metrics, serial, duration) = {
                 let history = history.read();
-                (history.metrics(), history.serial())
+                (
+                    history.metrics(),
+                    history.serial(),
+                    history.last_update_duration()
+                )
             };
+            match duration {
+                Some(duration) => {
+                    info!(
+                        "Validation completed in {} seconds.",
+                        duration.as_secs()
+                    );
+                }
+                None => info!("Validation completed.")
+            }
             if let Some(metrics) = metrics {
                 output::Summary::log(&metrics)
             }
@@ -449,7 +462,6 @@ impl Server {
             info!("Sending out notifications.");
             notify.notify();
         }
-        history.mark_update_done();
         Ok(())
     }
 }
