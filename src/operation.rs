@@ -279,6 +279,10 @@ impl Server {
                                 // Immediately start a new run after the
                                 // initial run.
                                 if initial_run {
+                                    info!(
+                                        "Initial run complete, now starting \
+                                         normal run."
+                                    );
                                     Duration::from_secs(0)
                                 }
                                 else {
