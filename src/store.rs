@@ -68,7 +68,7 @@
 
 use std::{fs, io};
 use std::fs::File;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use bytes::Bytes;
 use log::error;
@@ -768,7 +768,7 @@ pub struct StoredPoint {
     ///
     /// If present, the file will be positioned at the begining of the next
     /// stored object to be loaded.
-    file: Option<File>,
+    file: Option<BufReader<File>>,
 }
 
 impl StoredPoint {
@@ -783,7 +783,7 @@ impl StoredPoint {
         rpki_notify: Option<&uri::Https>,
     ) -> Result<Self, Failed> {
         let mut file = match File::open(&path) {
-            Ok(file) => file,
+            Ok(file) => BufReader::new(file),
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
                 return Self::create(path, manifest_uri, rpki_notify);
             }
@@ -923,7 +923,7 @@ impl StoredPoint {
     /// Does not create a value if the point does not exist. Does not output
     /// any error messages and just returns `None` if loading fails.
     pub fn load_quietly(path: PathBuf) -> Option<Self> {
-        let mut file = File::open(&path).ok()?;
+        let mut file = BufReader::new(File::open(&path).ok()?);
         let header = StoredPointHeader::read(&mut file).ok()?;
         let manifest = match header.update_status {
             UpdateStatus::Success(_) => {
@@ -968,23 +968,25 @@ impl StoredPoint {
 
     pub fn _update(
         &mut self,
-        mut tmp_file: NamedTempFile,
+        tmp_file: NamedTempFile,
         manifest: StoredManifest,
         mut objects: impl FnMut() -> Result<Option<StoredObject>, UpdateError>
     ) -> Result<(), UpdateError> {
+        let mut tmp_file = BufWriter::new(tmp_file);
+
         self.header.update_status = UpdateStatus::Success(Time::now());
 
         if let Err(err) = self.header.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_file.path().display(), err
+                tmp_file.get_ref().path().display(), err
             );
             return Err(UpdateError::fatal())
         }
         if let Err(err) = manifest.write(&mut tmp_file) {
             error!(
                 "Fatal: failed to write to file {}: {}",
-                tmp_file.path().display(), err
+                tmp_file.get_ref().path().display(), err
             );
             return Err(UpdateError::fatal())
         }
@@ -993,7 +995,7 @@ impl StoredPoint {
             Err(err) => {
                 error!(
                     "Fatal: failed to get position in file {}: {}",
-                    tmp_file.path().display(), err
+                    tmp_file.get_ref().path().display(), err
                 );
                 return Err(UpdateError::fatal())
             }
@@ -1002,17 +1004,26 @@ impl StoredPoint {
             if let Err(err) = object.write(&mut tmp_file) {
                 error!(
                     "Fatal: failed to write to file {}: {}",
-                    tmp_file.path().display(), err
+                    tmp_file.get_ref().path().display(), err
                 );
                 return Err(UpdateError::fatal())
             }
         }
 
+        let tmp_file = tmp_file.into_inner().map_err(|err| {
+            let (err, tmp_file) = err.into_parts();
+            error!(
+                "Fatal: failed to write to file {}: {}",
+                tmp_file.get_ref().path().display(), err
+            );
+            UpdateError::fatal()
+        })?;
+
         // I think we need to drop `self.file` first so it gets closed and the
         // path unlocked on Windows?
         drop(self.file.take());
         match tmp_file.persist(&self.path) {
-            Ok(file) => self.file = Some(file),
+            Ok(file) => self.file = Some(BufReader::new(file)),
             Err(err) => {
                 error!(
                     "Failed to persist temporary file {} to {}: {}",
