@@ -966,7 +966,7 @@ impl StoredPoint {
         self._update(tmp_file, manifest, objects)
     }
 
-    pub fn _update(
+    fn _update(
         &mut self,
         tmp_file: NamedTempFile,
         manifest: StoredManifest,
@@ -1047,6 +1047,36 @@ impl StoredPoint {
             }
         }
 
+        Ok(())
+    }
+
+    /// Deletes the stored point’s information.
+    ///
+    /// Replaces the file with one pretending we’ve never successfully
+    /// updated the point and changes `self` accordingly.
+    pub fn reject(&mut self) -> Result<(), Failed> {
+        self.is_new = true;
+        self.header.update_status = UpdateStatus::LastAttempt(Time::now());
+        self.manifest = None;
+        self.file = None;
+
+        let mut file = match File::create(&self.path) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Failed to create stored publication point at {}: {}",
+                    self.path.display(), err
+                );
+                return Err(Failed)
+            }
+        };
+        if let Err(err) = self.header.write(&mut file) {
+            error!(
+                "Failed to write stored publication point at {}: {}",
+                self.path.display(), err
+            );
+            return Err(Failed)
+        }
         Ok(())
     }
 

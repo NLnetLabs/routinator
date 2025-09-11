@@ -724,7 +724,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         metrics: &mut RunMetrics,
     ) -> Result<Result<Vec<CaTask<P::PubPoint>>, Self>, RunFailed> {
         // Try to load the manifest from the collector. If there isn’t one,
-        // we are done, too.
+        // we are done.
         let collected = match collector.load_object(
             self.cert.rpki_manifest()
         )? {
@@ -758,26 +758,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         };
 
-        // Check that the collected manifest’s manifest number and thisUpdate
-        // fields are larger than the stored manifest’s. Otherwise return so
+        // Check that the collected manifest is newer. Otherwise return so
         // we use the stored manifest.
-        if let Some(mft) = store.manifest() {
-            if collected.content.manifest_number() <= mft.manifest_number {
-                self.log.warn(format_args!(
-                    "manifest {}: manifest number is not greater than in \
-                     stored version. Using stored publication point.",
-                     self.cert.rpki_manifest(),
-                ));
-                return Ok(Err(self))
-            }
-            if collected.content.this_update() <= mft.this_update {
-                self.log.warn(format_args!(
-                    "manifest {}: manifest thisUpdate is not later than in \
-                     stored version. Using stored publication point.",
-                     self.cert.rpki_manifest(),
-                ));
-                return Ok(Err(self))
-            }
+        if !self.check_collected_is_newer(&collected, store)? {
+            return Ok(Err(self))
         }
 
         // The manifest is fine, so we can continue.
@@ -973,6 +957,72 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             ee_cert, content, crl_uri, crl, manifest_bytes, crl_bytes,
             metrics: Default::default(),
         }))
+    }
+
+    /// Checks that the collected manifest is newer then a stored manifest.
+    ///
+    /// Checks that the collected manifest has a higher manifest number and
+    /// a later thisUpdate date.
+    ///
+    /// The check is done against the “cached data” in the stored manifest.
+    /// If the check fails, we also check if the cached data matches what’s
+    /// in the actual stored manifest and, if that isn’t the case, discards
+    /// the stored publication point.
+    fn check_collected_is_newer(
+        &mut self,
+        collected: &ValidPointManifest,
+        stored: &mut StoredPoint,
+    ) -> Result<bool, Failed> {
+        let Some(stored_mft) = stored.manifest() else {
+            return Ok(true);
+        };
+
+        // Check if manifest number and this update are fine in which case we
+        // can return already.
+        if collected.content.manifest_number() > stored_mft.manifest_number
+            && collected.content.this_update() > stored_mft.this_update
+        {
+            return Ok(true);
+        }
+
+        // Now parse the stored manifest and check that the numbers match.
+        if let Ok(mft) = Manifest::decode(
+            stored_mft.manifest.clone(), self.run.validation.strict
+        ) {
+            if mft.content().manifest_number() == stored_mft.manifest_number
+                && mft.content().this_update() == stored_mft.this_update
+            {
+                // Same number, the stored manifest looks ok, so we can now
+                // reject the collected. To print the right message, we have
+                // to check again.
+
+                if collected.content.manifest_number()
+                    <= stored_mft.manifest_number
+                {
+                    self.log.warn(format_args!(
+                        "manifest {}: manifest number is not greater than in \
+                         stored version. Using stored publication point.",
+                         self.cert.rpki_manifest(),
+                    ));
+                    return Ok(false);
+                }
+                if collected.content.this_update()
+                    <= stored_mft.this_update
+                {
+                    self.log.warn(format_args!(
+                        "manifest {}: manifest thisUpdate is not later than in \
+                         stored version. Using stored publication point.",
+                         self.cert.rpki_manifest(),
+                    ));
+                    return Ok(false);
+                }
+            }
+        }
+
+        // The stored manifest is broken. Remove it and then claim the
+        // collected one is fine.
+        stored.reject()?;
+        Ok(true)
     }
 
     /// Check the manifest CRL.
