@@ -91,6 +91,9 @@ copyright = "Copyright (c) 2020, NLnet Labs. All rights reserved."
 conf-files = ["/etc/routinator/routinator.conf"]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true }
 
+[package.metadata.deb.variants.debian-trixie]
+systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true }
+
 [package.metadata.deb.variants.ubuntu-jammy]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
 

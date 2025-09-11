@@ -40,7 +40,7 @@ include:
     systemd_service_unit_file: pkg/common/routinator.routinator.service
 
   - image: 'almalinux:10'
-    systemd_service_unit_file: pkg/common/routinator.routinator.service
+    systemd_service_unit_file: pkg/common/routinator-almalinux-10.routinator.service
 
   # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Trixie upon which
   # Raspbian 13 is based.
@@ -112,4 +112,7 @@ test-mode:
 test-exclude:
   - pkg: 'routinator'
     image: 'debian:trixie'
+    mode: 'upgrade-from-published'
+  - pkg: 'routinator'
+    image: 'almalinux:10'
     mode: 'upgrade-from-published'
