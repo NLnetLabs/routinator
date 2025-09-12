@@ -248,6 +248,14 @@ impl Server {
 
         process.drop_privileges()?;
 
+        // Load exceptions and quit if they are broken.
+        let Ok(mut exceptions) = LocalExceptions::load(
+            process.config(), true
+        ) else {
+            error!("Exiting.");
+            return Err(ExitError::Generic)
+        };
+
         let mut validation = Engine::new(process.config(), true)?;
         let runtime = process.runtime()?;
         let mut rtr = runtime.spawn(rtr);
@@ -265,71 +273,67 @@ impl Server {
                     log.start();
                 }
 
-                let timeout = match LocalExceptions::load(
-                    process.config(), true
-                ) {
-                    Ok(exceptions) => {
-                        let initial_run = initial;
-                        initial = false;
-                        match Self::process_once(
-                            process.config(), &validation, &history,
-                            &mut notify, exceptions, initial_run,
-                        ) {
-                            Ok(()) => {
-                                // Immediately start a new run after the
-                                // initial run.
-                                if initial_run {
-                                    info!(
-                                        "Initial run complete, now starting \
-                                         normal run."
-                                    );
-                                    Duration::from_secs(0)
-                                }
-                                else {
-                                    history.read().refresh_wait()
-                                }
-                            }
-                            Err(err) => {
-                                if err.should_retry() {
-                                    if initial_run {
-                                        info!(
-                                            "Retrying full validation run."
-                                        );
-                                        Duration::from_secs(0)
-                                    }
-                                    else if can_retry {
-                                        if validation.sanitize().is_err() {
-                                            break Err(Failed)
-                                        }
-                                        info!(
-                                            "Validation failed but \
-                                             can be retried."
-                                        );
-                                        can_retry = false;
-                                        Duration::from_secs(0)
-                                    }
-                                    else {
-                                        error!(
-                                            "Retried validation failed again."
-                                        );
-                                        break Err(Failed);
-                                    }
-                                }
-                                else {
-                                    break Err(Failed);
-                                }
-                            }
-                        }
-
+                match LocalExceptions::load(process.config(), true) {
+                    Ok(new_exceptions) => {
+                        exceptions = new_exceptions;
                     }
                     Err(_) => {
-                        error!(
-                            "Failed to load exceptions. \
-                            Trying again in 10 seconds."
-                        );
-                        Duration::from_secs(10)
+                        warn!("Using previously loaded local exceptions.");
+                    }
+                }
+
+                let initial_run = initial;
+                initial = false;
+                let timeout = match Self::process_once(
+                    process.config(), &validation, &history,
+                    &mut notify, &exceptions, initial_run,
+                ) {
+                    Ok(()) => {
+                        // Immediately start a new run after the
+                        // initial run.
+                        if initial_run {
+                            info!(
+                                "Initial run complete, now starting \
+                                 normal run."
+                            );
+                            Duration::from_secs(0)
+                        }
+                        else {
+                            history.read().refresh_wait()
+                        }
+                    }
+                    Err(err) => {
+                        if err.should_retry() {
+                            if initial_run {
+                                info!(
+                                    "Retrying full validation run."
+                                );
+                                Duration::from_secs(0)
+                            }
+                            else if can_retry {
+                                if validation.sanitize().is_err() {
+                                    break Err(Failed)
+                                }
+                                info!(
+                                    "Validation failed but \
+                                     can be retried."
+                                );
+                                can_retry = false;
+                                Duration::from_secs(0)
+                            }
+                            else {
+                                error!(
+                                    "Retried validation failed again."
+                                );
+                                break Err(Failed);
+                            }
+                        }
+                        else {
+                            break Err(Failed);
+                        }
                     }
                 };
+
                 if let Some(log) = log.as_ref() {
                     log.flush();
                 }
@@ -421,7 +425,7 @@ impl Server {
         engine: &Engine,
         history: &SharedHistory,
         notify: &mut NotifySender,
-        exceptions: LocalExceptions,
+        exceptions: &LocalExceptions,
         initial: bool,
     ) -> Result<(), RunFailed> {
         info!("Starting a validation run.");
@@ -430,7 +434,7 @@ impl Server {
             engine, config, initial
         )?;
         let must_notify = history.update(
-            report, &exceptions, metrics,
+            report, exceptions, metrics,
         );
         history.mark_update_done();
         if log::max_level() >= log::Level::Info {
