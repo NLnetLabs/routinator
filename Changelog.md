@@ -10,6 +10,12 @@ Breaking changes
   logged separately and by default are only visible in the status HTTP
   server endpoints. The new `log-repository-issues` option can be used to
   have these messages also written to the log. ([#1054])
+* Changed how server mode deals with broken or missing local exception
+  files. Previously, Routinator would just stop updating until they are
+  fixed, leading to updates being stalled if the operator misses the error
+  messages. Now it will log a warning and keep using the previous set of
+  local exceptions. When starting, it will exit with an error message if
+  there are broken or missing local exception files. ([#1060])
 
 New
 
@@ -78,6 +84,7 @@ Other changes
 [#1053]: https://github.com/NLnetLabs/routinator/pull/1053
 [#1055]: https://github.com/NLnetLabs/routinator/pull/1055
 [#1057]: https://github.com/NLnetLabs/routinator/pull/1057
+[#1060]: https://github.com/NLnetLabs/routinator/pull/1060
 [@kawaemon]: https://github.com/kawaemon
 [mitmproxy]: https://www.mitmproxy.org/
 
