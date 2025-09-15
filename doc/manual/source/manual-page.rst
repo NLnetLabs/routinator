@@ -297,7 +297,7 @@ The available options are:
 .. option:: --rrdp-read-timeout=seconds
 
       Sets the timeout in seconds for RRDP-related network operation,
-      primarily waiting for the be able to read more data from the server.
+      primarily waiting to be able to read more data from the server.
       If this option is omitted, a default timeout of 10 seconds is used.
       Set the option to 0 to disable the timeout.
 
@@ -1185,11 +1185,11 @@ All values can be overridden via the command line options.
             An integer value that provides a timeout in seconds for retrieving
             a resource from an RRDP server. If the value is missing, a default
             timeout of 600 seconds will be used. Set the value to 0 to turn
-            off the timout.
+            off the timeout.
 
       rrdp-read-timeout
             An integer value that provides a timeout in seconds for 
-            RRDP-related network operations, primarily waiting for the be
+            RRDP-related network operations, primarily waiting to be
             able to read more data from the server. If the value is missing,
             a default timeout of 10 seconds will be used. Set the value to 0
             to turn off the timeout.
