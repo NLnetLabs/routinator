@@ -71,6 +71,8 @@ Other changes
 * Added building packages for RHEL 10 and Debian 13. ([#1034], [#1047])
 * Added building packages for ARMv6 and ARM64 for Debian Bookworm.
   ([#1036])
+* Added additional restrictions to the systemd unit files used in the
+  various binary packages. ([#1056])
 * Upgrades various dependencies. ([#1004], [#1005], [#1006])
 
 [#1004]: https://github.com/NLnetLabs/routinator/pull/1004
@@ -92,6 +94,7 @@ Other changes
 [#1052]: https://github.com/NLnetLabs/routinator/pull/1052
 [#1053]: https://github.com/NLnetLabs/routinator/pull/1053
 [#1055]: https://github.com/NLnetLabs/routinator/pull/1055
+[#1056]: https://github.com/NLnetLabs/routinator/pull/1056
 [#1057]: https://github.com/NLnetLabs/routinator/pull/1057
 [#1060]: https://github.com/NLnetLabs/routinator/pull/1060
 [#1061]: https://github.com/NLnetLabs/routinator/pull/1061
