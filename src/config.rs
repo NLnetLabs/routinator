@@ -50,7 +50,10 @@ const DEFAULT_EXPIRE: u64 = 7200;
 const DEFAULT_HISTORY_SIZE: usize = 10;
 
 /// The default for the RRDP timeout.
-const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(300);
+const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The default for the RRDP read timeout.
+const DEFAULT_RRDP_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The default for the RRDP TCP keepalive
 const DEFAULT_RRDP_TCP_KEEPALIVE: Duration = Duration::from_secs(60);
@@ -231,10 +234,22 @@ pub struct Config {
 
     /// RRDP timeout in seconds.
     ///
+    /// This is the timeout for completing the full HTTP request.
+    ///
     /// If this is None, no timeout is set.
     pub rrdp_timeout: Option<Duration>,
 
+    /// RRDP read timeout in seconds.
+    ///
+    /// This is the timeout for connect, read, and write calls within an
+    /// HTTP request.
+    ///
+    /// If this is None, no timeout is set.
+    pub rrdp_read_timeout: Option<Duration>,
+
     /// Optional RRDP connect timeout.
+    ///
+    /// If this is not set, the `rrdp_read_timeout` applies.
     pub rrdp_connect_timeout: Option<Duration>,
 
     /// Optional TCP keepalive duration for RRDP connections.
@@ -555,6 +570,16 @@ impl Config {
         // rrdp_timeout
         if let Some(value) = args.rrdp_timeout {
             self.rrdp_timeout = if value == 0 {
+                None
+            }
+            else {
+                Some(Duration::from_secs(value))
+            };
+        }
+
+        // rrdp_read_timeout
+        if let Some(value) = args.rrdp_read_timeout {
+            self.rrdp_read_timeout = if value == 0 {
                 None
             }
             else {
@@ -947,6 +972,13 @@ impl Config {
                     None => Some(DEFAULT_RRDP_TIMEOUT)
                 }
             },
+            rrdp_read_timeout: {
+                match file.take_u64("rrdp-read-timeout")? {
+                    Some(0) => None,
+                    Some(value) => Some(Duration::from_secs(value)),
+                    None => Some(DEFAULT_RRDP_READ_TIMEOUT)
+                }
+            },
             rrdp_connect_timeout: {
                 file.take_u64("rrdp-connect-timeout")?.map(Duration::from_secs)
             },
@@ -1185,6 +1217,7 @@ impl Config {
             rrdp_max_delta_count: DEFAULT_RRDP_MAX_DELTA_COUNT,
             rrdp_max_delta_list_len: DEFAULT_RRDP_MAX_DELTA_LIST_LEN,
             rrdp_timeout: Some(DEFAULT_RRDP_TIMEOUT), 
+            rrdp_read_timeout: Some(DEFAULT_RRDP_READ_TIMEOUT), 
             rrdp_connect_timeout: None,
             rrdp_tcp_keepalive: Some(DEFAULT_RRDP_TCP_KEEPALIVE),
             rrdp_local_addr: None,
@@ -1378,6 +1411,13 @@ impl Config {
         insert_int(
             &mut res, "rrdp-timeout",
             match self.rrdp_timeout {
+                None => 0,
+                Some(value) => value.as_secs(),
+            }
+        );
+        insert_int(
+            &mut res, "rrdp-read-timeout",
+            match self.rrdp_read_timeout {
                 None => 0,
                 Some(value) => value.as_secs(),
             }
@@ -1837,9 +1877,13 @@ struct GlobalArgs {
     #[arg(long, value_name = "SECONDS")]
     rrdp_fallback_time: Option<u64>,
 
-    /// Timeout of network operation for RRDP (0 for none)
+    /// Timeout of HTTP request for RRDP (0 for none)
     #[arg(long, value_name = "SECONDS")]
     rrdp_timeout: Option<u64>,
+
+    /// Timeout of network operation for RRDP (0 for none)
+    #[arg(long, value_name = "SECONDS")]
+    rrdp_read_timeout: Option<u64>,
 
     /// Timeout for connecting to an RRDP server
     #[arg(long, value_name = "SECONDS")]

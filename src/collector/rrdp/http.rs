@@ -52,6 +52,7 @@ impl HttpClient {
         builder = builder.redirect(
             redirect::Policy::custom(Self::redirect_policy)
         );
+        builder = builder.timeout(config.rrdp_read_timeout);
         if let Some(timeout) = config.rrdp_connect_timeout {
             builder = builder.connect_timeout(timeout);
         }
