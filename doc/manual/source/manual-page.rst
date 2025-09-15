@@ -290,15 +290,21 @@ The available options are:
 
 .. option:: --rrdp-timeout=seconds
 
-      Sets the timeout in seconds for any RRDP-related network operation,
-      i.e., connects, reads, and writes. If this option is omitted, the
-      default timeout of 300 seconds is used. Set the option to 0 to disable
-      the timeout.
+      Sets the timeout in seconds for retrieving a resource from an RRDP
+      server. If this option is omitted, a default timeout of 600 seconds is
+      used. Set the option to 0 to disable the timeout.
+
+.. option:: --rrdp-read-timeout=seconds
+
+      Sets the timeout in seconds for RRDP-related network operation,
+      primarily waiting for the be able to read more data from the server.
+      If this option is omitted, a default timeout of 10 seconds is used.
+      Set the option to 0 to disable the timeout.
 
 .. option:: --rrdp-connect-timeout=seconds
 
       Sets the timeout in seconds for RRDP connect requests. If omitted, the
-      general timeout will be used.
+      read timeout will be used.
 
 .. option:: --rrdp-tcp-keepalive=seconds
 
@@ -1176,15 +1182,22 @@ All values can be overridden via the command line options.
             If the value is missing, the default of 500 is used.
 
       rrdp-timeout
-            An integer value that provides a timeout in seconds for all
-            individual RRDP-related network operations, i.e., connects,
-            reads, and writes. If the value is missing, a default timeout of
-            300 seconds will be used. Set the value to 0 to turn the timeout
-            off.
+            An integer value that provides a timeout in seconds for retrieving
+            a resource from an RRDP server. If the value is missing, a default
+            timeout of 600 seconds will be used. Set the value to 0 to turn
+            off the timout.
+
+      rrdp-read-timeout
+            An integer value that provides a timeout in seconds for 
+            RRDP-related network operations, primarily waiting for the be
+            able to read more data from the server. If the value is missing,
+            a default timeout of 10 seconds will be used. Set the value to 0
+            to turn off the timeout.
 
       rrdp-connect-timeout
             An integer value that, if present, sets a separate timeout in
-            seconds for RRDP connect requests only.
+            seconds for connecting to an RRDP. If this value is absent, the
+            RRDP read timeout is used.
 
       rrdp-tcp-keepalive
             An integer value that provides the duration in seconds for the
