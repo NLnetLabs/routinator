@@ -1557,12 +1557,12 @@ encoded, and have been signed by the CA. If any of the objects fail this
 check, the entire CA will be rejected. If an object of an unknown  type  is
 encountered, the behaviour depends on the ``unknown-objects`` policy. If this
 policy has a value of *reject* the entire CA will be rejected. In this case,
-only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
-Ghostbuster records (.gbr) will be accepted.
+only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa),
+ASPAs (.asa), and Ghostbuster records (.gbr) will be accepted.
 
-If a CA is rejected, none of its ROAs will be added to the VRP set but also
-none of its child CAs will be considered at all; their published data will
-not be fetched or validated.
+If a CA is rejected, none of its ROAs, ASPAs, or router keys will be added
+to the VRP set but also none of its child CAs will be considered at all;
+their published data will not be fetched or validated.
 
 If a prefix has its ROAs published by different CAs, this will lead to some
 of its VRPs being dropped while others are still added. If the VRP for the
