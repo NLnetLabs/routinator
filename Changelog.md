@@ -54,9 +54,22 @@ New
 * The `/validity` HTTP server endpoint now accepts POST requests with a
   JSON body containing multiple routes to be checked all at once.
   ([#1053])
+* Better protect against corrupted stored publication points by double
+  checking cached manifest properties against the actual manifest and
+  discard the stored publication point if they mismatch.
+
+  This fixes an issue where an accidentally or maliciously manipulated
+  locally stored manifest could block update of a legitimate new manifest
+  which was reported by Zizhi Shang, Zhechao Lin, Jiahao Cao, Yangyang Wang,
+  Mingwei Xu of the Institute for Network Sciences and Cyberspace (INSC),
+  Tsinghua University.
 
 Bug fixes
 
+* Fixed a crash if certain invalid character appear in a manifest file
+  name by limiting the name to the rules defined in [RFC9286]. This issue
+  was reported by  Niklas Vogel of Goethe University Frankfurt and ATHENE.
+  ([rpki-rs#342])
 * Re-implemented RRDP client metrics based on the much simpler model used
   by RTRTR to fix recurring errors in the metrics. ([#1039])
 * Changed the message logged when an RRDP update times out to actually say
@@ -98,8 +111,10 @@ Other changes
 [#1057]: https://github.com/NLnetLabs/routinator/pull/1057
 [#1060]: https://github.com/NLnetLabs/routinator/pull/1060
 [#1061]: https://github.com/NLnetLabs/routinator/pull/1061
+[rpki-rs#342]: https://github.com/NLnetLabs/rpki-rs/pull/342
 [@kawaemon]: https://github.com/kawaemon
 [mitmproxy]: https://www.mitmproxy.org/
+[RFC9286]: https://tools.ietf.org/html/rfc9286
 
 
 ## 0.14.2 ‘Roll Initiative!’
