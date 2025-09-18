@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.0-rc1
+
+Released 2025-09-18.
 
 Breaking changes
 
@@ -74,7 +76,6 @@ Bug fixes
   by RTRTR to fix recurring errors in the metrics. ([#1039])
 * Changed the message logged when an RRDP update times out to actually say
   that. ([#1052])
-
 
 Other changes
 

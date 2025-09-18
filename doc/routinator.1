@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Jan 22, 2025" "0.14.2-dev" "Routinator"
+.TH "ROUTINATOR" "1" "Sep 18, 2025" "0.15.0-rc1" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
@@ -335,16 +335,23 @@ missing, the default of 500 is used.
 .INDENT 0.0
 .TP
 .B \-\-rrdp\-timeout=seconds
-Sets the timeout in seconds for any RRDP\-related network operation,
-i.e., connects, reads, and writes. If this option is omitted, the
-default timeout of 300 seconds is used. Set the option to 0 to disable
-the timeout.
+Sets the timeout in seconds for retrieving a resource from an RRDP
+server. If this option is omitted, a default timeout of 600 seconds is
+used. Set the option to 0 to disable the timeout.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-rrdp\-read\-timeout=seconds
+Sets the timeout in seconds for RRDP\-related network operation,
+primarily waiting to be able to read more data from the server.
+If this option is omitted, a default timeout of 10 seconds is used.
+Set the option to 0 to disable the timeout.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B \-\-rrdp\-connect\-timeout=seconds
 Sets the timeout in seconds for RRDP connect requests. If omitted, the
-general timeout will be used.
+read timeout will be used.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -376,16 +383,6 @@ This option provides the URI of a proxy to use for all HTTP connections
 made by the RRDP client. It can be either an HTTP or a SOCKS URI. The
 option can be given multiple times in which case proxies are tried in
 the given order.
-.UNINDENT
-.INDENT 0.0
-.TP
-.B \-\-rrdp\-keep\-responses=path
-If this option is enabled, the bodies of all HTTPS responses received
-from RRDP servers will be stored under \fIpath\fP\&. The sub\-path will be
-constructed using the components of the requested URI. For the
-responses to the notification files, the timestamp is appended to the
-path to make it possible to distinguish the series of requests made
-over time.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -466,6 +463,13 @@ syslog facility to use. The default is \fIdaemon\fP\&.
 .TP
 .B \-\-logfile=path
 Redirect logging output to the given file.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-log\-repository\-issues
+Log information about problems encountered while fetching and validating
+data. Normally, this information is only made available via the status
+HTTP endpoints.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -645,14 +649,16 @@ output in \fBjsonext\fP format will be quite large.
 .B slurm
 The list is formatted as locally added assertions of a
 local exceptions file defined by RFC 8416 (also known as
-SLURM). The produced file will have empty validation
-output filters.
+SLURM version 1). The produced file will have empty
+validation output filters. This version does not support
+ASPA.
 .TP
 .B slurm2
 The list is formatted as locally added assertions of a
-local exceptions file defined by draft-ietf-sidrops-aspa-slurm-02 
-(also known as SLURM version 2). The produced file will have empty 
-validation output filters.
+local exceptions file defined by
+draft\-ietf\-sidrops\-aspa\-slurm\-02 (also known as SLURM
+version 2). The produced file will have empty validation
+output filters.
 .TP
 .B openbgpd
 Choosing this format causes Routinator to produce a
@@ -689,6 +695,12 @@ This format produces no output whatsoever.
 .TP
 .B \-n, \-\-noupdate
 The repository will not be updated before producing the list.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-u, \-\-update\-after=minutes
+The repostory will only be updated if the last update was more
+than the given number of minutes ago.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -949,6 +961,23 @@ exactly one private key encoded in PEM format.
 Specifies the path to a file containing the server certificates
 to be used for HTTP\-over\-TLS connections. The file has to
 contain one or more certificates encoded in PEM format.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-refresh=seconds
+The amount of seconds the server should wait after having
+finished updating and validating the local repository before
+starting to update again. The next update will be earlier if
+objects in the repository expire earlier and min\-refresh is set.
+The default value is 600 seconds.
+.UNINDENT
+.INDENT 7.0
+.TP
+.B \-\-min\-refresh=seconds
+The amount of seconds the server should at least wait after
+having finished updating and validating the local repository
+before starting to update again. If not set this will default to
+refresh.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -1266,15 +1295,22 @@ list is considered empty and the snapshot is used instead.
 If the value is missing, the default of 500 is used.
 .TP
 .B rrdp\-timeout
-An integer value that provides a timeout in seconds for all
-individual RRDP\-related network operations, i.e., connects,
-reads, and writes. If the value is missing, a default timeout of
-300 seconds will be used. Set the value to 0 to turn the timeout
-off.
+An integer value that provides a timeout in seconds for retrieving
+a resource from an RRDP server. If the value is missing, a default
+timeout of 600 seconds will be used. Set the value to 0 to turn
+off the timeout.
+.TP
+.B rrdp\-read\-timeout
+An integer value that provides a timeout in seconds for
+RRDP\-related network operations, primarily waiting to be
+able to read more data from the server. If the value is missing,
+a default timeout of 10 seconds will be used. Set the value to 0
+to turn off the timeout.
 .TP
 .B rrdp\-connect\-timeout
 An integer value that, if present, sets a separate timeout in
-seconds for RRDP connect requests only.
+seconds for connecting to an RRDP. If this value is absent, the
+RRDP read timeout is used.
 .TP
 .B rrdp\-tcp\-keepalive
 An integer value that provides the duration in seconds for the
@@ -1296,14 +1332,6 @@ option, the system\(aqs own trust store is used.
 A list of string each providing the URI for a proxy for outgoing
 RRDP connections. The proxies are tried in order for each
 request. HTTP and SOCKS5 proxies are supported.
-.TP
-.B rrdp\-keep\-responses
-A string containing a path to a directory into which the bodies
-of all HTTPS responses received from RRDP servers will be stored.
-The sub\-path will be constructed using the components of the
-requested URI. For the responses to the notification files, the
-timestamp is appended to the path to make it possible to
-distinguish the series of requests made over time.
 .TP
 .B max\-object\-size
 An integer value that provides a limit for the size of individual
@@ -1378,6 +1406,12 @@ A string value specifying the syslog facility to use for logging
 to syslog. The default value if this entry is missing is
 \fIdaemon\fP\&.
 .TP
+.B log\-repository\-issues
+A boolean that indicates when present and set to true that
+information about problems encountered while fetching and
+validating data should be logged. Normally, this information is
+only made available via the status HTTP endpoints.
+.TP
 .B rtr\-listen
 An array of string values each providing an address and port on
 which the RTR server should listen in TCP mode. Address and port
@@ -1447,13 +1481,13 @@ must contain one or more certificates in PEM format.
 .B refresh
 An integer value specifying the number of seconds Routinator
 should wait between consecutive validation runs in server mode.
-The next validation run will happen earlier, if objects expire
-earlier and min-refresh is set. The default is 600 seconds.
+The next validation run will happen earlier if objects expire
+earlier and min\-refresh is set. The default is 600 seconds.
 .TP
-.B min-refresh
+.B min\-refresh
 An integer value specifying the number of seconds Routinator
-should at least wait between consecutive validation runs in server 
-mode. If not set this will default to refresh. 
+should at least wait between consecutive validation runs in server
+mode. If not set this will default to refresh.
 .TP
 .B retry
 An integer value specifying the number of seconds an RTR client
@@ -1519,6 +1553,10 @@ Returns a set of monitoring metrics in the format used by Prometheus.
 Returns the current status of the Routinator instance. This is similar
 to the output of the \fB/metrics\fP endpoint but in a more human friendly
 format.
+.sp
+This endpoint also includes a list of issues encountered while fetching
+data sorted by repository and validating data sorted by publication
+point.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -1636,12 +1674,12 @@ encoded, and have been signed by the CA. If any of the objects fail this
 check, the entire CA will be rejected. If an object of an unknown  type  is
 encountered, the behaviour depends on the \fBunknown\-objects\fP policy. If this
 policy has a value of \fIreject\fP the entire CA will be rejected. In this case,
-only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa), and
-Ghostbuster records (.gbr) will be accepted.
+only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa),
+ASPAs (.asa), and Ghostbuster records (.gbr) will be accepted.
 .sp
-If a CA is rejected, none of its ROAs will be added to the VRP set but also
-none of its child CAs will be considered at all; their published data will
-not be fetched or validated.
+If a CA is rejected, none of its ROAs, ASPAs, or router keys will be added
+to the VRP set but also none of its child CAs will be considered at all;
+their published data will not be fetched or validated.
 .sp
 If a prefix has its ROAs published by different CAs, this will lead to some
 of its VRPs being dropped while others are still added. If the VRP for the
