@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased next version
+
+Bug fixes
+
+Other changes
+
+
 ## 0.15.0-rc1
 
 Released 2025-09-18.
