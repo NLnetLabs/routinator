@@ -39,10 +39,10 @@ Open-source with professional support services
          :alt: Discord
          :target: https://discord.gg/8dvKB5Ykhy
 
-      .. |mastodon| image:: https://img.shields.io/mastodon/follow/109262826617293067?domain=https%3A%2F%2Ffosstodon.org&style=social
+      .. |mastodon| image:: https://img.shields.io/mastodon/follow/114692612288811644?domain=social.nlnetlabs.nl&style=social
          :alt: Mastodon
-         :target: https://fosstodon.org/@nlnetlabs
-                
+         :target: https://social.nlnetlabs.nl/@nlnetlabs
+
 |
 
 .. image:: img/routinator_badge.svg
