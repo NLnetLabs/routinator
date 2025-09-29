@@ -1,10 +1,10 @@
 Routinator |version|
 ====================
 
-Routinator 3000 is free, open-source :abbr:`RPKI (Resource Public Key
-Infrastructure)` Relying Party software made by `NLnet Labs
-<https://nlnetlabs.nl>`_. The project is written in Rust, a programming
-language designed for performance and memory safety.
+Routinator 3000 is free, open-source Relying Party software for Resource
+Public Key Infrastructure (RPKI). Routinator is developed by `NLnet Labs
+<https://nlnetlabs.nl>`_ since 2017. To learn more about RPKI, please refer
+to the `technology documentation <https://rpki.readthedocs.io>`_.
 
 Lightweight and portable
    Routinator has minimal system requirements and it can run on almost any
