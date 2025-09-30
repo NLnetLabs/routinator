@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Improvements
+
+Bug fixes
+
+Other changes
+
+
 ## 0.15.0 ‘This Ain’t No Disco’
 
 Released 2025-09-30
