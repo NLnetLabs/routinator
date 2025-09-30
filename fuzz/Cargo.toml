@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = "1"
 libfuzzer-sys = "0.4"
-rpki            = { version = "0.17.1", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
+rpki            = { version = "0.19.0", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ] }
 tempfile        = "3.1.0"
 
 [dependencies.routinator]
