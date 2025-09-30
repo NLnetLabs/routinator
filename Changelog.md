@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.0 ‘This Ain’t No Disco’
 
-Bug fixes
+Released 2025-09-30
 
-Other changes
+There have been no changes since 0.15.0-rc1.
 
 
 ## 0.15.0-rc1
@@ -14,7 +14,10 @@ Released 2025-09-18.
 Breaking changes
 
 * Removed the `rrdp-keep-responses` feature. We suggest the use of an HTTP
-  proxy such as [mitmproxy] instead. ([#1055])
+  proxy such as [mitmproxy] instead.
+
+  This once and for all fixes [CVE-2023-39916] which returned again in
+  release 0.14.0. ([#1055])
 * Messages about issues with repositories and publication points are now
   logged separately and by default are only visible in the status HTTP
   server endpoints. The new `log-repository-issues` option can be used to
@@ -123,6 +126,7 @@ Other changes
 [@kawaemon]: https://github.com/kawaemon
 [mitmproxy]: https://www.mitmproxy.org/
 [RFC9286]: https://tools.ietf.org/html/rfc9286
+[CVE-2023-39916]: https://nlnetlabs.nl/downloads/routinator/CVE-2023-39916.txt
 
 
 ## 0.14.2 ‘Roll Initiative!’
