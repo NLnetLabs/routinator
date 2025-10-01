@@ -10,7 +10,12 @@ Improvements
 
 Bug fixes
 
+* Undo PrivateUsers= in systemd file to allow user to run Routinator on ports 
+  <1024 ([#1068])
+
 Other changes
+
+[#1068]: https://github.com/NLnetLabs/routinator/pull/1068
 
 
 ## 0.15.0 ‘This Ain’t No Disco’
