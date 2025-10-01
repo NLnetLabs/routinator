@@ -15,7 +15,6 @@ MemoryDenyWriteExecute=yes
 NoNewPrivileges=yes
 PrivateDevices=yes
 PrivateTmp=yes
-PrivateUsers=yes
 ProtectControlGroups=yes
 ProtectHome=yes
 ProtectKernelModules=yes
