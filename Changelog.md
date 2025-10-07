@@ -10,12 +10,15 @@ Improvements
 
 Bug fixes
 
-* Undo PrivateUsers= in systemd file to allow user to run Routinator on ports 
-  <1024 ([#1068])
+* Abort the optimistic initial run if there are no stored TA certificates
+  for a TAL instead of succeeding with an empty data set. ([#1071])
+* Undo `PrivateUsers` restriction in systemd unit files to allow user to run
+  Routinator on privileged ports. ([#1068])
 
 Other changes
 
 [#1068]: https://github.com/NLnetLabs/routinator/pull/1068
+[#1071]: https://github.com/NLnetLabs/routinator/pull/1071
 
 
 ## 0.15.0 ‘This Ain’t No Disco’
