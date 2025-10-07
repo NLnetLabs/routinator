@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Improvements
+
+Bug fixes
+
+Other changes
+
+
 ## 0.15.1 ‘Ain’t No Country Club Either’
 
 Released 2025-10-07.
