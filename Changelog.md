@@ -1,12 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.1 ‘Ain’t No Country Club Either’
 
-Breaking changes
-
-New
-
-Improvements
+Released 2025-10-07.
 
 Bug fixes
 
@@ -14,8 +10,6 @@ Bug fixes
   for a TAL instead of succeeding with an empty data set. ([#1071])
 * Undo `PrivateUsers` restriction in systemd unit files to allow user to run
   Routinator on privileged ports. ([#1068])
-
-Other changes
 
 [#1068]: https://github.com/NLnetLabs/routinator/pull/1068
 [#1071]: https://github.com/NLnetLabs/routinator/pull/1071
