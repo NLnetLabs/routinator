@@ -556,8 +556,19 @@ impl<P: ProcessRun> Run<'_, P> {
                 }
             }
         }
-        warn!("No valid trust anchor for TAL {}", task.tal.info().name());
-        Ok(())
+        if self.initial {
+            info!(
+                "Initial quick validation failed: \
+                 no trust anchor for TAL {}.",
+                task.tal.info().name()
+            );
+            self.run_failed(RunFailed::retry());
+            Err(Failed)
+        }
+        else {
+            warn!("No valid trust anchor for TAL {}", task.tal.info().name());
+            Ok(())
+        }
     }
 
     /// Loads a trust anchor certificate with the given URI.
