@@ -1582,6 +1582,10 @@
         border-top-color: rgb(28, 89, 128);
     }
 
+    html.writer-html4 .rst-content dl:not(.docutils) dl:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) dl:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt {
+        background-color: rgb(32, 35, 36);
+    }
+
     html.writer-html4 .rst-content dl:not(.docutils) > dt::before,
     html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) > dt::before {
         color: rgb(109, 178, 223);
