@@ -1574,6 +1574,14 @@
         color: rgb(84, 164, 217);
         border-top-color: rgb(28, 89, 128);
     }
+
+    html.writer-html4 .rst-content dl:not(.docutils)>dt, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt {
+        background-image: initial;
+        background-color: rgb(32, 35, 36);
+        color: rgb(84, 164, 217);
+        border-top-color: rgb(28, 89, 128);
+    }
+
     html.writer-html4 .rst-content dl:not(.docutils) > dt::before,
     html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) > dt::before {
         color: rgb(109, 178, 223);
@@ -3036,6 +3044,13 @@
         html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) .sig-name {
             color: rgb(216, 212, 207);
         }
+
+		html.writer-html4 .rst-content dl:not(.docutils) .descclassname, html.writer-html4 .rst-content dl:not(.docutils) .descname, html.writer-html4 .rst-content dl:not(.docutils) .sig-name, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) .descclassname, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) .descname, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) .sig-name {
+			color: rgb(216, 212, 207);
+		}
+		html.writer-html4 .rst-content dl:not(.docutils)>dt .headerlink, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt .headerlink {
+			color: rgb(216, 212, 207);
+		}
         .rst-content .viewcode-back,
         .rst-content .viewcode-link {
             color: rgb(99, 220, 150);
