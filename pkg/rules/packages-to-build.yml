@@ -106,5 +106,5 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-test-exclude:
+test-exclude: []
 
