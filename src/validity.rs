@@ -98,28 +98,35 @@ pub struct RouteValidity<'a> {
 }
 
 impl<'a> RouteValidity<'a> {
-    pub fn new(
+    fn validate(
         prefix: Prefix,
         asn: Asn,
-        snapshot: &'a PayloadSnapshot
+        covers: impl IntoIterator<Item = (RouteOrigin, &'a PayloadInfo)>,
     ) -> Self {
         let mut matched = Vec::new();
         let mut bad_asn = Vec::new();
         let mut bad_len = Vec::new();
-        for item in snapshot.origins() {
-            if item.0.prefix.prefix().covers(prefix) {
-                if prefix.len() > item.0.prefix.resolved_max_len() {
-                    bad_len.push(item);
-                }
-                else if item.0.asn != asn {
-                    bad_asn.push(item);
-                }
-                else {
-                    matched.push(item)
-                }
+
+        for item in covers {
+            if prefix.len() > item.0.prefix.resolved_max_len() {
+                bad_len.push(item);
+            }
+            else if item.0.asn != asn {
+                bad_asn.push(item);
+            }
+            else {
+                matched.push(item)
             }
         }
+
         RouteValidity { prefix, asn, matched, bad_asn, bad_len }
+    }
+
+    pub fn new(prefix: Prefix, asn: Asn, snapshot: &'a PayloadSnapshot) -> Self {
+        let covers = snapshot
+            .origins()
+            .filter(|x| x.0.prefix.prefix().covers(prefix));
+        Self::validate(prefix, asn, covers)
     }
 
     pub fn prefix(&self) -> Prefix {
