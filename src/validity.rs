@@ -3,6 +3,8 @@
 use std::{fmt, io};
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
+use ipnet::IpNet;
+use prefix_trie::joint::JointPrefixMap;
 use rpki::resources::{Asn, Prefix};
 use rpki::rtr::payload::RouteOrigin;
 use serde::Deserialize;
@@ -25,9 +27,10 @@ impl<'a> RouteValidityList<'a> {
         requests: &RequestList, snapshot: &'a PayloadSnapshot
     ) -> Self {
         RouteValidityList {
-            routes: requests.routes.iter().map(|route| {
-                RouteValidity::new(route.prefix, route.asn, snapshot)
-            }).collect(),
+            routes: RouteValidity::new_batch(
+                requests.routes.iter().map(|x| (x.prefix, x.asn)),
+                snapshot,
+            ),
             created: snapshot.created(),
         }
     }
@@ -127,6 +130,40 @@ impl<'a> RouteValidity<'a> {
             .origins()
             .filter(|x| x.0.prefix.prefix().covers(prefix));
         Self::validate(prefix, asn, covers)
+    }
+
+    pub fn new_batch(
+        routes: impl IntoIterator<Item = (Prefix, Asn)>,
+        snapshot: &'a PayloadSnapshot,
+    ) -> Vec<Self> {
+        // using PrefixMap significantly improves time
+        // to search covering RouteOrigins, however creating it takes some time.
+        // so if requested routes are smaller than this value,
+        // avoid creating it and use linear-search to minimize overall time.
+        const TREE_THRESHOLD: usize = 100;
+
+        let routes = routes.into_iter();
+        if routes.size_hint().0 < TREE_THRESHOLD {
+            return routes
+                .map(|(pref, asn)| Self::new(pref, asn, snapshot))
+                .collect();
+        }
+
+        let mut tree = JointPrefixMap::<_, Vec<_>>::new();
+        for data in snapshot.origins() {
+            let prefix = IpNet::new(data.0.prefix.addr(), data.0.prefix.prefix_len()).unwrap();
+            tree.entry(prefix).or_default().push(data);
+        }
+
+        routes
+            .map(|(prefix, asn)| {
+                let net = IpNet::new(prefix.addr(), prefix.len()).unwrap();
+                let covers = tree.cover_values(&net)
+                    .flatten()
+                    .cloned();
+                Self::validate(prefix, asn, covers)
+            })
+            .collect()
     }
 
     pub fn prefix(&self) -> Prefix {
@@ -235,7 +272,7 @@ impl<'a> RouteValidity<'a> {
             {indent}    \"prefix\": \"{}\"\n\
             {indent}  }},\n\
             {indent}  \"validity\": {{\n\
-            {indent}    \"state\": \"{}\",",  
+            {indent}    \"state\": \"{}\",",
             self.asn,
             self.prefix,
             self.state(),
@@ -530,4 +567,3 @@ mod test {
         );
     }
 }
-
