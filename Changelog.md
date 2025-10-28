@@ -12,6 +12,8 @@ Bug fixes
 
 Other changes
 
+* Improved performance of batched route validation. ([#1076])
+
 
 ## 0.15.1 ‘Ain’t No Country Club Either’
 
