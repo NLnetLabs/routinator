@@ -11,7 +11,6 @@
 // consisitency.
 #![allow(clippy::unnecessary_wraps)]
 
-use std::os::unix::ffi::OsStrExt;
 use std::{fs, io, thread};
 use std::io::Write;
 use std::path::{Path, PathBuf};
