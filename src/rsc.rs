@@ -1,9 +1,8 @@
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use rpki::uri;
 use rpki::repository::rsc;
-use rpki::repository::cert::{Overclaim, ResourceCert};
-use rpki::repository::error::{InspectionError, ValidationError, VerificationError};
+use rpki::repository::cert::ResourceCert;
+use rpki::repository::error::{ValidationError, VerificationError};
 use rpki::repository::rsc::{ResourceSignedChecklist, Rsc};
 use rpki::repository::tal::{Tal, TalUri};
 use crate::config::Config;
@@ -26,7 +25,7 @@ impl ValidationReport {
         rsc: Rsc, config: &Config
     ) -> Result<Self, ValidationError> {
         Ok(Self {
-            rsc: rsc,
+            rsc,
             complete: AtomicBool::new(false),
             strict: config.strict
         })
@@ -44,9 +43,9 @@ impl ValidationReport {
 
     pub fn finalize(self) -> Result<ResourceSignedChecklist, Failed> {
         if self.complete.load(Ordering::Relaxed) {
-            return Ok(self.rsc.content().clone());
+            Ok(self.rsc.content().clone())
         } else {
-            return Err(Failed);
+            Err(Failed)
         }
     }
 }
@@ -134,7 +133,7 @@ impl<'a, 's> ValidateCa<'s> {
         else {
             cert.inspect_detached_ee(strict)?;
         }
-        cert.validity().verify().map_err(|e| VerificationError::from(e))?;
+        cert.validity().verify().map_err(VerificationError::from)?;
 
         self.report.complete.store(true, Ordering::Relaxed);
         Ok(true)
