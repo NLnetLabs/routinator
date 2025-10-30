@@ -64,6 +64,7 @@ pub mod operation;
 pub mod output;
 pub mod payload;
 pub mod process;
+pub mod rsc;
 pub mod rtr;
 pub mod rta;
 pub mod slurm;
