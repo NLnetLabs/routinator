@@ -24,6 +24,13 @@ impl ValidationReport {
     pub fn new(
         rsc: Rsc, config: &Config
     ) -> Result<Self, ValidationError> {
+        let cert = rsc.signed().cert();
+        rsc.as_resources().verify_covered(cert.as_resources())
+            .map_err(|err| VerificationError::new(err.to_string()))?;
+        rsc.v4_resources().verify_covered(cert.v4_resources())
+            .map_err(|err| VerificationError::new(err.v4().to_string()))?;
+        rsc.v6_resources().verify_covered(cert.v6_resources())
+            .map_err(|err| VerificationError::new(err.v6().to_string()))?;
         Ok(Self {
             rsc,
             complete: AtomicBool::new(false),
@@ -134,6 +141,18 @@ impl<'a, 's> ValidateCa<'s> {
             cert.inspect_detached_ee(strict)?;
         }
         cert.validity().verify().map_err(VerificationError::from)?;
+        if let Ok(blocks) = cert.as_resources().to_blocks() {
+            blocks.verify_covered(ca.as_cert().as_resources())
+                .map_err(|err| VerificationError::new(err.to_string()))?;
+        }
+        if let Ok(blocks) = cert.v4_resources().to_blocks() {
+            blocks.verify_covered(ca.as_cert().v4_resources())
+                .map_err(|err| VerificationError::new(err.v4().to_string()))?;
+        }
+        if let Ok(blocks) = cert.v6_resources().to_blocks() {
+            blocks.verify_covered(ca.as_cert().v6_resources())
+                .map_err(|err| VerificationError::new(err.v6().to_string()))?;
+        }
 
         self.report.complete.store(true, Ordering::Relaxed);
         Ok(true)
