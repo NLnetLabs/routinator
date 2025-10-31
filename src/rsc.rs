@@ -108,7 +108,7 @@ pub struct ValidateCa<'s> {
     certs: Vec<ResourceCert>,
 }
 
-impl<'a, 's> ValidateCa<'s> {
+impl<'s> ValidateCa<'s> {
     fn new(report: &'s ValidationReport) -> Self {
         ValidateCa {
             report,
