@@ -1224,12 +1224,13 @@ impl ValidateRsc {
         };
         
         let mut hashes = Vec::new();
-        for item in rsc.iter() {
+        for item in rsc.as_ref().iter() {
             hashes.push(item);
         }
 
-        'outer: for document in &self.document {
-            let digest = match rsc.digest_algorithm().digest_file(document) {
+        let digest_algorithm = rsc.as_ref().digest_algorithm();
+        for document in &self.document {
+            let digest = match digest_algorithm.digest_file(document) {
                 Ok(digest) => digest,
                 Err(err) => {
                     error!(
@@ -1248,24 +1249,29 @@ impl ValidateRsc {
             };
             let doc_file_name = doc_file_name.to_string_lossy();
             
+            let mut found = false;
             for item in hashes.iter() {
                 if item.hash() == digest.as_ref() {
                     if let Some(file_name) = item.file_name() {
                         if file_name == doc_file_name.as_bytes() {
-                            continue 'outer;
+                            found = true;
+                            break;
                         }
                     } else {
-                        continue 'outer;
+                        found = true;
+                        break;
                     }
                 }
             }
 
-            // At this point none of the entries in the check list matched the
-            // document we supplied.
+            if !found {
+                // At this point none of the entries in the check list matched 
+                // the document we supplied.
 
-            error!("Failed to match document to valid entry in the check list '{}'.", 
-                document.display());
-            return Err(ExitError::Invalid)
+                error!("Failed to match document to valid entry in the check list '{}'.", 
+                    document.display());
+                return Err(ExitError::Invalid)
+            }
         }
 
         let rsc_validation = match rsc::ValidationReport::new(
