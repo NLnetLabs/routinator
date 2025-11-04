@@ -1533,6 +1533,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         manifest.metrics.valid_ca_certs += 1;
 
+        self.processor.process_crl(
+            uri, 
+            manifest.ee_cert.clone(), 
+            manifest.crl.clone()
+        )?;
+
         let processor = match self.processor.process_ca(
             uri, &cert
         )? {
@@ -2252,6 +2258,15 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         content: Bytes
     ) -> Result<(), Failed> {
         let _ = (uri, cert, content);
+        Ok(())
+    }
+
+    fn process_crl(
+        &mut self, 
+        _uri: &uri::Rsync, 
+        _cert: ResourceCert, 
+        _crl: Crl,
+    ) -> Result<(), Failed> {
         Ok(())
     }
 

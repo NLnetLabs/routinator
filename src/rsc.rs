@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use rpki::uri;
 use rpki::repository::rsc;
 use rpki::repository::cert::ResourceCert;
-use rpki::repository::error::{ValidationError, VerificationError};
+use rpki::repository::error::ValidationError;
 use rpki::repository::rsc::{ResourceSignedChecklist, Rsc};
 use rpki::repository::tal::{Tal, TalUri};
 use crate::config::Config;
@@ -16,7 +16,9 @@ use crate::error::{Failed, RunFailed};
 #[derive(Debug)]
 pub struct ValidationReport {
     rsc: rsc::Rsc,
-    complete: AtomicBool,
+    matched: AtomicBool,
+    crl_found: AtomicBool,
+    crl_failure: AtomicBool,
     strict: bool,
 }
 
@@ -24,16 +26,12 @@ impl ValidationReport {
     pub fn new(
         rsc: Rsc, config: &Config
     ) -> Result<Self, ValidationError> {
-        let cert = rsc.signed().cert();
-        rsc.as_resources().verify_covered(cert.as_resources())
-            .map_err(|err| VerificationError::new(err.to_string()))?;
-        rsc.v4_resources().verify_covered(cert.v4_resources())
-            .map_err(|err| VerificationError::new(err.v4().to_string()))?;
-        rsc.v6_resources().verify_covered(cert.v6_resources())
-            .map_err(|err| VerificationError::new(err.v6().to_string()))?;
+        rsc.signed().cert().inspect_detached_ee(config.strict)?;
         Ok(Self {
-            rsc,
-            complete: AtomicBool::new(false),
+            rsc: rsc.clone(),
+            matched: AtomicBool::new(false),
+            crl_found: AtomicBool::new(false),
+            crl_failure: AtomicBool::new(false),
             strict: config.strict
         })
     }
@@ -49,7 +47,8 @@ impl ValidationReport {
     }
 
     pub fn finalize(self) -> Result<ResourceSignedChecklist, Failed> {
-        if self.complete.load(Ordering::Relaxed) {
+        if self.matched.load(Ordering::Relaxed)
+            && !self.crl_failure.load(Ordering::Relaxed) {
             Ok(self.rsc.content().clone())
         } else {
             Err(Failed)
@@ -58,25 +57,12 @@ impl ValidationReport {
 }
 
 impl ValidationReport {
-    fn supply_tal(&self, tal: &Tal) -> Result<bool, ValidationError> {
-        if self.complete.load(Ordering::Relaxed) {
+    fn supply_tal(&self, _tal: &Tal) -> Result<bool, ValidationError> {
+        if self.matched.load(Ordering::Relaxed) {
             return Ok(true);
         }
 
-        let cert = self.rsc.signed().cert();
-
-        if cert.is_self_signed() {
-            return Ok(false);
-        }
-
-        if cert.subject_public_key_info() != tal.key_info() {
-            return Ok(false);
-        }
-
-        cert.inspect_ta(self.strict)?;
-        cert.verify_ta_ref(self.strict)?;
-
-        Ok(true)
+        return Ok(false);
     }
 }
 
@@ -90,7 +76,7 @@ impl<'s> ProcessRun for &'s ValidationReport {
 
         match self.supply_tal(tal) {
             Ok(true) | Err(_) => {
-                self.complete.store(true, Ordering::Relaxed);
+                self.matched.store(true, Ordering::Relaxed);
                 Ok(None)
             }
             Ok(false) => {
@@ -105,56 +91,33 @@ impl<'s> ProcessRun for &'s ValidationReport {
 
 pub struct ValidateCa<'s> {
     report: &'s ValidationReport,
-    certs: Vec<ResourceCert>,
 }
 
 impl<'s> ValidateCa<'s> {
     fn new(report: &'s ValidationReport) -> Self {
         ValidateCa {
-            report,
-            certs: Vec::new()
+            report
         }
     }
 
     fn supply_ca(&self, ca: &ResourceCert) -> Result<bool, ValidationError> {
-        if self.report.complete.load(Ordering::Relaxed) {
+        if self.report.matched.load(Ordering::Relaxed)
+         && self.report.crl_found.load(Ordering::Relaxed) {
             return Ok(true);
         }
 
-        let cert = self.report.rsc.signed().cert();
+        let cert = self.report.rsc.signed().cert().clone();
         let strict = self.report.strict;
 
         if cert.authority_key_identifier().is_none() {
             return Ok(false);
         }
 
-        if cert.verify_issuer_claim(ca, strict).is_err()
-            || cert.verify_signature(ca, strict).is_err() 
-        {
-            return Ok(false);
-        }
+        cert.inspect_detached_ee(strict)?;
+        ca.inspect_ca(strict)?;
+        cert.verify_ee(ca, strict)?;
 
-        if cert.basic_ca().is_some() {
-            cert.inspect_ca(strict)?;
-        }
-        else {
-            cert.inspect_detached_ee(strict)?;
-        }
-        cert.validity().verify().map_err(VerificationError::from)?;
-        if let Ok(blocks) = cert.as_resources().to_blocks() {
-            blocks.verify_covered(ca.as_cert().as_resources())
-                .map_err(|err| VerificationError::new(err.to_string()))?;
-        }
-        if let Ok(blocks) = cert.v4_resources().to_blocks() {
-            blocks.verify_covered(ca.as_cert().v4_resources())
-                .map_err(|err| VerificationError::new(err.v4().to_string()))?;
-        }
-        if let Ok(blocks) = cert.v6_resources().to_blocks() {
-            blocks.verify_covered(ca.as_cert().v6_resources())
-                .map_err(|err| VerificationError::new(err.v6().to_string()))?;
-        }
-
-        self.report.complete.store(true, Ordering::Relaxed);
+        self.report.matched.store(true, Ordering::Relaxed);
         Ok(true)
     }
 }
@@ -167,26 +130,46 @@ impl ProcessPubPoint for ValidateCa<'_> {
     fn process_ca(
         &mut self, _uri: &uri::Rsync, cert: &CaCert,
     ) -> Result<Option<Self>, Failed> {
-        if self.report.complete.load(Ordering::Relaxed) {
+        if self.report.matched.load(Ordering::Relaxed)
+         && self.report.crl_found.load(Ordering::Relaxed) {
             return Ok(None)
         }
-        self.certs.push(cert.cert().clone());
-        Ok(Some(Self::new(self.report)))
+        if let Ok(true) = self.supply_ca(cert.cert()) {
+            self.report.matched.store(true, Ordering::Relaxed)
+        }
+        Ok(Some(Self { report: self.report }))
+    }
+
+    fn process_crl(
+        &mut self, 
+        _uri: &uri::Rsync, 
+        cert: ResourceCert, 
+        crl: rpki::repository::Crl,
+    ) -> Result<(), Failed> {
+        let crl_uri = self.report.rsc.signed().cert().crl_uri();
+        if crl_uri.is_none() || cert.crl_uri().is_none() {
+            return Ok(());
+        }
+
+        if crl_uri != cert.crl_uri() {
+            return Ok(());
+        }
+
+        self.report.crl_found.store(true, Ordering::Relaxed);
+
+        if crl.contains(self.report.rsc.signed().cert().serial_number()) {
+            self.report.crl_failure.store(true, Ordering::Relaxed);
+        }
+
+        Ok(())
+    
     }
 
     fn restart(&mut self) -> Result<(), Failed> {
-        self.certs.clear();
         Ok(())
     }
 
     fn commit(self) {
-        for cert in self.certs.iter() {
-            match self.supply_ca(cert) {
-                Ok(true) | Err(_) => {
-                    self.report.complete.store(true, Ordering::Relaxed)
-                }
-                Ok(false) => { }
-            }
-        }
+
     }
 }
