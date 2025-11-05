@@ -24,6 +24,7 @@ use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
 use log::{error, info, warn};
 use rpki::repository::Rsc;
+use rpki::repository::rsc::FileNameAndHash;
 use rpki::resources::{Asn, Prefix};
 #[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
@@ -1223,12 +1224,9 @@ impl ValidateRsc {
             }
         };
         
-        let mut hashes = Vec::new();
-        for item in rsc.as_ref().iter() {
-            hashes.push(item);
-        }
+        let hashes: Vec<FileNameAndHash> = rsc.content().iter().collect();
 
-        let digest_algorithm = rsc.as_ref().digest_algorithm();
+        let digest_algorithm = rsc.content().digest_algorithm();
         for document in &self.document {
             let digest = match digest_algorithm.digest_file(document) {
                 Ok(digest) => digest,
