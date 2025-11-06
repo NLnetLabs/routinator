@@ -1225,6 +1225,7 @@ impl ValidateRsc {
         };
         
         let hashes: Vec<FileNameAndHash> = rsc.content().iter().collect();
+        let mut document_errors = Vec::new();
 
         let digest_algorithm = rsc.content().digest_algorithm();
         for document in &self.document {
@@ -1266,10 +1267,32 @@ impl ValidateRsc {
                 // At this point none of the entries in the check list matched 
                 // the document we supplied.
 
-                error!("Failed to match document to valid entry in the check list '{}'.", 
-                    document.display());
-                return Err(ExitError::Invalid)
+                document_errors.push(document);
             }
+        }
+
+        if document_errors.len() > 0 {
+            for document in document_errors {
+                println!("Failed to match document to valid entry in the check list '{}'.", 
+                    document.display());
+            }
+            println!("");
+            println!("The documents listed on this RSC are:");
+            for document in rsc.content().iter() {
+                let hash = document.hash().iter()
+                    .map(|b| format!("{:02X?}", b).to_string())
+                    .collect::<Vec<String>>()
+                    .join("");
+                if let Some(filename) = document.file_name() {
+                    let filename = String::from_utf8_lossy(filename);
+                    println!("Hash: {}, file name: {:?}", hash, filename);
+                } else {
+                    println!("Hash: {}", hash);
+                }
+            }
+            println!("");
+            println!("Please be aware that RSCs may be bound to a specific file name, and those file names are case sensitive.");
+            return Err(ExitError::Invalid)
         }
 
         let rsc_validation = match rsc::ValidationReport::new(
