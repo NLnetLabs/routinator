@@ -1271,12 +1271,12 @@ impl ValidateRsc {
             }
         }
 
-        if document_errors.len() > 0 {
+        if !document_errors.is_empty() {
             for document in document_errors {
                 println!("Failed to match document to valid entry in the check list '{}'.", 
                     document.display());
             }
-            println!("");
+            println!();
             println!("The documents listed on this RSC are:");
             for document in rsc.content().iter() {
                 let hash = document.hash().iter()
@@ -1290,7 +1290,7 @@ impl ValidateRsc {
                     println!("Hash: {}", hash);
                 }
             }
-            println!("");
+            println!();
             println!("Please be aware that RSCs may be bound to a specific file name, and those file names are case sensitive.");
             return Err(ExitError::Invalid)
         }
