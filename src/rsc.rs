@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use rpki::uri;
+use rpki::uri::{self};
 use rpki::repository::rsc;
 use rpki::repository::cert::ResourceCert;
 use rpki::repository::error::ValidationError;
@@ -124,7 +124,7 @@ impl<'s> ValidateCa<'s> {
 
 impl ProcessPubPoint for ValidateCa<'_> {
     fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
-        Ok(uri.ends_with(".cer"))
+        Ok(uri.ends_with(".cer") || uri.ends_with(".crl"))
     }
 
     fn process_ca(
@@ -142,16 +142,16 @@ impl ProcessPubPoint for ValidateCa<'_> {
 
     fn process_crl(
         &mut self, 
-        _uri: &uri::Rsync, 
-        cert: ResourceCert, 
+        uri: &uri::Rsync, 
+        _cert: ResourceCert, 
         crl: rpki::repository::Crl,
     ) -> Result<(), Failed> {
-        let crl_uri = self.report.rsc.signed().cert().crl_uri();
-        if crl_uri.is_none() || cert.crl_uri().is_none() {
+        let  Some(rsc_crl_uri) = self.report.rsc.signed().cert().crl_uri() 
+        else {
             return Ok(());
-        }
+        };
 
-        if crl_uri != cert.crl_uri() {
+        if rsc_crl_uri != uri {
             return Ok(());
         }
 
