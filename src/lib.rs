@@ -66,7 +66,6 @@ pub mod payload;
 pub mod process;
 pub mod rsc;
 pub mod rtr;
-pub mod rta;
 pub mod slurm;
 pub mod store;
 pub mod tals;

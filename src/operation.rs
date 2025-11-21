@@ -26,11 +26,9 @@ use log::{error, info, warn};
 use rpki::repository::Rsc;
 use rpki::repository::rsc::FileNameAndHash;
 use rpki::resources::{Asn, Prefix};
-#[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
-#[cfg(feature = "rta")] use crate::rta;
 use crate::{output, rsc, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed, RunFailed};
@@ -67,8 +65,6 @@ pub enum Operation {
     Server(Server),
     Vrps(Vrps),
     Validate(Validate),
-    #[cfg(feature = "rta")]
-    ValidateDocument(ValidateDocument),
     ValidateRsc(ValidateRsc),
     Update(Update),
     PrintConfig(PrintConfig),
@@ -90,10 +86,6 @@ impl Operation {
         let app = Server::config_args(app);
         let app = Vrps::config_args(app);
         let app = Validate::config_args(app);
-
-        #[cfg(feature = "rta")]
-        let app = ValidateDocument::config_args(app);
-
         let app = ValidateRsc::config_args(app);
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
@@ -119,12 +111,6 @@ impl Operation {
             }
             Some(("validate", matches)) => {
                 Operation::Validate(Validate::from_arg_matches(matches)?)
-            }
-            #[cfg(feature = "rta")]
-            Some(("rta", matches)) => {
-                Operation::ValidateDocument(
-                    ValidateDocument::from_arg_matches(matches)?
-                )
             }
             Some(("rsc", matches)) => {
                 Operation::ValidateRsc(ValidateRsc::from_arg_matches(matches)?)
@@ -176,8 +162,6 @@ impl Operation {
             Operation::Server(cmd) => cmd.run(process),
             Operation::Vrps(cmd) => cmd.run(process),
             Operation::Validate(cmd) => cmd.run(process),
-            #[cfg(feature = "rta")]
-            Operation::ValidateDocument(cmd) => cmd.run(process),
             Operation::ValidateRsc(cmd) => cmd.run(process),
             Operation::Update(cmd) => cmd.run(process),
             Operation::PrintConfig(cmd) => cmd.run(process),
@@ -1013,137 +997,6 @@ impl Validate {
                     error!("Failed to write output: {err}");
                     ExitError::Generic
                 })
-            }
-        }
-    }
-}
-
-
-//------------ ValidateDocument ----------------------------------------------
-
-/// Validates an RTA-signed document.
-///
-/// Performs a validation run in order to find the necessary certificates.
-#[cfg(feature = "rta")]
-#[derive(Clone, Debug, Parser)]
-pub struct ValidateDocument {
-    /// Path to the signed document.
-    #[arg(long, value_name = "PATH")]
-    document: PathBuf,
-
-    /// Path to the signature file.
-    #[arg(long, value_name = "PATH")]
-    signature: PathBuf,
-
-    /// Don’t update the repository.
-    #[arg(short, long)]
-    noupdate: bool,
-}
-
-#[cfg(feature = "rta")]
-impl ValidateDocument {
-    /// Adds the command configuration to a clap app.
-    pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
-        app.subcommand(
-            ValidateDocument::augment_args(
-                clap::Command::new("rta")
-                .about("Validates an RTA-signed document")
-                .after_help(AFTER_HELP)
-            )
-        )
-    }
-
-    /// Creates a command from clap matches.
-    pub fn from_arg_matches(
-        matches: &ArgMatches,
-    ) -> Result<Self, Failed> {
-        Ok(
-            <ValidateDocument as FromArgMatches>::from_arg_matches(
-                matches
-            ).unwrap()
-        )
-    }
-
-    /// Tries to validate a document through RTA signatures.
-    ///
-    /// Returns successfully if validation is successful or with an
-    /// appropriate error otherwise.
-    fn run(self, process: Process) -> Result<(), ExitError> {
-        let mut validation = Engine::new(process.config(), !self.noupdate)?;
-        validation.ignite()?;
-        process.switch_logging(false, false)?;
-
-        // Load and decode the signature.
-        let data = match fs::read(&self.signature) {
-            Ok(data) => Bytes::from(data),
-            Err(err) => {
-                error!(
-                    "Failed to read signature '{}': {}",
-                    self.signature.display(), err
-                );
-                return Err(ExitError::Generic)
-            }
-        };
-        let rta = match Rta::decode(data, process.config().strict) {
-            Ok(rta) => rta,
-            Err(err) => {
-                error!(
-                    "Failed to decode signature '{}': {}",
-                    self.signature.display(), err
-                );
-                return Err(ExitError::Invalid)
-            }
-        };
-
-        // Load and digest the document.
-        let digest = match rta.digest_algorithm().digest_file(&self.document) {
-            Ok(digest) => digest,
-            Err(err) => {
-                error!(
-                    "Failed to read document '{}': {}",
-                    self.document.display(), err
-                );
-                return Err(ExitError::Generic)
-            }
-        };
-
-        // Check that the digests matches.
-        if digest.as_ref() != rta.message_digest().as_ref() {
-            error!("RTA signature invalid.");
-            return Err(ExitError::Invalid)
-        }
-
-        let rta_validation = match rta::ValidationReport::new(
-            &rta, process.config()
-        ) {
-            Ok(rta_validation) => rta_validation,
-            Err(_) => {
-                error!("RTA did not validate. (new)");
-                return Err(ExitError::Invalid);
-            }
-        };
-
-        if rta_validation.process(&validation).is_err() {
-            error!("RTA did not validate. (process)");
-            return Err(ExitError::Invalid);
-        }
-
-        match rta_validation.finalize() {
-            Ok(rta) => {
-                for block in rta.as_resources().iter() {
-                    println!("{block}");
-                }
-                for block in rta.v4_resources().iter() {
-                    println!("{}", block.display_v4());
-                }
-                for block in rta.v6_resources().iter() {
-                    println!("{}", block.display_v6());
-                }
-                Ok(())
-            }
-            Err(_) => {
-                error!("RTA did not validate. (finalize)");
-                Err(ExitError::Invalid)
             }
         }
     }
