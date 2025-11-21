@@ -1220,7 +1220,7 @@ impl ValidateRsc {
                     "Failed to decode signature '{}': {}",
                     self.signature.display(), err
                 );
-                return Err(ExitError::Invalid)
+                return Err(ExitError::Generic)
             }
         };
         
@@ -1280,19 +1280,19 @@ impl ValidateRsc {
             println!("The documents listed on this RSC are:");
             for document in rsc.content().iter() {
                 let hash = document.hash().iter()
-                    .map(|b| format!("{:02X?}", b).to_string())
+                    .map(|b| format!("{:02x?}", b).to_string())
                     .collect::<Vec<String>>()
                     .join("");
                 if let Some(filename) = document.file_name() {
                     let filename = String::from_utf8_lossy(filename);
-                    println!("Hash: {}, file name: {:?}", hash, filename);
+                    println!("{}  {}", hash, filename);
                 } else {
-                    println!("Hash: {}", hash);
+                    println!("{}  *", hash);
                 }
             }
             println!();
             println!("Please be aware that RSCs may be bound to a specific file name, and those file names are case sensitive.");
-            return Err(ExitError::Invalid)
+            return Err(ExitError::Generic)
         }
 
         let rsc_validation = match rsc::ValidationReport::new(
@@ -1301,33 +1301,37 @@ impl ValidateRsc {
             Ok(validation) => validation,
             Err(_) => {
                 error!("RSC did not validate. (new)");
-                return Err(ExitError::Invalid);
+                return Err(ExitError::Generic);
             }
         };
 
         if rsc_validation.process(&validation).is_err() {
             error!("RSC did not validate. (process)");
-            return Err(ExitError::Invalid);
+            return Err(ExitError::Generic);
         }
 
         match rsc_validation.finalize() {
             Ok(rsc) => {
-                println!("Validation of your RSC succeeded.");
-                println!("It has these resources:");
+                println!("Validation of these documents succeeded:");
+                for document in &self.document {
+                    println!("* {}", document.display());
+                }
+                println!();
+                println!("It was verified with an RSC with these resources:");
                 for block in rsc.as_resources().iter() {
-                    println!("{block}");
+                    println!("* {block}");
                 }
                 for block in rsc.v4_resources().iter() {
-                    println!("{}", block.display_v4());
+                    println!("* {}", block.display_v4());
                 }
                 for block in rsc.v6_resources().iter() {
-                    println!("{}", block.display_v6());
+                    println!("* {}", block.display_v6());
                 }
                 Ok(())
             }
             Err(_) => {
                 error!("RSC did not validate. (finalize)");
-                Err(ExitError::Invalid)
+                Err(ExitError::Generic)
             }
         }
     }
