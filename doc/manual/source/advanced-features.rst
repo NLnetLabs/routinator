@@ -158,48 +158,54 @@ in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
 
 .. versionadded:: 0.11.0
 
-Resource Tagged Attestations
-----------------------------
+Resource Signed Checklists
+--------------------------
 
-Resource Tagged Attestations (RTAs) allow any arbitrary file to be signed
-‘with resources’ by one or more parties. The RTA object is a separate file
-that cryptographically connects the document with a set of resources. The
-receiver of the object can use Routinator to show these resources, and verify
-that it was created by their rightful holder(s).
+Resource Signed Checklists allow any arbitrary file to be signed
+‘with resources’. The RSC object is a separate file
+that cryptographically connects the document hash(es) with a set of resources. 
+The receiver of the object can use Routinator to show these resources, and 
+verify that it was created by their rightful holder.
 
-One practical example where RTA could be valuable is to authorise a Bring
+One practical example where RSC could be valuable is to authorise a Bring
 Your Own IP (BYOIP) process, where you bring part or all of your publicly
 routable IPv4 or IPv6 address range from your on-premises network to a cloud
-provider. The document authorising BYOIP could be signed using RTA.
+provider. The document authorising BYOIP could be signed using RSC.
 
-RTA objects can be generated using Krill, the RPKI Certificate Authority
-software from NLnet Labs, and you can use the MyAPNIC hosted service. The
-objects can be validated using Routinator if it is built with RTA support,
-using the :ref:`features<building:enabling or disabling features>`
-functionality provided by Cargo:
-
-.. code-block:: text
-
-   cargo install --locked --features rta routinator
-
-You can now interactively validate an RTA signed object. If it is valid,
+RSC objects can be generated using e.g. the MyAPNIC hosted service. The
+objects can be validated using Routinator. If it is valid,
 Routinator will report the resources used to sign the object:
 
 .. code-block:: text
 
-    routinator rta acme-corp-byoip.rta
+    routinator rsc --document a.txt --document b.txt --signature my-rsc.sig
 
-    192.0.2.0/24
-    203.0.113.0/24
-    2001:db8::/48 
+    Validation of these documents succeeded:
+    * a.txt
+    * b.txt
+
+    It was verified with an RSC with these resources:
+    * AS65536-65551
+    * AS64496
+    * 192.0.2.0/24
+    * 2001:DB8::/32
+
+If it is not valid, it will output that and exit with exit code 1:
+
+.. code-block:: text
+
+    routinator rsc --document test2.txt --signature my-sig.sig
+
+    Failed to match document to valid entry in the check list 'test2.txt'.
+
+    The documents listed on this RSC are:
+    f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2  test.txt
+
+    Please be aware that RSCs may be bound to a specific file name, and those file names are case sensitive.
 
 .. seealso::
 
-    - `A profile for Resource Tagged Attestations (RTAs)
-      <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_
-    - `Moving RPKI Beyond Routing Security
-      <https://blog.nlnetlabs.nl/moving-rpki-beyond-routing-security/>`_ 
-    - `A proof-of-concept for constructing and validating RTAs
-      <https://github.com/APNIC-net/rpki-rta-demo>`_
+    - `A Profile for RPKI Signed Checklists (RSCs)
+      <https://www.rfc-editor.org/rfc/rfc9323.html>`_
 
-.. versionadded:: 0.8.0
+.. versionadded:: 0.16.0
