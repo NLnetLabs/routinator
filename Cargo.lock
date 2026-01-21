@@ -140,8 +140,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "bcder"
 version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f7c42c9913f68cf9390a225e81ad56a5c515347287eb98baa710090ca1de86d"
+source = "git+https://github.com/NLnetLabs/bcder.git?branch=rsc-support#e85312a5dc0bdd9ce8a050d36b92abc8bfdd7281"
 dependencies = [
  "bytes",
  "smallvec",
@@ -1372,8 +1371,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c24608ac7e6ede3c152d887e7d3233a2bd2f2f463689049dfda365daa60a396e"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rsc-support#fa864e8aa165d236b286195a9904507bf9d7c8e7"
 dependencies = [
  "arbitrary",
  "base64",
