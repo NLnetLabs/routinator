@@ -18,7 +18,15 @@ at all. From the command line you can start Routinator as a daemon using the
 the :term:`http-listen` configuration file option to start the HTTP server.
 To enable the RTR server, use the :option:`--rtr` command line option or the
 :term:`rtr-listen` option in the configuration file. Of course you also start
-both. 
+both.
+
+.. Important:: For production use, Routinator needs to run unprivileged and
+   sandboxed. If you have installed Routinator through our software package
+   repository, this is taken care of by the bundled `systemd .service file
+   <https://github.com/NLnetLabs/routinator/blob/main/pkg/common/routinator-systemd-257.routinator.service>`_.
+   If you choose to run Routinator manually, or under a different service
+   manager, dropping privileges and sandboxing to equivalent levels is your
+   responsibility.
 
 HTTPS and secure transports for RTR are supported as well. Please read the
 :doc:`http-service` and :doc:`rtr-service` sections for details.
