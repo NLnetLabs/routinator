@@ -70,7 +70,7 @@ If you have built Routinator using Cargo, you have made your own decisions
 with regards to the user that it runs as and the privileges it has. There is
 no default configuration file, as it is your choice if you want to use one.
 
-.. Attention:: Our :doc:`threat model<threat model>` assumes Routinator runs
+.. Attention:: Our :doc:`threat model<threat-model>` assumes Routinator runs
    unprivileged and sandboxed using the provided `systemd .service file
    <https://github.com/NLnetLabs/routinator/blob/main/pkg/common/routinator-systemd-257.routinator.service>`_.
    If you choose to run Routinator manually, or under a different service

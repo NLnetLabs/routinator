@@ -64,10 +64,8 @@ Routinator should:
 General assumptions:
 
 -  The user uses an authentic copy of Routinator.
--  Routinator runs unpriviliged and sandboxed using the provided `systemd
-  .service file
-  <https://github.com/NLnetLabs/routinator/blob/main/pkg/common/routinator-systemd-257.routinator.service>`_
-  (or an equivalent you provide).
+-  Routinator runs unpriviliged and sandboxed using the provided `systemd .service file <https://github.com/NLnetLabs/routinator/blob/main/pkg/common/routinator-systemd-257.routinator.service>`_
+   (or an equivalent you provide).
 -  An adversary does not have administrative control over the host system
    Routinator runs on.
 -  An adversary does not have write-access to Routinator’s cache directories.
