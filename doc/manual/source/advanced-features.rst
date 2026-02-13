@@ -3,13 +3,14 @@ Advanced Features
 
 Routinator offers several advanced features to let operators gain operational
 experience with some of the ongoing work in the Internet Engineering Task
-Force to improve and augment RPKI. 
+Force to improve and augment RPKI.
 
-.. note:: 
+.. note::
 
-    The Hosted RPKI systems that the RIRs offer currently only support the
-    creation of ROAs. To manage ASPA, BGPsec or other RPKI objects, you can
-    run Delegated RPKI with `Krill <https://krill.docs.nlnetlabs.nl/>`_. 
+    To manage ASPA, BGPsec or other RPKI objects, you can run Delegated RPKI
+    with `Krill <https://krill.docs.nlnetlabs.nl/>`_. A growing number of
+    hosted RIR systems allow you to manage these objects as well. Check with
+    your RIR to find out what is available.
 
 ASPA
 ----
@@ -25,7 +26,7 @@ You can let Routinator process ASPA objects and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-aspa` option
 or by setting ``enable-aspa`` to True in the :doc:`configuration
 file<configuration>`. ASPA information will be exposed via RTR, as well as
-in the :term:`json` and :term:`jsonext` output formats, e.g.: 
+in the :term:`json` and :term:`jsonext` output formats, e.g.:
 
 .. code-block:: json
 
@@ -80,7 +81,7 @@ in the :term:`json` and :term:`jsonext` output formats, e.g.:
       <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-profile>`_
     - `BGP AS_PATH Verification Based on Autonomous System Provider
       Authorization (ASPA) Objects
-      <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-verification>`_ 
+      <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-verification>`_
     - `Manage ASPA objects with Krill
       <https://krill.docs.nlnetlabs.nl/en/stable/manage-aspas.html>`_
 
@@ -92,15 +93,15 @@ BGPsec
 The goal of BGPsec, as described in :RFC:`8209`, is to provide full AS path
 validation. For this operators will need to publish BGPsec router keys in the
 RPKI. As there is currently very limited deployment, validating these objects
-with Routinator is not enabled by default. 
+with Routinator is not enabled by default.
 
 You can let Routinator process router keys and include them in the published
 dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
 or by setting ``enable-bgpsec`` to True in the :doc:`configuration
 file<configuration>`. BGPsec information will be exposed via RTR, as well as
-in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.: 
+in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
 
-.. code-block:: json 
+.. code-block:: json
 
     {
         "metadata": {
@@ -152,7 +153,7 @@ in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
       <https://datatracker.ietf.org/doc/html/rfc8205.html>`_
     - `A Profile for BGPsec Router Certificates, Certificate Revocation
       Lists, and Certification Requests
-      <https://datatracker.ietf.org/doc/html/rfc8209.html>`_ 
+      <https://datatracker.ietf.org/doc/html/rfc8209.html>`_
     - `Manage BGPSec Router Certificates with Krill
       <https://krill.docs.nlnetlabs.nl/en/stable/manage-bgpsec.html>`_
 
@@ -191,14 +192,14 @@ Routinator will report the resources used to sign the object:
 
     192.0.2.0/24
     203.0.113.0/24
-    2001:db8::/48 
+    2001:db8::/48
 
 .. seealso::
 
     - `A profile for Resource Tagged Attestations (RTAs)
       <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-rpki-rta>`_
     - `Moving RPKI Beyond Routing Security
-      <https://blog.nlnetlabs.nl/moving-rpki-beyond-routing-security/>`_ 
+      <https://blog.nlnetlabs.nl/moving-rpki-beyond-routing-security/>`_
     - `A proof-of-concept for constructing and validating RTAs
       <https://github.com/APNIC-net/rpki-rta-demo>`_
 
