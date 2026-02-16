@@ -93,7 +93,7 @@ Routinator guarantees the following:
 With the aforementioned assumptions and guarantees in mind, the following are
 examples of things an adversary with various capabilities can achieve.
 
-An adversary with the ability to publish repository data:
+An adversary with the ability to publish repository data could:
 
 -  craft publication point URIs to make Routinator perform HTTP GET or rsync
    requests to internal resources, circumventing access controls, with the
