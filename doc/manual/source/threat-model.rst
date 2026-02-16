@@ -93,11 +93,12 @@ Routinator guarantees the following:
 With the aforementioned assumptions and guarantees in mind, the following are
 examples of things an adversary with various capabilities can achieve.
 
-An adversary that puts crafted publication point URIs in their own repository data could:
+An adversary with the ability to publish repository data:
 
--  make Routinator perform HTTP GET or rsync requests to internal resources,
-   circumventing access controls, with the exception of host names that
-   Routinator considers dubious (see :option:`--allow-dubious-hosts`).
+-  craft publication point URIs to make Routinator perform HTTP GET or rsync
+   requests to internal resources, circumventing access controls, with the
+   exception of host names that Routinator considers dubious (see
+   :option:`--allow-dubious-hosts`).
 
 An adversary with network access on-path between Routinator and a repository
 could:
