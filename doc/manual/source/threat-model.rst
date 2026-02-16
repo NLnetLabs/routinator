@@ -14,18 +14,18 @@ this was done on good faith -- the RPKI adds a way to partially verify these
 statements.
 
 The data Routinator retrieves from the repositories, as well as the
-repositories themselves, are untrusted. Trust is established by cryptographic
-signatures that can only be made by resource holders. Signatures are
-validated, contents are checked according to the schema, and data is checked
-against the constraints in the certificate.
+repositories themselves and their locations, are untrusted. Trust is
+established by cryptographic signatures that can only be made by resource
+holders. Signatures are validated, contents are checked according to the
+schema, and data is checked against the constraints in the certificate.
 
 .. image:: img/routinator-data-flow.png
 
 There are two kinds of data:
 
--  **Repository data** is the data retrieved from public repositories by
-   Routinator. This is unvalidated and untrusted. Trust is established by
-   verifying the signatures.
+-  **Repository data** is the data retrieved from public repositories on the
+   open Internet by Routinator. This data is unvalidated and untrusted. Trust is
+   established by verifying the signatures.
 
 -  Validated **payload data** is the data Routinator parsed from the
    repositories and is sent to the routers. This data is validated and should
@@ -66,6 +66,8 @@ General assumptions:
 -  The user uses an authentic copy of Routinator.
 -  Routinator runs unpriviliged and sandboxed using the provided `systemd .service file <https://github.com/NLnetLabs/routinator/blob/main/pkg/common/routinator-systemd-257.routinator.service>`_
    (or an equivalent you provide).
+-  Routinator is operated in a network location that does not provide access to
+   internal HTTP or rsync resources.
 -  An adversary does not have administrative control over the host system
    Routinator runs on.
 -  An adversary does not have write-access to Routinator’s cache directories.
@@ -90,6 +92,12 @@ Routinator guarantees the following:
 
 With the aforementioned assumptions and guarantees in mind, the following are
 examples of things an adversary with various capabilities can achieve.
+
+An adversary that puts crafted publication point URIs in their own repository data could:
+
+-  make Routinator perform HTTP GET or rsync requests to internal resources,
+   circumventing access controls, with the exception of host names that
+   Routinator considers dubious (see :option:`--allow-dubious-hosts`).
 
 An adversary with network access on-path between Routinator and a repository
 could:
