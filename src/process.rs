@@ -102,7 +102,15 @@ impl Process {
     pub fn get_listen_fd(&self) -> Result<Option<TcpListener>, Failed> {
         if self.config.systemd_listen {
             match listenfd::ListenFd::from_env().take_tcp_listener(0) {
-                Ok(Some(res)) => Ok(Some(res)),
+                Ok(Some(res)) => {
+                    if let Err(err) = res.set_nonblocking(true) {
+                        error!(
+                            "Fatal: error switching systemd socket to \
+                            nonblocking: {err}"
+                        );
+                    }
+                    Ok(Some(res))
+                }
                 Ok(None) => {
                     error!(
                         "Fatal: systemd_listen enabled \
