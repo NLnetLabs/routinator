@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::{cmp, fs, io};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -18,6 +17,7 @@ use crate::utils::fatal;
 use crate::utils::archive::{ArchiveError, OpenError};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
+use crate::utils::log::unroll_error;
 use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
 use super::archive::{
@@ -897,29 +897,20 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(err)
             }
             else if let SnapshotError::Http(err) = err {
-                if let Some(source) = err.source() {
-                    warn!(
-                        "RRDP {}: Failed to process snapshot file {}: {} ({})",
-                        self.rpki_notify, notify.content().snapshot().uri(), 
-                        err, source
-                    );
-                } else {
-                    warn!(
-                        "RRDP {}: Failed to process snapshot file {}: {}",
-                        self.rpki_notify, notify.content().snapshot().uri(), 
-                        err
-                    );
-                }
+                warn!(
+                    "RRDP {}: Failed to process snapshot file {}: {}",
+                    self.rpki_notify, notify.content().snapshot().uri(), 
+                    unroll_error(&err)
+                );
                 return Ok(false)
             } 
             else if let SnapshotError::Rrdp(err) = err {
-
-                let mut err: &dyn Error = &err;
-                while let Some(e) = err.source() {
-                    err = e;
-                }
-                warn!("RRDP {}: Failed to process snapshot file XML {}: {}", 
-                    self.rpki_notify, notify.content().snapshot().uri(), err);
+                warn!(
+                    "RRDP {}: Failed to process snapshot file XML {}: {}", 
+                    self.rpki_notify, 
+                    notify.content().snapshot().uri(), 
+                    unroll_error(&err)
+                );
                 return Ok(false);
             }
             else {
