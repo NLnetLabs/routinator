@@ -1446,10 +1446,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.process_gbr(uri, content, manifest)?;
         }
         else if uri.ends_with(".crl") {
-            if *uri != manifest.crl_uri {
-                self.log.warn(format_args!("stray CRL {uri}."));
-                manifest.metrics.stray_crls += 1;
-            }
+            self.process_crl(uri, content, manifest)?;
         }
         else {
             manifest.metrics.others += 1;
@@ -1507,7 +1504,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(cert) => cert,
             Err(err) => {
                 self.log.warn(format_args!(
-                    "CA certificagte {uri}: {err}."
+                    "CA certificate {uri}: {err}."
                 ));
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
@@ -1693,6 +1690,43 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 ))
             }
         }
+        Ok(())
+    }
+
+    /// Processes a CRL.
+    fn process_crl(
+        &mut self, uri: &uri::Rsync, content: Bytes,
+        manifest: &mut ValidPointManifest,
+    ) -> Result<(), Failed> {
+        if *uri != manifest.crl_uri {
+            self.log.warn(format_args!("stray CRL {uri}."));
+            manifest.metrics.stray_crls += 1;
+        }
+        let crl = match Crl::decode(
+            content
+        ) {
+            Ok(crl) => crl,
+            Err(_) => {
+                self.log.warn(format_args!("undecodable CRL {uri}."));
+                return Ok(());
+            }
+        };
+
+        // XXX It feels neater to verify the signature here, even though in
+        // most cases `self.processor.process_crl` is a no-op, as otherwise
+        // a potentially invalid CRL might be passed on.
+        if crl.verify_signature(
+            self.cert.cert().subject_public_key_info()
+        ).is_err() {
+            self.log.warn(format_args!("signature mismatch CRL {uri}."));
+            return Ok(());
+        }
+
+        self.processor.process_crl(
+            uri, 
+            self.cert.cert().clone(), 
+            crl
+        )?;
         Ok(())
     }
 }
@@ -2252,6 +2286,15 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         content: Bytes
     ) -> Result<(), Failed> {
         let _ = (uri, cert, content);
+        Ok(())
+    }
+
+    fn process_crl(
+        &mut self, 
+        _uri: &uri::Rsync, 
+        _cert: ResourceCert, 
+        _crl: Crl,
+    ) -> Result<(), Failed> {
         Ok(())
     }
 
