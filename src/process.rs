@@ -108,6 +108,7 @@ impl Process {
                             "Fatal: error switching systemd socket to \
                             nonblocking: {err}"
                         );
+                        return Err(Failed);
                     }
                     Ok(Some(res))
                 }
