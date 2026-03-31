@@ -8,7 +8,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/nlnetlabs/routinator?color=brightgreen)](https://hub.docker.com/r/nlnetlabs/routinator)
 [![Documentation Status](https://readthedocs.org/projects/routinator/badge/?version=stable)](https://routinator.docs.nlnetlabs.nl/en/stable/)
 
-[![Spotify](https://img.shields.io/badge/Spotify-∞-brightgreen.svg)](https://open.spotify.com/user/alex.band/playlist/1DkYwN4e4tq73LGAeUykA1?si=AXNn9GkpQ4a-q5skG1yiYQ)
+[![Discuss on Discourse](https://img.shields.io/badge/Discourse-NLnet_Labs-orange?logo=Discourse)](https://community.nlnetlabs.nl/c/rpki/11)
 [![Discord](https://img.shields.io/discord/818584154278199396?label=Discord&logo=discord)](https://discord.gg/8dvKB5Ykhy)
 [![Mastodon Follow](https://img.shields.io/mastodon/follow/114692612288811644?domain=social.nlnetlabs.nl&style=social)](https://social.nlnetlabs.nl/@nlnetlabs)
 

@@ -28,16 +28,14 @@ operate SIDR technologies in existing and new networks.
 
 There are more than 40 RFCs about RPKI. You don't need to know all of by heart
 to provide a meaningful contribution to Routinator, but we feel it's good to
-have some reference and context. The [MANRS](https://www.manrs.org/) initiative
-has made an [easy to use tool](http://rpki-rfc.routingsecurity.net/) to view all
-the relevant RFCs, and how they are related. 
+have some reference and context. 
 
 ## Learning Routinator
 
 ### Join the Community
 
-We invite you to join the [RPKI mailing
-list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki) and/or [Discord
+We invite you to join the [NLnet Labs Commununity 
+Forum](https://community.nlnetlabs.nl/) and/or [Discord
 server](https://discord.gg/8dvKB5Ykhy). Please don't open a GitHub issue for a
 question. Instead, follow the discussion on the mailing list and Discord and ask
 questions there before you start sending patches. We prefer public discussions
