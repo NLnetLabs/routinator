@@ -10,7 +10,14 @@ Improvements
 
 Bug fixes
 
+* Set an RTR listener socket received via systemd to non-blocking. This
+  fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
+
 Other changes
+
+[#1081]: https://github.com/NLnetLabs/routinator/pull/1081
+[@MaxHearnden]: https://github.com/MaxHearnden
+
 
 
 ## 0.15.1 ‘Ain’t No Country Club Either’
