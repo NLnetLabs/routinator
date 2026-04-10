@@ -12,10 +12,13 @@ Bug fixes
 
 * Set an RTR listener socket received via systemd to non-blocking. This
   fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
+* Fixed the `--rrdp-tcp-keepalive` to be a command line option rather than
+  a command line argument. ([1085])
 
 Other changes
 
 [#1081]: https://github.com/NLnetLabs/routinator/pull/1081
+[#1085]: https://github.com/NLnetLabs/routinator/pull/1085
 [@MaxHearnden]: https://github.com/MaxHearnden
 
 
