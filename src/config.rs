@@ -1890,7 +1890,7 @@ struct GlobalArgs {
     rrdp_connect_timeout: Option<u64>,
 
     /// TCP keepalive duration for RRDP connections (0 for none)
-    #[arg(value_name = "SECONDS")]
+    #[arg(long, value_name = "SECONDS")]
     rrdp_tcp_keepalive: Option<u64>,
 
     /// Local address for outgoing RRDP connections
