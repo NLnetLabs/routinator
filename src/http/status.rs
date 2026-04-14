@@ -480,7 +480,7 @@ async fn handle_api_status(
                     if let Some(book) = &metrics.log_book {
                         target.member_array("issues", |target| {
                             for message in book {
-                                if message.level >= log::max_level() {
+                                if message.level > log::max_level() {
                                     continue;
                                 }
                                 target.array_object(|target| {
@@ -550,7 +550,7 @@ async fn handle_api_status(
                     if let Some(book) = &metrics.log_book {
                         target.member_array("issues", |target| {
                             for message in book {
-                                if message.level >= log::max_level() {
+                                if message.level > log::max_level() {
                                     continue;
                                 }
                                 target.array_object(|target| {
@@ -572,7 +572,7 @@ async fn handle_api_status(
             for (uri, book) in &metrics.pub_point_logs {
                 target.member_array(uri, |target| {
                     for message in book {
-                        if message.level >= log::max_level() {
+                        if message.level > log::max_level() {
                             continue;
                         }
                         target.array_object(|target| {
