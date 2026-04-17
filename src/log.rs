@@ -101,9 +101,11 @@ impl LogBookWriter {
     }
 
     pub fn log(&mut self, level: log::Level, args: fmt::Arguments<'_>) {
-        self.log_record(
-            &log::Record::builder().level(level).args(args).build()
-        )
+        if level <= log::max_level() {
+            self.log_record(
+                &log::Record::builder().level(level).args(args).build()
+            )
+        }
     }
 
     pub fn trace(&mut self, args: fmt::Arguments<'_>) {
