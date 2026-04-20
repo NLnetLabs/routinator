@@ -1,5 +1,4 @@
 
-use std::error::Error;
 use std::{error, fmt, io};
 use std::collections::HashSet;
 use std::io::Read;
@@ -15,6 +14,7 @@ use crate::error::{Failed, RunFailed};
 use crate::log::LogBookWriter;
 use crate::metrics::RrdpRepositoryMetrics;
 use crate::utils::archive::{ArchiveError, PublishError};
+use crate::utils::log::unroll_error;
 use super::archive::{
     AccessError, FallbackTime, RepositoryState, RrdpArchive,
     SnapshotRrdpArchive,
@@ -67,11 +67,7 @@ impl Notification {
                 response
             }
             Err(err) => {
-                if let Some(source) = err.source() {
-                    log.warn(format_args!("{err} ({source})"));
-                } else {
-                    log.warn(format_args!("{err}"));
-                }
+                log.warn(format_args!("{}", unroll_error(&err)));
                 *status = HttpStatus::Error;
                 return Err(Failed)
             }
