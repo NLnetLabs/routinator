@@ -21,14 +21,19 @@ use crate::utils::sync::{Mutex, RwLock};
 pub struct LogMessage {
     pub when: DateTime<Utc>,
     pub level: log::Level,
+    pub repository_level: log::Level,
     pub content: String,
 }
 
 impl LogMessage {
-    fn from_record(record: &Record<'_>) -> Self {
+    fn from_record(
+        record: &Record<'_>, 
+        repository_level: log::Level
+    ) -> Self {
         Self {
             when: Utc::now(),
             level: record.level(),
+            repository_level: repository_level,
             content: record.args().to_string(),
         }
     }
@@ -100,36 +105,50 @@ impl LogBookWriter {
         self.book
     }
 
-    pub fn log(&mut self, level: log::Level, args: fmt::Arguments<'_>) {
+    pub fn log(
+        &mut self, 
+        level: log::Level, 
+        repository_level: log::Level,
+        args: fmt::Arguments<'_>
+    ) {
         if level <= log::max_level() {
             self.log_record(
-                &log::Record::builder().level(level).args(args).build()
+                &log::Record::builder().level(level).args(args).build(),
+                repository_level
             )
         }
     }
 
     pub fn trace(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Trace, args);
+        self.log(log::Level::Trace, log::Level::Trace, args);
     }
 
     pub fn debug(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Debug, args);
+        self.log(log::Level::Debug, log::Level::Debug, args);
     }
 
     pub fn info(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Info, args);
+        self.log(log::Level::Info, log::Level::Info, args);
     }
 
+    // The log level set to Info is intentional. We do not want to show a
+    // warning in the logging when it is the repository's fault
     pub fn warn(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Info, args);
+        self.log(log::Level::Info, log::Level::Warn, args);
     }
 
+    // The log level set to Info is intentional. We do not want to show an
+    // error in the logging when it is the repository's fault
     pub fn error(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Error, args);
+        self.log(log::Level::Info, log::Level::Error, args);
     }
 
     /// Writes a log record.
-    pub fn log_record(&mut self, record: &Record<'_>) {
+    pub fn log_record(
+        &mut self, 
+        record: &Record<'_>, 
+        repository_level: log::Level
+    ) {
         let logger = log::logger();
 
         // We use the level filter from the global log which should be set
@@ -137,7 +156,9 @@ impl LogBookWriter {
         if !logger.enabled(record.metadata()) {
             return
         }
-        self.book.messages.push(LogMessage::from_record(record));
+        self.book.messages.push(
+            LogMessage::from_record(record, repository_level)
+        );
         if let Some(prefix) = self.process_prefix.as_ref() {
             logger.log(
                 &log::Record::builder()
