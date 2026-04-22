@@ -33,7 +33,7 @@ impl LogMessage {
         Self {
             when: Utc::now(),
             level: record.level(),
-            repository_level: repository_level,
+            repository_level,
             content: record.args().to_string(),
         }
     }
