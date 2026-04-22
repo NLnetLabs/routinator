@@ -111,7 +111,7 @@ impl LogBookWriter {
         repository_level: log::Level,
         args: fmt::Arguments<'_>
     ) {
-        if level <= log::max_level() {
+        if level <= log::max_level() || repository_level <= log::max_level() {
             self.log_record(
                 &log::Record::builder().level(level).args(args).build(),
                 repository_level
