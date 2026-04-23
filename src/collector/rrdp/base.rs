@@ -799,13 +799,13 @@ impl<'a> RepositoryUpdate<'a> {
             LoadResult::Current
         }
         else if let Some(date) = best_before {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and current copy is expired since {date}.",
             ));
             LoadResult::Stale
         }
         else {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and there is no current copy."
             ));
             LoadResult::Unavailable
@@ -1023,7 +1023,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        self.log.debug(format_args!("Delta update completed."));
+        self.log.info(format_args!("Delta update completed."));
         Ok(None)
     }
 

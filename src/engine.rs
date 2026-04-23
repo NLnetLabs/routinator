@@ -823,7 +823,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let file = match str_from_ascii(item.file()) {
                     Ok(file) => file,
                     Err(_) => {
-                        self.log.warn(format_args!(
+                        self.log.error(format_args!(
                             "manifest {} contains illegal file name '{}'.",
                             self.cert.rpki_manifest(),
                             String::from_utf8_lossy(item.file())
@@ -842,7 +842,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let content = match collector.load_object(&uri)? {
                     Some(content) => content,
                     None => {
-                        self.log.warn(format_args!(
+                        self.log.error(format_args!(
                             "{uri}: failed to load."
                         ));
                         return Err(store::UpdateError::Abort)
@@ -850,7 +850,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 };
 
                 if hash.verify(&content).is_err() {
-                    self.log.warn(format_args!(
+                    self.log.error(format_args!(
                         "{uri}: file has wrong manifest hash."
                     ));
                     return Err(store::UpdateError::Abort)
@@ -908,7 +908,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(manifest) => manifest,
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "failed to decode manifest {}.",
                     self.cert.rpki_manifest()
                 ));
@@ -1057,12 +1057,12 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(some) if some.ends_with(".crl") => some.clone(),
             Some(some) => {
                 self.metrics.invalid_manifests += 1;
-                self.log.warn(format_args!("invalid CRL URI {}", some));
+                self.log.error(format_args!("invalid CRL URI {}", some));
                 return Ok(None)
             }
             None => {
                 self.metrics.invalid_manifests += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "missing CRL URI on manifest {}",
                     self.cert.rpki_manifest()
                 ));
@@ -1073,7 +1073,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(name) => name,
             None => {
                 self.metrics.invalid_manifests += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "CRL URI {crl_uri} outside repository directory."
                 ));
                 return Ok(None)
@@ -1099,7 +1099,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 let hash = ManifestHash::new(hash, manifest.file_hash_alg());
                 if hash.verify(&bytes).is_err() {
                     self.metrics.invalid_crls += 1;
-                    self.log.warn(format_args!(
+                    self.log.error(format_args!(
                         "file {crl_uri} has wrong hash."
                     ));
                     return Ok(None)
@@ -1111,7 +1111,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Some(some) => some,
             None => {
                 self.metrics.invalid_crls += 1;
-                self.log.warn(format_args!("CRL not listed on manifest."));
+                self.log.error(format_args!("CRL not listed on manifest."));
                 return Ok(None)
             }
         };
@@ -1121,7 +1121,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(crl) => crl,
             Err(_) => {
                 self.metrics.invalid_crls += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "CRL {crl_uri}: failed to decode."
                 ));
                 return Ok(None)
@@ -1258,7 +1258,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(manifest) => manifest,
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "failed to decode manifest {}.",
                     self.cert.rpki_manifest(),
                 ));
@@ -1315,7 +1315,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Err(_) => {
                 self.metrics.invalid_manifests += 1;
                 self.metrics.invalid_crls += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "failed to decode CRL {crl_uri}."
                 ));
                 return Err(Failed)
@@ -1472,7 +1472,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(cert) => cert,
             Err(_) => {
                 manifest.metrics.invalid_certs += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "certificate {uri}: failed to decode."
                 ));
                 return Ok(())
@@ -1495,7 +1495,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         ca_task: &mut Vec<CaTask<P::PubPoint>>,
     ) -> Result<(), Failed> {
         if self.cert.check_loop(&cert).is_err() {
-            self.log.warn(format_args!(
+            self.log.error(format_args!(
                 "CA certificate {uri}: certificate loop detected."
             ));
             manifest.metrics.invalid_certs += 1;
@@ -1507,7 +1507,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(cert) => cert,
             Err(err) => {
                 self.log.warn(format_args!(
-                    "CA certificagte {uri}: {err}."
+                    "CA certificate {uri}: {err}."
                 ));
                 manifest.metrics.invalid_certs += 1;
                 return Ok(())
@@ -1598,7 +1598,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(roa) => roa,
             Err(_) => {
                 manifest.metrics.invalid_roas += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "ROA {uri}: failed to decode."
                 ));
                 return Ok(())
@@ -1635,7 +1635,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(aspa) => aspa,
             Err(err) => {
                 manifest.metrics.invalid_aspas += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "ASPA {uri}: failed to decode."
                 ));
                 return Ok(())
@@ -1671,7 +1671,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             Ok(obj) => obj,
             Err(_) => {
                 manifest.metrics.invalid_gbrs += 1;
-                self.log.warn(format_args!(
+                self.log.error(format_args!(
                     "GBR {uri}: failed to decode."
                 ));
                 return Ok(())

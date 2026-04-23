@@ -723,7 +723,7 @@ impl RsyncCommand {
             }
 
             if len > 0 {
-                target.log(level, format_args!("{}",
+                target.log(log::Level::Info, level, format_args!("{}",
                     String::from_utf8_lossy(&line[..len])
                 ));
             }
