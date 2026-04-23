@@ -190,7 +190,7 @@ impl<Meta> Archive<Meta> {
         }
 
         // Step 3. Check them objects.
-        objects.sort_by_key(|left| left.0);
+        objects.sort_by_key(|obj| obj.0);
 
         for window in objects.windows(2) {
             if window[1].0 != window[0].0 + window[0].1 {
@@ -538,7 +538,7 @@ impl<Meta: ObjectMeta> Archive<Meta> {
         if candidates.is_empty() {
             return Ok(None)
         }
-        candidates.sort_by_key(|left| left.0.size);
+        candidates.sort_by_key(|obj| obj.0.size);
         Ok(candidates.first().copied())
     }
 
