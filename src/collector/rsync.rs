@@ -755,7 +755,7 @@ impl WorkingDir {
     /// Returns the absolute path for the given module.
     pub fn module_path(&self, module: &Module) -> PathBuf {
         let mut res = self.base.clone();
-        res.push(&module.0[8..]);
+        res.push(module.0.strip_prefix("rsync://").unwrap_or(&module.0));
         res
     }
 
@@ -781,6 +781,7 @@ pub struct Module(str);
 impl Module {
     /// Creates a new module without checking the underlying string.
     unsafe fn from_str(s: &str) -> &Module {
+        debug_assert!(s.starts_with("rsync://"));
         &*(s as *const str as *const Module)
     }
 
