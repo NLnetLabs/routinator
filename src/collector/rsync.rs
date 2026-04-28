@@ -755,7 +755,7 @@ impl WorkingDir {
     /// Returns the absolute path for the given module.
     pub fn module_path(&self, module: &Module) -> PathBuf {
         let mut res = self.base.clone();
-        res.push(&module.0.strip_prefix("rsync://").unwrap_or(&module.0));
+        res.push(module.0.strip_prefix("rsync://").unwrap_or(&module.0));
         res
     }
 
