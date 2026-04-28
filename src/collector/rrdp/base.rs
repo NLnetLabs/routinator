@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::Read;
 use std::{cmp, fs, io};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -379,10 +380,28 @@ impl<'a> Run<'a> {
             return None
         }
         let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {uri}: {err}");
-            return None
+
+        let mut buf = [0; 256];
+        while let Ok(bytes_read) = response.read(&mut buf) {
+            if bytes_read == 0 {
+                break;
+            }
+
+            bytes.extend(buf.iter().take(bytes_read));
+
+            if bytes.len() > self.collector.config().max_object_size
+                .map(usize::try_from)
+                .unwrap_or(Ok(usize::MAX))
+                .unwrap_or(usize::MAX) 
+            {
+                warn!(
+                    "Compressed trust anchor certificate {uri} exceeds size \
+                    limit. Ignoring."
+                );
+                return None  
+            }
         }
+
         Some(Bytes::from(bytes))
     }
 
