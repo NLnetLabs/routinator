@@ -621,24 +621,22 @@ impl RsyncCommand {
                 return Err(io::Error::other("illegal destination path"));
             }
         };
+        if env::var("RSYNC_RSH").is_ok() {
+            log.error(format_args!(
+                "illegal rsync environment variable RSYNC_RSH"
+            ));
+            return Err(io::Error::other(
+                "illegal rsync environment variable. \
+                Please unset RSYNC_RSH"
+            ));
+        }
+
         let mut cmd = AsyncCommand::new(&self.command);
         for item in &self.args {
             if item == "-e" || item == "--rsh" {
                 log.error(format_args!("illegal rsync argument {item}"));
                 return Err(io::Error::other("illegal rsync argument"));
             }
-            if env::var("RSYNC_RSH").is_ok() {
-                log.error(format_args!(
-                    "illegal rsync environment variable RSYNC_RSH"
-                ));
-                return Err(io::Error::other(
-                    "illegal rsync environment variable"
-                ));
-            }
-            log.warn(format_args!(
-                "adding additional argument {item}; \
-                this may lead to unexpected behaviour"
-            ));
             cmd.arg(item);
         }
         cmd.arg("-rtO")
