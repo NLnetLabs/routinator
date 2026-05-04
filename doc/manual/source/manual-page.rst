@@ -1143,6 +1143,9 @@ All values can be overridden via the command line options.
             The options ``-rtO --delete`` are always passed to the command.
             The options listed in the option are added to it.
 
+            The option ``-e`` is not allowed in the list of arguments and
+            will be rejected.
+
             If the option is not provided, Routinator will add ``-z`` and
             ``--no-motd``, as well as ``--contimeout=10`` if it is supported
             by the rsync command, and ``--max-size`` if the
@@ -1294,7 +1297,6 @@ All values can be overridden via the command line options.
 
 
       log-repository-issues
-
             A boolean that indicates when present and set to true that
             information about problems encountered while fetching and
             validating data should be logged. Normally, this information is
