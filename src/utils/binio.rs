@@ -406,7 +406,9 @@ where
             ParseError::format("too many items in vec")
         })?;
 
-        // Prevent allocating too much memory at once
+        // Prevent allocating too much memory at once if `len` was crafted
+        // to be very big. We will hit the end of file if it was during
+        // reading, so I don’t think we need any additional measures?
         let mut res = HashMap::with_capacity(
             cmp::max(len, 65536)
         );
