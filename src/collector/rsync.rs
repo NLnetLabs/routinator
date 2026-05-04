@@ -477,8 +477,23 @@ impl RsyncCommand {
             );
             return Err(Failed);
         }
+        if env::var("RSYNC_RSH").is_ok() {
+            error!(
+                "illegal rsync environment variable RSYNC_RSH. \
+                Please unset RSYNC_RSH"
+            );
+            return Err(Failed);
+        }
         let args = match config.rsync_args {
-            Some(ref args) => args.clone(),
+            Some(ref args) => {
+                for arg in args {
+                    if arg == "-e" || arg == "--rsh" {
+                        error!("illegal rsync argument {arg}");
+                        return Err(Failed);
+                    }
+                }
+                args.clone()
+            },
             None => {
                 let mut args = Vec::new();
                 args.push("--no-motd".into());
@@ -621,22 +636,9 @@ impl RsyncCommand {
                 return Err(io::Error::other("illegal destination path"));
             }
         };
-        if env::var("RSYNC_RSH").is_ok() {
-            log.error(format_args!(
-                "illegal rsync environment variable RSYNC_RSH"
-            ));
-            return Err(io::Error::other(
-                "illegal rsync environment variable. \
-                Please unset RSYNC_RSH"
-            ));
-        }
 
         let mut cmd = AsyncCommand::new(&self.command);
         for item in &self.args {
-            if item == "-e" || item == "--rsh" {
-                log.error(format_args!("illegal rsync argument {item}"));
-                return Err(io::Error::other("illegal rsync argument"));
-            }
             cmd.arg(item);
         }
         cmd.arg("-rtO")
