@@ -387,7 +387,7 @@ impl<'a> Run<'a> {
             self.collector.config().max_object_size
         );
         let mut bytes = Vec::new();
-        if let Err(err) = reader.read(&mut bytes) {
+        if let Err(err) = reader.read_to_end(&mut bytes) {
             warn!(
                 "Could not read trust anchor certificate: {err}."
             );
