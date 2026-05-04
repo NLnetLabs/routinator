@@ -11,6 +11,7 @@ use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::NamedTempFile;
+use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
 use crate::log::LogBookWriter;
@@ -368,7 +369,7 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let mut response = match self.collector.http.response(uri) {
+        let response = match self.collector.http.response(uri) {
             Ok(response) => response,
             Err(_) => return None,
         };
@@ -379,27 +380,17 @@ impl<'a> Run<'a> {
             );
             return None
         }
+
+        let mut reader = LimitedDataRead::new(
+            response, 
+            uri, 
+            self.collector.config().max_object_size
+        );
         let mut bytes = Vec::new();
-
-        let mut buf = [0; 256];
-        while let Ok(bytes_read) = response.read(&mut buf) {
-            if bytes_read == 0 {
-                break;
-            }
-
-            bytes.extend(buf.iter().take(bytes_read));
-
-            if bytes.len() > self.collector.config().max_object_size
-                .map(usize::try_from)
-                .unwrap_or(Ok(usize::MAX))
-                .unwrap_or(usize::MAX) 
-            {
-                warn!(
-                    "Compressed trust anchor certificate {uri} exceeds size \
-                    limit. Ignoring."
-                );
-                return None  
-            }
+        if let Err(err) = reader.read(&mut bytes) {
+            warn!(
+                "Could not read trust anchor certificate: {err}."
+            );
         }
 
         Some(Bytes::from(bytes))
