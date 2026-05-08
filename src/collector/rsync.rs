@@ -13,7 +13,7 @@
 //! another thread requests access to the same module, that thread is blocked,
 //! too.
 
-use std::{fmt, fs, io, ops};
+use std::{env, fmt, fs, io, ops};
 use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
 use std::marker::Unpin;
@@ -477,8 +477,23 @@ impl RsyncCommand {
             );
             return Err(Failed);
         }
+        if env::var("RSYNC_RSH").is_ok() {
+            error!(
+                "illegal rsync environment variable RSYNC_RSH. \
+                Please unset RSYNC_RSH"
+            );
+            return Err(Failed);
+        }
         let args = match config.rsync_args {
-            Some(ref args) => args.clone(),
+            Some(ref args) => {
+                for arg in args {
+                    if arg == "-e" || arg == "--rsh" {
+                        error!("illegal rsync argument {arg}");
+                        return Err(Failed);
+                    }
+                }
+                args.clone()
+            },
             None => {
                 let mut args = Vec::new();
                 args.push("--no-motd".into());
@@ -621,6 +636,7 @@ impl RsyncCommand {
                 return Err(io::Error::other("illegal destination path"));
             }
         };
+
         let mut cmd = AsyncCommand::new(&self.command);
         for item in &self.args {
             cmd.arg(item);
