@@ -1143,8 +1143,8 @@ All values can be overridden via the command line options.
             The options ``-rtO --delete`` are always passed to the command.
             The options listed in the option are added to it.
 
-            The option ``-e`` is not allowed in the list of arguments and
-            will be rejected.
+            The options ``-e`` and ``--rsh``  are not allowed in the list
+            of arguments and will be rejected.
 
             If the option is not provided, Routinator will add ``-z`` and
             ``--no-motd``, as well as ``--contimeout=10`` if it is supported
