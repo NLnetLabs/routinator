@@ -8,6 +8,12 @@ New
 
 Improvements
 
+* Restricted trust anchor certificates downloaded via HTTP to the size given
+  via the `max_object_size` config option. ([#1090])
+* The `-e` and `--rsh` options will now be rejected in the `rsync-args`
+  config option. Similarly, Routinator will not start if the equivalent
+  evironment variable `RSYNC_RSH` is set. ([#1091])
+
 Bug fixes
 
 * Set an RTR listener socket received via systemd to non-blocking. This
@@ -17,6 +23,8 @@ Bug fixes
 
 Other changes
 
+[#1090]: https://github.com/NLnetLabs/routinator/pull/1090
+[#1091]: https://github.com/NLnetLabs/routinator/pull/1091
 [#1081]: https://github.com/NLnetLabs/routinator/pull/1081
 [#1085]: https://github.com/NLnetLabs/routinator/pull/1085
 [@MaxHearnden]: https://github.com/MaxHearnden
