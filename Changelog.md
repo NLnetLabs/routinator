@@ -6,7 +6,7 @@ Breaking changes
 
 New
 
-* Support for Ubuntu Resolute Raccoon (26.04)
+* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
 
 Improvements
 
