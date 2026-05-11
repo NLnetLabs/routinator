@@ -6,6 +6,8 @@ Breaking changes
 
 New
 
+* Support for Ubuntu Resolute Raccoon (26.04)
+
 Improvements
 
 * Restricted trust anchor certificates downloaded via HTTP to the size given
@@ -27,6 +29,7 @@ Other changes
 [#1091]: https://github.com/NLnetLabs/routinator/pull/1091
 [#1081]: https://github.com/NLnetLabs/routinator/pull/1081
 [#1085]: https://github.com/NLnetLabs/routinator/pull/1085
+[#1095]: https://github.com/NLnetLabs/routinator/pull/1095
 [@MaxHearnden]: https://github.com/MaxHearnden
 
 
