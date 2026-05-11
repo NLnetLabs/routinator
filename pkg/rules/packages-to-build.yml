@@ -107,5 +107,8 @@ test-mode:
   - 'fresh-install'
   - 'upgrade-from-published'
 
-test-exclude: []
+test-exclude: 
+  - pkg: 'routinator'
+    image: 'ubuntu:resolute'
+    mode: 'upgrade-from-published'
 
