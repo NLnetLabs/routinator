@@ -20,16 +20,16 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant, SystemTime};
-#[cfg(feature = "rta")] use bytes::Bytes;
+use bytes::Bytes;
 use clap::{Arg, Args, ArgAction, ArgMatches, FromArgMatches, Parser};
 use log::{error, info, warn};
+use rpki::repository::Rsc;
+use rpki::repository::rsc::FileNameAndHash;
 use rpki::resources::{Asn, Prefix};
-#[cfg(feature = "rta")] use rpki::repository::rta::Rta;
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
-#[cfg(feature = "rta")] use crate::rta;
-use crate::{output, validity};
+use crate::{output, rsc, validity};
 use crate::config::Config;
 use crate::error::{ExitError, Failed, RunFailed};
 use crate::http::http_listener;
@@ -65,8 +65,7 @@ pub enum Operation {
     Server(Server),
     Vrps(Vrps),
     Validate(Validate),
-    #[cfg(feature = "rta")]
-    ValidateDocument(ValidateDocument),
+    ValidateRsc(ValidateRsc),
     Update(Update),
     PrintConfig(PrintConfig),
     Dump(Dump),
@@ -87,10 +86,7 @@ impl Operation {
         let app = Server::config_args(app);
         let app = Vrps::config_args(app);
         let app = Validate::config_args(app);
-
-        #[cfg(feature = "rta")]
-        let app = ValidateDocument::config_args(app);
-
+        let app = ValidateRsc::config_args(app);
         let app = Update::config_args(app);
         let app = PrintConfig::config_args(app);
         let app = Dump::config_args(app);
@@ -115,12 +111,9 @@ impl Operation {
             }
             Some(("validate", matches)) => {
                 Operation::Validate(Validate::from_arg_matches(matches)?)
-            },
-            #[cfg(feature = "rta")]
-            Some(("rta", matches)) => {
-                Operation::ValidateDocument(
-                    ValidateDocument::from_arg_matches(matches)?
-                )
+            }
+            Some(("rsc", matches)) => {
+                Operation::ValidateRsc(ValidateRsc::from_arg_matches(matches)?)
             }
             Some(("update", matches)) => {
                 Operation::Update(Update::from_arg_matches(matches)?)
@@ -169,8 +162,7 @@ impl Operation {
             Operation::Server(cmd) => cmd.run(process),
             Operation::Vrps(cmd) => cmd.run(process),
             Operation::Validate(cmd) => cmd.run(process),
-            #[cfg(feature = "rta")]
-            Operation::ValidateDocument(cmd) => cmd.run(process),
+            Operation::ValidateRsc(cmd) => cmd.run(process),
             Operation::Update(cmd) => cmd.run(process),
             Operation::PrintConfig(cmd) => cmd.run(process),
             Operation::Dump(cmd) => cmd.run(process),
@@ -1011,17 +1003,16 @@ impl Validate {
 }
 
 
-//------------ ValidateDocument ----------------------------------------------
+//------------ ValidateRsc ---------------------------------------------------
 
-/// Validates an RTA-signed document.
+/// Validates an RSC-signed document.
 ///
 /// Performs a validation run in order to find the necessary certificates.
-#[cfg(feature = "rta")]
 #[derive(Clone, Debug, Parser)]
-pub struct ValidateDocument {
+pub struct ValidateRsc {
     /// Path to the signed document.
     #[arg(long, value_name = "PATH")]
-    document: PathBuf,
+    document: Vec<PathBuf>,
 
     /// Path to the signature file.
     #[arg(long, value_name = "PATH")]
@@ -1032,14 +1023,13 @@ pub struct ValidateDocument {
     noupdate: bool,
 }
 
-#[cfg(feature = "rta")]
-impl ValidateDocument {
+impl ValidateRsc {
     /// Adds the command configuration to a clap app.
     pub fn config_args<'a: 'b, 'b>(app: clap::Command) -> clap::Command {
         app.subcommand(
-            ValidateDocument::augment_args(
-                clap::Command::new("rta")
-                .about("Validates an RTA-signed document")
+            Self::augment_args(
+                clap::Command::new("rsc")
+                .about("Validates an RSC-signed document")
                 .after_help(AFTER_HELP)
             )
         )
@@ -1050,7 +1040,7 @@ impl ValidateDocument {
         matches: &ArgMatches,
     ) -> Result<Self, Failed> {
         Ok(
-            <ValidateDocument as FromArgMatches>::from_arg_matches(
+            <Self as FromArgMatches>::from_arg_matches(
                 matches
             ).unwrap()
         )
@@ -1076,66 +1066,125 @@ impl ValidateDocument {
                 return Err(ExitError::Generic)
             }
         };
-        let rta = match Rta::decode(data, process.config().strict) {
-            Ok(rta) => rta,
+        let rsc = match Rsc::decode(data, process.config().strict) {
+            Ok(rsc) => rsc,
             Err(err) => {
                 error!(
                     "Failed to decode signature '{}': {}",
                     self.signature.display(), err
                 );
-                return Err(ExitError::Invalid)
-            }
-        };
-
-        // Load and digest the document.
-        let digest = match rta.digest_algorithm().digest_file(&self.document) {
-            Ok(digest) => digest,
-            Err(err) => {
-                error!(
-                    "Failed to read document '{}': {}",
-                    self.document.display(), err
-                );
                 return Err(ExitError::Generic)
             }
         };
+        
+        let hashes: Vec<FileNameAndHash> = rsc.content().iter().collect();
+        let mut document_errors = Vec::new();
 
-        // Check that the digests matches.
-        if digest.as_ref() != rta.message_digest().as_ref() {
-            error!("RTA signature invalid.");
-            return Err(ExitError::Invalid)
+        let digest_algorithm = rsc.content().digest_algorithm();
+        for document in &self.document {
+            let digest = match digest_algorithm.digest_file(document) {
+                Ok(digest) => digest,
+                Err(err) => {
+                    error!(
+                        "Failed to read document '{}': {}",
+                        document.display(), err
+                    );
+                    return Err(ExitError::Generic)
+                }
+            };
+            let Some(doc_file_name) = document.file_name() else {
+                error!(
+                    "Failed to read document file name '{}'",
+                    document.display()
+                );
+                return Err(ExitError::Generic)
+            };
+            let doc_file_name = doc_file_name.to_string_lossy();
+            
+            let mut found = false;
+            for item in hashes.iter() {
+                if item.hash() == digest.as_ref() {
+                    if let Some(file_name) = item.file_name() {
+                        if file_name == doc_file_name.as_bytes() {
+                            found = true;
+                            break;
+                        }
+                    } else {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if !found {
+                // At this point none of the entries in the check list matched 
+                // the document we supplied.
+
+                document_errors.push(document);
+            }
         }
 
-        let rta_validation = match rta::ValidationReport::new(
-            &rta, process.config()
+        if !document_errors.is_empty() {
+            for document in document_errors {
+                println!("Failed to match document to valid entry in the check list '{}'.", 
+                    document.display());
+            }
+            println!();
+            println!("The documents listed on this RSC are:");
+            for document in rsc.content().iter() {
+                let hash = document.hash().iter()
+                    .map(|b| format!("{:02x?}", b).to_string())
+                    .collect::<Vec<String>>()
+                    .join("");
+                if let Some(filename) = document.file_name() {
+                    let filename = String::from_utf8_lossy(filename);
+                    println!("{}  {}", hash, filename);
+                } else {
+                    println!("{}  *", hash);
+                }
+            }
+            println!();
+            println!("Please be aware that RSCs may be bound to a specific file name, and those file names are case sensitive.");
+            return Err(ExitError::Generic)
+        }
+
+        let rsc_validation = match rsc::ValidationReport::new(
+            rsc, process.config()
         ) {
-            Ok(rta_validation) => rta_validation,
+            Ok(validation) => validation,
             Err(_) => {
-                error!("RTA did not validate. (new)");
-                return Err(ExitError::Invalid);
+                error!("RSC did not validate. (new)");
+                return Err(ExitError::Generic);
             }
         };
 
-        if rta_validation.process(&validation).is_err() {
-            error!("RTA did not validate. (process)");
-            return Err(ExitError::Invalid);
+        if rsc_validation.process(&validation).is_err() {
+            error!("RSC did not validate. (process)");
+            return Err(ExitError::Generic);
         }
 
-        match rta_validation.finalize() {
-            Ok(rta) => {
-                for block in rta.as_resources().iter() {
-                    println!("{block}");
+        match rsc_validation.finalize() {
+            Ok(rsc) => {
+                println!("Validation of these documents succeeded:");
+                for document in &self.document {
+                    println!("* {}", document.display());
                 }
-                for block in rta.v4_resources().iter() {
-                    println!("{}", block.display_v4());
+                println!();
+                println!("It was verified with an RSC with these resources:");
+                for block in rsc.as_resources().iter() {
+                    println!("* {block}");
                 }
-                for block in rta.v6_resources().iter() {
-                    println!("{}", block.display_v6());
+                for block in rsc.v4_resources().iter() {
+                    println!("* {}", block.display_v4());
+                }
+                for block in rsc.v6_resources().iter() {
+                    println!("* {}", block.display_v6());
                 }
                 Ok(())
             }
             Err(_) => {
-                error!("RTA did not validate. (finalize)");
-                Err(ExitError::Invalid)
+                error!("RSC did not validate. (finalize)");
+                Err(ExitError::Generic)
             }
         }
     }
