@@ -70,23 +70,70 @@ to get started.
 
           sudo apt install \
             ca-certificates \
-            curl \
-            gnupg \
             lsb-release
-
-       Add the GPG key from NLnet Labs:
-
-       .. code-block:: bash
-
-          curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
 
        Now, use the following command to set up the *main* repository:
 
        .. code-block:: bash
 
-          echo \
-          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/debian \
-          $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+         sudo cat > /etc/apt/sources.list.d/nlnetlabs.sources << EOF
+         Types: deb
+         URIs: https://packages.nlnetlabs.nl/linux/debian
+         Suites: $(lsb_release -cs)
+         Components: main
+         Signed-By: -----BEGIN PGP PUBLIC KEY BLOCK-----
+            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
+            V7FjCsVxiVNcy18RUMrPSvsVL3s=
+            =oelb
+            -----END PGP PUBLIC KEY BLOCK-----
+         EOF
 
        Update the :program:`apt` package index once more: 
 
@@ -143,23 +190,71 @@ to get started.
 
           sudo apt install \
             ca-certificates \
-            curl \
-            gnupg \
             lsb-release
-
-       Add the GPG key from NLnet Labs:
-
-       .. code-block:: bash
-
-          curl -fsSL https://packages.nlnetlabs.nl/aptkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/nlnetlabs-archive-keyring.gpg
 
        Now, use the following command to set up the *main* repository:
 
        .. code-block:: bash
 
-          echo \
-          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nlnetlabs-archive-keyring.gpg] https://packages.nlnetlabs.nl/linux/ubuntu \
-          $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nlnetlabs.list > /dev/null
+         sudo cat > /etc/apt/sources.list.d/nlnetlabs.sources << EOF
+         Types: deb
+         URIs: https://packages.nlnetlabs.nl/linux/ubuntu
+         Suites: $(lsb_release -cs)
+         Components: main
+         Signed-By: -----BEGIN PGP PUBLIC KEY BLOCK-----
+            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
+            V7FjCsVxiVNcy18RUMrPSvsVL3s=
+            =oelb
+            -----END PGP PUBLIC KEY BLOCK-----
+         EOF
+
 
        Update the :program:`apt` package index once more: 
 
