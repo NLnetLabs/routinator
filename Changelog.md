@@ -2,11 +2,29 @@
 
 ## Unreleased next version
 
-Breaking changes
+Security fixes
 
-New
+* Changed how transient errors when accepting incoming HTTP and RTR
+  connections are handled: instead of exiting, a warning is printed and
+  the error is ignored. ([#1099])
 
-* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
+  This issue was assigned [CVE-2026-49232].
+
+* Extended the check for illegal path components in rsync URIs to also
+  include the authority and module parts. (via [rpki-rs#370])
+
+  This fixes a path traversal vulnerability that has been assigned
+  [CVE-2026-49233].
+
+* Fixed a panic when parsing certain AS numbers from strings. (via
+  [rpki-rs#373])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49234].
+
+* Upgraded quick-xml to at least 0.39.4 to fix a regression in XML parsing
+  that may lead a panic on certain crated XML files. (via [rpki-rs#372])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49235].
 
 Improvements
 
@@ -22,13 +40,10 @@ Bug fixes
   fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
 * Fixed the `--rrdp-tcp-keepalive` to be a command line option rather than
   a command line argument. ([1085])
-* Changed how transient errors when accepting incoming HTTP and RTR
-  connections are handled: instead of exiting, a warning is printed and
-  the error is ignored. ([#1099])
-
-  This issue was assigned [CVE-2026-49232].
 
 Other changes
+
+* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
 
 [#1090]: https://github.com/NLnetLabs/routinator/pull/1090
 [#1091]: https://github.com/NLnetLabs/routinator/pull/1091
@@ -36,7 +51,13 @@ Other changes
 [#1085]: https://github.com/NLnetLabs/routinator/pull/1085
 [#1095]: https://github.com/NLnetLabs/routinator/pull/1095
 [@MaxHearnden]: https://github.com/MaxHearnden
+[rpki-rs#370]: https://github.com/NLnetLabs/rpki-rs/pull/370
+[rpki-rs#372]: https://github.com/NLnetLabs/rpki-rs/pull/372
+[rpki-rs#373]: https://github.com/NLnetLabs/rpki-rs/pull/373
 [CVE-2026-49232]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49232.txt
+[CVE-2026-49233]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49233.txt
+[CVE-2026-49234]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49234.txt
+[CVE-2026-49235]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49235.txt
 
 
 
