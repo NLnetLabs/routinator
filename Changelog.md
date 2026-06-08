@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.2 ‘Irgendwas ist immer’
+
+Released 2026-06-08.
+
+This release fixes a number of vulnerabilities and security issues
+identified by a security audit performed by [X41 D-Sec] and financed
+by [Sovereign Tech Agency]. We advise all users to upgrade at their
+earliest convenience.
 
 Security fixes
 
@@ -58,7 +65,8 @@ Other changes
 [CVE-2026-49233]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49233.txt
 [CVE-2026-49234]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49234.txt
 [CVE-2026-49235]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49235.txt
-
+[X41 D-Sec]: https://www.x41-dsec.de/
+[Sovereign Tech Agency]: https://www.sovereign.tech/
 
 
 ## 0.15.1 ‘Ain’t No Country Club Either’

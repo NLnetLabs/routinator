@@ -1,4 +1,5 @@
-.\" Man page generated from reStructuredText.
+.\" Man page generated from reStructuredText
+.\" by the Docutils 0.22.4 manpage writer.
 .
 .
 .nr rst2man-indent-level 0
@@ -27,22 +28,22 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ROUTINATOR" "1" "Oct 07, 2025" "0.15.1" "Routinator"
+.TH "ROUTINATOR" "1" "Jun 08, 2026" "0.15.2" "Routinator"
 .SH NAME
 routinator \- RPKI relying party software
 .SH SYNOPSIS
 .sp
-\fBroutinator\fP [\fBoptions\fP] \fI\%vrps\fP [\fBvrps\-options\fP] [\fB\-o \fP\fIoutput\-file\fP] [\fB\-f \fP\fIformat\fP]
+\fBroutinator\fP [\fBoptions\fP] \fBvrps\fP [\fBvrps\-options\fP] [\fB\-o \fP\fIoutput\-file\fP] [\fB\-f \fP\fIformat\fP]
 .sp
-\fBroutinator\fP [\fBoptions\fP] \fI\%validate\fP [\fBvalidate\-options\fP] [\fB\-a \fP\fIasn\fP] [\fB\-p \fP\fIprefix\fP]
+\fBroutinator\fP [\fBoptions\fP] \fBvalidate\fP [\fBvalidate\-options\fP] [\fB\-a \fP\fIasn\fP] [\fB\-p \fP\fIprefix\fP]
 .sp
-\fBroutinator\fP [\fBoptions\fP] \fI\%server\fP [\fBserver\-options\fP]
+\fBroutinator\fP [\fBoptions\fP] \fBserver\fP [\fBserver\-options\fP]
 .sp
-\fBroutinator\fP [\fBoptions\fP] \fI\%update\fP [\fBupdate\-options\fP]
+\fBroutinator\fP [\fBoptions\fP] \fBupdate\fP [\fBupdate\-options\fP]
 .sp
-\fBroutinator\fP [\fBarchive\-stats\fP] \fI\%archive\-stats\fP \fIpath\fP
+\fBroutinator\fP [\fBarchive\-stats\fP] \fBarchive\-stats\fP \fIpath\fP
 .sp
-\fBroutinator\fP \fI\%man\fP [\fB\-o \fP\fIfile\fP]
+\fBroutinator\fP \fBman\fP [\fB\-o \fP\fIfile\fP]
 .sp
 \fBroutinator\fP \fB\-h\fP
 .sp
@@ -58,7 +59,7 @@ various formats, as a server for the RPKI\-to\-Router (RTR) protocol that many
 routers implement to access the data, or via HTTP.
 .sp
 These modes and additional operations can be chosen via commands. For the
-available commands, see \fI\%COMMANDS\fP below.
+available commands, see COMMANDS below.
 .SH OPTIONS
 .sp
 The available options are:
@@ -70,7 +71,7 @@ option is not given, Routinator will try to use
 \fB$HOME/.routinator.conf\fP if that exists. If that doesn\(aqt exist,
 either, default values for the options as described here are used.
 .sp
-See \fI\%CONFIGURATION FILE\fP below for more information on the format and
+See CONFIGURATION FILE below for more information on the format and
 contents of the configuration file.
 .UNINDENT
 .INDENT 0.0
@@ -94,8 +95,8 @@ validating RPKI data. Each of the five RIRs provides a TAL that adds
 resources from their area. For normal production installations, these
 are the only TALs that should be used.
 .sp
-Using this option as well as the \fI\%\-\-tal\fP and
-\fI\%\-\-extra\-tals\-dir\fP options you can change which TALs
+Using this option as well as the \fB\-\-tal\fP and
+\fB\-\-extra\-tals\-dir\fP options you can change which TALs
 Routinator should use.
 .UNINDENT
 .INDENT 0.0
@@ -116,7 +117,7 @@ The option can be given more than once.
 Specifies a directory containing additional trust anchor locators
 (TALs) to use. Routinator will use all files in this directory with
 an extension of \fI\&.tal\fP as TALs. These files need to be in the format
-described by \X'tty: link https://datatracker.ietf.org/doc/html/rfc8630.html'\fI\%RFC 8630\fP\X'tty: link'\&.
+described by \fBRFC 8630\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc8630\:.html>\&.
 .sp
 Note that Routinator will use all TALs provided. That means that if a
 TAL in this directory is one of the bundled TALs, then these resources
@@ -127,7 +128,7 @@ will be validated twice.
 .B \-x file, \-\-exceptions=file
 Provides the path to a local exceptions file. The option can be used
 multiple times to specify more than one file to use. Each file is a
-JSON file as described in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8416.html'\fI\%RFC 8416\fP\X'tty: link'\&. It lists both route origins that
+JSON file as described in \fBRFC 8416\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc8416\:.html>\&. It lists both route origins that
 should be filtered out of the output as well as origins that should be
 added.
 .UNINDENT
@@ -140,7 +141,7 @@ closely. With the current RPKI repository, using this option will lead
 to a rather large amount of invalid route origins and should therefore
 not be used in practice.
 .sp
-See \fI\%RELAXED DECODING\fP below for more information.
+See RELAXED DECODING below for more information.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -191,7 +192,7 @@ Finally, the \fIaccept\fP policy will quietly add unsafe VRPs to the valid
 VRPs. This is the default policy.
 .sp
 For more information on the process of validation implemented in
-Routinator, see the section \fI\%VALIDATION\fP below.
+Routinator, see the section VALIDATION below.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -296,7 +297,7 @@ The policy \fBstale\fP means that rsync is tried if an update via RRDP
 fails and there is no current local copy of the RRDP repository. A
 local copy is considered current if it was last updated within a
 time span chosen on a per\-repository basis between the
-\fI\%\-\-refresh\fP time and \fI\%\-\-rrdp\-fallback\-time\fP\&.
+\fB\-\-refresh\fP time and \fB\-\-rrdp\-fallback\-time\fP\&.
 .sp
 The policy \fBnew\fP means that rsync is tried if an update via RRDP
 fails and there is no local copy of the RRDP repository at all. In
@@ -430,11 +431,11 @@ throughout the validation run.
 Print more information. If given twice, even more information is
 printed.
 .sp
-More specifically, a single \fI\%\-v\fP increases the log level from
+More specifically, a single \fB\-v\fP increases the log level from
 the default of \fIwarn\fP to \fIinfo\fP, specifying it more than once increases
 it to \fIdebug\fP\&.
 .sp
-See \fI\%LOGGING\fP below for more information on what information is logged
+See LOGGING below for more information on what information is logged
 at the different levels.
 .UNINDENT
 .INDENT 0.0
@@ -442,8 +443,8 @@ at the different levels.
 .B \-q, \-\-quiet
 Print less information. Given twice, print nothing at all.
 .sp
-A single \fI\%\-q\fP will drop the log level to \fIerror\fP\&. Repeating
-\fI\%\-q\fP more than once turns logging off completely.
+A single \fB\-q\fP will drop the log level to \fIerror\fP\&. Repeating
+\fB\-q\fP more than once turns logging off completely.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -513,7 +514,7 @@ trust anchor the entry is derived from. The latter is the
 name of the TAL file without the extension \fI\&.tal\fP\&. This can
 be overwritten with the \fItal\-labels\fP config file option.
 .sp
-This is the default format used if the \fI\%\-f\fP option
+This is the default format used if the \fB\-f\fP option
 is missing.
 .TP
 .B csvcompat
@@ -736,7 +737,7 @@ selectors combine as \(dqor\(dq not \(dqand\(dq.
 .TP
 .B \-m, \-\-more\-specifics
 Include VRPs with prefixes that are more specifics of those given
-by the \fI\%\-p\fP option. Without this option, only VRPs with
+by the \fB\-p\fP option. Without this option, only VRPs with
 prefixes equal or less specific are included.
 .sp
 Note that VRPs with more specific prefixes have no influence on
@@ -834,7 +835,7 @@ status 0 in this case.
 This command causes Routinator to act as a server for the
 RPKI\-to\-Router (RTR) and HTTP protocols. In this mode, Routinator will
 read all the Trust Anchor Locators and will stay attached to the
-terminal unless the \fI\%\-d\fP option is given.
+terminal unless the \fB\-d\fP option is given.
 .sp
 The server will periodically update the local repository, every ten
 minutes by default, notify any clients of changes, and let them fetch
@@ -849,7 +850,7 @@ ports after an initial validation run has finished.
 .sp
 It will not listen on any sockets unless explicitly specified. It will
 still run and periodically update the repository. This might be useful
-for use with \fI\%vrps\fP mode with the \fI\%\-n\fP option.
+for use with \fBvrps\fP mode with the \fB\-n\fP option.
 .INDENT 7.0
 .TP
 .B \-d, \-\-detach
@@ -863,7 +864,7 @@ Specifies a local address and port to listen on for incoming
 RTR connections.
 .sp
 Routinator supports both protocol version 0 defined in
-\X'tty: link https://datatracker.ietf.org/doc/html/rfc6810.html'\fI\%RFC 6810\fP\X'tty: link' and version 1 defined in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link'\&. However, it
+\fBRFC 6810\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc6810\:.html> and version 1 defined in \fBRFC 8210\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc8210\:.html>\&. However, it
 does not support router keys introduced in version 1.  IPv6
 addresses must be enclosed in square brackets. You can provide
 the option multiple times to let Routinator listen on multiple
@@ -876,7 +877,7 @@ Specifies a local address and port to listen for incoming
 TLS\-encrypted RTR connections.
 .sp
 The private key and server certificate given via the
-\fI\%\-\-rtr\-tls\-key\fP and \fI\%\-\-rtr\-tls\-cert\fP or their
+\fB\-\-rtr\-tls\-key\fP and \fB\-\-rtr\-tls\-cert\fP or their
 equivalent config file options will be used for connections.
 .sp
 The option can be given multiple times, but the same key and
@@ -886,7 +887,7 @@ certificate will be used for all connections.
 .TP
 .B \-\-http=addr:port
 Specifies the address and port to listen on for incoming HTTP
-connections.  See \fI\%HTTP SERVICE\fP below for more information on
+connections.  See HTTP SERVICE below for more information on
 the HTTP service provided by Routinator.
 .UNINDENT
 .INDENT 7.0
@@ -896,7 +897,7 @@ Specifies a local address and port to listen of for incoming
 TLS\-encrypted HTTP connections.
 .sp
 The private key and server certificate given via the
-\fI\%\-\-http\-tls\-key\fP and \fI\%\-\-http\-tls\-cert\fP or their
+\fB\-\-http\-tls\-key\fP and \fB\-\-http\-tls\-cert\fP or their
 equivalent config file options will be used for connections.
 .sp
 The option can be given multiple times, but the same key and
@@ -993,7 +994,7 @@ objects in the repository expire earlier. The default value is
 .B \-\-retry=seconds
 The amount of seconds to suggest to an RTR client to wait
 before trying to request data again if that failed. The default
-value is 600 seconds, as recommended in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link'\&.
+value is 600 seconds, as recommended in \fBRFC 8210\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc8210\:.html>\&.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -1003,7 +1004,7 @@ it cannot refresh it. After that time, the client should
 discard the data. Note that this value was introduced in
 version 1 of the RTR protocol and is thus not relevant for
 clients that only implement version 0. The default value, as
-recommended in \X'tty: link https://datatracker.ietf.org/doc/html/rfc8210.html'\fI\%RFC 8210\fP\X'tty: link', is 7200 seconds.
+recommended in \fBRFC 8210\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc8210\:.html>, is 7200 seconds.
 .UNINDENT
 .INDENT 7.0
 .TP
@@ -1073,7 +1074,7 @@ discover any new publication points that appear in the repository and
 fetch their data.
 .sp
 As such, the command really is a shortcut for running
-\fBroutinator\fP \fI\%vrps\fP \fI\%\-f\fP \fBnone\fP\&.
+\fBroutinator\fP \fBvrps\fP \fB\-f\fP \fBnone\fP\&.
 .INDENT 7.0
 .TP
 .B \-\-complete
@@ -1138,7 +1139,7 @@ manual page to standard output.
 .sp
 Instead of providing all options on the command line, they can also be
 provided through a configuration file. Such a file can be selected through
-the \fI\%\-c\fP option. If no configuration file is specified this way but a
+the \fB\-c\fP option. If no configuration file is specified this way but a
 file named \fB$HOME/.routinator.conf\fP is present, this file is used.
 .sp
 The configuration file is a file in TOML format. In short, it consists of a
@@ -1256,6 +1257,9 @@ to the rsync command. Each string is an argument of its own.
 The options \fB\-rtO \-\-delete\fP are always passed to the command.
 The options listed in the option are added to it.
 .sp
+The options \fB\-e\fP and \fB\-\-rsh\fP  are not allowed in the list
+of arguments and will be rejected.
+.sp
 If the option is not provided, Routinator will add \fB\-z\fP and
 \fB\-\-no\-motd\fP, as well as \fB\-\-contimeout=10\fP if it is supported
 by the rsync command, and \fB\-\-max\-size\fP if the
@@ -1274,7 +1278,7 @@ RRDP.
 .B rrdp\-fallback
 A string value specifying the circumstances under which an update
 via rsync is tried if an update via RRDP fails. See
-\fI\%\-\-rrdp\-fallback\fP for details on the available policies.
+\fB\-\-rrdp\-fallback\fP for details on the available policies.
 .TP
 .B rrdp\-fallback\-time
 An integer value specifying the maximum number of seconds since a
@@ -1369,7 +1373,7 @@ the number of CPUs in the system is used.
 A string value specifying the maximum log level for which log
 messages should be emitted. The default is \fIwarn\fP\&.
 .sp
-See \fI\%LOGGING\fP below for more information on what information is
+See LOGGING below for more information on what information is
 logged at the different levels.
 .TP
 .B log
@@ -1582,7 +1586,7 @@ Returns a JSON object describing whether the route announcement given
 by its origin AS Number and address prefix is RPKI valid, invalid, or
 not found.  The returned object is compatible with that provided by the
 RIPE NCC RPKI Validator. For more information, see
-\X'tty: link https://ripe.net/support/documentation/developer-documentation/rpki-validator-api'\fI\%https://ripe.net/support/documentation/developer\-documentation/rpki\-validator\-api\fP\X'tty: link'
+\%<https://\:ripe\:.net/\:support/\:documentation/\:developer-documentation/\:rpki-validator-api>
 .TP
 .B /validity?asn=as\-number&prefix=prefix
 Same as above but with a more form\-friendly calling convention.
@@ -1632,7 +1636,7 @@ respectively. The values can either be given in separate \fBexclude\fP
 parameters or included in one separated by commas.
 .sp
 These parameters work in the same way as the options of the same name to the
-\fI\%vrps\fP command.
+\fBvrps\fP command.
 .SH LOGGING
 .sp
 In order to allow diagnosis of the VRP data set as well as its overall
@@ -1664,7 +1668,7 @@ for, well, debugging.
 .UNINDENT
 .SH VALIDATION
 .sp
-In \fI\%vrps\fP and \fI\%server\fP mode, Routinator will produce a set of
+In \fBvrps\fP and \fBserver\fP mode, Routinator will produce a set of
 VRPs from the data published in the RPKI repository. It will walk over all
 certification authorities (CAs) starting with those referred to in the
 configured TALs.
@@ -1728,15 +1732,15 @@ relaxed decoding mode.
 .INDENT 3.5
 .INDENT 0.0
 .TP
-Resource Certificates (\X'tty: link https://datatracker.ietf.org/doc/html/rfc6487.html'\fI\%RFC 6487\fP\X'tty: link')
+Resource Certificates (\fBRFC 6487\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc6487\:.html>)
 Resource certificates are defined as a profile on the more general
-Internet PKI certificates defined in \X'tty: link https://datatracker.ietf.org/doc/html/rfc5280.html'\fI\%RFC 5280\fP\X'tty: link'\&.
+Internet PKI certificates defined in \fBRFC 5280\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc5280\:.html>\&.
 .INDENT 7.0
 .TP
 .B Subject and Issuer
 The RFC restricts the type used for CommonName attributes to
 PrintableString, allowing only a subset of ASCII characters,
-while \X'tty: link https://datatracker.ietf.org/doc/html/rfc5280.html'\fI\%RFC 5280\fP\X'tty: link' allows a number of additional string types.
+while \fBRFC 5280\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc5280\:.html> allows a number of additional string types.
 At least one CA produces resource certificates with
 Utf8Strings.
 .sp
@@ -1746,13 +1750,13 @@ number and types of attributes. This seems justified since RPKI
 explicitly does not use these fields.
 .UNINDENT
 .TP
-Signed Objects (\X'tty: link https://datatracker.ietf.org/doc/html/rfc6488.html'\fI\%RFC 6488\fP\X'tty: link')
+Signed Objects (\fBRFC 6488\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc6488\:.html>)
 Signed objects are defined as a profile on CMS messages defined in
-\X'tty: link https://datatracker.ietf.org/doc/html/rfc5652.html'\fI\%RFC 5652\fP\X'tty: link'\&.
+\fBRFC 5652\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc5652\:.html>\&.
 .INDENT 7.0
 .TP
 .B DER Encoding
-\X'tty: link https://datatracker.ietf.org/doc/html/rfc6488.html'\fI\%RFC 6488\fP\X'tty: link' demands all signed objects to be DER encoded while
+\fBRFC 6488\fP \%<https://\:datatracker\:.ietf\:.org/\:doc/\:html/\:rfc6488\:.html> demands all signed objects to be DER encoded while
 the more general CMS format allows any BER encoding \-\- DER is a
 stricter subset of the more general BER. At least one CA does
 indeed produce BER encoded signed objects.
@@ -1784,12 +1788,11 @@ re\-open the log file. If this fails, Routinator will exit.
 .SH EXIT STATUS
 .sp
 Upon success, the exit status 0 is returned. If any fatal error happens, the
-exit status will be 1. Some commands provide a \fI\%\-\-complete\fP option
+exit status will be 1. Some commands provide a \fB\-\-complete\fP option
 which will cause the exit status to be 2 if any of the rsync commands to
 update the repository fail.
-.SH AUTHOR
+.SH Author
 Jaap Akkerhuis wrote the original version of this manual page, Martin Hoffmann extended it for later versions.
-.SH COPYRIGHT
-2018–2025, NLnet Labs
-.\" Generated by docutils manpage writer.
-.
+.SH Copyright
+2018–2026, NLnet Labs
+.\" End of generated man page.
