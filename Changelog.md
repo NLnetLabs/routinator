@@ -20,6 +20,11 @@ Bug fixes
   fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
 * Fixed the `--rrdp-tcp-keepalive` to be a command line option rather than
   a command line argument. ([1085])
+* Changed how transient errors when accepting incoming HTTP and RTR
+  connections are handled: instead of exiting, a warning is printed and
+  the error is ignored. ([#1099])
+
+  This issue was assigned [CVE-2026-49232].
 
 Other changes
 
@@ -28,6 +33,7 @@ Other changes
 [#1081]: https://github.com/NLnetLabs/routinator/pull/1081
 [#1085]: https://github.com/NLnetLabs/routinator/pull/1085
 [@MaxHearnden]: https://github.com/MaxHearnden
+[CVE-2026-49232]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49232.txt
 
 
 
