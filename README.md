@@ -41,8 +41,7 @@ locations.
 NLnet Labs offers [professional support and consultancy
 services](https://www.nlnetlabs.nl/services/contracts/) with a service-level
 agreement. Community support is available on
-[Discord](https://discord.gg/8dvKB5Ykhy), and our [mailing
-list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki). Routinator is
+our [forum](https://community.nlnetlabs.nl/). Routinator is
 liberally licensed under the [BSD 3-Clause
 license](https://github.com/NLnetLabs/routinator/blob/main/LICENSE).
 
