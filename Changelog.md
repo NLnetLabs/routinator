@@ -26,13 +26,6 @@ Security fixes
 
   This fixes a vulnerability that has been assigned [CVE-2026-49235].
 
-
-Breaking changes
-
-New
-
-* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
-
 Improvements
 
 * Restricted trust anchor certificates downloaded via HTTP to the size given
@@ -49,6 +42,8 @@ Bug fixes
   a command line argument. ([1085])
 
 Other changes
+
+* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
 
 [#1090]: https://github.com/NLnetLabs/routinator/pull/1090
 [#1091]: https://github.com/NLnetLabs/routinator/pull/1091
