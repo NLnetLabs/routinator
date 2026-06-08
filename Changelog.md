@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Improvements
+
+Bug fixes
+
+Other changes
+
+
 ## 0.15.2 ‘Irgendwas ist immer’
 
 Released 2026-06-08.
