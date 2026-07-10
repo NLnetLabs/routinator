@@ -485,6 +485,10 @@ async fn handle_api_status(
                                         "level", message.level
                                     );
                                     target.member_str(
+                                        "repository_level", 
+                                        message.repository_level
+                                    );
+                                    target.member_str(
                                         "messages", &message.content
                                     );
                                 })
@@ -552,6 +556,10 @@ async fn handle_api_status(
                                         "level", message.level
                                     );
                                     target.member_str(
+                                        "repository_level", 
+                                        message.repository_level
+                                    );
+                                    target.member_str(
                                         "messages", &message.content
                                     );
                                 })
@@ -568,7 +576,11 @@ async fn handle_api_status(
                     for message in book {
                         target.array_object(|target| {
                             target.member_str("level", message.level);
-                            target.member_str("message", &message.content);
+                            target.member_str(
+                                "repository_level", 
+                                message.repository_level
+                            );
+                            target.member_str("messages", &message.content);
                         });
                     }
                 });
