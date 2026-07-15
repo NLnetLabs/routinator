@@ -7,7 +7,6 @@ use std::sync::Arc;
 use log::error;
 use rpki::resources::Asn;
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
-use rpki::rtr::pdu::ProviderAsns;
 use rpki::slurm::{AspaFilter, BgpsecFilter, PrefixFilter, SlurmFile};
 use crate::config::Config;
 use crate::error::Failed;
@@ -192,7 +191,7 @@ impl LocalExceptions {
 
     pub fn drop_aspa(&self, customer: Asn) -> bool {
         self.aspa_filters.iter().any(|filter| {
-            filter.drop_aspa(&Aspa::new(customer, ProviderAsns::empty()))
+            filter.drop_aspa(customer)
         })
     }
 
