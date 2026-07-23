@@ -11,7 +11,7 @@ if [ $1 -eq 1 ] ; then
     # Initial installation
     R_USER=routinator
     R_GROUP=${R_USER}
-    R_HOME_DIR=/var/lib/routinator
+    R_HOME_DIR=/var/cache/routinator
     R_HOME_DIR_PERMS=700
 
     # https://github.com/NLnetLabs/routinator/issues/774
