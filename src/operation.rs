@@ -456,7 +456,7 @@ impl Server {
                 None => info!("Validation completed.")
             }
             if let Some(metrics) = metrics {
-                output::Summary::log(&metrics)
+                metrics.log_summary()
             }
             info!(
                 "New serial is {serial}."
