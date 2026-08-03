@@ -1,6 +1,5 @@
 //! Handles endpoints related to output of payload sets.
 
-use futures::stream;
 use crate::config::Config;
 use crate::output::{Output, OutputFormat};
 use crate::payload::SharedHistory;
@@ -21,7 +20,7 @@ impl State {
         }
     }
 
-    pub fn handle_get_or_head(
+    pub async fn handle_get_or_head(
         &self,
         req: Request,
         history: &SharedHistory,
@@ -74,9 +73,11 @@ impl State {
             Ok(res.empty())
         }
         else {
-            Ok(res.stream(
-                stream::iter(output.stream(snapshot, metrics, format))
-            ))
+            let (writer, response) = res.stream_frames(0xFFFF);
+            tokio::spawn(async move {
+                output.write_frames(snapshot, metrics, format, writer).await
+            });
+            Ok(response)
         }
     }
 }

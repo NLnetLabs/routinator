@@ -51,7 +51,7 @@ impl State {
 
         let req = match self.payload.handle_get_or_head(
             req, &self.history
-        ) {
+        ).await {
             Ok(response) => return response,
             Err(req) => req
         };

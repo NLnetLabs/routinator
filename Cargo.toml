@@ -42,6 +42,7 @@ siphasher       = "1.0.1"
 tempfile        = "3.1.0"
 tokio           = { version = "1.24", features = [ "io-util", "macros", "process", "rt", "rt-multi-thread", "signal", "sync" ] }
 tokio-rustls    = { version = "0.26.1", default-features = false, features = [ "ring", "logging", "tls12" ] }
+tokio-stream    = "0.1.19"
 toml_edit       = "0.23.5"
 uuid            = "1.1"
 

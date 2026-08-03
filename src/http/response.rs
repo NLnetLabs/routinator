@@ -9,6 +9,8 @@ use http_body_util::combinators::BoxBody;
 use hyper::body::{Body, Bytes, Frame};
 use hyper::StatusCode;
 use hyper::http::response::Builder;
+use tokio_stream::wrappers::ReceiverStream;
+use crate::output::FrameWriter;
 use crate::utils::date::{parse_http_date, format_http_date};
 use crate::utils::json::JsonBuilder;
 use super::request::Request;
@@ -248,6 +250,14 @@ impl ResponseBuilder {
             }))
         )
     }
+
+    pub fn stream_frames(self, frame_size: usize) -> (FrameWriter, Response) {
+        let (writer, rx) = FrameWriter::new(frame_size);
+        let resp = self.stream(
+            ReceiverStream::new(rx).map(Bytes::from)
+        );
+        (writer, resp)
+    }
 }
 
 
@@ -306,11 +316,8 @@ impl<'a> Iterator for EtagsIter<'a> {
         };
 
         // Find the end of the tag which is after the next DQUOTE.
-        let end = match self.0[prefix_len..].find('"') {
-            Some(index) => index + prefix_len + 1,
-            None => return None
-        };
-
+        let end = self.0[prefix_len..].find('"')? + prefix_len + 1;
+   
         let res = &self.0[0..end];
 
         // Move past the second DQUOTE and any space.

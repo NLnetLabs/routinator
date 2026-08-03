@@ -1,8 +1,11 @@
 //! Output of validated RPKI payload.
 
-use std::{error, fmt, io};
+use std::{error, fmt, io, mem};
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 use bytes::Bytes;
 use chrono::Utc;
 use chrono::format::{Item, Numeric, Pad};
@@ -11,6 +14,7 @@ use rpki::resources::{Asn, Prefix};
 use rpki::resources::addr::ParsePrefixError;
 use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
 use rpki::util::base64;
+use tokio::sync::mpsc;
 use crate::config::Config;
 use crate::error::Failed;
 use crate::http::ContentType;
@@ -425,9 +429,12 @@ impl Output {
         format: OutputFormat,
         target: &mut W,
     ) -> Result<(), io::Error> {
-        let mut stream = OutputStream::new(self, snapshot, metrics, format);
-        while stream.write_next(target)? { }
-        Ok(())
+        let mut fut = self._write(snapshot, metrics, format, target);
+        let fut = unsafe { Pin::new_unchecked(&mut fut) };
+        match fut.poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Pending => panic!("incomplete write"),
+            Poll::Ready(res) => res,
+        }
     }
 
     /// Creates an output stream for the given format.
@@ -438,6 +445,29 @@ impl Output {
         format: OutputFormat,
     ) -> impl Iterator<Item = Bytes> + Send + Sync + 'static {
         OutputStream::new(self, snapshot, metrics, format)
+    }
+
+    pub async fn write_frames(
+        self,
+        snapshot: Arc<PayloadSnapshot>,
+        metrics: Arc<Metrics>,
+        format: OutputFormat,
+        target: FrameWriter,
+    ) -> Result<(), io::Error> {
+        self._write(snapshot, metrics, format, target).await
+    }
+
+    async fn _write(
+        self,
+        snapshot: Arc<PayloadSnapshot>,
+        _metrics: Arc<Metrics>,
+        format: OutputFormat,
+        target: impl WriteOutput,
+    ) -> Result<(), io::Error> {
+        match format {
+            OutputFormat::Csv => write_csv(&snapshot, target).await,
+            _ => todo!()
+        }
     }
 
     fn include_origin(&self, origin: RouteOrigin) -> bool {
@@ -732,6 +762,23 @@ trait Formatter<W> {
 
 
 //------------ Csv -----------------------------------------------------------
+
+async fn write_csv(
+    snapshot: &PayloadSnapshot, mut target: impl WriteOutput,
+) -> Result<(), io::Error> {
+    writeln!(target, "ASN,IP Prefix,Max Length,Trust Anchor")?;
+    for (origin, info) in snapshot.origins() {
+        writeln!(target, "{},{}/{},{},{}",
+            origin.asn,
+            origin.prefix.addr(), origin.prefix.prefix_len(),
+            origin.prefix.resolved_max_len(),
+            info.tal_name().unwrap_or("N/A"),
+        )?;
+        target.flush().await?;
+    }
+    Ok(())
+}
+
 
 struct Csv;
 
@@ -1740,6 +1787,75 @@ impl<W: io::Write> Formatter<W> for NoOutput {
 }
 
 
+//------------ WriteOutput ---------------------------------------------------
+
+trait WriteOutput {
+    fn write_fmt(
+        &mut self, args: fmt::Arguments<'_>
+    ) -> Result<(), io::Error>;
+
+    async fn flush(&mut self) -> Result<(), io::Error>;
+}
+
+impl<W: io::Write> WriteOutput for W {
+    fn write_fmt(
+        &mut self, args: fmt::Arguments<'_>
+    ) -> Result<(), io::Error> {
+        io::Write::write_fmt(self, args)
+    }
+
+    async fn flush(&mut self) -> Result<(), io::Error> {
+        Ok(())
+    }
+}
+
+
+//------------ FrameWriter ---------------------------------------------------
+
+pub struct FrameWriter {
+    /// The frame we are currently writing to.
+    frame: Vec<u8>,
+
+    /// The maximum size of each frame.
+    ///
+    /// Whenever the frame reaches this size, it is being send off.
+    frame_size: usize,
+
+    /// The destination of a completed frame.
+    tx: mpsc::Sender<Vec<u8>>
+}
+
+impl FrameWriter {
+    pub fn new(frame_size: usize) -> (Self, mpsc::Receiver<Vec<u8>>) {
+        let (tx, rx) = mpsc::channel(1);
+        (
+            Self {
+                frame: Vec::with_capacity(frame_size),
+                frame_size,
+                tx
+            },
+            rx
+        )
+    }
+}
+
+impl WriteOutput for FrameWriter {
+    fn write_fmt(
+        &mut self, args: fmt::Arguments<'_>
+    ) -> Result<(), io::Error> {
+        io::Write::write_fmt(&mut self.frame, args)
+    }
+
+    async fn flush(&mut self) -> Result<(), io::Error> {
+        if self.frame.len() > self.frame_size {
+            let frame = mem::take(&mut self.frame);
+            self.tx.send(frame).await.map_err(|_| io::Error::other("broken pipe"))?;
+        }
+        Ok(())
+    }
+}
+
+
 //============ Tests =========================================================
 
 #[cfg(test)]
@@ -1869,3 +1985,4 @@ mod test {
         }
     }
 }
+
