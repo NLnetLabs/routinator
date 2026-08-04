@@ -512,14 +512,16 @@ impl Output {
         self, snapshot: &PayloadSnapshot, mut target: &mut impl WriteOutput,
     ) -> Result<(), io::Error> {
         writeln!(target, "ASN,IP Prefix,Max Length,Trust Anchor")?;
-        for (origin, info) in self.origins(snapshot) {
-            writeln!(target, "{},{}/{},{},{}",
-                origin.asn,
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-                info.tal_name().unwrap_or("N/A"),
-            )?;
-            target.flush().await?;
+        if self.route_origins {
+            for (origin, info) in self.origins(snapshot) {
+                writeln!(target, "{},{}/{},{},{}",
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                    info.tal_name().unwrap_or("N/A"),
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
@@ -530,14 +532,16 @@ impl Output {
         writeln!(
             target, "\"ASN\",\"IP Prefix\",\"Max Length\",\"Trust Anchor\""
         )?;
-        for (origin, info) in self.origins(snapshot) {
-            writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
-                origin.asn,
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-                info.tal_name().unwrap_or("N/A"),
-            )?;
-            target.flush().await?;
+        if self.route_origins {
+            for (origin, info) in self.origins(snapshot) {
+                writeln!(target, "\"{}\",\"{}/{}\",\"{}\",\"{}\"",
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                    info.tal_name().unwrap_or("N/A"),
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
@@ -562,27 +566,29 @@ impl Output {
         writeln!(target,
             "URI,ASN,IP Prefix,Max Length,Not Before,Not After"
         )?;
-        for (origin, info) in self.origins(snapshot) {
-            write!(target, "{},{},{}/{},{},",
-                info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
-                origin.asn,
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-            )?;
-            match info.validity() {
-                Some(validity) => {
-                    writeln!(target, "{},{}",
-                        validity.not_before().format_with_items(
-                            TIME_ITEMS.iter().cloned()
-                        ),
-                        validity.not_after().format_with_items(
-                            TIME_ITEMS.iter().cloned()
-                        )
-                    )?
+        if self.route_origins {
+            for (origin, info) in self.origins(snapshot) {
+                write!(target, "{},{},{}/{},{},",
+                    info.uri().map(|uri| uri.as_str()).unwrap_or("N/A"),
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                )?;
+                match info.validity() {
+                    Some(validity) => {
+                        writeln!(target, "{},{}",
+                            validity.not_before().format_with_items(
+                                TIME_ITEMS.iter().cloned()
+                            ),
+                            validity.not_after().format_with_items(
+                                TIME_ITEMS.iter().cloned()
+                            )
+                        )?
+                    }
+                    None => writeln!(target, "N/A,N/A")?,
                 }
-                None => writeln!(target, "N/A,N/A")?,
+                target.flush().await?;
             }
-            target.flush().await?;
         }
         Ok(())
     }
@@ -603,98 +609,106 @@ impl Output {
         )?;
 
         // Origins
-        let mut first = true;
-        for (origin, info) in self.origins(snapshot) {
-            if first {
-                first = false;
-                writeln!(target,
-                    ",\
-                    \n  \"roas\": ["
-                )?;    
-            }
-            else {
-                writeln!(target, ",")?
-            }
+        if self.route_origins {
+            let mut first = true;
+            for (origin, info) in self.origins(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target,
+                        ",\
+                        \n  \"roas\": ["
+                    )?;    
+                }
+                else {
+                    writeln!(target, ",")?
+                }
 
-            write!(target,
-                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-                \"maxLength\": {}, \"ta\": \"{}\" }}",
-                origin.asn,
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-                info.tal_name().unwrap_or("N/A"),
-            )?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+                    \"maxLength\": {}, \"ta\": \"{}\" }}",
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                    info.tal_name().unwrap_or("N/A"),
+                )?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         // Router keys
-        first = true;
-        for (key, info) in self.router_keys(snapshot) {
-            if first {
-                first = false;
-                writeln!(target,
-                    ",\
-                    \n  \"routerKeys\": ["
-                )?;    
-            }
-            else {
-                writeln!(target, ",")?
-            }
+        //
+        if self.router_keys {
+            let mut first = true;
+            for (key, info) in self.router_keys(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target,
+                        ",\
+                        \n  \"routerKeys\": ["
+                    )?;    
+                }
+                else {
+                    writeln!(target, ",")?
+                }
 
-            write!(target,
-                "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
-                \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
-                key.asn,
-                key.key_identifier,
-                key.key_info,
-                info.tal_name().unwrap_or("N/A"),
-            )?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+                    \"routerPublicKey\": \"{}\", \"ta\": \"{}\" }}",
+                    key.asn,
+                    key.key_identifier,
+                    key.key_info,
+                    info.tal_name().unwrap_or("N/A"),
+                )?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         // ASPAs
-        first = true;
-        for (aspa, info) in self.aspas(snapshot) {
-            if first {
-                first = false;
-                writeln!(target,
-                    ",\
-                    \n  \"aspas\": ["
-                )?;    
-            }
-            else {
-                writeln!(target, ",")?
-            }
-
-            write!(target,
-                "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
-            )?;
-
-            let mut first_provider = true;
-            for item in aspa.providers.iter() {
-                if first_provider {
-                    write!(target, "\"{item}\"")?;
-                    first_provider = false;
+        if self.aspas {
+            let mut first = true;
+            for (aspa, info) in self.aspas(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target,
+                        ",\
+                        \n  \"aspas\": ["
+                    )?;    
                 }
                 else {
-                    write!(target, ", \"{item}\"")?;
+                    writeln!(target, ",")?
                 }
-            }
 
-            write!(
-                target,
-                "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
-            )?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"customer\": \"{}\", \"providers\": [",
+                    aspa.customer
+                )?;
+
+                let mut first_provider = true;
+                for item in aspa.providers.iter() {
+                    if first_provider {
+                        write!(target, "\"{item}\"")?;
+                        first_provider = false;
+                    }
+                    else {
+                        write!(target, ", \"{item}\"")?;
+                    }
+                }
+
+                write!(
+                    target,
+                    "], \"ta\": \"{}\" }}", info.tal_name().unwrap_or("N/A")
+                )?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         writeln!(target, "\n}}")
@@ -716,93 +730,100 @@ impl Output {
         )?;
 
         // Route origins
-        let mut first = true;
-        for (origin, info) in self.origins(snapshot) {
-            if first {
-                first = false;
-                writeln!(target,
-                    ",\
-                    \n  \"roas\": ["
-                )?;    
-            }
-            else {
-                writeln!(target, ",")?;
-            }
+        if self.route_origins {
+            let mut first = true;
+            for (origin, info) in self.origins(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target,
+                        ",\
+                        \n  \"roas\": ["
+                    )?;    
+                }
+                else {
+                    writeln!(target, ",")?;
+                }
 
-            write!(target,
-                "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
-                \"maxLength\": {}, \"source\": [",
-                origin.asn,
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-            )?;
-            Self::extended_json_payload_info(info, "roa", target)?;
-            write!(target, "] }}")?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"asn\": \"{}\", \"prefix\": \"{}/{}\", \
+                    \"maxLength\": {}, \"source\": [",
+                    origin.asn,
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                )?;
+                Self::extended_json_payload_info(info, "roa", target)?;
+                write!(target, "] }}")?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         // Router keys
-        first = true;
-        for (key, info) in self.router_keys(snapshot) {
-            if first {
-                first = false;
-                writeln!(target, ",\n  \"routerKeys\": [")?;
-            }
-            else {
-                writeln!(target, ",")?;
-            }
+        if self.router_keys {
+            let mut first = true;
+            for (key, info) in self.router_keys(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target, ",\n  \"routerKeys\": [")?;
+                }
+                else {
+                    writeln!(target, ",")?;
+                }
 
-            write!(target,
-                "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
-                \"routerPublicKey\": \"{}\", \"source\": [",
-                key.asn,
-                key.key_identifier,
-                key.key_info,
-            )?;
-            Self::extended_json_payload_info(info, "cer", target)?;
-            write!(target, "] }}")?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"asn\": \"{}\", \"SKI\": \"{}\", \
+                    \"routerPublicKey\": \"{}\", \"source\": [",
+                    key.asn,
+                    key.key_identifier,
+                    key.key_info,
+                )?;
+                Self::extended_json_payload_info(info, "cer", target)?;
+                write!(target, "] }}")?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         // ASPAs
-        first = true;
-        for (aspa, info) in self.aspas(snapshot) {
-            if first {
-                first = false;
-                writeln!(target, ",\n  \"aspas\": [")?;
-            }
-            else {
-                writeln!(target, ",")?;
-            }
-
-            write!(target,
-                "    {{ \"customer\": \"{}\", \"providers\": [", aspa.customer
-            )?;
-
-            let mut first_provider = true;
-            for item in aspa.providers.iter() {
-                if first_provider {
-                    write!(target, "\"{item}\"")?;
-                    first_provider = false;
+        if self.aspas {
+            let mut first = true;
+            for (aspa, info) in self.aspas(snapshot) {
+                if first {
+                    first = false;
+                    writeln!(target, ",\n  \"aspas\": [")?;
                 }
                 else {
-                    write!(target, ", \"{item}\"")?;
+                    writeln!(target, ",")?;
                 }
-            }
 
-            write!(target, "], \"source\": [")?;
-            Self::extended_json_payload_info(info, "aspa", target)?;
-            write!(target, "] }}")?;
-            target.flush().await?;
-        }
-        if !first {
-            write!(target, "\n  ]")?;
+                write!(target,
+                    "    {{ \"customer\": \"{}\", \"providers\": [",
+                    aspa.customer
+                )?;
+
+                let mut first_provider = true;
+                for item in aspa.providers.iter() {
+                    if first_provider {
+                        write!(target, "\"{item}\"")?;
+                        first_provider = false;
+                    }
+                    else {
+                        write!(target, ", \"{item}\"")?;
+                    }
+                }
+
+                write!(target, "], \"source\": [")?;
+                Self::extended_json_payload_info(info, "aspa", target)?;
+                write!(target, "] }}")?;
+                target.flush().await?;
+            }
+            if !first {
+                write!(target, "\n  ]")?;
+            }
         }
 
         writeln!(target, "\n}}")
@@ -895,59 +916,65 @@ impl Output {
         &self, snapshot: &PayloadSnapshot, target: &mut impl WriteOutput,
     ) -> Result<(), io::Error> {
         writeln!(target, "    \"prefixAssertions\": [")?;
-        let mut first = true;
-        for (origin, info) in self.origins(snapshot) {
-            if first {
-                first = false;
-            }
-            else {
-                writeln!(target, ",")?;
-            }
+        if self.route_origins {
+            let mut first = true;
+            for (origin, info) in self.origins(snapshot) {
+                if first {
+                    first = false;
+                }
+                else {
+                    writeln!(target, ",")?;
+                }
 
-            writeln!(target,
-                "      {{\
-                \n        \"asn\": {},\
-                \n        \"prefix\": \"{}/{}\",",
-                origin.asn.into_u32(),
-                origin.prefix.addr(), origin.prefix.prefix_len()
-            )?;
-            if let Some(max_len) = origin.prefix.max_len() {
-                writeln!(target, "        \"maxPrefixLength\": {max_len},")?;
+                writeln!(target,
+                    "      {{\
+                    \n        \"asn\": {},\
+                    \n        \"prefix\": \"{}/{}\",",
+                    origin.asn.into_u32(),
+                    origin.prefix.addr(), origin.prefix.prefix_len()
+                )?;
+                if let Some(max_len) = origin.prefix.max_len() {
+                    writeln!(
+                        target, "        \"maxPrefixLength\": {max_len},"
+                    )?;
+                }
+                write!(target,
+                    "        \"comment\": \"{}\"\
+                    \n      }}",
+                    info.tal_name().unwrap_or("N/A")
+                )?;
+                target.flush().await?;
             }
-            write!(target,
-                "        \"comment\": \"{}\"\
-                \n      }}",
-                info.tal_name().unwrap_or("N/A")
-            )?;
-            target.flush().await?;
         }
         writeln!(target,
             "\n    ],"
         )?;
 
         writeln!(target, "    \"bgpsecAssertions\": [")?;
-        first = true;
-        for (key, info) in self.router_keys(snapshot) {
-            if first {
-                first = false;
-            }
-            else {
-                writeln!(target, ",")?;
-            }
+        if self.router_keys {
+            let mut first = true;
+            for (key, info) in self.router_keys(snapshot) {
+                if first {
+                    first = false;
+                }
+                else {
+                    writeln!(target, ",")?;
+                }
 
-            write!(target,
-                 "      {{\
-                \n        \"asn\": {},\
-                \n        \"SKI\": \"{}\",\
-                \n        \"routerPublicKey\": \"{}\",\
-                \n        \"comment\": \"{}\"\
-                \n      }}",
-                key.asn.into_u32(),
-                base64::Slurm.display(key.key_identifier.as_slice()),
-                base64::Slurm.display(key.key_info.as_slice()),
-                info.tal_name().unwrap_or("N/A")
-            )?;
-            target.flush().await?;
+                write!(target,
+                     "      {{\
+                    \n        \"asn\": {},\
+                    \n        \"SKI\": \"{}\",\
+                    \n        \"routerPublicKey\": \"{}\",\
+                    \n        \"comment\": \"{}\"\
+                    \n      }}",
+                    key.asn.into_u32(),
+                    base64::Slurm.display(key.key_identifier.as_slice()),
+                    base64::Slurm.display(key.key_info.as_slice()),
+                    info.tal_name().unwrap_or("N/A")
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
@@ -960,7 +987,7 @@ impl Output {
             \n  \"slurmVersion\": 2,\
             \n  \"validationOutputFilters\": {{\
             \n    \"prefixFilters\": [ ],\
-            \n    \"bgpsecFilters\": [ ]\
+            \n    \"bgpsecFilters\": [ ],\
             \n    \"aspaFilters\": [ ]\
             \n  }},\
             \n  \"locallyAddedAssertions\": {{"
@@ -970,36 +997,38 @@ impl Output {
         writeln!(target, "\n    ],")?;
 
         writeln!(target, "    \"aspaAssertions\": [")?;
-        let mut first = true;
-        for (aspa, info) in self.aspas(snapshot) {
-            if first {
-                first = false;
-            }
-            else {
-                writeln!(target, ",")?;
-            }
-
-            write!(target,
-                "      {{ \
-                \n        \"customerAsn\": {}, \
-                \n        \"providerAsns\": [", aspa.customer.into_u32()
-            )?;
-
-            let mut first_provider = true;
-            for item in aspa.providers.iter() {
-                if first_provider {
-                    write!(target, "\n          {}", item.into_u32())?;
-                    first_provider = false;
+        if self.aspas {
+            let mut first = true;
+            for (aspa, info) in self.aspas(snapshot) {
+                if first {
+                    first = false;
                 }
                 else {
-                    write!(target, ", \n          {}", item.into_u32())?;
+                    writeln!(target, ",")?;
                 }
+
+                write!(target,
+                    "      {{ \
+                    \n        \"customerAsn\": {}, \
+                    \n        \"providerAsns\": [", aspa.customer.into_u32()
+                )?;
+
+                let mut first_provider = true;
+                for item in aspa.providers.iter() {
+                    if first_provider {
+                        write!(target, "\n          {}", item.into_u32())?;
+                        first_provider = false;
+                    }
+                    else {
+                        write!(target, ", \n          {}", item.into_u32())?;
+                    }
+                }
+                write!(target,
+                    "\n        ],\
+                    \n        \"comment\": \"{}\"\
+                    \n      }}", info.tal_name().unwrap_or("N/A"))?;
+                target.flush().await?;
             }
-            write!(target,
-                "\n        ],\
-                \n        \"comment\": \"{}\"\
-                \n      }}", info.tal_name().unwrap_or("N/A"))?;
-            target.flush().await?;
         }
         writeln!(target, "\n    ]")?;
 
@@ -1013,17 +1042,19 @@ impl Output {
         self, snapshot: &PayloadSnapshot, mut target: &mut impl WriteOutput,
     ) -> Result<(), io::Error> {
         writeln!(target, "roa-set {{")?;
-        for (origin, _) in self.origins(snapshot) {
-            write!(
-                target, "    {}/{}",
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-            )?;
-            let max_len = origin.prefix.resolved_max_len();
-            if origin.prefix.prefix_len() < max_len {
-                write!(target, " maxlen {max_len}")?;
+        if self.route_origins {
+            for (origin, _) in self.origins(snapshot) {
+                write!(
+                    target, "    {}/{}",
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                )?;
+                let max_len = origin.prefix.resolved_max_len();
+                if origin.prefix.prefix_len() < max_len {
+                    write!(target, " maxlen {max_len}")?;
+                }
+                writeln!(target, " source-as {}", u32::from(origin.asn))?;
+                target.flush().await?;
             }
-            writeln!(target, " source-as {}", u32::from(origin.asn))?;
-            target.flush().await?;
         }
         writeln!(target, "}}")
     }
@@ -1031,13 +1062,15 @@ impl Output {
     async fn bird1(
         self, snapshot: &PayloadSnapshot, mut target: &mut impl WriteOutput,
     ) -> Result<(), io::Error> {
-        for (origin, _) in self.origins(snapshot) {
-            writeln!(target, "roa {}/{} max {} as {};",
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-                u32::from(origin.asn)
-            )?;
-            target.flush().await?;
+        if self.route_origins {
+            for (origin, _) in self.origins(snapshot) {
+                writeln!(target, "roa {}/{} max {} as {};",
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                    u32::from(origin.asn)
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
@@ -1045,13 +1078,15 @@ impl Output {
     async fn bird2(
         self, snapshot: &PayloadSnapshot, mut target: &mut impl WriteOutput,
     ) -> Result<(), io::Error> {
-        for (origin, _) in self.origins(snapshot) {
-            writeln!(target, "route {}/{} max {} as {};",
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.prefix.resolved_max_len(),
-                u32::from(origin.asn)
-            )?;
-            target.flush().await?;
+        if self.route_origins {
+            for (origin, _) in self.origins(snapshot) {
+                writeln!(target, "route {}/{} max {} as {};",
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.prefix.resolved_max_len(),
+                    u32::from(origin.asn)
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
@@ -1074,23 +1109,25 @@ impl Output {
             Item::Literal("Z"),
         ];
 
-        for (origin, info) in self.origins(snapshot) {
-            let now = Utc::now().format_with_items(
-                TIME_ITEMS.iter().cloned()
-            );
-            writeln!(target,
-                "\n{}: {}/{}\norigin: {}\n\
-                descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
-                last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
-                if origin.prefix.addr().is_ipv4() { "route" }
-                else { "route6" },
-                origin.prefix.addr(), origin.prefix.prefix_len(),
-                origin.asn, now, now,
-                info.tal_name().map(|name| {
-                    name.to_uppercase()
-                }).unwrap_or_else(|| "N/A".into())
-            )?;
-            target.flush().await?;
+        if self.route_origins {
+            for (origin, info) in self.origins(snapshot) {
+                let now = Utc::now().format_with_items(
+                    TIME_ITEMS.iter().cloned()
+                );
+                writeln!(target,
+                    "\n{}: {}/{}\norigin: {}\n\
+                    descr: RPKI attestation\nmnt-by: NA\ncreated: {}\n\
+                    last-modified: {}\nsource: ROA-{}-RPKI-ROOT\n",
+                    if origin.prefix.addr().is_ipv4() { "route" }
+                    else { "route6" },
+                    origin.prefix.addr(), origin.prefix.prefix_len(),
+                    origin.asn, now, now,
+                    info.tal_name().map(|name| {
+                        name.to_uppercase()
+                    }).unwrap_or_else(|| "N/A".into())
+                )?;
+                target.flush().await?;
+            }
         }
         Ok(())
     }
