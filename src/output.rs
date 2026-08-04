@@ -1182,12 +1182,12 @@ pub struct FrameWriter {
 }
 
 impl FrameWriter {
-    pub fn new(frame_size: usize) -> (Self, mpsc::Receiver<Vec<u8>>) {
+    pub fn new() -> (Self, mpsc::Receiver<Vec<u8>>) {
         let (tx, rx) = mpsc::channel(1);
         (
             Self {
-                frame: Vec::with_capacity(frame_size),
-                frame_size,
+                frame: Vec::new(),
+                frame_size: 0xFFFF,
                 tx
             },
             rx

@@ -73,7 +73,7 @@ impl State {
             Ok(res.empty())
         }
         else {
-            let (writer, response) = res.stream_frames(0xFFFF);
+            let (writer, response) = res.stream_frames();
             tokio::spawn(async move {
                 output.write_frames(snapshot, metrics, format, writer).await
             });

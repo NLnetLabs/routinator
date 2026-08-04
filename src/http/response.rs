@@ -251,8 +251,8 @@ impl ResponseBuilder {
         )
     }
 
-    pub fn stream_frames(self, frame_size: usize) -> (FrameWriter, Response) {
-        let (writer, rx) = FrameWriter::new(frame_size);
+    pub fn stream_frames(self) -> (FrameWriter, Response) {
+        let (writer, rx) = FrameWriter::new();
         let resp = self.stream(
             ReceiverStream::new(rx).map(Bytes::from)
         );
