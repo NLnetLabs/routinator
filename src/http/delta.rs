@@ -1,17 +1,14 @@
 //! Handles endpoints related to output of payload deltas.
 
+use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
-use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use futures::stream;
 use rpki::rtr::Serial;
-use rpki::rtr::payload::{Action, PayloadRef};
-use rpki::rtr::server::{NotifySender, PayloadDiff};
-use crate::payload::{
-    DeltaArcIter, PayloadDelta, PayloadSnapshot, SharedHistory, SnapshotArcIter
-};
-use crate::utils::fmt::WriteOrPanic;
+use rpki::rtr::payload::{Aspa, RouteOrigin, RouterKey};
+use rpki::rtr::server::NotifySender;
+use crate::output::{FrameWriter, WriteOutput};
+use crate::payload::{PayloadDelta, PayloadSnapshot, SharedHistory};
 use crate::utils::date::format_iso_date;
 use crate::utils::json::JsonBuilder;
 use super::request::Request;
@@ -19,7 +16,7 @@ use super::response::{ContentType, Response, ResponseBuilder};
 
 //------------ handle_get_or_head --------------------------------------------
 
-pub fn handle_get_or_head(
+pub async fn handle_get_or_head(
     req: Request,
     history: &SharedHistory,
 ) -> Result<Response, Request> {
@@ -68,22 +65,30 @@ fn handle_delta(
     session: u64, from_serial: Serial, to_serial: Serial,
     delta: Arc<PayloadDelta>, created: DateTime<Utc>,
 ) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON).stream(
-        stream::iter(
-            DeltaStream::new(session, from_serial, to_serial, delta, created)
-        )
-    )
+    let (mut writer, response) = ResponseBuilder::ok().content_type(
+        ContentType::JSON
+    ).stream_frames();
+    tokio::spawn(async move {
+        let _ = write_delta(
+            session, from_serial, to_serial, &delta, created, &mut writer
+        ).await;
+    });
+    response
 }
 
 fn handle_reset(
     session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>,
     created: DateTime<Utc>,
 ) -> Response {
-    ResponseBuilder::ok().content_type(ContentType::JSON).stream(
-        stream::iter(
-            SnapshotStream::new(session, to_serial, snapshot, created)
-        )
-    )
+    let (mut writer, response) = ResponseBuilder::ok().content_type(
+        ContentType::JSON
+    ).stream_frames();
+    tokio::spawn(async move {
+        let _ = write_snapshot(
+            session, to_serial, &snapshot, created, &mut writer
+        ).await;
+    });
+    response
 }
 
 
@@ -136,6 +141,184 @@ fn need_wait(
     };
 
     Ok(history.read().session_and_serial() == version)
+}
+
+
+//------------ write_delta and write_snapshot --------------------------------
+
+async fn write_delta(
+    session: u64, from_serial: Serial, to_serial: Serial,
+    delta: &PayloadDelta, created: DateTime<Utc>,
+    target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    write!(target, "\
+        {{\
+        \n  \"reset\": false,\
+        \n  \"session\": \"{}\",\
+        \n  \"serial\": {},\
+        \n  \"fromSerial\": {},\
+        \n  \"generated\": {},\
+        \n  \"generatedTime\": \"{}\",\
+        \n  \"announced\": [",
+        session, to_serial, from_serial,
+        created.timestamp(), format_iso_date(created),
+    )?;
+
+    let mut first = true;
+
+    for origin in delta.announced_origins() {
+        append_delimiter(&mut first, target)?;
+        append_origin(origin, target).await?;
+    }
+
+    for key in delta.announced_router_keys() {
+        append_delimiter(&mut first, target)?;
+        append_router_key(key, target).await?;
+    }
+
+    for aspa in delta.announced_aspas() {
+        append_delimiter(&mut first, target)?;
+        append_aspa(aspa, target).await?;
+    }
+
+    write!(target, "\
+        \n  ],\
+        \n  \"withdrawn\": [",
+    )?;
+
+    let mut first = true;
+
+    for origin in delta.withdrawn_origins() {
+        append_delimiter(&mut first, target)?;
+        append_origin(origin, target).await?;
+    }
+
+    for key in delta.withdrawn_router_keys() {
+        append_delimiter(&mut first, target)?;
+        append_router_key(key, target).await?;
+    }
+
+    for aspa in delta.withdrawn_aspas() {
+        append_delimiter(&mut first, target)?;
+        append_aspa(aspa, target).await?;
+    }
+
+    write!(target, "\n  ]\n}}\n")?;
+    target.finalize().await
+}
+
+
+async fn write_snapshot(
+    session: u64,
+    to_serial: Serial,
+    snapshot: &PayloadSnapshot,
+    created: DateTime<Utc>,
+    target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    write!(target, "\
+        {{\
+        \n  \"reset\": true,\
+        \n  \"session\": \"{}\",\
+        \n  \"serial\": {},\
+        \n  \"generated\": {},\
+        \n  \"generatedTime\": \"{}\",\
+        \n  \"announced\": [",
+        session, to_serial,
+        created.timestamp(), format_iso_date(created),
+    )?;
+
+    let mut first = true;
+
+    for (origin, _) in snapshot.origins() {
+        append_delimiter(&mut first, target)?;
+        append_origin(origin, target).await?;
+    }
+
+    for (key, _) in snapshot.router_keys() {
+        append_delimiter(&mut first, target)?;
+        append_router_key(key, target).await?;
+    }
+
+    for (aspa, _) in snapshot.aspas() {
+        append_delimiter(&mut first, target)?;
+        append_aspa(aspa, target).await?;
+    }
+
+    write!(target, "\n  ]\n}}\n")?;
+    target.finalize().await
+
+}
+
+
+fn append_delimiter(
+    first: &mut bool, target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    if *first {
+        *first = false;
+    }
+    else {
+        write!(target, ",")?;
+    }
+    Ok(())
+}
+
+
+async fn append_origin(
+    origin: RouteOrigin, target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    write!(target, "\
+        \n    {{\
+        \n        \"type\": \"routeOrigin\",\
+        \n        \"asn\": \"{}\",\
+        \n        \"prefix\": \"{}/{}\",\
+        \n        \"maxLength\": {}\
+        \n    }}",
+        origin.asn,
+        origin.prefix.addr(), origin.prefix.prefix_len(),
+        origin.prefix.resolved_max_len()
+    )?;
+    target.flush().await
+}
+
+async fn append_router_key(
+    key: &RouterKey, target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    write!(target, "\
+        \n    {{\
+        \n        \"type\": \"routerKey\",\
+        \n        \"keyIdentifier\": \"{}\",\
+        \n        \"asn\": \"{}\",\
+        \n        \"keyInfo\": \"{}\"
+        \n    }}",
+        key.key_identifier,
+        key.asn,
+        key.key_info,
+    )?;
+    target.flush().await
+}
+
+async fn append_aspa(
+    aspa: &Aspa, target: &mut FrameWriter
+) -> Result<(), io::Error> {
+    write!(target, "\
+        \n  {{\
+        \n      \"type\": \"aspa\",
+        \n      \"customerAsn\": \"{}\",\
+        \n      \"providerAsns\": [",
+        aspa.customer,
+    )?;
+    let mut first_aspa = true;
+    for asn in aspa.providers.iter() {
+        if first_aspa {
+            write!(target, "\"{asn}\"")?;
+            first_aspa = false
+        }
+        else {
+            write!(target, ", \"{asn}\"")?;
+        }
+    }
+    write!(target, "]\n\n    }}")?;
+    target.flush().await
 }
 
 
@@ -196,309 +379,6 @@ fn version_from_query(
                 true, "missing 'session' argument in query"
             ))
         }
-    }
-}
-
-
-//------------ DeltaStream ---------------------------------------------------
-
-/// An iterator as the foundation for streaming a delta.
-///
-/// The iterator produces segments of roughly 64k size. This can be converted
-/// into a async stream and then used with Tokio’s `Body::wrap_stream`.
-struct DeltaStream {
-    /// The header of the output.
-    ///
-    /// This is set to some when a new value is created and then taken out on
-    /// the very first iteration.
-    header: Option<Vec<u8>>,
-
-    /// The iterator for announced items.
-    ///
-    /// This is a regular delta iterator, we just have to skip over withdraw
-    /// items.
-    ///
-    /// If this is `None`, we are done with the announcements and need to do
-    /// the withdrawals.
-    announce: Option<DeltaArcIter>,
-
-    /// The iterator for withdrawn items.
-    ///
-    /// This is a regular delta iterator, we just have to skip over announced
-    /// items.
-    ///
-    /// If this is `None`, there is nothing left to do.
-    withdraw: Option<DeltaArcIter>,
-
-    /// Is the next appended item the first item in a list?
-    first: bool,
-}
-
-impl DeltaStream {
-    /// Creates a new delta stream.
-    fn new(
-        session: u64, from_serial: Serial, to_serial: Serial,
-        delta: Arc<PayloadDelta>, created: DateTime<Utc>,
-    ) -> Self {
-        let mut vec = Vec::new();
-        Self::append_header(
-            &mut vec, session, from_serial, to_serial, created
-        );
-        DeltaStream {
-            header: Some(vec),
-            announce: Some(delta.clone().arc_iter()),
-            withdraw: Some(delta.arc_iter()),
-            first: true,
-        }
-    }
-
-    /// Appends the delta header to the provided vec.
-    fn append_header(
-        vec: &mut Vec<u8>,
-        session: u64, from_serial: Serial, to_serial: Serial,
-        created: DateTime<Utc>,
-    ) {
-        write!(vec, "\
-            {{\
-            \n  \"reset\": false,\
-            \n  \"session\": \"{}\",\
-            \n  \"serial\": {},\
-            \n  \"fromSerial\": {},\
-            \n  \"generated\": {},\
-            \n  \"generatedTime\": \"{}\",\
-            \n  \"announced\": [",
-            session, to_serial, from_serial,
-            created.timestamp(), format_iso_date(created),
-        )
-    }
-
-    /// Appends the separator between announced and withdrawn to the vec.
-    fn append_separator(
-        vec: &mut Vec<u8>,
-    ) {
-        write!(vec, "\
-            \n  ],\
-            \n  \"withdrawn\": [",
-        )
-    }
-
-    /// Appends an origin to the vec.
-    fn append_payload(
-        vec: &mut Vec<u8>,
-        payload: PayloadRef,
-        first: bool
-    ) {
-        if !first {
-            vec.push(b',')
-        }
-        match payload {
-            PayloadRef::Origin(origin) => {
-                write!(vec, "\
-                    \n    {{\
-                    \n        \"type\": \"routeOrigin\",\
-                    \n        \"asn\": \"{}\",\
-                    \n        \"prefix\": \"{}/{}\",\
-                    \n        \"maxLength\": {}\
-                    \n    }}",
-                    origin.asn,
-                    origin.prefix.addr(), origin.prefix.prefix_len(),
-                    origin.prefix.resolved_max_len()
-                )
-            },
-            PayloadRef::RouterKey(key) => {
-                write!(vec, "\
-                    \n    {{\
-                    \n        \"type\": \"routerKey\",\
-                    \n        \"keyIdentifier\": \"{}\",\
-                    \n        \"asn\": \"{}\",\
-                    \n        \"keyInfo\": \"{}\"
-                    \n    }}",
-                    key.key_identifier,
-                    key.asn,
-                    key.key_info,
-                )
-            }
-            PayloadRef::Aspa(aspa) => {
-                write!(vec, "\
-                    \n  {{\
-                    \n      \"type\": \"aspa\",
-                    \n      \"customerAsn\": \"{}\",\
-                    \n      \"providerAsns\": [",
-                    aspa.customer,
-                );
-                let mut first = true;
-                for asn in aspa.providers.iter() {
-                    if first {
-                        write!(vec, "\"{asn}\"");
-                        first = false
-                    }
-                    else {
-                        write!(vec, ", \"{asn}\"");
-                    }
-                }
-                write!(vec, "]\n\n    }}");
-            }
-        }
-    }
-
-    /// Appends the footer to the vec.
-    fn append_footer(vec: &mut Vec<u8>) {
-        vec.extend_from_slice(b"\n  ]\n}\n");
-    }
-}
-
-impl Iterator for DeltaStream {
-    type Item = Bytes;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        #[allow(clippy::question_mark)]
-        if self.withdraw.is_none() {
-            return None
-        }
-        let mut vec = self.header.take().unwrap_or_default();
-        loop {
-            if vec.len() > 64000 {
-                return Some(vec.into())
-            }
-            if self.next_announce(&mut vec) {
-                continue;
-            }
-            if !self.next_withdraw(&mut vec) {
-                return Some(vec.into())
-            }
-        }
-    }
-}
-
-impl DeltaStream {
-    /// Appends the next announcement to `vec`.
-    ///
-    /// Returns whether the method should be called again.
-    fn next_announce(&mut self, vec: &mut Vec<u8>) -> bool {
-        if let Some(announce) = self.announce.as_mut() {
-            while let Some((payload, action)) = announce.next() {
-                if matches!(action, Action::Announce) {
-                    Self::append_payload(vec, payload, self.first);
-                    self.first = false;
-                    return true
-                }
-            }
-        }
-        else {
-            return false;
-        }
-        Self::append_separator(vec);
-        self.announce = None;
-        self.first = true;
-
-        // Request to be called again. This only means that if we crossed
-        // the 64k boundary, we won’t add the first withdrawal just yet.
-        true
-    }
-
-    /// Appends the next withdrawal to `vec`.
-    ///
-    /// Returns whether the method should be called again.
-    fn next_withdraw(&mut self, vec: &mut Vec<u8>) -> bool {
-        if let Some(withdraw) = self.withdraw.as_mut() {
-            while let Some((payload, action)) = withdraw.next() {
-                if matches!(action, Action::Withdraw) {
-                    Self::append_payload(vec, payload, self.first);
-                    self.first = false;
-                    return true
-                }
-            }
-        }
-        else {
-            return false;
-        }
-        Self::append_footer(vec);
-        self.withdraw = None;
-        false
-    }
-}
-
-
-//------------ SnapshotStream ------------------------------------------------
-
-/// An iterator as the foundation for streaming a snapshot.
-///
-/// This fairly similar to [`DeltaStream`] only simpler.
-struct SnapshotStream {
-    /// The header of the output.
-    ///
-    /// This is set to some when a new value is created and then taken out on
-    /// the very first iteration.
-    header: Option<Vec<u8>>,
-
-    /// An iterator over the snapshot we work on.
-    ///
-    /// This is set to `None` to fuse the iterator.
-    iter: Option<SnapshotArcIter>,
-}
-
-impl SnapshotStream {
-    /// Creates a new snapshot stream.
-    fn new(
-        session: u64, to_serial: Serial, snapshot: Arc<PayloadSnapshot>,
-        created: DateTime<Utc>,
-    ) -> Self {
-        let mut vec = Vec::new();
-        Self::append_header(&mut vec, session, to_serial, created);
-        SnapshotStream {
-            header: Some(vec),
-            iter: Some(snapshot.arc_iter()),
-        }
-    }
-
-    /// Appends the snapshot header to the vec.
-    fn append_header(
-        vec: &mut Vec<u8>,
-        session: u64, to_serial: Serial, created: DateTime<Utc>,
-    ) {
-        write!(vec, "\
-            {{\
-            \n  \"reset\": true,\
-            \n  \"session\": \"{}\",\
-            \n  \"serial\": {},\
-            \n  \"generated\": {},\
-            \n  \"generatedTime\": \"{}\",\
-            \n  \"announced\": [",
-            session, to_serial,
-            created.timestamp(), format_iso_date(created),
-        )
-    }
-}
-
-impl Iterator for SnapshotStream {
-    type Item = Bytes;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        use rpki::rtr::server::PayloadSet;
-
-        let iter = self.iter.as_mut()?;
-        let mut first = self.header.is_some();
-        let mut vec = self.header.take().unwrap_or_default();
-        loop {
-            if vec.len() > 64000 {
-                return Some(vec.into())
-            }
-            match iter.next() {
-                Some(payload) => {
-                    DeltaStream::append_payload(
-                        &mut vec, payload, first,
-                    );
-                }
-                None => {
-                    break
-                }
-            }
-            first = false;
-        }
-
-        self.iter = None;
-        DeltaStream::append_footer(&mut vec);
-        Some(vec.into())
     }
 }
 

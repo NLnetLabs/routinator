@@ -5,7 +5,7 @@
 //! [`Metrics`] that collects all metrics gathered during the run. Additional
 //! types contain the metrics related to specific processed entities.
 
-use std::{io, ops, process};
+use std::{fmt, io, ops, process};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{
@@ -15,6 +15,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::time::{Duration, SystemTimeError};
 use arc_swap::ArcSwap;
 use chrono::{DateTime, TimeZone, Utc};
+use log::info;
 use rpki::uri;
 use rpki::repository::tal::TalInfo;
 use rpki::rtr::state::Serial;
@@ -113,6 +114,73 @@ impl Metrics {
     /// Returns whether any rsync metrics have non-empty logs.
     pub fn has_rsync_logs(&self) -> bool {
         self.rsync.iter().any(|item| item.log_book.is_some())
+    }
+
+    pub fn produce_summary(
+        &self,
+        mut line: impl FnMut(fmt::Arguments) -> Result<(), io::Error>
+    ) -> Result<(), io::Error> {
+        line(format_args!("Summary at {}", self.time))?;
+        for tal in &self.tals {
+            line(format_args!("{}: ", tal.name()))?;
+            line(format_args!(
+                "            ROAs: {:7} verified;",
+                tal.publication.valid_roas
+            ))?;
+            line(format_args!(
+                "            VRPs: {:7} verified, {:7} final;",
+                tal.payload.vrps().valid,
+                tal.payload.vrps().contributed
+            ))?;
+            line(format_args!(
+                "    router certs: {:7} verified;",
+                tal.publication.valid_router_certs,
+            ))?;
+            line(format_args!(
+                "     router keys: {:7} verified, {:7} final;",
+                tal.payload.router_keys.valid,
+                tal.payload.router_keys.contributed
+            ))?;
+            line(format_args!(
+                "           ASPAs: {:7} verified, {:7} final;",
+                tal.publication.valid_aspas,
+                tal.payload.aspas.contributed
+            ))?;
+        }
+        line(format_args!("total: "))?;
+        line(format_args!(
+            "            ROAs: {:7} verified;",
+            self.publication.valid_roas
+        ))?;
+        line(format_args!(
+            "            VRPs: {:7} verified, {:7} final;",
+            self.snapshot.payload.vrps().valid,
+            self.snapshot.payload.vrps().contributed
+        ))?;
+        line(format_args!(
+            "    router certs: {:7} verified;",
+            self.publication.valid_router_certs,
+        ))?;
+        line(format_args!(
+            "     router keys: {:7} verified, {:7} final;",
+            self.snapshot.payload.router_keys.valid,
+            self.snapshot.payload.router_keys.contributed
+        ))?;
+        line(format_args!(
+            "           ASPAs: {:7} verified, {:7} final;",
+            self.publication.valid_aspas,
+            self.snapshot.payload.aspas.contributed
+        ))?;
+        Ok(())
+    }
+
+    pub fn log_summary(&self) {
+        // Panic: only an error returned by the closure is returned which it
+        //        never does.
+        self.produce_summary(|args| {
+            info!("{args}");
+            Ok(())
+        }).unwrap()
     }
 }
 

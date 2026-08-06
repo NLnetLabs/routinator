@@ -145,6 +145,20 @@ impl PayloadDelta {
         self.origins.items.iter().map(|(item, action)| (*item, *action))
     }
 
+    /// Returns an iterator over the announced route origins.
+    pub fn announced_origins(
+        &self
+    ) -> impl Iterator<Item = RouteOrigin> + '_ {
+        self.origins.announced().copied()
+    }
+
+    /// Returns an iterator over the withdrawn route origins.
+    pub fn withdrawn_origins(
+        &self
+    ) -> impl Iterator<Item = RouteOrigin> + '_ {
+        self.origins.withdrawn().copied()
+    }
+
     /// Returns an iterator over the actions on router keys.
     pub fn router_key_actions(
         &self
@@ -152,11 +166,39 @@ impl PayloadDelta {
         self.router_keys.items.iter().map(|(item, action)| (item, *action))
     }
 
+    /// Returns an iterator over the announced router keys.
+    pub fn announced_router_keys(
+        &self
+    ) -> impl Iterator<Item = &RouterKey> + '_ {
+        self.router_keys.announced()
+    }
+
+    /// Returns an iterator over the withdrawn router keys.
+    pub fn withdrawn_router_keys(
+        &self
+    ) -> impl Iterator<Item = &RouterKey> + '_ {
+        self.router_keys.withdrawn()
+    }
+
     /// Returns an iterator over the actions on ASPAs. 
     pub fn aspa_actions(
         &self
     ) -> impl Iterator<Item = (&Aspa, Action)> + '_ {
         self.aspas.items.iter().map(|(item, action)| (item, action.into()))
+    }
+
+    /// Returns an iterator over the announced ASPAs.
+    pub fn announced_aspas(
+        &self
+    ) -> impl Iterator<Item = &Aspa> + '_ {
+        self.aspas.announced()
+    }
+
+    /// Returns an iterator over the withdrawn ASPAs.
+    pub fn withdrawn_aspas(
+        &self
+    ) -> impl Iterator<Item = &Aspa> + '_ {
+        self.aspas.withdrawn()
     }
 
     /// Returns an iterator over the actions.
@@ -323,6 +365,28 @@ impl<P: Clone + Ord> StandardDelta<P> {
         }
 
         items
+    }
+
+    fn announced(
+        &self
+    ) -> impl Iterator<Item = &'_ P> + '_ {
+        self.items.iter().filter_map(|(item, action)| {
+            match action {
+                Action::Announce => Some(item),
+                Action::Withdraw => None,
+            }
+        })
+    }
+
+    fn withdrawn(
+        &self
+    ) -> impl Iterator<Item = &'_ P> + '_ {
+        self.items.iter().filter_map(|(item, action)| {
+            match action {
+                Action::Announce => None,
+                Action::Withdraw => Some(item),
+            }
+        })
     }
 }
 
@@ -615,6 +679,28 @@ impl AspaDelta {
     /// Returns an element of the delta.
     fn get(&self, idx: usize) -> Option<(&Aspa, Action)> {
         self.items.get(idx).map(|item| (&item.0, (&item.1).into()))
+    }
+
+    fn announced(
+        &self
+    ) -> impl Iterator<Item = &'_ Aspa> + '_ {
+        self.items.iter().filter_map(|(item, action)| {
+            match action.into() {
+                Action::Announce => Some(item),
+                Action::Withdraw => None,
+            }
+        })
+    }
+
+    fn withdrawn(
+        &self
+    ) -> impl Iterator<Item = &'_ Aspa> + '_ {
+        self.items.iter().filter_map(|(item, action)| {
+            match action.into() {
+                Action::Announce => None,
+                Action::Withdraw => Some(item),
+            }
+        })
     }
 }
 
