@@ -1250,13 +1250,16 @@ impl error::Error for QueryError { }
 
 #[cfg(test)]
 mod test {
+    use std::fs;
+    use std::io::{BufWriter, Write};
+    use std::path::PathBuf;
     use chrono::DateTime;
-    use rpki::{crypto::KeyIdentifier, repository::x509::Time, resources::MaxLenPrefix, rtr::pdu::{ProviderAsns, RouterKeyInfo}};
-    #[allow(unused_imports)]
-    use std::{fs::{self}, io::BufWriter, path::PathBuf, io::Write};
-
+    use rpki::crypto::KeyIdentifier;
+    use rpki::repository::x509::Time;
+    use rpki::resources::MaxLenPrefix;
+    use rpki::rtr::pdu::{ProviderAsns, RouterKeyInfo};
+    use tokio::runtime::Runtime;
     use crate::slurm::ExceptionInfo;
-
     use super::*;
 
     #[test]
@@ -1346,12 +1349,21 @@ mod test {
                     output.no_aspas();
                 }
 
-                let mut buf = BufWriter::new(Vec::new());
+                let buf = Runtime::new().unwrap().block_on(async move {
+                    let mut buf = Vec::new();
+                    let (writer, mut rx) = FrameWriter::new();
+                    tokio::spawn(async move {
+                        output.write_frames(
+                            snapshot, metrics, output_format, writer
+                        ).await.unwrap();
+                    });
+                    while let Some(frame) = rx.recv().await {
+                        buf.extend_from_slice(&frame);
+                    }
+                    buf
+                });
 
-                output.write(snapshot, metrics, output_format,  &mut buf).unwrap();
-
-                let bytes = buf.into_inner().unwrap();
-                let string = String::from_utf8(bytes).unwrap();
+                let string = String::from_utf8(buf).unwrap();
 
                 let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 d.push("test/output");
