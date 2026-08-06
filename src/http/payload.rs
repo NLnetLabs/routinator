@@ -20,7 +20,7 @@ impl State {
         }
     }
 
-    pub async fn handle_get_or_head(
+    pub fn handle_get_or_head(
         &self,
         req: Request,
         history: &SharedHistory,

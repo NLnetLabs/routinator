@@ -3,7 +3,7 @@
 use std::fmt;
 use std::convert::Infallible;
 use chrono::{DateTime, Utc};
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use http_body_util::combinators::BoxBody;
 use hyper::body::{Body, Bytes, Frame};
@@ -61,7 +61,9 @@ impl Response {
     }
 
     // Returns a Unsupported Media Type response.
-    pub fn unsupported_media_type(api: bool, message: impl fmt::Display) -> Self {
+    pub fn unsupported_media_type(
+        api: bool, message: impl fmt::Display
+    ) -> Self {
         Self::error(api, StatusCode::UNSUPPORTED_MEDIA_TYPE, message)
     }
 
@@ -240,21 +242,14 @@ impl ResponseBuilder {
         self.finalize(Empty::new())
     }
 
-    pub fn stream<S>(self, body: S) -> Response
-    where
-        S: Stream<Item = Bytes> + Send + Sync + 'static
-    {
-        self.finalize(
-            StreamBody::new(body.map(|item| {
-                Ok(Frame::data(item))
-            }))
-        )
-    }
-
     pub fn stream_frames(self) -> (FrameWriter, Response) {
         let (writer, rx) = FrameWriter::new();
-        let resp = self.stream(
-            ReceiverStream::new(rx).map(Bytes::from)
+        let resp = self.finalize(
+            StreamBody::new(
+                ReceiverStream::new(rx).map(|item| {
+                    Ok(Frame::data(item.into()))
+                })
+            )
         );
         (writer, resp)
     }

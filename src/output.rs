@@ -435,7 +435,7 @@ impl Output {
         mut target: FrameWriter,
     ) -> Result<(), io::Error> {
         self._write(&snapshot, &metrics, format, &mut target).await?;
-        target.flush().await
+        target.finalize().await
     }
 
     fn include_origin(&self, origin: RouteOrigin) -> bool {
@@ -1145,12 +1145,14 @@ impl Output {
 
 //------------ WriteOutput ---------------------------------------------------
 
-trait WriteOutput {
+pub(crate) trait WriteOutput {
     fn write_fmt(
         &mut self, args: fmt::Arguments<'_>
     ) -> Result<(), io::Error>;
 
     async fn flush(&mut self) -> Result<(), io::Error>;
+
+    async fn finalize(&mut self) -> Result<(), io::Error>;
 }
 
 impl<W: io::Write> WriteOutput for W {
@@ -1161,6 +1163,10 @@ impl<W: io::Write> WriteOutput for W {
     }
 
     async fn flush(&mut self) -> Result<(), io::Error> {
+        Ok(())
+    }
+
+    async fn finalize(&mut self) -> Result<(), io::Error> {
         Ok(())
     }
 }
@@ -1210,6 +1216,12 @@ impl WriteOutput for FrameWriter {
             })?;
         }
         Ok(())
+    }
+
+    async fn finalize(&mut self) -> Result<(), io::Error> {
+        self.tx.send(mem::take(&mut self.frame)).await.map_err(|_| {
+            io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe")
+        })
     }
 }
 
