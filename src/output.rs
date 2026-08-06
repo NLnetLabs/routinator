@@ -1145,13 +1145,27 @@ impl Output {
 
 //------------ WriteOutput ---------------------------------------------------
 
+/// A trait for writing output data.
+///
+/// This provides `write_fmt` so it can be used with `write!` and friends
+/// plus two async methods for flushing output.
+///
+/// The latter two are used for writing large data frame by frame. Call
+/// `flush` every regularly (e.g., at the end of an iteration). When done,
+/// call `finalize`. Note that if you don’t, the last frame will be lost.
+///
+/// The trait is implemented for anything that is `io::Write`, in which case
+/// the two async methods just return immediately.
 pub(crate) trait WriteOutput {
+    /// Writes the provided arguments to the output.
     fn write_fmt(
         &mut self, args: fmt::Arguments<'_>
     ) -> Result<(), io::Error>;
 
+    /// Flushes the output if necessary.
     async fn flush(&mut self) -> Result<(), io::Error>;
 
+    /// Flushes the output no matter what.
     async fn finalize(&mut self) -> Result<(), io::Error>;
 }
 
@@ -1174,6 +1188,7 @@ impl<W: io::Write> WriteOutput for W {
 
 //------------ FrameWriter ---------------------------------------------------
 
+/// A writer that sends a frame out whenever it reaches a certain size.
 pub struct FrameWriter {
     /// The frame we are currently writing to.
     frame: Vec<u8>,
@@ -1188,6 +1203,7 @@ pub struct FrameWriter {
 }
 
 impl FrameWriter {
+    /// Creates a new frame writer.
     pub fn new() -> (Self, mpsc::Receiver<Vec<u8>>) {
         let (tx, rx) = mpsc::channel(1);
         (
