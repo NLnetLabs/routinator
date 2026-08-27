@@ -2781,7 +2781,7 @@ mod test {
             config.extra_tals_dir.unwrap().to_str().unwrap(), "/test/taldir"
         );
         assert!(config.exceptions.is_empty());
-        assert!(!config.strict);
+        assert!(config.strict);
         assert_eq!(
             config.validation_threads,
             Config::default_validation_threads()
@@ -2818,7 +2818,7 @@ mod test {
     fn basic_args() {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository",
-            "-x", "/x1", "--exceptions", "x2", "--strict",
+            "-x", "/x1", "--exceptions", "x2",
             "--validation-threads", "2000",
             "--syslog", "--syslog-facility", "auth"
         ]);
