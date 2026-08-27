@@ -752,7 +752,11 @@ impl<'a> SnapshotBuilder<'a> {
     fn process_aspa(&mut self, aspa: PubAspa, metrics: &mut AllVrpMetrics) {
         metrics.update(|m| m.aspas.valid += 1);
 
-        // SLURM filtering goes here ...
+        // Is the ASPA to be filtered locally?
+        if self.exceptions.drop_aspa(aspa.customer) {
+            metrics.update(|m| m.aspas.locally_filtered += 1);
+            return
+        }
 
         match self.aspas.entry(aspa.customer) {
             hash_map::Entry::Vacant(entry) => {
@@ -825,7 +829,26 @@ impl<'a> SnapshotBuilder<'a> {
             }
         }
 
-        // XXX ASPA assertions.
+        for (aspa, info) in self.exceptions.aspa_assertions() {
+            match self.aspas.entry(aspa.customer) {
+                hash_map::Entry::Vacant(entry) => {
+                    entry.insert((
+                        SmallAsnSet::from_iter(aspa.providers.iter()), 
+                        info.into()
+                    ));
+                    metrics.local.aspas.contributed += 1;
+                    metrics.snapshot.payload.aspas.contributed += 1;
+                },
+                hash_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().0 = entry.get().0.union(
+                        &SmallAsnSet::from_iter(aspa.providers.iter())
+                    ).collect();
+                    entry.get_mut().1.add_local(info);
+                    metrics.local.aspas.duplicate += 1;
+                    metrics.snapshot.payload.aspas.duplicate += 1;
+                },
+            }
+        }
     }
 
     fn into_snapshot(self, metrics: &mut Metrics) -> PayloadSnapshot {

@@ -6,9 +6,13 @@ Breaking changes
 
 New
 
+* Add SLURM v2 input filtering support
+
 Improvements
 
 Bug fixes
+
+* Fix field names to match the latest SLURM v2 draft
 
 Other changes
 
