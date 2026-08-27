@@ -34,7 +34,7 @@ following pre-configured options:
 
 .. code-block:: toml
 
-   repository-dir = "/var/lib/routinator/rpki-cache"
+   repository-dir = "/var/cache/routinator/rpki-cache"
    rtr-listen = ["127.0.0.1:3323"]
    http-listen = ["127.0.0.1:8323"]
 
@@ -198,11 +198,11 @@ fetch data from the ARIN Operational Test and Evaluation Environment, run:
 
 Lastly, if you would like to use a TAL that isn't bundled with Routinator you
 can place it in a directory of your choice, for example
-:file:`/var/lib/routinator/tals`, and refer to it by running:
+:file:`/var/cache/routinator/tals`, and refer to it by running:
 
 .. code-block:: text
 
-    routinator --extra-tals-dir="/var/lib/routinator/tals"
+    routinator --extra-tals-dir="/var/cache/routinator/tals"
 
 Routinator will use all files in this directory with an extension of *.tal*
 as TALs. These files need to be in the format described by :rfc:`8630`. Note
@@ -230,7 +230,7 @@ memory using the `tmpfs file system
 <https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
 If you have installed Routinator using a package, by default the RPKI cache
-directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
+directory will be :file:`/var/cache/routinator/rpki-cache`, so we'll use that
 as an example. Note that the directory you choose must exist before the mount
 can be done. You should allocate at least 3GB for the cache, but giving it
 4GB will allow ample margin for future growth. Lastly, *tmpfs* will behave
@@ -239,7 +239,7 @@ usage<installation:Inode Usage>`:
 
 .. code-block:: bash
 
-    sudo mount -t tmpfs -o size=4G -o nr_inodes=2M tmpfs /var/lib/routinator/rpki-cache
+    sudo mount -t tmpfs -o size=4G -o nr_inodes=2M tmpfs /var/cache/routinator/rpki-cache
 
 *Tmpfs* will behave just like a regular disk, so if it runs out of space
 Routinator will do a clean crash, stopping validation, the API, HTTP server
