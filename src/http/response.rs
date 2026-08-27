@@ -306,9 +306,9 @@ impl<'a> Iterator for EtagsIter<'a> {
         };
 
         // Find the end of the tag which is after the next DQUOTE.
-        let end = match self.0[prefix_len..].find('"') {
-            Some(index) => index + prefix_len + 1,
-            None => return None
+        let end = {
+            let index = self.0[prefix_len..].find('"')?;
+            index + prefix_len + 1
         };
 
         let res = &self.0[0..end];
