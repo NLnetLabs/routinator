@@ -29,7 +29,7 @@ use crate::error::Failed;
 //------------ Defaults for Some Values --------------------------------------
 
 /// Are we doing strict validation by default?
-const DEFAULT_STRICT: bool = false;
+const DEFAULT_STRICT: bool = true;
 
 /// The default timeout for running rsync commands in seconds.
 const DEFAULT_RSYNC_TIMEOUT: Duration = Duration::from_secs(300);
@@ -483,8 +483,8 @@ impl Config {
         }
 
         // strict
-        if args.strict {
-            self.strict = true
+        if args.disable_strict {
+            self.strict = false
         }
 
         // stale
@@ -635,13 +635,13 @@ impl Config {
         }
 
         // enable_bgpsec
-        if args.enable_bgpsec {
-            self.enable_bgpsec = true
+        if args.disable_bgpsec {
+            self.enable_bgpsec = false
         }
 
         // enable_aspa
-        if args.enable_aspa {
-            self.enable_aspa = true
+        if args.disable_aspa {
+            self.enable_aspa = false
         }
 
         // dirty_repository
@@ -917,7 +917,7 @@ impl Config {
             exceptions: {
                 file.take_path_array("exceptions")?.unwrap_or_default()
             },
-            strict: file.take_bool("strict")?.unwrap_or(false),
+            strict: file.take_bool("strict")?.unwrap_or(true),
             stale: {
                 file.take_from_str("stale")?.unwrap_or(DEFAULT_STALE_POLICY)
             },
@@ -1009,9 +1009,9 @@ impl Config {
                 file.take_usize("max-ca-depth")?
                     .unwrap_or(DEFAULT_MAX_CA_DEPTH)
             },
-            enable_bgpsec: file.take_bool("enable-bgpsec")?.unwrap_or(false),
+            enable_bgpsec: file.take_bool("enable-bgpsec")?.unwrap_or(true),
 
-            enable_aspa: file.take_bool("enable-aspa")?.unwrap_or(false),
+            enable_aspa: file.take_bool("enable-aspa")?.unwrap_or(true),
 
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
@@ -1226,8 +1226,8 @@ impl Config {
             rrdp_user_agent: DEFAULT_RRDP_USER_AGENT.to_string(),
             max_object_size: Some(DEFAULT_MAX_OBJECT_SIZE),
             max_ca_depth: DEFAULT_MAX_CA_DEPTH,
-            enable_bgpsec: false,
-            enable_aspa: false,
+            enable_bgpsec: true,
+            enable_aspa: true,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
             validation_threads: Config::default_validation_threads(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
@@ -1807,7 +1807,7 @@ struct GlobalArgs {
 
     /// Parse RPKI data in strict mode
     #[arg(long)]
-    strict: bool,
+    disable_strict: bool,
 
     /// The policy for handling stale objects
     #[arg(long, value_name = "POLICY")]
@@ -1915,11 +1915,11 @@ struct GlobalArgs {
 
     /// Include BGPsec router keys in the data set
     #[arg(long)]
-    enable_bgpsec: bool,
+    disable_bgpsec: bool,
 
     /// Include ASPA in the data set
     #[arg(long)]
-    enable_aspa: bool,
+    disable_aspa: bool,
 
     /// Do not clean up repository directory after validation
     #[arg(long)]
@@ -2781,7 +2781,7 @@ mod test {
             config.extra_tals_dir.unwrap().to_str().unwrap(), "/test/taldir"
         );
         assert!(config.exceptions.is_empty());
-        assert!(!config.strict);
+        assert!(config.strict);
         assert_eq!(
             config.validation_threads,
             Config::default_validation_threads()
@@ -2818,7 +2818,7 @@ mod test {
     fn basic_args() {
         let config = process_basic_args(&[
             "routinator", "-r", "/repository",
-            "-x", "/x1", "--exceptions", "x2", "--strict",
+            "-x", "/x1", "--exceptions", "x2",
             "--validation-threads", "2000",
             "--syslog", "--syslog-facility", "auth"
         ]);

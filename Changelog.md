@@ -4,6 +4,12 @@
 
 Breaking changes
 
+* ASPA and BGPsec are now enabled by default. The command line options 
+`--enable-aspa` and `--enable-bgpsec` have been replaced with `--disable-aspa`
+and `--disable-bgpsec`. 
+* Strict mode is now enabled by default. `--strict` has been replaced with
+`--disable-strict`.
+
 New
 
 Improvements

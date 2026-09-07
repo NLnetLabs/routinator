@@ -102,13 +102,11 @@ The available options are:
       should be filtered out of the output as well as origins that should be
       added.
 
-.. option:: --strict
+.. option:: --disable-strict
 
-      If this option is present, the repository will be validated in strict
+      If this option is present, the repository won't be validated in strict
       mode following the requirements laid out by the standard documents very
-      closely. With the current RPKI repository, using this option will lead
-      to a rather large amount of invalid route origins and should therefore
-      not be used in practice.
+      closely. 
 
       See `RELAXED DECODING`_ below for more information.
 
@@ -345,15 +343,15 @@ The available options are:
       The maximum number of CAs a given CA may be away from a trust anchor
       certificate before it is rejected. The default value is 32.
 
-.. option:: --enable-bgpsec
+.. option:: --disable-bgpsec
 
-      If this option is present, BGPsec router keys will be processed
-      during validation and included in the produced data set.
+      If this option is present, BGPsec router keys will not be processed
+      during validation and not included in the produced data set.
 
-.. option:: --enable-aspa
+.. option:: --disable-aspa
 
-      If this option is present, ASPA assertions will be processed
-      during validation and included in the produced data set.
+      If this option is present, ASPA assertions will not be processed
+      during validation and not included in the produced data set.
 
 .. option:: --dirty
 
@@ -1067,7 +1065,7 @@ All values can be overridden via the command line options.
 
       strict
             A boolean specifying whether strict validation should be
-            employed. If missing, strict validation will not be used.
+            employed. If missing or true, strict validation will be used.
 
       stale
             A string specifying the policy for dealing with stale objects.
@@ -1236,14 +1234,14 @@ All values can be overridden via the command line options.
 
       enable-bgpsec
             A boolean value specifying whether BGPsec router keys should be
-            included in the published dataset. If false or missing, no router
-            keys will be included.
+            included in the published dataset. If false, no router
+            keys will be included. Enabled by default.
 
 
       enable-aspa
             A boolean value specifying whether ASPA assertions should be
-            included in the published dataset. If false or missing, no ASPA
-            assertions will be included.
+            included in the published dataset. If false, no ASPA
+            assertions will be included. Enabled by default.
 
       dirty
             A boolean value which, if true, specifies that unused files and
@@ -1603,11 +1601,11 @@ the formatting of the objects published in the RPKI repository. However,
 because RPKI reuses existing technology, real-world applications produce
 objects that do not follow these strict requirements.
 
-As a consequence, a significant portion of the RPKI repository is actually
-invalid if the rules are followed. We therefore introduce two decoding modes:
+As a consequence, a significant portion of the RPKI repository used to be
+invalid if the rules are followed. We therefore introduced two decoding modes:
 strict and relaxed. Strict mode rejects any object that does not pass all
 checks laid out by the relevant RFCs. Relaxed mode ignores a number of these
-checks.
+checks. Nowadays nearly all objects follow the strict requirements.
 
 This memo documents the violations we encountered and are dealing with in
 relaxed decoding mode.
