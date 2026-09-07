@@ -11,6 +11,14 @@ This project and everyone participating in it is governed by the [NLnet Labs
 Code of Conduct](https://www.nlnetlabs.nl/conduct/). By participating, you are
 expected to uphold this code. 
 
+## LLM Policy
+
+Before contributing to this project, please be aware of the [NLnet Labs LLM Policy]. In a nutshell: we do not accept any LLM-generated contributions to
+code or documentation.
+
+[NLnet Labs LLM Policy]: https://www.nlnetlabs.nl/llm-policy
+
+
 ## Learning RPKI
 
 Routinator is Relying Party software for the Resource Public Key Infrastructure
