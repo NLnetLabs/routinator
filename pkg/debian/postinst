@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-ROUTINATOR_HOME="/var/lib/routinator/"
+ROUTINATOR_HOME="/var/cache/routinator/"
 ROUTINATOR_USER="routinator"
 
 create_user() {
