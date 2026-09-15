@@ -351,6 +351,9 @@ pub struct Config {
     /// Should we log repository issues?
     pub log_repository_issues: bool,
 
+    /// The target to log repository messages to.
+    pub repository_log_target: Option<LogTarget>,
+
     /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
 
@@ -905,6 +908,8 @@ impl Config {
     /// Creates a base config from a config file.
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Failed> {
         let log_target = Self::log_target_from_config_file(&mut file)?;
+        let repository_log_target = 
+            Self::repository_log_target_from_config_file(&mut file)?;
         let res = Config {
             config_file: file.path.clone(),
             cache_dir: file.take_mandatory_path("repository-dir")?,
@@ -1079,6 +1084,7 @@ impl Config {
             log_repository_issues: {
                 file.take_bool("log-repository-issues")?.unwrap_or(false)
             },
+            repository_log_target,
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
@@ -1184,6 +1190,44 @@ impl Config {
         }
     }
 
+    /// Determines the logging target for repositories from the config file.
+    ///
+    /// Syslog is not supported. Just set log-repository-issues to true if
+    /// you want that.
+    fn repository_log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<Option<LogTarget>, Failed> {
+        let log_target = file.take_string("repository-log")?;
+        let log_file = file.take_path("repository-log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | Some("stderr") => 
+                Ok(Some(LogTarget::Stderr)),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(Some(LogTarget::File(file))),
+                    None => {
+                        error!(
+                            "Failed in config file {}: \
+                             log target \"file\" requires \
+                             'repository-log-file' value.",
+                            file.path.display()
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            Some(value) => {
+                error!(
+                    "Failed in config file {}: \
+                     invalid log target '{}'",
+                    file.path.display(), value
+                );
+                Err(Failed)
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Creates a default config with the given paths.
     ///
     /// Uses default values for everything except for the config file path
@@ -1249,6 +1293,7 @@ impl Config {
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
             log_repository_issues: false,
+            repository_log_target: None,
             pid_file: None,
             working_dir: None,
             chroot: None,

@@ -1,10 +1,11 @@
 //! Logging.
 
+use std::fmt::Debug;
 use std::{fmt, fs, io, mem, process, slice};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{LevelFilter, Record, error};
@@ -64,6 +65,9 @@ impl<'a> IntoIterator for &'a LogBook {
 }
 
 
+pub(crate) static REPOSITORY_LOGGER: LazyLock<Mutex<Option<Arc<Logger>>>> = 
+    LazyLock::new(|| Mutex::new(None));
+
 //------------ LogBookWriter -------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -85,7 +89,9 @@ impl LogBookWriter {
     /// is the prefix exactly, i.e., there will not be white space or
     /// characters separating the prefix from the actual log output. Such
     /// a separator has to be part of the prefix.
-    pub fn new(process_prefix: Option<String>) -> Self {
+    pub fn new(
+        process_prefix: Option<String>, 
+    ) -> Self {
         Self {
             book: Default::default(),
             process_prefix,
@@ -159,6 +165,9 @@ impl LogBookWriter {
         self.book.messages.push(
             LogMessage::from_record(record, repository_level)
         );
+        if let Some(repository_logger) = REPOSITORY_LOGGER.lock().clone() {
+            repository_logger.log(record);
+        }
         if let Some(prefix) = self.process_prefix.as_ref() {
             logger.log(
                 &log::Record::builder()
@@ -252,7 +261,21 @@ impl Logger {
     fn new(
         config: &Config, daemon: bool, output: Option<Arc<Mutex<String>>>
     ) -> Result<Self, Failed> {
-        let target = match config.log_target {
+        Self::new_target(
+            config.log_target.clone(), 
+            config.log_level, 
+            daemon, 
+            output
+        )
+    }
+
+    pub(crate) fn new_target(
+        log_target: LogTarget, 
+        log_level: log::LevelFilter, 
+        daemon: bool, 
+        output: Option<Arc<Mutex<String>>>
+    ) -> Result<Self, Failed> {
+        let target = match log_target {
             #[cfg(unix)]
             LogTarget::Default(facility) => {
                 if daemon { 
@@ -276,7 +299,7 @@ impl Logger {
         Ok(Self {
             target: Mutex::new(target),
             output,
-            log_level: config.log_level,
+            log_level,
         })
     }
 

@@ -28,6 +28,7 @@ use rpki::resources::{Asn, Prefix};
 use rpki::rtr::server::NotifySender;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
+use crate::log::Logger;
 #[cfg(feature = "rta")] use crate::rta;
 use crate::{output, validity};
 use crate::config::Config;
@@ -228,6 +229,18 @@ impl Server {
             self.detach,
             !process.config().http_listen.is_empty()
         )?;
+        if let Some(log_target) = &process.config().repository_log_target {
+            let logger = Logger::new_target(
+                log_target.clone(), 
+                log::LevelFilter::Info, 
+                self.detach, 
+                None
+            );
+            if let Ok(logger) = logger {
+                let mut global_log = crate::log::REPOSITORY_LOGGER.lock();
+                *global_log = Some(Arc::new(logger));
+            }
+        }
         warn!("Using config file {}.", process.config().config_file.display());
         process.setup_service(self.detach)?;
         let log = log.map(Arc::new);
@@ -666,6 +679,18 @@ impl Vrps {
 
         engine.ignite()?;
         process.switch_logging(false, false)?;
+        if let Some(log_target) = &process.config().repository_log_target {
+            let logger = Logger::new_target(
+                log_target.clone(), 
+                log::LevelFilter::Info, 
+                false, 
+                None
+            );
+            if let Ok(logger) = logger {
+                let mut global_log = crate::log::REPOSITORY_LOGGER.lock();
+                *global_log = Some(Arc::new(logger));
+            }
+        }
         warn!("Using config file {}.", process.config().config_file.display());
         let exceptions = LocalExceptions::load(process.config(), true)?;
         let (report, mut metrics) = {
