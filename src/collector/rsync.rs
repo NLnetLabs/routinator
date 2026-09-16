@@ -55,7 +55,7 @@ pub struct Collector {
     /// Whether to filter dubious authorities in rsync URIs.
     filter_dubious: bool,
 
-    /// Whether to log issues also to the process log?
+    /// The logger to use for repository issues (if any)
     repository_logger: Option<Arc<Logger>>,
 }
  

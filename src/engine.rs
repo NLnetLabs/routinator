@@ -120,7 +120,7 @@ pub struct Engine {
     /// Maximum depth of the CA chain.
     max_ca_depth: usize,
 
-    /// Should we log repository issues to the process log?
+    /// The logger to use for repository issues (if any)
     repository_logger: Option<Arc<Logger>>,
 }
 
