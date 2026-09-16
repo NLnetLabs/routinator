@@ -1,3 +1,5 @@
+use std::fmt::Display;
+use std::io::Read;
 use std::{fs, io};
 use std::path::Path;
 use std::time::Duration;
@@ -385,3 +387,120 @@ impl From<StatusCode> for HttpStatus {
     }
 }
 
+
+//------------ LimitedDataRead -----------------------------------------------
+
+/// A reader that reads the data of objects in a snapshot or delta.
+///
+/// The type ensures the size limit of objects and allows treating read errors
+/// differently than write errors by storing any error and making it available
+/// after the fact.
+pub struct LimitedDataRead<'a, R> {
+    /// The wrapped reader.
+    reader: R,
+
+    /// The URI of the object we are reading.
+    uri: &'a dyn Display,
+
+    /// The number of bytes left to read.
+    ///
+    /// If this is `None` we are allowed to read an unlimited amount.
+    left: Option<u64>,
+
+    /// The last error that happend.
+    err: Option<LimitedDataReadError>,
+}
+
+impl<'a, R> LimitedDataRead<'a, R> {
+    /// Creates a new read from necessary information.
+    ///
+    /// The returned value will wrap `reader`. The `uri` should be the rsync
+    /// URI of the published object. It is only used for generating meaningful
+    /// error messages. If `max_size` is some value, the size of the object
+    /// will be limited to that value in bytes. Larger objects lead to an
+    /// error.
+    pub fn new(reader: R, uri: &'a impl Display, max_size: Option<u64>) -> Self {
+        LimitedDataRead { reader, uri, left: max_size, err: None }
+    }
+
+    /// Returns a stored error if available.
+    ///
+    /// If it returns some error, that error happened during reading before
+    /// an `io::Error` was returned.
+    ///
+    /// The method takes the stored error and replaces it internally with
+    /// `None`.
+    pub fn take_err(&mut self) -> Option<LimitedDataReadError> {
+        self.err.take()
+    }
+}
+
+impl<R: io::Read> LimitedDataRead<'_, R> {
+    /// Reads the data into a vec.
+    pub fn read_all(mut self) -> Result<Vec<u8>, LimitedDataReadError> {
+        let mut content = Vec::new();
+        if let Err(io_err) = self.read_to_end(&mut content) {
+            return Err(
+                match self.take_err() {
+                    Some(data_err) => data_err,
+                    None => LimitedDataReadError::Read(io_err),
+                }
+            )
+        }
+        Ok(content)
+    }
+}
+
+impl<R: io::Read> io::Read for LimitedDataRead<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        let res = match self.reader.read(buf) {
+            Ok(res) => res,
+            Err(err) => {
+                self.err = Some(LimitedDataReadError::Read(err));
+                return Err(io::Error::other("reading data failed"))
+            }
+        };
+        if let Some(left) = self.left {
+            let res64 = match u64::try_from(res) {
+                Ok(res) => res,
+                Err(_) => {
+                    // If the usize doesn’t fit into a u64, things are
+                    // definitely way too big.
+                    self.left = Some(0);
+                    self.err = Some(
+                        LimitedDataReadError::LargeObject(self.uri.to_string())
+                    );
+                    return Err(io::Error::other("size limit exceeded"))
+                }
+            };
+            if res64 > left {
+                self.left = Some(0);
+                self.err = Some(
+                    LimitedDataReadError::LargeObject(self.uri.to_string())
+                );
+                Err(io::Error::other("size limit exceeded"))
+            }
+            else {
+                self.left = Some(left - res64);
+                Ok(res)
+            }
+        }
+        else {
+            Ok(res)
+        }
+    }
+}
+
+
+//------------ LimitedDataReadError ------------------------------------------
+
+/// An error happened while reading object data.
+///
+/// This covers both the case where the maximum allowed file size was
+/// exhausted as well as where reading data failed. Neither of them is fatal,
+/// so we need to process them separately.
+#[derive(Debug)]
+pub enum LimitedDataReadError {
+    LargeObject(String),
+    Read(io::Error),
+}

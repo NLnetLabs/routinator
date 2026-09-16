@@ -10,6 +10,52 @@ Improvements
 
 Bug fixes
 
+Other changes
+
+
+## 0.15.2 ‘Irgendwas ist immer’
+
+Released 2026-06-08.
+
+This release fixes a number of vulnerabilities and security issues
+identified by a security audit performed by [X41 D-Sec] and financed
+by [Sovereign Tech Agency]. We advise all users to upgrade at their
+earliest convenience.
+
+Security fixes
+
+* Changed how transient errors when accepting incoming HTTP and RTR
+  connections are handled: instead of exiting, a warning is printed and
+  the error is ignored. ([#1099])
+
+  This issue was assigned [CVE-2026-49232].
+
+* Extended the check for illegal path components in rsync URIs to also
+  include the authority and module parts. (via [rpki-rs#370])
+
+  This fixes a path traversal vulnerability that has been assigned
+  [CVE-2026-49233].
+
+* Fixed a panic when parsing certain AS numbers from strings. (via
+  [rpki-rs#373])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49234].
+
+* Upgraded quick-xml to at least 0.39.4 to fix a regression in XML parsing
+  that may lead a panic on certain crated XML files. (via [rpki-rs#372])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49235].
+
+Improvements
+
+* Restricted trust anchor certificates downloaded via HTTP to the size given
+  via the `max_object_size` config option. ([#1090])
+* The `-e` and `--rsh` options will now be rejected in the `rsync-args`
+  config option. Similarly, Routinator will not start if the equivalent
+  evironment variable `RSYNC_RSH` is set. ([#1091])
+
+Bug fixes
+
 * Set an RTR listener socket received via systemd to non-blocking. This
   fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
 * Fixed the `--rrdp-tcp-keepalive` to be a command line option rather than
@@ -17,10 +63,23 @@ Bug fixes
 
 Other changes
 
+* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
+
+[#1090]: https://github.com/NLnetLabs/routinator/pull/1090
+[#1091]: https://github.com/NLnetLabs/routinator/pull/1091
 [#1081]: https://github.com/NLnetLabs/routinator/pull/1081
 [#1085]: https://github.com/NLnetLabs/routinator/pull/1085
+[#1095]: https://github.com/NLnetLabs/routinator/pull/1095
 [@MaxHearnden]: https://github.com/MaxHearnden
-
+[rpki-rs#370]: https://github.com/NLnetLabs/rpki-rs/pull/370
+[rpki-rs#372]: https://github.com/NLnetLabs/rpki-rs/pull/372
+[rpki-rs#373]: https://github.com/NLnetLabs/rpki-rs/pull/373
+[CVE-2026-49232]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49232.txt
+[CVE-2026-49233]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49233.txt
+[CVE-2026-49234]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49234.txt
+[CVE-2026-49235]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49235.txt
+[X41 D-Sec]: https://www.x41-dsec.de/
+[Sovereign Tech Agency]: https://www.sovereign.tech/
 
 
 ## 0.15.1 ‘Ain’t No Country Club Either’

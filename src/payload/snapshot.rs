@@ -241,7 +241,7 @@ impl<'a> arbitrary::Arbitrary<'a> for PayloadCollection<RouteOrigin> {
         u: &mut arbitrary::Unstructured<'a>
     ) -> arbitrary::Result<Self> {
         let mut vec = Vec::<(RouteOrigin, PayloadInfo)>::arbitrary(u)?;
-        vec.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        vec.sort_unstable_by_key(|left| left.0);
         vec.dedup_by(|left, right| left.0 == right.0);
         Ok(Self { vec })
     }
