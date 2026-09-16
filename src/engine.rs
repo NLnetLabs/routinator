@@ -45,7 +45,7 @@ use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
 use crate::error::{Failed, Fatal, RunFailed};
-use crate::log::{LogBook, LogBookWriter};
+use crate::log::{LogBook, LogBookWriter, Logger};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
 };
@@ -121,7 +121,7 @@ pub struct Engine {
     max_ca_depth: usize,
 
     /// Should we log repository issues to the process log?
-    log_repository_issues: bool,
+    repository_logger: Option<Arc<Logger>>,
 }
 
 impl Engine {
@@ -155,6 +155,8 @@ impl Engine {
             None
         };
         let store = Store::new(config)?;
+        let repository_logger = 
+            Logger::make_logger(config.repository_log_target.clone())?;
         let mut res = Engine {
             bundled_tals: tals::collect_tals(config)?,
             extra_tals_dir: config.extra_tals_dir.clone(),
@@ -167,7 +169,7 @@ impl Engine {
             validation_threads: config.validation_threads,
             dirty_repository: config.dirty_repository,
             max_ca_depth: config.max_ca_depth,
-            log_repository_issues: config.log_repository_issues,
+            repository_logger,
         };
         res.reload_tals()?;
         Ok(res)
@@ -675,9 +677,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             run, cert, processor, repository_index,
             metrics: Default::default(),
             log: LogBookWriter::new(
-                run.validation.log_repository_issues.then(|| {
+                run.validation.repository_logger.is_some().then(|| {
                     format!("{}: ", cert.ca_repository())
-                })
+                }),
+                run.validation.repository_logger.clone()
             ),
         })
     }

@@ -5,7 +5,7 @@ use std::{fmt, fs, io, mem, process, slice};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::{Arc, OnceLock};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{LevelFilter, Record, error};
@@ -65,9 +65,6 @@ impl<'a> IntoIterator for &'a LogBook {
 }
 
 
-pub(crate) static REPOSITORY_LOGGER: LazyLock<RwLock<Option<Arc<Logger>>>> = 
-    LazyLock::new(|| RwLock::new(None));
-
 //------------ LogBookWriter -------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -79,6 +76,8 @@ pub struct LogBookWriter {
     ///
     /// If this is `None`, we don’t write to the process log.
     process_prefix: Option<String>,
+
+    repository_logger: Option<Arc<Logger>>,
 }
 
 impl LogBookWriter {
@@ -91,10 +90,12 @@ impl LogBookWriter {
     /// a separator has to be part of the prefix.
     pub fn new(
         process_prefix: Option<String>, 
+        repository_logger: Option<Arc<Logger>>,
     ) -> Self {
         Self {
             book: Default::default(),
             process_prefix,
+            repository_logger,
         }
     }
 
@@ -165,19 +166,22 @@ impl LogBookWriter {
         self.book.messages.push(
             LogMessage::from_record(record, repository_level)
         );
-        if let Some(repository_logger) = REPOSITORY_LOGGER.read().clone() {
-            repository_logger.log(record);
-        }
         if let Some(prefix) = self.process_prefix.as_ref() {
-            logger.log(
-                &log::Record::builder()
-                    .args(format_args!("{}{}", prefix, record.args()))
-                    .metadata(record.metadata().clone())
-                    .module_path(record.module_path())
-                    .file(record.file())
-                    .line(record.line())
-                    .build()
-            );
+            if let Some(repository_logger) = self.repository_logger.as_ref() {
+                let metadata = log::Metadata::builder()
+                    .target(record.metadata().target())
+                    .level(repository_level)
+                    .build();
+                repository_logger.log(
+                    &log::Record::builder()
+                        .args(format_args!("{}{}", prefix, record.args()))
+                        .metadata(metadata)
+                        .module_path(record.module_path())
+                        .file(record.file())
+                        .line(record.line())
+                        .build()
+                );
+            }
         }
     }
 }
@@ -186,6 +190,7 @@ impl LogBookWriter {
 //------------ Logger --------------------------------------------------------
 
 /// Format and write log messages.
+#[derive(Debug)]
 pub struct Logger {
     /// Where to write messages to.
     target: Mutex<LogBackend>,
@@ -198,6 +203,7 @@ pub struct Logger {
 }
 
 /// The actual target for logging
+#[derive(Debug)]
 enum LogBackend {
     #[cfg(unix)]
     Syslog(SyslogLogger),
@@ -301,6 +307,21 @@ impl Logger {
             output,
             log_level,
         })
+    }
+
+    pub fn make_logger(
+        log_target: Option<LogTarget>
+    ) -> Result<Option<Arc<Logger>>, Failed> {
+        if let Some(log_target) = log_target {
+            Ok(Some(Arc::new(Logger::new_target(
+                log_target, 
+                log::LevelFilter::Info, 
+                false, 
+                None
+            )?)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Creates a syslog target.
@@ -493,6 +514,13 @@ impl Logger {
 struct SyslogLogger(
     syslog::Logger<syslog::LoggerBackend, syslog::Formatter3164>
 );
+
+#[cfg(unix)]
+impl Debug for SyslogLogger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SyslogLogger").field(&"not implemented").finish()
+    }
+}
 
 #[cfg(unix)]
 impl SyslogLogger {

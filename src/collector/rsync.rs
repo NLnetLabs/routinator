@@ -31,7 +31,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::{Failed, Fatal};
-use crate::log::LogBookWriter;
+use crate::log::{LogBookWriter, Logger};
 use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::fatal;
 use crate::utils::sync::{Mutex, RwLock};
@@ -56,7 +56,7 @@ pub struct Collector {
     filter_dubious: bool,
 
     /// Whether to log issues also to the process log?
-    log_repository_issues: bool,
+    repository_logger: Option<Arc<Logger>>,
 }
  
 
@@ -109,7 +109,8 @@ impl Collector {
                 ),
                 command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts,
-                log_repository_issues: config.log_repository_issues,
+                repository_logger: 
+                    Logger::make_logger(config.repository_log_target.clone())?,
             }))
         }
     }
@@ -290,9 +291,10 @@ impl<'a> Run<'a> {
         }
 
         let mut log = LogBookWriter::new(
-            self.collector.log_repository_issues.then(|| {
+            self.collector.repository_logger.is_some().then(|| {
                 format!("rsync {}: ", module)
-            })
+            }),
+            self.collector.repository_logger.clone()
         );
 
         // Check if the module name is dubious. If so, skip updating.
