@@ -65,8 +65,8 @@ impl<'a> IntoIterator for &'a LogBook {
 }
 
 
-pub(crate) static REPOSITORY_LOGGER: LazyLock<Mutex<Option<Arc<Logger>>>> = 
-    LazyLock::new(|| Mutex::new(None));
+pub(crate) static REPOSITORY_LOGGER: LazyLock<RwLock<Option<Arc<Logger>>>> = 
+    LazyLock::new(|| RwLock::new(None));
 
 //------------ LogBookWriter -------------------------------------------------
 
@@ -165,7 +165,7 @@ impl LogBookWriter {
         self.book.messages.push(
             LogMessage::from_record(record, repository_level)
         );
-        if let Some(repository_logger) = REPOSITORY_LOGGER.lock().clone() {
+        if let Some(repository_logger) = REPOSITORY_LOGGER.read().clone() {
             repository_logger.log(record);
         }
         if let Some(prefix) = self.process_prefix.as_ref() {

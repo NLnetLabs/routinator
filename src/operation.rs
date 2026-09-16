@@ -237,7 +237,7 @@ impl Server {
                 None
             );
             if let Ok(logger) = logger {
-                let mut global_log = crate::log::REPOSITORY_LOGGER.lock();
+                let mut global_log = crate::log::REPOSITORY_LOGGER.write();
                 *global_log = Some(Arc::new(logger));
             }
         }
@@ -687,7 +687,7 @@ impl Vrps {
                 None
             );
             if let Ok(logger) = logger {
-                let mut global_log = crate::log::REPOSITORY_LOGGER.lock();
+                let mut global_log = crate::log::REPOSITORY_LOGGER.write();
                 *global_log = Some(Arc::new(logger));
             }
         }
