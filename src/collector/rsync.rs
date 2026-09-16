@@ -110,7 +110,10 @@ impl Collector {
                 command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts,
                 repository_logger: 
-                    Logger::make_logger(config.repository_log_target.clone())?,
+                    Logger::make_logger(
+                        config.repository_log_target.clone(),
+                        config.log_level
+                    )?,
             }))
         }
     }

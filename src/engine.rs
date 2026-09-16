@@ -155,8 +155,10 @@ impl Engine {
             None
         };
         let store = Store::new(config)?;
-        let repository_logger = 
-            Logger::make_logger(config.repository_log_target.clone())?;
+        let repository_logger = Logger::make_logger(
+            config.repository_log_target.clone(),
+            config.log_level
+        )?;
         let mut res = Engine {
             bundled_tals: tals::collect_tals(config)?,
             extra_tals_dir: config.extra_tals_dir.clone(),

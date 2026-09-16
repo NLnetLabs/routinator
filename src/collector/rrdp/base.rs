@@ -634,7 +634,10 @@ impl RrdpConfig {
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
             max_delta_list_len: config.rrdp_max_delta_list_len,
-            repository_logger: Logger::make_logger(config.repository_log_target.clone())?,
+            repository_logger: Logger::make_logger(
+                config.repository_log_target.clone(),
+                config.log_level
+            )?,
         })
     }
 }

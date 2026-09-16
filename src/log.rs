@@ -1,7 +1,7 @@
 //! Logging.
 
 use std::fmt::Debug;
-use std::{fmt, fs, io, mem, process, slice};
+use std::{cmp, fmt, fs, io, mem, process, slice};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -310,12 +310,13 @@ impl Logger {
     }
 
     pub fn make_logger(
-        log_target: Option<LogTarget>
+        log_target: Option<LogTarget>,
+        log_level: LevelFilter,
     ) -> Result<Option<Arc<Logger>>, Failed> {
         if let Some(log_target) = log_target {
             Ok(Some(Arc::new(Logger::new_target(
                 log_target, 
-                log::LevelFilter::Info, 
+                cmp::max(log::LevelFilter::Info, log_level), 
                 false, 
                 None
             )?)))
