@@ -126,9 +126,7 @@ impl LogBookWriter {
         repository_level: log::Level,
         args: fmt::Arguments<'_>
     ) {
-        if  level <= log::max_level() || 
-            repository_level <= self.max_repository_level 
-        {
+        if repository_level <= self.max_repository_level {
             self.log_record(
                 &log::Record::builder().level(level).args(args).build(),
                 repository_level
@@ -166,13 +164,6 @@ impl LogBookWriter {
         record: &Record<'_>, 
         repository_level: log::Level
     ) {
-        let logger = log::logger();
-
-        // We use the level filter from the global log which should be set
-        // up correctly according to our configuration.
-        if !logger.enabled(record.metadata()) {
-            return
-        }
         self.book.messages.push(
             LogMessage::from_record(record, repository_level)
         );
