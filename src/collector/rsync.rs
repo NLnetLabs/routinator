@@ -57,6 +57,9 @@ pub struct Collector {
 
     /// The logger to use for repository issues (if any)
     repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
  
 
@@ -112,8 +115,9 @@ impl Collector {
                 repository_logger: 
                     Logger::make_logger(
                         config.repository_log_target.clone(),
-                        config.log_level
+                        config.repository_log_level
                     )?,
+                max_repository_level: config.repository_log_level
             }))
         }
     }
@@ -297,7 +301,8 @@ impl<'a> Run<'a> {
             self.collector.repository_logger.is_some().then(|| {
                 format!("rsync {}: ", module)
             }),
-            self.collector.repository_logger.clone()
+            self.collector.repository_logger.clone(),
+            self.collector.max_repository_level,
         );
 
         // Check if the module name is dubious. If so, skip updating.

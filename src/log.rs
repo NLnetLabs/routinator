@@ -72,12 +72,18 @@ pub struct LogBookWriter {
     /// The book to write messages to.
     book: LogBook,
 
-    /// The prefix for writing messages to the process log.
-    ///
-    /// If this is `None`, we don’t write to the process log.
+    /// The prefix for writing messages.
+    /// 
+    /// If it is none we do not write to the log.
     process_prefix: Option<String>,
 
+    /// The logger for writing messages.
+    /// 
+    /// If it is none we do not write to the log.
     repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to show repository messages for
+    max_repository_level: LevelFilter,
 }
 
 impl LogBookWriter {
@@ -91,11 +97,13 @@ impl LogBookWriter {
     pub fn new(
         process_prefix: Option<String>, 
         repository_logger: Option<Arc<Logger>>,
+        max_repository_level: LevelFilter,
     ) -> Self {
         Self {
             book: Default::default(),
             process_prefix,
             repository_logger,
+            max_repository_level,
         }
     }
 
@@ -118,7 +126,9 @@ impl LogBookWriter {
         repository_level: log::Level,
         args: fmt::Arguments<'_>
     ) {
-        if level <= log::max_level() || repository_level <= log::max_level() {
+        if  level <= log::max_level() || 
+            repository_level <= self.max_repository_level 
+        {
             self.log_record(
                 &log::Record::builder().level(level).args(args).build(),
                 repository_level

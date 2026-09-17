@@ -440,7 +440,8 @@ impl<'a> Run<'a> {
             self.collector.config.repository_logger.is_some().then(|| {
                 format!("RRDP {}: ", rpki_notify)
             }),
-            self.collector.config.repository_logger.clone()
+            self.collector.config.repository_logger.clone(),
+            self.collector.config.max_repository_level,
         );
 
         // Now we can update the repository. But we only do this if we like
@@ -632,8 +633,11 @@ pub struct RrdpConfig {
     /// The maximum length of the delta list in a notification file.
     pub max_delta_list_len: usize,
 
-    /// Log issues also to the process log?
+    /// The logger for repository messages
     pub repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
 
 impl RrdpConfig {
@@ -646,8 +650,9 @@ impl RrdpConfig {
             max_delta_list_len: config.rrdp_max_delta_list_len,
             repository_logger: Logger::make_logger(
                 config.repository_log_target.clone(),
-                config.log_level
+                config.repository_log_level
             )?,
+            max_repository_level: config.repository_log_level,
         })
     }
 }

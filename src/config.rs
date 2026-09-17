@@ -348,6 +348,9 @@ pub struct Config {
     /// The target to log to.
     pub log_target: LogTarget,
 
+    /// The log levels to be logged for repository messages
+    pub repository_log_level: LevelFilter,
+
     /// The target to log repository messages to.
     pub repository_log_target: Option<LogTarget>,
 
@@ -1073,6 +1076,10 @@ impl Config {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target,
+            repository_log_level: {
+                file.take_from_str("repository-log-level")?
+                    .unwrap_or(LevelFilter::Info)
+            },
             repository_log_target,
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
@@ -1335,6 +1342,7 @@ impl Config {
             http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
+            repository_log_level: LevelFilter::Info,
             repository_log_target: None,
             pid_file: None,
             working_dir: None,
@@ -1632,6 +1640,11 @@ impl Config {
             }
         }
         if let Some(repository_log_target) = &self.repository_log_target {
+            insert(
+                &mut res, 
+                "repository-log-level", 
+                self.repository_log_level.to_string()
+            );
             match repository_log_target {
                 #[cfg(unix)]
                 LogTarget::Default(facility) => {

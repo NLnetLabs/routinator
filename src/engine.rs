@@ -122,6 +122,9 @@ pub struct Engine {
 
     /// The logger to use for repository issues (if any)
     repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
 
 impl Engine {
@@ -157,7 +160,7 @@ impl Engine {
         let store = Store::new(config)?;
         let repository_logger = Logger::make_logger(
             config.repository_log_target.clone(),
-            config.log_level
+            config.repository_log_level
         )?;
         let mut res = Engine {
             bundled_tals: tals::collect_tals(config)?,
@@ -172,6 +175,7 @@ impl Engine {
             dirty_repository: config.dirty_repository,
             max_ca_depth: config.max_ca_depth,
             repository_logger,
+            max_repository_level: config.repository_log_level,
         };
         res.reload_tals()?;
         Ok(res)
@@ -682,7 +686,8 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 run.validation.repository_logger.is_some().then(|| {
                     format!("{}: ", cert.ca_repository())
                 }),
-                run.validation.repository_logger.clone()
+                run.validation.repository_logger.clone(),
+                run.validation.max_repository_level,
             ),
         })
     }
