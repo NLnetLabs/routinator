@@ -1,6 +1,7 @@
 //! Logging.
 
-use std::{fmt, fs, io, mem, process, slice};
+use std::fmt::Debug;
+use std::{cmp, fmt, fs, io, mem, process, slice};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -21,14 +22,19 @@ use crate::utils::sync::{Mutex, RwLock};
 pub struct LogMessage {
     pub when: DateTime<Utc>,
     pub level: log::Level,
+    pub repository_level: log::Level,
     pub content: String,
 }
 
 impl LogMessage {
-    fn from_record(record: &Record<'_>) -> Self {
+    fn from_record(
+        record: &Record<'_>, 
+        repository_level: log::Level
+    ) -> Self {
         Self {
             when: Utc::now(),
             level: record.level(),
+            repository_level,
             content: record.args().to_string(),
         }
     }
@@ -66,10 +72,18 @@ pub struct LogBookWriter {
     /// The book to write messages to.
     book: LogBook,
 
-    /// The prefix for writing messages to the process log.
-    ///
-    /// If this is `None`, we don’t write to the process log.
+    /// The prefix for writing messages.
+    /// 
+    /// If it is none we do not write to the log.
     process_prefix: Option<String>,
+
+    /// The logger for writing messages.
+    /// 
+    /// If it is none we do not write to the log.
+    repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to show repository messages for
+    max_repository_level: LevelFilter,
 }
 
 impl LogBookWriter {
@@ -80,10 +94,16 @@ impl LogBookWriter {
     /// is the prefix exactly, i.e., there will not be white space or
     /// characters separating the prefix from the actual log output. Such
     /// a separator has to be part of the prefix.
-    pub fn new(process_prefix: Option<String>) -> Self {
+    pub fn new(
+        process_prefix: Option<String>, 
+        repository_logger: Option<Arc<Logger>>,
+        max_repository_level: LevelFilter,
+    ) -> Self {
         Self {
             book: Default::default(),
             process_prefix,
+            repository_logger,
+            max_repository_level,
         }
     }
 
@@ -100,52 +120,69 @@ impl LogBookWriter {
         self.book
     }
 
-    pub fn log(&mut self, level: log::Level, args: fmt::Arguments<'_>) {
-        self.log_record(
-            &log::Record::builder().level(level).args(args).build()
-        )
+    pub fn log(
+        &mut self, 
+        level: log::Level, 
+        repository_level: log::Level,
+        args: fmt::Arguments<'_>
+    ) {
+        if repository_level <= self.max_repository_level {
+            self.log_record(
+                &log::Record::builder().level(level).args(args).build(),
+                repository_level
+            )
+        }
     }
 
     pub fn trace(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Trace, args);
+        self.log(log::Level::Trace, log::Level::Trace, args);
     }
 
     pub fn debug(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Debug, args);
+        self.log(log::Level::Debug, log::Level::Debug, args);
     }
 
     pub fn info(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Info, args);
+        self.log(log::Level::Info, log::Level::Info, args);
     }
 
+    // The log level set to Info is intentional. We do not want to show a
+    // warning in the logging when it is the repository's fault
     pub fn warn(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Info, args);
+        self.log(log::Level::Info, log::Level::Warn, args);
     }
 
+    // The log level set to Info is intentional. We do not want to show an
+    // error in the logging when it is the repository's fault
     pub fn error(&mut self, args: fmt::Arguments<'_>) {
-        self.log(log::Level::Error, args);
+        self.log(log::Level::Info, log::Level::Error, args);
     }
 
     /// Writes a log record.
-    pub fn log_record(&mut self, record: &Record<'_>) {
-        let logger = log::logger();
-
-        // We use the level filter from the global log which should be set
-        // up correctly according to our configuration.
-        if !logger.enabled(record.metadata()) {
-            return
-        }
-        self.book.messages.push(LogMessage::from_record(record));
+    pub fn log_record(
+        &mut self, 
+        record: &Record<'_>, 
+        repository_level: log::Level
+    ) {
+        self.book.messages.push(
+            LogMessage::from_record(record, repository_level)
+        );
         if let Some(prefix) = self.process_prefix.as_ref() {
-            logger.log(
-                &log::Record::builder()
-                    .args(format_args!("{}{}", prefix, record.args()))
-                    .metadata(record.metadata().clone())
-                    .module_path(record.module_path())
-                    .file(record.file())
-                    .line(record.line())
-                    .build()
-            );
+            if let Some(repository_logger) = self.repository_logger.as_ref() {
+                let metadata = log::Metadata::builder()
+                    .target(record.metadata().target())
+                    .level(repository_level)
+                    .build();
+                repository_logger.log(
+                    &log::Record::builder()
+                        .args(format_args!("{}{}", prefix, record.args()))
+                        .metadata(metadata)
+                        .module_path(record.module_path())
+                        .file(record.file())
+                        .line(record.line())
+                        .build()
+                );
+            }
         }
     }
 }
@@ -154,6 +191,7 @@ impl LogBookWriter {
 //------------ Logger --------------------------------------------------------
 
 /// Format and write log messages.
+#[derive(Debug)]
 pub struct Logger {
     /// Where to write messages to.
     target: Mutex<LogBackend>,
@@ -166,6 +204,7 @@ pub struct Logger {
 }
 
 /// The actual target for logging
+#[derive(Debug)]
 enum LogBackend {
     #[cfg(unix)]
     Syslog(SyslogLogger),
@@ -229,7 +268,21 @@ impl Logger {
     fn new(
         config: &Config, daemon: bool, output: Option<Arc<Mutex<String>>>
     ) -> Result<Self, Failed> {
-        let target = match config.log_target {
+        Self::new_target(
+            config.log_target.clone(), 
+            config.log_level, 
+            daemon, 
+            output
+        )
+    }
+
+    pub(crate) fn new_target(
+        log_target: LogTarget, 
+        log_level: log::LevelFilter, 
+        daemon: bool, 
+        output: Option<Arc<Mutex<String>>>
+    ) -> Result<Self, Failed> {
+        let target = match log_target {
             #[cfg(unix)]
             LogTarget::Default(facility) => {
                 if daemon { 
@@ -253,8 +306,24 @@ impl Logger {
         Ok(Self {
             target: Mutex::new(target),
             output,
-            log_level: config.log_level,
+            log_level,
         })
+    }
+
+    pub fn make_logger(
+        log_target: Option<LogTarget>,
+        log_level: LevelFilter,
+    ) -> Result<Option<Arc<Logger>>, Failed> {
+        if let Some(log_target) = log_target {
+            Ok(Some(Arc::new(Logger::new_target(
+                log_target, 
+                cmp::max(log::LevelFilter::Info, log_level), 
+                false, 
+                None
+            )?)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Creates a syslog target.
@@ -447,6 +516,13 @@ impl Logger {
 struct SyslogLogger(
     syslog::Logger<syslog::LoggerBackend, syslog::Formatter3164>
 );
+
+#[cfg(unix)]
+impl Debug for SyslogLogger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SyslogLogger").field(&"not implemented").finish()
+    }
+}
 
 #[cfg(unix)]
 impl SyslogLogger {

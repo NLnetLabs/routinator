@@ -11,10 +11,11 @@ use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::NamedTempFile;
+use crate::Failed;
 use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
-use crate::log::LogBookWriter;
+use crate::log::{LogBookWriter, Logger};
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::archive::{ArchiveError, OpenError};
@@ -91,7 +92,7 @@ impl Collector {
         Ok(Some(Self {
             working_dir: Self::create_working_dir(config)?,
             http: HttpClient::new(config)?,
-            config: config.into(),
+            config: RrdpConfig::from_config(config)?,
         }))
     }
 
@@ -436,9 +437,11 @@ impl<'a> Run<'a> {
         }
 
         let mut log = LogBookWriter::new(
-            self.collector.config.log_repository_issues.then(|| {
+            self.collector.config.repository_logger.is_some().then(|| {
                 format!("RRDP {}: ", rpki_notify)
-            })
+            }),
+            self.collector.config.repository_logger.clone(),
+            self.collector.config.max_repository_level,
         );
 
         // Now we can update the repository. But we only do this if we like
@@ -630,20 +633,27 @@ pub struct RrdpConfig {
     /// The maximum length of the delta list in a notification file.
     pub max_delta_list_len: usize,
 
-    /// Log issues also to the process log?
-    pub log_repository_issues: bool,
+    /// The logger for repository messages
+    pub repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
 
-impl<'a> From<&'a Config> for RrdpConfig {
-    fn from(config: &'a Config) -> Self {
-        Self {
+impl RrdpConfig {
+    fn from_config(config: &Config) -> Result<Self, Failed> {
+        Ok(Self {
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
             max_delta_list_len: config.rrdp_max_delta_list_len,
-            log_repository_issues: config.log_repository_issues,
-        }
+            repository_logger: Logger::make_logger(
+                config.repository_log_target.clone(),
+                config.repository_log_level
+            )?,
+            max_repository_level: config.repository_log_level,
+        })
     }
 }
 
@@ -809,13 +819,13 @@ impl<'a> RepositoryUpdate<'a> {
             LoadResult::Current
         }
         else if let Some(date) = best_before {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and current copy is expired since {date}.",
             ));
             LoadResult::Stale
         }
         else {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and there is no current copy."
             ));
             LoadResult::Unavailable
@@ -1033,7 +1043,7 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        self.log.debug(format_args!("Delta update completed."));
+        self.log.info(format_args!("Delta update completed."));
         Ok(None)
     }
 
