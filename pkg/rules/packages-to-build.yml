@@ -8,7 +8,6 @@ image:
   - "ubuntu:jammy"    # ubuntu/22.04
   - "ubuntu:noble"    # ubuntu/24.04
   - "ubuntu:resolute"    # ubuntu/26.04
-  - "debian:bullseye" # debian/11
   - "debian:bookworm" # debian/12
   - "debian:trixie"   # debian/13
   - 'almalinux:8'    # compatible with EOL centos:8
@@ -67,23 +66,6 @@ include:
   # Raspbian 12 is based.
   - pkg: 'routinator'
     image: 'debian:bookworm'
-    target: 'aarch64-unknown-linux-musl'
-
-  # package for the Raspberry Pi 4b as an ARMv7 cross compiled variant of the Debian Bullseye upon which
-  # Raspbian 11 is based.
-  - pkg: 'routinator'
-    image: 'debian:bullseye'
-    target: 'armv7-unknown-linux-musleabihf'
-
-  # package for the Raspberry Pi 1b as an ARMv6 cross compiled variant of the Debian Buster upon which
-  # Raspbian 10 is based.
-  - pkg: 'routinator'
-    image: 'debian:buster'
-    target: 'arm-unknown-linux-musleabihf'
-
-  # package for the ROCK64 as an AARCH64 cross compiled variant of Debian Buster upon which Armbian 21 is based.
-  - pkg: 'routinator'
-    image: 'debian:buster'
     target: 'aarch64-unknown-linux-musl'
 
   # the include entries below will not cause additional packages to be built because they specify combinations
