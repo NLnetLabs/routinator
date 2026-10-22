@@ -4,7 +4,7 @@ use std::error::Error;
 
 
 /// Unroll the error sources to get a full error message.
-pub fn unroll_error(err: &dyn Error) -> String {
+pub fn unroll_error(err: impl Error) -> String {
     let mut errors = Vec::new();
 
     let mut source = err.source();
