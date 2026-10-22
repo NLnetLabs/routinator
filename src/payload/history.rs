@@ -184,12 +184,9 @@ impl PayloadSource for SharedHistory {
         ).unwrap_or(u32::MAX);
 
         // Ranges from RFC 8210 section 6
-        res.refresh = cmp::max(res.refresh, 1);
-        res.refresh = cmp::min(res.refresh, 86400);
-        res.retry = cmp::max(res.retry, 1);
-        res.retry = cmp::min(res.retry, 7200);
-        res.expire = cmp::max(res.expire, 600);
-        res.expire = cmp::min(res.expire, 172800);
+        res.refresh = res.refresh.clamp(1, 86400);
+        res.retry = res.retry.clamp(1, 7200);
+        res.expire = res.expire.clamp(600, 172800);
         res
     }
 }
