@@ -8,7 +8,7 @@ Breaking changes
 `--enable-aspa` and `--enable-bgpsec` have been replaced with `--disable-aspa`
 and `--disable-bgpsec`. 
 * Strict mode is now enabled by default. `--strict` has been replaced with
-`--disable-strict`.
+`--relaxed`.
 
 New
 

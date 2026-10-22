@@ -483,7 +483,7 @@ impl Config {
         }
 
         // strict
-        if args.disable_strict {
+        if args.relaxed {
             self.strict = false
         }
 
@@ -1805,9 +1805,9 @@ struct GlobalArgs {
     #[arg(short = 'x', long, value_name="PATH")]
     exceptions: Option<Vec<PathBuf>>,
 
-    /// Parse RPKI data in strict mode
+    /// Parse RPKI data in relaxed mode
     #[arg(long)]
-    disable_strict: bool,
+    relaxed: bool,
 
     /// The policy for handling stale objects
     #[arg(long, value_name = "POLICY")]

@@ -102,7 +102,7 @@ The available options are:
       should be filtered out of the output as well as origins that should be
       added.
 
-.. option:: --disable-strict
+.. option:: --relaxed
 
       If this option is present, the repository won't be validated in strict
       mode following the requirements laid out by the standard documents very
