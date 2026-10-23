@@ -780,6 +780,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // First, report its validity to the processor.
         collected.point_validity(&mut self.processor);
 
+        // Process detached objects first.
+        self.processor.process_detached(
+            self.cert, |cert| collected.check_crl(cert)
+        )?;
+
         // We can look at the objects now. The objects are fine if they are
         // present and match the hash. If they don’t we have to cancel the
         // update. We also validate them while we are at it. This also
@@ -1205,6 +1210,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
 
         manifest.point_validity(&mut self.processor);
 
+        self.processor.process_detached(
+            self.cert, |cert| manifest.check_crl(cert)
+        )?;
+
         let mut ca_tasks = Vec::new();
         for object in &mut store {
             let object = match object {
@@ -1446,7 +1455,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.process_gbr(uri, content, manifest)?;
         }
         else if uri.ends_with(".crl") {
-            self.process_crl(uri, content, manifest)?;
+            if *uri != manifest.crl_uri {
+                self.log.warn(format_args!("stray CRL {uri}."));
+                manifest.metrics.stray_crls += 1;
+            }
         }
         else {
             manifest.metrics.others += 1;
@@ -1690,43 +1702,6 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                 ))
             }
         }
-        Ok(())
-    }
-
-    /// Processes a CRL.
-    fn process_crl(
-        &mut self, uri: &uri::Rsync, content: Bytes,
-        manifest: &mut ValidPointManifest,
-    ) -> Result<(), Failed> {
-        if *uri != manifest.crl_uri {
-            self.log.warn(format_args!("stray CRL {uri}."));
-            manifest.metrics.stray_crls += 1;
-        }
-        let crl = match Crl::decode(
-            content
-        ) {
-            Ok(crl) => crl,
-            Err(_) => {
-                self.log.warn(format_args!("undecodable CRL {uri}."));
-                return Ok(());
-            }
-        };
-
-        // XXX It feels neater to verify the signature here, even though in
-        // most cases `self.processor.process_crl` is a no-op, as otherwise
-        // a potentially invalid CRL might be passed on.
-        if crl.verify_signature(
-            self.cert.cert().subject_public_key_info()
-        ).is_err() {
-            self.log.warn(format_args!("signature mismatch CRL {uri}."));
-            return Ok(());
-        }
-
-        self.processor.process_crl(
-            uri, 
-            self.cert.cert().clone(), 
-            crl
-        )?;
         Ok(())
     }
 }
@@ -2212,6 +2187,20 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         let _ = (manifest_ee, stale);
     }
 
+    /// Processes detached objects.
+    ///
+    /// The method is given the CA certificate and a way to check if
+    /// a certificate issued by the CA has been revoked.
+    fn process_detached<F>(
+        &mut self,
+        cert: &CaCert,
+        check_crl: F
+    ) -> Result<(), Failed>
+    where F: Fn(&Cert) -> Result<(), ValidationError> {
+        let _ = (cert, check_crl);
+        Ok(())
+    }
+
     /// Determines whether an object with the given URI should be processed.
     ///
     /// The object will only be processed if the method returns `Ok(true)`.
@@ -2286,15 +2275,6 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         content: Bytes
     ) -> Result<(), Failed> {
         let _ = (uri, cert, content);
-        Ok(())
-    }
-
-    fn process_crl(
-        &mut self, 
-        _uri: &uri::Rsync, 
-        _cert: ResourceCert, 
-        _crl: Crl,
-    ) -> Result<(), Failed> {
         Ok(())
     }
 

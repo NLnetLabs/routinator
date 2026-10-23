@@ -1,7 +1,8 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use rpki::uri::{self};
-use rpki::repository::rsc;
-use rpki::repository::cert::ResourceCert;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
+use rpki::uri;
+use rpki::repository::cert::Cert;
 use rpki::repository::error::ValidationError;
 use rpki::repository::rsc::{ResourceSignedChecklist, Rsc};
 use rpki::repository::tal::{Tal, TalUri};
@@ -15,11 +16,10 @@ use crate::error::{Failed, RunFailed};
 /// The result of an RSC validation run.
 #[derive(Debug)]
 pub struct ValidationReport {
-    rsc: rsc::Rsc,
-    matched: AtomicBool,
-    crl_found: AtomicBool,
-    crl_failure: AtomicBool,
+    rsc: Rsc,
     strict: bool,
+    result: OnceLock<ResourceSignedChecklist>,
+    done: AtomicBool,
 }
 
 impl ValidationReport {
@@ -28,11 +28,10 @@ impl ValidationReport {
     ) -> Result<Self, ValidationError> {
         rsc.signed().cert().inspect_detached_ee(config.strict)?;
         Ok(Self {
-            rsc: rsc.clone(),
-            matched: AtomicBool::new(false),
-            crl_found: AtomicBool::new(false),
-            crl_failure: AtomicBool::new(false),
-            strict: config.strict
+            rsc,
+            strict: config.strict,
+            result: OnceLock::new(),
+            done: AtomicBool::new(false),
         })
     }
 
@@ -47,22 +46,15 @@ impl ValidationReport {
     }
 
     pub fn finalize(self) -> Result<ResourceSignedChecklist, Failed> {
-        if self.matched.load(Ordering::Relaxed)
-            && !self.crl_failure.load(Ordering::Relaxed) {
-            Ok(self.rsc.content().clone())
-        } else {
-            Err(Failed)
-        }
+        self.result.into_inner().ok_or(Failed)
     }
-}
 
-impl ValidationReport {
-    fn supply_tal(&self, _tal: &Tal) -> Result<bool, ValidationError> {
-        if self.matched.load(Ordering::Relaxed) {
-            return Ok(true);
-        }
+    pub fn is_done(&self) -> bool {
+        self.done.load(Relaxed)
+    }
 
-        Ok(false)
+    pub fn mark_done(&self) {
+        self.done.store(true, Relaxed);
     }
 }
 
@@ -70,25 +62,20 @@ impl<'s> ProcessRun for &'s ValidationReport {
     type PubPoint = ValidateCa<'s>;
 
     fn process_ta(
-        &self, tal: &Tal, _uri: &TalUri, _cert: &CaCert,
+        &self, _tal: &Tal, _uri: &TalUri, _cert: &CaCert,
         _tal_index: usize
     ) -> Result<Option<Self::PubPoint>, Failed> {
-
-        match self.supply_tal(tal) {
-            Ok(true) | Err(_) => {
-                self.matched.store(true, Ordering::Relaxed);
-                Ok(None)
-            }
-            Ok(false) => {
-                Ok(Some(ValidateCa::new(self)))
-            }
+        if self.is_done() {
+            return Ok(None)
         }
+        Ok(Some(ValidateCa::new(self)))
     }
 }
 
 
 //------------ ValidateCa ----------------------------------------------------
 
+#[derive(Clone, Copy)]
 pub struct ValidateCa<'s> {
     report: &'s ValidationReport,
 }
@@ -99,70 +86,50 @@ impl<'s> ValidateCa<'s> {
             report
         }
     }
-
-    fn supply_ca(&self, ca: &ResourceCert) -> Result<bool, ValidationError> {
-        if self.report.matched.load(Ordering::Relaxed)
-         && self.report.crl_found.load(Ordering::Relaxed) {
-            return Ok(true);
-        }
-
-        let cert = self.report.rsc.signed().cert().clone();
-        let strict = self.report.strict;
-
-        if cert.authority_key_identifier().is_none() {
-            return Ok(false);
-        }
-
-        cert.inspect_detached_ee(strict)?;
-        ca.inspect_ca(strict)?;
-        cert.verify_ee(ca, strict)?;
-
-        self.report.matched.store(true, Ordering::Relaxed);
-        Ok(true)
-    }
 }
 
 impl ProcessPubPoint for ValidateCa<'_> {
-    fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
-        Ok(uri.ends_with(".cer") || uri.ends_with(".crl"))
+    fn want(&self, _uri: &uri::Rsync) -> Result<bool, Failed> {
+        Ok(false)
     }
 
-    fn process_ca(
-        &mut self, _uri: &uri::Rsync, cert: &CaCert,
-    ) -> Result<Option<Self>, Failed> {
-        if self.report.matched.load(Ordering::Relaxed)
-         && self.report.crl_found.load(Ordering::Relaxed) {
-            return Ok(None)
-        }
-        if let Ok(true) = self.supply_ca(cert.cert()) {
-            self.report.matched.store(true, Ordering::Relaxed)
-        }
-        Ok(Some(Self { report: self.report }))
-    }
-
-    fn process_crl(
-        &mut self, 
-        uri: &uri::Rsync, 
-        _cert: ResourceCert, 
-        crl: rpki::repository::Crl,
-    ) -> Result<(), Failed> {
-        let  Some(rsc_crl_uri) = self.report.rsc.signed().cert().crl_uri() 
-        else {
-            return Ok(());
-        };
-
-        if rsc_crl_uri != uri {
-            return Ok(());
+    fn process_detached<F>(
+        &mut self,
+        ca_cert: &CaCert,
+        check_crl: F
+    ) -> Result<(), Failed>
+    where F: Fn(&Cert) -> Result<(), ValidationError> {
+        // Early return if we are done.
+        if self.report.is_done() {
+            return Ok(())
         }
 
-        self.report.crl_found.store(true, Ordering::Relaxed);
+        // Return early if the CA is not the issuer.
+        if !self.report.rsc.is_issuer(ca_cert.cert(), self.report.strict) {
+            return Ok(())
+        }
 
-        if crl.contains(self.report.rsc.signed().cert().serial_number()) {
-            self.report.crl_failure.store(true, Ordering::Relaxed);
+        // Process the RSC and remember the result.
+        let rsc = self.report.rsc.clone();
+        if let Ok((_, checklist)) = rsc.process(
+            ca_cert.cert(), self.report.strict, check_crl
+        ) {
+            // It’s fine if the result is set already, then the RSC validated
+            // twice.
+            let _ = self.report.result.set(checklist);
+            self.report.mark_done();
         }
 
         Ok(())
-    
+    }
+
+    fn process_ca(
+        &mut self, _uri: &uri::Rsync, _cert: &CaCert,
+    ) -> Result<Option<Self>, Failed> {
+        if self.report.is_done() {
+            return Ok(None)
+        }
+        Ok(Some(*self))
     }
 
     fn restart(&mut self) -> Result<(), Failed> {
@@ -170,6 +137,6 @@ impl ProcessPubPoint for ValidateCa<'_> {
     }
 
     fn commit(self) {
-
     }
 }
+
