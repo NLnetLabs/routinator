@@ -348,8 +348,11 @@ pub struct Config {
     /// The target to log to.
     pub log_target: LogTarget,
 
-    /// Should we log repository issues?
-    pub log_repository_issues: bool,
+    /// The log levels to be logged for repository messages
+    pub repository_log_level: LevelFilter,
+
+    /// The target to log repository messages to.
+    pub repository_log_target: Option<LogTarget>,
 
     /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
@@ -668,11 +671,6 @@ impl Config {
             self.log_level = LevelFilter::Error
         }
 
-        // log_repository_issues
-        if args.log_repository_issues {
-            self.log_repository_issues = true
-        }
-
         Ok(())
     }
 
@@ -905,6 +903,8 @@ impl Config {
     /// Creates a base config from a config file.
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Failed> {
         let log_target = Self::log_target_from_config_file(&mut file)?;
+        let repository_log_target = 
+            Self::repository_log_target_from_config_file(&mut file)?;
         let res = Config {
             config_file: file.path.clone(),
             cache_dir: file.take_mandatory_path("repository-dir")?,
@@ -1076,9 +1076,11 @@ impl Config {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target,
-            log_repository_issues: {
-                file.take_bool("log-repository-issues")?.unwrap_or(false)
+            repository_log_level: {
+                file.take_from_str("repository-log-level")?
+                    .unwrap_or(LevelFilter::Info)
             },
+            repository_log_target,
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
@@ -1184,6 +1186,98 @@ impl Config {
         }
     }
 
+    /// Determines the logging target for repositories from the config file.
+    ///
+    /// The unix version
+    #[cfg(unix)]
+    fn repository_log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<Option<LogTarget>, Failed> {
+        let facility = file.take_string("repository-syslog-facility")?;
+        let facility = facility.as_ref().map(AsRef::as_ref)
+                               .unwrap_or("daemon");
+        let facility = match Facility::from_str(facility) {
+            Ok(value) => value,
+            Err(_) => {
+                error!(
+                    "Failed in config file {}: \
+                    invalid repository-syslog-facility.",
+                    file.path.display()
+                );
+                return Err(Failed);
+            }
+        };
+        let log_target = file.take_string("repository-log")?;
+        let log_file = file.take_path("repository-log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") => Ok(Some(LogTarget::Default(facility))),
+            Some("syslog") => Ok(Some(LogTarget::Syslog(facility))),
+            Some("stderr") =>  Ok(Some(LogTarget::Stderr)),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(Some(LogTarget::File(file))),
+                    None => {
+                        error!(
+                            "Failed in config file {}: \
+                             log target \"file\" requires \
+                             'repository-log-file' value.",
+                            file.path.display()
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            Some(value) => {
+                error!(
+                    "Failed in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Failed)
+            },
+            None => Ok(None),
+        }
+    }
+
+    /// Determines the logging target for repositories from the config file.
+    ///
+    /// The non-unix version
+    #[cfg(not(unix))]
+    fn repository_log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<Option<LogTarget>, Failed> {
+        let log_target = file.take_string("repository-log")?;
+        let log_file = file.take_path("repository-log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | Some("stderr") =>  Ok(Some(LogTarget::Stderr)),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(Some(LogTarget::File(file))),
+                    None => {
+                        error!(
+                            "Failed in config file {}: \
+                             log target \"file\" requires \
+                             'repository-log-file' value.",
+                            file.path.display()
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            Some(value) => {
+                error!(
+                    "Failed in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Failed)
+            },
+            None => Ok(None),
+        }
+    }
+
     /// Creates a default config with the given paths.
     ///
     /// Uses default values for everything except for the config file path
@@ -1248,7 +1342,8 @@ impl Config {
             http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
-            log_repository_issues: false,
+            repository_log_level: LevelFilter::Info,
+            repository_log_target: None,
             pid_file: None,
             working_dir: None,
             chroot: None,
@@ -1544,7 +1639,44 @@ impl Config {
                 insert(&mut  res, "log-file", file.display().to_string());
             }
         }
-        insert(&mut res, "log-repository-issues", self.log_repository_issues);
+        if let Some(repository_log_target) = &self.repository_log_target {
+            insert(
+                &mut res, 
+                "repository-log-level", 
+                self.repository_log_level.to_string()
+            );
+            match repository_log_target {
+                #[cfg(unix)]
+                LogTarget::Default(facility) => {
+                    insert(&mut res, "repository-log", "default");
+                    insert(
+                        &mut res, 
+                        "repository-syslog-facility", 
+                        facility_to_string(*facility)
+                    );
+                }
+                #[cfg(unix)]
+                LogTarget::Syslog(facility) => {
+                    insert(&mut res, "repository-log", "syslog");
+                    insert(
+                        &mut res, 
+                        "repository-syslog-facility", 
+                        facility_to_string(*facility)
+                    );
+                }
+                LogTarget::Stderr => {
+                    insert(&mut res, "repository-log", "stderr");
+                }
+                LogTarget::File(ref file) => {
+                    insert(&mut res, "repository-log", "file");
+                    insert(
+                        &mut  res, 
+                        "repository-log-file", 
+                        file.display().to_string()
+                    );
+                }
+            }
+        }
         if let Some(ref file) = self.pid_file {
             insert(&mut res, "pid-file", file.display().to_string());
         }
@@ -1950,10 +2082,6 @@ struct GlobalArgs {
     /// Log to this file
     #[arg(long, value_name = "PATH")]
     logfile: Option<String>,
-
-    /// Log repository issues
-    #[arg(long)]
-    log_repository_issues: bool,
 }
 
 
