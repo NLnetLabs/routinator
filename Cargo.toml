@@ -1,9 +1,10 @@
 [package]
 # Note: some of these values are also used when building Debian packages below.
 name = "routinator"
-version = "0.15.2-dev"
+version = "0.15.3-dev"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.87"
+resolver = "3"
 authors = ["NLnet Labs <rpki-team@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
 repository = "https://github.com/NLnetLabs/routinator"
@@ -46,7 +47,7 @@ uuid            = "1.1"
 
 
 [target.'cfg(unix)'.dependencies]
-nix             = { version = "0.30.1", features = ["fs", "mman", "net", "process", "socket", "user"] }
+nix             = { version = "0.31.3", features = ["fs", "mman", "net", "process", "socket", "user"] }
 syslog          = "7"
 
 [features]
@@ -94,19 +95,13 @@ systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable 
 [package.metadata.deb.variants.debian-trixie]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true }
 
+[package.metadata.deb.variants.debian-bookworm]
+systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true }
+
 [package.metadata.deb.variants.ubuntu-jammy]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
 
 [package.metadata.deb.variants.ubuntu-focal]
-systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
-
-[package.metadata.deb.variants.debian-buster]
-systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
-
-[package.metadata.deb.variants.debian-bullseye]
-systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
-
-[package.metadata.deb.variants.debian-bullseye-armv7-unknown-linux-musleabihf]
 systemd-units = { unit-name = "routinator", unit-scripts = "pkg/common", enable = true, usr-merge = false }
 
 [package.metadata.deb.variants.minimal]

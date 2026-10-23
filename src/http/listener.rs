@@ -6,12 +6,13 @@ use std::net::{SocketAddr, TcpListener as StdListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use futures::pin_mut;
 use futures::future::{pending, select_all};
 use hyper::service::service_fn;
 use hyper::Method;
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use log::error;
+use log::{error, warn};
 use rpki::rtr::server::NotifySender;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
@@ -125,8 +126,9 @@ async fn single_http_listener(
         let stream = match listener.accept().await {
             Ok(some) => some,
             Err(err) => {
-                error!("Fatal error in HTTP server {addr}: {err}");
-                break;
+                warn!("Accept error in HTTP server {addr}: {err}");
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
             }
         };
         let service_state = state.clone();

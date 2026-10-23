@@ -52,11 +52,10 @@ to get started.
 
          -  Debian Trixie 13
          -  Debian Bookworm 12
-         -  Debian Bullseye 11
 
        Packages for the ``amd64``/``x86_64`` architecture are available for
-       all listed versions. In addition, we offer ``armhf`` architecture
-       packages for Debian/Raspbian Bullseye, and ``arm64`` for Buster.
+       all listed versions. In addition, we offer ``aarch64`` and ``armv7``
+       packages for Bookworm and Trixie.
        
        First update the :program:`apt` package index: 
 
@@ -124,6 +123,7 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Ubuntu versions:
 
+         - Ubuntu Resolute 26.04 (LTS)
          - Ubuntu Noble 24.04 (LTS)
          - Ubuntu Jammy 22.04 (LTS)
          - Ubuntu Focal 20.04 (LTS)

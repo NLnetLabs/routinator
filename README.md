@@ -1,7 +1,4 @@
 # Routinator
-
-<img align="right" src="https://www.nlnetlabs.nl/static/logos/Routinator/Routinator_Avatar_Realistic.svg" height="150">
-
 [![crates.io](https://img.shields.io/crates/v/routinator.svg?color=brightgreen)](https://crates.io/crates/routinator)
 [![CI](https://github.com/NLnetLabs/routinator/workflows/ci/badge.svg)](https://github.com/NLnetLabs/routinator/actions?query=workflow%3Aci)
 [![Packaging](https://github.com/NLnetLabs/routinator/actions/workflows/pkg.yml/badge.svg)](https://nlnetlabs.nl/packages/)
@@ -41,8 +38,7 @@ locations.
 NLnet Labs offers [professional support and consultancy
 services](https://www.nlnetlabs.nl/services/contracts/) with a service-level
 agreement. Community support is available on
-[Discord](https://discord.gg/8dvKB5Ykhy), and our [mailing
-list](https://lists.nlnetlabs.nl/mailman/listinfo/rpki). Routinator is
+our [forum](https://community.nlnetlabs.nl/). Routinator is
 liberally licensed under the [BSD 3-Clause
 license](https://github.com/NLnetLabs/routinator/blob/main/LICENSE).
 

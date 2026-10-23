@@ -2,7 +2,6 @@
 use std::error::Error;
 use std::{error, fmt, io};
 use std::collections::HashSet;
-use std::io::Read;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{error, warn};
@@ -11,6 +10,7 @@ use ring::digest;
 use rpki::{rrdp, uri};
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
+use crate::collector::rrdp::http::{LimitedDataRead, LimitedDataReadError};
 use crate::error::{Failed, RunFailed};
 use crate::log::LogBookWriter;
 use crate::metrics::RrdpRepositoryMetrics;
@@ -257,7 +257,7 @@ impl ProcessSnapshot for SnapshotUpdate<'_> {
         uri: uri::Rsync,
         data: &mut rrdp::ObjectReader,
     ) -> Result<(), Self::Err> {
-        let content = RrdpDataRead::new(
+        let content = LimitedDataRead::new(
             data, &uri, self.collector.config().max_object_size,
         ).read_all()?;
         self.archive.publish_object(&uri, &content).map_err(|err| match err {
@@ -385,7 +385,7 @@ impl ProcessDelta for DeltaUpdate<'_> {
         if !self.seen.insert(uri.clone()) {
             return Err(DeltaError::ObjectRepeated { uri })
         }
-        let content = RrdpDataRead::new(
+        let content = LimitedDataRead::new(
             data, &uri, self.collector.config().max_object_size
         ).read_all()?;
         match hash {
@@ -483,110 +483,6 @@ impl<R: io::Read> io::Read for HashRead<R> {
 }
 
 
-//------------ RrdpDataRead --------------------------------------------------
-
-/// A reader that reads the data of objects in a snapshot or delta.
-///
-/// The type ensures the size limit of objects and allows treating read errors
-/// differently than write errors by storing any error and making it available
-/// after the fact.
-struct RrdpDataRead<'a, R> {
-    /// The wrapped reader.
-    reader: R,
-
-    /// The URI of the object we are reading.
-    uri: &'a uri::Rsync,
-
-    /// The number of bytes left to read.
-    ///
-    /// If this is `None` we are allowed to read an unlimited amount.
-    left: Option<u64>,
-
-    /// The last error that happend.
-    err: Option<RrdpDataReadError>,
-}
-
-impl<'a, R> RrdpDataRead<'a, R> {
-    /// Creates a new read from necessary information.
-    ///
-    /// The returned value will wrap `reader`. The `uri` should be the rsync
-    /// URI of the published object. It is only used for generating meaningful
-    /// error messages. If `max_size` is some value, the size of the object
-    /// will be limited to that value in bytes. Larger objects lead to an
-    /// error.
-    pub fn new(reader: R, uri: &'a uri::Rsync, max_size: Option<u64>) -> Self {
-        RrdpDataRead { reader, uri, left: max_size, err: None }
-    }
-
-    /// Returns a stored error if available.
-    ///
-    /// If it returns some error, that error happened during reading before
-    /// an `io::Error` was returned.
-    ///
-    /// The method takes the stored error and replaces it internally with
-    /// `None`.
-    pub fn take_err(&mut self) -> Option<RrdpDataReadError> {
-        self.err.take()
-    }
-}
-
-impl<R: io::Read> RrdpDataRead<'_, R> {
-    /// Reads the data into a vec.
-    pub fn read_all(mut self) -> Result<Vec<u8>, RrdpDataReadError> {
-        let mut content = Vec::new();
-        if let Err(io_err) = self.read_to_end(&mut content) {
-            return Err(
-                match self.take_err() {
-                    Some(data_err) => data_err,
-                    None => RrdpDataReadError::Read(io_err),
-                }
-            )
-        }
-        Ok(content)
-    }
-}
-
-impl<R: io::Read> io::Read for RrdpDataRead<'_, R> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let res = match self.reader.read(buf) {
-            Ok(res) => res,
-            Err(err) => {
-                self.err = Some(RrdpDataReadError::Read(err));
-                return Err(io::Error::other("reading data failed"))
-            }
-        };
-        if let Some(left) = self.left {
-            let res64 = match u64::try_from(res) {
-                Ok(res) => res,
-                Err(_) => {
-                    // If the usize doesn’t fit into a u64, things are
-                    // definitely way too big.
-                    self.left = Some(0);
-                    self.err = Some(
-                        RrdpDataReadError::LargeObject(self.uri.clone())
-                    );
-                    return Err(io::Error::other("size limit exceeded"))
-                }
-            };
-            if res64 > left {
-                self.left = Some(0);
-                self.err = Some(
-                    RrdpDataReadError::LargeObject(self.uri.clone())
-                );
-                Err(io::Error::other("size limit exceeded"))
-            }
-            else {
-                self.left = Some(left - res64);
-                Ok(res)
-            }
-        }
-        else {
-            Ok(res)
-        }
-    }
-}
-
-
 //------------ SnapshotReason ------------------------------------------------
 
 /// The reason why a snapshot was used.
@@ -646,19 +542,6 @@ impl SnapshotReason {
 
 //============ Errors ========================================================
 
-//------------ RrdpDataReadError ---------------------------------------------
-
-/// An error happened while reading object data.
-///
-/// This covers both the case where the maximum allowed file size was
-/// exhausted as well as where reading data failed. Neither of them is fatal,
-/// so we need to process them separately.
-#[derive(Debug)]
-enum RrdpDataReadError {
-    LargeObject(uri::Rsync),
-    Read(io::Error),
-}
-
 
 //------------ HashMismatch --------------------------------------------------
 
@@ -688,7 +571,7 @@ pub enum SnapshotError {
     },
     DuplicateObject(uri::Rsync),
     HashMismatch,
-    LargeObject(uri::Rsync),
+    LargeObject(String),
     RunFailed(RunFailed),
 }
 
@@ -722,13 +605,13 @@ impl From<RunFailed> for SnapshotError {
     }
 }
 
-impl From<RrdpDataReadError> for SnapshotError {
-    fn from(err: RrdpDataReadError) -> Self {
+impl From<LimitedDataReadError> for SnapshotError {
+    fn from(err: LimitedDataReadError) -> Self {
         match err {
-            RrdpDataReadError::LargeObject(uri) => {
+            LimitedDataReadError::LargeObject(uri) => {
                 SnapshotError::LargeObject(uri)
             }
-            RrdpDataReadError::Read(err) => {
+            LimitedDataReadError::Read(err) => {
                 SnapshotError::Rrdp(err.into())
             }
         }
@@ -813,7 +696,7 @@ pub enum DeltaError {
         uri: uri::Rsync,
     },
     DeltaHashMismatch,
-    LargeObject(uri::Rsync),
+    LargeObject(String),
     Archive(ArchiveError),
 }
 
@@ -841,13 +724,13 @@ impl From<io::Error> for DeltaError {
     }
 }
 
-impl From<RrdpDataReadError> for DeltaError {
-    fn from(err: RrdpDataReadError) -> Self {
+impl From<LimitedDataReadError> for DeltaError {
+    fn from(err: LimitedDataReadError) -> Self {
         match err {
-            RrdpDataReadError::LargeObject(uri) => {
+            LimitedDataReadError::LargeObject(uri) => {
                 DeltaError::LargeObject(uri)
             }
-            RrdpDataReadError::Read(err) => {
+            LimitedDataReadError::Read(err) => {
                 DeltaError::Rrdp(err.into())
             }
         }

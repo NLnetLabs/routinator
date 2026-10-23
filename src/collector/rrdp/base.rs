@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::Read;
 use std::{cmp, fs, io};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -10,6 +11,7 @@ use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::NamedTempFile;
+use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
 use crate::log::LogBookWriter;
@@ -367,7 +369,7 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let mut response = match self.collector.http.response(uri) {
+        let response = match self.collector.http.response(uri) {
             Ok(response) => response,
             Err(_) => return None,
         };
@@ -378,11 +380,19 @@ impl<'a> Run<'a> {
             );
             return None
         }
+
+        let mut reader = LimitedDataRead::new(
+            response, 
+            uri, 
+            self.collector.config().max_object_size
+        );
         let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {uri}: {err}");
-            return None
+        if let Err(err) = reader.read_to_end(&mut bytes) {
+            warn!(
+                "Could not read trust anchor certificate: {err}."
+            );
         }
+
         Some(Bytes::from(bytes))
     }
 

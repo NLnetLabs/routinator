@@ -4,7 +4,7 @@
 //! how to serialize themselves. The module implements the traits for all the
 //! types we need.
 
-use std::{error, fmt, hash, io, slice};
+use std::{cmp, error, fmt, hash, io, slice};
 use std::collections::HashMap;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
@@ -405,7 +405,14 @@ where
         let len = usize::try_from(u64::parse(source)?).map_err(|_| {
             ParseError::format("too many items in vec")
         })?;
-        let mut res = HashMap::with_capacity(len);
+
+        // Prevent allocating too much memory at once if `len` was crafted
+        // to be very big. We will hit the end of file if it was during
+        // reading, so I don’t think we need any additional measures?
+        let mut res = HashMap::with_capacity(
+            cmp::max(len, 65536)
+        );
+        
         for _ in 0..len {
             if res.insert(K::parse(source)?, V::parse(source)?).is_some() {
                 return Err(ParseError::format("duplicate keys"))
