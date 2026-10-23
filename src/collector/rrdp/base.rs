@@ -373,7 +373,9 @@ impl<'a> Run<'a> {
             Ok(response) => response,
             Err(_) => return None,
         };
-        if response.content_length() > self.collector.config().max_object_size {
+        if self.collector.config().max_object_size.is_some() && 
+           response.content_length() > self.collector.config().max_object_size 
+        {
             warn!(
                 "Trust anchor certificate {uri} exceeds size limit. \
                  Ignoring."
