@@ -1418,7 +1418,7 @@ dependencies = [
 [[package]]
 name = "rpki"
 version = "0.20.0-dev"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rsc-support#1cc818c0e2b439ccd2305aac037e5b3d01542e9f"
+source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rsc-support#32adf39ea30c889beb43d75250da05eb79b89f3c"
 dependencies = [
  "arbitrary",
  "aws-lc-rs",

@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
+use log::error;
 use rpki::uri;
 use rpki::repository::cert::Cert;
 use rpki::repository::error::ValidationError;
@@ -89,8 +90,8 @@ impl<'s> ValidateCa<'s> {
 }
 
 impl ProcessPubPoint for ValidateCa<'_> {
-    fn want(&self, _uri: &uri::Rsync) -> Result<bool, Failed> {
-        Ok(false)
+    fn want(&self, uri: &uri::Rsync) -> Result<bool, Failed> {
+        Ok(!self.report.is_done() && uri.ends_with(".cer"))
     }
 
     fn process_detached<F>(
@@ -111,13 +112,16 @@ impl ProcessPubPoint for ValidateCa<'_> {
 
         // Process the RSC and remember the result.
         let rsc = self.report.rsc.clone();
-        if let Ok((_, checklist)) = rsc.process(
-            ca_cert.cert(), self.report.strict, check_crl
-        ) {
-            // It’s fine if the result is set already, then the RSC validated
-            // twice.
-            let _ = self.report.result.set(checklist);
-            self.report.mark_done();
+        match rsc.process(ca_cert.cert(), self.report.strict, check_crl) {
+            Ok((_, checklist)) => {
+                // It’s fine if the result is set already, then the RSC
+                // validated twice.
+                let _ = self.report.result.set(checklist);
+                self.report.mark_done();
+            }
+            Err(err) => {
+                error!("Valdation failed: {err}");
+            }
         }
 
         Ok(())
