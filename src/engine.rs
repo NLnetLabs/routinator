@@ -1134,6 +1134,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.log.warn(format_args!("CRL {crl_uri}: {err}."));
             return Ok(None)
         }
+        if crl.this_update() > Time::now() {
+            self.metrics.invalid_crls += 1;
+            self.log.warn(format_args!("CRL {crl_uri}: not yet valid."));
+            return Ok(None);
+        }
         if crl.is_stale() {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
