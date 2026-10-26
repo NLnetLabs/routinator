@@ -135,6 +135,8 @@ async fn single_http_listener(
         tokio::task::spawn(async move {
             let _ = hyper_util::server::conn::auto::Builder::new(
                 TokioExecutor::new()
+            ).http1().timer(
+                hyper_util::rt::TokioTimer::new()
             ).serve_connection(
                 TokioIo::new(stream),
                 service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
