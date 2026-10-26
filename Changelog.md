@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.3 “Until It Ends, There Is No End”
 
-Breaking changes
-
-New
+Released 2026-10-26.
 
 Security fixes
 
@@ -38,8 +36,6 @@ Bug fixes
 * Skip publication points that have never succeeded during dump.
   Previously, such a publication point would lead to a crash. ([#1137])
 * Reject CRLs that have a thisUpdate field in the future. ([#1138])
-
-Other changes
 
 Acknowledgements
 
