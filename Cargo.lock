@@ -1381,7 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "routinator"
-version = "0.15.3"
+version = "0.15.4-dev"
 dependencies = [
  "arbitrary",
  "arc-swap",

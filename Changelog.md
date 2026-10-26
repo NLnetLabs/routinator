@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Improvements
+
+Bug fixes
+
+Other changes
+
+
 ## 0.15.3 “Until It Ends, There Is No End”
 
 Released 2026-10-26.
