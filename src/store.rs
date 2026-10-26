@@ -332,6 +332,11 @@ impl Store {
                 return Ok(())
             }
         };
+        if matches!(header.update_status, UpdateStatus::LastAttempt(_)) {
+            // We have never seen a successful attempt, so we don't want
+            // to include this in the dump.
+            return Ok(());
+        }
         let manifest = StoredManifest::read(&mut file).map_err(|err| {
             error!(
                 "Fatal: failed to read file {}: {}",
