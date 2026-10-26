@@ -6,6 +6,7 @@
 //!
 //! [`Config`]: struct.Config.html
 
+use std::num::NonZeroUsize;
 use std::{env, fmt, fs, process};
 use std::collections::HashMap;
 use std::io::Read;
@@ -651,7 +652,7 @@ impl Config {
 
         // validation_threads
         if let Some(value) = args.validation_threads {
-            self.validation_threads = value
+            self.validation_threads = value.get()
         }
 
         // log_level
@@ -1015,11 +1016,11 @@ impl Config {
 
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
-                file.take_small_usize(
+                file.take_small_nonzero_usize(
                     "validation-threads"
                 )?.unwrap_or_else(|| {
                     Config::default_validation_threads()
-                })
+                }).get()
             },
             refresh: {
                 Duration::from_secs(
@@ -1229,7 +1230,7 @@ impl Config {
             enable_bgpsec: false,
             enable_aspa: false,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
-            validation_threads: Config::default_validation_threads(),
+            validation_threads: Config::default_validation_threads().get(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             min_refresh: None,
             retry: Duration::from_secs(DEFAULT_RETRY),
@@ -1259,8 +1260,8 @@ impl Config {
     }
 
     /// Returns the default value for validation threads.
-    fn default_validation_threads() -> usize {
-        available_parallelism().map(|x| x.get()).unwrap_or(1)
+    fn default_validation_threads() -> NonZeroUsize {
+        available_parallelism().unwrap_or(NonZeroUsize::new(1).unwrap())
     }
 
     /// Alters paths so that they are relative to a possible chroot.
@@ -1927,7 +1928,7 @@ struct GlobalArgs {
 
     /// Number of threads for validation
     #[arg(long, value_name = "COUNT")]
-    validation_threads: Option<usize>,
+    validation_threads: Option<NonZeroUsize>,
 
     /// Log more information, twice for even more
     #[arg(short, long, action = ArgAction::Count)]
@@ -2281,6 +2282,21 @@ impl ConfigFile {
             }
             None => Ok(None)
         }
+    }
+
+    /// Takes a small nonzero unsigned integer value from the config file.
+    ///
+    /// This is the same as `take_small_usize`, except with an additional
+    /// check to make sure the value is not 0.
+    fn take_small_nonzero_usize(
+        &mut self, key: &str
+    ) -> Result<Option<NonZeroUsize>, Failed> {
+        if let Some(value) = self.take_small_usize(key)? {
+            NonZeroUsize::new(value).ok_or(Failed).map(Some)
+        } else {
+            Ok(None)
+        }
+            
     }
 
     /// Takes a string value from the config file.
@@ -2697,7 +2713,7 @@ mod test {
         assert_eq!(config.strict, DEFAULT_STRICT);
         assert_eq!(
             config.validation_threads,
-            Config::default_validation_threads(),
+            Config::default_validation_threads().get(),
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.min_refresh, None);
@@ -2784,7 +2800,7 @@ mod test {
         assert!(!config.strict);
         assert_eq!(
             config.validation_threads,
-            Config::default_validation_threads()
+            Config::default_validation_threads().get()
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
