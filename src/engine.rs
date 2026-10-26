@@ -1150,6 +1150,13 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         }
 
+        // Check that this CRL actually belongs to this CA
+        if let Err(err) = crl.verify_issuer_claim(self.cert.cert(), false) {
+            self.metrics.invalid_crls += 1;
+            self.log.warn(format_args!("CRL {crl_uri}: {err}."));
+            return Ok(None)
+        }
+
         // Turn on serial caching before looking for the first serial.
         if manifest.len() > CRL_CACHE_LIMIT {
             crl.cache_serials()
