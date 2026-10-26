@@ -118,7 +118,7 @@ impl Notification {
             ));
             return Err(Failed)
         }
-        content.sort_deltas();
+        content.sort_and_verify_deltas(Some(delta_list_limit));
         Ok(Notification { uri, content, etag, last_modified })
     }
 
