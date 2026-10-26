@@ -44,7 +44,7 @@ use rpki::uri;
 use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
-use crate::error::{Failed, Fatal, RunFailed};
+use crate::error::{Failed, Fatal, PubPointFailed, RunFailed};
 use crate::log::{LogBook, LogBookWriter};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
@@ -690,7 +690,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         self,
         metrics: &mut RunMetrics,
     ) -> Result<Vec<CaTask<P::PubPoint>>, RunFailed> {
-        let mut store = self.run.store.pub_point(self.cert)?;
+        let mut store = match self.run.store.pub_point(self.cert) {
+            Ok(store) => store,
+            Err(PubPointFailed::Recoverable(kind)) => {
+                warn!(
+                    "{}: publication point could not be processed due to {}", 
+                    self.cert.rpki_manifest(), kind
+                );
+                return Ok(Vec::new())
+            },
+            Err(PubPointFailed::Fatal) => return Err(RunFailed::fatal())
+       };
         if self.run.initial && store.is_new() {
             info!(
                 "Initial quick validation failed: \

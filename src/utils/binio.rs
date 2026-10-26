@@ -453,6 +453,10 @@ impl ParseError {
     pub fn is_eof(&self) -> bool {
         self.err.kind() == io::ErrorKind::UnexpectedEof
     }
+
+    pub fn err(&self) -> &io::Error {
+        &self.err
+    }
 }
 
 impl From<io::Error> for ParseError {
