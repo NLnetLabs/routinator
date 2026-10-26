@@ -503,8 +503,8 @@ impl<P: ProcessRun> Run<'_, P> {
         metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
-            let cert = match self.load_ta(uri, task.tal.info())? {
-                Some(cert) => cert,
+            let (cert, store_ta_cert) = match self.load_ta(uri, task.tal.info())? {
+                (Some(cert), store) => (cert, store),
                 _ => continue,
             };
             if cert.subject_public_key_info() != task.tal.key_info() {
@@ -526,6 +526,11 @@ impl<P: ProcessRun> Run<'_, P> {
                 Ok(cert) => cert,
                 Err(_) => continue,
             };
+
+            if store_ta_cert {
+                self.store.update_ta(uri, &cert.cert().to_captured())?;
+            }
+
             debug!("Found valid trust anchor {uri}. Processing.");
 
             match self.processor.process_ta(
@@ -566,24 +571,26 @@ impl<P: ProcessRun> Run<'_, P> {
     ///
     /// Attempts to download the certificate from upstream but falls back to
     /// the version in the store if available.
+    /// 
+    /// Returns a tuple of the cert (if it exists) and whether it was newly
+    /// retrieved from the HTTPS endpoint (rather than loaded from disk).
     fn load_ta(
         &self,
         uri: &TalUri,
         _info: &TalInfo,
-    ) -> Result<Option<Cert>, Failed> {
+    ) -> Result<(Option<Cert>, bool), Failed> {
         // Get the new version, store and return it if it decodes.
         if let Some(collector) = self.collector.as_ref() {
             if let Some(bytes) = collector.load_ta(uri) {
                 if let Ok(cert) = Cert::decode(bytes.clone()) {
-                    self.store.update_ta(uri, &bytes)?;
-                    return Ok(Some(cert))
+                    return Ok((Some(cert), true))
                 }
             }
         }
 
         // Get what we have in store.
         self.store.load_ta(uri).map(|bytes| {
-            bytes.and_then(|bytes| Cert::decode(bytes).ok())
+            (bytes.and_then(|bytes| Cert::decode(bytes).ok()), false)
         })
     }
 
