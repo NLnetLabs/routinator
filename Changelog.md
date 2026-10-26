@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.15.3 “Until It Ends, There Is No End”
 
-Breaking changes
-
-New
+Released 2026-10-26.
 
 Security fixes
 
@@ -25,6 +23,8 @@ Security fixes
 * Added a check to the RRDP collector that the list of deltas is
   consecutive rather than happily processing non-consecutive lists.
   ([#1139])
+* Updated rpki-rs to 0.20.0. This version also includes a number of security
+  fixes. See its [release notes][rpki-rs] for more information.
 
 Improvements
 
@@ -39,7 +39,9 @@ Bug fixes
   Previously, such a publication point would lead to a crash. ([#1137])
 * Reject CRLs that have a thisUpdate field in the future. ([#1138])
 
-Other changes
+Dependencies
+
+* Updated WebPKI roots to latest version.
 
 Acknowledgements
 
@@ -58,6 +60,7 @@ Acknowledgements
 [#1138]: https://github.com/NLnetLabs/routinator/pull/1138
 [#1139]: https://github.com/NLnetLabs/routinator/pull/1139
 [#1140]: https://github.com/NLnetLabs/routinator/pull/1140
+[rpki-rs]: https://github.com/NLnetLabs/rpki-rs/releases/tag/v0.20.0
 
 
 ## 0.15.2 ‘Irgendwas ist immer’
