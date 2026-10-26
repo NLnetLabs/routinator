@@ -55,15 +55,6 @@ use crate::store::{
 use crate::utils::str::str_from_ascii;
 
 
-//------------ Configuration -------------------------------------------------
-
-/// The minimum number of manifest entries that triggers CRL serial caching.
-///
-/// The value has been determined experimentally with the RPKI repository at
-/// a certain state so may or may not be a good one, really.
-const CRL_CACHE_LIMIT: usize = 50;
-
-
 //------------ Engine --------------------------------------------------------
 
 /// The mechanism to update and process RPKI data.
@@ -1151,9 +1142,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         // Turn on serial caching before looking for the first serial.
-        if manifest.len() > CRL_CACHE_LIMIT {
-            crl.cache_serials()
-        }
+        crl.cache_serials();
 
         // Finally: has the manifest’s cert been revoked?
         if crl.contains(ee_cert.serial_number()) {
@@ -1350,9 +1339,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         // Turn on serial caching before looking for the first serial.
-        if content.len() > CRL_CACHE_LIMIT {
-            crl.cache_serials()
-        }
+        crl.cache_serials();
 
         // Finally: has the manifest’s cert been revoked?
         //
