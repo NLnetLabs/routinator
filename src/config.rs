@@ -291,7 +291,7 @@ pub struct Config {
     pub dirty_repository: bool,
 
     /// Number of threads used during validation.
-    pub validation_threads: usize,
+    pub validation_threads: NonZeroUsize,
 
     /// The refresh interval for repository validation.
     pub refresh: Duration,
@@ -652,7 +652,7 @@ impl Config {
 
         // validation_threads
         if let Some(value) = args.validation_threads {
-            self.validation_threads = value.get()
+            self.validation_threads = value
         }
 
         // log_level
@@ -1020,7 +1020,7 @@ impl Config {
                     "validation-threads"
                 )?.unwrap_or_else(|| {
                     Config::default_validation_threads()
-                }).get()
+                })
             },
             refresh: {
                 Duration::from_secs(
@@ -1230,7 +1230,7 @@ impl Config {
             enable_bgpsec: false,
             enable_aspa: false,
             dirty_repository: DEFAULT_DIRTY_REPOSITORY,
-            validation_threads: Config::default_validation_threads().get(),
+            validation_threads: Config::default_validation_threads(),
             refresh: Duration::from_secs(DEFAULT_REFRESH),
             min_refresh: None,
             retry: Duration::from_secs(DEFAULT_RETRY),
@@ -1261,7 +1261,9 @@ impl Config {
 
     /// Returns the default value for validation threads.
     fn default_validation_threads() -> NonZeroUsize {
-        available_parallelism().unwrap_or(NonZeroUsize::new(1).unwrap())
+        available_parallelism().unwrap_or(
+            NonZeroUsize::new(1).expect("1 is not zero")
+        )
     }
 
     /// Alters paths so that they are relative to a possible chroot.
@@ -1460,7 +1462,9 @@ impl Config {
         insert(&mut res, "enable-bgpsec", self.enable_bgpsec);
         insert(&mut res, "enable-aspa", self.enable_aspa);
         insert(&mut res, "dirty", self.dirty_repository);
-        insert_int(&mut res, "validation-threads", self.validation_threads);
+        insert_int(
+            &mut res, "validation-threads", self.validation_threads.get()
+        );
         insert_int(&mut res, "refresh", self.refresh.as_secs());
         if let Some(min_refresh) = self.min_refresh.as_ref() {
             insert_int(&mut res, "min-refresh", min_refresh.as_secs());
@@ -2713,7 +2717,7 @@ mod test {
         assert_eq!(config.strict, DEFAULT_STRICT);
         assert_eq!(
             config.validation_threads,
-            Config::default_validation_threads().get(),
+            Config::default_validation_threads(),
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.min_refresh, None);
@@ -2759,7 +2763,7 @@ mod test {
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 1000);
+        assert_eq!(config.validation_threads.get(), 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
         assert_eq!(config.expire, Duration::from_secs(8));
@@ -2800,7 +2804,7 @@ mod test {
         assert!(!config.strict);
         assert_eq!(
             config.validation_threads,
-            Config::default_validation_threads().get()
+            Config::default_validation_threads()
         );
         assert_eq!(config.refresh, Duration::from_secs(DEFAULT_REFRESH));
         assert_eq!(config.retry, Duration::from_secs(DEFAULT_RETRY));
@@ -2843,7 +2847,7 @@ mod test {
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 2000);
+        assert_eq!(config.validation_threads.get(), 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }
 
