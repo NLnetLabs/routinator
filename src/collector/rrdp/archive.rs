@@ -61,7 +61,7 @@ impl RrdpArchive {
         Ok(Some(Self { path, archive }))
     }
 
-    pub fn open(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
+    pub fn open_read(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
         let archive = archive::Archive::open(
             path.as_ref(), false
         ).map_err(|err| match err {
