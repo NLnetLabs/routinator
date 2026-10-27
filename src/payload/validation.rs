@@ -843,6 +843,14 @@ impl<'a> SnapshotBuilder<'a> {
                     entry.get_mut().0 = entry.get().0.union(
                         &SmallAsnSet::from_iter(aspa.providers.iter())
                     ).collect();
+
+                    // Explicitly filter out AS0
+                    let as0 = Asn::from_u32(0);
+                    if entry.get().0.contains(as0) && entry.get().0.len() > 1 {
+                        entry.get_mut().0 = entry.get().0.iter()
+                            .filter(|asn| asn != &as0).collect();
+                    }
+
                     entry.get_mut().1.add_local(info);
                     metrics.local.aspas.duplicate += 1;
                     metrics.snapshot.payload.aspas.duplicate += 1;
