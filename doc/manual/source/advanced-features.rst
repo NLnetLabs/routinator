@@ -23,9 +23,7 @@ one or more other ASes as its upstream providers. When validated, an ASPA's
 content can be used for detection and mitigation of route leaks.
 
 You can let Routinator process ASPA objects and include them in the published
-dataset, as well as the metrics, using the :option:`--enable-aspa` option
-or by setting ``enable-aspa`` to True in the :doc:`configuration
-file<configuration>`. ASPA information will be exposed via RTR, as well as
+dataset. ASPA information will be exposed via RTR, as well as
 in the :term:`json` and :term:`jsonext` output formats, e.g.:
 
 .. code-block:: json
@@ -96,9 +94,7 @@ RPKI. As there is currently very limited deployment, validating these objects
 with Routinator is not enabled by default.
 
 You can let Routinator process router keys and include them in the published
-dataset, as well as the metrics, using the :option:`--enable-bgpsec` option
-or by setting ``enable-bgpsec`` to True in the :doc:`configuration
-file<configuration>`. BGPsec information will be exposed via RTR, as well as
+dataset. BGPsec information will be exposed via RTR, as well as
 in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
 
 .. code-block:: json
