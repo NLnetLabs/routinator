@@ -44,7 +44,7 @@ use rpki::uri;
 use crate::{collector, store, tals};
 use crate::config::{Config, FilterPolicy};
 use crate::collector::Collector;
-use crate::error::{Failed, Fatal, RunFailed};
+use crate::error::{Failed, Fatal, PubPointFailed, RunFailed};
 use crate::log::{LogBook, LogBookWriter};
 use crate::metrics::{
     Metrics, PublicationMetrics, RepositoryMetrics, TalMetrics
@@ -53,15 +53,6 @@ use crate::store::{
     Store, StoredManifest, StoredObject, StoredPoint, StoredStatus
 };
 use crate::utils::str::str_from_ascii;
-
-
-//------------ Configuration -------------------------------------------------
-
-/// The minimum number of manifest entries that triggers CRL serial caching.
-///
-/// The value has been determined experimentally with the RPKI repository at
-/// a certain state so may or may not be a good one, really.
-const CRL_CACHE_LIMIT: usize = 50;
 
 
 //------------ Engine --------------------------------------------------------
@@ -512,8 +503,8 @@ impl<P: ProcessRun> Run<'_, P> {
         metrics: &mut RunMetrics,
     ) -> Result<(), Failed> {
         for uri in task.tal.uris() {
-            let cert = match self.load_ta(uri, task.tal.info())? {
-                Some(cert) => cert,
+            let (cert, store_ta_cert) = match self.load_ta(uri, task.tal.info())? {
+                (Some(cert), store) => (cert, store),
                 _ => continue,
             };
             if cert.subject_public_key_info() != task.tal.key_info() {
@@ -535,6 +526,11 @@ impl<P: ProcessRun> Run<'_, P> {
                 Ok(cert) => cert,
                 Err(_) => continue,
             };
+
+            if store_ta_cert {
+                self.store.update_ta(uri, &cert.cert().to_captured())?;
+            }
+
             debug!("Found valid trust anchor {uri}. Processing.");
 
             match self.processor.process_ta(
@@ -575,24 +571,26 @@ impl<P: ProcessRun> Run<'_, P> {
     ///
     /// Attempts to download the certificate from upstream but falls back to
     /// the version in the store if available.
+    /// 
+    /// Returns a tuple of the cert (if it exists) and whether it was newly
+    /// retrieved from the HTTPS endpoint (rather than loaded from disk).
     fn load_ta(
         &self,
         uri: &TalUri,
         _info: &TalInfo,
-    ) -> Result<Option<Cert>, Failed> {
+    ) -> Result<(Option<Cert>, bool), Failed> {
         // Get the new version, store and return it if it decodes.
         if let Some(collector) = self.collector.as_ref() {
             if let Some(bytes) = collector.load_ta(uri) {
                 if let Ok(cert) = Cert::decode(bytes.clone()) {
-                    self.store.update_ta(uri, &bytes)?;
-                    return Ok(Some(cert))
+                    return Ok((Some(cert), true))
                 }
             }
         }
 
         // Get what we have in store.
         self.store.load_ta(uri).map(|bytes| {
-            bytes.and_then(|bytes| Cert::decode(bytes).ok())
+            (bytes.and_then(|bytes| Cert::decode(bytes).ok()), false)
         })
     }
 
@@ -690,7 +688,17 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         self,
         metrics: &mut RunMetrics,
     ) -> Result<Vec<CaTask<P::PubPoint>>, RunFailed> {
-        let mut store = self.run.store.pub_point(self.cert)?;
+        let mut store = match self.run.store.pub_point(self.cert) {
+            Ok(store) => store,
+            Err(PubPointFailed::Recoverable(kind)) => {
+                warn!(
+                    "{}: publication point could not be processed due to {}", 
+                    self.cert.rpki_manifest(), kind
+                );
+                return Ok(Vec::new())
+            },
+            Err(PubPointFailed::Fatal) => return Err(RunFailed::fatal())
+       };
         if self.run.initial && store.is_new() {
             info!(
                 "Initial quick validation failed: \
@@ -1134,6 +1142,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             self.log.warn(format_args!("CRL {crl_uri}: {err}."));
             return Ok(None)
         }
+        if crl.this_update() > Time::now() {
+            self.metrics.invalid_crls += 1;
+            self.log.warn(format_args!("CRL {crl_uri}: not yet valid."));
+            return Ok(None);
+        }
         if crl.is_stale() {
             self.metrics.stale_crls += 1;
             match self.run.validation.stale {
@@ -1150,10 +1163,15 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
             }
         }
 
-        // Turn on serial caching before looking for the first serial.
-        if manifest.len() > CRL_CACHE_LIMIT {
-            crl.cache_serials()
+        // Check that this CRL actually belongs to this CA
+        if let Err(err) = crl.verify_issuer_claim(self.cert.cert(), false) {
+            self.metrics.invalid_crls += 1;
+            self.log.warn(format_args!("CRL {crl_uri}: {err}."));
+            return Ok(None)
         }
+
+        // Turn on serial caching before looking for the first serial.
+        crl.cache_serials();
 
         // Finally: has the manifest’s cert been revoked?
         if crl.contains(ee_cert.serial_number()) {
@@ -1350,9 +1368,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         }
 
         // Turn on serial caching before looking for the first serial.
-        if content.len() > CRL_CACHE_LIMIT {
-            crl.cache_serials()
-        }
+        crl.cache_serials();
 
         // Finally: has the manifest’s cert been revoked?
         //
