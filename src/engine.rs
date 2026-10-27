@@ -142,10 +142,14 @@ impl Engine {
         config: &Config,
         update: bool,
     ) -> Result<Self, Failed> {
-        let repository_logger = Logger::make_logger(
-            config.repository_log_target.clone(),
-            config.repository_log_level
-        )?;
+        let repository_logger =
+            config.repository_log_target.as_ref().map(|target| {
+                Logger::new(
+                    target.clone(),
+                    config.repository_log_level,
+                    false, None,
+                ).map(Arc::new)
+            }).transpose()?;
         let collector = if update {
             Some(Collector::new(config, repository_logger.as_ref())?)
         }

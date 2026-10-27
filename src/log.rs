@@ -1,7 +1,7 @@
 //! Logging.
 
+use std::{fmt, fs, io, mem, process, slice};
 use std::fmt::Debug;
-use std::{cmp, fmt, fs, io, mem, process, slice};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -253,7 +253,9 @@ impl Logger {
         else {
             (None, None)
         };
-        let logger = Logger::new(config, daemon, output)?;
+        let logger = Logger::new(
+            config.log_target.clone(), config.log_level, daemon, output
+        )?;
         GLOBAL_LOGGER.switch(logger);
         log::set_max_level(config.log_level);
         Ok(res)
@@ -264,19 +266,8 @@ impl Logger {
         GLOBAL_LOGGER.rotate()
     }
 
-    /// Creates a new logger from config and additional information.
-    fn new(
-        config: &Config, daemon: bool, output: Option<Arc<Mutex<String>>>
-    ) -> Result<Self, Failed> {
-        Self::new_target(
-            config.log_target.clone(), 
-            config.log_level, 
-            daemon, 
-            output
-        )
-    }
-
-    pub(crate) fn new_target(
+    /// Creates a new logger.
+    pub fn new(
         log_target: LogTarget, 
         log_level: log::LevelFilter, 
         daemon: bool, 
@@ -308,22 +299,6 @@ impl Logger {
             output,
             log_level,
         })
-    }
-
-    pub fn make_logger(
-        log_target: Option<LogTarget>,
-        log_level: LevelFilter,
-    ) -> Result<Option<Arc<Logger>>, Failed> {
-        if let Some(log_target) = log_target {
-            Ok(Some(Arc::new(Logger::new_target(
-                log_target, 
-                cmp::max(log::LevelFilter::Info, log_level), 
-                false, 
-                None
-            )?)))
-        } else {
-            Ok(None)
-        }
     }
 
     /// Creates a syslog target.
@@ -520,7 +495,7 @@ struct SyslogLogger(
 #[cfg(unix)]
 impl Debug for SyslogLogger {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SyslogLogger").field(&"not implemented").finish()
+        f.debug_tuple("SyslogLogger").field(&"...").finish()
     }
 }
 
