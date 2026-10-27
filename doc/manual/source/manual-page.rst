@@ -402,12 +402,6 @@ The available options are:
 
       Redirect logging output to the given file.
 
-.. option:: --log-repository-issues
-
-      Log information about problems encountered while fetching and validating
-      data. Normally, this information is only made available via the status
-      HTTP endpoints.
-
 .. option:: -h, --help
 
       Print some help information.
@@ -1294,13 +1288,40 @@ All values can be overridden via the command line options.
             A string value specifying the syslog facility to use for logging
             to syslog. The default value if this entry is missing is
             *daemon*.
+            
+      repository-log-level
+            A string value specifying the maximum log level for which
+            repository log messages should be emitted. The default is *warn*.
 
+            See `LOGGING`_ below for more information on what information is
+            logged at the different levels.
 
-      log-repository-issues
-            A boolean that indicates when present and set to true that
-            information about problems encountered while fetching and
-            validating data should be logged. Normally, this information is
-            only made available via the status HTTP endpoints.
+      repository-log
+            A string specifying where to send repository log messages to. 
+            This can be one of the following values:
+
+            stderr
+                  Repository log messages will be sent to standard error.
+
+            syslog
+                  Repository log messages will be sent to syslog.
+
+            file
+                  Repository log messages will be sent to the file specified 
+                  through the repository-log-file configuration file entry.
+
+            The default if this value is missing is no logging.
+
+      repository-log-file
+            A string value containing the path to a file to which repo log
+            messages will be appended if the log configuration value is set
+            to file. In this case, the value is mandatory.
+
+      repository-syslog-facility
+            A string value specifying the syslog facility to use for logging
+            repository messages to syslog. The default value if this entry is 
+            missing is *daemon*.
+
 
       rtr-listen
             An array of string values each providing an address and port on
