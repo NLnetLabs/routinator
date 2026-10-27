@@ -10,6 +10,7 @@ use rpki::repository::tal::TalUri;
 use rpki::uri;
 use crate::config::{Config, FallbackPolicy};
 use crate::error::{Failed, Fatal, RunFailed};
+use crate::log::Logger;
 use crate::metrics::Metrics;
 use crate::engine::CaCert;
 use super::{rrdp, rsync};
@@ -61,11 +62,12 @@ impl Collector {
     /// Takes all necessary information from `config`.
     pub fn new(
         config: &Config,
+        repository_logger: Option<&Arc<Logger>>,
     ) -> Result<Self, Failed> {
         Self::init(config)?;
         Ok(Collector {
-            rrdp: rrdp::Collector::new(config)?,
-            rsync: rsync::Collector::new(config)?,
+            rrdp: rrdp::Collector::new(config, repository_logger)?,
+            rsync: rsync::Collector::new(config, repository_logger)?,
             rrdp_fallback: config.rrdp_fallback,
         })
     }

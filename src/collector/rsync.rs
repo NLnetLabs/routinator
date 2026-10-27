@@ -101,7 +101,10 @@ impl Collector {
     /// Creates a new rsync collector.
     ///
     /// If use of rsync is disabled via the config, returns `Ok(None)`.
-    pub fn new(config: &Config) -> Result<Option<Self>, Failed> {
+    pub fn new(
+        config: &Config,
+        repository_logger: Option<&Arc<Logger>>,
+    ) -> Result<Option<Self>, Failed> {
         if config.disable_rsync {
             Ok(None)
         }
@@ -112,11 +115,7 @@ impl Collector {
                 ),
                 command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts,
-                repository_logger: 
-                    Logger::make_logger(
-                        config.repository_log_target.clone(),
-                        config.repository_log_level
-                    )?,
+                repository_logger: repository_logger.cloned(),
                 max_repository_level: config.repository_log_level
             }))
         }

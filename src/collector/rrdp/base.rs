@@ -11,7 +11,6 @@ use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
 use tempfile::{NamedTempFile, TempDir};
-use crate::Failed;
 use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
@@ -45,6 +44,9 @@ pub struct Collector {
 
     /// Various configuration options.
     config: RrdpConfig,
+
+    /// The logger for repository messages
+    repository_logger: Option<Arc<Logger>>,
 }
 
 impl Collector {
@@ -85,14 +87,18 @@ impl Collector {
     /// Creates a new RRDP collector.
     ///
     /// Returns `Ok(None)` if RRDP was disabled.
-    pub fn new(config: &Config) -> Result<Option<Self>, Fatal> {
+    pub fn new(
+        config: &Config,
+        repository_logger: Option<&Arc<Logger>>,
+    ) -> Result<Option<Self>, Fatal> {
         if config.disable_rrdp {
             return Ok(None)
         }
         Ok(Some(Self {
             working_dir: Self::create_working_dir(config)?,
             http: HttpClient::new(config)?,
-            config: RrdpConfig::from_config(config)?,
+            config: RrdpConfig::from_config(config),
+            repository_logger: repository_logger.cloned(),
         }))
     }
 
@@ -461,10 +467,10 @@ impl<'a> Run<'a> {
         }
 
         let mut log = LogBookWriter::new(
-            self.collector.config.repository_logger.is_some().then(|| {
+            self.collector.repository_logger.is_some().then(|| {
                 format!("RRDP {}: ", rpki_notify)
             }),
-            self.collector.config.repository_logger.clone(),
+            self.collector.repository_logger.clone(),
             self.collector.config.max_repository_level,
         );
 
@@ -657,27 +663,20 @@ pub struct RrdpConfig {
     /// The maximum length of the delta list in a notification file.
     pub max_delta_list_len: usize,
 
-    /// The logger for repository messages
-    pub repository_logger: Option<Arc<Logger>>,
-
     /// The maximum level we want to log repository messages for
     max_repository_level: log::LevelFilter,
 }
 
 impl RrdpConfig {
-    fn from_config(config: &Config) -> Result<Self, Failed> {
-        Ok(Self {
+    fn from_config(config: &Config) -> Self {
+        Self {
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
             max_delta_list_len: config.rrdp_max_delta_list_len,
-            repository_logger: Logger::make_logger(
-                config.repository_log_target.clone(),
-                config.repository_log_level
-            )?,
             max_repository_level: config.repository_log_level,
-        })
+        }
     }
 }
 

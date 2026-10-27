@@ -142,17 +142,17 @@ impl Engine {
         config: &Config,
         update: bool,
     ) -> Result<Self, Failed> {
+        let repository_logger = Logger::make_logger(
+            config.repository_log_target.clone(),
+            config.repository_log_level
+        )?;
         let collector = if update {
-            Some(Collector::new(config)?)
+            Some(Collector::new(config, repository_logger.as_ref())?)
         }
         else {
             None
         };
         let store = Store::new(config)?;
-        let repository_logger = Logger::make_logger(
-            config.repository_log_target.clone(),
-            config.repository_log_level
-        )?;
         let mut res = Engine {
             bundled_tals: tals::collect_tals(config)?,
             extra_tals_dir: config.extra_tals_dir.clone(),
