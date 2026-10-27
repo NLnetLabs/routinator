@@ -760,10 +760,17 @@ impl<'a> SnapshotBuilder<'a> {
                 metrics.update(|m| m.aspas.contributed += 1);
             }
             hash_map::Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.0 = entry.0.union(&aspa.providers).collect();
-                entry.1.add_published(aspa.info);
-                metrics.update(|m| m.aspas.duplicate += 1);
+                if !is_as0(&aspa.providers) {
+                    let entry = entry.get_mut();
+                    if is_as0(&entry.0) {
+                        entry.0 = aspa.providers;
+                    }
+                    else {
+                        entry.0 = entry.0.union(&aspa.providers).collect();
+                    }
+                    entry.1.add_published(aspa.info);
+                    metrics.update(|m| m.aspas.duplicate += 1);
+                }
             }
         }
     }
@@ -899,3 +906,18 @@ impl<'a> AllVrpMetrics<'a> {
     }
 }
 
+
+//------------ Helper Functions ----------------------------------------------
+
+/// Returns whether an AS set contains only AS0.
+fn is_as0(as_set: &SmallAsnSet) -> bool {
+    let mut iter = as_set.iter();
+    let Some(first) = iter.next() else { return false };
+    if first.into_u32() != 0 {
+        return false;
+    }
+    if iter.next().is_some() {
+        return false;
+    }
+    true
+}
