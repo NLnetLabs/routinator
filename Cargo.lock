@@ -1173,9 +1173,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.39.4"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdcc8dd4e2f670d309a5f0e83fe36dfdc05af317008fea29144da1a2ac858e5e"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
 dependencies = [
  "memchr",
 ]
@@ -1417,12 +1417,13 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.20.0"
-source = "git+https://github.com/NLnetLabs/rpki-rs.git?branch=rsc-support#3cc00fc11769227b42a27463a797e9610ba0202b"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4c2c21ed5b68fdbd6ae5bb3da3a158f6197fc11a4213022397dea9b4b456b88"
 dependencies = [
  "arbitrary",
  "aws-lc-rs",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bcder",
  "bytes",
  "chrono",
