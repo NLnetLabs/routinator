@@ -1,4 +1,5 @@
 use std::{cmp, fs, io};
+use std::io::Read;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
@@ -8,7 +9,8 @@ use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
+use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
 use crate::log::LogBookWriter;
@@ -190,7 +192,7 @@ impl Collector {
         registry: &mut DumpRegistry,
         state_registry: &mut HashMap<uri::Https, RepositoryState>,
     ) -> Result<(), RunFailed> {
-        let archive = RrdpArchive::open(repo_path.clone())?;
+        let archive = RrdpArchive::open_read(repo_path.clone())?;
         let state = archive.load_state()?;
         let target_path = registry.get_repo_path(Some(&state.rpki_notify));
         let object_path = target_path.join("rsync");
@@ -319,6 +321,30 @@ impl Collector {
         Ok((file, path.into()))
     }
 
+    fn temp_dir(
+        &self
+    ) -> Result<TempDir, Fatal> {
+        let base = self.working_dir.join("tmp");
+        if let Err(err) = fs::create_dir_all(&base) {
+            error!(
+                "Failed to create RRDP temporary directory {}: {}",
+                base.display(), err
+            );
+            return Err(Fatal)
+        }
+        let path = match TempDir::new_in(&base) {
+            Ok(dir) => dir,
+            Err(err) => {
+                error!(
+                    "Failed to create temporary directory in {}: {}",
+                    base.display(), err
+                );
+                return Err(Fatal)
+            }
+        };
+        Ok(path)
+    }
+
     pub(super) fn http(&self) -> &HttpClient {
         &self.http
     }
@@ -367,7 +393,7 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let mut response = match self.collector.http.response(uri) {
+        let response = match self.collector.http.response(uri) {
             Ok(response) => response,
             Err(_) => return None,
         };
@@ -378,11 +404,19 @@ impl<'a> Run<'a> {
             );
             return None
         }
+
+        let mut reader = LimitedDataRead::new(
+            response, 
+            uri, 
+            self.collector.config().max_object_size
+        );
         let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {uri}: {err}");
-            return None
+        if let Err(err) = reader.read_to_end(&mut bytes) {
+            warn!(
+                "Could not read trust anchor certificate: {err}."
+            );
         }
+
         Some(Bytes::from(bytes))
     }
 
@@ -586,7 +620,7 @@ impl<'a> Run<'a> {
         path: Arc<PathBuf>,
         retain: &HashSet<uri::Https>
     ) -> Result<bool, RunFailed> {
-        let archive = RrdpArchive::open(path)?;
+        let archive = RrdpArchive::open_read(path)?;
         let state = archive.load_state()?;
         Ok(retain.contains(&state.rpki_notify))
     }
@@ -680,7 +714,7 @@ pub struct ReadRepository {
 impl ReadRepository {
     fn new(repository: &Repository) -> Result<Self, RunFailed> {
         Ok(Self {
-            archive: RrdpArchive::open(repository.path.clone())?,
+            archive: RrdpArchive::open_read(repository.path.clone())?,
         })
     }
 
@@ -958,7 +992,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn delta_update(
         &mut self,
         notify: &Notification,
-        mut archive: RrdpArchive,
+        archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
         if let Err(err) = notify.content().delta_status() {
@@ -981,6 +1015,24 @@ impl<'a> RepositoryUpdate<'a> {
             Err(reason) => return Ok(Some(reason)),
         };
 
+        let archive_path = archive.path().clone();
+        let temp_dir = self.collector.temp_dir()?;
+        let temp_path = Arc::new(temp_dir.path().join("archive"));
+        if fs::rename(
+            archive_path.as_path(), 
+            temp_path.clone().as_path()
+        ).is_err() {
+            return Err(RunFailed::fatal());
+        }
+
+        drop(archive);
+        let mut temp_archive = 
+            match RrdpArchive::try_open(temp_path.clone())?
+        {
+            Some(archive) => archive,
+            None => return Err(RunFailed::retry()),
+        };
+
         if !deltas.is_empty() {
             let count = deltas.len();
             for (i, info) in deltas.iter().enumerate() {
@@ -988,7 +1040,7 @@ impl<'a> RepositoryUpdate<'a> {
                     "Delta update step ({}/{}).", i + 1, count
                 ));
                 if let Err(err) = DeltaUpdate::new(
-                    self.collector, &mut archive,
+                    self.collector, &mut temp_archive,
                     notify.content().session_id(),
                     info, &mut self.metrics
                 ).try_update() {
@@ -1003,7 +1055,7 @@ impl<'a> RepositoryUpdate<'a> {
         // We are up-to-date now, so we can replace the state file with one
         // reflecting the notification we’ve got originally. This will update
         // the etag and last-modified data.
-        if let Err(err) = archive.update_state(
+        if let Err(err) = temp_archive.update_state(
             &notify.to_repository_state(self.collector.config.fallback_time)
         ) {
             if err.should_retry() {
@@ -1013,6 +1065,14 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(err)
             }
         }
+
+        if fs::rename(
+            temp_path.as_path(),
+            archive_path.as_path()
+        ).is_err() {
+            return Err(RunFailed::fatal());
+        }
+        drop(temp_dir);
 
         self.log.debug(format_args!("Delta update completed."));
         Ok(None)

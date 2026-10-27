@@ -13,6 +13,138 @@ Bug fixes
 Other changes
 
 
+## 0.15.3 “Until It Ends, There Is No End”
+
+Released 2026-10-26.
+
+Security fixes
+
+* Switched to always caching CRL serial numbers to avoid a potential
+  resource exhaustion through re-decoding the list over and over.
+  ([#1130])
+* Output individual payload items to HTTP clients or disk instead of
+  building the whole set in memory first. ([#1131])
+* Avoid stack overflow when releasing a payload set by implementing a
+  non-recursive `Drop` for `PayloadInfo`. ([#1132])
+* Added a timer to the HTTP/1 connection establishment to prevent
+  indefinite task blocking in the HTTP server. ([#1133])
+* Added a way to deal with manifest file names clashing with directory
+  names of publication points by ignoring the colliding publication point.
+  ([#1134])
+* A fetched TA certificate is now only stored if it is found to be valid.
+  This avoids overwriting the last known good certificate. ([#1135])
+* Added a check to the RRDP collector that the list of deltas is
+  consecutive rather than happily processing non-consecutive lists.
+  ([#1139])
+* Updated rpki-rs to 0.20.0. This version also includes a number of security
+  fixes. See its [release notes][rpki-rs] for more information.
+
+Improvements
+
+* Move the stored RRDP archive to a temporary place before updating to
+  avoid a partially updated state if processing aborts. ([#1136])
+* Added a check that the authority key identifier of a CRL matches the
+  subject key identifier of the issuing CA certificate. ([#1140])
+
+Bug fixes
+
+* Skip publication points that have never succeeded during dump.
+  Previously, such a publication point would lead to a crash. ([#1137])
+* Reject CRLs that have a thisUpdate field in the future. ([#1138])
+
+Dependencies
+
+* Updated WebPKI roots to latest version.
+
+Acknowledgements
+
+* We would like to thank Qifan Zhang, Palo Alto Networks, as well as
+  Xin Wang and Jiajia Liu, Northwestern Polytechnical University for
+  reporting these issues.
+
+[#1130]: https://github.com/NLnetLabs/routinator/pull/1130
+[#1131]: https://github.com/NLnetLabs/routinator/pull/1131
+[#1132]: https://github.com/NLnetLabs/routinator/pull/1132
+[#1133]: https://github.com/NLnetLabs/routinator/pull/1133
+[#1134]: https://github.com/NLnetLabs/routinator/pull/1134
+[#1135]: https://github.com/NLnetLabs/routinator/pull/1135
+[#1136]: https://github.com/NLnetLabs/routinator/pull/1136
+[#1137]: https://github.com/NLnetLabs/routinator/pull/1137
+[#1138]: https://github.com/NLnetLabs/routinator/pull/1138
+[#1139]: https://github.com/NLnetLabs/routinator/pull/1139
+[#1140]: https://github.com/NLnetLabs/routinator/pull/1140
+[rpki-rs]: https://github.com/NLnetLabs/rpki-rs/releases/tag/v0.20.0
+
+
+## 0.15.2 ‘Irgendwas ist immer’
+
+Released 2026-06-08.
+
+This release fixes a number of vulnerabilities and security issues
+identified by a security audit performed by [X41 D-Sec] and financed
+by [Sovereign Tech Agency]. We advise all users to upgrade at their
+earliest convenience.
+
+Security fixes
+
+* Changed how transient errors when accepting incoming HTTP and RTR
+  connections are handled: instead of exiting, a warning is printed and
+  the error is ignored. ([#1099])
+
+  This issue was assigned [CVE-2026-49232].
+
+* Extended the check for illegal path components in rsync URIs to also
+  include the authority and module parts. (via [rpki-rs#370])
+
+  This fixes a path traversal vulnerability that has been assigned
+  [CVE-2026-49233].
+
+* Fixed a panic when parsing certain AS numbers from strings. (via
+  [rpki-rs#373])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49234].
+
+* Upgraded quick-xml to at least 0.39.4 to fix a regression in XML parsing
+  that may lead a panic on certain crated XML files. (via [rpki-rs#372])
+
+  This fixes a vulnerability that has been assigned [CVE-2026-49235].
+
+Improvements
+
+* Restricted trust anchor certificates downloaded via HTTP to the size given
+  via the `max_object_size` config option. ([#1090])
+* The `-e` and `--rsh` options will now be rejected in the `rsync-args`
+  config option. Similarly, Routinator will not start if the equivalent
+  evironment variable `RSYNC_RSH` is set. ([#1091])
+
+Bug fixes
+
+* Set an RTR listener socket received via systemd to non-blocking. This
+  fixes a panic in Tokio. ([#1081] by [@MaxHearnden])
+* Fixed the `--rrdp-tcp-keepalive` to be a command line option rather than
+  a command line argument. ([1085])
+
+Other changes
+
+* Support for Ubuntu Resolute Raccoon (26.04). ([#1095])
+
+[#1090]: https://github.com/NLnetLabs/routinator/pull/1090
+[#1091]: https://github.com/NLnetLabs/routinator/pull/1091
+[#1081]: https://github.com/NLnetLabs/routinator/pull/1081
+[#1085]: https://github.com/NLnetLabs/routinator/pull/1085
+[#1095]: https://github.com/NLnetLabs/routinator/pull/1095
+[@MaxHearnden]: https://github.com/MaxHearnden
+[rpki-rs#370]: https://github.com/NLnetLabs/rpki-rs/pull/370
+[rpki-rs#372]: https://github.com/NLnetLabs/rpki-rs/pull/372
+[rpki-rs#373]: https://github.com/NLnetLabs/rpki-rs/pull/373
+[CVE-2026-49232]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49232.txt
+[CVE-2026-49233]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49233.txt
+[CVE-2026-49234]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49234.txt
+[CVE-2026-49235]: https://nlnetlabs.nl/downloads/routinator/CVE-2026-49235.txt
+[X41 D-Sec]: https://www.x41-dsec.de/
+[Sovereign Tech Agency]: https://www.sovereign.tech/
+
+
 ## 0.15.1 ‘Ain’t No Country Club Either’
 
 Released 2025-10-07.
