@@ -31,7 +31,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::{Failed, Fatal};
-use crate::log::LogBookWriter;
+use crate::log::{LogBookWriter, Logger};
 use crate::metrics::{Metrics, RsyncModuleMetrics};
 use crate::utils::fatal;
 use crate::utils::sync::{Mutex, RwLock};
@@ -55,8 +55,11 @@ pub struct Collector {
     /// Whether to filter dubious authorities in rsync URIs.
     filter_dubious: bool,
 
-    /// Whether to log issues also to the process log?
-    log_repository_issues: bool,
+    /// The logger to use for repository issues (if any)
+    repository_logger: Option<Arc<Logger>>,
+
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
  
 
@@ -98,7 +101,10 @@ impl Collector {
     /// Creates a new rsync collector.
     ///
     /// If use of rsync is disabled via the config, returns `Ok(None)`.
-    pub fn new(config: &Config) -> Result<Option<Self>, Failed> {
+    pub fn new(
+        config: &Config,
+        repository_logger: Option<&Arc<Logger>>,
+    ) -> Result<Option<Self>, Failed> {
         if config.disable_rsync {
             Ok(None)
         }
@@ -109,7 +115,8 @@ impl Collector {
                 ),
                 command: Some(RsyncCommand::new(config)?),
                 filter_dubious: !config.allow_dubious_hosts,
-                log_repository_issues: config.log_repository_issues,
+                repository_logger: repository_logger.cloned(),
+                max_repository_level: config.repository_log_level
             }))
         }
     }
@@ -290,9 +297,11 @@ impl<'a> Run<'a> {
         }
 
         let mut log = LogBookWriter::new(
-            self.collector.log_repository_issues.then(|| {
+            self.collector.repository_logger.is_some().then(|| {
                 format!("rsync {}: ", module)
-            })
+            }),
+            self.collector.repository_logger.clone(),
+            self.collector.max_repository_level,
         );
 
         // Check if the module name is dubious. If so, skip updating.
@@ -739,7 +748,7 @@ impl RsyncCommand {
             }
 
             if len > 0 {
-                target.log(level, format_args!("{}",
+                target.log(log::Level::Info, level, format_args!("{}",
                     String::from_utf8_lossy(&line[..len])
                 ));
             }

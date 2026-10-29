@@ -11,9 +11,8 @@ It is collected per RRDP or rsync repository and publication point, rather
 than as lines mixed in with the log, making it easier to see possible issues
 for repositories or publication points.
 
-If you rather prefer to have all information in one place, you can use the
-``--log-repository-issues`` command line option to request writing this data
-to the log as well.
+You can also log the repository log messages to syslog or a file. See the
+manual for how to set this up.
 
 Log levels are utilised to allow filtering this information for
 particular use cases.
