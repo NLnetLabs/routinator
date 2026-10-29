@@ -4,17 +4,60 @@
 
 Breaking changes
 
-New
+* Enabled ASPA and BGPsec by default. The command line options `--enable-aspa`
+  and `--enable-bgpsec` have been replaced with `--disable-aspa` and
+  `--disable-bgpsec`, respectively. ([#1112])
+* Enabled strict validataion mode is by default. The command line option
+  `--strict` has been replaced with `--relaxed`. ([#1112])
+* Added the ability to separately configure if and where repository issues
+  get logged via the new `repository-log-level`, `repository-log` and
+  friends. The previous `log-repository-issues` was removed in favour of
+  this new scheme.
 
-* Add SLURM v2 input filtering support
+  This also slightly changes the JSON produced by the `/status` endpoint.
+  ([#1088])
+* Limited the value of the `refresh` option to a week to avoid integer
+  overflows. ([#1144])
+
+New
 
 Improvements
 
+* Reject any rsync argument starting with `--rsh`. ([#1150])
+* Reject a `history-size` of 0. ([#1151])
+
 Bug fixes
 
-* Fix field names to match the latest SLURM v2 draft
+* Correctly merge ASPAs with an AS0-only provider list. ([#1143])
+* Fixed a bug where setting max-object-size to 0 to indicate no limit is
+  interpreted as a limit of 0 when downloading HTTP TA certificates.
+  ([#1122])
+* Limited the timing values sent by the RTR server to the range defined in
+  RFC 8210. ([#1124])
+* Fixed a panic when both `refresh` and `rrdp-fallback-time` are set to 0.
+  ([#1128])
+* Reject a value of 0 for `validation-threads` which doesn’t make sense
+  and also causes a crash. ([#1127])
 
 Other changes
+
+* Updated the bundled Routinator UI to release [0.5.1][ui-0.5.1]:
+  * Add screen when Routinator is not initialised yet.
+  * Don't show a white page when a network or CORS failure occurs.
+  * Add ASPA to the metrics.
+  * Add repository log messages to UI.
+
+[#1088]: https://github.com/NLnetLabs/routinator/pull/1088
+[#1112]: https://github.com/NLnetLabs/routinator/pull/1112
+[#1122]: https://github.com/NLnetLabs/routinator/pull/1122
+[#1124]: https://github.com/NLnetLabs/routinator/pull/1124
+[#1127]: https://github.com/NLnetLabs/routinator/pull/1127
+[#1128]: https://github.com/NLnetLabs/routinator/pull/1128
+[#1143]: https://github.com/NLnetLabs/routinator/pull/1143
+[#1144]: https://github.com/NLnetLabs/routinator/pull/1144
+[#1150]: https://github.com/NLnetLabs/routinator/pull/1150
+[#1151]: https://github.com/NLnetLabs/routinator/pull/1151
+[ui-0.5.1]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.5.0
 
 
 ## 0.15.3 “Until It Ends, There Is No End”
