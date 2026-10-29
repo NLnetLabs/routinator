@@ -10,6 +10,7 @@ use std::{cmp, env, fmt, fs, process};
 use std::collections::HashMap;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::thread::available_parallelism;
@@ -293,7 +294,7 @@ pub struct Config {
     pub dirty_repository: bool,
 
     /// Number of threads used during validation.
-    pub validation_threads: usize,
+    pub validation_threads: NonZeroUsize,
 
     /// The refresh interval for repository validation.
     pub refresh: Duration,
@@ -351,8 +352,11 @@ pub struct Config {
     /// The target to log to.
     pub log_target: LogTarget,
 
-    /// Should we log repository issues?
-    pub log_repository_issues: bool,
+    /// The log levels to be logged for repository messages
+    pub repository_log_level: LevelFilter,
+
+    /// The target to log repository messages to.
+    pub repository_log_target: Option<LogTarget>,
 
     /// The optional PID file for server mode.
     pub pid_file: Option<PathBuf>,
@@ -671,11 +675,6 @@ impl Config {
             self.log_level = LevelFilter::Error
         }
 
-        // log_repository_issues
-        if args.log_repository_issues {
-            self.log_repository_issues = true
-        }
-
         Ok(())
     }
 
@@ -912,6 +911,8 @@ impl Config {
     /// Creates a base config from a config file.
     fn from_config_file(mut file: ConfigFile) -> Result<Self, Failed> {
         let log_target = Self::log_target_from_config_file(&mut file)?;
+        let repository_log_target = 
+            Self::repository_log_target_from_config_file(&mut file)?;
         let res = Config {
             config_file: file.path.clone(),
             cache_dir: file.take_mandatory_path("repository-dir")?,
@@ -1022,7 +1023,7 @@ impl Config {
 
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
-                file.take_small_usize(
+                file.take_small_nonzero_usize(
                     "validation-threads"
                 )?.unwrap_or_else(|| {
                     Config::default_validation_threads()
@@ -1088,9 +1089,11 @@ impl Config {
                 file.take_from_str("log-level")?.unwrap_or(LevelFilter::Warn)
             },
             log_target,
-            log_repository_issues: {
-                file.take_bool("log-repository-issues")?.unwrap_or(false)
+            repository_log_level: {
+                file.take_from_str("repository-log-level")?
+                    .unwrap_or(LevelFilter::Info)
             },
+            repository_log_target,
             pid_file: file.take_path("pid-file")?,
             working_dir: file.take_path("working-dir")?,
             chroot: file.take_path("chroot")?,
@@ -1196,6 +1199,98 @@ impl Config {
         }
     }
 
+    /// Determines the logging target for repositories from the config file.
+    ///
+    /// The unix version
+    #[cfg(unix)]
+    fn repository_log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<Option<LogTarget>, Failed> {
+        let facility = file.take_string("repository-syslog-facility")?;
+        let facility = facility.as_ref().map(AsRef::as_ref)
+                               .unwrap_or("daemon");
+        let facility = match Facility::from_str(facility) {
+            Ok(value) => value,
+            Err(_) => {
+                error!(
+                    "Failed in config file {}: \
+                    invalid repository-syslog-facility.",
+                    file.path.display()
+                );
+                return Err(Failed);
+            }
+        };
+        let log_target = file.take_string("repository-log")?;
+        let log_file = file.take_path("repository-log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") => Ok(Some(LogTarget::Default(facility))),
+            Some("syslog") => Ok(Some(LogTarget::Syslog(facility))),
+            Some("stderr") =>  Ok(Some(LogTarget::Stderr)),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(Some(LogTarget::File(file))),
+                    None => {
+                        error!(
+                            "Failed in config file {}: \
+                             log target \"file\" requires \
+                             'repository-log-file' value.",
+                            file.path.display()
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            Some(value) => {
+                error!(
+                    "Failed in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Failed)
+            },
+            None => Ok(None),
+        }
+    }
+
+    /// Determines the logging target for repositories from the config file.
+    ///
+    /// The non-unix version
+    #[cfg(not(unix))]
+    fn repository_log_target_from_config_file(
+        file: &mut ConfigFile
+    ) -> Result<Option<LogTarget>, Failed> {
+        let log_target = file.take_string("repository-log")?;
+        let log_file = file.take_path("repository-log-file")?;
+        match log_target.as_ref().map(AsRef::as_ref) {
+            Some("default") | Some("stderr") =>  Ok(Some(LogTarget::Stderr)),
+            Some("file") => {
+                match log_file {
+                    Some(file) => Ok(Some(LogTarget::File(file))),
+                    None => {
+                        error!(
+                            "Failed in config file {}: \
+                             log target \"file\" requires \
+                             'repository-log-file' value.",
+                            file.path.display()
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+            Some(value) => {
+                error!(
+                    "Failed in config file {}: \
+                     invalid log target '{}'",
+                     file.path.display(),
+                     value
+                );
+                Err(Failed)
+            },
+            None => Ok(None),
+        }
+    }
+
     /// Creates a default config with the given paths.
     ///
     /// Uses default values for everything except for the config file path
@@ -1260,7 +1355,8 @@ impl Config {
             http_tls_cert: None,
             log_level: LevelFilter::Warn,
             log_target: LogTarget::default(),
-            log_repository_issues: false,
+            repository_log_level: LevelFilter::Info,
+            repository_log_target: None,
             pid_file: None,
             working_dir: None,
             chroot: None,
@@ -1271,8 +1367,10 @@ impl Config {
     }
 
     /// Returns the default value for validation threads.
-    fn default_validation_threads() -> usize {
-        available_parallelism().map(|x| x.get()).unwrap_or(1)
+    fn default_validation_threads() -> NonZeroUsize {
+        available_parallelism().unwrap_or(
+            NonZeroUsize::new(1).expect("1 is not zero")
+        )
     }
 
     /// Alters paths so that they are relative to a possible chroot.
@@ -1471,7 +1569,9 @@ impl Config {
         insert(&mut res, "enable-bgpsec", self.enable_bgpsec);
         insert(&mut res, "enable-aspa", self.enable_aspa);
         insert(&mut res, "dirty", self.dirty_repository);
-        insert_int(&mut res, "validation-threads", self.validation_threads);
+        insert_int(
+            &mut res, "validation-threads", self.validation_threads.get()
+        );
         insert_int(&mut res, "refresh", self.refresh.as_secs());
         if let Some(min_refresh) = self.min_refresh.as_ref() {
             insert_int(&mut res, "min-refresh", min_refresh.as_secs());
@@ -1556,7 +1656,44 @@ impl Config {
                 insert(&mut  res, "log-file", file.display().to_string());
             }
         }
-        insert(&mut res, "log-repository-issues", self.log_repository_issues);
+        if let Some(repository_log_target) = &self.repository_log_target {
+            insert(
+                &mut res, 
+                "repository-log-level", 
+                self.repository_log_level.to_string()
+            );
+            match repository_log_target {
+                #[cfg(unix)]
+                LogTarget::Default(facility) => {
+                    insert(&mut res, "repository-log", "default");
+                    insert(
+                        &mut res, 
+                        "repository-syslog-facility", 
+                        facility_to_string(*facility)
+                    );
+                }
+                #[cfg(unix)]
+                LogTarget::Syslog(facility) => {
+                    insert(&mut res, "repository-log", "syslog");
+                    insert(
+                        &mut res, 
+                        "repository-syslog-facility", 
+                        facility_to_string(*facility)
+                    );
+                }
+                LogTarget::Stderr => {
+                    insert(&mut res, "repository-log", "stderr");
+                }
+                LogTarget::File(ref file) => {
+                    insert(&mut res, "repository-log", "file");
+                    insert(
+                        &mut  res, 
+                        "repository-log-file", 
+                        file.display().to_string()
+                    );
+                }
+            }
+        }
         if let Some(ref file) = self.pid_file {
             insert(&mut res, "pid-file", file.display().to_string());
         }
@@ -1939,7 +2076,7 @@ struct GlobalArgs {
 
     /// Number of threads for validation
     #[arg(long, value_name = "COUNT")]
-    validation_threads: Option<usize>,
+    validation_threads: Option<NonZeroUsize>,
 
     /// Log more information, twice for even more
     #[arg(short, long, action = ArgAction::Count)]
@@ -1962,10 +2099,6 @@ struct GlobalArgs {
     /// Log to this file
     #[arg(long, value_name = "PATH")]
     logfile: Option<String>,
-
-    /// Log repository issues
-    #[arg(long)]
-    log_repository_issues: bool,
 }
 
 
@@ -2293,6 +2426,21 @@ impl ConfigFile {
             }
             None => Ok(None)
         }
+    }
+
+    /// Takes a small nonzero unsigned integer value from the config file.
+    ///
+    /// This is the same as `take_small_usize`, except with an additional
+    /// check to make sure the value is not 0.
+    fn take_small_nonzero_usize(
+        &mut self, key: &str
+    ) -> Result<Option<NonZeroUsize>, Failed> {
+        if let Some(value) = self.take_small_usize(key)? {
+            NonZeroUsize::new(value).ok_or(Failed).map(Some)
+        } else {
+            Ok(None)
+        }
+            
     }
 
     /// Takes a string value from the config file.
@@ -2755,7 +2903,7 @@ mod test {
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 1000);
+        assert_eq!(config.validation_threads.get(), 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
         assert_eq!(config.expire, Duration::from_secs(8));
@@ -2839,7 +2987,7 @@ mod test {
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 2000);
+        assert_eq!(config.validation_threads.get(), 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }
 
