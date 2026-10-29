@@ -21,6 +21,11 @@ Breaking changes
 
 New
 
+* Added support for Resource Signed Checklists (RSC, [RFC 9323]).
+  ([#1077])
+* Added support for SLURM v2 which adds filtering and adding ASPA
+  assertions. ([#1106])
+
 Improvements
 
 * Reject any rsync argument starting with `--rsh`. ([#1150])
@@ -47,7 +52,9 @@ Other changes
   * Add ASPA to the metrics.
   * Add repository log messages to UI.
 
+[#1077]: https://github.com/NLnetLabs/routinator/pull/1077
 [#1088]: https://github.com/NLnetLabs/routinator/pull/1088
+[#1106]: https://github.com/NLnetLabs/routinator/pull/1106
 [#1112]: https://github.com/NLnetLabs/routinator/pull/1112
 [#1122]: https://github.com/NLnetLabs/routinator/pull/1122
 [#1124]: https://github.com/NLnetLabs/routinator/pull/1124
@@ -58,6 +65,7 @@ Other changes
 [#1150]: https://github.com/NLnetLabs/routinator/pull/1150
 [#1151]: https://github.com/NLnetLabs/routinator/pull/1151
 [ui-0.5.1]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.5.0
+[RFC 9323]: https://tools.ietf.org/html/rfc9323
 
 
 ## 0.15.3 “Until It Ends, There Is No End”
