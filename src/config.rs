@@ -6,7 +6,7 @@
 //!
 //! [`Config`]: struct.Config.html
 
-use std::{env, fmt, fs, process};
+use std::{cmp, env, fmt, fs, process};
 use std::collections::HashMap;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
@@ -39,6 +39,9 @@ const DEFAULT_DIRTY_REPOSITORY: bool = false;
 
 /// The default refresh interval in seconds.
 const DEFAULT_REFRESH: u64 = 600;
+
+/// The maximum refresh inverval in seconds.
+const MAX_REFRESH: u64 = 3600 * 24 * 7;
 
 /// The default RTR retry interval in seconds.
 const DEFAULT_RETRY: u64 = 600;
@@ -750,12 +753,16 @@ impl Config {
 
         // refresh
         if let Some(value) = args.refresh {
-            self.refresh = Duration::from_secs(value)
+            self.refresh = Duration::from_secs(
+                cmp::min(value, MAX_REFRESH)
+            )
         }
 
         // min-refresh
         if let Some(value) = args.min_refresh {
-            self.min_refresh = Some(Duration::from_secs(value))
+            self.min_refresh = Some(Duration::from_secs(
+                cmp::min(value, MAX_REFRESH)
+            ))
         }
 
         // retry
@@ -1023,11 +1030,16 @@ impl Config {
             },
             refresh: {
                 Duration::from_secs(
-                    file.take_u64("refresh")?.unwrap_or(DEFAULT_REFRESH)
+                    cmp::min(
+                        file.take_u64("refresh")?.unwrap_or(DEFAULT_REFRESH),
+                        MAX_REFRESH
+                    )
                 )
             },
             min_refresh: {
-                file.take_u64("min-refresh")?.map(Duration::from_secs)
+                file.take_u64("min-refresh")?.map(|value| {
+                    Duration::from_secs(cmp::min(value, MAX_REFRESH))
+                })
             },
             retry: {
                 Duration::from_secs(

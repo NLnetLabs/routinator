@@ -871,7 +871,8 @@ These can be requested by providing different commands on the command line.
               finished updating and validating the local repository before
               starting to update again. The next update will be earlier if
               objects in the repository expire earlier and min-refresh is set. 
-              The default value is 600 seconds.
+              The default value is 600 seconds. The value is quietly limited
+              to a week (or 604,800 seconds).
 
        .. option:: --min-refresh=seconds
 
@@ -879,14 +880,6 @@ These can be requested by providing different commands on the command line.
               having finished updating and validating the local repository 
               before starting to update again. If not set this will default to
               refresh.
-
-       .. option:: --refresh=seconds
-
-              The amount of seconds the server should wait after having
-              finished updating and validating the local repository before
-              starting to update again. The next update will be earlier if
-              objects in the repository expire earlier. The default value is
-              600 seconds.
 
        .. option:: --retry=seconds
 
@@ -1370,7 +1363,8 @@ All values can be overridden via the command line options.
             An integer value specifying the number of seconds Routinator
             should wait between consecutive validation runs in server mode.
             The next validation run will happen earlier if objects expire
-            earlier and min-refresh is set. The default is 600 seconds.
+            earlier and min-refresh is set. The default is 600 seconds. The
+            value is quietly limited to a week (or 604,800 seconds).
 
       min-refresh
             An integer value specifying the number of seconds Routinator
