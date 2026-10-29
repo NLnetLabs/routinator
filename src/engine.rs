@@ -803,6 +803,11 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         // First, report its validity to the processor.
         collected.point_validity(&mut self.processor);
 
+        // Process detached objects first.
+        self.processor.process_detached(
+            self.cert, |cert| collected.check_crl(cert)
+        )?;
+
         // We can look at the objects now. The objects are fine if they are
         // present and match the hash. If they don’t we have to cancel the
         // update. We also validate them while we are at it. This also
@@ -1237,6 +1242,10 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
         };
 
         manifest.point_validity(&mut self.processor);
+
+        self.processor.process_detached(
+            self.cert, |cert| manifest.check_crl(cert)
+        )?;
 
         let mut ca_tasks = Vec::new();
         for object in &mut store {
@@ -2207,6 +2216,20 @@ pub trait ProcessPubPoint: Sized + Send + Sync {
         stale: Time,
     ) {
         let _ = (manifest_ee, stale);
+    }
+
+    /// Processes detached objects.
+    ///
+    /// The method is given the CA certificate and a way to check if
+    /// a certificate issued by the CA has been revoked.
+    fn process_detached<F>(
+        &mut self,
+        cert: &CaCert,
+        check_crl: F
+    ) -> Result<(), Failed>
+    where F: Fn(&Cert) -> Result<(), ValidationError> {
+        let _ = (cert, check_crl);
+        Ok(())
     }
 
     /// Determines whether an object with the given URI should be processed.

@@ -4,11 +4,13 @@ Manual Page
 Synopsis
 --------
 
+:program:`routinator` [``options``] :subcmd:`server` [``server-options``]
+
 :program:`routinator` [``options``] :subcmd:`vrps` [``vrps-options``] [:samp:`-o {output-file}`] [:samp:`-f {format}`]
 
 :program:`routinator` [``options``] :subcmd:`validate` [``validate-options``] [:samp:`-a {asn}`] [:samp:`-p {prefix}`]
 
-:program:`routinator` [``options``] :subcmd:`server` [``server-options``]
+:program:`routinator` [``options``] :subcmd:`rsc` [``rsc-options``] :samp:`{rsc-path}`
 
 :program:`routinator` [``options``] :subcmd:`update` [``update-options``]
 
@@ -414,6 +416,219 @@ Commands
 Routinator provides a number of operations around the local RPKI repository.
 These can be requested by providing different commands on the command line.
 
+.. subcmd:: server
+
+       This command causes Routinator to act as a server for the
+       RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
+       read all the Trust Anchor Locators and will stay attached to the
+       terminal unless the :option:`-d` option is given.
+
+       The server will periodically update the local repository, every ten
+       minutes by default, notify any clients of changes, and let them fetch
+       validated data. It will not, however, reread the trust anchor
+       locators. Thus, if you update them, you will have to restart
+       Routinator.
+
+       You can provide a number of addresses and ports to listen on for RTR
+       and HTTP through command line options or their configuration file
+       equivalent. Currently, Routinator will only start listening on these
+       ports after an initial validation run has finished.
+
+       It will not listen on any sockets unless explicitly specified. It will
+       still run and periodically update the repository. This might be useful
+       for use with :subcmd:`vrps` mode with the :option:`-n` option.
+
+       .. option:: -d, --detach
+
+              If present, Routinator will detach from the terminal after a
+              successful start.
+
+       .. option:: --rtr=addr:port
+
+              Specifies a local address and port to listen on for incoming
+              RTR connections.
+
+              Routinator supports both protocol version 0 defined in
+              :rfc:`6810` and version 1 defined in :rfc:`8210`. However, it
+              does not support router keys introduced in version 1.  IPv6
+              addresses must be enclosed in square brackets. You can provide
+              the option multiple times to let Routinator listen on multiple
+              address-port pairs.
+
+       .. option:: --rtr-tls=addr:port
+
+              Specifies a local address and port to listen for incoming
+              TLS-encrypted RTR connections.
+
+              The private key and server certificate given via the
+              :option:`--rtr-tls-key` and :option:`--rtr-tls-cert` or their
+              equivalent config file options will be used for connections.
+
+              The option can be given multiple times, but the same key and
+              certificate will be used for all connections.
+
+       .. option:: --http=addr:port
+
+              Specifies the address and port to listen on for incoming HTTP
+              connections.  See `HTTP SERVICE`_ below for more information on
+              the HTTP service provided by Routinator.
+
+       .. option:: --http-tls=addr:port
+
+              Specifies a local address and port to listen of for incoming
+              TLS-encrypted HTTP connections.
+
+              The private key and server certificate given via the
+              :option:`--http-tls-key` and :option:`--http-tls-cert` or their
+              equivalent config file options will be used for connections.
+
+              The option can be given multiple times, but the same key and
+              certificate will be used for all connections.
+
+       .. option:: --listen-systemd
+
+              The RTR listening socket will be acquired from systemd via
+              socket activation. Use this option together with systemd's
+              socket units to allow a Routinator running as a regular user to
+              bind to the default RTR port 323.
+
+              Currently, all TCP listener sockets handed over by systemd will
+              be used for the RTR protocol.
+
+       .. option:: --rtr-tcp-keepalive=seconds
+        
+              The number of seconds to wait before sending a TCP keepalive on
+              an established RTR  connection. By  default, TCP keepalive is
+              enabled on all RTR connections with an idle time of 60 seconds. 
+              Set this option to 0 to disable keepalives.
+
+              On some systems, notably OpenBSD, this option only enables TCP
+              keepalives if set to any value other than 0. You will have to
+              use the system's own mechanisms to change the idle times.
+
+       .. option:: --rtr-client-metrics
+       
+              If provided, the server metrics will include separate metrics
+              for every RTR client. Clients are identified by their RTR
+              source IP address. This is disabled by default to avoid
+              accidentally leaking information about the local network
+              topology.
+
+       .. option:: --rtr-tls-key
+
+              Specifies the path to a file containing the private key to be
+              used for RTR-over-TLS connections. The file has to contain
+              exactly one private key encoded in PEM format.
+
+       .. option:: --rtr-tls-cert
+
+              Specifies the path to a file containing the server certificates
+              to be used for RTR-over-TLS connections. The file has to
+              contain one or more certificates encoded in PEM format.
+
+       .. option:: --http-tls-key
+
+              Specifies the path to a file containing the private key to be
+              used for HTTP-over-TLS connections. The file has to contain
+              exactly one private key encoded in PEM format.
+
+       .. option:: --http-tls-cert
+
+              Specifies the path to a file containing the server certificates
+              to be used for HTTP-over-TLS connections. The file has to
+              contain one or more certificates encoded in PEM format.
+
+       .. option:: --refresh=seconds
+
+              The amount of seconds the server should wait after having
+              finished updating and validating the local repository before
+              starting to update again. The next update will be earlier if
+              objects in the repository expire earlier and min-refresh is set. 
+              The default value is 600 seconds.
+
+       .. option:: --min-refresh=seconds
+
+              The amount of seconds the server should at least wait after 
+              having finished updating and validating the local repository 
+              before starting to update again. If not set this will default to
+              refresh.
+
+       .. option:: --refresh=seconds
+
+              The amount of seconds the server should wait after having
+              finished updating and validating the local repository before
+              starting to update again. The next update will be earlier if
+              objects in the repository expire earlier. The default value is
+              600 seconds.
+
+       .. option:: --retry=seconds
+
+              The amount of seconds to suggest to an RTR client to wait
+              before trying to request data again if that failed. The default
+              value is 600 seconds, as recommended in :rfc:`8210`.
+
+       .. option:: --expire=seconds
+
+              The amount of seconds to an RTR client can keep using data if
+              it cannot refresh it. After that time, the client should
+              discard the data. Note that this value was introduced in
+              version 1 of the RTR protocol and is thus not relevant for
+              clients that only implement version 0. The default value, as
+              recommended in :rfc:`8210`, is 7200 seconds.
+
+       .. option:: --history=count
+
+              In RTR, a client can request to only receive the changes that
+              happened since the last version of the data it had seen. This
+              option sets how many change sets the server will at most keep.
+              If a client requests changes from an older version, it will get
+              the current full set.
+
+              Note that routers typically stay connected with their RTR
+              server and therefore really only ever need one single change
+              set. Additionally, if RTR server or router are restarted, they
+              will have a new session with new change sets and need to
+              exchange a full data set, too. Thus, increasing the value
+              probably only ever increases memory consumption.
+
+              The default value is 10.
+
+       .. option:: --pid-file=path
+
+              States a file which will be used in daemon mode to store the
+              processes PID. While the process is running, it will keep the
+              file locked.
+
+       .. option:: --working-dir=path
+
+              The working directory for the daemon process. In daemon mode,
+              Routinator will change to this directory while detaching from
+              the terminal.
+
+       .. option:: --chroot=path
+
+              The root directory for the daemon process. If this option is
+              provided, the daemon process will change its root directory to
+              the given directory. This will only work if all other paths
+              provided via the configuration or command line options are
+              under this directory.
+
+       .. option:: --user=user-name
+
+              The name of the user to change to for server mode. It this
+              option is provided, Routinator will run as that user after the
+              listening sockets for HTTP and RTR have been created. This may
+              cause problems, if the user is not allowed to write to the
+              directory given as repository directory or local exception
+              files.
+
+       .. option:: --group=group-name
+
+              The name of the group to change to for server mode. It this
+              option is provided, Routinator will run as that group after the
+              listening sockets for HTTP and RTR have been created.
+
+
 .. subcmd:: vrps
 
     This command requests that Routinator update the local repository and
@@ -737,210 +952,23 @@ These can be requested by providing different commands on the command line.
               this option is not given, the operation will complete with exit
               status 0 in this case.
 
-.. subcmd:: server
 
-       This command causes Routinator to act as a server for the
-       RPKI-to-Router (RTR) and HTTP protocols. In this mode, Routinator will
-       read all the Trust Anchor Locators and will stay attached to the
-       terminal unless the :option:`-d` option is given.
+.. subcmd:: rsc
 
-       The server will periodically update the local repository, every ten
-       minutes by default, notify any clients of changes, and let them fetch
-       validated data. It will not, however, reread the trust anchor
-       locators. Thus, if you update them, you will have to restart
-       Routinator.
+       Validate a Resource Signed Checklist (RSC) against the RPKI tree.
 
-       You can provide a number of addresses and ports to listen on for RTR
-       and HTTP through command line options or their configuration file
-       equivalent. Currently, Routinator will only start listening on these
-       ports after an initial validation run has finished.
+       The path to the RSC file needs to be given as a positional argument.
+       Upon success, the resources associated with the RSC will be printed.
 
-       It will not listen on any sockets unless explicitly specified. It will
-       still run and periodically update the repository. This might be useful
-       for use with :subcmd:`vrps` mode with the :option:`-n` option.
+       .. option:: --document=path
 
-       .. option:: -d, --detach
+           Verify that the RSC file contains a signature for the given
+           document.
 
-              If present, Routinator will detach from the terminal after a
-              successful start.
+       .. option:: -n, --noupdate
 
-       .. option:: --rtr=addr:port
-
-              Specifies a local address and port to listen on for incoming
-              RTR connections.
-
-              Routinator supports both protocol version 0 defined in
-              :rfc:`6810` and version 1 defined in :rfc:`8210`. However, it
-              does not support router keys introduced in version 1.  IPv6
-              addresses must be enclosed in square brackets. You can provide
-              the option multiple times to let Routinator listen on multiple
-              address-port pairs.
-
-       .. option:: --rtr-tls=addr:port
-
-              Specifies a local address and port to listen for incoming
-              TLS-encrypted RTR connections.
-
-              The private key and server certificate given via the
-              :option:`--rtr-tls-key` and :option:`--rtr-tls-cert` or their
-              equivalent config file options will be used for connections.
-
-              The option can be given multiple times, but the same key and
-              certificate will be used for all connections.
-
-       .. option:: --http=addr:port
-
-              Specifies the address and port to listen on for incoming HTTP
-              connections.  See `HTTP SERVICE`_ below for more information on
-              the HTTP service provided by Routinator.
-
-       .. option:: --http-tls=addr:port
-
-              Specifies a local address and port to listen of for incoming
-              TLS-encrypted HTTP connections.
-
-              The private key and server certificate given via the
-              :option:`--http-tls-key` and :option:`--http-tls-cert` or their
-              equivalent config file options will be used for connections.
-
-              The option can be given multiple times, but the same key and
-              certificate will be used for all connections.
-
-       .. option:: --listen-systemd
-
-              The RTR listening socket will be acquired from systemd via
-              socket activation. Use this option together with systemd's
-              socket units to allow a Routinator running as a regular user to
-              bind to the default RTR port 323.
-
-              Currently, all TCP listener sockets handed over by systemd will
-              be used for the RTR protocol.
-
-       .. option:: --rtr-tcp-keepalive=seconds
-        
-              The number of seconds to wait before sending a TCP keepalive on
-              an established RTR  connection. By  default, TCP keepalive is
-              enabled on all RTR connections with an idle time of 60 seconds. 
-              Set this option to 0 to disable keepalives.
-
-              On some systems, notably OpenBSD, this option only enables TCP
-              keepalives if set to any value other than 0. You will have to
-              use the system's own mechanisms to change the idle times.
-
-       .. option:: --rtr-client-metrics
-       
-              If provided, the server metrics will include separate metrics
-              for every RTR client. Clients are identified by their RTR
-              source IP address. This is disabled by default to avoid
-              accidentally leaking information about the local network
-              topology.
-
-       .. option:: --rtr-tls-key
-
-              Specifies the path to a file containing the private key to be
-              used for RTR-over-TLS connections. The file has to contain
-              exactly one private key encoded in PEM format.
-
-       .. option:: --rtr-tls-cert
-
-              Specifies the path to a file containing the server certificates
-              to be used for RTR-over-TLS connections. The file has to
-              contain one or more certificates encoded in PEM format.
-
-       .. option:: --http-tls-key
-
-              Specifies the path to a file containing the private key to be
-              used for HTTP-over-TLS connections. The file has to contain
-              exactly one private key encoded in PEM format.
-
-       .. option:: --http-tls-cert
-
-              Specifies the path to a file containing the server certificates
-              to be used for HTTP-over-TLS connections. The file has to
-              contain one or more certificates encoded in PEM format.
-
-       .. option:: --refresh=seconds
-
-              The amount of seconds the server should wait after having
-              finished updating and validating the local repository before
-              starting to update again. The next update will be earlier if
-              objects in the repository expire earlier and min-refresh is set. 
-              The default value is 600 seconds. The value is quietly limited
-              to a week (or 604,800 seconds).
-
-       .. option:: --min-refresh=seconds
-
-              The amount of seconds the server should at least wait after 
-              having finished updating and validating the local repository 
-              before starting to update again. If not set this will default to
-              refresh.
-
-       .. option:: --retry=seconds
-
-              The amount of seconds to suggest to an RTR client to wait
-              before trying to request data again if that failed. The default
-              value is 600 seconds, as recommended in :rfc:`8210`.
-
-       .. option:: --expire=seconds
-
-              The amount of seconds to an RTR client can keep using data if
-              it cannot refresh it. After that time, the client should
-              discard the data. Note that this value was introduced in
-              version 1 of the RTR protocol and is thus not relevant for
-              clients that only implement version 0. The default value, as
-              recommended in :rfc:`8210`, is 7200 seconds.
-
-       .. option:: --history=count
-
-              In RTR, a client can request to only receive the changes that
-              happened since the last version of the data it had seen. This
-              option sets how many change sets the server will at most keep.
-              If a client requests changes from an older version, it will get
-              the current full set.
-
-              Note that routers typically stay connected with their RTR
-              server and therefore really only ever need one single change
-              set. Additionally, if RTR server or router are restarted, they
-              will have a new session with new change sets and need to
-              exchange a full data set, too. Thus, increasing the value
-              probably only ever increases memory consumption.
-
-              The default value is 10.
-
-       .. option:: --pid-file=path
-
-              States a file which will be used in daemon mode to store the
-              processes PID. While the process is running, it will keep the
-              file locked.
-
-       .. option:: --working-dir=path
-
-              The working directory for the daemon process. In daemon mode,
-              Routinator will change to this directory while detaching from
-              the terminal.
-
-       .. option:: --chroot=path
-
-              The root directory for the daemon process. If this option is
-              provided, the daemon process will change its root directory to
-              the given directory. This will only work if all other paths
-              provided via the configuration or command line options are
-              under this directory.
-
-       .. option:: --user=user-name
-
-              The name of the user to change to for server mode. It this
-              option is provided, Routinator will run as that user after the
-              listening sockets for HTTP and RTR have been created. This may
-              cause problems, if the user is not allowed to write to the
-              directory given as repository directory or local exception
-              files.
-
-       .. option:: --group=group-name
-
-              The name of the group to change to for server mode. It this
-              option is provided, Routinator will run as that group after the
-              listening sockets for HTTP and RTR have been created.
+              The repository will not be updated before performing
+              validation.
 
 
 .. subcmd:: update
