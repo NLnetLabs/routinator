@@ -255,8 +255,7 @@ impl PayloadHistory {
         PayloadHistory {
             current: None,
             deltas: VecDeque::with_capacity(
-                config.history_size.checked_add(1)
-                .unwrap_or(config.history_size)
+                config.history_size.saturating_add(1)
             ),
             metrics: None,
             session: {
