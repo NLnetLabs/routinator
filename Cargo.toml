@@ -3,7 +3,7 @@
 name = "routinator"
 version = "0.15.4-dev"
 edition = "2021"
-rust-version = "1.87"
+rust-version = "1.89"
 resolver = "3"
 authors = ["NLnet Labs <rpki-team@nlnetlabs.nl>"]
 description = "An RPKI relying party software."
@@ -22,7 +22,7 @@ bytes           = "1.0.0"
 chrono          = "0.4.35"
 clap            = { version = "4.4", features = [ "wrap_help", "cargo", "derive" ] }
 crossbeam-queue = "0.3.1"
-dirs            = "6"
+dirs            = "7"
 form_urlencoded = "1.0"
 futures         = "0.3.4"
 http-body-util  = "0.1"
@@ -31,8 +31,8 @@ hyper-util      = { version = "0.1", features = [ "server" ] }
 listenfd        = "1"
 log             = "0.4.8"
 pin-project-lite = "0.2.4"
-rand            = "0.9.0"
-reqwest         = { version = "0.12.4", default-features = false, features = ["blocking", "rustls-tls", "gzip" ] }
+rand            = "0.10.3"
+reqwest         = { version = "0.13.5", default-features = false, features = ["blocking", "rustls", "gzip" ] }
 ring            = "0.17"
 rpki            = { version = "0.20.1", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ]}
 rustls-pemfile  = "2.1.2"

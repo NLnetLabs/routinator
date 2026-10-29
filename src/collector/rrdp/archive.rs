@@ -6,7 +6,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use log::{error, warn};
-use rand::Rng;
+use rand::RngExt;
 use rpki::{rrdp, uri};
 use uuid::Uuid;
 use crate::config::Config;
