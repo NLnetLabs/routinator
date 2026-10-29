@@ -254,7 +254,10 @@ impl PayloadHistory {
     pub fn from_config(config: &Config) -> Self {
         PayloadHistory {
             current: None,
-            deltas: VecDeque::with_capacity(config.history_size),
+            deltas: VecDeque::with_capacity(
+                config.history_size.checked_add(1)
+                .unwrap_or(config.history_size)
+            ),
             metrics: None,
             session: {
                 SystemTime::now()
@@ -280,10 +283,10 @@ impl PayloadHistory {
 
     /// Pushes a new delta to the history
     fn push_delta(&mut self, delta: PayloadDelta) {
-        if self.deltas.len() == self.keep {
+        self.deltas.push_front(Arc::new(delta));
+        while self.deltas.len() > self.keep {
             let _ = self.deltas.pop_back();
         }
-        self.deltas.push_front(Arc::new(delta))
     }
 
     /// Returns whether the history is already active.
