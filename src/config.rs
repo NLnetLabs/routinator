@@ -48,7 +48,7 @@ const DEFAULT_RETRY: u64 = 600;
 const DEFAULT_EXPIRE: u64 = 7200;
 
 /// The default number of VRP diffs to keep.
-const DEFAULT_HISTORY_SIZE: usize = 10;
+const DEFAULT_HISTORY_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
 /// The default for the RRDP timeout.
 const DEFAULT_RRDP_TIMEOUT: Duration = Duration::from_secs(600);
@@ -306,7 +306,7 @@ pub struct Config {
     pub expire: Duration,
 
     /// How many diffs to keep in the history.
-    pub history_size: usize,
+    pub history_size: NonZeroUsize,
 
     /// Addresses to listen on for RTR TCP transport connections.
     pub rtr_listen: Vec<SocketAddr>,
@@ -1041,7 +1041,7 @@ impl Config {
                 )
             },
             history_size: {
-                file.take_small_usize("history-size")?
+                file.take_small_nonzero_usize("history-size")?
                     .unwrap_or(DEFAULT_HISTORY_SIZE)
             },
             rtr_listen: {
@@ -1566,7 +1566,7 @@ impl Config {
         }
         insert_int(&mut res, "retry", self.retry.as_secs());
         insert_int(&mut res, "expire", self.expire.as_secs());
-        insert_int(&mut res, "history-size", self.history_size);
+        insert_int(&mut res, "history-size", self.history_size.get());
         insert(
             &mut res, "rtr-listen",
             toml::Value::Array(
@@ -2113,7 +2113,7 @@ struct ServerArgs {
 
     /// Number of history items to keep [default 10]
     #[arg(long, value_name = "COUNT")]
-    history: Option<usize>,
+    history: Option<NonZeroUsize>,
 
     /// Listen on address/port for RTR
     #[arg(long = "rtr", value_name = "ADDR:PORT")]
@@ -2895,7 +2895,7 @@ mod test {
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
         assert_eq!(config.expire, Duration::from_secs(8));
-        assert_eq!(config.history_size, 5000);
+        assert_eq!(config.history_size.get(), 5000);
         assert_eq!(
             config.rtr_listen,
             vec![
@@ -3006,7 +3006,7 @@ mod test {
         assert_eq!(config.refresh, Duration::from_secs(7));
         assert_eq!(config.retry, Duration::from_secs(8));
         assert_eq!(config.expire, Duration::from_secs(9));
-        assert_eq!(config.history_size, 1000);
+        assert_eq!(config.history_size.get(), 1000);
         assert_eq!(
             config.rtr_listen,
             vec![
