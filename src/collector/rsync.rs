@@ -487,7 +487,7 @@ impl RsyncCommand {
         let args = match config.rsync_args {
             Some(ref args) => {
                 for arg in args {
-                    if arg == "-e" || arg == "--rsh" {
+                    if arg == "-e" || arg.starts_with("--rsh") {
                         error!("illegal rsync argument {arg}");
                         return Err(Failed);
                     }
