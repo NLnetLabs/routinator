@@ -1014,8 +1014,8 @@ pub struct ValidateRsc {
     #[arg(long, value_name = "PATH")]
     document: Vec<PathBuf>,
 
-    /// Path to the signature file.
-    #[arg(long, value_name = "PATH")]
+    /// Path to the RSC file to validate.
+    #[arg(value_name = "RSC_PATH")]
     signature: PathBuf,
 
     /// Don’t update the repository.
