@@ -22,6 +22,7 @@ use std::{cmp, fmt, fs, thread};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -103,7 +104,7 @@ pub struct Engine {
     stale: FilterPolicy,
 
     /// Number of validation threads.
-    validation_threads: usize,
+    validation_threads: NonZeroUsize,
 
     /// Should we leave the repository dirty after a valiation run.
     dirty_repository: bool,
@@ -444,10 +445,10 @@ impl<P: ProcessRun> Run<'_, P> {
 
         // Keep a flag to cancel everything if something goes wrong.
         let thread_metrics = ArrayQueue::new(
-            self.validation.validation_threads
+            self.validation.validation_threads.get()
         );
         thread::scope(|scope| {
-            for _ in 0 .. self.validation.validation_threads {
+            for _ in 0 .. self.validation.validation_threads.get() {
                 scope.spawn(|| {
                     let mut metrics = metrics.fork();
                     while let Some(task) = tasks.pop() {

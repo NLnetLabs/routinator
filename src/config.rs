@@ -6,6 +6,7 @@
 //!
 //! [`Config`]: struct.Config.html
 
+use std::num::NonZeroUsize;
 use std::{env, fmt, fs, process};
 use std::collections::HashMap;
 use std::io::Read;
@@ -290,7 +291,7 @@ pub struct Config {
     pub dirty_repository: bool,
 
     /// Number of threads used during validation.
-    pub validation_threads: usize,
+    pub validation_threads: NonZeroUsize,
 
     /// The refresh interval for repository validation.
     pub refresh: Duration,
@@ -1015,7 +1016,7 @@ impl Config {
 
             dirty_repository: file.take_bool("dirty")?.unwrap_or(false),
             validation_threads: {
-                file.take_small_usize(
+                file.take_small_nonzero_usize(
                     "validation-threads"
                 )?.unwrap_or_else(|| {
                     Config::default_validation_threads()
@@ -1259,8 +1260,10 @@ impl Config {
     }
 
     /// Returns the default value for validation threads.
-    fn default_validation_threads() -> usize {
-        available_parallelism().map(|x| x.get()).unwrap_or(1)
+    fn default_validation_threads() -> NonZeroUsize {
+        available_parallelism().unwrap_or(
+            NonZeroUsize::new(1).expect("1 is not zero")
+        )
     }
 
     /// Alters paths so that they are relative to a possible chroot.
@@ -1459,7 +1462,9 @@ impl Config {
         insert(&mut res, "enable-bgpsec", self.enable_bgpsec);
         insert(&mut res, "enable-aspa", self.enable_aspa);
         insert(&mut res, "dirty", self.dirty_repository);
-        insert_int(&mut res, "validation-threads", self.validation_threads);
+        insert_int(
+            &mut res, "validation-threads", self.validation_threads.get()
+        );
         insert_int(&mut res, "refresh", self.refresh.as_secs());
         if let Some(min_refresh) = self.min_refresh.as_ref() {
             insert_int(&mut res, "min-refresh", min_refresh.as_secs());
@@ -1927,7 +1932,7 @@ struct GlobalArgs {
 
     /// Number of threads for validation
     #[arg(long, value_name = "COUNT")]
-    validation_threads: Option<usize>,
+    validation_threads: Option<NonZeroUsize>,
 
     /// Log more information, twice for even more
     #[arg(short, long, action = ArgAction::Count)]
@@ -2281,6 +2286,21 @@ impl ConfigFile {
             }
             None => Ok(None)
         }
+    }
+
+    /// Takes a small nonzero unsigned integer value from the config file.
+    ///
+    /// This is the same as `take_small_usize`, except with an additional
+    /// check to make sure the value is not 0.
+    fn take_small_nonzero_usize(
+        &mut self, key: &str
+    ) -> Result<Option<NonZeroUsize>, Failed> {
+        if let Some(value) = self.take_small_usize(key)? {
+            NonZeroUsize::new(value).ok_or(Failed).map(Some)
+        } else {
+            Ok(None)
+        }
+            
     }
 
     /// Takes a string value from the config file.
@@ -2743,7 +2763,7 @@ mod test {
             vec![PathBuf::from("/test/ex1"), PathBuf::from("/ex2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 1000);
+        assert_eq!(config.validation_threads.get(), 1000);
         assert_eq!(config.refresh, Duration::from_secs(6));
         assert_eq!(config.retry, Duration::from_secs(7));
         assert_eq!(config.expire, Duration::from_secs(8));
@@ -2827,7 +2847,7 @@ mod test {
             config.exceptions, [Path::new("/x1"), Path::new("/test/x2")]
         );
         assert!(config.strict);
-        assert_eq!(config.validation_threads, 2000);
+        assert_eq!(config.validation_threads.get(), 2000);
         assert_eq!(config.log_target, LogTarget::Syslog(Facility::LOG_AUTH));
     }
 
