@@ -4,13 +4,34 @@
 
 Breaking changes
 
+* Enabled ASPA and BGPsec by default. The command line options `--enable-aspa`
+  and `--enable-bgpsec` have been replaced with `--disable-aspa` and
+  `--disable-bgpsec`, respectively. ([#1112])
+* Enabled strict validataion mode is by default. The command line option
+  `--strict` has been replaced with `--relaxed`. ([#1112])
+
 New
 
 Improvements
 
 Bug fixes
 
+* Correctly merge ASPAs with an AS0-only provider list. ([#1143])
+* Fixed a bug where setting max-object-size to 0 to indicate no limit is
+  interpreted as a limit of 0 when downloading HTTP TA certificates.
+  ([#1122])
+* Limited the timing values sent by the RTR server to the range defined in
+  RFC 8210. ([#1124])
+* Fixed a panic when both `refresh` and `rrdp-fallback-time` are set to 0.
+  ([#1128])
+
 Other changes
+
+[#1112]: https://github.com/NLnetLabs/routinator/pull/1112
+[#1122]: https://github.com/NLnetLabs/routinator/pull/1122
+[#1124]: https://github.com/NLnetLabs/routinator/pull/1124
+[#1128]: https://github.com/NLnetLabs/routinator/pull/1128
+[#1143]: https://github.com/NLnetLabs/routinator/pull/1143
 
 
 ## 0.15.3 “Until It Ends, There Is No End”
