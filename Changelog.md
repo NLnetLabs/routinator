@@ -5,7 +5,13 @@
 
 Bug fixes
 
-Other fixes
+Other changes
+
+* Updated the bundled Routinator UI to release [0.5.2][ui-0.5.2]
+  ([#1156])
+
+[#1156]: https://github.com/NLnetLabs/routinator/pull/1156
+[ui-0.5.2]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.5.0
 
 
 ## 0.16.0-rc1
