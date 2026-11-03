@@ -489,7 +489,7 @@ async fn handle_api_status(
                                         message.repository_level
                                     );
                                     target.member_str(
-                                        "messages", &message.content
+                                        "message", &message.content
                                     );
                                 })
                             }
@@ -560,7 +560,7 @@ async fn handle_api_status(
                                         message.repository_level
                                     );
                                     target.member_str(
-                                        "messages", &message.content
+                                        "message", &message.content
                                     );
                                 })
                             }
@@ -580,7 +580,7 @@ async fn handle_api_status(
                                 "repository_level", 
                                 message.repository_level
                             );
-                            target.member_str("messages", &message.content);
+                            target.member_str("message", &message.content);
                         });
                     }
                 });
