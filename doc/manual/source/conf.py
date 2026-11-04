@@ -133,8 +133,8 @@ html_theme_options = {
     'source_repository': 'https://github.com/NLnetLabs/routinator/',
     'source_branch': os.environ.get('READTHEDOCS_GIT_IDENTIFIER', 'main'),
     'source_directory': 'doc/manual/source/',
-    'light_logo': 'images/nlnetlabs-wordmark.svg',
-    'dark_logo': 'images/nlnetlabs-wordmark-white.svg',
+    'light_logo': 'images/routinator-wordmark.svg',
+    'dark_logo': 'images/routinator-wordmark-white.svg',
     'light_css_variables': {
         'font-stack': '"NLnet Labs Montserrat", system-ui, sans-serif',
         'font-stack--headings': '"NLnet Labs Mackinac", Georgia, serif',
