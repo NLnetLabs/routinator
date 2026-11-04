@@ -33,8 +33,8 @@ Open-source with professional support services
    .. only:: html
 
       |discord| |mastodon|
-      
-      .. |discord| image:: https://img.shields.io/discord/818584154278199396   
+
+      .. |discord| image:: https://img.shields.io/discord/818584154278199396
          :alt: Discord
          :target: https://discord.gg/8dvKB5Ykhy
 
@@ -58,7 +58,7 @@ Open-source with professional support services
    installation
    building
    configuration
-   
+
 .. toctree::
    :maxdepth: 2
    :hidden:
@@ -82,7 +82,7 @@ Open-source with professional support services
    user-interface
    api-endpoints
    monitoring
-   
+
 .. toctree::
    :maxdepth: 2
    :hidden:
@@ -98,7 +98,7 @@ Open-source with professional support services
    :hidden:
    :caption: Reference
    :name: toc-reference
-   
+
    manual-page
    threat-model
    json-metrics

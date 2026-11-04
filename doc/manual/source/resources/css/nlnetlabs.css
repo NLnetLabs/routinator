@@ -1,0 +1,77 @@
+/* NLnet Labs typography; colours follow Furo’s light/dark theme selection. */
+@font-face {
+  font-family: "NLnet Labs Montserrat";
+  src: url("../fonts/Montserrat-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NLnet Labs Montserrat";
+  src: url("../fonts/Montserrat-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NLnet Labs Montserrat";
+  src: url("../fonts/Montserrat-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NLnet Labs Montserrat";
+  src: url("../fonts/Montserrat-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NLnet Labs Mackinac";
+  src: url("../fonts/P22Mackinac-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+body { line-height: 1.7; }
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+h1 { letter-spacing: -.03em; }
+.sidebar-brand { gap: 1rem; padding-top: 2rem; padding-bottom: 1.5rem; }
+.sidebar-logo { width: 100%; max-width: 210px; }
+.sidebar-brand-text { font-size: 1rem; font-weight: 500; line-height: 1.5; }
+.sidebar-tree a, .toc-tree a { font-weight: 500; }
+.sidebar-tree .current-page > .reference {
+  box-shadow: inset 3px 0 #f36c21;
+  background: var(--color-background-hover);
+}
+a:focus-visible, button:focus-visible, input:focus-visible,
+label:has(+ input:focus-visible) {
+  outline: 2px solid var(--color-brand-content);
+  outline-offset: 3px;
+}
+
+/* Match the installation tabs to Furo's selected colour mode. */
+body[data-theme] .sphinx-tabs [role="tablist"],
+body[data-theme] .sphinx-tabs-panel { border-color: var(--color-background-border); }
+body[data-theme] .sphinx-tabs-tab {
+  font-family: var(--font-stack);
+  font-weight: 500;
+  color: var(--color-foreground-primary);
+  background: transparent;
+}
+body[data-theme] .sphinx-tabs-panel,
+body[data-theme] .sphinx-tabs-tab[aria-selected="true"] {
+  color: var(--color-foreground-primary);
+  background: var(--color-background-secondary);
+}
+body[data-theme] .sphinx-tabs-tab[aria-selected="true"] {
+  border-color: var(--color-background-border);
+  border-bottom: 1px solid var(--color-background-secondary);
+  box-shadow: inset 0 3px #f36c21;
+}
