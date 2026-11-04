@@ -19,11 +19,6 @@ import sys
 
 import toml
 import datetime
-try:
-    import versionwarning
-    versionbanner = True
-except ModuleNotFoundError:
-    versionbanner = False
 
 # -- Project information -----------------------------------------------------
 
@@ -44,14 +39,6 @@ rst_epilog = f"""
 
 # The full version, including alpha/beta/rc tags
 release = version
-
-# -- Version Warning Banner configuration ------------------------------------
-if versionbanner:
-    versionwarning_messages = {
-        'latest': 'You are reading the <code class="docutils literal notranslate"><span class="pre">latest</span></code> (unstable) version of this documentation, which may describe features which are not available in the <a href="/en/stable/">stable version</a>.',
-    }
-    versionwarning_banner_title = 'Note'
-    versionwarning_body_selector = 'div[itemprop="articleBody"]'
 
 # -- Sphinx Tabs configuration -----------------------------------------------
 
@@ -76,10 +63,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
     'notfound.extension',
-    'sphinxcontrib.jquery'
 ]
-if versionbanner:
-    extensions.append('versionwarning.extension')
 
 intersphinx_mapping = {
     'rtrtr': ('https://rtrtr.docs.nlnetlabs.nl/en/stable/', None),
