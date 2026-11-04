@@ -9,11 +9,13 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use futures::{pin_mut, Stream};
 use futures::future::{pending, select_all};
-use log::error;
+use log::{error, warn};
+use pin_project_lite::pin_project;
 use rpki::rtr::server::{NotifySender, Server, Socket};
 use rpki::rtr::state::State;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::Sleep;
 use tokio_rustls::TlsAcceptor;
 use crate::config::Config;
 use crate::error::ExitError;
@@ -118,7 +120,8 @@ async fn single_rtr_listener(
     };
     let tls = tls.map(TlsAcceptor::from);
     let listener = RtrListener {
-        tcp: listener, tls, keepalive, server_metrics
+        tcp: listener, backoff: None,
+        tls, keepalive, server_metrics, addr: addr.clone(),
     };
     if let Err(err) = Server::new(
         listener, sender, origins.clone()
@@ -130,12 +133,16 @@ async fn single_rtr_listener(
 
 //------------ RtrListener --------------------------------------------------
 
-/// A wrapper around an TCP listener that produces RTR streams.
-struct RtrListener {
-    tcp: TcpListener,
-    tls: Option<TlsAcceptor>,
-    keepalive: Option<Duration>,
-    server_metrics: Arc<RtrServerMetrics>,
+pin_project! {
+    /// A wrapper around an TCP listener that produces RTR streams.
+    struct RtrListener {
+        tcp: TcpListener,
+        backoff: Option<Pin<Box<Sleep>>>,
+        tls: Option<TlsAcceptor>,
+        keepalive: Option<Duration>,
+        server_metrics: Arc<RtrServerMetrics>,
+        addr: String,
+    }
 }
 
 impl Stream for RtrListener {
@@ -145,18 +152,31 @@ impl Stream for RtrListener {
         self: Pin<&mut Self>,
         ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        match self.tcp.poll_accept(ctx) {
+        let this = self.project();
+        if let Some(backoff) = this.backoff.as_mut() {
+            if matches!(backoff.as_mut().poll(ctx), Poll::Pending) {
+                return Poll::Pending;
+            }
+            *this.backoff = None;
+        }
+        match this.tcp.poll_accept(ctx) {
             Poll::Ready(Ok((sock, addr))) => {
                 match RtrStream::new(
                     sock, addr,
-                    self.tls.as_ref(), self.keepalive,
-                    &self.server_metrics,
+                    this.tls.as_ref(), *this.keepalive,
+                    this.server_metrics,
                 ) {
                     Ok(stream) => Poll::Ready(Some(Ok(stream))),
                     Err(_) => Poll::Pending,
                 }
             }
-            Poll::Ready(Err(err)) => Poll::Ready(Some(Err(err))),
+            Poll::Ready(Err(err)) => {
+                warn!("Accept error in RTR server {}: {}", this.addr, err);
+                *this.backoff = Some(Box::pin(
+                    tokio::time::sleep(Duration::from_millis(100))
+                ));
+                Poll::Pending
+            }
             Poll::Pending => Poll::Pending,
         }
     }

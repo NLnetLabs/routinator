@@ -6,7 +6,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use log::{error, warn};
-use rand::Rng;
+use rand::RngExt;
 use rpki::{rrdp, uri};
 use uuid::Uuid;
 use crate::config::Config;
@@ -61,7 +61,7 @@ impl RrdpArchive {
         Ok(Some(Self { path, archive }))
     }
 
-    pub fn open(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
+    pub fn open_read(path: Arc<PathBuf>) -> Result<Self, RunFailed> {
         let archive = archive::Archive::open(
             path.as_ref(), false
         ).map_err(|err| match err {
@@ -568,12 +568,20 @@ impl FallbackTime {
 
     /// Picks a best-before date for a repository updated around now.
     pub fn best_before(self) -> DateTime<Utc> {
+        if self.max <= self.min {
+            // We cannot sample from an empty range, so the best we can do is
+            // just now?
+            return Utc::now();
+        }
+
         // Saturating conversion between std’s and chrono’s Duration types.
-        Utc::now() + chrono::Duration::from_std(
-            rand::rng().random_range(self.min..self.max)
-        ).unwrap_or_else(|_| {
-            chrono::Duration::try_milliseconds(i64::MAX).unwrap()
-        })
+        Utc::now().checked_add_signed(
+            chrono::Duration::from_std(
+                rand::rng().random_range(self.min..self.max)
+            ).unwrap_or_else(|_| {
+                chrono::Duration::try_milliseconds(i64::MAX).unwrap()
+            })
+        ).unwrap_or(DateTime::<Utc>::MAX_UTC)
     }
 }
 

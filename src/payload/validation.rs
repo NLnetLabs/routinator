@@ -752,7 +752,11 @@ impl<'a> SnapshotBuilder<'a> {
     fn process_aspa(&mut self, aspa: PubAspa, metrics: &mut AllVrpMetrics) {
         metrics.update(|m| m.aspas.valid += 1);
 
-        // SLURM filtering goes here ...
+        // Is the ASPA to be filtered locally?
+        if self.exceptions.drop_aspa(aspa.customer) {
+            metrics.update(|m| m.aspas.locally_filtered += 1);
+            return
+        }
 
         match self.aspas.entry(aspa.customer) {
             hash_map::Entry::Vacant(entry) => {
@@ -760,10 +764,17 @@ impl<'a> SnapshotBuilder<'a> {
                 metrics.update(|m| m.aspas.contributed += 1);
             }
             hash_map::Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.0 = entry.0.union(&aspa.providers).collect();
-                entry.1.add_published(aspa.info);
-                metrics.update(|m| m.aspas.duplicate += 1);
+                if !is_as0(&aspa.providers) {
+                    let entry = entry.get_mut();
+                    if is_as0(&entry.0) {
+                        entry.0 = aspa.providers;
+                    }
+                    else {
+                        entry.0 = entry.0.union(&aspa.providers).collect();
+                    }
+                    entry.1.add_published(aspa.info);
+                    metrics.update(|m| m.aspas.duplicate += 1);
+                }
             }
         }
     }
@@ -825,7 +836,32 @@ impl<'a> SnapshotBuilder<'a> {
             }
         }
 
-        // XXX ASPA assertions.
+        for (aspa, info) in self.exceptions.aspa_assertions() {
+            match self.aspas.entry(aspa.customer) {
+                hash_map::Entry::Vacant(entry) => {
+                    entry.insert((
+                        SmallAsnSet::from_iter(aspa.providers.iter()), 
+                        info.into()
+                    ));
+                    metrics.local.aspas.contributed += 1;
+                    metrics.snapshot.payload.aspas.contributed += 1;
+                },
+                hash_map::Entry::Occupied(mut entry) => {
+                    if !is_as0(&aspa.providers) {
+                        let entry = entry.get_mut();
+                        if is_as0(&entry.0) {
+                            entry.0 = aspa.providers;
+                        }
+                        else {
+                            entry.0 = entry.0.union(&aspa.providers).collect();
+                        }
+                        entry.1.add_local(info);
+                    }
+                    metrics.local.aspas.duplicate += 1;
+                    metrics.snapshot.payload.aspas.duplicate += 1;
+                },
+            }
+        }
     }
 
     fn into_snapshot(self, metrics: &mut Metrics) -> PayloadSnapshot {
@@ -899,3 +935,18 @@ impl<'a> AllVrpMetrics<'a> {
     }
 }
 
+
+//------------ Helper Functions ----------------------------------------------
+
+/// Returns whether an AS set contains only AS0.
+fn is_as0(as_set: &SmallAsnSet) -> bool {
+    let mut iter = as_set.iter();
+    let Some(first) = iter.next() else { return false };
+    if first.into_u32() != 0 {
+        return false;
+    }
+    if iter.next().is_some() {
+        return false;
+    }
+    true
+}

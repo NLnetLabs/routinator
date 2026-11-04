@@ -105,8 +105,8 @@ own:
       dirty = false
       disable-rrdp = false
       disable-rsync = false
-      enable-aspa = false
-      enable-bgpsec = false
+      enable-aspa = true
+      enable-bgpsec = true
       exceptions = []
       expire = 7200
       history-size = 10
@@ -131,7 +131,7 @@ own:
       rtr-tcp-keepalive = 60
       rtr-tls-listen = []
       stale = "reject"
-      strict = false
+      strict = true
       syslog-facility = "daemon"
       systemd-listen = false
       unknown-objects = "warn"

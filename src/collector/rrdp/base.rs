@@ -1,5 +1,5 @@
-use std::error::Error;
 use std::{cmp, fs, io};
+use std::io::Read;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
@@ -9,15 +9,17 @@ use log::{debug, error, info, warn};
 use rpki::uri;
 use rpki::crypto::DigestAlgorithm;
 use rpki::rrdp::{DeltaInfo, DeltaListError, NotificationFile};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
+use crate::collector::rrdp::http::LimitedDataRead;
 use crate::config::Config;
 use crate::error::{Fatal, RunFailed};
-use crate::log::LogBookWriter;
+use crate::log::{LogBookWriter, Logger};
 use crate::metrics::{Metrics, RrdpRepositoryMetrics};
 use crate::utils::fatal;
 use crate::utils::archive::{ArchiveError, OpenError};
 use crate::utils::dump::DumpRegistry;
 use crate::utils::json::JsonBuilder;
+use crate::utils::log::unroll_error;
 use crate::utils::sync::{Mutex, RwLock};
 use crate::utils::uri::UriExt;
 use super::archive::{
@@ -42,6 +44,9 @@ pub struct Collector {
 
     /// Various configuration options.
     config: RrdpConfig,
+
+    /// The logger for repository messages
+    repository_logger: Option<Arc<Logger>>,
 }
 
 impl Collector {
@@ -82,14 +87,18 @@ impl Collector {
     /// Creates a new RRDP collector.
     ///
     /// Returns `Ok(None)` if RRDP was disabled.
-    pub fn new(config: &Config) -> Result<Option<Self>, Fatal> {
+    pub fn new(
+        config: &Config,
+        repository_logger: Option<&Arc<Logger>>,
+    ) -> Result<Option<Self>, Fatal> {
         if config.disable_rrdp {
             return Ok(None)
         }
         Ok(Some(Self {
             working_dir: Self::create_working_dir(config)?,
             http: HttpClient::new(config)?,
-            config: config.into(),
+            config: RrdpConfig::from_config(config),
+            repository_logger: repository_logger.cloned(),
         }))
     }
 
@@ -190,7 +199,7 @@ impl Collector {
         registry: &mut DumpRegistry,
         state_registry: &mut HashMap<uri::Https, RepositoryState>,
     ) -> Result<(), RunFailed> {
-        let archive = RrdpArchive::open(repo_path.clone())?;
+        let archive = RrdpArchive::open_read(repo_path.clone())?;
         let state = archive.load_state()?;
         let target_path = registry.get_repo_path(Some(&state.rpki_notify));
         let object_path = target_path.join("rsync");
@@ -319,6 +328,30 @@ impl Collector {
         Ok((file, path.into()))
     }
 
+    fn temp_dir(
+        &self
+    ) -> Result<TempDir, Fatal> {
+        let base = self.working_dir.join("tmp");
+        if let Err(err) = fs::create_dir_all(&base) {
+            error!(
+                "Failed to create RRDP temporary directory {}: {}",
+                base.display(), err
+            );
+            return Err(Fatal)
+        }
+        let path = match TempDir::new_in(&base) {
+            Ok(dir) => dir,
+            Err(err) => {
+                error!(
+                    "Failed to create temporary directory in {}: {}",
+                    base.display(), err
+                );
+                return Err(Fatal)
+            }
+        };
+        Ok(path)
+    }
+
     pub(super) fn http(&self) -> &HttpClient {
         &self.http
     }
@@ -367,22 +400,32 @@ impl<'a> Run<'a> {
     /// This just downloads the file. It is not cached since that is done
     /// by the store anyway.
     pub fn load_ta(&self, uri: &uri::Https) -> Option<Bytes> {
-        let mut response = match self.collector.http.response(uri) {
+        let response = match self.collector.http.response(uri) {
             Ok(response) => response,
             Err(_) => return None,
         };
-        if response.content_length() > self.collector.config().max_object_size {
+        if self.collector.config().max_object_size.is_some() && 
+           response.content_length() > self.collector.config().max_object_size 
+        {
             warn!(
                 "Trust anchor certificate {uri} exceeds size limit. \
                  Ignoring."
             );
             return None
         }
+
+        let mut reader = LimitedDataRead::new(
+            response, 
+            uri, 
+            self.collector.config().max_object_size
+        );
         let mut bytes = Vec::new();
-        if let Err(err) = response.copy_to(&mut bytes) {
-            info!("Failed to get trust anchor {uri}: {err}");
-            return None
+        if let Err(err) = reader.read_to_end(&mut bytes) {
+            warn!(
+                "Could not read trust anchor certificate: {err}."
+            );
         }
+
         Some(Bytes::from(bytes))
     }
 
@@ -426,9 +469,11 @@ impl<'a> Run<'a> {
         }
 
         let mut log = LogBookWriter::new(
-            self.collector.config.log_repository_issues.then(|| {
+            self.collector.repository_logger.is_some().then(|| {
                 format!("RRDP {}: ", rpki_notify)
-            })
+            }),
+            self.collector.repository_logger.clone(),
+            self.collector.config.max_repository_level,
         );
 
         // Now we can update the repository. But we only do this if we like
@@ -586,7 +631,7 @@ impl<'a> Run<'a> {
         path: Arc<PathBuf>,
         retain: &HashSet<uri::Https>
     ) -> Result<bool, RunFailed> {
-        let archive = RrdpArchive::open(path)?;
+        let archive = RrdpArchive::open_read(path)?;
         let state = archive.load_state()?;
         Ok(retain.contains(&state.rpki_notify))
     }
@@ -620,19 +665,19 @@ pub struct RrdpConfig {
     /// The maximum length of the delta list in a notification file.
     pub max_delta_list_len: usize,
 
-    /// Log issues also to the process log?
-    pub log_repository_issues: bool,
+    /// The maximum level we want to log repository messages for
+    max_repository_level: log::LevelFilter,
 }
 
-impl<'a> From<&'a Config> for RrdpConfig {
-    fn from(config: &'a Config) -> Self {
+impl RrdpConfig {
+    fn from_config(config: &Config) -> Self {
         Self {
             filter_dubious: !config.allow_dubious_hosts,
             fallback_time: FallbackTime::from_config(config),
             max_object_size: config.max_object_size,
             max_delta_count: config.rrdp_max_delta_count,
             max_delta_list_len: config.rrdp_max_delta_list_len,
-            log_repository_issues: config.log_repository_issues,
+            max_repository_level: config.repository_log_level,
         }
     }
 }
@@ -680,7 +725,7 @@ pub struct ReadRepository {
 impl ReadRepository {
     fn new(repository: &Repository) -> Result<Self, RunFailed> {
         Ok(Self {
-            archive: RrdpArchive::open(repository.path.clone())?,
+            archive: RrdpArchive::open_read(repository.path.clone())?,
         })
     }
 
@@ -799,13 +844,13 @@ impl<'a> RepositoryUpdate<'a> {
             LoadResult::Current
         }
         else if let Some(date) = best_before {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and current copy is expired since {date}.",
             ));
             LoadResult::Stale
         }
         else {
-            self.log.info(format_args!(
+            self.log.warn(format_args!(
                 "Update failed and there is no current copy."
             ));
             LoadResult::Unavailable
@@ -897,29 +942,20 @@ impl<'a> RepositoryUpdate<'a> {
                 return Err(err)
             }
             else if let SnapshotError::Http(err) = err {
-                if let Some(source) = err.source() {
-                    warn!(
-                        "RRDP {}: Failed to process snapshot file {}: {} ({})",
-                        self.rpki_notify, notify.content().snapshot().uri(), 
-                        err, source
-                    );
-                } else {
-                    warn!(
-                        "RRDP {}: Failed to process snapshot file {}: {}",
-                        self.rpki_notify, notify.content().snapshot().uri(), 
-                        err
-                    );
-                }
+                warn!(
+                    "RRDP {}: Failed to process snapshot file {}: {}",
+                    self.rpki_notify, notify.content().snapshot().uri(), 
+                    unroll_error(&err)
+                );
                 return Ok(false)
             } 
             else if let SnapshotError::Rrdp(err) = err {
-
-                let mut err: &dyn Error = &err;
-                while let Some(e) = err.source() {
-                    err = e;
-                }
-                warn!("RRDP {}: Failed to process snapshot file XML {}: {}", 
-                    self.rpki_notify, notify.content().snapshot().uri(), err);
+                warn!(
+                    "RRDP {}: Failed to process snapshot file XML {}: {}", 
+                    self.rpki_notify, 
+                    notify.content().snapshot().uri(), 
+                    unroll_error(&err)
+                );
                 return Ok(false);
             }
             else {
@@ -967,7 +1003,7 @@ impl<'a> RepositoryUpdate<'a> {
     fn delta_update(
         &mut self,
         notify: &Notification,
-        mut archive: RrdpArchive,
+        archive: RrdpArchive,
         state: RepositoryState,
     ) -> Result<Option<SnapshotReason>, RunFailed> {
         if let Err(err) = notify.content().delta_status() {
@@ -990,6 +1026,24 @@ impl<'a> RepositoryUpdate<'a> {
             Err(reason) => return Ok(Some(reason)),
         };
 
+        let archive_path = archive.path().clone();
+        let temp_dir = self.collector.temp_dir()?;
+        let temp_path = Arc::new(temp_dir.path().join("archive"));
+        if fs::rename(
+            archive_path.as_path(), 
+            temp_path.clone().as_path()
+        ).is_err() {
+            return Err(RunFailed::fatal());
+        }
+
+        drop(archive);
+        let mut temp_archive = 
+            match RrdpArchive::try_open(temp_path.clone())?
+        {
+            Some(archive) => archive,
+            None => return Err(RunFailed::retry()),
+        };
+
         if !deltas.is_empty() {
             let count = deltas.len();
             for (i, info) in deltas.iter().enumerate() {
@@ -997,7 +1051,7 @@ impl<'a> RepositoryUpdate<'a> {
                     "Delta update step ({}/{}).", i + 1, count
                 ));
                 if let Err(err) = DeltaUpdate::new(
-                    self.collector, &mut archive,
+                    self.collector, &mut temp_archive,
                     notify.content().session_id(),
                     info, &mut self.metrics
                 ).try_update() {
@@ -1012,7 +1066,7 @@ impl<'a> RepositoryUpdate<'a> {
         // We are up-to-date now, so we can replace the state file with one
         // reflecting the notification we’ve got originally. This will update
         // the etag and last-modified data.
-        if let Err(err) = archive.update_state(
+        if let Err(err) = temp_archive.update_state(
             &notify.to_repository_state(self.collector.config.fallback_time)
         ) {
             if err.should_retry() {
@@ -1023,7 +1077,15 @@ impl<'a> RepositoryUpdate<'a> {
             }
         }
 
-        self.log.debug(format_args!("Delta update completed."));
+        if fs::rename(
+            temp_path.as_path(),
+            archive_path.as_path()
+        ).is_err() {
+            return Err(RunFailed::fatal());
+        }
+        drop(temp_dir);
+
+        self.log.info(format_args!("Delta update completed."));
         Ok(None)
     }
 

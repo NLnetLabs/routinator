@@ -5,8 +5,9 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use log::error;
+use rpki::resources::asn::{Asn, SmallAsnSet};
 use rpki::rtr::payload::{RouteOrigin, RouterKey};
-use rpki::slurm::{BgpsecFilter, PrefixFilter, SlurmFile};
+use rpki::slurm::{AspaFilter, BgpsecFilter, PrefixFilter, SlurmFile};
 use crate::config::Config;
 use crate::error::Failed;
 
@@ -17,9 +18,11 @@ use crate::error::Failed;
 pub struct LocalExceptions {
     origin_filters: Vec<PrefixFilter>,
     router_key_filters: Vec<BgpsecFilter>,
+    aspa_filters: Vec<AspaFilter>,
 
     origin_assertions: Vec<(RouteOrigin, Arc<ExceptionInfo>)>,
     router_key_assertions: Vec<(RouterKey, Arc<ExceptionInfo>)>,
+    aspa_assertions: Vec<(AspaAssertion, Arc<ExceptionInfo>)>,
 }
 
 impl LocalExceptions {
@@ -121,6 +124,15 @@ impl LocalExceptions {
                 item
             })
         );
+        self.aspa_filters.extend(
+            json.filters.aspa.unwrap_or_default()
+                    .into_iter().map(|mut item| {
+                if !keep_comments {
+                    item.comment = None
+                }
+                item
+            })
+        );
         self.origin_assertions.extend(
             json.assertions.prefix.into_iter().map(|item| {
                 (
@@ -149,6 +161,24 @@ impl LocalExceptions {
                 )
             })
         );
+        if let Some(aspa_assertions) = json.assertions.aspa {
+            self.aspa_assertions.extend(
+                aspa_assertions.into_iter().map(|item| {
+                    (
+                        AspaAssertion {
+                            customer: item.customer_asn,
+                            providers: item.provider_asns.iter().collect(),
+                        },
+                        info.cloned().unwrap_or_else(|| {
+                            Arc::new(ExceptionInfo {
+                                path: path.clone(),
+                                comment: item.comment,
+                            })
+                        })
+                    )
+                })
+            );
+        }
     }
 
     pub fn drop_origin(&self, origin: RouteOrigin) -> bool {
@@ -158,6 +188,12 @@ impl LocalExceptions {
     pub fn drop_router_key(&self, key: &RouterKey) -> bool {
         self.router_key_filters.iter().any(|filter| {
             filter.drop_router_key(key)
+        })
+    }
+
+    pub fn drop_aspa(&self, customer: Asn) -> bool {
+        self.aspa_filters.iter().any(|filter| {
+            filter.drop_aspa(customer)
         })
     }
 
@@ -176,6 +212,23 @@ impl LocalExceptions {
             (key.clone(), info.clone())
         })
     }
+
+    pub fn aspa_assertions(
+        &self
+    ) -> impl Iterator<Item = (AspaAssertion, Arc<ExceptionInfo>)> + '_ {
+        self.aspa_assertions.iter().map(|(aspa, info)| {
+            (aspa.clone(), info.clone())
+        })
+    }
+}
+
+
+//------------ AspaAssertion -------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct AspaAssertion {
+    pub customer: Asn,
+    pub providers: SmallAsnSet,
 }
 
 

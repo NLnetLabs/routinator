@@ -15,7 +15,8 @@ use crate::config::Config;
 use crate::error::Failed;
 use crate::http::ContentType;
 use crate::payload::{
-    PayloadInfo, PayloadSnapshot
+    PayloadInfo, PayloadSnapshot, SnapshotArcAspaIter, 
+    SnapshotArcOriginIter, SnapshotArcRouterKeyIter
 };
 use crate::metrics::Metrics;
 use crate::utils::date::format_iso_date;
@@ -477,6 +478,12 @@ struct OutputStream<Target> {
     metrics: Arc<Metrics>,
     state: StreamState,
     formatter: Box<dyn Formatter<Target> + Send + Sync>,
+    origin_iter: SnapshotArcOriginIter,
+    origin_first: bool,
+    router_key_iter: SnapshotArcRouterKeyIter,
+    router_key_first: bool,
+    aspa_iter: SnapshotArcAspaIter,
+    aspa_first: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -503,9 +510,17 @@ impl<Target: io::Write> OutputStream<Target> {
         format: OutputFormat,
     ) -> Self {
         OutputStream {
-            output, snapshot, metrics,
+            output, 
+            snapshot: snapshot.clone(), 
+            metrics,
             state: StreamState::Header,
             formatter: format.formatter(),
+            origin_iter: snapshot.clone().arc_origin_iter(),
+            origin_first: true,
+            router_key_iter: snapshot.clone().arc_router_key_iter(),
+            router_key_first: true,
+            aspa_iter: snapshot.clone().arc_aspa_iter(),
+            aspa_first: true
         }
     }
 
@@ -524,47 +539,57 @@ impl<Target: io::Write> OutputStream<Target> {
                 )?
             },
             StreamState::OriginBefore => {
-                self.formatter.before_origins(target, self.output.route_origins)?
+                self.formatter.before_origins(
+                    target, self.output.route_origins
+                )?
             },
             StreamState::Origin => {
-                let mut iter = self.snapshot.clone().arc_origin_iter();
-                let mut first = true;
-                while let Some((origin, info)) = iter.next_with_info() {
+                let mut next_state = StreamState::OriginAfter;
+                while let Some((origin, info)) = 
+                    self.origin_iter.next_with_info() 
+                {
                     if !self.output.include_origin(origin) {
                         continue
                     }
-                    if first {
-                        first = false;
+                    if self.origin_first {
+                        self.origin_first = false;
                     }
                     else {
                         self.formatter.origin_delimiter(target)?;
                     }
                     self.formatter.origin(origin, info, target)?;
+                    next_state = StreamState::Origin;
+                    break;
                 }
-                StreamState::OriginAfter
+                next_state
             },
             StreamState::OriginAfter => {
                 self.formatter.after_origins(target)?
             },
             StreamState::KeyBefore => {
-                self.formatter.before_router_keys(target, self.output.router_keys)?
+                self.formatter.before_router_keys(
+                    target, self.output.router_keys
+                )?
             },
             StreamState::Key => {
-                let mut iter = self.snapshot.clone().arc_router_key_iter();
-                let mut first = true;
-                while let Some((key, info)) = iter.next_with_info() {
+                let mut next_state = StreamState::KeyAfter;
+                while let Some((key, info)) = 
+                    self.router_key_iter.next_with_info() 
+                {
                     if !self.output.include_router_key(key) {
                         continue
                     }
-                    if first {
-                        first = false;
+                    if self.router_key_first {
+                        self.router_key_first = false;
                     }
                     else {
                         self.formatter.router_key_delimiter(target)?;
                     }
                     self.formatter.router_key(key, info, target)?;
+                    next_state = StreamState::Key;
+                    break;
                 }
-                StreamState::KeyAfter
+                next_state
             },
             StreamState::KeyAfter => {
                 self.formatter.after_router_keys(target)?
@@ -573,21 +598,24 @@ impl<Target: io::Write> OutputStream<Target> {
                 self.formatter.before_aspas(target, self.output.aspas)?
             },
             StreamState::Aspa => {
-                let mut iter = self.snapshot.clone().arc_aspa_iter();
-                let mut first = true;
-                while let Some((aspa, info)) = iter.next_with_info() {
+                let mut next_state = StreamState::AspaAfter;
+                while let Some((aspa, info)) = 
+                    self.aspa_iter.next_with_info() 
+                {
                     if !self.output.include_aspa(aspa) {
                         continue
                     }
-                    if first {
-                        first = false;
+                    if self.aspa_first {
+                        self.aspa_first = false;
                     }
                     else {
                         self.formatter.aspa_delimiter(target)?;
                     }
                     self.formatter.aspa(aspa, info, target)?;
+                    next_state = StreamState::Aspa;
+                    break;
                 }
-                StreamState::AspaAfter
+                next_state
             },
             StreamState::AspaAfter => {
                 self.formatter.after_aspas(target)?

@@ -11,6 +11,8 @@
 //! Secondly, [`ExitError`] is used when the program should be terminated. It
 //! provides enough information to determine the exit code of the program.
 
+use std::io;
+
 use log::error;
 
 
@@ -27,6 +29,50 @@ pub struct Failed;
 impl From<Fatal> for Failed {
     fn from(_: Fatal) -> Failed {
         Failed
+    }
+}
+
+
+//------------ PubPointFailed ------------------------------------------------
+
+/// A publication point item has failed to complete.
+/// 
+/// This error type is used to indicate that an operation has failed, but
+/// that it may be due to some shenanigans from a publication point
+/// (Though most of the time it will just be fatal)
+/// 
+/// `Recoverable` is only to be used when the publication point is to blame.
+/// 
+/// Intentionally does not implement `From` for `RunFailed`.
+#[derive(Clone, Copy, Debug)]
+pub enum PubPointFailed {
+    Recoverable(std::io::ErrorKind),
+    Fatal,
+}
+
+impl PubPointFailed {
+    pub fn is_recoverable(err: io::ErrorKind) -> bool {
+        matches!(err, 
+            io::ErrorKind::AlreadyExists | 
+            io::ErrorKind::InvalidFilename |
+            io::ErrorKind::IsADirectory |
+            io::ErrorKind::NotADirectory
+        )
+    }
+}
+
+impl From<Failed> for PubPointFailed {
+    fn from(_: Failed) -> Self {
+        PubPointFailed::Fatal
+    }
+}
+
+impl From<io::Error> for PubPointFailed {
+    fn from(err: io::Error) -> Self {
+        match Self::is_recoverable(err.kind()) {
+            true => PubPointFailed::Recoverable(err.kind()),
+            false => PubPointFailed::Fatal
+        }
     }
 }
 

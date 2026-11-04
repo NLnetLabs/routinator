@@ -82,7 +82,7 @@ use tempfile::NamedTempFile;
 use crate::collector;
 use crate::config::Config;
 use crate::engine::CaCert;
-use crate::error::{Failed, Fatal, RunFailed};
+use crate::error::{Failed, Fatal, PubPointFailed, RunFailed};
 use crate::metrics::Metrics;
 use crate::utils::fatal;
 use crate::utils::binio::{Compose, Parse, ParseError};
@@ -332,6 +332,11 @@ impl Store {
                 return Ok(())
             }
         };
+        if matches!(header.update_status, UpdateStatus::LastAttempt(_)) {
+            // We have never seen a successful attempt, so we don't want
+            // to include this in the dump.
+            return Ok(());
+        }
         let manifest = StoredManifest::read(&mut file).map_err(|err| {
             error!(
                 "Fatal: failed to read file {}: {}",
@@ -527,7 +532,7 @@ impl<'a> Run<'a> {
     /// repositories.
     pub fn pub_point(
         &self, ca_cert: &CaCert
-    ) -> Result<StoredPoint, Failed> {
+    ) -> Result<StoredPoint, PubPointFailed> {
         self.repository(ca_cert).get_point(ca_cert.rpki_manifest())
     }
 }
@@ -716,7 +721,7 @@ impl Repository {
     /// information stored for the point or not.
     pub fn get_point(
         &self, manifest_uri: &uri::Rsync
-    ) -> Result<StoredPoint, Failed> {
+    ) -> Result<StoredPoint, PubPointFailed> {
         StoredPoint::open(
             self.point_path(manifest_uri),
             manifest_uri, self.rpki_notify.as_ref(),
@@ -781,18 +786,21 @@ impl StoredPoint {
         path: PathBuf,
         manifest_uri: &uri::Rsync,
         rpki_notify: Option<&uri::Https>,
-    ) -> Result<Self, Failed> {
+    ) -> Result<Self, PubPointFailed> {
         let mut file = match File::open(&path) {
             Ok(file) => BufReader::new(file),
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
                 return Self::create(path, manifest_uri, rpki_notify);
+            }
+            Err(ref err) if PubPointFailed::is_recoverable(err.kind()) => {
+                return Err(PubPointFailed::Recoverable(err.kind()));
             }
             Err(err) => {
                 error!(
                     "Failed to open stored publication point at {}: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(Failed.into())
             }
         };
 
@@ -801,12 +809,19 @@ impl StoredPoint {
             Err(err) if !err.is_fatal() => {
                 return Self::create(path, manifest_uri, rpki_notify);
             }
+            Err(err) if PubPointFailed::is_recoverable(err.err().kind()) => {
+                error!(
+                    "Failed to read stored publication point at {}: {}",
+                    path.display(), err
+                );
+                return Err(PubPointFailed::Recoverable(err.err().kind()))
+            }
             Err(err) => {
                 error!(
                     "Failed to read stored publication point at {}: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(Failed.into())
             }
         };
 
@@ -833,7 +848,7 @@ impl StoredPoint {
                      seek failed: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(Failed.into())
             }
             if let Err(err) = header.write(&mut file) {
                 error!(
@@ -841,7 +856,7 @@ impl StoredPoint {
                      write failed: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(Failed.into())
             }
 
             return Ok(Self {
@@ -860,7 +875,7 @@ impl StoredPoint {
                     "Failed to read stored publication point at {}: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(Failed.into())
             }
         };
 
@@ -883,9 +898,15 @@ impl StoredPoint {
         path: PathBuf,
         manifest_uri: &uri::Rsync,
         rpki_notify: Option<&uri::Https>,
-    ) -> Result<Self, Failed> {
+    ) -> Result<Self, PubPointFailed> {
         if let Some(path) = path.parent() {
-            fatal::create_dir_all(path)?;
+            fs::create_dir_all(path).map_err(|err| {
+                error!(
+                    "Failed to create directory {}: {}",
+                    path.display(), err
+                );
+                PubPointFailed::from(err)
+            })?;
         }
         let mut file = match File::create(&path) {
             Ok(file) => file,
@@ -894,7 +915,7 @@ impl StoredPoint {
                     "Failed to create stored publication point at {}: {}",
                     path.display(), err
                 );
-                return Err(Failed)
+                return Err(PubPointFailed::from(err))
             }
         };
         let header = StoredPointHeader::new(
@@ -905,7 +926,7 @@ impl StoredPoint {
                 "Failed to write stored publication point at {}: {}",
                 path.display(), err
             );
-            return Err(Failed)
+            return Err(PubPointFailed::from(err))
         }
 
         Ok(StoredPoint {

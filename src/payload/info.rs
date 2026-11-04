@@ -106,6 +106,17 @@ impl<'a> IntoIterator for &'a PayloadInfo {
     }
 }
 
+//--- Drop
+
+impl Drop for PayloadInfo {
+    fn drop(&mut self) {
+        let mut tail = self.tail.take();
+        while let Some(mut info) = tail {
+            tail = info.tail.take();
+        }
+    }
+}
+
 
 //------------ PayloadInfoIter -----------------------------------------------
 
@@ -184,3 +195,41 @@ impl PublishInfo {
 
 }
 
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use rpki::repository::{tal::TalInfo, x509::{Time, Validity}};
+    use crate::payload::{PayloadInfo, info::PublishInfo};
+
+    #[test]
+    fn drop_payload_stackoverflow() {
+        let publish_info = PublishInfo {
+            tal: Arc::new(
+                TalInfo::from_name(String::from("test"))
+            ),
+            uri: None,
+            roa_validity: Validity::new(
+                Time::five_minutes_ago(), 
+                Time::five_minutes_from_now()
+            ),
+            chain_validity: Validity::new(
+                Time::five_minutes_ago(), 
+                Time::five_minutes_from_now()
+            ),
+            point_stale: Time::now(),
+        };
+
+        let publish_info = Arc::new(publish_info);
+
+        let mut payload_info = PayloadInfo {
+            head: Ok(publish_info.clone()),
+            tail: None,
+        };
+
+        for _ in 0..100_000 {
+            payload_info.add_published(publish_info.clone());
+        }
+
+        drop(payload_info);
+    }
+}

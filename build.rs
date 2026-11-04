@@ -15,7 +15,8 @@ const TYPES: &[(&str, &str)] = &[
     ("css", "text/css"),
     ("html", "text/html"),
     ("js", "text/javascript"),
-    ("svg", "image/svg+xml")
+    ("svg", "image/svg+xml"),
+    ("ico", "image/vnd.microsoft.icon")
 ];
 
 struct Asset {

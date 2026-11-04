@@ -5,6 +5,7 @@
 
 use std::{cmp, ops};
 use std::collections::VecDeque;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
@@ -182,6 +183,11 @@ impl PayloadSource for SharedHistory {
         res.refresh = u32::try_from(
             read.update_wait().as_secs()
         ).unwrap_or(u32::MAX);
+
+        // Ranges from RFC 8210 section 6
+        res.refresh = res.refresh.clamp(1, 86400);
+        res.retry = res.retry.clamp(1, 7200);
+        res.expire = res.expire.clamp(600, 172800);
         res
     }
 }
@@ -209,7 +215,7 @@ pub struct PayloadHistory {
     session: u64,
 
     /// The number of diffs to keep.
-    keep: usize,
+    keep: NonZeroUsize,
 
     /// The time to wait between updates,
     refresh: Duration,
@@ -249,7 +255,7 @@ impl PayloadHistory {
     pub fn from_config(config: &Config) -> Self {
         PayloadHistory {
             current: None,
-            deltas: VecDeque::with_capacity(config.history_size),
+            deltas: VecDeque::with_capacity(config.history_size.get()),
             metrics: None,
             session: {
                 SystemTime::now()
@@ -275,7 +281,7 @@ impl PayloadHistory {
 
     /// Pushes a new delta to the history
     fn push_delta(&mut self, delta: PayloadDelta) {
-        if self.deltas.len() == self.keep {
+        if self.deltas.len() == self.keep.get() {
             let _ = self.deltas.pop_back();
         }
         self.deltas.push_front(Arc::new(delta))
