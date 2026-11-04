@@ -25,17 +25,16 @@ Flexible RPKI-to-Router (RTR) support
 Open-source with professional support services
    NLnet Labs offers `professional support and consultancy services
    <https://www.nlnetlabs.nl/services/contracts/>`_ with a service-level
-   agreement. Community support is available on `Discord
-   <https://discord.gg/8dvKB5Ykhy>`_ and our `mailing list
-   <https://lists.nlnetlabs.nl/mailman/listinfo/rpki>`_. Routinator is
-   liberally licensed under the `BSD 3-Clause license
+   agreement. Community support is available on `our forum
+   <https://community.nlnetlabs.nl>`_. Routinator is liberally licensed
+   under the `BSD 3-Clause license
    <https://github.com/NLnetLabs/routinator/blob/main/LICENSE>`_.
 
    .. only:: html
 
       |discord| |mastodon|
-      
-      .. |discord| image:: https://img.shields.io/discord/818584154278199396   
+
+      .. |discord| image:: https://img.shields.io/discord/818584154278199396
          :alt: Discord
          :target: https://discord.gg/8dvKB5Ykhy
 
@@ -59,7 +58,7 @@ Open-source with professional support services
    installation
    building
    configuration
-   
+
 .. toctree::
    :maxdepth: 2
    :hidden:
@@ -83,7 +82,7 @@ Open-source with professional support services
    user-interface
    api-endpoints
    monitoring
-   
+
 .. toctree::
    :maxdepth: 2
    :hidden:
@@ -99,7 +98,7 @@ Open-source with professional support services
    :hidden:
    :caption: Reference
    :name: toc-reference
-   
+
    manual-page
    threat-model
    json-metrics
