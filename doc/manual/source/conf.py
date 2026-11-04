@@ -121,7 +121,7 @@ pygments_style = None
 # a list of builtin themes.
 #
 html_theme = 'furo'
-html_title = 'Routinator documentation'
+html_title = 'Documentation for Routinator by NLnet Labs'
 html_css_files = ['css/nlnetlabs.css']
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -198,7 +198,7 @@ for mode, information, attention, warning in (
             colours[f'color-admonition-title--{kind}'] = accent
             colours[f'color-admonition-title-background--{kind}'] = background
 
-html_favicon = 'resources/favicon.ico'
+html_favicon = 'resources/images/favicon.ico'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
