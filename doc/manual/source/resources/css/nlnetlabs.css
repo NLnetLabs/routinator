@@ -44,7 +44,7 @@ h1, h2, h3, h4, h5, h6 {
 h1 { letter-spacing: -.03em; }
 .sidebar-brand { gap: 1rem; padding-top: 2rem; padding-bottom: 1.5rem; }
 .sidebar-logo { width: 100%; margin: 0; }
-.sidebar-brand-text { font-size: 1rem; font-weight: 500; line-height: 1.5; }
+.sidebar-brand-text { display: none }
 .sidebar-tree a, .toc-tree a { font-weight: 500; }
 .sidebar-tree .current-page > .reference {
   box-shadow: inset 3px 0 #f36c21;
