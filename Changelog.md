@@ -1,15 +1,19 @@
 # Changelog
 
+## 0.16.0 ‘Full of Grace’
 
-## Unreleased next version
+Released 2026-11-06.
 
 Bug fixes
+
+* Added a forgotten change in the status API output format. ([#1155])
 
 Other changes
 
 * Updated the bundled Routinator UI to release [0.5.2][ui-0.5.2]
   ([#1156])
 
+[#1155]: https://github.com/NLnetLabs/routinator/pull/1155
 [#1156]: https://github.com/NLnetLabs/routinator/pull/1156
 [ui-0.5.2]: https://github.com/NLnetLabs/routinator-ui/releases/tag/v0.5.0
 
@@ -84,7 +88,7 @@ Other changes
 [RFC 9323]: https://tools.ietf.org/html/rfc9323
 
 
-## 0.15.3 “Until It Ends, There Is No End”
+## 0.15.3 ‘Until It Ends, There Is No End’
 
 Released 2026-10-26.
 
