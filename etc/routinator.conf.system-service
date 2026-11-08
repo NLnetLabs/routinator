@@ -2,7 +2,7 @@
 # ========================================================
 #
 # This configuration assumes that the repository cache is maintained in
-# /var/lib/routinator/rpki-cache.
+# /var/cache/routinator/rpki-cache.
 #
 # It will start Routinator with an RTR server listening on port 3323 and
 # an HTTP server listening on port 8323. Both are limited to localhost by
@@ -15,6 +15,6 @@
 # example, see etc/routinator.conf.example in the source distribution or
 # consult the manual page.
 
-repository-dir = "/var/lib/routinator/rpki-cache"
+repository-dir = "/var/cache/routinator/rpki-cache"
 rtr-listen = ["127.0.0.1:3323"]
 http-listen = ["127.0.0.1:8323"]
