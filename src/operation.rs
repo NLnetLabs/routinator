@@ -83,7 +83,7 @@ impl Operation {
                 ::default_provider().install_default().is_err()
         {
             eprintln!(
-                "Failed to set default TLS crypto provider. \n\
+                "Failed to set default TLS crypto provider.\n\
                  This is a bug and should be reported."
             );
             return Err(Failed);
