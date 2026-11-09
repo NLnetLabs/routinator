@@ -1,6 +1,21 @@
 # Changelog
 
+## Unreleased next version
+
+Breaking changes
+
+New
+
+Improvements
+
+Bug fixes
+
+Other changes
+
+
 ## 0.16.1 ‘You Cry, You Learn’
+
+Released 2026-11-09.
 
 Bug fixes
 
