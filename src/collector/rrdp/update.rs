@@ -5,8 +5,8 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{error, warn};
 use reqwest::StatusCode;
-use ring::digest;
 use rpki::{rrdp, uri};
+use rpki::crypto::digest;
 use rpki::rrdp::{DeltaInfo, NotificationFile, ProcessDelta, ProcessSnapshot};
 use uuid::Uuid;
 use crate::collector::rrdp::http::{LimitedDataRead, LimitedDataReadError};
@@ -452,7 +452,7 @@ impl<R> HashRead<R> {
     pub fn new(reader: R) -> Self {
         HashRead {
             reader,
-            context: digest::Context::new(&digest::SHA256)
+            context: digest::DigestAlgorithm::sha256().start(),
         }
     }
 

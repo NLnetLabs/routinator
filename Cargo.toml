@@ -33,7 +33,6 @@ log             = "0.4.8"
 pin-project-lite = "0.2.4"
 rand            = "0.10.3"
 reqwest         = { version = "0.13.5", default-features = false, features = ["blocking", "rustls", "gzip" ] }
-ring            = "0.17"
 rpki            = { version = "0.20.1", features = [ "repository", "rrdp", "rtr", "serde", "slurm" ]}
 rustls-pemfile  = "2.1.2"
 serde           = { version = "1.0.95", features = [ "derive" ] }
@@ -41,7 +40,7 @@ serde_json      = "1.0.57"
 siphasher       = "1.0.1"
 tempfile        = "3.1.0"
 tokio           = { version = "1.24", features = [ "io-util", "macros", "process", "rt", "rt-multi-thread", "signal", "sync" ] }
-tokio-rustls    = { version = "0.26.1", default-features = false, features = [ "ring", "logging", "tls12" ] }
+tokio-rustls    = { version = "0.26.1", default-features = false, features = [ "aws_lc_rs", "logging", "tls12" ] }
 toml_edit       = "0.25.13"
 uuid            = "1.1"
 
