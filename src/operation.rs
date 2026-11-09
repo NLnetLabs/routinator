@@ -78,6 +78,16 @@ impl Operation {
     ///
     /// Call this before doing anything else.
     pub fn prepare() -> Result<(), Failed> {
+        if
+            tokio_rustls::rustls::crypto::aws_lc_rs
+                ::default_provider().install_default().is_err()
+        {
+            eprintln!(
+                "Failed to set default TLS crypto provider. \n\
+                 This is a bug and should be reported."
+            );
+            return Err(Failed);
+        }
         Process::init()
     }
 
