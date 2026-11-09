@@ -1,16 +1,14 @@
 # Changelog
 
-## Unreleased next version
-
-Breaking changes
-
-New
-
-Improvements
+## 0.16.1 ‘You Cry, You Learn’
 
 Bug fixes
 
-Other changes
+* Fixed a crash on start if TLS is enabled for the HTTP or RTR servers.
+  ([#1162], [#1163])
+
+[#1162]: https://github.com/NLnetLabs/routinator/pull/1162
+[#1163]: https://github.com/NLnetLabs/routinator/pull/1163
 
 
 ## 0.16.0 ‘Full of Grace’
