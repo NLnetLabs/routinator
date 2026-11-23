@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased next version
+## 0.16.2 ‘A Quiet Street Where Old Ghosts Meet’
+
+Released 2026-11-23.
 
 Security fixes
 
