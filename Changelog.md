@@ -2,15 +2,22 @@
 
 ## Unreleased next version
 
-Breaking changes
+Security fixes
 
-New
+* Fixed an issue where Routinator runs out of memory and crashes if an
+  rsync server sends an excessive amount of disagnistic output. ([#1171])
 
-Improvements
+  This issue was assigned [CVE-2026-119068].
+* Fixed an issue where Routinator may keep some data from a rejected
+  publication point when falling back to the stored version that
+  publication point. ([#1170])
 
-Bug fixes
+  This issue was assigned [CVE-2026-119069].
 
-Other changes
+[#1170]: https://github.com/NLnetLabs/routinator/pull/1170
+[#1171]: https://github.com/NLnetLabs/routinator/pull/1171
+[CVE-2026-119068]: https://www.nlnetlabs.nl/downloads/krill/CVE-2026-119068.txt
+[CVE-2026-119069]: https://www.nlnetlabs.nl/downloads/krill/CVE-2026-119069.txt
 
 
 ## 0.16.1 ‘You Cry, You Learn’
