@@ -27,7 +27,7 @@ use futures::{FutureExt, TryFutureExt};
 use futures::future::Either;
 use log::{debug, error, warn};
 use rpki::uri;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt};
 use tokio::process::Command as AsyncCommand;
 use crate::config::Config;
 use crate::error::{Failed, Fatal};
@@ -451,6 +451,8 @@ impl<'a> Run<'a> {
 
 //------------ RsyncCommand --------------------------------------------------
 
+const RSYNC_SIZE_LIMIT: u64 = 64 * 1024 * 1024;
+
 /// The command to run rsync.
 #[derive(Debug)]
 struct RsyncCommand {
@@ -733,7 +735,8 @@ impl RsyncCommand {
         target: &mut LogBookWriter,
         level: log::Level,
     ) -> Result<(), io::Error> {
-        let Some(mut pipe) = pipe else { return Ok(()) };
+        let Some(pipe) = pipe else { return Ok(()) };
+        let mut pipe = pipe.take(RSYNC_SIZE_LIMIT);
         let mut line = Vec::new();
         while pipe.read_until(b'\n', &mut line).await? != 0 {
             let mut len = line.len();
