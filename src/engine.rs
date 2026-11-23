@@ -731,6 +731,7 @@ impl<'a, P: ProcessRun> PubPoint<'a, P> {
                     Ok(res) => return Ok(res),
                     Err(mut this) => {
                         this.metrics = Default::default();
+                        this.processor.restart()?;
                         return Ok(this.process_stored(store, metrics)?)
                     }
                 }
