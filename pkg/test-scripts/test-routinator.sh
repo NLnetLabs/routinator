@@ -13,7 +13,7 @@ case $1 in
     cat /etc/routinator/routinator.conf
 
     echo -e "\nROUTINATOR DATA DIR:"
-    ls -la /var/lib/routinator
+    ls -la /var/cache/routinator
 
     # For newer Routinator init is no longer required and the Routinator service should be automatically enabled and
     # started, for 0.11.3 and earlier init had to be done first and then the service manually enabled and started:
@@ -25,7 +25,7 @@ case $1 in
       sudo routinator-init --accept-arin-rpa
 
       echo -e "\nROUTINATOR DATA DIR AFTER INIT:"
-      ls -la /var/lib/routinator
+      ls -la /var/cache/routinator
 
       echo -e "\nENABLE ROUTINATOR SERVICE:"
       systemctl enable routinator
@@ -37,7 +37,7 @@ case $1 in
       systemctl start routinator
 
       echo -e "\nROUTINATOR TALS DIR:"
-      ls -la /var/lib/routinator/tals/
+      ls -la /var/cache/routinator/tals/
     fi
 
     echo -e "\nROUTINATOR SERVICE SHOULD BE ENABLED:"
@@ -55,7 +55,7 @@ case $1 in
     man -P cat routinator | head -n 20 || true
 
     echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
-    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20 || true
+    ls -ltR /var/cache/routinator/rpki-cache/ | head -n 20 || true
     ;;
 
   post-upgrade)
@@ -66,7 +66,7 @@ case $1 in
     cat /etc/routinator/routinator.conf
     
     echo -e "\nROUTINATOR DATA DIR:"
-    ls -la /var/lib/routinator
+    ls -la /var/cache/routinator
     
     echo -e "\nROUTINATOR SERVICE STATUS:"
     systemctl status routinator || true
@@ -83,6 +83,6 @@ case $1 in
     fi
 
     echo -e "\nROUTINATOR RPKI CACHE DIR (first 20 lines of ls output only):"
-    ls -ltR /var/lib/routinator/rpki-cache/ | head -n 20 || true
+    ls -ltR /var/cache/routinator/rpki-cache/ | head -n 20 || true
     ;;
 esac
