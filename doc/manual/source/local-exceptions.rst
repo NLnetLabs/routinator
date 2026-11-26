@@ -23,8 +23,9 @@ format in combination with the :option:`--select-asn` and
   
     - :doc:`interactive`
 
-For example, this command will create a SLURM file that always authorises all
-announcements that are currently done from AS196615:
+This command selects the VRPs for origin AS196615 from Routinator's current
+dataset and writes their prefixes and maximum prefix lengths to standard
+output as SLURM prefix assertions:
 
 .. code-block:: text
 
