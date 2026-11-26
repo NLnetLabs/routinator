@@ -123,7 +123,7 @@ own:
       rrdp-max-delta-count = 100
       rrdp-proxies = []
       rrdp-root-certs = []
-      rrdp-timeout = 300
+      rrdp-timeout = 600
       rsync-command = "rsync"
       rsync-timeout = 300
       rtr-client-metrics = false
