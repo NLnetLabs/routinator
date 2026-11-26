@@ -212,7 +212,9 @@ Publishing ASPAs
 To publish provider authorisations, use your RIR's hosted RPKI service where
 supported, or a delegated RPKI certificate authority such as `Krill
 <https://krill.docs.nlnetlabs.nl/en/stable/manage-aspas.html>`_. Check your
-RIR's documentation for availability and procedures.
+RIR's documentation for availability and procedures. For guidance on which ASes
+to include in your provider list, see `Publishing a provider list
+<https://rpki.readthedocs.io/en/latest/rpki/aspa.html#publishing-a-provider-list>`_.
 
 Further Reading
 ---------------
