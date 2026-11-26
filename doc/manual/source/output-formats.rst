@@ -341,7 +341,7 @@ generated in a wide range of output formats for various use cases.
     slurm2
           The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by 
-          `draft-ietf-sidrops-aspa-slurm-02 <https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-slurm/>`_ 
+          `draft-ietf-sidrops-aspa-slurm-04 <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-slurm-04>`_
           (also known as SLURM version 2). The produced file will have empty 
           validation output filters.
 
@@ -391,7 +391,9 @@ generated in a wide range of output formats for various use cases.
               }
             }
 
-          .. versionadded:: 0.14.3
+          .. versionadded:: 0.15.0
+             SLURM version 2 output. Routinator can also read version 2 local
+             exception files from version 0.16.0 onwards.
 
     openbgpd
           Choosing this format causes Routinator to produce a *roa-set*
