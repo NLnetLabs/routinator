@@ -100,7 +100,9 @@ exclude_patterns = []
 pygments_style = None
 
 # OpenGraph image
-ogp_image = "https://nlnetlabs.nl/static/logos/NLnetLabs/Mark_NLnet_Labs.png"
+ogp_social_cards = {
+    "image": "https://nlnetlabs.nl/static/logos/NLnetLabs/Mark_NLnet_Labs.png",
+}
 
 # -- Options for HTML output -------------------------------------------------
 
