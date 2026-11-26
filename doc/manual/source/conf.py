@@ -63,6 +63,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
     'notfound.extension',
+    'sphinxext.opengraph',
 ]
 
 intersphinx_mapping = {
@@ -98,6 +99,8 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
+# OpenGraph image
+ogp_image = "resources/images/nlnet-labs-brandlogo.png"
 
 # -- Options for HTML output -------------------------------------------------
 
