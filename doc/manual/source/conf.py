@@ -20,6 +20,10 @@ import sys
 import toml
 import datetime
 
+from fontpkg.mpl import use
+
+use("Montserrat", set_default=True)
+
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
@@ -104,6 +108,8 @@ ogp_site_name = 'Routinator documentation'
 ogp_social_cards = {  # Used when matplotlib is installed
     'image': 'img/nlnet-labs-brandlogo.png',
     'line_color': '#F26522',
+    'site_url': 'routinator.docs.nlnetlabs.nl',
+    'font': "Montserrat",
 }
 
 # -- Options for HTML output -------------------------------------------------
