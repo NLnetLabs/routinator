@@ -2119,7 +2119,7 @@ struct ServerArgs {
     #[arg(long, value_name = "SECONDS")]
     retry: Option<u64>,
 
-    /// RTR expire interval in seconds [default 600]
+    /// RTR expire interval in seconds [default 7200]
     #[arg(long, value_name = "SECONDS")]
     expire: Option<u64>,
 
