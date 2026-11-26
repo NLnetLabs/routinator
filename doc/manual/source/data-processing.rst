@@ -76,6 +76,10 @@ minutes for both and can be changed via the :option:`--rsync-timeout` and
 Validating
 ----------
 
+Routinator also validates :doc:`ASPA objects <aspa>` and makes their payloads
+available to compatible consumers. ASPA processing is enabled by default from
+version 0.16.0.
+
 The validation process determines if all certificates, Route Origin Attestations
 (ROAs) and other signed objects that may appear in the RPKI have the correct
 signatures. It will also verify if the hashes are correct, no objects have

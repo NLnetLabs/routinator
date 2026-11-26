@@ -66,6 +66,7 @@ Open-source with professional support services
    :name: toc-core
 
    data-processing
+   aspa
    output-formats
    local-exceptions
    logging

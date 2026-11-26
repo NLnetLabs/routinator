@@ -21,6 +21,9 @@ Assigned Numbers Authority)`-assigned default port for the protocol, which
 would be 323. But as this is a privileged port, you would need to be running
 Routinator as *root* when otherwise there is no reason to do that. 
 
+For distributing ASPA payloads, see :doc:`aspa`. Clients need support for the
+ASPA extensions to RTR; support for route origin validation alone is not enough.
+
 Secure Transports
 -----------------
 
