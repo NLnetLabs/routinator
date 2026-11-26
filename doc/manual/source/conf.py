@@ -63,6 +63,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
     'notfound.extension',
+    'sphinxext.opengraph',
 ]
 
 intersphinx_mapping = {
@@ -98,6 +99,12 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
+# OpenGraph image
+ogp_site_name = 'Routinator documentation'
+ogp_social_cards = {  # Used when matplotlib is installed
+    'image': 'img/nlnet-labs-brandlogo.png',
+    'line_color': '#F26522',
+}
 
 # -- Options for HTML output -------------------------------------------------
 
