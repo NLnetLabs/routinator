@@ -1,0 +1,54 @@
+name: Nightly builds
+
+on:
+  push:
+    branches:
+      - "main"
+
+  # Allow manually triggering the workflow.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  package:
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v10
+    with:
+      package_build_rules: pkg/rules/packages-to-build.yml
+      package_test_scripts_path: pkg/test-scripts/test-<package>.sh
+
+      rpm_scriptlets_path: pkg/rpm/scriptlets.toml
+  upload:
+    runs-on: ubuntu-latest
+    needs: package
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: '.'
+          pattern: "!tmp*"
+      - name: Create index for the artifacts
+        uses: NLnetLabs/directory-listing@main
+        with:
+          target: '.'
+          project: "Routinator"
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
