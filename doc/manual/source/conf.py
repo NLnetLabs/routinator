@@ -100,7 +100,7 @@ exclude_patterns = []
 pygments_style = None
 
 # OpenGraph image
-ogp_image = "resources/images/nlnet-labs-brandlogo.png"
+ogp_image = "nlnet-labs-brandlogo.png"
 
 # -- Options for HTML output -------------------------------------------------
 
