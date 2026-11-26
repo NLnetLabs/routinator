@@ -27,54 +27,32 @@ RPKI. Routinator validates these objects by default from version 0.16.0;
 processing can be disabled with :option:`--disable-bgpsec`. Validating router
 certificates does not itself enable BGPsec on routers.
 
-You can let Routinator process router keys and include them in the published
-dataset. BGPsec information will be exposed via RTR, as well as
-in the :term:`SLURM`, :term:`json` and :term:`jsonext` output formats, e.g.:
+Routinator makes validated router keys available over RTR and in the SLURM,
+JSON and extended JSON output formats. The following excerpt from
+:term:`jsonext` shows the certificate from which a router key was obtained.
 
 .. code-block:: json
 
     {
-        "metadata": {
-            "generated": 1626853335,
-            "generatedTime": "2021-07-21T07:42:15Z"
-        },
-        "roas": [{
-            "asn": "AS196615",
-            "prefix": "93.175.147.0/24",
-            "maxLength": 24,
-            "source": [{
-                "type": "roa",
-                "uri": "rsync://rpki.ripe.net/repository/DEFAULT/73/fe2d72-c2dd-46c1-9429-e66369649411/1/49sMtcwyAuAW2lVDSQBGhOHd9og.roa",
-                "validity": {
-                    "notBefore": "2021-01-01T04:39:56Z",
-                    "notAfter": "2022-07-01T00:00:00Z"
-                },
-                "chainValidity": {
-                    "notBefore": "2021-05-06T12:51:30Z",
-                    "notAfter": "2021-05-08T00:00:00Z"
-                },
-                "stale": "2021-05-08T00:00:00Z"
-            }]
-        }],
         "routerKeys": [{
-            "asn": "AS64496",
-            "SKI": "E2F075EC50E9F2EFCED81D44491D25D42A298D89",
-            "routerPublicKey": "kwEwYHKoZIzj0CAtig5-QfEKpTtFgiqfiAFQg--LAQerAH2Mpp-GucoDAGBbhIqMFQYIKoZIzj0DAQcDQgAEgFcjQ_D33wNPsXxnAGb-mtZ7XQrVO9DQ6UlASh",
-            "source": [{
-                "type": "roa",
-                "uri": "rsync://acmecorp.example.net/rpki/RIPE-NLACMECORP/R0tgdREopjYdeyeI-wXUJQ4p786.cer",
-                "validity": {
-                    "notBefore": "2021-11-09T17:04:40Z",
-                    "notAfter": "2022-11-09T17:04:39Z"
-                },
-                "chainValidity": {
-                    "notBefore": "2022-01-16T14:45:51Z",
-                    "notAfter": "2021-01-18T00:00:00Z"
-                },
-                "stale": "2021-01-18T00:00:00Z"
-            }]
-        }],
-        "aspas": []
+          "asn": "AS211321",
+          "SKI": "17316903F0671229E8808BA8E8AB0105FA915A07",
+          "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET10FMBxP6P3r6aG_ICpfsktp7X6ylJIY8Kye6zkQhNOt0y-cRzYngH8MGzY3cXNvZ64z4CpZ22gf4teybGq8ow",
+          "source": [{
+            "type": "cer",
+            "tal": "ripe",
+            "uri": "rsync://testbed.krill.cloud/repo/local-testbed-child/0/ROUTER-00033979-17316903F0671229E8808BA8E8AB0105FA915A07.cer",
+            "validity": {
+              "notBefore": "2022-07-25T20:47:37Z",
+              "notAfter": "2023-07-24T20:52:37Z"
+            },
+            "chainValidity": {
+              "notBefore": "2022-07-25T20:47:37Z",
+              "notAfter": "2022-07-26T00:00:00Z"
+            },
+            "stale": "2022-07-26T00:00:00Z"
+          }]
+        }]
     }
 
 .. seealso::
