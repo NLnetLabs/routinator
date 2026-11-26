@@ -103,11 +103,9 @@ generated in a wide range of output formats for various use cases.
             - *ta* has the trust anchor from which the authorisation was
               derived.
 
-          The *aspa* member contains an array of objects with four members 
-          each: 
+          Each object in the *aspas* array has three members:
           
             - *customer* contains the customer ASN,
-            - *afi* lists the address family as either "ipv4" or "ipv6",
             - *providers* contains the provider ASN set as an array, and
             - *ta* has the trust anchor from which the authorisation was
               derived.
@@ -140,7 +138,6 @@ generated in a wide range of output formats for various use cases.
               }],
               "aspas": [{
                 "customer": "AS64496",
-                "afi": "ipv6",
                 "providers": ["AS64499", "AS64511", "AS65551"],
                 "ta": "ripe"
               }]
@@ -186,11 +183,9 @@ generated in a wide range of output formats for various use cases.
             - *source* contains extended information about the source of the
               key.
 
-          The *aspas* member contains an array of objects with
-          four elements each: 
+          Each object in the *aspas* array has three members:
           
             - *customer* contains the customer ASN,
-            - *afi* specifies the address family as either "ipv4" or "ipv6",
             - *providers* contains the provider ASN set as an array, and
             - *source* contains information about the source of the
               authorisation.
@@ -272,7 +267,6 @@ generated in a wide range of output formats for various use cases.
                 }],
                 "aspas": [{
                   "customer": "AS64496",
-                  "afi": "ipv6",
                   "providers": ["AS64499", "AS64511", "AS65551"],
                   "source": [{
                       "type": "aspa",
