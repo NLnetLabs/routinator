@@ -100,8 +100,10 @@ exclude_patterns = []
 pygments_style = None
 
 # OpenGraph image
-ogp_social_cards = {
-    "image": "https://nlnetlabs.nl/static/logos/NLnetLabs/Mark_NLnet_Labs.png",
+ogp_site_name = 'Routinator documentation'
+ogp_social_cards = {  # Used when matplotlib is installed
+    'image': 'img/nlnet-labs-brandlogo.png',
+    'line_color': '#F26522',
 }
 
 # -- Options for HTML output -------------------------------------------------
