@@ -553,14 +553,6 @@ These can be requested by providing different commands on the command line.
               before starting to update again. If not set this will default to
               refresh.
 
-       .. option:: --refresh=seconds
-
-              The amount of seconds the server should wait after having
-              finished updating and validating the local repository before
-              starting to update again. The next update will be earlier if
-              objects in the repository expire earlier. The default value is
-              600 seconds.
-
        .. option:: --retry=seconds
 
               The amount of seconds to suggest to an RTR client to wait
@@ -1521,10 +1513,12 @@ The service only supports GET requests with the following paths:
       returned and their values should be passed as the query parameters in a
       future request.
 
-      The members *announced* and *withdrawn* contain arrays with route
-      origins that have been announced and withdrawn, respectively, since the
-      provided session and serial. If *reset* is *true*, the *withdrawn*
-      member is not present.
+      The *announced* and *withdrawn* arrays contain the payloads added and
+      removed since the requested version. Each item has a *type* of
+      ``routeOrigin``, ``routerKey`` or ``aspa``. An ASPA item contains the
+      customer ASN in ``customerAsn`` and an array of provider ASNs in
+      ``providerAsns``. When *reset* is *true*, *announced* contains the full
+      dataset and the response omits *withdrawn*.
 
 /json-delta/notify, /json-delta/notify?session=session&serial=serial
       Returns a JSON object with two members *session* and *serial* which

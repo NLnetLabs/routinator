@@ -18,7 +18,7 @@ The HTTP service supports **GET** requests on the following paths:
 ``/validity?asn=as-number&prefix=prefix``
      Same as above but with a more form-friendly calling convention.
      
-``/json-delta, /json-delta?session=session?serial=serial``
+``/json-delta, /json-delta?session=session&serial=serial``
      Returns a JSON object with the changes since the dataset version
      identified by the *session* and *serial* query parameters. If a delta
      cannot be produced from that version, the full data set is returned and
@@ -27,10 +27,12 @@ The HTTP service supports **GET** requests on the following paths:
      returned and their values should be passed as the query parameters in a
      future request.
 
-     The members *announced* and *withdrawn* contain arrays with route
-     origins that have been announced and withdrawn, respectively, since the
-     provided session and serial. If *reset* is *true*, the *withdrawn*
-     member is not present.
+     The *announced* and *withdrawn* arrays contain the payloads added and
+     removed since the requested version. Each item has a *type* of
+     ``routeOrigin``, ``routerKey`` or ``aspa``. An ASPA item contains the
+     customer ASN in ``customerAsn`` and an array of provider ASNs in
+     ``providerAsns``. When *reset* is *true*, *announced* contains the full
+     dataset and the response omits *withdrawn*.
 
 ``/json-delta/notify, /json-delta/notify?session=session&serial=serial``
      Returns a JSON object with two members *session* and *serial* which

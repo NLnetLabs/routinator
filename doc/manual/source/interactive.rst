@@ -17,7 +17,7 @@ For example, to print the VRPs in CSV format to standard output, run:
 
    routinator vrps --format csv
 
-To generate a file with with the validated ROA payloads in JSON format, run:
+To generate a file with the validated payloads in JSON format, run:
 
 .. code-block:: text
 
@@ -27,15 +27,6 @@ During the validation process, logging information will be printed to standard
 error. You can influence the amount of details returned with the
 :option:`--verbose` and :option:`--quiet` options. To learn more about what kind
 of information returned, refer to the :doc:`logging` section.
-
-If you have enabled :ref:`advanced-features:bgpsec` and/or
-:ref:`advanced-features:aspa` validation, in some output formats the amount
-of data can be quite overwhelming. You can exclude specific data types for the
-output with the :option:`--no-route-origins`, :option:`--no-router-keys` and
-the :option:`--noaspas` options.
-
-.. versionchanged:: 0.13.0
-   Allow excluding specific data from the output.
 
 Query Options
 -------------
@@ -92,7 +83,7 @@ for 82.221.32.0/20:
 
 .. code-block:: text
 
-   routinator vrps --format json --select-asn 82.221.32.0/20
+   routinator vrps --format json --select-prefix 82.221.32.0/20
 
 Routinator will return the exact match and the VRP for the less specific /17
 prefix:
@@ -114,7 +105,7 @@ When including the :option:`--more-specifics` option in the same query:
 
 .. code-block:: text
 
-   routinator vrps --format json --select-asn 82.221.32.0/20 --more-specifics
+   routinator vrps --format json --select-prefix 82.221.32.0/20 --more-specifics
 
 You will now see that a more specific /23 prefix is returned as well:
 
@@ -140,12 +131,11 @@ You will now see that a more specific /23 prefix is returned as well:
 Exclude Specific Data Types
 """""""""""""""""""""""""""
 
-If you have enabled :ref:`advanced-features:bgpsec` and/or
-:ref:`advanced-features:aspa` validation, in some output formats the amount of
-data can be quite overwhelming. You can exclude specific payload types with
-the :option:`--no-route-origins`, :option:`--no-router-keys` and
-:option:`--noaspas` options to disable inclusion of route origins, router
-keys, and ASPAs, respectively.
+Since version 0.16.0, Routinator processes BGPsec router certificates and
+ASPA objects by default. JSON output can therefore contain router keys and
+ASPA payloads alongside route origins. To omit a payload type from the
+output, use :option:`--no-router-keys`, :option:`--no-aspas` or
+:option:`--no-route-origins`, respectively.
 
 .. deprecated:: 0.9.0
    ``--filter-asn`` and ``--filter-prefix``   
