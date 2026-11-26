@@ -20,9 +20,16 @@ import sys
 import toml
 import datetime
 
-from fontpkg.mpl import use
+from matplotlib import font_manager
+from pyfonts import load_google_font
 
-use("Montserrat", set_default=True)
+for weight in ("regular", "bold"):
+    font_prop = load_google_font("Montserrat", weight=weight)
+    font_manager.fontManager.addfont(font_prop.get_file())
+
+ogp_social_cards = {
+    "font": "Montserrat",
+}
 
 # -- Project information -----------------------------------------------------
 
