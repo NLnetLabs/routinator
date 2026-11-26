@@ -20,6 +20,15 @@ import sys
 import toml
 import datetime
 
+# Load Montserrat font for OpenGraph cards
+
+from matplotlib import font_manager
+from pyfonts import load_google_font
+
+for weight in ("regular", "bold"):
+    font_prop = load_google_font("Montserrat", weight=weight)
+    font_manager.fontManager.addfont(font_prop.get_file())
+
 # -- Project information -----------------------------------------------------
 
 project = 'Routinator'
@@ -104,7 +113,8 @@ ogp_site_name = 'Routinator documentation'
 ogp_social_cards = {  # Used when matplotlib is installed
     'image': 'img/nlnet-labs-brandlogo.png',
     'line_color': '#F26522',
-    'site_url': 'routinator.docs.nlnetlabs.nl'
+    'site_url': 'routinator.docs.nlnetlabs.nl',
+    'font': "Montserrat",
 }
 
 # -- Options for HTML output -------------------------------------------------
