@@ -104,7 +104,7 @@ ogp_site_name = 'Routinator documentation'
 ogp_social_cards = {  # Used when matplotlib is installed
     'image': 'img/nlnet-labs-brandlogo.png',
     'line_color': '#F26522',
-    'site_url': 'https://routinator.docs.nlnetlabs.nl/'
+    'site_url': 'routinator.docs.nlnetlabs.nl'
 }
 
 # -- Options for HTML output -------------------------------------------------
