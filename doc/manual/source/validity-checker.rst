@@ -145,8 +145,7 @@ detailed analysis of the reasoning behind the outcome of each route:
         "validity": {
           "state": "invalid",
           "reason": "as",
-          "description": "At least one VRP Covers the Route Prefix, but no
-           VRP ASN matches the route origin ASN",
+          "description": "At least one VRP Covers the Route Prefix, but no VRP ASN matches the route origin ASN",
           "VRPs": {
             "matched": [
             ],
@@ -185,7 +184,8 @@ detailed analysis of the reasoning behind the outcome of each route:
           }
         }
       }
-    ]
+    ],
+    "generatedTime": "2021-07-21T11:36:44Z"
   }
 
 .. versionadded:: 0.9.0
