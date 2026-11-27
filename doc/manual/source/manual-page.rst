@@ -162,10 +162,10 @@ The available options are:
 
 .. option:: --unknown-objects=policy
 
-      Defines how to deal with unknown types  of  RPKI  objects.  Currently,
-      only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa),
-      and Ghostbuster Records (.gbr) are allowed to appear in the RPKI
-      repository.
+      Defines how to deal with unknown RPKI object types. During repository
+      validation, Routinator recognises certificates (.cer), CRLs (.crl),
+      manifests (.mft), ROAs (.roa), ASPAs (.asa) and Ghostbuster Records
+      (.gbr).
 
       There are, once more, three policies for dealing with an object of any
       other type:
