@@ -137,10 +137,9 @@ has been rejected because it failed to validate completely, the VRP is said to
 be *unsafe* since using it may lead to legitimate routes being flagged as RPKI
 Invalid.
 
-Routinator has an :option:`--unsafe-vrps` option that specifies how to deal with
-these types of VRPs. Currently, the default policy is *warn* in order to gain
-operational experience with the frequency and impact of unsafe VRPs. This
-default may change in future version.
+The default :option:`--unsafe-vrps` policy, ``accept``, keeps these VRPs
+without logging or counting them as unsafe. Use ``warn`` to monitor them or
+``reject`` to exclude them from the dataset.
 
 You can learn more about this topic in the :doc:`unsafe-vrps` section.
 

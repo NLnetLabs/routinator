@@ -143,17 +143,16 @@ The available options are:
 
       This option defines how to deal with "unsafe VRPs." If the address
       prefix of a VRP overlaps with any resources assigned to a CA that has
-      been rejected because if failed to validate completely, the VRP is said
+      been rejected because it failed to validate completely, the VRP is said
       to be unsafe since using it may lead to legitimate routes being flagged
       as RPKI invalid.
 
       There are three options how to deal with unsafe VRPs:
 
       A policy of *reject* will filter out these VRPs. Warnings will be
-      logged to indicate which VRPs have been filtered
+      logged to indicate which VRPs have been filtered.
 
-      The *warn* policy will log warnings for unsafe VRPs but will add them
-      to the valid VRPs.
+      The *warn* policy retains unsafe VRPs and logs each one at info level.
 
       Finally, the *accept* policy will quietly add unsafe VRPs to the valid
       VRPs. This is the default policy.
@@ -1097,8 +1096,7 @@ All values can be overridden via the command line options.
                   Filter unsafe VRPs and add warning messages to the log.
 
             warn
-                  Warn about unsafe VRPs in the log but add them to the final
-                  set of VRPs.
+                  Retain unsafe VRPs and log each one at info level.
 
             accept
                   Quietly add unsafe VRPs to the final set of VRPs.  This is
@@ -1574,8 +1572,8 @@ warn
 
 info
       Information about events and data that could be considered abnormal but
-      do not influence the set of VRPs produced. For example, when filtering
-      of unsafe VRPs is disabled, the unsafe VRPs are logged with this level.
+      do not influence the set of VRPs produced. For example, the *warn* policy
+      logs individual unsafe VRPs at this level.
 
 debug
       Information about the internal state of Routinator that may be useful
@@ -1601,28 +1599,15 @@ If a CA is rejected, none of its ROAs, ASPAs, or router keys will be added
 to the VRP set but also none of its child CAs will be considered at all;
 their published data will not be fetched or validated.
 
-If a prefix has its ROAs published by different CAs, this will lead to some
-of its VRPs being dropped while others are still added. If the VRP for the
-legitimately announced route is among those having been dropped, the route
-becomes RPKI invalid. This can happen both by operator error or through an
-active attack.
+If a rejected CA supplied the only VRP authorising a route, the route's
+origin validation state depends on the remaining VRPs. If none cover the
+announced prefix, the state is *NotFound*. If any cover the prefix but none
+authorise the announcement, the state is *Invalid*.
 
-In addition, if a VRP for a less specific prefix exists that covers the
-prefix of the dropped VRP, the route will be invalidated by the less specific
-VRP.
-
-Because of this risk of accidentally or maliciously invalidating routes, VRPs
-that have address prefixes overlapping with resources of rejected CAs are
-called *unsafe VRPs*.
-
-In order to avoid these situations and instead fall back to an RPKI unknown
-state for such routes, Routinator allows to filter out these unsafe VRPs.
-This can be enabled via the ``--unsafe-vrps=reject`` command line option or
-setting ``unsafe-vrps=reject`` in the config file.
-
-By default, this filter is currently disabled but warnings are logged about
-unsafe VRPs. This allows to assess the operation impact of such a filter.
-Depending on this assessment, the default may change in future versions.
+Routinator calls VRPs whose prefixes overlap the resources of a rejected CA
+*unsafe VRPs*. By default, Routinator keeps these VRPs without logging or
+counting them as unsafe. Set ``unsafe-vrps = "warn"`` to monitor them, or
+``unsafe-vrps = "reject"`` to filter them out.
 
 One exception from this rule are CAs that have the full address space
 assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out
