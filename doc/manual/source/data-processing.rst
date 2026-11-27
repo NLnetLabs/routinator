@@ -85,13 +85,11 @@ Update Interval
 
 Routinator will fetch new RPKI data ten minutes after the last successful update
 has finished. The interval can be changed using the :option:`--refresh` option.
-It is possible that it takes very long to update a repository due to
-temporary network problems. To ensure a slow repository doesn't stop the entire
-update process from completing, Routinator has a timeout for stalled
-connections. For RRDP, this timeout is implemented as an HTTP request timeout.
-For rsync, the timeout is around the spawned rsync process. The default is five
-minutes for both and can be changed via the :option:`--rsync-timeout` and
-:option:`--rrdp-timeout` options.
+By default, Routinator allows 300 seconds for an rsync process to complete
+(:option:`--rsync-timeout`) and 600 seconds for an HTTP request to retrieve
+an RRDP resource (:option:`--rrdp-timeout`). Within an RRDP request,
+:option:`--rrdp-read-timeout` limits how long Routinator waits for more data
+on an individual read. The default read timeout is 10 seconds.
 
 Validating
 ----------
@@ -100,15 +98,16 @@ Routinator also validates :doc:`ASPA objects <aspa>` and makes their payloads
 available to compatible consumers. ASPA processing is enabled by default from
 version 0.16.0.
 
-The validation process determines if all certificates, Route Origin Attestations
+The validation process determines if all certificates, Route Origin Authorisations
 (ROAs) and other signed objects that may appear in the RPKI have the correct
 signatures. It will also verify if the hashes are correct, no objects have
 expired and the entire data set is complete. If any of the objects do not pass
 these checks, the data will be discarded.
 
-Currently, only certificates (.cer), certificate revocation lists (.crl),
-manifests (.mft), ROAs (.roa), and Ghostbuster Records (.gbr) are allowed to
-appear the RPKI. If another type of object is encountered Routinator will *warn*
+During repository validation, Routinator processes certificates (``.cer``),
+certificate revocation lists (``.crl``), manifests (``.mft``), ROAs
+(``.roa``), ASPAs (``.asa``) and Ghostbuster Records (``.gbr``).
+If another type of object is encountered Routinator will *warn*
 by default, but this can be changed with the :option:`--unknown-objects` option. 
 
 Note that even if unknown objects are accepted, they must appear in the manifest
