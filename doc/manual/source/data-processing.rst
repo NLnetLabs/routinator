@@ -32,6 +32,26 @@ will reject the name *localhost*, URIs that consist of IP addresses, and
 hostnames that contain an explicit port. You can change this behaviour with the
 :option:`--allow-dubious-hosts` option.
 
+RRDP URLs and Redirects
+"""""""""""""""""""""""
+
+Routinator uses the notification URL in the CA certificate to determine
+which HTTPS origin it will contact for that repository. This prevents a
+notification file or an HTTP redirect from directing the validator to another
+server to retrieve RRDP data.
+
+Routinator checks that the snapshot and delta URLs in the notification use
+the same hostname and port as the notification URL. The paths can differ.
+An explicitly specified port must match in both URLs. For HTTP redirects,
+Routinator checks that the scheme, host and port remain the same.
+
+For example, if ``https://rpki.example.net/notification.xml`` lists a snapshot
+at ``https://cdn.example.net/snapshot.xml``, Routinator rejects the
+notification and logs ``snapshot or delta files with different origin``.
+
+.. versionchanged:: 0.14.0
+   RRDP retrieval is restricted to the origin of the notification URL.
+
 RRDP Fallback
 """""""""""""
 
