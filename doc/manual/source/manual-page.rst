@@ -98,11 +98,11 @@ The available options are:
 
 .. option:: -x file, --exceptions=file
 
-      Provides the path to a local exceptions file. The option can be used
-      multiple times to specify more than one file to use. Each file is a
-      JSON file as described in :rfc:`8416`. It lists both route origins that
-      should be filtered out of the output as well as origins that should be
-      added.
+      Specify a local exceptions file in JSON format. Repeat this option to
+      load multiple files. SLURM version 1 (:rfc:`8416`) supports filters and
+      local assertions for route origins and BGPsec router keys. Since
+      version 0.16.0, Routinator also reads SLURM version 2 files, which can
+      filter ASPA payloads by customer ASN and add local provider lists.
 
 .. option:: --relaxed
 
@@ -143,17 +143,16 @@ The available options are:
 
       This option defines how to deal with "unsafe VRPs." If the address
       prefix of a VRP overlaps with any resources assigned to a CA that has
-      been rejected because if failed to validate completely, the VRP is said
+      been rejected because it failed to validate completely, the VRP is said
       to be unsafe since using it may lead to legitimate routes being flagged
       as RPKI invalid.
 
       There are three options how to deal with unsafe VRPs:
 
       A policy of *reject* will filter out these VRPs. Warnings will be
-      logged to indicate which VRPs have been filtered
+      logged to indicate which VRPs have been filtered.
 
-      The *warn* policy will log warnings for unsafe VRPs but will add them
-      to the valid VRPs.
+      The *warn* policy retains unsafe VRPs and logs each one at info level.
 
       Finally, the *accept* policy will quietly add unsafe VRPs to the valid
       VRPs. This is the default policy.
@@ -163,10 +162,10 @@ The available options are:
 
 .. option:: --unknown-objects=policy
 
-      Defines how to deal with unknown types  of  RPKI  objects.  Currently,
-      only certificates (.cer), CRLs (.crl), manifests (.mft), ROAs (.roa),
-      and Ghostbuster Records (.gbr) are allowed to appear in the RPKI
-      repository.
+      Defines how to deal with unknown RPKI object types. During repository
+      validation, Routinator recognises certificates (.cer), CRLs (.crl),
+      manifests (.mft), ROAs (.roa), ASPAs (.asa) and Ghostbuster Records
+      (.gbr).
 
       There are, once more, three policies for dealing with an object of any
       other type:
@@ -448,10 +447,12 @@ These can be requested by providing different commands on the command line.
               Specifies a local address and port to listen on for incoming
               RTR connections.
 
-              Routinator supports both protocol version 0 defined in
-              :rfc:`6810` and version 1 defined in :rfc:`8210`. However, it
-              does not support router keys introduced in version 1.  IPv6
-              addresses must be enclosed in square brackets. You can provide
+              Routinator supports RTR versions 0 (:rfc:`6810`), 1
+              (:rfc:`8210`) and 2. All three versions carry route origins.
+              Versions 1 and 2 also carry BGPsec router keys. ASPA payloads
+              require version 2.
+
+              Enclose IPv6 addresses in square brackets. You can provide
               the option multiple times to let Routinator listen on multiple
               address-port pairs.
 
@@ -623,10 +624,10 @@ These can be requested by providing different commands on the command line.
 
 .. subcmd:: vrps
 
-    This command requests that Routinator update the local repository and
-    then validate the Route Origin Attestations in the repository and output
-    the valid route origins, which are also known as Validated ROA Payloads
-    or VRPs, as a list.
+    By default, this command updates the local repository and validates its
+    contents. It writes the resulting payloads in the selected output format.
+    The default CSV format lists Validated ROA Payloads (VRPs). Formats such
+    as JSON can also include BGPsec router keys and ASPA payloads.
 
     .. option:: -o file, --output=file
 
@@ -692,12 +693,11 @@ These can be requested by providing different commands on the command line.
                   Base 64 encoded string in *routerPublicKey*, and the trust
                   anchor from which the authorization was derived in *ta*.
 
-                  The *aspa* member contains an array of objects with four
-                  members each: The *customer* member contains the customer
-                  ASN, *afi* the address family as either "ipv4" or "ipv6",
-                  *providers* contains the provider ASN set as an array, and
-                  the trust anchor from which the authorization was derived
-                  in *ta*.
+                  Each entry in *aspas* contains the customer ASN in
+                  *customer*, an array of provider ASNs in *providers*, and
+                  the trust anchor name in *ta*. For all three payload types,
+                  *ta* is ``"N/A"`` for a payload derived solely from local
+                  assertions.
 
                   The output object also includes a member named *metadata*
                   which provides additional information. Currently, this is a
@@ -740,31 +740,23 @@ These can be requested by providing different commands on the command line.
                   information about the source of the key is contained in
                   *source*.
 
-                  The *aspa* member contains an array of objects with four
-                  members each: The *customer* member contains the customer
-                  ASN, *afi* the address family as either "ipv4" or "ipv6",
-                  *providers* contains the provider ASN set as an array, and
-                  information about the source of the data can be found in
-                  *source*.
+                  Each entry in *aspas* contains the customer ASN in
+                  *customer*, an array of provider ASNs in *providers*, and
+                  an array of contributing sources in *source*.
 
-                  This source information the same for route origins and
-                  router keys. It consists of an array. Each item in that
-                  array is an object providing details of a source.
-                  The object will have a *type* of *roa* if it was derived
-                  from a valid ROA object, *cer* if it was derived from
-                  a published router certificate, or *exception* if it was an
-                  assertion in a local exception file.
+                  For route origins, router keys and ASPA payloads, each
+                  entry in *source* identifies its *type*: *roa* for a ROA,
+                  *cer* for a router certificate, *aspa* for an ASPA object,
+                  or *exception* for a local assertion.
 
-                  For RPKI objects, *tal* provides the name of the trust
-                  anchor locator the object was published under, *uri*
-                  provides the rsync URI of the ROA or router certificate,
-                  *validity* provides the validity of the ROA itself,
-                  *chainValidity* the validity considering the validity of
-                  the certificates along the validation chain, and
-                  *stale* the time when any of the publication points along
-                  the validation chain becomes stale.
+                  For published objects, *tal* names the trust anchor locator
+                  and *uri* gives the object's rsync URI when available.
+                  *validity* gives the certificate's validity period and
+                  *chainValidity* accounts for validity along the chain.
+                  *stale* gives the time when the first publication point
+                  along that chain becomes stale.
 
-                  For  assertions from local exceptions, *path* will provide
+                  For assertions from local exceptions, *path* will provide
                   the path of the local exceptions file and, optionally,
                   *comment* will provide the comment if given for the
                   assertion.
@@ -787,11 +779,9 @@ These can be requested by providing different commands on the command line.
                   ASPA.
 
            slurm2
-                  The list is formatted as locally added assertions of a
-                  local exceptions file defined by 
-                  draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM 
-                  version 2). The produced file will have empty validation 
-                  output filters.
+                  Write the selected payloads as local assertions in a SLURM
+                  version 2 file with empty validation output filters. ASPA
+                  assertions use ``customerAsn`` and ``providerAsns``.
 
            openbgpd
                   Choosing this format causes Routinator to produce a
@@ -841,9 +831,10 @@ These can be requested by providing different commands on the command line.
 
     .. option:: -a asn, --select-asn=asn
 
-           Only output VRPs for the given ASN. The option can be given
-           multiple times, in which case VRPs for all provided ASNs are
-           provided. ASNs can be given with or without the prefix *AS*.
+           Select VRPs by origin ASN, router keys by their associated ASN
+           and ASPA payloads by customer ASN. An ASN appearing only in an
+           ASPA provider list does not select that payload. Repeat the option
+           to match any of the given ASNs. The *AS* prefix is optional.
 
     .. option:: -p prefix, --select-prefix=prefix
 
@@ -856,8 +847,7 @@ These can be requested by providing different commands on the command line.
 
            The option can be given multiple times, in which case VRPs for all
            prefixes are provided. It can also be combined with one or more
-           ASN selections. Then all matching VRPs are included. That is,
-           selectors combine as "or" not "and".
+           ASN selections. The output includes payloads matching any selector.
 
     .. option:: -m, --more-specifics
 
@@ -1097,8 +1087,7 @@ All values can be overridden via the command line options.
                   Filter unsafe VRPs and add warning messages to the log.
 
             warn
-                  Warn about unsafe VRPs in the log but add them to the final
-                  set of VRPs.
+                  Retain unsafe VRPs and log each one at info level.
 
             accept
                   Quietly add unsafe VRPs to the final set of VRPs.  This is
@@ -1148,8 +1137,13 @@ All values can be overridden via the command line options.
             The options ``-rtO --delete`` are always passed to the command.
             The options listed in the option are added to it.
 
-            The options ``-e`` and ``--rsh``  are not allowed in the list
-            of arguments and will be rejected.
+            Routinator rejects the ``-e`` and ``--rsh`` options because they
+            let rsync invoke a remote shell. Since version 0.15.2, Routinator
+            also checks its process environment when it starts with rsync
+            enabled. If ``RSYNC_RSH`` is set, even to an empty value,
+            Routinator logs an error and exits. This check also applies when
+            the service inherits the variable and no ``rsync-args`` are
+            configured.
 
             If the option is not provided, Routinator will add ``-z`` and
             ``--no-motd``, as well as ``--contimeout=10`` if it is supported
@@ -1530,14 +1524,14 @@ The service only supports GET requests with the following paths:
       set is available. This can be used as a means to get notified when
       the data set has been updated.
 
-In addition, the current set of VRPs is available for each output format at a
-path with the same name as the output format. E.g., the CSV output is
-available at ``/csv``.
+The current payloads are available at a path named after the output format.
+For example, ``/csv`` lists VRPs and ``/json`` can also include router keys
+and ASPA payloads.
 
-These paths accept selector expressions to limit the VRPs returned in the
-form of a query string. The field ``select-asn`` can be used to filter for
-ASNs and the field ``select-prefix`` can be used to filter for prefixes. The
-fields can be repeated multiple times.
+These paths accept the query parameters ``select-asn`` and ``select-prefix``.
+An ASN selects matching route origins, router keys and ASPA customer ASNs.
+A prefix selects VRPs. The response includes payloads matching any of the
+supplied selectors.
 
 In addition, the query parameter ``include=more-specifics`` will cause the
 inclusion of VRPs for more specific prefixes of prefixes given via
@@ -1574,8 +1568,8 @@ warn
 
 info
       Information about events and data that could be considered abnormal but
-      do not influence the set of VRPs produced. For example, when filtering
-      of unsafe VRPs is disabled, the unsafe VRPs are logged with this level.
+      do not influence the set of VRPs produced. For example, the *warn* policy
+      logs individual unsafe VRPs at this level.
 
 debug
       Information about the internal state of Routinator that may be useful
@@ -1601,28 +1595,15 @@ If a CA is rejected, none of its ROAs, ASPAs, or router keys will be added
 to the VRP set but also none of its child CAs will be considered at all;
 their published data will not be fetched or validated.
 
-If a prefix has its ROAs published by different CAs, this will lead to some
-of its VRPs being dropped while others are still added. If the VRP for the
-legitimately announced route is among those having been dropped, the route
-becomes RPKI invalid. This can happen both by operator error or through an
-active attack.
+If a rejected CA supplied the only VRP authorising a route, the route's
+origin validation state depends on the remaining VRPs. If none cover the
+announced prefix, the state is *NotFound*. If any cover the prefix but none
+authorise the announcement, the state is *Invalid*.
 
-In addition, if a VRP for a less specific prefix exists that covers the
-prefix of the dropped VRP, the route will be invalidated by the less specific
-VRP.
-
-Because of this risk of accidentally or maliciously invalidating routes, VRPs
-that have address prefixes overlapping with resources of rejected CAs are
-called *unsafe VRPs*.
-
-In order to avoid these situations and instead fall back to an RPKI unknown
-state for such routes, Routinator allows to filter out these unsafe VRPs.
-This can be enabled via the ``--unsafe-vrps=reject`` command line option or
-setting ``unsafe-vrps=reject`` in the config file.
-
-By default, this filter is currently disabled but warnings are logged about
-unsafe VRPs. This allows to assess the operation impact of such a filter.
-Depending on this assessment, the default may change in future versions.
+Routinator calls VRPs whose prefixes overlap the resources of a rejected CA
+*unsafe VRPs*. By default, Routinator keeps these VRPs without logging or
+counting them as unsafe. Set ``unsafe-vrps = "warn"`` to monitor them, or
+``unsafe-vrps = "reject"`` to filter them out.
 
 One exception from this rule are CAs that have the full address space
 assigned, i.e., 0.0.0.0/0 and ::/0. Adding these to the filter would wipe out

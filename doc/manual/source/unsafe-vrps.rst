@@ -25,19 +25,24 @@ or one that is offered by a third party as a service. Because there are now
 more variables at play, such as broken CAs or unavailable repositories, there
 is a possibility of unsafe VRPs emerging.
 
-Unsafe VRPs typically occur when the organisation that holds the superset of
-resources publishes a ROA for their aggregate prefix, e.g. 2001:db8::/32-32,
-and the customer publishes a ROA to authorise a more specific, e.g.
-2001:db8:abcd:/48-48. Now, when the customer CA is unavailable for any reason
-and validation fails, the VRP for 2001:db8:abcd:/48 will be marked as
-*unsafe*. Note that the reason for the unavailability can be that the CA
-itself is broken, or because the repository that hosts the ROA is unavailable
-for a prolonged period.
+For example, a provider publishes a ROA for its aggregate
+``2001:db8::/32`` with a maximum length of 32. Its customer publishes a ROA
+authorising its own AS to originate ``2001:db8:abcd::/48``. If Routinator
+rejects the customer CA, the customer's VRP drops out of the dataset.
+The provider's /32 VRP remains and overlaps the rejected CA's resources.
+It is this /32 VRP that Routinator can mark as unsafe.
 
-Routinator has an :option:`--unsafe-vrps` option that specifies how to deal
-with unsafe resources when conditions creating unsafe VRPs exist. Currently,
-the default policy is to *accept* unsafe VRPs. This means VRPs will not be
-analysed for being unsafe at all, nor will any metrics be generated. The
-other options are *warn*, which will report any unsafe VRP that was
-encountered and *reject*, filtering out VRPs that are marked as unsafe. For
-the latter two options metrics are made available.
+If the /32 is the only remaining VRP covering the announcement, a router
+performing origin validation will classify the customer's /48 as *Invalid*:
+the /32 covers the prefix but its maximum length is 32. Filtering out that
+VRP leaves the announcement *NotFound* because no covering VRP remains.
+
+The :option:`--unsafe-vrps` policy determines how Routinator handles these
+overlaps:
+
+* ``accept`` (default) keeps the VRPs without counting or logging unsafe VRPs.
+* ``warn`` keeps the VRPs, counts them and logs each one at info level.
+* ``reject`` filters the VRPs out, counts them and logs each one at warn level.
+
+With either ``warn`` or ``reject``, Routinator also logs a warning when it
+encounters any unsafe VRPs during a validation run.

@@ -68,10 +68,23 @@ The output will look like this:
       }
     }
 
-Use the :option:`--exceptions` option to refer to your file with local
-exceptions. Routinator verifies that the JSON itself is valid, as well as the
-specified values. The exceptions file will be re-read on every validation
-run, so you can simply update the file whenever your exceptions change. 
+Use :option:`--exceptions` to specify a local exceptions file. In server
+mode, Routinator loads all configured exceptions files at startup. If any
+file is missing, unreadable or invalid, the server exits with an error.
+
+Before each validation run, the server reloads the files as a set. If any
+file fails to load, Routinator logs the file error and the warning
+``Using previously loaded local exceptions.`` Validation continues with the
+entire set from the last successful load. Changes to any of the files take
+effect only once all files load successfully.
+
+To withdraw a temporary exception, remove its entry and save a valid SLURM
+file at the configured path. Deleting the file leaves the previous exception
+in effect on the running server and prevents the next server start while the
+file is still configured.
+
+.. versionchanged:: 0.15.0
+   The server retains the previously loaded exceptions if a reload fails.
 
 In the metrics Routinator provides, there are counters indicating how many
 VRPs are added and excluded from the final data set as a result of your

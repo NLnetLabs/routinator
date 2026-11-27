@@ -32,6 +32,26 @@ will reject the name *localhost*, URIs that consist of IP addresses, and
 hostnames that contain an explicit port. You can change this behaviour with the
 :option:`--allow-dubious-hosts` option.
 
+RRDP URLs and Redirects
+"""""""""""""""""""""""
+
+Routinator uses the notification URL in the CA certificate to determine
+which HTTPS origin it will contact for that repository. This prevents a
+notification file or an HTTP redirect from directing the validator to another
+server to retrieve RRDP data.
+
+Routinator checks that the snapshot and delta URLs in the notification use
+the same hostname and port as the notification URL. The paths can differ.
+An explicitly specified port must match in both URLs. For HTTP redirects,
+Routinator checks that the scheme, host and port remain the same.
+
+For example, if ``https://rpki.example.net/notification.xml`` lists a snapshot
+at ``https://cdn.example.net/snapshot.xml``, Routinator rejects the
+notification and logs ``snapshot or delta files with different origin``.
+
+.. versionchanged:: 0.14.0
+   RRDP retrieval is restricted to the origin of the notification URL.
+
 RRDP Fallback
 """""""""""""
 
@@ -65,13 +85,11 @@ Update Interval
 
 Routinator will fetch new RPKI data ten minutes after the last successful update
 has finished. The interval can be changed using the :option:`--refresh` option.
-It is possible that it takes very long to update a repository due to
-temporary network problems. To ensure a slow repository doesn't stop the entire
-update process from completing, Routinator has a timeout for stalled
-connections. For RRDP, this timeout is implemented as an HTTP request timeout.
-For rsync, the timeout is around the spawned rsync process. The default is five
-minutes for both and can be changed via the :option:`--rsync-timeout` and
-:option:`--rrdp-timeout` options.
+By default, Routinator allows 300 seconds for an rsync process to complete
+(:option:`--rsync-timeout`) and 600 seconds for an HTTP request to retrieve
+an RRDP resource (:option:`--rrdp-timeout`). Within an RRDP request,
+:option:`--rrdp-read-timeout` limits how long Routinator waits for more data
+on an individual read. The default read timeout is 10 seconds.
 
 Validating
 ----------
@@ -80,21 +98,40 @@ Routinator also validates :doc:`ASPA objects <aspa>` and makes their payloads
 available to compatible consumers. ASPA processing is enabled by default from
 version 0.16.0.
 
-The validation process determines if all certificates, Route Origin Attestations
+The validation process determines if all certificates, Route Origin Authorisations
 (ROAs) and other signed objects that may appear in the RPKI have the correct
 signatures. It will also verify if the hashes are correct, no objects have
 expired and the entire data set is complete. If any of the objects do not pass
 these checks, the data will be discarded.
 
-Currently, only certificates (.cer), certificate revocation lists (.crl),
-manifests (.mft), ROAs (.roa), and Ghostbuster Records (.gbr) are allowed to
-appear the RPKI. If another type of object is encountered Routinator will *warn*
+During repository validation, Routinator processes certificates (``.cer``),
+certificate revocation lists (``.crl``), manifests (``.mft``), ROAs
+(``.roa``), ASPAs (``.asa``) and Ghostbuster Records (``.gbr``).
+If another type of object is encountered Routinator will *warn*
 by default, but this can be changed with the :option:`--unknown-objects` option. 
 
 Note that even if unknown objects are accepted, they must appear in the manifest
 and the hash over their content must match the one given in the manifest. If the
 hash does not match, the Certificate Authority (CA) and all its objects are
 still rejected.
+
+Manifest Updates
+""""""""""""""""
+
+Before replacing a stored publication point, Routinator checks that the new
+manifest for that CA has both a higher manifest number and a later
+``thisUpdate`` time than the stored manifest. If either value stays the same
+or goes backwards on a changed manifest, Routinator logs a repository warning
+and validates the stored publication point again. The usual validity and
+staleness checks still apply to the stored data.
+
+For example, after a repository is restored from backup, downloads may succeed
+while Routinator continues to use the stored publication point. The warning
+identifies the manifest and indicates which value failed the check.
+
+.. versionchanged:: 0.14.0
+   Routinator checks the manifest number and ``thisUpdate`` before accepting
+   a replacement manifest.
 
 Stale Objects
 """""""""""""
@@ -137,10 +174,9 @@ has been rejected because it failed to validate completely, the VRP is said to
 be *unsafe* since using it may lead to legitimate routes being flagged as RPKI
 Invalid.
 
-Routinator has an :option:`--unsafe-vrps` option that specifies how to deal with
-these types of VRPs. Currently, the default policy is *warn* in order to gain
-operational experience with the frequency and impact of unsafe VRPs. This
-default may change in future version.
+The default :option:`--unsafe-vrps` policy, ``accept``, keeps these VRPs
+without logging or counting them as unsafe. Use ``warn`` to monitor them or
+``reject`` to exclude them from the dataset.
 
 You can learn more about this topic in the :doc:`unsafe-vrps` section.
 

@@ -23,17 +23,15 @@ the ``/json`` path you can fetch a list of all VRPs in JSON format.
 Query Parameters
 ----------------
 
-All paths accept selector expressions to limit the VRPs returned in the
-form of a query parameter. You can use ``select-asn`` to select ASNs and
-``select-prefix`` to select prefixes. These expressions can be repeated
-multiple times. The output for each additional parameter will be added to the
-results.
+Payload output endpoints such as ``/json`` accept the query parameters
+``select-asn`` and ``select-prefix`` to filter results by ASN or prefix.
+Results include payloads matching any of the supplied selectors.
 
 For example, to only show the VRPs in JSON format authorising AS196615, use:
 
 .. code-block:: text
 
-   curl http://192.0.2.13:8323/json?select-asn=196615
+   curl 'http://192.0.2.13:8323/json?select-asn=196615'
 
 This will produce the following output:
 
@@ -68,13 +66,11 @@ match, as well as less specifics. The reason is that a VRP of an overlapping
 less specific prefix can also affect the RPKI validity of a BGP announcement,
 depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
 
-In some cases you may want more specifics to be displayed as well. For this
-the ``more-specifics`` query string can be used. For example, when querying
-for 82.221.32.0/20:
+For example, to query for 82.221.32.0/20:
 
 .. code-block:: text
 
-   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20
+   curl 'http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20'
 
 Routinator will return the exact match and the VRP for the less specific /17
 prefix:
@@ -92,11 +88,11 @@ prefix:
       ]
    }
 
-When including the ``more-specifics`` parameter in the same query:
+To include more specific prefixes, add ``include=more-specifics``:
 
 .. code-block:: text
 
-   curl http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20&include=more-specifics
+   curl 'http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20&include=more-specifics'
 
 You will now see that a more specific /23 prefix is returned as well:
 
@@ -114,13 +110,13 @@ You will now see that a more specific /23 prefix is returned as well:
       ]
    }
 
-.. Tip:: The ``more-specifics`` parameter will also work if there is no
+.. Tip:: The ``include=more-specifics`` option will also work if there is no
          exactly matching or less specific prefix. In that case you
          will get a list of all more specific VRPs covered by the prefix you
          supplied in the query.
 
 .. versionchanged:: 0.11.0
-   ``more-specifics`` query parameter
+   Support for ``include=more-specifics``
 
 TLS Transport
 -------------
