@@ -447,10 +447,12 @@ These can be requested by providing different commands on the command line.
               Specifies a local address and port to listen on for incoming
               RTR connections.
 
-              Routinator supports both protocol version 0 defined in
-              :rfc:`6810` and version 1 defined in :rfc:`8210`. However, it
-              does not support router keys introduced in version 1.  IPv6
-              addresses must be enclosed in square brackets. You can provide
+              Routinator supports RTR versions 0 (:rfc:`6810`), 1
+              (:rfc:`8210`) and 2. All three versions carry route origins.
+              Versions 1 and 2 also carry BGPsec router keys. ASPA payloads
+              require version 2.
+
+              Enclose IPv6 addresses in square brackets. You can provide
               the option multiple times to let Routinator listen on multiple
               address-port pairs.
 
@@ -691,12 +693,11 @@ These can be requested by providing different commands on the command line.
                   Base 64 encoded string in *routerPublicKey*, and the trust
                   anchor from which the authorization was derived in *ta*.
 
-                  The *aspa* member contains an array of objects with four
-                  members each: The *customer* member contains the customer
-                  ASN, *afi* the address family as either "ipv4" or "ipv6",
-                  *providers* contains the provider ASN set as an array, and
-                  the trust anchor from which the authorization was derived
-                  in *ta*.
+                  Each entry in *aspas* contains the customer ASN in
+                  *customer*, an array of provider ASNs in *providers*, and
+                  the trust anchor name in *ta*. For all three payload types,
+                  *ta* is ``"N/A"`` for a payload derived solely from local
+                  assertions.
 
                   The output object also includes a member named *metadata*
                   which provides additional information. Currently, this is a
@@ -739,31 +740,23 @@ These can be requested by providing different commands on the command line.
                   information about the source of the key is contained in
                   *source*.
 
-                  The *aspa* member contains an array of objects with four
-                  members each: The *customer* member contains the customer
-                  ASN, *afi* the address family as either "ipv4" or "ipv6",
-                  *providers* contains the provider ASN set as an array, and
-                  information about the source of the data can be found in
-                  *source*.
+                  Each entry in *aspas* contains the customer ASN in
+                  *customer*, an array of provider ASNs in *providers*, and
+                  an array of contributing sources in *source*.
 
-                  This source information the same for route origins and
-                  router keys. It consists of an array. Each item in that
-                  array is an object providing details of a source.
-                  The object will have a *type* of *roa* if it was derived
-                  from a valid ROA object, *cer* if it was derived from
-                  a published router certificate, or *exception* if it was an
-                  assertion in a local exception file.
+                  For route origins, router keys and ASPA payloads, each
+                  entry in *source* identifies its *type*: *roa* for a ROA,
+                  *cer* for a router certificate, *aspa* for an ASPA object,
+                  or *exception* for a local assertion.
 
-                  For RPKI objects, *tal* provides the name of the trust
-                  anchor locator the object was published under, *uri*
-                  provides the rsync URI of the ROA or router certificate,
-                  *validity* provides the validity of the ROA itself,
-                  *chainValidity* the validity considering the validity of
-                  the certificates along the validation chain, and
-                  *stale* the time when any of the publication points along
-                  the validation chain becomes stale.
+                  For published objects, *tal* names the trust anchor locator
+                  and *uri* gives the object's rsync URI when available.
+                  *validity* gives the certificate's validity period and
+                  *chainValidity* accounts for validity along the chain.
+                  *stale* gives the time when the first publication point
+                  along that chain becomes stale.
 
-                  For  assertions from local exceptions, *path* will provide
+                  For assertions from local exceptions, *path* will provide
                   the path of the local exceptions file and, optionally,
                   *comment* will provide the comment if given for the
                   assertion.
