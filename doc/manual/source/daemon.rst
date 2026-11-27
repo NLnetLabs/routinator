@@ -9,7 +9,7 @@ it and makes the resulting data set available through the built-in HTTP and
 If you have installed Routinator through our software package repository, the
 HTTP and RTR servers are enabled by default via the
 :ref:`pre-installed
-configuration file <configuration:routinator installed from a package>`.
+configuration file <configuration:setup when installed from a package>`.
 However, they are only available on localhost for security reasons. You will
 have to explicitly change these options to make the services available to
 other network devices.
