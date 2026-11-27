@@ -250,7 +250,9 @@ Also keep in mind that every time you restart the machine, the contents of
 the *tmpfs* file system will be lost. This means that Routinator will have to
 rebuild its cache from scratch. This is not a problem, other than it having
 to download several hundred megabytes of data, which usually takes about ten
-minutes to complete. During this time all services will be unavailable.
+minutes to complete. Once the HTTP server is listening, ``/version`` can
+already respond. Payload endpoints such as ``/json`` return HTTP 503
+(Service Unavailable) until the first validated dataset is available.
 
 Note that your routers should be configured to have a secondary relying party
 instance available at all times.
