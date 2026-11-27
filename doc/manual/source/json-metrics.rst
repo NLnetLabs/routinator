@@ -30,7 +30,7 @@ The JSON metrics consists of an object with the following members:
     Metrics for each configured :term:`trust anchor <Trust Anchor (TA)>`. In most cases
     these will be the
     five :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`, but will
-    include the :term:`trust anchors <Trust Anchor (TA)>` of any
+    include the trust anchors of any
     configured :ref:`testbeds <initialisation:preparing for test environments>`
     as well.
 
@@ -39,15 +39,15 @@ The JSON metrics consists of an object with the following members:
 
 ``repositories``
     Metrics for each :term:`repository` encountered during validation. Note that the
-    data given here relates to the :term:`repository` content used during validation.
-    If the :term:`repository` failed to update, then these numbers are from the stored
+    data given here relates to the repository content used during validation.
+    If the repository failed to update, then these numbers are from the stored
     old data.
 
     Each element of this object contains a :ref:`publication metrics value
     <json-metrics:publication metrics>` as described below. In addition, there
-    is a member ``type`` that describes whether the :term:`repository` is an :term:`RRDP
+    is a member ``type`` that describes whether the repository is an :term:`RRDP
     <RPKI Repository Delta Protocol (RRDP)>` or
-    rsync :term:`repository`.
+    rsync repository.
 
 ``vrpsAddedLocally``
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` added to the final
@@ -56,20 +56,20 @@ The JSON metrics consists of an object with the following members:
 ``rsync``
     Metrics for updates via rsync.
 
-    This is an object with one element for each :term:`repository` that was updated via
+    This is an object with one element for each repository that was updated via
     rsync during the last validation run. Each element contains an :ref:`rsync
     update metrics value <json-metrics:rsync update metrics>` as described
     below.
 
 ``rrdp``
-    Metrics for updates via :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>`.
+    Metrics for updates via RRDP.
 
-    This is an object with one element for each :term:`repository` that was updated via
+    This is an object with one element for each repository that was updated via
     rsync during the last validation run. Each element contains an :ref:`RRDP
     update metrics value <json-metrics:rrdp update metrics>` as described below.
 
 ``rtr``
-    Metrics for the built-in :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server. See
+    Metrics for the built-in RTR server. See
     :ref:`RTR metrics <json-metrics:rtr server metrics>` below.
 
 ``http``
@@ -79,40 +79,40 @@ The JSON metrics consists of an object with the following members:
 Publication Metrics
 """""""""""""""""""
 
-Publication metrics are provided both for all :term:`trust anchors <Trust Anchor (TA)>`
+Publication metrics are provided both for all trust anchors
 and for each
-:term:`RPKI <Resource Public Key Infrastructure (RPKI)>` :term:`repository`. They contain
+:term:`RPKI <Resource Public Key Infrastructure (RPKI)>` repository. They contain
 the following information:
 
 ``vrpsTotal``
-    The total number of :term:`VRPs <Validated ROA Payload (VRP)>` found to be
+    The total number of VRPs found to be
     present and valid.
 
 ``vrpsUnsafe``
-    The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are considered
+    The number of VRPs that are considered
     :term:`unsafe <Unsafe VRPs>`. Depending on configuration, these may be
     included in the final set or dropped from it.
 
 ``vrpsLocallyFiltered``
-    The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are filtered
+    The number of VRPs that are filtered
     as the result of a :doc:`local exception<local-exceptions>`.
 
 ``vrpsDuplicate``
-    The number of duplicate :term:`VRPs <Validated ROA Payload (VRP)>`
+    The number of duplicate VRPs
     resulting from :term:`ROAs <Route Origin Authorisation (ROA)>` containing the same
     authorisation.
 
-    Note that if a :term:`VRP <Validated ROA Payload (VRP)>` appears in multiple
-    :term:`trust anchors <Trust Anchor (TA)>` or :term:`repositories <Repository>`,
+    Note that if a VRP appears in multiple
+    trust anchors or repositories,
     which occurrence is considered the duplicate depends on the order of
     processing which may change between validation runs. Thus, this number
     may change unexpectedly.
 
 ``vrpsFinal``
-    The number of :term:`VRPs <Validated ROA Payload (VRP)>` that are
-    contributed by this :term:`trust anchor <Trust Anchor (TA)>` or :term:`repository` to
+    The number of VRPs that are
+    contributed by this trust anchor or repository to
     the final set provided
-    to your routers. This is the total number of :term:`VRPs <Validated ROA Payload (VRP)>`,
+    to your routers. This is the total number of VRPs,
     minus the ones that are locally filtered, duplicate, and, if configured to 
     be dropped, unsafe.
 
@@ -120,67 +120,61 @@ the following information:
     The number of valid :term:`publication points <Publication Point>`.
 
 ``rejectedPublicationPoints``
-    The number of rejected :term:`publication points <Publication Point>`.
+    The number of rejected publication points.
 
-    A :term:`publication point` is rejected if its :term:`manifest` is invalid or if any
-    objects listed on the :term:`manifest` are missing or have a different content
+    A publication point is rejected if its :term:`manifest` is invalid or if any
+    objects listed on the manifest are missing or have a different content
     hash.
 
 ``validManifests``
-    The number of valid :term:`manifests <Manifest>`.
+    The number of valid manifests.
 
 ``invalidManifests``
-    The number of invalid :term:`manifests <Manifest>`.
+    The number of invalid manifests.
 
-    A :term:`manifest` is invalid if it is not correctly encoded, has expired or
+    A manifest is invalid if it is not correctly encoded, has expired or
     is not correctly signed by the issuing :term:`CA <Certification authority (CA)>`.
 
 ``staleManifests``
-    The number of :term:`stale <Stale Object>` :term:`manifests <Manifest>`.
+    The number of :term:`stale <Stale Object>` manifests.
 
-    A :term:`manifest` is stale if the current time is past the time an update to
-    the :term:`manifest` should have been issued. Whether a stale :term:`manifest` is valid
+    A manifest is stale if the current time is past the time an update to
+    the manifest should have been issued. Whether a stale manifest is valid
     or invalid depends on configuration. By default it is considered invalid.
 
 ``missingManifests``
-    The number of missing :term:`manifests <Manifest>`.
+    The number of missing manifests.
 
 ``validCRLs``
     The number of valid :term:`certificate revocation lists <Certificate 
     Revocation List (CRL)>`.
 
 ``invalidCRLs``
-    The number of invalid :term:`certificate revocation lists <Certificate 
-    Revocation List (CRL)>`.
+    The number of invalid certificate revocation lists.
 
-    A :term:`CRL <Certificate Revocation List (CRL)>` is invalid if it is not correctly
+    A CRL is invalid if it is not correctly
     encoded or
-    is not correctly signed by the issuing :term:`CA <Certification authority (CA)>`.
+    is not correctly signed by the issuing CA.
 
 ``staleCRLs``
-    The number of :term:`stale <Stale Object>` :term:`certificate revocation
-    lists <Certificate  Revocation List (CRL)>`.
+    The number of stale certificate revocation
+    lists.
 
-    A :term:`CRL <Certificate Revocation List (CRL)>` is stale if the current time is past
+    A CRL is stale if the current time is past
     the time an update
-    should have been issued. Whether a stale :term:`CRL <Certificate Revocation List
-    (CRL)>` is valid
+    should have been issued. Whether a stale CRL is valid
     or invalid depends on configuration. By default it is considered invalid.
 
 ``strayCRLs``
-    The number of stray :term:`certificate revocation lists <Certificate 
-    Revocation List (CRL)>`.
+    The number of stray certificate revocation lists.
 
-    Each :term:`CA <Certification authority (CA)>` should only issue one :term:`CRL
-    <Certificate Revocation List (CRL)>`. This :term:`CRL <Certificate Revocation List
-    (CRL)>` should both be listed on the
-    :term:`manifest` and used by the :term:`manifest`’s certificate itself. Any :term:`manifest`
-    listed on the :term:`manifest` that is not also the :term:`manifest`’s own :term:`CRL
-    <Certificate Revocation List (CRL)>` is
+    Each CA should only issue one CRL. This CRL should both be listed on the
+    manifest and used by the manifest’s certificate itself. Any manifest
+    listed on the manifest that is not also the manifest’s own CRL is
     considered a stray.
 
 ``validCACerts``
-    The number of :term:`Certificate Authority (CA) <Certification authority (CA)>`
+    The number of Certificate Authority (CA)
     certificates found to be present
     and valid.
 
@@ -192,40 +186,34 @@ the following information:
     which are :term:`BGPsec router certificates <BGPsec router certificate>`.
 
 ``invalidCerts``
-    The number of invalid stand-alone certificates, either :term:`CA <Certification
-    authority (CA)>` or :term:`EE
-    certificates <End-entity (EE) certificate>`.
+    The number of invalid stand-alone certificates, either CA or EE
+    certificates.
 
 ``validROAs``
-    The number of valid :term:`Route Origin Authorisations <Route Origin
-    Authorisation (ROA)>`
+    The number of valid Route Origin Authorisations
 
 ``invalidROAs``
-    The number of invalid :term:`Route Origin Authorisations <Route Origin
-    Authorisation (ROA)>`.
+    The number of invalid Route Origin Authorisations.
 
 ``validGBRs``
     The number of valid :term:`Ghostbusters Records <Ghostbusters Record
     (GBR)>`.
 
-    Note that currently the content of a :term:`Ghostbuster Record <Ghostbusters Record
-    (GBR)>` is not checked.
+    Note that currently the content of a Ghostbuster Record is not checked.
 
 ``InvalidGBRs``
-    The number of invalid :term:`Ghostbusters Records 
-    <Ghostbusters Record (GBR)>`.
+    The number of invalid Ghostbusters Records.
 
 ``otherObjects``
-    The number of objects found that are not certificates (.cer), :term:`Certificate
-    Revocation Lists <Certificate Revocation List (CRL)>` (.crl), :term:`manifests
-    <Manifest>` (.mft), :term:`ROAs <Route Origin Authorisation (ROA)>` (.roa), or
-    :term:`Ghostbuster
-    Records <Ghostbusters Record (GBR)>` (.gbr).
+    The number of objects found that are not certificates (.cer), Certificate
+    Revocation Lists (.crl), manifests (.mft), ROAs (.roa), or
+    Ghostbuster
+    Records (.gbr).
 
 Rsync Update Metrics
 """"""""""""""""""""
 
-For each :term:`repository` updated via rsync the following values are given.
+For each repository updated via rsync the following values are given.
 
 ``status``
     The status code returned by the rsync process. A value of 0 means the
@@ -239,8 +227,7 @@ For each :term:`repository` updated via rsync the following values are given.
 RRDP Update Metrics
 """""""""""""""""""
 
-For each :term:`repository` updated via :term:`RRDP <RPKI Repository Delta Protocol
-(RRDP)>` the following values are given.
+For each repository updated via RRDP the following values are given.
 
 ``status``
     The overall status of the update. This will be 200 if the updated
@@ -251,7 +238,7 @@ For each :term:`repository` updated via :term:`RRDP <RPKI Repository Delta Proto
 ``notifyStatus``
     The status of retrieving the :term:`notification file <RRDP notification file>`. This
     is the first step
-    of an :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` update. A value of 200
+    of an RRDP update. A value of 200
     indicates that the file was successfully
     retrieved. A value of 304 indicates that the file hasn’t changed since
     last update and no actual update is necessary. Any other value represents
@@ -259,7 +246,7 @@ For each :term:`repository` updated via :term:`RRDP <RPKI Repository Delta Proto
 
 ``payloadStatus``
     The status of retrieving the actual payload. This is the second step
-    of an :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` update and may either
+    of an RRDP update and may either
     represent a single HTTPS request for
     the :term:`snapshot <RRDP snapshot>` file or a series of HTTPS request for the
     sequence of :term:`delta <RRDP delta>`
@@ -267,61 +254,58 @@ For each :term:`repository` updated via :term:`RRDP <RPKI Repository Delta Proto
 
     A value of 0 means that no payload retrieval was necessary. A value of
     200 means that the update was successful. Any other value indicates an
-    error. In case of a sequence of :term:`delta <RRDP delta>` updates, this error may have been
+    error. In case of a sequence of delta updates, this error may have been
     preceded by one or more successful requests.
 
 ``duration``
-    The overall duration of the :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>`
+    The overall duration of the RRDP
     update in seconds.
 
 ``serial``
     The :term:`serial number <RRDP session ID and serial number>` stated by the
-    :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` server for the current data set.
-    With each update the :term:`serial number <RRDP session ID and serial number>` is
+    RRDP server for the current data set.
+    With each update the serial number is
     increased by one.
 
 ``session``
-    The identifier of the current session of the :term:`RRDP <RPKI Repository Delta
-    Protocol (RRDP)>` server. :term:`Serial numbers <RRDP session ID and serial number>`
+    The identifier of the current session of the RRDP server. Serial numbers
     are only valid within the same session. If the server needs to restart its
-    sequence for whatever reason, it needs to choose a new :term:`session ID <RRDP session
-    ID and serial number>` and all
-    data will have to be updated through a :term:`snapshot <RRDP snapshot>`.
+    sequence for whatever reason, it needs to choose a new session ID and all
+    data will have to be updated through a snapshot.
 
 ``delta``
-    Whether data was updated via a sequence of :term:`deltas <RRDP delta>` (``true``) or a full
-    :term:`snapshot <RRDP snapshot>` had to be retrieved (``false``).
+    Whether data was updated via a sequence of deltas (``true``) or a full
+    snapshot had to be retrieved (``false``).
 
 ``snapshotReason``
-    If this is not ``null``, it provides a reason why a :term:`snapshot <RRDP snapshot>`
+    If this is not ``null``, it provides a reason why a snapshot
     was used
-    instead of a :term:`delta <RRDP delta>` as a short explanatory string.
+    instead of a delta as a short explanatory string.
 
 RTR Server Metrics
 """"""""""""""""""
 
-A number of metrics are provided describing the state of the included :term:`RTR
-<RPKI-to-Router (RPKI-RTR)>`
-server. These metrics are available whether the :term:`RTR <RPKI-to-Router (RPKI-RTR)>`
+A number of metrics are provided describing the state of the included RTR
+server. These metrics are available whether the RTR
 server is actually
 enabled or not.
 
 ``currentConnections``
-   The number of currently open :term:`RTR <RPKI-to-Router (RPKI-RTR)>` connections.
+   The number of currently open RTR connections.
 
 ``bytesRead``
-   The total number of bytes read from :term:`RTR <RPKI-to-Router (RPKI-RTR)>`
+   The total number of bytes read from RTR
    connections. In other words,
    describes how much data has been sent by clients.
 
 ``bytesWritten``
-   The total number of bytes written to :term:`RTR <RPKI-to-Router (RPKI-RTR)>`
+   The total number of bytes written to RTR
    connections. In other words,
    describes how much data has been sent to clients.
 
 If ``rtr-client-metrics`` are enabled via configuration or command line,
 an additional object ``clients`` will appear that list the IP addresses of
-clients seen by the :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server providing the following
+clients seen by the RTR server providing the following
 information for them.
 
 ``connections``

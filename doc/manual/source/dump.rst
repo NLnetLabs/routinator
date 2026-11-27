@@ -13,24 +13,23 @@ Three directories will be created in the output directory:
 rrdp
     This directory contains all the files collected via :term:`RRDP <RPKI Repository Delta
     Protocol (RRDP)>` from the various
-    :term:`repositories <Repository>`. Each :term:`repository` is stored in its own
+    :term:`repositories <Repository>`. Each repository is stored in its own
     directory. The mapping
     between ``rpkiNotify`` URI and path is provided in the
-    :file:`repositories.json` file. For each :term:`repository`, the files are stored in
+    :file:`repositories.json` file. For each repository, the files are stored in
     a directory structure based on the components of the file as :term:`rsync URI`.
 
 rsync
     This directory contains all the files collected via rsync. The files are
-    stored in a directory structure based on the components of the file's :term:`rsync
-    URI <rsync URI>`.
+    stored in a directory structure based on the components of the file's rsync
+    URI.
 
 store
     This directory contains all the files used for validation. Files collected
-    via :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` or rsync are copied to the
+    via RRDP or rsync are copied to the
     store if they are correctly referenced
-    by a valid :term:`manifest`. This part contains one directory for each :term:`RRDP
-    <RPKI Repository Delta Protocol (RRDP)>`
-    :term:`repository` similarly structured to the :file:`rrdp` directory and one
+    by a valid :term:`manifest`. This part contains one directory for each RRDP
+    repository similarly structured to the :file:`rrdp` directory and one
     additional directory :file:`rsync` that contains files collected via rsync.
 
 ta

@@ -13,7 +13,7 @@ can use the :option:`--noupdate` option:
 
    routinator validate --asn 12654 --prefix 93.175.147.0/24
 
-This will simply return the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
+This will simply return the RPKI
 validity state:
    
 .. code-block:: text
@@ -30,8 +30,8 @@ This will produce a detailed analysis of the reasoning behind the validation
 outcome printed in JSON format. In case of an :term:`Invalid` state, the ``reason``
 indicates whether this is because the announcement is originated by an
 unauthorised :term:`AS <Autonomous System (AS)>` (``"reason": "as"``), or if the length of
-the announced :term:`prefix <IP prefix>`
-is more specific than the authorised :term:`prefix <IP prefix>` or, if present, the
+the announced prefix
+is more specific than the authorised prefix or, if present, the
 :term:`maximum prefix
 length <Maximum Prefix Length (MaxLength)>` allows (``"reason": "length"``). Lastly, a
 complete list of :term:`VRPs <Validated ROA Payload (VRP)>` that
@@ -83,10 +83,10 @@ read from standard input. You can also save the results to a file using the
 
 You can provide a simple plain text file with the routes you would like to have
 verified by Routinator. The input file should have one route announcement per
-line, provided as a :term:`prefix <IP prefix>` followed by an ASCII-art arrow ``=>``
+line, provided as a prefix followed by an ASCII-art arrow ``=>``
 surrounded by
-white space and followed by the :term:`AS Number <Autonomous System Number (ASN)>` of the
-originating :term:`Autonomous System <Autonomous System (AS)>`.
+white space and followed by the AS Number of the
+originating Autonomous System.
 
 For example, let's provide Routinator with this file, saved as
 :file:`beacons.txt`:
@@ -102,7 +102,7 @@ Now we refer to the file with the :option:`--input` option:
 
    routinator validate --input beacons.txt 
    
-Routinator provides the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` validity
+Routinator provides the RPKI validity
 state in the output:
    
 .. code-block:: text   
@@ -113,8 +113,8 @@ state in the output:
 With the :option:`--json` option you can provide a file in JSON format. It
 should consist of a single object with one member *routes*  which contains an
 array of objects. Each object describes one route announcement through its
-:term:`prefix <IP prefix>` and *asn* members which contain a :term:`prefix <IP prefix>`
-and originating :term:`AS number <Autonomous System Number (ASN)>` as
+prefix and *asn* members which contain a prefix
+and originating AS number as
 strings, respectively.
 
 For example, let's provide Routinator with this :file:`beacons.json` file:

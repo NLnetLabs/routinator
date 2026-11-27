@@ -19,10 +19,8 @@ application on the following paths:
     is allocated for the exporter.
      
 ``/api/v1/status``
-    Returns exhaustive information in JSON format on all :term:`trust anchors <Trust
-    Anchor (TA)>`,
-    :term:`repositories <Repository>`, :term:`RRDP <RPKI Repository Delta Protocol
-    (RRDP)>` and rsync connections, as well as :term:`RTR <RPKI-to-Router (RPKI-RTR)>` and
+    Returns exhaustive information in JSON format on all trust anchors,
+    repositories, RRDP and rsync connections, as well as RTR and
     HTTP
     sessions. This data set provides the source for the Routinator user
     interface.
@@ -40,27 +38,24 @@ Update metrics
   - The retrieval duration and `exit code
     <https://lxadm.com/Rsync_exit_codes>`_ for each rsync :term:`publication point`
   - The retrieval duration and `HTTP status code
-    <https://en.wikipedia.org/wiki/List_of_HTTP_status_codes>`_ for each :term:`RRDP <RPKI
-    Repository Delta Protocol (RRDP)>`
-    :term:`publication point`
+    <https://en.wikipedia.org/wiki/List_of_HTTP_status_codes>`_ for each RRDP
+    publication point
 
 Object metrics
   - For each cryptographic object that can appear in the :term:`RPKI <Resource Public Key
     Infrastructure (RPKI)>`, the number of
-    valid, invalid and stale items per :term:`trust anchor <Trust Anchor (TA)>` and
-    :term:`repository`
+    valid, invalid and stale items per trust anchor and
+    repository
   - The number of :term:`validated ROA payloads <Validated ROA Payload (VRP)>`
-    (:term:`VRPs <Validated ROA Payload (VRP)>`) per :term:`Trust Anchor <Trust Anchor
-    (TA)>` and
-    :term:`repository`
-  - The number of :term:`VRPs <Validated ROA Payload (VRP)>` added and excluded locally
+    (VRPs) per Trust Anchor and
+    repository
+  - The number of VRPs added and excluded locally
 
 RTR server
-  - The current :term:`RTR <RPKI-to-Router (RPKI-RTR)>` serial number
-  - The current number of :term:`RTR <RPKI-to-Router (RPKI-RTR)>` connections
-  - The total amount of bytes sent and received over the :term:`RTR <RPKI-to-Router
-    (RPKI-RTR)>` connection
-  - Metrics for each :term:`RTR <RPKI-to-Router (RPKI-RTR)>` client is available if the
+  - The current RTR serial number
+  - The current number of RTR connections
+  - The total amount of bytes sent and received over the RTR connection
+  - Metrics for each RTR client is available if the
     :option:`--rtr-client-metrics` option is provided
   
 HTTP server

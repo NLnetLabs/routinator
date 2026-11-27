@@ -17,8 +17,7 @@ Management with the RPKI (SLURM)>` standard specified in :RFC:`8416`.
 You can use this `example file
 <https://github.com/NLnetLabs/rpki-rs/blob/main/test-data/slurm/full.json>`_
 as a starting point, but you can also build your own exceptions file based on
-existing :term:`VRPs <Validated ROA Payload (VRP)>` in the global :term:`RPKI <Resource
-Public Key Infrastructure (RPKI)>` data set using the :term:`SLURM` output
+existing :term:`VRPs <Validated ROA Payload (VRP)>` in the global RPKI data set using the :term:`SLURM` output
 format in combination with the :option:`--select-asn` and
 :option:`--select-prefix` options. 
 
@@ -26,12 +25,11 @@ format in combination with the :option:`--select-asn` and
   
     - :doc:`interactive`
 
-This command selects the :term:`VRPs <Validated ROA Payload (VRP)>` for origin AS196615
+This command selects the VRPs for origin AS196615
 from Routinator's current
 dataset and writes their :term:`prefixes <IP prefix>` and :term:`maximum prefix lengths
 <Maximum Prefix Length (MaxLength)>` to standard
-output as :term:`SLURM <Simplified Local Internet Number Resource Management with the RPKI
-(SLURM)>` :term:`prefix <IP prefix>` :term:`assertions <Locally added assertion>`:
+output as SLURM prefix :term:`assertions <Locally added assertion>`:
 
 .. code-block:: text
 
@@ -84,8 +82,7 @@ file fails to load, Routinator logs the file error and the warning
 entire set from the last successful load. Changes to any of the files take
 effect only once all files load successfully.
 
-To withdraw a temporary exception, remove its entry and save a valid :term:`SLURM
-<Simplified Local Internet Number Resource Management with the RPKI (SLURM)>`
+To withdraw a temporary exception, remove its entry and save a valid SLURM
 file at the configured path. Deleting the file leaves the previous exception
 in effect on the running server and prevents the next server start while the
 file is still configured.
@@ -94,15 +91,15 @@ file is still configured.
    The server retains the previously loaded exceptions if a reload fails.
 
 In the metrics Routinator provides, there are counters indicating how many
-:term:`VRPs <Validated ROA Payload (VRP)>` are added and excluded from the final data set
+VRPs are added and excluded from the final data set
 as a result of your
 exceptions. 
 
 Limiting Prefix Length
 ----------------------
 
-It's possible to set the maximum length of IPv4 and :term:`IPv6 prefixes <IP prefix>` that will
-be included in the :term:`VRP <Validated ROA Payload (VRP)>` data set. You can set this with the
+It's possible to set the maximum length of IPv4 and IPv6 prefixes that will
+be included in the VRP data set. You can set this with the
 :option:`--limit-v4-len` and :option:`--limit-v6-len` options, respectively.
 
 To illustrate this option we'll use an extreme example:
@@ -111,8 +108,8 @@ To illustrate this option we'll use an extreme example:
 
     routinator --limit-v4-len=8 --limit-v6-len=19 vrps
 
-Now, all :term:`VRPs <Validated ROA Payload (VRP)>` will be ignored that have a
-:term:`prefix <IP prefix>` with a length that is longer
+Now, all VRPs will be ignored that have a
+prefix with a length that is longer
 than /8 IPv4 and /19 IPv6:
 
 .. code-block:: text
@@ -124,8 +121,8 @@ than /8 IPv4 and /19 IPv6:
     AS3320,2003::/19,19,ripe
     AS5511,2a01:c000::/19,48,ripe
 
-Note that only the :term:`prefix <IP prefix>` length itself and not the :term:`maximum
-prefix length <Maximum Prefix Length (MaxLength)>`
-value of the :term:`ROA <Route Origin Authorisation (ROA)>` is considered.
+Note that only the prefix length itself and not the maximum
+prefix length
+value of the ROA is considered.
 
 .. versionadded:: 0.12.0

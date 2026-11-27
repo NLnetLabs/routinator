@@ -162,8 +162,7 @@ To disable the features that are enabled by default, use the
 using the ``--features`` option, listing each feature separated by commas. 
 
 For example, if you want to build Routinator without the user interface, make
-sure SOCKS support is retained and use the native :term:`TLS <Transport Layer Security
-(TLS)>` implementation, enter
+sure SOCKS support is retained and use the native TLS implementation, enter
 the following command:
 
 .. code-block:: text

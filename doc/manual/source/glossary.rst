@@ -8,20 +8,19 @@ Glossary
     A signed :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` object in which an
     IP address holder names a single
     :term:`autonomous system (AS)` authorised to originate routes to one or more
-    :term:`prefixes <IP prefix>`. For each :term:`prefix <IP prefix>`, the holder can specify a
+    :term:`prefixes <IP prefix>`. For each prefix, the holder can specify a
     :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>` to
     allow more-specific announcements. A ROA with :term:`AS 0 <AS 0 (AS0)>` signals that the
-    holder does not intend the specified :term:`prefixes <IP prefix>` to be routed.
+    holder does not intend the specified prefixes to be routed.
     See :rfc:`9582` and :rfc:`7607`.
 
   Validated ROA Payload (VRP)
     A record containing one :term:`IP prefix`, its :term:`maximum prefix length <Maximum
     Prefix Length (MaxLength)>` and an
-    :term:`origin AS` number. Each :term:`prefix <IP prefix>` in a valid :term:`ROA <Route
+    :term:`origin AS` number. Each prefix in a valid :term:`ROA <Route
     Origin
-    Authorisation (ROA)>` yields a VRP. An invalid :term:`ROA <Route Origin Authorisation
-    (ROA)>` contributes none.
-    Other valid :term:`ROAs <Route Origin Authorisation (ROA)>` can independently
+    Authorisation (ROA)>` yields a VRP. An invalid ROA contributes none.
+    Other valid ROAs can independently
     authorise the same announcement.
 
   Resource Public Key Infrastructure (RPKI)
@@ -48,24 +47,23 @@ Glossary
     A check of the :term:`prefix <IP prefix>` and :term:`origin AS` in a :term:`BGP
     <Border Gateway Protocol (BGP)>` announcement against the
     available :term:`VRPs <Validated ROA Payload (VRP)>`. The result is
-    :term:`Valid` if at least one :term:`covering VRP` matches the :term:`origin AS` and permits
-    the announced :term:`prefix <IP prefix>` length. It is :term:`Invalid` if
-    :term:`covering VRPs <Covering VRP>` exist
-    but none matches, and :term:`NotFound` if no :term:`VRP <Validated ROA Payload (VRP)>`
-    covers the :term:`prefix <IP prefix>`. A :term:`Valid`
+    :term:`Valid` if at least one :term:`covering VRP` matches the origin AS and permits
+    the announced prefix length. It is :term:`Invalid` if
+    covering VRPs exist
+    but none matches, and :term:`NotFound` if no VRP
+    covers the prefix. A Valid
     result establishes that the origin is authorised. The check does not
-    authenticate the :term:`BGP <Border Gateway Protocol (BGP)>` update or verify its
+    authenticate the BGP update or verify its
     :term:`AS path <AS path (AS_PATH)>`. See :rfc:`6811`.
 
   Maximum Prefix Length (MaxLength)
     The longest :term:`prefix <IP prefix>` length authorised for a particular
-    :term:`prefix <IP prefix>` in a
+    prefix in a
     :term:`ROA <Route Origin Authorisation (ROA)>`. For example, a /24 with
     a maximum length of 25 authorises the named :term:`AS <Autonomous System (AS)>` to
     announce the /24
-    itself and either of its two /25s. If the :term:`ROA <Route Origin Authorisation
-    (ROA)>` omits ``maxLength`` for
-    a :term:`prefix <IP prefix>`, only the exact :term:`prefix <IP prefix>` is authorised
+    itself and either of its two /25s. If the ROA omits ``maxLength`` for
+    a prefix, only the exact prefix is authorised
     by that entry.
 
   RPKI Relying Parties
@@ -102,14 +100,12 @@ Glossary
     objects <RPKI signed object>` available to :term:`relying parties <RPKI Relying
     Parties>`. A repository can host
     :term:`publication points <Publication Point>` for multiple
-    :term:`certification authorities <Certification authority (CA)>` (:term:`CAs
-    <Certification authority (CA)>`). See :rfc:`6481`.
+    :term:`certification authorities <Certification authority (CA)>` (CAs). See :rfc:`6481`.
 
   RPKI Repository Delta Protocol (RRDP)
     A protocol for synchronising a :term:`relying party <RPKI Relying Parties>`'s local
     copy of an :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
-    :term:`repository <Repository>` over HTTPS. The :term:`relying party <RPKI Relying
-    Parties>` checks a
+    :term:`repository <Repository>` over HTTPS. The relying party checks a
     :term:`notification file <RRDP notification file>` to see whether its copy is current,
     can be brought
     up to date with :term:`deltas <RRDP delta>`, or needs a full :term:`snapshot <RRDP
@@ -122,29 +118,28 @@ Glossary
     including its
     :term:`manifest <Manifest>` and revocation list. During a :term:`key rollover <CA key
     rollover>`,
-    two :term:`CA <Certification authority (CA)>` instances can share a publication point,
+    two CA instances can share a publication point,
     each with its own
-    :term:`manifest`. See :rfc:`9286`.
+    manifest. See :rfc:`9286`.
 
   Manifest
     A signed :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` object that lists
     filenames and hashes for the files a :term:`CA <Certification authority (CA)>`
     instance publishes at its :term:`publication point <Publication Point>`.
-    It lists the certificates the :term:`CA <Certification authority (CA)>` issues and
+    It lists the certificates the CA issues and
     publishes, its current
     revocation list and its other published :term:`signed objects <RPKI signed object>`.
     The manifest
     excludes itself. A :term:`relying party <RPKI Relying Parties>` can use it to detect
     missing files or
-    files whose contents differ from those the :term:`CA <Certification authority (CA)>`
+    files whose contents differ from those the CA
     published. See :rfc:`9286`.
 
   Certificate Revocation List (CRL)
     A signed list in which a :term:`certification authority <Certification authority
     (CA)>` identifies certificates
     it has revoked by their serial numbers and gives the date of each
-    revocation. A :term:`relying party <RPKI Relying Parties>` checks the :term:`CA
-    <Certification authority (CA)>`'s signature to verify the
+    revocation. A :term:`relying party <RPKI Relying Parties>` checks the CA's signature to verify the
     origin and integrity of the list. See :rfc:`6487`.
 
   Stale Object
@@ -157,12 +152,12 @@ Glossary
     Routinator's term for otherwise valid :term:`VRPs <Validated ROA Payload
     (VRP)>` whose :term:`prefixes <IP prefix>` overlap address space assigned to a
     rejected :term:`CA <Certification authority (CA)>`.
-    A :term:`VRP <Validated ROA Payload (VRP)>` that remains in the data set may cover a
+    A VRP that remains in the data set may cover a
     legitimate announcement
-    whose authorising :term:`VRP <Validated ROA Payload (VRP)>` was lost when the
-    :term:`CA <Certification authority (CA)>` was rejected. This can cause
+    whose authorising VRP was lost when the
+    CA was rejected. This can cause
     the announcement to be classified as :term:`Invalid`. By default Routinator
-    keeps these :term:`VRPs <Validated ROA Payload (VRP)>` without counting or logging
+    keeps these VRPs without counting or logging
     them as unsafe.
     See :doc:`unsafe-vrps` for an example and the available policies.
 
@@ -191,11 +186,10 @@ Glossary
   AS 0 (AS0)
     A reserved :term:`AS number <Autonomous System Number (ASN)>` that cannot be used by a
     :term:`BGP <Border Gateway Protocol (BGP)>` speaker as its own
-    :term:`ASN <Autonomous System Number (ASN)>` or appear in a valid :term:`BGP <Border
-    Gateway Protocol (BGP)>` :term:`AS path <AS path (AS_PATH)>`. An AS 0 :term:`ROA
+    ASN or appear in a valid BGP :term:`AS path <AS path (AS_PATH)>`. An AS 0 :term:`ROA
     <Route Origin Authorisation (ROA)>` signals that the
     holder does not intend the covered :term:`prefixes <IP prefix>` to be routed. Another
-    :term:`ROA <Route Origin Authorisation (ROA)>`
+    ROA
     can still authorise an announcement that it covers. In an :doc:`ASPA
     <aspa>`, AS 0 alone in the provider list declares that the customer
     has no providers. See :rfc:`6483` and :rfc:`7607`.
@@ -209,10 +203,9 @@ Glossary
   AS path (AS_PATH)
     A :term:`BGP <Border Gateway Protocol (BGP)>` attribute that records :term:`AS numbers
     <Autonomous System Number (ASN)>` as a route is propagated.
-    For a path consisting of a sequence of :term:`AS numbers <Autonomous System Number
-    (ASN)>`, the rightmost one
+    For a path consisting of a sequence of AS numbers, the rightmost one
     is the origin and a neighbour advertising the route normally prepends
-    its own :term:`ASN <Autonomous System Number (ASN)>` on the left. See :rfc:`4271` and
+    its own ASN on the left. See :rfc:`4271` and
     :rfc:`6811`.
 
   Origin AS
@@ -230,12 +223,11 @@ Glossary
 
   Covering VRP
     A :term:`VRP <Validated ROA Payload (VRP)>` whose :term:`prefix <IP prefix>` contains
-    the entire announced :term:`prefix <IP prefix>`, including an
-    exact :term:`prefix <IP prefix>` match. Coverage depends only on the :term:`prefixes
-    <IP prefix>`. For the :term:`VRP <Validated ROA Payload (VRP)>`
+    the entire announced prefix, including an
+    exact prefix match. Coverage depends only on the prefixes. For the VRP
     to match the announcement, its :term:`ASN <Autonomous System Number (ASN)>` must also
     match the origin and its
-    maximum length must permit the announced :term:`prefix <IP prefix>` length. See :rfc:`6811`.
+    maximum length must permit the announced prefix length. See :rfc:`6811`.
 
   Valid
     The :term:`route origin validation <Route Origin Validation (ROV)>` state for an
@@ -266,7 +258,7 @@ Glossary
   Autonomous System Provider Authorisation (ASPA)
     A signed :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` object in which a
     :term:`customer AS <Customer AS and provider AS>` identifies its authorised
-    :term:`provider ASes <Customer AS and provider AS>`. Routinator validates these
+    provider ASes. Routinator validates these
     declarations and makes the
     resulting provider sets available to routers. The object profile and
     the procedures for checking an :term:`AS path <AS path (AS_PATH)>` are separate
@@ -276,7 +268,7 @@ Glossary
   Customer AS and provider AS
     In an :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>`, the customer AS
     is the :term:`AS <Autonomous System (AS)>` making the declaration. The
-    provider AS is an :term:`AS <Autonomous System (AS)>` it authorises to provide
+    provider AS is an AS it authorises to provide
     upstream connectivity.
     A provider list applies to that customer ASN across both IPv4 and
     IPv6. See :doc:`aspa`.
@@ -292,7 +284,7 @@ Glossary
   BGPsec router certificate
     An :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` :term:`end-entity
     certificate <End-entity (EE) certificate>` binding a :term:`BGPsec` public key to one
-    or more :term:`AS numbers <Autonomous System Number (ASN)>`. It lets a :term:`BGPsec`
+    or more :term:`AS numbers <Autonomous System Number (ASN)>`. It lets a BGPsec
     speaker verify a path signature
     under the authority of the corresponding :term:`AS <Autonomous System (AS)>`. See
     :rfc:`8209`.
@@ -397,7 +389,7 @@ Glossary
     An integer that a :term:`CA <Certification authority (CA)>` increases each time it
     issues a new :term:`manifest` for
     the same key. :term:`Relying parties <RPKI Relying Parties>` can use it to recognise
-    an older :term:`manifest`
+    an older manifest
     at a :term:`publication point`. See :rfc:`9286` and :doc:`data-processing`.
 
   thisUpdate and nextUpdate
@@ -442,7 +434,7 @@ Glossary
   RRDP session ID and serial number
     The pair identifying a version of an :term:`RRDP <RPKI Repository Delta Protocol
     (RRDP)>` :term:`repository`. The session ID
-    identifies the update history and the serial advances as the :term:`repository`
+    identifies the update history and the serial advances as the repository
     changes. A new session requires the :term:`relying party <RPKI Relying Parties>` to
     retrieve a
     :term:`snapshot <RRDP snapshot>`. See :rfc:`8182`.
@@ -514,7 +506,7 @@ Glossary
   CA key rollover
     The replacement of a :term:`certification authority <Certification authority (CA)>`'s
     key pair. During the
-    transition the :term:`CA <Certification authority (CA)>` can publish objects under
+    transition the CA can publish objects under
     both keys, with a separate
     :term:`manifest` and :term:`CRL <Certificate Revocation List (CRL)>` for each. See
     :rfc:`6489` and :rfc:`9286`.

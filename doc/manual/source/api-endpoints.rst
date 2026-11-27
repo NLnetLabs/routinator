@@ -37,7 +37,7 @@ The HTTP service supports **GET** requests on the following paths:
      ``routeOrigin``, ``routerKey`` or ``aspa``. An :term:`ASPA <Autonomous System
      Provider Authorisation (ASPA)>` item contains the
      :term:`customer ASN <Customer AS and provider AS>` in ``customerAsn`` and an array of
-     :term:`provider ASNs <Customer AS and provider AS>` in
+     provider ASNs in
      ``providerAsns``. When *reset* is *true*, *announced* contains the full
      dataset and the response omits *withdrawn*.
 

@@ -2,11 +2,11 @@ VRP Output Formats
 ==================
 
 Routinator can perform :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` validation as a one-time operation or run as a
-daemon. In both operating modes :term:`validated ROA payloads <Validated ROA Payload (VRP)>` (:term:`VRPs <Validated ROA Payload (VRP)>`) can be
+daemon. In both operating modes :term:`validated ROA payloads <Validated ROA Payload (VRP)>` (VRPs) can be
 generated in a wide range of output formats for various use cases.
 
 .. Tip:: In many of the output formats, the name of the :term:`trust anchor <Trust Anchor (TA)>` from
-         where the :term:`VRP <Validated ROA Payload (VRP)>` originated is provided. This name is derived from the
+         where the VRP originated is provided. This name is derived from the
          file name of the :term:`TAL <Trust Anchor Locator (TAL)>`, without  the *.tal* extension. If you would
          like a different name, the *tal-label* option in the 
          :doc:`configuration file <configuration>` lets you create a mapping
@@ -21,7 +21,7 @@ generated in a wide range of output formats for various use cases.
             -  The :term:`prefix <IP prefix>` in slash notation,
             -  the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`,
             -  the :term:`Autonomous System Number <Autonomous System Number (ASN)>`, and
-            -  the name of the :term:`trust anchor <Trust Anchor (TA)>` the entry is derived from.
+            -  the name of the trust anchor the entry is derived from.
           
           .. code-block:: text
             
@@ -32,9 +32,9 @@ generated in a wide range of output formats for various use cases.
           
     csvcompat
           This is the same as the *csv* format except that all fields are
-          embedded in double quotes and the :term:`Autonomous System Number <Autonomous System Number (ASN)>` is given
-          without the :term:`prefix <IP prefix>` :term:`AS <Autonomous System (AS)>`. This format is pretty much identical to
-          the CSV format produced by the RIPE NCC :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` Validator.
+          embedded in double quotes and the Autonomous System Number is given
+          without the prefix :term:`AS <Autonomous System (AS)>`. This format is pretty much identical to
+          the CSV format produced by the RIPE NCC RPKI Validator.
           
           .. code-block:: text
               
@@ -45,19 +45,19 @@ generated in a wide range of output formats for various use cases.
               
     csvext
           This is an extended version of the *csv* format, which was used by
-          the RIPE NCC :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` Validator 1.x. Each line contains these
+          the RIPE NCC RPKI Validator 1.x. Each line contains these
           comma-separated values: 
           
             - The :term:`rsync URI` of the :term:`ROA <Route Origin Authorisation (ROA)>` the line is taken from (or "N/A" if it
-              isn't from a :term:`ROA <Route Origin Authorisation (ROA)>`),
-            - the :term:`Autonomous System Number <Autonomous System Number (ASN)>`,
-            - the :term:`prefix <IP prefix>` in slash notation,
-            - the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`, and
-            - the not-before and not-after date of the validity of the :term:`ROA <Route Origin Authorisation (ROA)>`.
+              isn't from a ROA),
+            - the Autonomous System Number,
+            - the prefix in slash notation,
+            - the maximum prefix length, and
+            - the not-before and not-after date of the validity of the ROA.
           
           .. Note:: This format is available for backwards compatibility
                     reasons only. One particular limitation is that it does 
-                    not consider duplicate :term:`ROAs <Route Origin Authorisation (ROA)>`. Please use :term:`jsonext`
+                    not consider duplicate ROAs. Please use :term:`jsonext`
                     as a comprehensive output format.
 
           .. code-block:: text
@@ -70,7 +70,7 @@ generated in a wide range of output formats for various use cases.
     json
           The list is placed into a JSON object with up to four members:
 
-            - *roas* contains the validated :term:`route origin authorisations <Route Origin Authorisation (ROA)>`,
+            - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
               :ref:`advanced-features:bgpsec` :term:`router keys <BGPsec router key>`,
             - *aspas* contains the validated :ref:`advanced-features:aspa` 
@@ -84,30 +84,30 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements 
           each:
           
-            - *asn* lists the :term:`Autonomous System Number <Autonomous System Number (ASN)>` of the network
-              authorised to originate a :term:`prefix <IP prefix>`,
-            - :term:`prefix <IP prefix>` has the :term:`prefix <IP prefix>` in slash notation,
-            - :term:`maxLength <Maximum Prefix Length (MaxLength)>` states the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>` of the announced
+            - *asn* lists the Autonomous System Number of the network
+              authorised to originate a prefix,
+            - prefix has the prefix in slash notation,
+            - maxLength states the maximum prefix length of the announced
               route, and
-            - *ta* has the :term:`trust anchor <Trust Anchor (TA)>` from which the authorisation was
+            - *ta* has the trust anchor from which the authorisation was
               derived. 
           
           The *routerKeys* member contains an array of objects with four 
           elements each: 
           
-            - *asn* contains the :term:`autonomous system <Autonomous System (AS)>` using the :term:`router key <BGPsec router key>`,
+            - *asn* contains the autonomous system using the router key,
             - :term:`SKI <Subject Key Identifier (SKI)>` lists the key identifier as a string of hexadecimal
               digits,
             - *routerPublicKey* contains the actual public key as a Base 64 
               encoded string, and 
-            - *ta* has the :term:`trust anchor <Trust Anchor (TA)>` from which the authorisation was
+            - *ta* has the trust anchor from which the authorisation was
               derived.
 
           Each object in the *aspas* array has three members:
           
             - *customer* contains the :term:`customer ASN <Customer AS and provider AS>`,
-            - *providers* contains the :term:`provider ASN <Customer AS and provider AS>` set as an array, and
-            - *ta* has the :term:`trust anchor <Trust Anchor (TA)>` from which the authorisation was
+            - *providers* contains the provider ASN set as an array, and
+            - *ta* has the trust anchor from which the authorisation was
               derived.
           
           The output object also includes a member named *metadata* which
@@ -151,9 +151,9 @@ generated in a wide range of output formats for various use cases.
     jsonext
           The list is placed into a JSON object with up to four members:
 
-            - *roas* contains the validated :term:`route origin authorisations <Route Origin Authorisation (ROA)>`,
+            - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
-              :ref:`advanced-features:bgpsec` :term:`router keys <BGPsec router key>`,
+              :ref:`advanced-features:bgpsec` router keys,
             - *aspas* contains the validated :ref:`advanced-features:aspa` 
               objects, and 
             - *metadata* contains some information about the validation run
@@ -165,10 +165,10 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements
           each: 
           
-            - *asn* lists the :term:`Autonomous System Number <Autonomous System Number (ASN)>` of the network
-              authorised to originate a :term:`prefix <IP prefix>`,
-            - :term:`prefix <IP prefix>` has the :term:`prefix <IP prefix>` in slash notation,
-            - :term:`maxLength <Maximum Prefix Length (MaxLength)>` states the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>` of the announced
+            - *asn* lists the Autonomous System Number of the network
+              authorised to originate a prefix,
+            - prefix has the prefix in slash notation,
+            - maxLength states the maximum prefix length of the announced
               route, and
             - *source* contains information about the source of the
               authorisation.
@@ -176,8 +176,8 @@ generated in a wide range of output formats for various use cases.
           The *routerKeys* member contains an array of objects with
           four elements each: 
           
-            - *asn* lists the :term:`autonomous system <Autonomous System (AS)>` using the :term:`router key <BGPsec router key>`,
-            - :term:`SKI <Subject Key Identifier (SKI)>` has the key identifier as a string of hexadecimal digits,
+            - *asn* lists the autonomous system using the router key,
+            - SKI has the key identifier as a string of hexadecimal digits,
             - *routerPublicKey* has the actual public key as a Base 64
               encoded string, and
             - *source* contains extended information about the source of the
@@ -185,30 +185,30 @@ generated in a wide range of output formats for various use cases.
 
           Each object in the *aspas* array has three members:
           
-            - *customer* contains the :term:`customer ASN <Customer AS and provider AS>`,
-            - *providers* contains the :term:`provider ASN <Customer AS and provider AS>` set as an array, and
+            - *customer* contains the customer ASN,
+            - *providers* contains the provider ASN set as an array, and
             - *source* contains information about the source of the
               authorisation.
 
-          This source information the same for route origins, :term:`router keys <BGPsec router key>` and
+          This source information the same for route origins, router keys and
           aspas. It consists of an array. Each item in that array is an
           object providing details of a source. The object will have a *type*
-          of *roa* if it was derived from a valid :term:`ROA <Route Origin Authorisation (ROA)>` object, *cer* if it was
+          of *roa* if it was derived from a valid ROA object, *cer* if it was
           derived from a published :term:`router certificate <BGPsec router certificate>`, *aspa* if it was
           derived from an :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>` object, or *exception* if it was an :term:`assertion <Locally added assertion>`
           in a local exception file.
 
-          For :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` objects, *tal* provides the name of the :term:`trust anchor
-          locator <Trust Anchor Locator (TAL)>` the object was published under, *uri* provides the :term:`rsync
-          URI <rsync URI>` of the :term:`ROA <Route Origin Authorisation (ROA)>` or :term:`router certificate <BGPsec router certificate>`, *validity* provides the
-          validity of the :term:`ROA <Route Origin Authorisation (ROA)>` itself, *chainValidity* the validity
+          For RPKI objects, *tal* provides the name of the trust anchor
+          locator the object was published under, *uri* provides the rsync
+          URI of the ROA or router certificate, *validity* provides the
+          validity of the ROA itself, *chainValidity* the validity
           considering the validity of the certificates along the :term:`validation
           chain <Certification path>`, and *stale* the time when any of the :term:`publication points <Publication Point>` along
-          the :term:`validation chain <Certification path>` becomes stale.
+          the validation chain becomes stale.
 
-          For  :term:`assertions <Locally added assertion>` from local exceptions, *path* will provide the path
+          For  assertions from local exceptions, *path* will provide the path
           of the local exceptions file and, optionally, *comment* will
-          provide the comment if given for the :term:`assertion <Locally added assertion>`.
+          provide the comment if given for the assertion.
 
           The output object also includes a member named *metadata* which
           provides additional information. Currently, this is a member
@@ -296,10 +296,10 @@ generated in a wide range of output formats for various use cases.
              Only include members that have not been disabled or excluded
 
     slurm
-          The list is formatted as :term:`locally added assertions <Locally added assertion>` of a :doc:`local
+          The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by :RFC:`8416` (also
           known as :term:`SLURM <Simplified Local Internet Number Resource Management with the RPKI (SLURM)>` version 1). The produced file will have empty
-          :term:`validation output filters <Validation output filter>`. This version does not support :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>`.
+          :term:`validation output filters <Validation output filter>`. This version does not support ASPA.
 
           .. code-block:: json
 
@@ -339,11 +339,11 @@ generated in a wide range of output formats for various use cases.
           .. versionadded:: 0.11.0
 
     slurm2
-          The list is formatted as :term:`locally added assertions <Locally added assertion>` of a :doc:`local
+          The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by 
           `draft-ietf-sidrops-aspa-slurm-04 <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-slurm-04>`_
-          (also known as :term:`SLURM <Simplified Local Internet Number Resource Management with the RPKI (SLURM)>` version 2). The produced file will have empty
-          :term:`validation output filters <Validation output filter>`.
+          (also known as SLURM version 2). The produced file will have empty
+          validation output filters.
 
           .. code-block:: json
 
@@ -392,7 +392,7 @@ generated in a wide range of output formats for various use cases.
             }
 
           .. versionadded:: 0.15.0
-             :term:`SLURM <Simplified Local Internet Number Resource Management with the RPKI (SLURM)>` version 2 output. Routinator can also read version 2 local
+             SLURM version 2 output. Routinator can also read version 2 local
              exception files from version 0.16.0 onwards.
 
     openbgpd
@@ -408,7 +408,7 @@ generated in a wide range of output formats for various use cases.
             }
             
     bird1
-          Choosing this format causes Routinator to produce a :term:`ROA <Route Origin Authorisation (ROA)>` table
+          Choosing this format causes Routinator to produce a ROA table
           configuration item for use with BIRD 1.6.
           
           .. code-block:: text
@@ -444,13 +444,13 @@ generated in a wide range of output formats for various use cases.
             source: ROA-RIPE-RPKI-ROOT
           
     summary
-          This format produces a summary of the content of the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
+          This format produces a summary of the content of the RPKI
           :term:`repository`. It does not take filters into account and will always
-          provide numbers for the complete :term:`repository`.
+          provide numbers for the complete repository.
           
-          For each :term:`trust anchor <Trust Anchor (TA)>`, it will print the number of verified :term:`ROAs <Route Origin Authorisation (ROA)>`
-          and :term:`VRPs <Validated ROA Payload (VRP)>`, :term:`router certificates <BGPsec router certificate>` and keys, as well as :term:`ASPAs <Autonomous System Provider Authorisation (ASPA)>`. Note that
-          :term:`router keys <BGPsec router key>` and :term:`ASPAs <Autonomous System Provider Authorisation (ASPA)>` will only be included in the totals if you
+          For each trust anchor, it will print the number of verified ROAs
+          and VRPs, router certificates and keys, as well as ASPAs. Note that
+          router keys and ASPAs will only be included in the totals if you
           have enabled :ref:`advanced-features:bgpsec` and
           :ref:`advanced-features:aspa`, respectively.
                 

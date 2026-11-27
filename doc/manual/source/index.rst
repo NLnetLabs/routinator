@@ -3,8 +3,8 @@ Routinator |version|
 
 Routinator is an open-source :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
 validator developed by NLnet Labs. It
-fetches and validates objects published in the :term:`Resource Public Key
-Infrastructure (RPKI)`. Its built-in :term:`RPKI-to-Router (RTR) <RPKI-to-Router
+fetches and validates objects published in the Resource Public Key
+Infrastructure (RPKI). Its built-in :term:`RPKI-to-Router (RTR) <RPKI-to-Router
 (RPKI-RTR)>` server supplies
 routers with the resulting data. Routers can use this data to check the
 origin of a :term:`BGP <Border Gateway Protocol (BGP)>` announcement or, with :doc:`ASPA
@@ -36,7 +36,7 @@ Monitor a running instance
 
 Use :doc:`monitoring` to check when validation last completed, inspect
 :term:`repository` status and collect Prometheus metrics. See :doc:`logging` to
-diagnose problems fetching or validating :term:`repository` data.
+diagnose problems fetching or validating repository data.
 
 Further information and support
 -------------------------------
