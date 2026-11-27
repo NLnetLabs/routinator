@@ -1146,8 +1146,13 @@ All values can be overridden via the command line options.
             The options ``-rtO --delete`` are always passed to the command.
             The options listed in the option are added to it.
 
-            The options ``-e`` and ``--rsh``  are not allowed in the list
-            of arguments and will be rejected.
+            Routinator rejects the ``-e`` and ``--rsh`` options because they
+            let rsync invoke a remote shell. Since version 0.15.2, Routinator
+            also checks its process environment when it starts with rsync
+            enabled. If ``RSYNC_RSH`` is set, even to an empty value,
+            Routinator logs an error and exits. This check also applies when
+            the service inherits the variable and no ``rsync-args`` are
+            configured.
 
             If the option is not provided, Routinator will add ``-z`` and
             ``--no-motd``, as well as ``--contimeout=10`` if it is supported
