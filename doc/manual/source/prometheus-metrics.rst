@@ -40,7 +40,7 @@ repository, or the base URI of the rsync repository.
     Internet Registries <Regional Internet Registry (RIR)>`,
     but will include the trust anchors of any configured
     :ref:`testbeds
-    <initialisation:preparing for test environments>` as well. 
+    <configuration:trust anchor locators>` as well.
     
     This metric has two labels: either ``name`` or ``uri``, followed by the
     ``state`` which is *valid* or *rejected*.
@@ -50,7 +50,7 @@ repository, or the base URI of the rsync repository.
     these will be the
     five Regional Internet Registries, but will
     include the trust anchors of any
-    configured :ref:`testbeds <initialisation:preparing for test environments>`
+    configured :ref:`testbeds <configuration:trust anchor locators>`
     as well. 
     
     This metric has three labels: either ``name`` or ``uri``, followed by

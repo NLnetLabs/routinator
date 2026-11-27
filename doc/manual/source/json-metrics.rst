@@ -31,7 +31,7 @@ The JSON metrics consists of an object with the following members:
     these will be the
     five :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`, but will
     include the trust anchors of any
-    configured :ref:`testbeds <initialisation:preparing for test environments>`
+    configured :ref:`testbeds <configuration:trust anchor locators>`
     as well.
 
     Each element of this object contains a :ref:`publication metrics value
