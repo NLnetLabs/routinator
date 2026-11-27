@@ -98,11 +98,11 @@ The available options are:
 
 .. option:: -x file, --exceptions=file
 
-      Provides the path to a local exceptions file. The option can be used
-      multiple times to specify more than one file to use. Each file is a
-      JSON file as described in :rfc:`8416`. It lists both route origins that
-      should be filtered out of the output as well as origins that should be
-      added.
+      Specify a local exceptions file in JSON format. Repeat this option to
+      load multiple files. SLURM version 1 (:rfc:`8416`) supports filters and
+      local assertions for route origins and BGPsec router keys. Since
+      version 0.16.0, Routinator also reads SLURM version 2 files, which can
+      filter ASPA payloads by customer ASN and add local provider lists.
 
 .. option:: --relaxed
 
@@ -624,10 +624,10 @@ These can be requested by providing different commands on the command line.
 
 .. subcmd:: vrps
 
-    This command requests that Routinator update the local repository and
-    then validate the Route Origin Attestations in the repository and output
-    the valid route origins, which are also known as Validated ROA Payloads
-    or VRPs, as a list.
+    By default, this command updates the local repository and validates its
+    contents. It writes the resulting payloads in the selected output format.
+    The default CSV format lists Validated ROA Payloads (VRPs). Formats such
+    as JSON can also include BGPsec router keys and ASPA payloads.
 
     .. option:: -o file, --output=file
 
@@ -779,11 +779,9 @@ These can be requested by providing different commands on the command line.
                   ASPA.
 
            slurm2
-                  The list is formatted as locally added assertions of a
-                  local exceptions file defined by 
-                  draft-ietf-sidrops-aspa-slurm-02 (also known as SLURM 
-                  version 2). The produced file will have empty validation 
-                  output filters.
+                  Write the selected payloads as local assertions in a SLURM
+                  version 2 file with empty validation output filters. ASPA
+                  assertions use ``customerAsn`` and ``providerAsns``.
 
            openbgpd
                   Choosing this format causes Routinator to produce a
@@ -833,9 +831,10 @@ These can be requested by providing different commands on the command line.
 
     .. option:: -a asn, --select-asn=asn
 
-           Only output VRPs for the given ASN. The option can be given
-           multiple times, in which case VRPs for all provided ASNs are
-           provided. ASNs can be given with or without the prefix *AS*.
+           Select VRPs by origin ASN, router keys by their associated ASN
+           and ASPA payloads by customer ASN. An ASN appearing only in an
+           ASPA provider list does not select that payload. Repeat the option
+           to match any of the given ASNs. The *AS* prefix is optional.
 
     .. option:: -p prefix, --select-prefix=prefix
 
@@ -848,8 +847,7 @@ These can be requested by providing different commands on the command line.
 
            The option can be given multiple times, in which case VRPs for all
            prefixes are provided. It can also be combined with one or more
-           ASN selections. Then all matching VRPs are included. That is,
-           selectors combine as "or" not "and".
+           ASN selections. The output includes payloads matching any selector.
 
     .. option:: -m, --more-specifics
 
@@ -1526,14 +1524,14 @@ The service only supports GET requests with the following paths:
       set is available. This can be used as a means to get notified when
       the data set has been updated.
 
-In addition, the current set of VRPs is available for each output format at a
-path with the same name as the output format. E.g., the CSV output is
-available at ``/csv``.
+The current payloads are available at a path named after the output format.
+For example, ``/csv`` lists VRPs and ``/json`` can also include router keys
+and ASPA payloads.
 
-These paths accept selector expressions to limit the VRPs returned in the
-form of a query string. The field ``select-asn`` can be used to filter for
-ASNs and the field ``select-prefix`` can be used to filter for prefixes. The
-fields can be repeated multiple times.
+These paths accept the query parameters ``select-asn`` and ``select-prefix``.
+An ASN selects matching route origins, router keys and ASPA customer ASNs.
+A prefix selects VRPs. The response includes payloads matching any of the
+supplied selectors.
 
 In addition, the query parameter ``include=more-specifics`` will cause the
 inclusion of VRPs for more specific prefixes of prefixes given via
