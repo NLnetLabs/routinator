@@ -18,10 +18,10 @@ generated in a wide range of output formats for various use cases.
           The list is formatted as lines of comma-separated values of the
           following items:
 
-            -  The :term:`prefix <IP prefix>` in slash notation,
-            -  the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`,
-            -  the :term:`Autonomous System Number <Autonomous System Number (ASN)>`, and
-            -  the name of the trust anchor the entry is derived from.
+          -  The :term:`prefix <IP prefix>` in slash notation,
+          -  the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`,
+          -  the :term:`Autonomous System Number <Autonomous System Number (ASN)>`, and
+          -  the name of the trust anchor the entry is derived from.
           
           .. code-block:: text
             
@@ -48,12 +48,12 @@ generated in a wide range of output formats for various use cases.
           the RIPE NCC RPKI Validator 1.x. Each line contains these
           comma-separated values: 
           
-            - The :term:`rsync URI` of the :term:`ROA <Route Origin Authorisation (ROA)>` the line is taken from (or "N/A" if it
-              isn't from a ROA),
-            - the Autonomous System Number,
-            - the prefix in slash notation,
-            - the maximum prefix length, and
-            - the not-before and not-after date of the validity of the ROA.
+          - The :term:`rsync URI` of the :term:`ROA <Route Origin Authorisation (ROA)>` the line is taken from (or "N/A" if it
+            isn't from a ROA),
+          - the Autonomous System Number,
+          - the prefix in slash notation,
+          - the maximum prefix length, and
+          - the not-before and not-after date of the validity of the ROA.
           
           .. Note:: This format is available for backwards compatibility
                     reasons only. One particular limitation is that it does 
@@ -70,13 +70,13 @@ generated in a wide range of output formats for various use cases.
     json
           The list is placed into a JSON object with up to four members:
 
-            - *roas* contains the validated route origin authorisations,
-            - *routerKeys* contains the validated
-              :ref:`advanced-features:bgpsec` :term:`router keys <BGPsec router key>`,
-            - *aspas* contains the validated :ref:`advanced-features:aspa` 
-              payload, and
-            - *metadata* contains some information about the validation run 
-              itself. 
+          - *roas* contains the validated route origin authorisations,
+          - *routerKeys* contains the validated
+            :ref:`advanced-features:bgpsec` :term:`router keys <BGPsec router key>`,
+          - *aspas* contains the validated :ref:`advanced-features:aspa`
+            payload, and
+          - *metadata* contains some information about the validation run
+            itself.
               
           Of the first three, only those members are present that have not 
           been disabled or excluded. 
@@ -84,31 +84,31 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements 
           each:
           
-            - *asn* lists the Autonomous System Number of the network
-              authorised to originate a prefix,
-            - prefix has the prefix in slash notation,
-            - maxLength states the maximum prefix length of the announced
-              route, and
-            - *ta* has the trust anchor from which the authorisation was
-              derived. 
+          - *asn* lists the Autonomous System Number of the network
+            authorised to originate a prefix,
+          - prefix has the prefix in slash notation,
+          - maxLength states the maximum prefix length of the announced
+            route, and
+          - *ta* has the trust anchor from which the authorisation was
+            derived.
           
           The *routerKeys* member contains an array of objects with four 
           elements each: 
           
-            - *asn* contains the autonomous system using the router key,
-            - :term:`SKI <Subject Key Identifier (SKI)>` lists the key identifier as a string of hexadecimal
-              digits,
-            - *routerPublicKey* contains the actual public key as a Base 64 
-              encoded string, and 
-            - *ta* has the trust anchor from which the authorisation was
-              derived.
+          - *asn* contains the autonomous system using the router key,
+          - :term:`SKI <Subject Key Identifier (SKI)>` lists the key identifier as a string of hexadecimal
+            digits,
+          - *routerPublicKey* contains the actual public key as a Base 64
+            encoded string, and
+          - *ta* has the trust anchor from which the authorisation was
+            derived.
 
           Each object in the *aspas* array has three members:
           
-            - *customer* contains the :term:`customer ASN <Customer AS and provider AS>`,
-            - *providers* contains the provider ASN set as an array, and
-            - *ta* has the trust anchor from which the authorisation was
-              derived.
+          - *customer* contains the :term:`customer ASN <Customer AS and provider AS>`,
+          - *providers* contains the provider ASN set as an array, and
+          - *ta* has the trust anchor from which the authorisation was
+            derived.
           
           The output object also includes a member named *metadata* which
           provides additional information. Currently, this is a member
@@ -151,13 +151,13 @@ generated in a wide range of output formats for various use cases.
     jsonext
           The list is placed into a JSON object with up to four members:
 
-            - *roas* contains the validated route origin authorisations,
-            - *routerKeys* contains the validated
-              :ref:`advanced-features:bgpsec` router keys,
-            - *aspas* contains the validated :ref:`advanced-features:aspa` 
-              objects, and 
-            - *metadata* contains some information about the validation run
-              itself.
+          - *roas* contains the validated route origin authorisations,
+          - *routerKeys* contains the validated
+            :ref:`advanced-features:bgpsec` router keys,
+          - *aspas* contains the validated :ref:`advanced-features:aspa`
+            objects, and
+          - *metadata* contains some information about the validation run
+            itself.
 
           Of the first three, only those members are present that have not 
           been disabled or excluded.
@@ -165,30 +165,30 @@ generated in a wide range of output formats for various use cases.
           The *roas* member contains an array of objects with four elements
           each: 
           
-            - *asn* lists the Autonomous System Number of the network
-              authorised to originate a prefix,
-            - prefix has the prefix in slash notation,
-            - maxLength states the maximum prefix length of the announced
-              route, and
-            - *source* contains information about the source of the
-              authorisation.
+          - *asn* lists the Autonomous System Number of the network
+            authorised to originate a prefix,
+          - prefix has the prefix in slash notation,
+          - maxLength states the maximum prefix length of the announced
+            route, and
+          - *source* contains information about the source of the
+            authorisation.
 
           The *routerKeys* member contains an array of objects with
           four elements each: 
           
-            - *asn* lists the autonomous system using the router key,
-            - SKI has the key identifier as a string of hexadecimal digits,
-            - *routerPublicKey* has the actual public key as a Base 64
-              encoded string, and
-            - *source* contains extended information about the source of the
-              key.
+          - *asn* lists the autonomous system using the router key,
+          - SKI has the key identifier as a string of hexadecimal digits,
+          - *routerPublicKey* has the actual public key as a Base 64
+            encoded string, and
+          - *source* contains extended information about the source of the
+            key.
 
           Each object in the *aspas* array has three members:
           
-            - *customer* contains the customer ASN,
-            - *providers* contains the provider ASN set as an array, and
-            - *source* contains information about the source of the
-              authorisation.
+          - *customer* contains the customer ASN,
+          - *providers* contains the provider ASN set as an array, and
+          - *source* contains information about the source of the
+            authorisation.
 
           This source information the same for route origins, router keys and
           aspas. It consists of an array. Each item in that array is an

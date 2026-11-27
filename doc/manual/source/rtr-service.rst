@@ -149,23 +149,23 @@ configure each router platform, but aims to provide helpful pointers.
 Hardware Routers
 """"""""""""""""
 
- - `Arista EOS <https://aristanetworks.force.com/AristaCommunity/s/article/bgp-origin-validation-rpki>`_
- - `Cisco IOS and IOS XE <https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.pdf>`_
- - `Cisco IOS-XR <https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/217020-bgp-rpki-with-xr7-cisco8000-whitepaper.html>`_
- - `Extreme Networks SLX-OS <https://documentation.extremenetworks.com/slxos/sw/20xx/20.3.1/l3config/GUID-D0B94396-6741-4799-921D-C8F5C5895CBC.shtml>`_
- - `Huawei VRP <https://support.huawei.com/enterprise/en/doc/EDOC1100055018/36627f51/improving-bgp-security>`_
- - `Juniper Junos <https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html>`_
- - `Nokia SR OS <https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_
- - `MikroTik <https://help.mikrotik.com/docs/pages/viewpage.action?pageId=59277471>`_
+- `Arista EOS <https://aristanetworks.force.com/AristaCommunity/s/article/bgp-origin-validation-rpki>`_
+- `Cisco IOS and IOS XE <https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.pdf>`_
+- `Cisco IOS-XR <https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/217020-bgp-rpki-with-xr7-cisco8000-whitepaper.html>`_
+- `Extreme Networks SLX-OS <https://documentation.extremenetworks.com/slxos/sw/20xx/20.3.1/l3config/GUID-D0B94396-6741-4799-921D-C8F5C5895CBC.shtml>`_
+- `Huawei VRP <https://support.huawei.com/enterprise/en/doc/EDOC1100055018/36627f51/improving-bgp-security>`_
+- `Juniper Junos <https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html>`_
+- `Nokia SR OS <https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5366>`_
+- `MikroTik <https://help.mikrotik.com/docs/pages/viewpage.action?pageId=59277471>`_
 
 Software Routers
 """"""""""""""""
 
- - `BIRD <https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.13>`_
- - `FRRouting <https://docs.frrouting.org/en/latest/bgp.html#prefix-origin-validation-using-rpki>`_
- - `GoBGP <https://github.com/osrg/gobgp/blob/master/docs/sources/rpki.md>`_
- - `OpenBGPD <https://man.openbsd.org/bgpd.conf#SET_CONFIGURATION>`_
- - `VyOS <https://docs.vyos.io/en/latest/configuration/protocols/rpki.html>`_
+- `BIRD <https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.13>`_
+- `FRRouting <https://docs.frrouting.org/en/latest/bgp.html#prefix-origin-validation-using-rpki>`_
+- `GoBGP <https://github.com/osrg/gobgp/blob/master/docs/sources/rpki.md>`_
+- `OpenBGPD <https://man.openbsd.org/bgpd.conf#SET_CONFIGURATION>`_
+- `VyOS <https://docs.vyos.io/en/latest/configuration/protocols/rpki.html>`_
 
 .. seealso:: `Rejecting RPKI Invalid BGP Routes 
              <https://bgpfilterguide.nlnog.net/guides/reject_invalids/>`_

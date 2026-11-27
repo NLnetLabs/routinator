@@ -146,16 +146,15 @@ Routinator currently has the following features:
 ``socks`` —  *Enabled* by default
     Allow the configuration of a SOCKS proxy.
 ``ui``  —  *Enabled* by default
-    Download and build the the `routinator-ui
-    <https://crates.io/crates/routinator-ui>`_ crate to run the :doc:`user
+    Download and build the `routinator-ui
+    <https://crates.io/crates/routinator-ui>`__ crate to run the :doc:`user
     interface<user-interface>`.
 ``native-tls`` —  *Disabled* by default
     Use the native :term:`TLS <Transport Layer Security (TLS)>` implementation of your
     system instead of `rustls
     <https://github.com/rustls/rustls>`_.
 ``rta`` —  *Disabled* by default
-    Let Routinator validate :ref:`advanced-features:Resource Tagged
-    Attestations`.
+    Enabling this feature has no effect.
 
 To disable the features that are enabled by default, use the
 ``--no-default-features`` option. You can then choose which features you want
@@ -179,7 +178,7 @@ Docker build args, e.g.
 Building the UI
 ---------------
 The UI is independent from Routinator, and lives in a separate repository, 
-namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`_. First 
+namely `routinator-ui <https://github.com/NLnetLabs/routinator-ui/>`__. First
 download the routinator-ui repository and build it. The routinator-ui is made 
 using React with TypeScript, and you need `Node and Yarn <https://nodejs.org/en/download>`_ 
 for this. Building it is as simple as running:
