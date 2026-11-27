@@ -72,8 +72,8 @@ file of the RRDP repository, or the base URI of the rsync repository.
       * ``router_cert`` - The number of router certificates found to be
         present and *valid*. This only refers to such certificates included as 
         stand-alone files which are BGPsec router certificates.
-      * ``roa`` - The number of :term:`Route Origin Attestations <Route Origin 
-        Attestation (ROA)>` for each of the states *valid* and *invalid*.
+      * ``roa`` - The number of :term:`Route Origin Authorisations <Route Origin
+        Authorisation (ROA)>` for each of the states *valid* and *invalid*.
       * ``gbr`` - The number of :term:`Ghostbusters Records <Ghostbusters Record
         (GBR)>` for each of the states *valid* and *invalid*. Note that
         currently the content of a Ghostbuster Record is not checked.

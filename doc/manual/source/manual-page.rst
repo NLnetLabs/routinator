@@ -26,7 +26,7 @@ Description
 -----------
 
 Routinator collects and processes Resource Public Key Infrastructure (RPKI)
-data. It validates the Route Origin Attestations contained in the data and
+data. It validates the Route Origin Authorisations contained in the data and
 makes them available to your BGP routing workflow.
 
 It can run in one-shot mode outputting a list of validated ROA payloads in

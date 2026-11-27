@@ -180,12 +180,12 @@ RPKI repository. They contain the following information:
     certificates.
 
 ``validROAs``
-    The number of valid :term:`Route Origin Attestations <Route Origin 
-    Attestation (ROA)>`
+    The number of valid :term:`Route Origin Authorisations <Route Origin
+    Authorisation (ROA)>`
 
 ``invalidROAs``
-    The number of invalid :term:`Route Origin Attestations <Route Origin 
-    Attestation (ROA)>`.
+    The number of invalid :term:`Route Origin Authorisations <Route Origin
+    Authorisation (ROA)>`.
 
 ``validGBRs``
     The number of valid :term:`Ghostbusters Records <Ghostbusters Record
