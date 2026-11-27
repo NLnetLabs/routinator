@@ -51,15 +51,15 @@ on the open-source `roto-api <https://github.com/NLnetLabs/roto-api>`_
 service, developed and hosted by NLnet Labs at `bgp-api.net
 <https://rest.bgp-api.net/api/v1/>`_. The service uses these data sources:
 
-  - BGP information based on `RISWhois
-    <https://www.ris.ripe.net/dumps/>`_
-    data, which is part of the RIPE NCC's `Routing Information Service
-    <https://ris.ripe.net/>`_ (RIS). This data set is currently updated every
-    8 hours.
-  - Resource allocations retrieved from `statistics
-    <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five
-    :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`. These are
-    updated daily.
+- BGP information based on `RISWhois
+  <https://www.ris.ripe.net/dumps/>`_
+  data, which is part of the RIPE NCC's `Routing Information Service
+  <https://ris.ripe.net/>`_ (RIS). This data set is currently updated every
+  8 hours.
+- Resource allocations retrieved from `statistics
+  <https://www.nro.net/about/rirs/statistics/>`_ hosted by the five
+  :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`. These are
+  updated daily.
 
 You may wish to host the UI on a different machine than the machine Routinator 
 runs on, or on a path that is different from ``/ui``. See our documentation for 

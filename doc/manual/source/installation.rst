@@ -52,8 +52,8 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Debian versions:
 
-         -  Debian Trixie 13
-         -  Debian Bookworm 12
+       -  Debian Trixie 13
+       -  Debian Bookworm 12
 
        Packages for the ``amd64``/``x86_64`` architecture are available for
        all listed versions. In addition, we offer ``aarch64`` and ``armv7``
@@ -126,10 +126,10 @@ to get started.
        To install a Routinator package, you need the 64-bit version of one of
        these Ubuntu versions:
 
-         - Ubuntu Resolute 26.04 (LTS)
-         - Ubuntu Noble 24.04 (LTS)
-         - Ubuntu Jammy 22.04 (LTS)
-         - Ubuntu Focal 20.04 (LTS)
+       - Ubuntu Resolute 26.04 (LTS)
+       - Ubuntu Noble 24.04 (LTS)
+       - Ubuntu Jammy 22.04 (LTS)
+       - Ubuntu Focal 20.04 (LTS)
 
        Packages are available for the ``amd64``/``x86_64`` architecture only.
        
