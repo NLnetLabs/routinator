@@ -1416,8 +1416,7 @@ All values can be overridden via the command line options.
             is requested to use a data set if it cannot get an update before
             throwing it away and continuing with no data at all. The default
             is 7200 seconds if it cannot get an update before throwing it
-            away and continuing with no data at all. The default is 7200
-            seconds.
+            away and continuing with no data at all.
 
       history-size
             An integer value specifying how many change sets Routinator
