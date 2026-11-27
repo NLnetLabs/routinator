@@ -2,9 +2,11 @@
                the ARIN Relying Party Agreement (RPA) is no longer 
                required.** The RPA `has been updated 
                <https://www.arin.net/announcements/20220929/>`_ to allow the 
-               ARIN TAL to be embedded in Relying Party software. By 
+               ARIN :term:`TAL <Trust Anchor Locator (TAL)>` to be embedded in
+               :term:`Relying Party <RPKI Relying Parties>` software. By
                default, Routinator is now set up to fetch and validate all 
-               RPKI data needed for production environments.
+               :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` data needed for
+               production environments.
 
 Configuration
 =============
@@ -38,7 +40,8 @@ following pre-configured options:
    rtr-listen = ["127.0.0.1:3323"]
    http-listen = ["127.0.0.1:8323"]
 
-For security reasons the HTTP and RTR server will only listen on localhost,
+For security reasons the HTTP and :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server will only
+listen on localhost,
 so you will have to change these values to make them accessible to other
 devices on your network.
 
@@ -81,7 +84,8 @@ If you run Routinator without referring to a configuration file it will check
 if the file :file:`$HOME/.routinator.conf` exists and if it does, use it.
 If no configuration file is available, the default values are used.
 
-You can specify the location of the RPKI cache directory using the
+You can specify the location of the :term:`RPKI <Resource Public Key Infrastructure
+(RPKI)>` cache directory using the
 :option:`--repository-dir` option. If you don't, one will be created in the
 default location :file:`$HOME/.rpki-cache/repository`. The :doc:`HTTP
 service<http-service>` and :doc:`RTR service<rtr-service>` must be started
@@ -142,18 +146,25 @@ Trust Anchor Locators
 ---------------------
 
 Fetching data is done by connecting to the :term:`Trust Anchor Locators
-(TALs) <Trust Anchor Locator (TAL)>` of the five Regional Internet Registries
-(RIRs): AFRINIC, APNIC, ARIN, LACNIC and RIPE NCC. TALs provide hints for
-the trust anchor certificates to be used both to discover and validate all
-RPKI content. **By default, Routinator will be set up for use in production
+(TALs) <Trust Anchor Locator (TAL)>` of the five :term:`Regional Internet Registries
+<Regional Internet Registry (RIR)>`
+(:term:`RIRs <Regional Internet Registry (RIR)>`): AFRINIC, APNIC, ARIN, LACNIC and RIPE
+NCC. :term:`TALs <Trust Anchor Locator (TAL)>` provide hints for
+the :term:`trust anchor <Trust Anchor (TA)>` certificates to be used both to discover and
+validate all
+:term:`RPKI <Resource Public Key Infrastructure (RPKI)>` content. **By default, Routinator
+will be set up for use in production
 environments and run with the production TALs of the five RIRs.**
 
-Some RIRs and third parties also provide separate TALs for testing purposes,
-allowing operators to gain experience with using RPKI in a safe environment.
-Both the production and testbed TALs are bundled with Routinator and can be
+Some :term:`RIRs <Regional Internet Registry (RIR)>` and third parties also provide
+separate :term:`TALs <Trust Anchor Locator (TAL)>` for testing purposes,
+allowing operators to gain experience with using :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` in a safe environment.
+Both the production and testbed :term:`TALs <Trust Anchor Locator (TAL)>` are bundled with
+Routinator and can be
 enabled and disabled using command line and configuration file options.
 
-Run the following command to list all available TALs:
+Run the following command to list all available :term:`TALs <Trust Anchor Locator (TAL)>`:
 
 .. code-block:: text
 
@@ -177,26 +188,31 @@ This displays the following overview:
          X   ripe-pilot          RIPE NCC RPKI Test Environment
              nlnetlabs-testbed   NLnet Labs RPKI Testbed
 
-You can influence which TALs Routinator uses with the :option:`--tal` option,
+You can influence which :term:`TALs <Trust Anchor Locator (TAL)>` Routinator uses with the
+:option:`--tal` option,
 which can be combined with the :option:`--no-rir-tals` option to leave out
-all RIR production TALs, as well as the :option:`--extra-tals-dir` option to
-specify a directory containing extra TALs to use.
+all :term:`RIR <Regional Internet Registry (RIR)>` production :term:`TALs <Trust Anchor
+Locator (TAL)>`, as well as the :option:`--extra-tals-dir` option to
+specify a directory containing extra :term:`TALs <Trust Anchor Locator (TAL)>` to use.
 
-For example, if you want to add the RIPE NCC RPKI Test Environment to the
-default TAL set, run:
+For example, if you want to add the RIPE NCC :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` Test Environment to the
+default :term:`TAL <Trust Anchor Locator (TAL)>` set, run:
 
 .. code-block:: text
 
     routinator --tal=ripe-pilot
 
-If you want to run Routinator without any of the production TALs and only
+If you want to run Routinator without any of the production :term:`TALs <Trust Anchor
+Locator (TAL)>` and only
 fetch data from the ARIN Operational Test and Evaluation Environment, run:
 
 .. code-block:: text
 
     routinator --no-rir-tals --tal=arin-ote
 
-Lastly, if you would like to use a TAL that isn't bundled with Routinator you
+Lastly, if you would like to use a :term:`TAL <Trust Anchor Locator (TAL)>` that isn't
+bundled with Routinator you
 can place it in a directory of your choice, for example
 :file:`/var/lib/routinator/tals`, and refer to it by running:
 
@@ -205,9 +221,12 @@ can place it in a directory of your choice, for example
     routinator --extra-tals-dir="/var/lib/routinator/tals"
 
 Routinator will use all files in this directory with an extension of *.tal*
-as TALs. These files need to be in the format described by :rfc:`8630`. Note
-that Routinator will use all TALs provided. That means that if a TAL in this
-directory is one of the bundled TALs, then these resources will be validated
+as :term:`TALs <Trust Anchor Locator (TAL)>`. These files need to be in the format
+described by :rfc:`8630`. Note
+that Routinator will use all :term:`TALs <Trust Anchor Locator (TAL)>` provided. That
+means that if a :term:`TAL <Trust Anchor Locator (TAL)>` in this
+directory is one of the bundled :term:`TALs <Trust Anchor Locator (TAL)>`, then these
+resources will be validated
 twice.
 
 .. versionadded:: 0.9.0
@@ -223,13 +242,15 @@ twice.
 Using Tmpfs for the RPKI Cache
 ------------------------------
 
-The full RPKI data set consists of hundreds of thousands of small files. This
+The full :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` data set consists of
+hundreds of thousands of small files. This
 causes a considerable amount of disk I/O with each validation run. If this is
 undesirable in your setup, you can choose to store the cache in volatile
 memory using the `tmpfs file system
 <https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html>`_.
 
-If you have installed Routinator using a package, by default the RPKI cache
+If you have installed Routinator using a package, by default the :term:`RPKI <Resource
+Public Key Infrastructure (RPKI)>` cache
 directory will be :file:`/var/lib/routinator/rpki-cache`, so we'll use that
 as an example. Note that the directory you choose must exist before the mount
 can be done. You should allocate at least 3GB for the cache, but giving it
@@ -243,7 +264,8 @@ usage<installation:Inode Usage>`:
 
 *Tmpfs* will behave just like a regular disk, so if it runs out of space
 Routinator will do a clean crash, stopping validation, the API, HTTP server
-and most importantly the RTR server, ensuring that no stale data will be
+and most importantly the :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server, ensuring that no
+stale data will be
 served to your routers. 
 
 Also keep in mind that every time you restart the machine, the contents of
@@ -254,7 +276,8 @@ minutes to complete. Once the HTTP server is listening, ``/version`` can
 already respond. Payload endpoints such as ``/json`` return HTTP 503
 (Service Unavailable) until the first validated dataset is available.
 
-Note that your routers should be configured to have a secondary relying party
+Note that your routers should be configured to have a secondary :term:`relying party <RPKI
+Relying Parties>`
 instance available at all times.
 
 Verifying Configuration
@@ -264,7 +287,7 @@ You should verify if Routinator has been configured correctly and your
 firewall allows the required outbound connections on ports 443 and 873. From
 a cold start, it will take ten to fifteen minutes to do the first validation
 run that builds up the validated cache. Subsequent runs will be much faster,
-because only the changes between the repositories and the validated cache
+because only the changes between the :term:`repositories <Repository>` and the validated cache
 need to be processed.
 
 If you have installed Routinator from a package and run it as a service, you
@@ -280,23 +303,27 @@ And check the logs using:
 
    sudo journalctl --unit=routinator
 
-.. Important:: Because it is expected that the state of the entire RPKI is not 
+.. Important:: Because it is expected that the state of the entire :term:`RPKI <Resource
+               Public Key Infrastructure (RPKI)>` is not
                perfect at all times, you may see several warnings about objects
                that are either stale or failed cryptographic verification, or
-               repositories that are temporarily unavailable. 
+               :term:`repositories <Repository>` that are temporarily unavailable.
 
 If you have built Routinator using Cargo it is recommended to perform an
-initial test run. You can do this by having Routinator print a validated ROA
-payload (VRP) list with the :subcmd:`vrps` subcommand, and using :option:`-v`
+initial test run. You can do this by having Routinator print a :term:`validated ROA
+payload (VRP) <Validated ROA Payload (VRP)>` list with the :subcmd:`vrps` subcommand, and
+using :option:`-v`
 twice to increase the :doc:`log level<logging>` to *debug*:
 
 .. code-block:: bash
 
    routinator -vv vrps
 
-Now, you can see how Routinator connects to the RPKI trust anchors, downloads
-the the contents of the repositories to your machine, verifies it and
-produces a list of VRPs in the default CSV format to standard output. 
+Now, you can see how Routinator connects to the :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` :term:`trust anchors <Trust Anchor (TA)>`, downloads
+the the contents of the :term:`repositories <Repository>` to your machine, verifies it and
+produces a list of :term:`VRPs <Validated ROA Payload (VRP)>` in the default CSV format to
+standard output.
 
 .. code-block:: text
 

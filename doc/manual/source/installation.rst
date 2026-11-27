@@ -11,10 +11,12 @@ powerful CPU is not required. Make sure you have 1GB of available memory and
 Inode Usage
 """""""""""
 
-Please keep in mind that the RPKI consists of a great number of small files.
+Please keep in mind that the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
+consists of a great number of small files.
 As a result, Routinator will use a large amount of inodes. You should
 accommodate for at least two million inodes. This will give you ample margin
-for the RPKI repositories to grow over time, as adoption increases. 
+for the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` :term:`repositories
+<Repository>` to grow over time, as adoption increases.
 
 Alternatively, you could opt to use a file system such as ZFS, which doesn't
 use inodes, or btrfs, where inodes are allocated dynamically as needed.
@@ -25,7 +27,8 @@ use inodes, or btrfs, where inodes are allocated dynamically as needed.
 Firewall Configuration
 """"""""""""""""""""""
 
-As new RPKI repositories can emerge in any IP address range and on any domain
+As new :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` :term:`repositories
+<Repository>` can emerge in any IP address range and on any domain
 name, outbound traffic must not be blocked based on IP or DNS in any way.
 Routinator only needs to establish outbound connections via HTTPS and rsync,
 on ports 443 and 873, respectively. 
@@ -101,7 +104,8 @@ to get started.
 
        After installation Routinator will run immediately as the user
        *routinator* and be configured to start at boot. By default, it will
-       run the RTR server on port 3323 and the HTTP server on port 8323.
+       run the :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server on port 3323 and the HTTP
+       server on port 8323.
        These, and other values can be changed in the :doc:`configuration
        file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
@@ -174,7 +178,8 @@ to get started.
 
        After installation Routinator will run immediately as the user
        *routinator* and be configured to start at boot. By default, it will
-       run the RTR server on port 3323 and the HTTP server on port 8323.
+       run the :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server on port 3323 and the HTTP
+       server on port 8323.
        These, and other values can be changed in the :doc:`configuration
        file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
@@ -221,7 +226,8 @@ to get started.
 
        After installation Routinator will run immediately as the user
        *routinator* and be configured to start at boot. By default, it will
-       run the RTR server on port 3323 and the HTTP server on port 8323.
+       run the :term:`RTR <RPKI-to-Router (RPKI-RTR)>` server on port 3323 and the HTTP
+       server on port 8323.
        These, and other values can be changed in the :doc:`configuration
        file<configuration>` located in
        :file:`/etc/routinator/routinator.conf`. 
@@ -245,7 +251,8 @@ to get started.
        <https://hub.docker.com/r/nlnetlabs/routinator/tags>`_ per Routinator
        version (aka Docker "tag") in the ``OS/ARCH`` column.
 
-       To run Routinator as a background daemon with the default settings (RTR
+       To run Routinator as a background daemon with the default settings (:term:`RTR
+       <RPKI-to-Router (RPKI-RTR)>`
        server on port 3323 and HTTP server on port 8323) can be done like so:
 
        .. code-block:: bash
@@ -286,7 +293,8 @@ to get started.
        all of the arguments required by Routinator. See the :doc:`manual-page` for
        more information.
 
-       To persist the RPKI cache data you can create a separate Docker volume
+       To persist the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` cache data
+       you can create a separate Docker volume
        and mount it into the container like so:
 
        .. code-block:: bash

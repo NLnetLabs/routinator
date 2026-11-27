@@ -1,35 +1,48 @@
 Advanced Features
 =================
 
-This page covers specialised uses of RPKI data supported by Routinator:
-BGPsec router certificates and Resource Signed Checklists. These capabilities
+This page covers specialised uses of :term:`RPKI <Resource Public Key Infrastructure
+(RPKI)>` data supported by Routinator:
+:term:`BGPsec router certificates <BGPsec router certificate>` and Resource Signed
+Checklists. These capabilities
 have different consumers and deployment requirements.
 
 .. note::
 
-    To manage ASPA, BGPsec or other RPKI objects, you can run Delegated RPKI
+    To manage :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>`,
+    :term:`BGPsec` or other :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
+    objects, you can run Delegated :term:`RPKI <Resource Public Key Infrastructure
+    (RPKI)>`
     with `Krill <https://krill.docs.nlnetlabs.nl/>`_. A growing number of
-    hosted RIR systems allow you to manage these objects as well. Check with
-    your RIR to find out what is available.
+    hosted :term:`RIR <Regional Internet Registry (RIR)>` systems allow you to manage
+    these objects as well. Check with
+    your :term:`RIR <Regional Internet Registry (RIR)>` to find out what is available.
 
 ASPA
 ----
 
-ASPA is covered on its own :doc:`page <aspa>`, including default processing,
+:term:`ASPA <Autonomous System Provider Authorisation (ASPA)>` is covered on its own
+:doc:`page <aspa>`, including default processing,
 provider authorisations, output formats and requirements for consuming the data.
 
 BGPsec
 ------
 
-The goal of BGPsec, as described in :RFC:`8209`, is to provide full AS path
-validation. For this operators will need to publish BGPsec router keys in the
-RPKI. Routinator validates these objects by default from version 0.16.0;
-processing can be disabled with :option:`--disable-bgpsec`. Validating router
-certificates does not itself enable BGPsec on routers.
+The goal of :term:`BGPsec`, as described in :RFC:`8209`, is to provide full :term:`AS path
+<AS path (AS_PATH)>`
+validation. For this operators will need to publish :term:`BGPsec router keys <BGPsec
+router key>` in the
+:term:`RPKI <Resource Public Key Infrastructure (RPKI)>`. Routinator validates these
+objects by default from version 0.16.0;
+processing can be disabled with :option:`--disable-bgpsec`. Validating :term:`router
+certificates <BGPsec router certificate>` does not itself enable :term:`BGPsec` on routers.
 
-Routinator makes validated router keys available over RTR and in the SLURM,
+Routinator makes validated :term:`router keys <BGPsec router key>` available over
+:term:`RTR <RPKI-to-Router (RPKI-RTR)>` and in the :term:`SLURM <Simplified Local Internet
+Number Resource Management with the RPKI (SLURM)>`,
 JSON and extended JSON output formats. The following excerpt from
-:term:`jsonext` shows the certificate from which a router key was obtained.
+:term:`jsonext` shows the certificate from which a :term:`router key <BGPsec router key>`
+was obtained.
 
 .. code-block:: json
 
@@ -71,17 +84,20 @@ Resource Signed Checklists
 --------------------------
 
 Resource Signed Checklists allow any arbitrary file to be signed
-‘with resources’. The RSC object is a separate file
+‘with resources’. The :term:`RSC <RPKI Signed Checklist (RSC)>` object is a separate file
 that cryptographically connects the document hash(es) with a set of resources. 
 The receiver of the object can use Routinator to show these resources, and 
 verify that it was created by their rightful holder.
 
-One practical example where RSC could be valuable is to authorise a Bring
+One practical example where :term:`RSC <RPKI Signed Checklist (RSC)>` could be valuable is
+to authorise a Bring
 Your Own IP (BYOIP) process, where you bring part or all of your publicly
 routable IPv4 or IPv6 address range from your on-premises network to a cloud
-provider. The document authorising BYOIP could be signed using RSC.
+provider. The document authorising BYOIP could be signed using :term:`RSC <RPKI Signed
+Checklist (RSC)>`.
 
-RSC objects can be generated using e.g. the MyAPNIC hosted service. The
+:term:`RSC <RPKI Signed Checklist (RSC)>` objects can be generated using e.g. the MyAPNIC
+hosted service. The
 objects can be validated using Routinator. If it is valid,
 Routinator will report the resources used to sign the object:
 
