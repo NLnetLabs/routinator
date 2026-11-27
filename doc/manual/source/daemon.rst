@@ -1,12 +1,14 @@
 Running as a Daemon
 ===================
 
-Routinator can run as a service that periodically fetches RPKI data, verifies
+Routinator can run as a service that periodically fetches :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` data, verifies
 it and makes the resulting data set available through the built-in HTTP and
-RPKI-to-Router (RTR) servers.
+:term:`RPKI-to-Router <RPKI-to-Router (RPKI-RTR)>` (RTR) servers.
 
 If you have installed Routinator through our software package repository, the
-HTTP and RTR servers are enabled by default via the :ref:`pre-installed
+HTTP and RTR servers are enabled by default via the
+:ref:`pre-installed
 configuration file <configuration:routinator installed from a package>`.
 However, they are only available on localhost for security reasons. You will
 have to explicitly change these options to make the services available to
@@ -16,7 +18,8 @@ If you have built Routinator using Cargo, no servers are enabled by default
 at all. From the command line you can start Routinator as a daemon using the
 :subcmd:`server` subcommand. Use the :option:`--http` command line option or
 the :term:`http-listen` configuration file option to start the HTTP server.
-To enable the RTR server, use the :option:`--rtr` command line option or the
+To enable the RTR server, use the :option:`--rtr`
+command line option or the
 :term:`rtr-listen` option in the configuration file. Of course you also start
 both.
 
@@ -28,24 +31,28 @@ both.
    manager, dropping privileges and sandboxing to equivalent levels is your
    responsibility.
 
-HTTPS and secure transports for RTR are supported as well. Please read the
+HTTPS and secure transports for RTR are supported as
+well. Please read the
 :doc:`http-service` and :doc:`rtr-service` sections for details.
 
 On startup, Routinator first tries to validate the RPKI data in its local
-store without fetching repository updates. If this run succeeds, it makes the
-resulting dataset available over RTR and HTTP and immediately starts a normal
+store without fetching :term:`repository` updates. If this run succeeds, it makes the
+resulting dataset available over RTR and HTTP and
+immediately starts a normal
 validation run with network access. A successful request to ``/json`` after a
 restart can therefore return validated data while the first network update is
 still in progress.
 
-With an empty store, or if required data such as a trust anchor certificate
+With an empty store, or if required data such as a :term:`trust anchor <Trust Anchor
+(TA)>` certificate
 is missing, Routinator proceeds directly to a full validation run. In that
 case, the first dataset becomes available when the full run completes.
 
 .. versionchanged:: 0.15.0
    Server startup includes an initial validation run using stored data.
 
-.. Note:: If you add or change a TAL after starting the service, restart
+.. Note:: If you add or change a :term:`TAL <Trust Anchor Locator (TAL)>` after starting
+          the service, restart
           Routinator or send it a :ref:`SIGUSR1 <manual-page:signals>`
           to reload the trust anchor locators.
 

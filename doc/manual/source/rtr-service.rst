@@ -1,16 +1,19 @@
 RTR Service
 ===========
 
-Routinator has a built-in server for the RPKI-to-Router (RTR) protocol, which
+Routinator has a built-in server for the :term:`RPKI-to-Router <RPKI-to-Router
+(RPKI-RTR)>` (RTR) protocol, which
 can be started with the :option:`--rtr` command line option or the
 :term:`rtr-listen` option in the configuration file. 
 
-Routinator supports RTR version 1 described in :RFC:`8210`, as well as the
+Routinator supports RTR version 1 described in
+:RFC:`8210`, as well as the
 older version from :RFC:`6810`. After the first validation run has completed,
-routers with support for route origin validation (ROV) can connect to
+routers with support for :term:`route origin validation (ROV)` can connect to
 Routinator to fetch the processed data. 
 
-.. Tip:: If you would like to run the RTR server as a separate daemon, for
+.. Tip:: If you would like to run the RTR server as a
+         separate daemon, for
          example because you want to centralise validation and distribute
          processed data to various locations where routers can connect, then
          NLnet Labs provides :doc:`RTRTR<rtrtr:index>`.
@@ -21,7 +24,8 @@ Assigned Numbers Authority)`-assigned default port for the protocol, which
 would be 323. But as this is a privileged port, you would need to be running
 Routinator as *root* when otherwise there is no reason to do that. 
 
-For distributing ASPA payloads, see :doc:`aspa`. Clients need support for the
+For distributing :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>` payloads,
+see :doc:`aspa`. Clients need support for the
 ASPA extensions to RTR; support for route origin validation alone is not enough.
 
 Secure Transports
@@ -29,16 +33,19 @@ Secure Transports
 
 Although there is no mandatory-to-implement transport that provides
 authentication and integrity protection, :rfc:`6810#section-7` defines a
-number of secure transports for RPKI-RTR that can be used to secure
-communications, including TLS, SSH, TCP MD5 and TCP-AO. 
+number of secure transports for RPKI-RTR that can be
+used to secure
+communications, including :term:`TLS <Transport Layer Security (TLS)>`, SSH, TCP MD5 and TCP-AO.
 
-Routinator has native support for TLS connections, and can be configured to
+Routinator has native support for TLS
+connections, and can be configured to
 use `SSH Transport`_ with some additional tooling.
 
 TLS Transport
 """""""""""""
 
-It's possible to natively use RTR-over-TLS connections with Routinator. There
+It's possible to natively use RTR-over-TLS
+connections with Routinator. There
 is an :abbr:`IANA (Internet Assigned Numbers Authority)`-assigned default
 port for *rpki-rtr-tls* as well, in this case 324.
 
@@ -47,16 +54,19 @@ especially useful to use secure connections when deploying our RTR data proxy
 :doc:`RTRTR <rtrtr:index>`, as data may be flowing across the public
 Internet.
 
-In this example we'll start Routinator's RTR server listening on the IP
+In this example we'll start Routinator's RTR server
+listening on the IP
 addresses 192.0.2.13 and 2001:0DB8::13 and use port 3324 to make sure it's
 not a privileged port. 
 
-First, indicate that you want a TLS connection with the :option:`--rtr-tls`
+First, indicate that you want a TLS connection
+with the :option:`--rtr-tls`
 option. Then use the :option:`--rtr-tls-cert` option to specify the path to a
 file containing the server certificates to be used. This file has to contain
-one or more certificates encoded in PEM format. Lastly, use the
+one or more certificates encoded in :term:`PEM format <PEM encoding>`. Lastly, use the
 :option:`--rtr-tls-key` option to specify the path to a file containing the
-private key to be used for RTR-over-TLS connections. The file has to contain
+private key to be used for RTR-over-TLS
+connections. The file has to contain
 exactly one private key encoded in PEM format:
 
 .. code-block:: text
@@ -68,7 +78,8 @@ exactly one private key encoded in PEM format:
 
 If you want to securely connect to Routinator with RTRTR using the
 :ref:`RTR-TLS Unit<rtrtr:configuration:rtr unit>`, a certificate that is
-trusted by the usual set of web trust anchors will work with no additional
+trusted by the usual set of web :term:`trust anchors <Trust Anchor (TA)>` will work with
+no additional
 configuration. In case you generated a self-signed certificate for
 Routinator, make sure to copy the certificate to your machine running RTRTR
 and refer to the path of the file in your unit using the ``cacerts``
@@ -81,12 +92,14 @@ SSH Transport
 
 These instructions were contributed by `Wild Kat <https://github.com/wk>`_.
 
-SSH transport for RPKI-RTR can be configured with the help of `netcat
+SSH transport for RPKI-RTR can be configured with the
+help of `netcat
 <http://netcat.sourceforge.net/>`_ and `OpenSSH <https://www.openssh.com/>`_.
 
 1. Begin by installing the :program:`openssh-server` and :program:`netcat` packages.
 
-Make sure Routinator is running as an RTR server on localhost:
+Make sure Routinator is running as an RTR server on
+localhost:
 
 .. code-block:: text
 
@@ -128,7 +141,8 @@ Make sure Routinator is running as an RTR server on localhost:
 Configuring Routers
 -------------------
 
-Route Origin Validation is supported on most hardware and software routers.
+Route Origin Validation is supported on most
+hardware and software routers.
 This documentation does not provide authoritative information on how to
 configure each router platform, but aims to provide helpful pointers.
 
@@ -155,7 +169,7 @@ Software Routers
 
 .. seealso:: `Rejecting RPKI Invalid BGP Routes 
              <https://bgpfilterguide.nlnog.net/guides/reject_invalids/>`_
-             in the NLNOG BGP Filter Guide.
+             in the NLNOG :term:`BGP <Border Gateway Protocol (BGP)>` Filter Guide.
 
 .. note:: For additions or corrections, please `open an issue 
           <https://github.com/NLnetLabs/routinator/issues>`_ or `submit a

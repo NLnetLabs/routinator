@@ -1,13 +1,14 @@
 Logging
 =======
 
-To let you analyse the validated ROA payload (VRP) data set as well as its
+To let you analyse the :term:`validated ROA payload (VRP)` data set as well as its
 overall health, Routinator provides an extensive amount of information. The
 information regarding its own health is written to the configured log.
 
 All information about issues encountered during fetching and validating data
 is stored separately and can be retrieved through the status HTTP endpoints.
-It is collected per RRDP or rsync repository and publication point, rather
+It is collected per :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` or rsync
+:term:`repository` and :term:`publication point`, rather
 than as lines mixed in with the log, making it easier to see possible issues
 for repositories or publication points.
 
@@ -31,7 +32,8 @@ warn
 
 info
       Information about events and data that could be considered abnormal but do
-      not influence the set of VRPs  produced. For example, the ``warn`` policy logs individual
+      not influence the set of VRPs  produced. For
+      example, the ``warn`` policy logs individual
       :ref:`unsafe VRPs <data-processing:unsafe vrps>` at this level.
 
 debug

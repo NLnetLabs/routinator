@@ -12,9 +12,11 @@ Routinator's HTTP server also provides a :doc:`user
 interface<user-interface>`, an :doc:`API<api-endpoints>`,
 :doc:`monitoring<monitoring>` and :doc:`logging<logging>` endpoints. 
 
-After fetching and verifying all RPKI data for the first time, paths are
+After fetching and verifying all :term:`RPKI <Resource Public Key Infrastructure (RPKI)>`
+data for the first time, paths are
 available for each :doc:`VRP output format <output-formats>`. For example, at
-the ``/json`` path you can fetch a list of all VRPs in JSON format.
+the ``/json`` path you can fetch a list of all :term:`VRPs <Validated ROA Payload (VRP)>`
+in JSON format.
 
 .. code-block:: text
 
@@ -24,10 +26,12 @@ Query Parameters
 ----------------
 
 Payload output endpoints such as ``/json`` accept the query parameters
-``select-asn`` and ``select-prefix`` to filter results by ASN or prefix.
+``select-asn`` and ``select-prefix`` to filter results by :term:`ASN <Autonomous System
+Number (ASN)>` or :term:`prefix <IP prefix>`.
 Results include payloads matching any of the supplied selectors.
 
-For example, to only show the VRPs in JSON format authorising AS196615, use:
+For example, to only show the VRPs in JSON format
+authorising AS196615, use:
 
 .. code-block:: text
 
@@ -51,7 +55,8 @@ This will produce the following output:
 
 The query parameter ``exclude`` can be used to exclude certain payload types
 from the response. The values ``routeOrigins``, ``routerKeys``, and ``aspas``
-disable inclusion of route origins, router keys, and ASPAs, respectively. The
+disable inclusion of route origins, :term:`router keys <BGPsec router key>`, and
+:term:`ASPAs <Autonomous System Provider Authorisation (ASPA)>`, respectively. The
 values can either be given in separate ``exclude`` parameters or included in
 one separated by commas.
 
@@ -63,7 +68,8 @@ More Specific Prefixes
 
 When you query for a prefix, by default Routinator will return the exact
 match, as well as less specifics. The reason is that a VRP of an overlapping
-less specific prefix can also affect the RPKI validity of a BGP announcement,
+less specific prefix can also affect the RPKI validity of a :term:`BGP <Border Gateway Protocol (BGP)>`
+announcement,
 depending on the :term:`Maximum Prefix Length (MaxLength)` that is set.
 
 For example, to query for 82.221.32.0/20:
@@ -72,7 +78,8 @@ For example, to query for 82.221.32.0/20:
 
    curl 'http://192.0.2.13:8323/json?select-prefix=82.221.32.0/20'
 
-Routinator will return the exact match and the VRP for the less specific /17
+Routinator will return the exact match and the VRP
+for the less specific /17
 prefix:
 
 .. code-block:: json
@@ -112,7 +119,8 @@ You will now see that a more specific /23 prefix is returned as well:
 
 .. Tip:: The ``include=more-specifics`` option will also work if there is no
          exactly matching or less specific prefix. In that case you
-         will get a list of all more specific VRPs covered by the prefix you
+         will get a list of all more specific VRPs
+         covered by the prefix you
          supplied in the query.
 
 .. versionchanged:: 0.11.0
@@ -121,15 +129,17 @@ You will now see that a more specific /23 prefix is returned as well:
 TLS Transport
 -------------
 
-Routinator offers native TLS support for both HTTP and :doc:`RTR
+Routinator offers native :term:`TLS <Transport Layer Security (TLS)>` support for both
+HTTP and :doc:`RTR
 connections<rtr-service>`. In this example we'll start Routinator's HTTPS
 server listening on the IP addresses 192.0.2.13 and 2001:0DB8::13 and use
 port 8324.
 
-First, indicate that you want a TLS connection with the :option:`--http-tls`
+First, indicate that you want a TLS connection
+with the :option:`--http-tls`
 option. Then use the :option:`--http-tls-cert` option to specify the path to
 a file containing the server certificates to be used. This file has to
-contain one or more certificates encoded in PEM format. Lastly, use the
+contain one or more certificates encoded in :term:`PEM format <PEM encoding>`. Lastly, use the
 :option:`--http-tls-key` option to specify the path to a file containing the
 private key to be used for HTTPS connections. The file has to contain exactly
 one private key encoded in PEM format:
@@ -146,7 +156,8 @@ one private key encoded in PEM format:
 Using a Reverse Proxy
 ---------------------
 
-Though TLS is natively supported, it may be more convenient to set up a
+Though TLS is natively supported, it may be more
+convenient to set up a
 reverse proxy to serve HTTPS data. This way you'll be using a production
 grade web server that for example allows automation of certificate renewal.
 

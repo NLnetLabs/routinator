@@ -4,15 +4,20 @@ API Endpoints
 The HTTP service supports **GET** requests on the following paths:
 
 ``/api/v1/status``
-     Returns exhaustive information in JSON format on all trust anchors,
-     repositories, RRDP and rsync connections, as well as RTR and HTTP
+     Returns exhaustive information in JSON format on all :term:`trust anchors <Trust
+     Anchor (TA)>`,
+     :term:`repositories <Repository>`, :term:`RRDP <RPKI Repository Delta Protocol
+     (RRDP)>` and rsync connections, as well as :term:`RTR <RPKI-to-Router (RPKI-RTR)>`
+     and HTTP
      sessions. This data set provides the source for the Routinator user
      interface.
 
 ``/api/v1/validity/as-number/prefix``
      Returns a JSON object describing whether the route announcement given by
-     its origin AS Number and address prefix is RPKI valid, invalid, or not
-     found. A complete list of VRPs that caused the result is included. For
+     its :term:`origin AS` Number and address :term:`prefix <IP prefix>` is :term:`RPKI
+     <Resource Public Key Infrastructure (RPKI)>` valid, invalid, or not
+     found. A complete list of :term:`VRPs <Validated ROA Payload (VRP)>` that caused the
+     result is included. For
      details about its contents see :doc:`validity checker<validity-checker>`.
      
 ``/validity?asn=as-number&prefix=prefix``
@@ -29,8 +34,10 @@ The HTTP service supports **GET** requests on the following paths:
 
      The *announced* and *withdrawn* arrays contain the payloads added and
      removed since the requested version. Each item has a *type* of
-     ``routeOrigin``, ``routerKey`` or ``aspa``. An ASPA item contains the
-     customer ASN in ``customerAsn`` and an array of provider ASNs in
+     ``routeOrigin``, ``routerKey`` or ``aspa``. An :term:`ASPA <Autonomous System
+     Provider Authorisation (ASPA)>` item contains the
+     :term:`customer ASN <Customer AS and provider AS>` in ``customerAsn`` and an array of
+     provider ASNs in
      ``providerAsns``. When *reset* is *true*, *announced* contains the full
      dataset and the response omits *withdrawn*.
 

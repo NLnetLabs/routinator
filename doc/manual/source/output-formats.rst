@@ -1,13 +1,13 @@
 VRP Output Formats
 ==================
 
-Routinator can perform RPKI validation as a one-time operation or run as a
-daemon. In both operating modes validated ROA payloads (VRPs) can be
+Routinator can perform :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` validation as a one-time operation or run as a
+daemon. In both operating modes :term:`validated ROA payloads <Validated ROA Payload (VRP)>` (VRPs) can be
 generated in a wide range of output formats for various use cases.
 
-.. Tip:: In many of the output formats, the name of the trust anchor from 
+.. Tip:: In many of the output formats, the name of the :term:`trust anchor <Trust Anchor (TA)>` from
          where the VRP originated is provided. This name is derived from the
-         file name of the TAL, without  the *.tal* extension. If you would 
+         file name of the :term:`TAL <Trust Anchor Locator (TAL)>`, without  the *.tal* extension. If you would
          like a different name, the *tal-label* option in the 
          :doc:`configuration file <configuration>` lets you create a mapping
          between the file name and your desired label.
@@ -18,10 +18,10 @@ generated in a wide range of output formats for various use cases.
           The list is formatted as lines of comma-separated values of the
           following items:
 
-            -  The prefix in slash notation, 
-            -  the maximum prefix length, 
-            -  the Autonomous System Number, and 
-            -  the name of the trust anchor the entry is derived from. 
+            -  The :term:`prefix <IP prefix>` in slash notation,
+            -  the :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`,
+            -  the :term:`Autonomous System Number <Autonomous System Number (ASN)>`, and
+            -  the name of the trust anchor the entry is derived from.
           
           .. code-block:: text
             
@@ -33,7 +33,7 @@ generated in a wide range of output formats for various use cases.
     csvcompat
           This is the same as the *csv* format except that all fields are
           embedded in double quotes and the Autonomous System Number is given
-          without the prefix *AS*. This format is pretty much identical to
+          without the prefix :term:`AS <Autonomous System (AS)>`. This format is pretty much identical to
           the CSV format produced by the RIPE NCC RPKI Validator.
           
           .. code-block:: text
@@ -48,11 +48,11 @@ generated in a wide range of output formats for various use cases.
           the RIPE NCC RPKI Validator 1.x. Each line contains these
           comma-separated values: 
           
-            - The rsync URI of the ROA the line is taken from (or "N/A" if it
-              isn't from a ROA), 
-            - the Autonomous System Number, 
-            - the prefix in slash notation, 
-            - the maximum prefix length, and 
+            - The :term:`rsync URI` of the :term:`ROA <Route Origin Authorisation (ROA)>` the line is taken from (or "N/A" if it
+              isn't from a ROA),
+            - the Autonomous System Number,
+            - the prefix in slash notation,
+            - the maximum prefix length, and
             - the not-before and not-after date of the validity of the ROA.
           
           .. Note:: This format is available for backwards compatibility
@@ -70,9 +70,9 @@ generated in a wide range of output formats for various use cases.
     json
           The list is placed into a JSON object with up to four members:
 
-            - *roas* contains the validated route origin authorisations, 
+            - *roas* contains the validated route origin authorisations,
             - *routerKeys* contains the validated
-              :ref:`advanced-features:bgpsec` router keys,
+              :ref:`advanced-features:bgpsec` :term:`router keys <BGPsec router key>`,
             - *aspas* contains the validated :ref:`advanced-features:aspa` 
               payload, and
             - *metadata* contains some information about the validation run 
@@ -86,8 +86,8 @@ generated in a wide range of output formats for various use cases.
           
             - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
-            - *prefix* has the prefix in slash notation,
-            - *maxLength* states the maximum prefix length of the announced
+            - prefix has the prefix in slash notation,
+            - maxLength states the maximum prefix length of the announced
               route, and
             - *ta* has the trust anchor from which the authorisation was
               derived. 
@@ -96,7 +96,7 @@ generated in a wide range of output formats for various use cases.
           elements each: 
           
             - *asn* contains the autonomous system using the router key,
-            - *SKI* lists the key identifier as a string of hexadecimal 
+            - :term:`SKI <Subject Key Identifier (SKI)>` lists the key identifier as a string of hexadecimal
               digits,
             - *routerPublicKey* contains the actual public key as a Base 64 
               encoded string, and 
@@ -105,7 +105,7 @@ generated in a wide range of output formats for various use cases.
 
           Each object in the *aspas* array has three members:
           
-            - *customer* contains the customer ASN,
+            - *customer* contains the :term:`customer ASN <Customer AS and provider AS>`,
             - *providers* contains the provider ASN set as an array, and
             - *ta* has the trust anchor from which the authorisation was
               derived.
@@ -167,8 +167,8 @@ generated in a wide range of output formats for various use cases.
           
             - *asn* lists the Autonomous System Number of the network
               authorised to originate a prefix,
-            - *prefix* has the prefix in slash notation,
-            - *maxLength* states the maximum prefix length of the announced
+            - prefix has the prefix in slash notation,
+            - maxLength states the maximum prefix length of the announced
               route, and
             - *source* contains information about the source of the
               authorisation.
@@ -177,7 +177,7 @@ generated in a wide range of output formats for various use cases.
           four elements each: 
           
             - *asn* lists the autonomous system using the router key,
-            - *SKI* has the key identifier as a string of hexadecimal digits,
+            - SKI has the key identifier as a string of hexadecimal digits,
             - *routerPublicKey* has the actual public key as a Base 64
               encoded string, and
             - *source* contains extended information about the source of the
@@ -194,16 +194,16 @@ generated in a wide range of output formats for various use cases.
           aspas. It consists of an array. Each item in that array is an
           object providing details of a source. The object will have a *type*
           of *roa* if it was derived from a valid ROA object, *cer* if it was
-          derived from a published router certificate, *aspa* if it was
-          derived from an ASPA object, or *exception* if it was an assertion
+          derived from a published :term:`router certificate <BGPsec router certificate>`, *aspa* if it was
+          derived from an :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>` object, or *exception* if it was an :term:`assertion <Locally added assertion>`
           in a local exception file.
 
           For RPKI objects, *tal* provides the name of the trust anchor
           locator the object was published under, *uri* provides the rsync
           URI of the ROA or router certificate, *validity* provides the
           validity of the ROA itself, *chainValidity* the validity
-          considering the validity of the certificates along the validation
-          chain, and *stale* the time when any of the publication points along
+          considering the validity of the certificates along the :term:`validation
+          chain <Certification path>`, and *stale* the time when any of the :term:`publication points <Publication Point>` along
           the validation chain becomes stale.
 
           For  assertions from local exceptions, *path* will provide the path
@@ -298,8 +298,8 @@ generated in a wide range of output formats for various use cases.
     slurm
           The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by :RFC:`8416` (also
-          known as SLURM version 1). The produced file will have empty 
-          validation output filters. This version does not support ASPA.
+          known as :term:`SLURM <Simplified Local Internet Number Resource Management with the RPKI (SLURM)>` version 1). The produced file will have empty
+          :term:`validation output filters <Validation output filter>`. This version does not support ASPA.
 
           .. code-block:: json
 
@@ -342,7 +342,7 @@ generated in a wide range of output formats for various use cases.
           The list is formatted as locally added assertions of a :doc:`local
           exceptions<local-exceptions>` file defined by 
           `draft-ietf-sidrops-aspa-slurm-04 <https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-slurm-04>`_
-          (also known as SLURM version 2). The produced file will have empty 
+          (also known as SLURM version 2). The produced file will have empty
           validation output filters.
 
           .. code-block:: json
@@ -428,8 +428,7 @@ generated in a wide range of output formats for various use cases.
             route 93.175.147.0/24 max 24 as 196615;
 
     rpsl
-          This format produces a list of :abbr:`RPSL (Routing Policy
-          Specification Language)` objects with the authorisation in the
+          This format produces a list of :term:`RPSL <Routing Policy Specification Language (RPSL)>` objects with the authorisation in the
           fields *route*, *origin*, and *source*. In addition, the fields
           *descr*, *mnt-by*, *created*, and *last-modified*, are present with
           more or less meaningful values.
@@ -446,8 +445,8 @@ generated in a wide range of output formats for various use cases.
           
     summary
           This format produces a summary of the content of the RPKI
-          repository. It does not take filters into account and will always
-          provide numbers for the complete repository. 
+          :term:`repository`. It does not take filters into account and will always
+          provide numbers for the complete repository.
           
           For each trust anchor, it will print the number of verified ROAs
           and VRPs, router certificates and keys, as well as ASPAs. Note that

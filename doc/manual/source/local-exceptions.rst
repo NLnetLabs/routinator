@@ -1,21 +1,23 @@
 Local Exceptions
 ================
 
-In some cases, you may want to override the global RPKI data set with your
+In some cases, you may want to override the global :term:`RPKI <Resource Public Key
+Infrastructure (RPKI)>` data set with your
 own local exceptions. For example, when a legitimate route announcement is
-inadvertently flagged as *invalid* due to a misconfigured ROA, you may want
+inadvertently flagged as :term:`invalid` due to a misconfigured :term:`ROA <Route Origin
+Authorisation (ROA)>`, you may want
 to temporarily accept it to give the operators an opportunity to resolve the
 issue.
 
 You can do this by specifying route origins that should be filtered out of
 the output, as well as origins that should be added, in a file using JSON
-notation according to the :abbr:`SLURM (Simplified Local Internet Number
-Resource Management with the RPKI)` standard specified in :RFC:`8416`.
+notation according to the :term:`SLURM <Simplified Local Internet Number Resource
+Management with the RPKI (SLURM)>` standard specified in :RFC:`8416`.
 
 You can use this `example file
 <https://github.com/NLnetLabs/rpki-rs/blob/main/test-data/slurm/full.json>`_
 as a starting point, but you can also build your own exceptions file based on
-existing VRPs in the global RPKI data set using the :term:`SLURM` output
+existing :term:`VRPs <Validated ROA Payload (VRP)>` in the global RPKI data set using the :term:`SLURM` output
 format in combination with the :option:`--select-asn` and
 :option:`--select-prefix` options. 
 
@@ -23,9 +25,11 @@ format in combination with the :option:`--select-asn` and
   
     - :doc:`interactive`
 
-This command selects the VRPs for origin AS196615 from Routinator's current
-dataset and writes their prefixes and maximum prefix lengths to standard
-output as SLURM prefix assertions:
+This command selects the VRPs for origin AS196615
+from Routinator's current
+dataset and writes their :term:`prefixes <IP prefix>` and :term:`maximum prefix lengths
+<Maximum Prefix Length (MaxLength)>` to standard
+output as SLURM prefix :term:`assertions <Locally added assertion>`:
 
 .. code-block:: text
 
@@ -87,7 +91,8 @@ file is still configured.
    The server retains the previously loaded exceptions if a reload fails.
 
 In the metrics Routinator provides, there are counters indicating how many
-VRPs are added and excluded from the final data set as a result of your
+VRPs are added and excluded from the final data set
+as a result of your
 exceptions. 
 
 Limiting Prefix Length
@@ -103,7 +108,8 @@ To illustrate this option we'll use an extreme example:
 
     routinator --limit-v4-len=8 --limit-v6-len=19 vrps
 
-Now, all VRPs will be ignored that have a prefix with a length that is longer
+Now, all VRPs will be ignored that have a
+prefix with a length that is longer
 than /8 IPv4 and /19 IPv6:
 
 .. code-block:: text
@@ -115,7 +121,8 @@ than /8 IPv4 and /19 IPv6:
     AS3320,2003::/19,19,ripe
     AS5511,2a01:c000::/19,48,ripe
 
-Note that only the prefix length itself and not the maximum prefix length
+Note that only the prefix length itself and not the maximum
+prefix length
 value of the ROA is considered.
 
 .. versionadded:: 0.12.0

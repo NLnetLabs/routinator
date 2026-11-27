@@ -9,7 +9,8 @@ architecture where you can fulfil these requirements.
 Dependencies
 ------------
 
-To get started you need rsync because some RPKI repositories still use it as
+To get started you need rsync because some :term:`RPKI <Resource Public Key Infrastructure
+(RPKI)>` :term:`repositories <Repository>` still use it as
 its main means of distribution. Some of the cryptographic primitives used by
 Routinator require a C toolchain. Lastly, you need Rust because that’s the
 programming language that Routinator has been written in.
@@ -149,7 +150,8 @@ Routinator currently has the following features:
     <https://crates.io/crates/routinator-ui>`_ crate to run the :doc:`user
     interface<user-interface>`.
 ``native-tls`` —  *Disabled* by default
-    Use the native TLS implementation of your system instead of `rustls
+    Use the native :term:`TLS <Transport Layer Security (TLS)>` implementation of your
+    system instead of `rustls
     <https://github.com/rustls/rustls>`_.
 ``rta`` —  *Disabled* by default
     Let Routinator validate :ref:`advanced-features:Resource Tagged
@@ -189,7 +191,8 @@ for this. Building it is as simple as running:
 
 This will install all the dependencies and build the final files, that you can 
 host on your webserver. In case you just want the latest build files, you can 
-find those on the GitHub releases page -- these will use ``/ui`` as path.
+find those on the GitHub releases page -- these will use ``/ui`` :term:`as path <AS path
+(AS_PATH)>`.
 
 Routinator by default ships with this UI that can be accessed on 
 http://localhost:8232/ui/. For most users this will be enough. The UI that 

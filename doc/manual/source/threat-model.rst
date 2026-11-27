@@ -2,9 +2,9 @@
  Threat Model
 ##############
 
-Routinator is an RPKI (Resource Public Key Infrastructure) relying party
-client that retrieves data from the various RPKI repositories, checks its
-validity, and produces a validated payload for consumption by BGP (Border
+Routinator is an :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` (Resource Public Key Infrastructure) :term:`relying party <RPKI Relying Parties>`
+client that retrieves data from the various RPKI :term:`repositories <Repository>`, checks its
+validity, and produces a validated payload for consumption by :term:`BGP <Border Gateway Protocol (BGP)>` (Border
 Gateway Protocol) routers.
 
 BGP routers are the backbone of the Internet. They use protocols that allow
@@ -71,7 +71,7 @@ General assumptions:
 -  An adversary does not have administrative control over the host system
    Routinator runs on.
 -  An adversary does not have write-access to Routinator’s cache directories.
--  The user uses trusted TALs, and the TALs enabled by default are trusted.
+-  The user uses trusted :term:`TALs <Trust Anchor Locator (TAL)>`, and the TALs enabled by default are trusted.
 -  Advances in cryptoanalytic attacks against the cryptographic primitives
    used by the RPKI have not occurred.
 -  Published repository data is authentic, i.e., resource holders maintain
@@ -79,7 +79,7 @@ General assumptions:
 
 Routinator guarantees the following:
 
--  Unsigned or incorrectly signed objects in the RPKI will not end up in the
+-  Unsigned or incorrectly :term:`signed objects <RPKI signed object>` in the RPKI will not end up in the
    validated RPKI payloads provided to routers.
 
 -  For a repository that is reachable, when repository data set up in a
@@ -95,7 +95,7 @@ examples of things an adversary with various capabilities can achieve.
 
 An adversary with the ability to publish repository data could:
 
--  craft publication point URIs to make Routinator perform HTTP GET or rsync
+-  craft :term:`publication point` URIs to make Routinator perform HTTP GET or rsync
    requests to internal resources, circumventing access controls, with the
    exception of host names that Routinator considers dubious (see
    :option:`--allow-dubious-hosts`).
@@ -106,7 +106,7 @@ could:
 -  block access to the repository or degrade throughput of access to
    repository data,
 
--  downgrade the transport used for repository access from RRDP (which
+-  downgrade the transport used for repository access from :term:`RRDP <RPKI Repository Delta Protocol (RRDP)>` (which
    provides confidentiality and integrity at the transport level) to rsync
    (which does not). This behaviour was decided by the community. After such a
    downgrade, the adversary can:
@@ -116,7 +116,7 @@ could:
       data,
 
    -  replay old objects, suppressing updates to older objects for their
-      validity period,
+      :term:`validity period <Certificate validity period>`,
 
 -  infer the configuration of Routinator with respect to the configured TALs
    and timeouts and other network-related settings.
@@ -141,7 +141,7 @@ An adversary who compromises a resource holder's key material could:
 
 -  sign valid statements that will then be successfully validated and included
    in the payload data to routers. This includes the ability to hijack a
-   prefix or invalidate a genuine announcement.
+   :term:`prefix <IP prefix>` or invalidate a genuine announcement.
 
 .. rubric:: Footnotes
 
