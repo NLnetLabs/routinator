@@ -31,11 +31,23 @@ both.
 HTTPS and secure transports for RTR are supported as well. Please read the
 :doc:`http-service` and :doc:`rtr-service` sections for details.
 
-.. Note:: Both servers will only start serving data once the first validation
-          run has completed. Routinator will not reread the trust anchor 
-          locators after it has started the service. Thus, if you add or 
-          change a TAL you must restart Routinator or send it a
-          :ref:`SIGUSR1 <manual-page:signals>`.
+On startup, Routinator first tries to validate the RPKI data in its local
+store without fetching repository updates. If this run succeeds, it makes the
+resulting dataset available over RTR and HTTP and immediately starts a normal
+validation run with network access. A successful request to ``/json`` after a
+restart can therefore return validated data while the first network update is
+still in progress.
+
+With an empty store, or if required data such as a trust anchor certificate
+is missing, Routinator proceeds directly to a full validation run. In that
+case, the first dataset becomes available when the full run completes.
+
+.. versionchanged:: 0.15.0
+   Server startup includes an initial validation run using stored data.
+
+.. Note:: If you add or change a TAL after starting the service, restart
+          Routinator or send it a :ref:`SIGUSR1 <manual-page:signals>`
+          to reload the trust anchor locators.
 
 Using 192.0.2.13 as an example IPv4 address, enter the following command to
 start Routinator with the HTTP server listening on port 8323 and the RTR
