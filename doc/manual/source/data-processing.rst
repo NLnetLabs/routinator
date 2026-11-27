@@ -96,6 +96,24 @@ and the hash over their content must match the one given in the manifest. If the
 hash does not match, the Certificate Authority (CA) and all its objects are
 still rejected.
 
+Manifest Updates
+""""""""""""""""
+
+Before replacing a stored publication point, Routinator checks that the new
+manifest for that CA has both a higher manifest number and a later
+``thisUpdate`` time than the stored manifest. If either value stays the same
+or goes backwards on a changed manifest, Routinator logs a repository warning
+and validates the stored publication point again. The usual validity and
+staleness checks still apply to the stored data.
+
+For example, after a repository is restored from backup, downloads may succeed
+while Routinator continues to use the stored publication point. The warning
+identifies the manifest and indicates which value failed the check.
+
+.. versionchanged:: 0.14.0
+   Routinator checks the manifest number and ``thisUpdate`` before accepting
+   a replacement manifest.
+
 Stale Objects
 """""""""""""
 
