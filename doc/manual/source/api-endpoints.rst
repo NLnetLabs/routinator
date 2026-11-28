@@ -19,10 +19,10 @@ The HTTP service supports **GET** requests on the following paths:
      found. A complete list of :term:`VRPs <Validated ROA Payload (VRP)>` that caused the
      result is included. For
      details about its contents see :doc:`validity checker<validity-checker>`.
-     
+
 ``/validity?asn=as-number&prefix=prefix``
      Same as above but with a more form-friendly calling convention.
-     
+
 ``/json-delta, /json-delta?session=session&serial=serial``
      Returns a JSON object with the changes since the dataset version
      identified by the *session* and *serial* query parameters. If a delta
@@ -55,7 +55,7 @@ The HTTP service supports **POST** requests on the following path:
 
 ``/validity``
      Returns a JSON object describing the validity of multiple routes. This
-     expects a JSON body in the same format as 
+     expects a JSON body in the same format as
      :ref:`the validate command <validity-checker:Reading Input From a File>`.
      Also make sure to set the ``Content-Type`` header to ``application/json``
      when sending the request. The request body size is limited to 100 kB. The
@@ -65,10 +65,6 @@ In addition, the ``/log`` endpoint returns :doc:`logging<logging>`
 information and the ``/metrics``, ``/status`` and
 ``/version`` endpoints provide :doc:`monitoring<monitoring>` data.
 
-.. versionadded:: 0.9.0
-   The ``/json-delta`` path
-.. versionchanged:: 0.9.0
-   The ``/api/v1/status`` path
 .. versionadded:: 0.13.0
    The ``/json-delta/notify`` path
 .. versionadded:: 0.15.0
