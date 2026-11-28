@@ -134,16 +134,13 @@ own:
 Trust Anchor Locators
 ---------------------
 
-Fetching data is done by connecting to the Trust Anchor Locators
-(TALs) of the five :term:`Regional Internet Registries
-<Regional Internet Registry (RIR)>`
-(RIRs): AFRINIC, APNIC, ARIN, LACNIC and RIPE
-NCC. TALs provide hints for
-the :term:`trust anchor <Trust Anchor (TA)>` certificates to be used both to discover and
-validate all
-RPKI content. **By default, Routinator
-will be set up for use in production
-environments and run with the production TALs of the five RIRs.**
+Fetching data is done by connecting to the Trust Anchor Locators (TALs) of the
+five :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`
+(RIRs): AFRINIC, APNIC, ARIN, LACNIC and RIPE NCC. TALs provide hints for the
+:term:`trust anchor <Trust Anchor (TA)>` certificates to be used both to
+discover and validate all RPKI content. By default, Routinator will be set up
+for use in production environments and run with the production TALs of the five
+RIRs.
 
 Some RIRs and third parties also provide
 separate TALs for testing purposes,
