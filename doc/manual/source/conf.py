@@ -70,6 +70,9 @@ intersphinx_mapping = {
     'krill': ('https://krill.docs.nlnetlabs.nl/en/stable/', None)
 }
 
+# Prevent interphinx from following subcommand refs to other manuals
+intersphinx_disabled_reftypes = ['std:doc', 'std:subcmd']
+
 autosectionlabel_prefix_document = True
 
 # Add any paths that contain templates here, relative to this directory.
