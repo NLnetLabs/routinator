@@ -156,28 +156,24 @@ one private key encoded in PEM format:
 Using a Reverse Proxy
 ---------------------
 
-Though TLS is natively supported, it may be more
-convenient to set up a
-reverse proxy to serve HTTPS data. This way you'll be using a production
-grade web server that for example allows automation of certificate renewal.
+A reverse proxy can manage HTTPS certificates and forward requests to
+Routinator's HTTP service. In the examples below, Routinator listens on
+``127.0.0.1:8323`` and the proxy runs on the same host.
 
-For convenience, all the files and folders for the :doc:`user
-interface<user-interface>` are hosted under the ``/ui`` path and the
-:doc:`API endpoints<api-endpoints>` are under ``/api``. For example, this
-allows you to just expose the UI and not any of the other paths, such as
-those serving the various :doc:`VRP output formats<output-formats>`.
+The examples make the :doc:`user interface <user-interface>` available at
+``/ui/`` and forward requests under ``/api/``. This includes
+``/api/v1/status``, which provides monitoring data, and ``/api/v1/origins/``,
+which serves the same JSON data as ``/json``. Clients can therefore retrieve
+the data set through the API even though these rules do not forward the
+top-level ``/json`` path.
 
 NGINX
 """""
 
-To only expose the user interface through NGINX, this is what your
-configuration needs at a minimum when running it on the same server as
-Routinator runs on, using port 8323.
-
-Using the ``=`` modifier, the first entry only forwards if the path is
-*exactly* ``/`` so that paths not explicitly mentioned, such as ``/json``,
-are not forwarded. For more information, please refer to the `NGINX
-documentation <https://nginx.org/en/docs/http/server_names.html>`_.
+Add these locations to the HTTPS server block. The ``=`` modifier matches
+the root path exactly, allowing Routinator to redirect that request to
+``/ui/``. See the `NGINX location documentation
+<https://nginx.org/en/docs/http/ngx_http_core_module.html#location>`_.
 
 .. code-block:: nginx
 
@@ -194,7 +190,8 @@ documentation <https://nginx.org/en/docs/http/server_names.html>`_.
 Apache
 """"""
 
-To achieve a similar goal with Apache, you can use this configuration.
+In an Apache HTTPS virtual host, redirect the root path to the UI and
+forward requests for the UI and API to Routinator.
 
 .. code-block:: apache
 
@@ -213,3 +210,26 @@ To achieve a similar goal with Apache, you can use this configuration.
        ProxyPassReverse /ui http://127.0.0.1:8323/ui
     </VirtualHost>
 
+Caddy
+"""""
+
+Replace ``rpki.example.net`` with the public hostname pointing to your
+proxy. Caddy can obtain and renew the certificate automatically. The
+path matcher forwards requests for the root, UI and API to Routinator.
+The final ``handle`` block returns HTTP 404 for any other path.
+
+.. code-block:: text
+
+    rpki.example.net {
+        @routinator path / /ui /ui/* /api/*
+        handle @routinator {
+            reverse_proxy 127.0.0.1:8323
+        }
+        handle {
+            respond 404
+        }
+    }
+
+See `Caddy's automatic HTTPS documentation
+<https://caddyserver.com/docs/automatic-https>`_ for certificate issuance
+requirements.
