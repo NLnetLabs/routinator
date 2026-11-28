@@ -195,6 +195,13 @@ the following information:
 ``invalidROAs``
     The number of invalid Route Origin Authorisations.
 
+``validASPAs``
+    The number of valid :term:`ASPA <Autonomous System Provider Authorisation
+    (ASPA)>` objects.
+
+``invalidASPAs``
+    The number of invalid ASPA objects.
+
 ``validGBRs``
     The number of valid :term:`Ghostbusters Records <Ghostbusters Record
     (GBR)>`.

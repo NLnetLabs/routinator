@@ -88,6 +88,8 @@ repository, or the base URI of the rsync repository.
         stand-alone files which are BGPsec router certificates.
       * ``roa`` - The number of :term:`Route Origin Authorisations <Route Origin
         Authorisation (ROA)>` for each of the states *valid* and *invalid*.
+      * ``aspa`` - The number of :term:`ASPA <Autonomous System Provider
+        Authorisation (ASPA)>` objects in each state, *valid* or *invalid*.
       * ``gbr`` - The number of :term:`Ghostbusters Records <Ghostbusters Record
         (GBR)>` for each of the states *valid* and *invalid*. Note that
         currently the content of a Ghostbuster Record

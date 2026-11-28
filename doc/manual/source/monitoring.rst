@@ -42,10 +42,10 @@ Update metrics
     publication point
 
 Object metrics
-  - For each cryptographic object that can appear in the :term:`RPKI <Resource Public Key
-    Infrastructure (RPKI)>`, the number of
-    valid, invalid and stale items per trust anchor and
-    repository
+  - Object validation results per trust anchor and repository, including the
+    numbers of valid and invalid :term:`ASPA <Autonomous System Provider
+    Authorisation (ASPA)>` objects. Stale counts apply to manifests and
+    certificate revocation lists.
   - The number of :term:`validated ROA payloads <Validated ROA Payload (VRP)>`
     (VRPs) per Trust Anchor and
     repository
