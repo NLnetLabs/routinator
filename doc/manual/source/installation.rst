@@ -302,16 +302,6 @@ to get started.
               -v rpki-cache:/home/routinator/.rpki-cache \
               nlnetlabs/routinator
 
-.. versionadded:: 0.9.0
-   RPM packages
-.. versionadded:: 0.11.0
-   Debian packages for ``armhf`` and ``arm64`` architecture
-.. versionadded:: 0.11.2
-   Ubuntu packages for Jammy 22.04 (LTS)
-.. deprecated:: 0.12.0
-   ``routinator-init`` and ``--accept-arin-rpa``
-.. versionadded:: 0.13.0
-   Packages for Debian Bookworm 12 and RHEL 9
 .. versionadded:: 0.14.1
    Ubuntu packages for Noble 24.04 (LTS), remove packages for Debian Stretch 9,
    Ubuntu Xenial 16.04 (LTS), and Ubuntu Bionic 18.04 (LTS)
