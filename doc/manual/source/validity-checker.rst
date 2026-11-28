@@ -4,8 +4,11 @@ Validity Checker
 You can check the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` origin
 validation status of one or more :term:`BGP <Border Gateway Protocol (BGP)>` announcements
 using the :subcmd:`validate` subcommand and by supplying the :term:`ASN <Autonomous System
-Number (ASN)>` and :term:`prefix <IP prefix>`. A
-validation run will be started before returning the result, making sure you get
+Number (ASN)>` and :term:`prefix <IP prefix>`. The checker evaluates the
+route origin against validated ROA payloads. ASPA-based AS-path verification
+is performed by routing software that supports it (see :doc:`aspa`).
+
+A validation run will be started before returning the result, making sure you get
 the latest information. If you would like a result from the current cache, you
 can use the :option:`--noupdate` option:
 
@@ -13,12 +16,11 @@ can use the :option:`--noupdate` option:
 
    routinator validate --asn 12654 --prefix 93.175.147.0/24
 
-This will simply return the RPKI
-validity state:
+For example, if the only covering VRP authorises AS196615, the result is:
    
 .. code-block:: text
    
-   Invalid
+   93.175.147.0/24 => AS12654: invalid
 
 You can also add the :option:`--json` option:
 
@@ -197,5 +199,3 @@ detailed analysis of the reasoning behind the outcome of each route:
     ],
     "generatedTime": "2021-07-21T11:36:44Z"
   }
-
-.. versionadded:: 0.9.0

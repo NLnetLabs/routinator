@@ -3,20 +3,34 @@ Prometheus Metrics
 
 Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
 metrics in Prometheus format at the ``/metrics`` endpoint. Here you can
-find an overview of all metrics and their meaning.
+find an overview of all metrics and their meaning. Until validation metrics
+are available, this endpoint returns HTTP 503.
+
+Validation and repository metrics are gauges: they describe the latest run
+and can decrease, including the families whose names end in ``_total``.
+Server metrics that accumulate bytes, queries, requests or opened connections
+are counters. Current connection counts, serial numbers and elapsed times
+are gauges.
 
 ``routinator_last_update_start``
     Seconds since the start of the last update.
     
 ``routinator_last_update_duration``
-    Duration of the last update in seconds.
+    Duration of the last completed update in whole seconds, or ``NaN`` if unavailable.
 
 ``routinator_last_update_done``
-    Seconds since the end of the last update.
+    Seconds since the end of the last completed update, or ``NaN`` if unavailable.
 
 ``routinator_serial``
     The current :term:`serial number <RTR session ID and serial number>` for data served to
     :term:`RTR <RPKI-to-Router (RPKI-RTR)>` clients.
+
+``routinator_vrps_added_locally``
+    Number of VRPs contributed by locally added assertions.
+
+``routinator_aspa_large_provider_set``
+    Number of customer ASNs omitted from the snapshot because their
+    combined ASPA provider set exceeded the size limit. See :doc:`aspa`.
 
 Publication Metrics
 """""""""""""""""""
@@ -35,68 +49,38 @@ file <RRDP notification file>` of the :term:`RRDP <RPKI Repository Delta Protoco
 repository, or the base URI of the rsync repository.
 
 ``routinator_{ta,repository}_publication_points_total``
-    The number of :term:`publication points <Publication Point>` per trust
-    anchor. In most cases these will be the five :term:`Regional
-    Internet Registries <Regional Internet Registry (RIR)>`,
-    but will include the trust anchors of any configured
-    :ref:`testbeds
-    <configuration:trust anchor locators>` as well.
-    
-    This metric has two labels: either ``name`` or ``uri``, followed by the
-    ``state`` which is *valid* or *rejected*.
+    Number of :term:`publication points <Publication Point>` for this trust
+    anchor or repository, with ``state="valid"`` or ``state="rejected"``.
 
 ``routinator_{ta,repository}_objects_total``
-    Metrics for each configured trust anchor. In most cases
-    these will be the
-    five Regional Internet Registries, but will
-    include the trust anchors of any
-    configured :ref:`testbeds <configuration:trust anchor locators>`
-    as well. 
-    
-    This metric has three labels: either ``name`` or ``uri``, followed by
-    ``type`` for the type of object, e.g. :term:`crl <Certificate Revocation List (CRL)>`,
-    and lastly ``state`` describing
-    its validity state, such as *valid* or *stale*.
-    
-    The types and states of objects can be:
-      * ``manifest`` - The number of :term:`manifests <Manifest>` for each of 
-        the states *valid*, *invalid*, *stale* and *missing*. A manifest is
-        *invalid* if it is not correctly encoded, has expired or is not
-        correctly signed by the issuing :term:`CA <Certification authority (CA)>`. It is
-        considered *stale* if the
-        current time is past the time an update to the manifest should have been
-        issued. Whether a *stale* manifest is *valid* or *invalid* depends on
-        configuration. By default a *stale* manifest is considered *invalid*.
-      * ``crl`` - The number of certificate revocation lists for each of the states *valid*, *invalid*,
-        *stale* and *stray*. A CRL is
-        *invalid* if it is not correctly encoded
-        or is not correctly signed by the issuing CA. It is considered *stale*
-        if the current time is past the time an update to the manifest should
-        have been issued. Whether a *stale* manifest is *valid* or *invalid*
-        depends on configuration. By default a *stale* CRL is considered
-        *invalid*. Lastly, each CA should only
-        issue one CRL. This CRL should
-        both be listed on the manifest and used by the manifest’s certificate
-        itself. Any manifest listed on the manifest that is not also the
-        manifest’s own CRL is
-        considered a *stray*.
-      * ``ca_cert`` - The number of Certificate Authority (CA) certificates with
-        the state *valid*.
-      * ``router_cert`` - The number of :term:`router certificates <BGPsec router
-        certificate>` found to be
-        present and *valid*. This only refers to such certificates included as 
-        stand-alone files which are BGPsec router certificates.
-      * ``roa`` - The number of :term:`Route Origin Authorisations <Route Origin
-        Authorisation (ROA)>` for each of the states *valid* and *invalid*.
-      * ``gbr`` - The number of :term:`Ghostbusters Records <Ghostbusters Record
-        (GBR)>` for each of the states *valid* and *invalid*. Note that
-        currently the content of a Ghostbuster Record
-        is not checked.
-      * ``other`` - The number of objects found that are not certificates 
-        (.cer), Certificate  Revocation Lists
-        (.crl), manifests (.mft), ROAs
-        (.roa), or Ghostbuster  Records (.gbr) and
-        have the state *invalid*.
+    Number of objects for this trust anchor or repository, grouped by
+    ``type`` and ``state``. The following combinations are exported:
+
+    .. list-table::
+       :header-rows: 1
+
+       * - Object type
+         - States
+       * - ``manifest``
+         - ``valid``, ``invalid``, ``premature``, ``stale``, ``missing``
+       * - ``crl``
+         - ``valid``, ``invalid``, ``stale``, ``stray``
+       * - ``ca_cert``, ``router_cert``
+         - ``valid``
+       * - ``cert``
+         - ``invalid``
+       * - ``roa``, ``aspa``, ``gbr``
+         - ``valid``, ``invalid``
+       * - ``other``
+         - ``invalid``
+
+    A premature manifest has a ``thisUpdate`` time in the future. A stale
+    manifest or CRL has passed its ``nextUpdate`` time. The stale policy
+    determines whether Routinator accepts it. A stray CRL is listed on a
+    manifest but is not the CRL used by the manifest's certificate.
+    Invalid stand-alone certificates share the ``cert`` label. For
+    Ghostbusters Records, Routinator checks the signed object and its
+    certificate without parsing the vCard.
 
 The following metrics all have just one label, either ``name`` in case of a 
 trust anchor or ``uri`` for repositories:
@@ -107,7 +91,8 @@ trust anchor or ``uri`` for repositories:
     
 ``routinator_{ta,repository}_unsafe_vrps_total``
     The number of VRPs found to be
-    :term:`unsafe <Unsafe VRPs>`. 
+    :term:`unsafe <Unsafe VRPs>`. This series is emitted only when the
+    unsafe VRP policy is ``warn`` or ``reject``.
     
 ``routinator_{ta,repository}_locally_filtered_vrps_total``
     The number of VRPs that are filtered
@@ -132,19 +117,51 @@ trust anchor or ``uri`` for repositories:
     minus the ones that are
     locally filtered, duplicate, and, if configured to be dropped, unsafe.
 
+Payload Metrics
+"""""""""""""""
+
+These gauges have a source label (``name`` for a trust anchor or ``uri``
+for a repository) and a ``type`` label. For IPv4 VRPs, IPv6 VRPs and
+BGPsec router keys, the type values are ``route_origins_ipv4``,
+``route_origins_ipv6`` and ``router_keys``, respectively.
+
+``routinator_{ta,repository}_valid_payload_total``
+    Valid published payloads processed before local filtering.
+
+``routinator_{ta,repository}_unsafe_payload_total``
+    Payloads marked unsafe. Emitted for the ``warn`` and ``reject`` policies.
+    The unsafe check applies to VRPs. The router key series is zero.
+
+``routinator_{ta,repository}_locally_filtered_payload_total``
+    Payloads removed by local exceptions.
+
+``routinator_{ta,repository}_duplicate_payload_total``
+    Additional contributions counted against an existing entry.
+
+``routinator_{ta,repository}_contributed_payload_total``
+    Entries contributed by the source after filtering and deduplication.
+
+For :term:`ASPA <Autonomous System Provider Authorisation (ASPA)>` payloads,
+``type="aspas"`` is exported only for the valid, duplicate and contributed
+families. Routinator groups provider lists by customer ASN. An additional
+list counted as a duplicate can still add providers to an existing entry.
+Contributions are counted before the combined provider-set size check.
+To count signed ASPA objects instead, use the object metric, for example
+``routinator_ta_objects_total{type="aspa",state="valid"}``.
+
 Rsync Update Metrics
 """"""""""""""""""""
 
-For each repository updated via rsync the following values are given.
+These metrics use the rsync module URI as the ``uri`` label.
 
 ``routinator_rsync_status``
     The status code returned by the rsync process. A value of 0 means the
     process has finished successfully. The meaning of other values depends
     on the rsync client used. Please refer to its documentation for further
-    details.
+    details. A value of -1 means no exit code was available.
 
 ``routinator_rsync_duration``
-    The duration the rsync process was running in seconds.
+    The duration the rsync process was running in seconds, when available.
 
 RRDP Update Metrics
 """""""""""""""""""
@@ -154,10 +171,10 @@ have a label ``uri`` specifying the URI of the notification file of the RRDP
 repository.
 
 ``routinator_rrdp_status``
-    The overall status of the update. This will be 200 if the updated
-    succeeded, 304 if no update was necessary because the data was already
-    current, and any other value for a failed update. If the value is -1,
-    it was not possible to reach the HTTPS server at all.
+    The HTTP status of the notification request, or of the payload request
+    when one followed a successful notification request. A 304 indicates an
+    unchanged notification file. A value of -1 indicates a request error. A value of
+    -2 indicates that Routinator rejected the repository before fetching.
 
 ``routinator_rrdp_notification_status``
     The status of retrieving the notification file. This
@@ -182,12 +199,11 @@ repository.
     preceded by one or more successful requests.
 
 ``routinator_rrdp_duration``
-    The overall duration of the RRDP
-    update in seconds.
+    The overall duration of the RRDP update in seconds, when available.
 
 ``routinator_rrdp_serial_info``
     The :term:`serial number <RRDP session ID and serial number>` stated by the
-    RRDP server for the current data set.
+    RRDP server for the current data set, when available.
     With each update the serial number is
     increased by one.
 
@@ -212,19 +228,29 @@ enabled or not.
    connections. In other words,
    describes how much data has been sent to clients.
 
-``routinator_rtr_client_last_reset_seconds`` 
-   The amount of seconds since last cache reset by a client address.
+The following per-client metrics require :option:`--rtr-client-metrics`
+and carry an ``addr`` label for the client IP address.
+
+``routinator_rtr_client_connections``
+   Currently open connections from this address.
+
+``routinator_rtr_client_serial``
+   The serial reported for this client address, or -1 if unavailable.
+
+``routinator_rtr_client_last_update_seconds``
+   Seconds since the client's last update, or -1 if unavailable.
+
+``routinator_rtr_client_read_bytes`` and ``routinator_rtr_client_written_bytes``
+   Bytes received from and sent to clients at this address, respectively.
+
+``routinator_rtr_client_last_reset_seconds``
+   Seconds since the last cache reset for this address, or -1 if unavailable.
 
 ``routinator_rtr_client_reset_queries`` 
    The number of reset queries by a client address.
 
 ``routinator_rtr_client_serial_queries`` 
-   The number of of serial queries by a client address.
-
-.. versionadded:: 0.12.0
-   ``routinator_rtr_client_last_reset_seconds``, 
-   ``routinator_rtr_client_reset_queries`` and
-   ``routinator_rtr_client_serial_queries``
+   The number of serial queries by a client address.
 
 HTTP Server Metrics
 """""""""""""""""""
@@ -237,10 +263,24 @@ server.
 
 ``routinator_http_current_connections``
    The number of currently open connections. This should at least be 1 as
-   there is a connection open when requesting the JSON metrics.
+   there is a connection open when scraping this endpoint.
 
-``requests``
+``routinator_http_requests``
    The total number of requests received and answered by the HTTP server.
 
 ``routinator_http_bytes_read`` and ``routinator_http_bytes_written``
    The number of bytes read from and written to HTTP clients.
+
+Deprecated Metrics
+""""""""""""""""""
+
+The exporter also provides the following gauges for existing dashboards:
+
+* ``routinator_valid_roas``, ``routinator_total_vrps``,
+  ``routinator_vrps_unsafe``, ``routinator_vrps_filtered_locally`` and
+  ``routinator_vrps_duplicate`` report valid ROAs, valid VRPs, unsafe VRPs,
+  locally filtered VRPs and duplicate VRPs, respectively. They use the
+  label ``tal``. Unsafe samples require the ``warn`` or ``reject`` policy.
+* ``routinator_vrps_final`` is the number of VRPs in the final data set.
+* ``routinator_stale_objects`` is the combined count of stale manifests
+  and CRLs.

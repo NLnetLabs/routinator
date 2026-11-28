@@ -7,7 +7,7 @@ to the view of the :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` data
 Routinator currently sees. This subcommand has
 only one option, :option:`--output`, which specifies the directory where the
 output should be written.
-   
+
 Three directories will be created in the output directory:
 
 rrdp
@@ -41,8 +41,3 @@ ta
     Within this second level, the certificate is stored in a file that has
     the hexadecimal encoding of the SHA-256 hash of the certificate’s URI
     as the file name with the extension ``.cer`` appended.
-
-.. versionadded:: 0.9.0
-.. versionchanged:: 0.11.1
-   Stored trust anchor certificates are dumped into the ``ta`` directory.
-
