@@ -48,12 +48,12 @@ with in addition to the settings in the config file, you can check with the
 This output will also provide you with the correct syntax in case you want to
 make changes.
 
-.. Important:: Once you have started Routinator as a system service you 
-               should not invoke :doc:`interactive<interactive>` validation 
+.. Important:: Once you have started Routinator as a system service you
+               should not invoke :doc:`interactive<interactive>` validation
                runs from the command line using ``routinator vrps``. If there
-               is specific information you would like to have from 
-               Routinator, you should retrieve it via the 
-               :doc:`user interface<user-interface>` or one of the 
+               is specific information you would like to have from
+               Routinator, you should retrieve it via the
+               :doc:`user interface<user-interface>` or one of the
                :doc:`HTTP endpoints<http-service>`.
 
 Setup When Built with Cargo
@@ -79,7 +79,7 @@ You can specify the location of the RPKI cache directory using the
 default location :file:`$HOME/.rpki-cache/repository`. The :doc:`HTTP
 service<http-service>` and :doc:`RTR service<rtr-service>` must be started
 explicitly using the command line options :option:`--http` and
-:option:`--rtr`, respectively, or via the configuration file. 
+:option:`--rtr`, respectively, or via the configuration file.
 
 You can view the default settings Routinator runs with using:
 
@@ -154,11 +154,11 @@ Run the following command to list all available TALs:
 .. code-block:: text
 
     routinator --tal=list
-    
+
 This displays the following overview:
-    
+
 .. code-block:: text
-    
+
       .---- RIR TALs
       |  .- RIR test TALs
       V  V
@@ -211,16 +211,6 @@ directory is one of the bundled TALs, then these
 resources will be validated
 twice.
 
-.. versionadded:: 0.9.0
-   :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
-   :option:`--tal` and :option:`--skip-tal`
-.. deprecated:: 0.9.0
-   ``--decline-arin-rpa``, use :option:`--skip-tal` instead
-.. versionadded:: 0.12.0
-   :option:`--extra-tals-dir`
-.. deprecated:: 0.12.0
-   The ``init`` subcommand, :option:`--list-tals`
-
 Using Tmpfs for the RPKI Cache
 ------------------------------
 
@@ -247,7 +237,7 @@ usage<installation:Inode Usage>`:
 Routinator will do a clean crash, stopping validation, the API, HTTP server
 and most importantly the RTR server, ensuring that no
 stale data will be
-served to your routers. 
+served to your routers.
 
 Also keep in mind that every time you restart the machine, the contents of
 the *tmpfs* file system will be lost. This means that Routinator will have to
