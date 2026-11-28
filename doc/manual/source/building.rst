@@ -153,8 +153,6 @@ Routinator currently has the following features:
     Use the native :term:`TLS <Transport Layer Security (TLS)>` implementation of your
     system instead of `rustls
     <https://github.com/rustls/rustls>`_.
-``rta`` —  *Disabled* by default
-    Enabling this feature has no effect.
 
 To disable the features that are enabled by default, use the
 ``--no-default-features`` option. You can then choose which features you want
