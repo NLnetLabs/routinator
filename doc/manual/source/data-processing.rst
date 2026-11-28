@@ -11,7 +11,7 @@ be the successor to rsync in the RPKI.
 As all RPKI :term:`repositories
 <Repository>` currently
 advertise support for both protocols, Routinator will prefer RRDP if
-available. 
+available.
 
 In the RPKI, the certificate hierarchy
 follows the same structure as the
@@ -77,7 +77,7 @@ the data instead. To spread out load on the rsync server, the exact moment
 fallback happens is picked randomly between the refresh time and the
 :option:`--rrdp-fallback-time` value. If rsync communication is unsuccessful
 too, the local cache is used until the objects go stale and ultimately
-expire. 
+expire.
 
 Another policy for :option:`--rrdp-fallback` is *never*. This means that
 rsync is never tried for a CA that advertises the
@@ -131,7 +131,7 @@ During repository validation, Routinator processes certificates (``.cer``),
 (``.roa``), ASPAs (``.asa``) and
 :term:`Ghostbuster Records <Ghostbusters Record (GBR)>` (``.gbr``).
 If another type of object is encountered Routinator will *warn*
-by default, but this can be changed with the :option:`--unknown-objects` option. 
+by default, but this can be changed with the :option:`--unknown-objects` option.
 
 Note that even if unknown objects are accepted, they must appear in the manifest
 and the hash over their content must match the one given in the manifest. If the
@@ -163,20 +163,16 @@ Stale Objects
 """""""""""""
 
 During the validation process, Routinator may encounter objects that are
-*stale*. In RPKI, manifests and CRLs can
-be stale if the time given in their next-update field
-is in the past,
-indicating that an update to the object was scheduled but didn't happen. This
-can be because of an operational issue at the issuer or an attacker trying to
-replay old objects. 
+*stale*. In RPKI, manifests and CRLs can be stale if the time given in their
+:term:`nextUpdate <thisUpdate and nextUpdate>` field is in the past, indicating
+that an update to the object was scheduled but didn't happen. This can be
+because of an operational issue at the issuer or an attacker trying to replay
+old objects.
 
-Ongoing standards efforts and operational experiences suggest that :term:`stale objects
-<Stale Object>`
-should be rejected, which is the default policy set by the :option:`--stale`
-option since Routinator 0.8.0. As a result, all material published by the CA
-issuing this manifest and CRL is
-considered invalid, including all material of
-any child CA.
+Operational experiences suggest that :term:`stale objects <Stale Object>` should
+be rejected, which is the default policy set by the :option:`--stale` option. As
+a result, all material published by the CA issuing this manifest and CRL is
+considered invalid, including all material of any child CA.
 
 ROAs and VRPs
 """""""""""""
