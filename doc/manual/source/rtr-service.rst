@@ -90,53 +90,35 @@ configuration option.
 SSH Transport
 """""""""""""
 
-These instructions were contributed by `Wild Kat <https://github.com/wk>`_.
-
-SSH transport for RPKI-RTR can be configured with the
-help of `netcat
-<http://netcat.sourceforge.net/>`_ and `OpenSSH <https://www.openssh.com/>`_.
-
-1. Begin by installing the :program:`openssh-server` and :program:`netcat` packages.
-
-Make sure Routinator is running as an RTR server on
-localhost:
+A router using RTR over SSH requests the ``rpki-rtr`` subsystem
+(:rfc:`8210`, section 9.1). OpenSSH authenticates the router and starts
+:program:`nc` (netcat) to pass the RTR session to Routinator. In this
+example, Routinator listens on the loopback interface of the SSH server:
 
 .. code-block:: text
 
    routinator server --rtr 127.0.0.1:3323
 
-2. Create a username and a password for the router to log into the host with, such as ``rpki``.
-
-3. Configure OpenSSH to expose an ``rpki-rtr`` subsystem that acts as a proxy into Routinator by editing the :file:`/etc/ssh/sshd_config` file or equivalent to include the following line:
-
-.. code-block:: bash
-
-   # Define an `rpki-rtr` subsystem which is actually `netcat` used to
-   # proxy STDIN/STDOUT to a running `routinator server --rtr 127.0.0.1:3323`
-   Subsystem       rpki-rtr        /bin/nc 127.0.0.1 3323
-
-   # Certain routers may use old KEX algos and Ciphers which are no longer enabled by default.
-   # These examples are required in IOS-XR 5.3 but no longer enabled by default in OpenSSH 7.3
-   Ciphers +3des-cbc
-   KexAlgorithms +diffie-hellman-group1-sha1
-   
-   # Only allow the rpki user to execute this one command
-   Match User rpki
-       ForceCommand /bin/nc localhost 3323
-       PasswordAuthentication yes
-   Match all
-
-4. Restart the OpenSSH server daemon.
-
-5. Set up the router running IOS-XR using this example configuration:
+Create a dedicated SSH account named ``rpki`` and install the router's
+public key in its :file:`.ssh/authorized_keys` file. Add the subsystem
+to the global section of :file:`/etc/ssh/sshd_config` and put the
+``Match User`` block at the end of the file. Use the absolute path to
+:program:`nc` on your system in both places.
 
 .. code-block:: text
 
-   router bgp 65534
-    rpki server 192.168.0.100
-     username rpki
-     password <password>
-     transport ssh port 22
+   Subsystem rpki-rtr /usr/bin/nc 127.0.0.1 3323
+
+   Match User rpki
+       AuthenticationMethods publickey
+       ForceCommand /usr/bin/nc 127.0.0.1 3323
+       DisableForwarding yes
+       PermitTTY no
+
+Check the configuration with ``sshd -t`` before reloading OpenSSH.
+Configure the router's RTR client to connect to the SSH server as
+``rpki`` using its private key. Verify the server's host key through a
+trusted channel and configure the router to trust that key.
 
 Configuring Routers
 -------------------
