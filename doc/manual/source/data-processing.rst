@@ -112,32 +112,28 @@ on an individual read. The default read timeout is 10 seconds.
 Validating
 ----------
 
-Routinator also validates :doc:`ASPA objects <aspa>` and makes their payloads
-available to compatible consumers. :term:`ASPA <Autonomous System Provider Authorisation
-(ASPA)>` processing is enabled by default from
-version 0.16.0.
-
-The validation process determines if all certificates, :term:`Route Origin Authorisations
-<Route Origin Authorisation (ROA)>`
-(ROAs) and other :term:`signed objects <RPKI
-signed object>` that may appear in the RPKI have the correct
-signatures. It will also verify if the hashes are correct, no objects have
-expired and the entire data set is complete. If any of the objects do not pass
-these checks, the data will be discarded.
+The validation process determines if all certificates, :term:`Route Origin
+Authorisations <Route Origin Authorisation (ROA)>` (ROAs), :term:`Autonomous
+System Provider Authorisations <Autonomous System Provider Authorisation
+(ASPA)>` (ASPAs) and other :term:`signed objects <RPKI signed object>` that may
+appear in the RPKI have the correct signatures. It will also verify if the
+hashes are correct, no objects have expired and the entire data set is complete.
+If any of the objects do not pass these checks, the data will be discarded.
 
 During repository validation, Routinator processes certificates (``.cer``),
-:term:`certificate revocation lists <Certificate Revocation List (CRL)>` (``.crl``),
-:term:`manifests <Manifest>` (``.mft``), ROAs
-(``.roa``), ASPAs (``.asa``) and
-:term:`Ghostbuster Records <Ghostbusters Record (GBR)>` (``.gbr``).
-If another type of object is encountered Routinator will *warn*
-by default, but this can be changed with the :option:`--unknown-objects` option.
+:term:`certificate revocation lists <Certificate Revocation List (CRL)>`
+(``.crl``), :term:`manifests <Manifest>` (``.mft``), ROAs (``.roa``), ASPAs
+(``.asa``) and :term:`Ghostbuster Records <Ghostbusters Record (GBR)>`
+(``.gbr``). If another type of object is encountered Routinator will *warn* by
+default, but this can be changed with the :option:`--unknown-objects` option.
 
 Note that even if unknown objects are accepted, they must appear in the manifest
 and the hash over their content must match the one given in the manifest. If the
-hash does not match, the Certificate Authority (CA)
-and all its objects are
+hash does not match, the Certificate Authority (CA) and all its objects are
 still rejected.
+
+.. versionchanged:: 0.16.0
+   Enable ASPA processing by default
 
 Manifest Updates
 """"""""""""""""
@@ -177,28 +173,21 @@ considered invalid, including all material of any child CA.
 ROAs and VRPs
 """""""""""""
 
-ROAs are *cryptographic* objects that contain a
-statement authorising a *single*
-:term:`Autonomous System Number (ASN)` to originate *one or more* :term:`IP prefixes <IP
-prefix>`, along
-with their :term:`maximum prefix length <Maximum Prefix Length (MaxLength)>`. ROAs can only be created by the legitimate
-holder of the IP prefixes contained within it, but they can authorise
-any ASN.
+ROAs are *cryptographic* objects that contain a statement authorising a *single*
+:term:`Autonomous System Number (ASN)` to originate *one or more* :term:`IP
+prefixes <IP prefix>`, along with their :term:`maximum prefix length <Maximum
+Prefix Length (MaxLength)>`. ROAs can only be created by the legitimate holder
+of the IP prefixes contained within it, but they can authorise any ASN.
 
-If the ROA passes validation, Routinator will
-produce one or more *plain text*
-:term:`validated ROA payloads <Validated ROA Payload (VRP)>` (VRPs) for each ROA, depending on how
-many IP prefixes
-are contained within it. Each VRP is a tuple of an
-ASN, a single prefix and its
-maximum prefix length. The complete collection
-of VRPs can be expressed in
-formats such as CSV or JSON, or exposed via the :term:`RPKI-to-Router <RPKI-to-Router
-(RPKI-RTR)>` (RTR) protocol so
-that they can be compared to all :term:`BGP <Border Gateway Protocol (BGP)>` origins seen
-by your routers. For each
-route origin it can be determined if they are RPKI *"Valid"*, *"Invalid"* or
-*"NotFound"*.
+If the ROA passes validation, Routinator will produce one or more *plain text*
+:term:`validated ROA payloads <Validated ROA Payload (VRP)>` (VRPs) for each
+ROA, depending on how many IP prefixes are contained within it. Each VRP is a
+tuple of an ASN, a single prefix and its maximum prefix length. The complete
+collection of VRPs can be expressed in formats such as CSV or JSON, or exposed
+via the :term:`RPKI-to-Router <RPKI-to-Router (RPKI-RTR)>` (RTR) protocol so
+that they can be compared to all :term:`BGP <Border Gateway Protocol (BGP)>`
+origins seen by your routers. For each route origin it can be determined if they
+are RPKI *"Valid"*, *"Invalid"* or *"NotFound"*.
 
 Unsafe VRPs
 """""""""""
@@ -238,5 +227,3 @@ first time:
 .. code-block:: text
 
     routinator --fresh vrps
-
-.. versionadded:: 0.9.0
