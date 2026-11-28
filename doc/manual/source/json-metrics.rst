@@ -1,11 +1,9 @@
 JSON Metrics
 ============
 
-Routinator's :doc:`monitoring service<monitoring>` provides comprehensive
-metrics in JSON format ``/api/v1/status`` endpoint. Here you can find an
-overview of all metrics and their meaning.
-
-The JSON metrics consists of an object with the following members:
+The :doc:`monitoring service <monitoring>` returns a JSON object at
+``/api/v1/status``. Until the first validation metrics are available, the
+endpoint returns HTTP 503. A successful response has the following members:
 
 ``version``
     The version of Routinator.
@@ -21,18 +19,27 @@ The JSON metrics consists of an object with the following members:
     The date and time in UTC when the last validation run started.
     
 ``lastUpdateDone``
-    The date and time in UTC when the last validation run completed.
+    The date and time in UTC when the last validation run completed, or ``null``
+    if no completion time is available.
     
 ``lastUpdateDuration``
-    The duration of the last validation run in seconds.
+    The duration of the last completed validation run in seconds, or ``null``
+    if unavailable.
     
+``payload``
+    Counts for the whole validation run, grouped by payload type. See
+    :ref:`json-metrics:payload metrics` for the fields and their scope.
+
+``aspasLargeProviderSet``
+    Number of customer ASNs omitted from the snapshot because their combined
+    provider set exceeded the size limit. See :doc:`aspa`.
+
 ``tals``
-    Metrics for each configured :term:`trust anchor <Trust Anchor (TA)>`. In most cases
-    these will be the
-    five :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`, but will
-    include the trust anchors of any
-    configured :ref:`testbeds <configuration:trust anchor locators>`
-    as well.
+    Metrics for each configured :term:`trust anchor <Trust Anchor (TA)>`. In
+    most cases these will be the five :term:`Regional Internet Registries
+    <Regional Internet Registry (RIR)>`, but will include the trust anchors of
+    any configured :ref:`testbeds <configuration:trust anchor locators>` as
+    well.
 
     Each element of this object contains a :ref:`publication metrics value
     <json-metrics:publication metrics>` as described below.
@@ -47,7 +54,8 @@ The JSON metrics consists of an object with the following members:
     <json-metrics:publication metrics>` as described below. In addition, there
     is a member ``type`` that describes whether the repository is an :term:`RRDP
     <RPKI Repository Delta Protocol (RRDP)>` or
-    rsync repository.
+    rsync repository. Its possible values are ``"RRDP"``, ``"rsync"`` and
+    ``"other"``.
 
 ``vrpsAddedLocally``
     The number of :term:`VRPs <Validated ROA Payload (VRP)>` added to the final
@@ -65,8 +73,12 @@ The JSON metrics consists of an object with the following members:
     Metrics for updates via RRDP.
 
     This is an object with one element for each repository that was updated via
-    rsync during the last validation run. Each element contains an :ref:`RRDP
+    RRDP during the last validation run. Each element contains an :ref:`RRDP
     update metrics value <json-metrics:rrdp update metrics>` as described below.
+
+``pubPointIssues``
+    An object keyed by publication point URI. Each value is an array of
+    :ref:`log entries <json-metrics:issue entries>`. The object can be empty.
 
 ``rtr``
     Metrics for the built-in RTR server. See
@@ -75,6 +87,30 @@ The JSON metrics consists of an object with the following members:
 ``http``
     Metrics for the built-in HTTP server. See
     :ref:`HTTP metrics <json-metrics:http server metrics>` below.
+
+Payload Metrics
+"""""""""""""""
+
+The top-level ``payload`` object covers the whole run. Each entry in ``tals``
+and ``repositories`` also has a ``payload`` object for that source. All three
+use the same four groups: ``routeOriginsIPv4``, ``routeOriginsIPv6``,
+``routerKeys`` and ``aspas``. Each group reports:
+
+* ``total``: valid published payloads processed, before local filters.
+* ``locallyFiltered``: payloads removed by local exceptions.
+* ``duplicate``: additional contributions counted against an existing entry.
+  For ASPA, entries are grouped by customer ASN. A second provider list can
+  contribute new providers to an existing entry.
+* ``final``: entries contributed after filtering and combining duplicates.
+  The top-level count includes new entries from local assertions.
+* ``unsafe`` (IPv4 and IPv6 route origins only): VRPs marked unsafe under
+  the configured policy.
+
+For ASPA, ``payload.aspas.final`` counts customer entries before the
+provider-set size limit is applied. Subtract ``aspasLargeProviderSet`` from
+the top-level count to obtain the number of customer entries in the snapshot.
+The separate ``validASPAs`` and ``invalidASPAs`` fields count signed objects
+at each trust anchor or repository.
 
 Publication Metrics
 """""""""""""""""""
@@ -135,6 +171,9 @@ the following information:
     A manifest is invalid if it is not correctly encoded, has expired or
     is not correctly signed by the issuing :term:`CA <Certification authority (CA)>`.
 
+``prematureManifests``
+    The number of manifests whose ``thisUpdate`` time is in the future.
+
 ``staleManifests``
     The number of :term:`stale <Stale Object>` manifests.
 
@@ -169,7 +208,7 @@ the following information:
     The number of stray certificate revocation lists.
 
     Each CA should only issue one CRL. This CRL should both be listed on the
-    manifest and used by the manifest’s certificate itself. Any manifest
+    manifest and used by the manifest’s certificate itself. Any CRL
     listed on the manifest that is not also the manifest’s own CRL is
     considered a stray.
 
@@ -178,12 +217,12 @@ the following information:
     certificates found to be present
     and valid.
 
-``validEECerts``
-    The number of :term:`End Entity (EE) certificates <End-entity (EE) certificate>` found
-    to be present and valid.
+``validRouterCerts``
+    The number of valid stand-alone :term:`BGPsec router certificates
+    <BGPsec router certificate>`.
 
-    This only refers to such certificates included as stand-alone files
-    which are :term:`BGPsec router certificates <BGPsec router certificate>`.
+``validEECerts``
+    A deprecated name for the same count as ``validRouterCerts``.
 
 ``invalidCerts``
     The number of invalid stand-alone certificates, either CA or EE
@@ -208,14 +247,13 @@ the following information:
 
     Note that currently the content of a Ghostbuster Record is not checked.
 
-``InvalidGBRs``
+``invalidGBRs``
     The number of invalid Ghostbusters Records.
 
 ``otherObjects``
     The number of objects found that are not certificates (.cer), Certificate
-    Revocation Lists (.crl), manifests (.mft), ROAs (.roa), or
-    Ghostbuster
-    Records (.gbr).
+    Revocation Lists (.crl), manifests (.mft), ROAs (.roa), ASPAs (.asa), or
+    Ghostbusters Records (.gbr).
 
 Rsync Update Metrics
 """"""""""""""""""""
@@ -229,7 +267,12 @@ For each repository updated via rsync the following values are given.
     details.
 
 ``duration``
-    The duration the rsync process was running in seconds.
+    The duration the rsync process was running in seconds, or ``null`` if
+    unavailable.
+
+``issues``
+    An optional array of :ref:`log entries <json-metrics:issue entries>` for
+    this rsync module.
 
 RRDP Update Metrics
 """""""""""""""""""
@@ -237,7 +280,7 @@ RRDP Update Metrics
 For each repository updated via RRDP the following values are given.
 
 ``status``
-    The overall status of the update. This will be 200 if the updated
+    The overall status of the update. This will be 200 if the update
     succeeded, 304 if no update was necessary because the data was already
     current, and any other value for a failed update. If the value is -1,
     it was not possible to reach the HTTPS server at all.
@@ -265,29 +308,44 @@ For each repository updated via RRDP the following values are given.
     preceded by one or more successful requests.
 
 ``duration``
-    The overall duration of the RRDP
-    update in seconds.
+    The overall duration of the RRDP update in seconds, or ``null`` if
+    unavailable.
+
+``issues``
+    An optional array of :ref:`log entries <json-metrics:issue entries>` for
+    this notification URI.
+
+When ``status`` is 304, the following four members are omitted.
 
 ``serial``
     The :term:`serial number <RRDP session ID and serial number>` stated by the
-    RRDP server for the current data set.
+    RRDP server for the current data set, or ``null`` if unavailable.
     With each update the serial number is
     increased by one.
 
 ``session``
-    The identifier of the current session of the RRDP server. Serial numbers
+    The identifier of the current session of the RRDP server, or ``null`` if
+    unavailable. Serial numbers
     are only valid within the same session. If the server needs to restart its
     sequence for whatever reason, it needs to choose a new session ID and all
     data will have to be updated through a snapshot.
 
 ``delta``
-    Whether data was updated via a sequence of deltas (``true``) or a full
-    snapshot had to be retrieved (``false``).
+    ``false`` when a snapshot reason was recorded and ``true`` otherwise.
+    Use ``status`` to determine whether the update succeeded.
 
-``snapshotReason``
+``snapshot_reason``
     If this is not ``null``, it provides a reason why a snapshot
     was used
     instead of a delta as a short explanatory string.
+
+Issue Entries
+"""""""""""""
+
+Each entry in ``pubPointIssues`` or a transport's ``issues`` array contains
+three strings: ``level`` is the severity for the application log,
+``repository_level`` is the severity for the repository log and
+``message`` is the log text.
 
 RTR Server Metrics
 """"""""""""""""""
@@ -313,7 +371,8 @@ enabled or not.
 If ``rtr-client-metrics`` are enabled via configuration or command line,
 an additional object ``clients`` will appear that list the IP addresses of
 clients seen by the RTR server providing the following
-information for them.
+information for them. The ``serial``, ``updated`` and ``lastReset`` fields are
+``null`` until the corresponding values are available.
 
 ``connections``
    The number of currently open connections from that address. The number
