@@ -14,6 +14,8 @@ Synopsis
 
 :program:`routinator` [``options``] :subcmd:`update` [``update-options``]
 
+:program:`routinator` [``options``] :subcmd:`config` [``server-options``]
+
 :program:`routinator` [``archive-stats``] :subcmd:`archive-stats` :samp:`{path}`
 
 :program:`routinator` :subcmd:`man` [:samp:`-o {file}`]
@@ -108,7 +110,7 @@ The available options are:
 
       If this option is present, the repository won't be validated in strict
       mode following the requirements laid out by the standard documents very
-      closely. 
+      closely.
 
       See `RELAXED DECODING`_ below for more information.
 
@@ -126,17 +128,17 @@ The available options are:
       A policy of *reject* instructs Routinator to consider all stale objects
       invalid. This will result in all material published by the CA issuing
       this manifest and CRL to be invalid including all material of any child
-      CA. 
+      CA.
 
       The *warn* policy will allow Routinator to consider any stale object to
       be valid. It will, however, print a warning in the log allowing an
-      operator to follow up on the issue. 
+      operator to follow up on the issue.
 
       Finally, the *accept* policy will cause Routinator to quietly accept
       any stale object as valid.
-      
-      In Routinator 0.8.0 and newer, *reject* is the default policy if the 
-      option is not provided. In version 0.7.0 the default for this option 
+
+      In Routinator 0.8.0 and newer, *reject* is the default policy if the
+      option is not provided. In version 0.7.0 the default for this option
       was *warn*. In all previous versions *warn* was hard-wired.
 
 .. option:: --unsafe-vrps=policy
@@ -270,7 +272,7 @@ The available options are:
       RRDP repository before Routinator falls back to using rsync. The
       default is 3600 seconds. If the given value is smaller than twice the
       refresh time, it is silently increased to that value.
-      
+
       The actual time is chosen at random between the refresh time and this
       value in order to spread out load on the rsync server.
 
@@ -281,7 +283,7 @@ The available options are:
       instead. If the option is missing, the default of 100 is used.
 
 .. option:: --rrdp-max-delta-list-len=len
- 
+
       If the number of deltas included in the notification file of an RRDP
       repository is larger than the value provided, the delta list is
       considered empty and the snapshot is used instead. If the option is
@@ -374,7 +376,7 @@ The available options are:
       More specifically, a single :option:`-v` increases the log level from
       the default of *warn* to *info*, specifying it more than once increases
       it to *debug*.
-      
+
       See `LOGGING`_ below for more information on what information is logged
       at the different levels.
 
@@ -497,10 +499,10 @@ These can be requested by providing different commands on the command line.
               be used for the RTR protocol.
 
        .. option:: --rtr-tcp-keepalive=seconds
-        
+
               The number of seconds to wait before sending a TCP keepalive on
               an established RTR  connection. By  default, TCP keepalive is
-              enabled on all RTR connections with an idle time of 60 seconds. 
+              enabled on all RTR connections with an idle time of 60 seconds.
               Set this option to 0 to disable keepalives.
 
               On some systems, notably OpenBSD, this option only enables TCP
@@ -508,7 +510,7 @@ These can be requested by providing different commands on the command line.
               use the system's own mechanisms to change the idle times.
 
        .. option:: --rtr-client-metrics
-       
+
               If provided, the server metrics will include separate metrics
               for every RTR client. Clients are identified by their RTR
               source IP address. This is disabled by default to avoid
@@ -544,13 +546,13 @@ These can be requested by providing different commands on the command line.
               The amount of seconds the server should wait after having
               finished updating and validating the local repository before
               starting to update again. The next update will be earlier if
-              objects in the repository expire earlier and min-refresh is set. 
+              objects in the repository expire earlier and min-refresh is set.
               The default value is 600 seconds.
 
        .. option:: --min-refresh=seconds
 
-              The amount of seconds the server should at least wait after 
-              having finished updating and validating the local repository 
+              The amount of seconds the server should at least wait after
+              having finished updating and validating the local repository
               before starting to update again. If not set this will default to
               refresh.
 
@@ -672,7 +674,7 @@ These can be requested by providing different commands on the command line.
            json
                   The list is placed into a JSON object with up to four
                   members: *roas* contains the validated route origin
-                  authorizations, *routerKeys* contains the validated 
+                  authorizations, *routerKeys* contains the validated
                   BGPsec router keys, *aspas* contains the validated
                   ASPA payload, and *metadata* contains some information
                   about the validation run itself. Of the first three, only
@@ -717,7 +719,7 @@ These can be requested by providing different commands on the command line.
            jsonext
                   The list is placed into a JSON object with up to four
                   members: *roas* contains the validated route origin
-                  authorizations, *routerKeys* contains the validated 
+                  authorizations, *routerKeys* contains the validated
                   BGPsec router keys, *aspas* contains the validated
                   ASPA payload, and *metadata* contains some information
                   about the validation run itself. Of the first three, only
@@ -730,7 +732,7 @@ These can be requested by providing different commands on the command line.
                   slash notation in *prefix*, the maximum prefix length of
                   the announced route in *maxLength*, and extended
                   information about the source of the authorization in
-                  *source*. 
+                  *source*.
 
                   The *routerKeys* member contains an array of objects with
                   four elements each: The autonomous system using the router
@@ -767,15 +769,15 @@ These can be requested by providing different commands on the command line.
                   generated as a Unix timestamp, and a member *generatedTime*
                   which provides the same time but in the standard ISO date
                   format.
-                  
+
                   Please note that because of this additional information,
                   output in ``jsonext`` format will be quite large.
 
            slurm
                   The list is formatted as locally added assertions of a
                   local exceptions file defined by RFC 8416 (also known as
-                  SLURM version 1). The produced file will have empty 
-                  validation output filters. This version does not support 
+                  SLURM version 1). The produced file will have empty
+                  validation output filters. This version does not support
                   ASPA.
 
            slurm2
@@ -858,7 +860,7 @@ These can be requested by providing different commands on the command line.
            Note that VRPs with more specific prefixes have no influence on
            whether a route is RPKI valid or invalid and therefore these VRPs
            are of an informational nature only.
-    
+
     .. option:: --no-route-origins, --no-router-keys, --no-aspas
 
            These three options can be used to exclude the various payload
@@ -870,7 +872,7 @@ These can be requested by providing different commands on the command line.
        This command can be used to perform RPKI route origin validation for
        one or more route announcements. Routinator will determine whether the
        provided announcements are RPKI valid, invalid, or not found.
-       
+
        A single route announcement can be given directly on the command line:
 
        .. option:: -a asn, --asn=asn
@@ -894,10 +896,10 @@ These can be requested by providing different commands on the command line.
        or standard input.
 
        .. option:: -i file, --input=file
-       
+
               If present, input is read from the given file. If the file is
               given is a single dash, input is read from standard output.
-              
+
        .. option:: -j, --json
 
               If this option is provided, the input is assumed to be JSON
@@ -917,7 +919,7 @@ These can be requested by providing different commands on the command line.
        input method.
 
        .. option:: -o file, --output=file
-       
+
               Output is written to the provided file. If the option is
               omitted or *file* is given as a single dash, output is written
               to standard output.
@@ -975,21 +977,21 @@ These can be requested by providing different commands on the command line.
        Writes the content of all stored data to the file system. This is
        primarily intended for debugging but can be used to get access to the
        view of the RPKI data that Routinator currently sees.
-       
+
        .. option:: -o dir, --output=dir
-       
+
               Write the output to the given directory. If the option is omitted,
               the current directory is used.
-              
+
        Three directories will be created in the output directory:
-       
+
        The *rrdp* directory will contain all the files collected via RRDP
        from the various repositories. Each repository is stored in its own
        directory. The mapping between rpkiNotify URI and path is provided in
        the *repositories.json* file. For each repository, the files are
        stored in a directory structure based on the components of the file as
        rsync URI.
-       
+
        The *rsync* directory contains all the files collected via rsync. The
        files are stored in a directory structure based on the components of
        the file's rsync URI.
@@ -1000,6 +1002,11 @@ These can be requested by providing different commands on the command line.
        directory for each RRDP repository similarly structured to the *rrdp*
        directory and one additional directory *rsync* that contains files
        collected via rsync.
+
+.. subcmd:: config
+
+       Prints the effective configuration in TOML format to standard output
+       and exits. The output includes command-line overrides.
 
 .. subcmd:: archive-stats
 
@@ -1190,7 +1197,7 @@ All values can be overridden via the command line options.
             off the timeout.
 
       rrdp-read-timeout
-            An integer value that provides a timeout in seconds for 
+            An integer value that provides a timeout in seconds for
             RRDP-related network operations, primarily waiting to be
             able to read more data from the server. If the value is missing,
             a default timeout of 10 seconds will be used. Set the value to 0
@@ -1293,7 +1300,7 @@ All values can be overridden via the command line options.
             A string value specifying the syslog facility to use for logging
             to syslog. The default value if this entry is missing is
             *daemon*.
-            
+
       repository-log-level
             A string value specifying the maximum log level for which
             repository log messages should be emitted. The default is *warn*.
@@ -1302,7 +1309,7 @@ All values can be overridden via the command line options.
             logged at the different levels.
 
       repository-log
-            A string specifying where to send repository log messages to. 
+            A string specifying where to send repository log messages to.
             This can be one of the following values:
 
             stderr
@@ -1312,7 +1319,7 @@ All values can be overridden via the command line options.
                   Repository log messages will be sent to syslog.
 
             file
-                  Repository log messages will be sent to the file specified 
+                  Repository log messages will be sent to the file specified
                   through the repository-log-file configuration file entry.
 
             The default if this value is missing is no logging.
@@ -1324,7 +1331,7 @@ All values can be overridden via the command line options.
 
       repository-syslog-facility
             A string value specifying the syslog facility to use for logging
-            repository messages to syslog. The default value if this entry is 
+            repository messages to syslog. The default value if this entry is
             missing is *daemon*.
 
 
@@ -1403,8 +1410,8 @@ All values can be overridden via the command line options.
 
       min-refresh
             An integer value specifying the number of seconds Routinator
-            should at least wait between consecutive validation runs in server 
-            mode. If not set this will default to refresh. 
+            should at least wait between consecutive validation runs in server
+            mode. If not set this will default to refresh.
 
       retry
             An integer value specifying the number of seconds an RTR client
@@ -1480,7 +1487,7 @@ The service only supports GET requests with the following paths:
 /log
       Returns the logging output of the last validation run. The log level
       matches that set upon start.
-      
+
       Note that the output is collected after each validation run and is
       therefore only available after the initial run has concluded.
 

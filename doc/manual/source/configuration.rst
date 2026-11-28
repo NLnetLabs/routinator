@@ -1,13 +1,3 @@
-.. Important:: **With Routinator 0.12.0 and newer, initialisation to accept 
-               the ARIN Relying Party Agreement (RPA) is no longer 
-               required.** The RPA `has been updated 
-               <https://www.arin.net/announcements/20220929/>`_ to allow the 
-               ARIN :term:`TAL <Trust Anchor Locator (TAL)>` to be embedded in
-               :term:`Relying Party <RPKI Relying Parties>` software. By
-               default, Routinator is now set up to fetch and validate all 
-               :term:`RPKI <Resource Public Key Infrastructure (RPKI)>` data needed for
-               production environments.
-
 Configuration
 =============
 
@@ -58,12 +48,12 @@ with in addition to the settings in the config file, you can check with the
 This output will also provide you with the correct syntax in case you want to
 make changes.
 
-.. Important:: Once you have started Routinator as a system service you 
-               should not invoke :doc:`interactive<interactive>` validation 
+.. Important:: Once you have started Routinator as a system service you
+               should not invoke :doc:`interactive<interactive>` validation
                runs from the command line using ``routinator vrps``. If there
-               is specific information you would like to have from 
-               Routinator, you should retrieve it via the 
-               :doc:`user interface<user-interface>` or one of the 
+               is specific information you would like to have from
+               Routinator, you should retrieve it via the
+               :doc:`user interface<user-interface>` or one of the
                :doc:`HTTP endpoints<http-service>`.
 
 Setup When Built with Cargo
@@ -89,7 +79,7 @@ You can specify the location of the RPKI cache directory using the
 default location :file:`$HOME/.rpki-cache/repository`. The :doc:`HTTP
 service<http-service>` and :doc:`RTR service<rtr-service>` must be started
 explicitly using the command line options :option:`--http` and
-:option:`--rtr`, respectively, or via the configuration file. 
+:option:`--rtr`, respectively, or via the configuration file.
 
 You can view the default settings Routinator runs with using:
 
@@ -144,16 +134,13 @@ own:
 Trust Anchor Locators
 ---------------------
 
-Fetching data is done by connecting to the Trust Anchor Locators
-(TALs) of the five :term:`Regional Internet Registries
-<Regional Internet Registry (RIR)>`
-(RIRs): AFRINIC, APNIC, ARIN, LACNIC and RIPE
-NCC. TALs provide hints for
-the :term:`trust anchor <Trust Anchor (TA)>` certificates to be used both to discover and
-validate all
-RPKI content. **By default, Routinator
-will be set up for use in production
-environments and run with the production TALs of the five RIRs.**
+Fetching data is done by connecting to the Trust Anchor Locators (TALs) of the
+five :term:`Regional Internet Registries <Regional Internet Registry (RIR)>`
+(RIRs): AFRINIC, APNIC, ARIN, LACNIC and RIPE NCC. TALs provide hints for the
+:term:`trust anchor <Trust Anchor (TA)>` certificates to be used both to
+discover and validate all RPKI content. By default, Routinator will be set up
+for use in production environments and run with the production TALs of the five
+RIRs.
 
 Some RIRs and third parties also provide
 separate TALs for testing purposes,
@@ -167,11 +154,11 @@ Run the following command to list all available TALs:
 .. code-block:: text
 
     routinator --tal=list
-    
+
 This displays the following overview:
-    
+
 .. code-block:: text
-    
+
       .---- RIR TALs
       |  .- RIR test TALs
       V  V
@@ -224,16 +211,6 @@ directory is one of the bundled TALs, then these
 resources will be validated
 twice.
 
-.. versionadded:: 0.9.0
-   :option:`--list-tals`, :option:`--rir-tals`, :option:`--rir-test-tals`, 
-   :option:`--tal` and :option:`--skip-tal`
-.. deprecated:: 0.9.0
-   ``--decline-arin-rpa``, use :option:`--skip-tal` instead
-.. versionadded:: 0.12.0
-   :option:`--extra-tals-dir`
-.. deprecated:: 0.12.0
-   The ``init`` subcommand, :option:`--list-tals`
-
 Using Tmpfs for the RPKI Cache
 ------------------------------
 
@@ -260,7 +237,7 @@ usage<installation:Inode Usage>`:
 Routinator will do a clean crash, stopping validation, the API, HTTP server
 and most importantly the RTR server, ensuring that no
 stale data will be
-served to your routers. 
+served to your routers.
 
 Also keep in mind that every time you restart the machine, the contents of
 the *tmpfs* file system will be lost. This means that Routinator will have to
